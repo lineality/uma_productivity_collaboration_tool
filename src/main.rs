@@ -1614,13 +1614,16 @@ fn initialize_uma_application() {
         // // Load the collaborator list from the data directory
         // let mut collaborator_list = load_collaborator_list();
 
+        let mut rng = rand::thread_rng(); // Declare the rng here
+        let new_random_sync_port: u16 = rng.gen_range(40000..=50000);
+        
         // // Add a new user to Uma file system
         add_collaborator_setup_file(
             username, 
             Some(ipv4_addresses), // Wrap ipv4_addresses in Some()
             Some(ipv6_addresses), // Wrap ipv6_addresses in Some()
             gpg_key_public, 
-            40000, // sync_file_transfer_port TODO: pick a random number
+            new_random_sync_port, 
             60,   // Example sync_interval (in seconds)
         );
 
@@ -1778,7 +1781,6 @@ fn handle_command(
                 debug_log(&format!("app.current_path {:?}", &app.current_path)); 
                 app.input_mode = InputMode::InsertText;
 
-                // TODO Assuming you have a way to get the current node's name:
                 let current_node_name = app.current_path.file_name().unwrap().to_string_lossy().to_string();
 
                 app.current_path = app.current_path.join("instant_message_browser");
@@ -2294,8 +2296,6 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
     // }
     
     // Create App instance
-    // TODO borrow issue here
-    // let mut app = App::new(graph_navigation_instance_state); // Pass graph_navigation_instance_state
     let mut app = App::new(graph_navigation_instance_state.clone()); // Pass graph_navigation_instance_state
     
 
