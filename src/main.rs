@@ -61,7 +61,8 @@ use std::process::Command;
 // For Sync
 use rand::prelude::{
     // SliceRandom,
-    IteratorRandom
+    IteratorRandom,
+    Rng,
 };
 use std::thread;
 use std::time::Duration;
@@ -801,7 +802,10 @@ fn add_collaborator_qa(
     debug_log("Enter the collaborator's sync file transfer port (default: 40000):");
     let mut sync_port_input = String::new();
     io::stdin().read_line(&mut sync_port_input)?; 
-    let sync_file_transfer_port: u16 = sync_port_input.trim().parse().unwrap_or(40000);
+    // let sync_file_transfer_port: u16 = sync_port_input.trim().parse().unwrap_or(40000);
+    // Generate a random port within the desired range
+    let mut rng = rand::thread_rng(); 
+    let sync_file_transfer_port: u16 = rng.gen_range(40000..=50000); 
 
     debug_log("Enter the collaborator's sync interval in seconds (default: 60):");
     let mut sync_interval_input = String::new();
@@ -1614,8 +1618,8 @@ fn initialize_uma_application() {
         // // Load the collaborator list from the data directory
         // let mut collaborator_list = load_collaborator_list();
 
-        let mut rng = rand::thread_rng(); // Declare the rng here
-        let new_random_sync_port: u16 = rng.gen_range(40000..=50000);
+        let mut rng = rand::thread_rng(); 
+        let sync_file_transfer_port: u16 = rng.gen_range(40000..=50000); 
         
         // // Add a new user to Uma file system
         add_collaborator_setup_file(
@@ -1623,7 +1627,7 @@ fn initialize_uma_application() {
             Some(ipv4_addresses), // Wrap ipv4_addresses in Some()
             Some(ipv6_addresses), // Wrap ipv6_addresses in Some()
             gpg_key_public, 
-            new_random_sync_port, 
+            sync_file_transfer_port, // sync_file_transfer_port
             60,   // Example sync_interval (in seconds)
         );
 
@@ -1781,6 +1785,7 @@ fn handle_command(
                 debug_log(&format!("app.current_path {:?}", &app.current_path)); 
                 app.input_mode = InputMode::InsertText;
 
+                // TODO Assuming you have a way to get the current node's name:
                 let current_node_name = app.current_path.file_name().unwrap().to_string_lossy().to_string();
 
                 app.current_path = app.current_path.join("instant_message_browser");
@@ -2235,6 +2240,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
     */
 
 
+
     // Load UMA configuration from uma.toml
     let uma_toml_path = Path::new("uma.toml");
 
@@ -2298,6 +2304,8 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
     // Create App instance
     let mut app = App::new(graph_navigation_instance_state.clone()); // Pass graph_navigation_instance_state
     
+    // -- Start in Command Mode --- 
+    app.input_mode = InputMode::Command; // Initialize app in command mode
 
     // -- Here: save first version of starting 'state'
     
@@ -2335,6 +2343,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         }
 
         // Render the appropriate list based on the mode
+        // TODO this 2nd input is a legacy kludge, but is needed to show TUI for now
         // TODO this is most likely VERY wrong and will not work for task-browser
         match app.input_mode {
             InputMode::Command => {
