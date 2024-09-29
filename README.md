@@ -1,6 +1,12 @@
-# uma_productivity_collaboration_tool
+### uma_productivity_collaboration_tool
 
-cli tui messenger planner
+# Very Early Development Still!
 
-- Distributed Multipoint Conferencing Unit
-- 
+#### Use:
+```bash
+RUST_BACKTRACE=full cargo run
+```
+
+
+## cli tui messenger planner
+- Distributed Multi-point Conferencing Unit 
