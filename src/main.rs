@@ -1989,7 +1989,7 @@ fn sync_flag_ok_or_wait(wait_this_many_seconds: u64) {
         let file_content = match fs::read_to_string(CONTINUE_UMA_PATH) {
             Ok(content) => content,
             Err(_) => {
-                println!("Error reading 'continue_uma.txt'. Continuing..."); // Handle the error (e.g., log it) but continue for now
+                debug_log("Error reading 'continue_uma.txt'. Continuing..."); // Handle the error (e.g., log it) but continue for now
                 continue; // Skip to the next loop iteration
             }
         };
@@ -2005,10 +2005,10 @@ fn sync_flag_ok_or_wait(wait_this_many_seconds: u64) {
             .trim() == "1"; 
 
         if is_sync_enabled {
-            // println!("Synchronization flag is '1'. Proceeding...");
+            debug_log("Synchronization flag is '1'. Proceeding...");
             break; // Exit the loop
         } else {
-            // println!("Synchronization flag is '0'. Waiting...");
+            debug_log("Synchronization flag is '0'. Waiting...");
             thread::sleep(Duration::from_secs(wait_this_many_seconds)); // Wait for 3 seconds
         }
     }
@@ -2034,12 +2034,13 @@ fn out_request_sync_loop() {
     */
     loop {
         sync_flag_ok_or_wait(3);
+        debug_log("out_request_sync_loop() started after sync_flag_ok");
         
         // 1. Read the 'continue_uma.txt' file 
         let file_content = match fs::read_to_string(CONTINUE_UMA_PATH) {
             Ok(content) => content,
             Err(_) => {
-                println!("Error reading 'continue_uma.txt'. Continuing..."); // Handle the error (e.g., log it) but continue for now
+                debug_log("Error reading 'continue_uma.txt'. Continuing..."); // Handle the error (e.g., log it) but continue for now
                 continue; // Skip to the next loop iteration
             }
         };
@@ -2052,7 +2053,7 @@ fn out_request_sync_loop() {
 
         // Load the allowlist once outside the loop
         let sync_config_data_set = load_teamchannel_connection_data().unwrap_or_else(|e| { 
-            eprintln!("Error loading sync_config_data_set: {}", e);
+            debug_log!("Error loading sync_config_data_set: {}", e);
             HashSet::new() // Use an empty HashSet here
         });
 
@@ -2116,6 +2117,7 @@ fn in_queue_sync_loop() {
     */
     loop {
         sync_flag_ok_or_wait(3);
+        debug_log("in_queue_sync_loop() started after sync_flag_ok");
                 
         // 1. Read the 'continue_uma.txt' file 
         let file_content = match fs::read_to_string(CONTINUE_UMA_PATH) {
@@ -2388,9 +2390,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                         if app.current_path.display().to_string() == "project_graph_data/team_channels".to_string() {
                             debug_log("app.current_path == project_graph_data/team_channels");
                             debug_log(&format!("current_path: {:?}", app.current_path));
-                            
 
-                            
                             let input = tiny_tui::get_input()?; // Get input here
                             if let Ok(index) = input.parse::<usize>() { 
                                 let item_index = index - 1; // Adjust for 0-based indexing
@@ -2398,9 +2398,13 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                                     let selected_channel = &app.tui_directory_list[item_index];
                                     debug_log(&format!("Selected channel: {}", selected_channel)); // Log the selected channel name
 
+                                    
+                                    //////////////////////////
                                     // Enable sync flag here!
+                                    //////////////////////////
                                     debug_log("About to set sync flag to true!");
-                                    // set_sync_start_ok_flag_to_true();  //TODO turn on!                           
+                                    set_sync_start_ok_flag_to_true();  //TODO turn on to use sync !!! (off for testing)
+                                    
                                     
                                     app.current_path = app.current_path.join(selected_channel);
                                     
