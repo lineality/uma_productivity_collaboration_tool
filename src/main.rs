@@ -2145,8 +2145,9 @@ fn out_request_sync_loop() {
 
 
 // TEST ONLY
-fn in_queue_sync_loop() {
-    loop { 
+// TEST ONLY 
+fn in_queue_sync_loop() { 
+    loop {
         sync_flag_ok_or_wait(3);
         debug_log("in_queue_sync_loop() started after sync_flag_ok");
                 
@@ -2163,54 +2164,24 @@ fn in_queue_sync_loop() {
             break; 
         }
 
-        // Load Bob's collaborator data to get his port 
-        let my_data = load_collaborator_by_username("bob").expect("Failed to load my data"); 
+        // HARDCODE Bob's IP address and port for this test! 
+        let bob_ip: Ipv6Addr = "2601:80:4803:9490:22a2:b594:a55:ac64".parse().unwrap(); 
+        let bob_port: u16 = 40001; // Or whatever port you've assigned to Bob 
 
-        // Create the SocketAddr Bob will listen on 
-        let my_addr = SocketAddr::new(IpAddr::V6(my_data.ipv6_addresses[0]), my_data.sync_file_transfer_port);
-        
-        // Bind to the correct port
+        let my_addr = SocketAddr::new(IpAddr::V6(bob_ip), bob_port); 
         let listener = TcpListener::bind(my_addr).expect("Failed to bind to signal port"); 
 
-        // Accept connections (this code can stay the same)
         match listener.accept() {
-
-        // 2. Accept incoming connections
-        match listener.accept() {
-            Ok((mut stream, addr)) => {
-                // 3. Verify the sender's IP address against the allowlist
-                if is_ip_allowlisted(&addr.ip(), &allowlist) {
-                    // 4. Receive the signal data from the stream
-                    let mut buffer = [0; 1024]; // Adjust buffer size as needed
-                    let bytes_read = stream.read(&mut buffer).expect("Failed to read from stream");
-
-                    // 5. Process the received signal (e.g., Sync Request)
-                    let signal = String::from_utf8_lossy(&buffer[..bytes_read]);
-                    match signal.trim() {
-                        "Sync Request" => {
-                            // Initiate the synchronization operation (e.g., send relevant files)
-                            // ... (Implement sync logic here)
-                            println!("Received Sync Request from {}", addr.ip());
-                        }
-                        _ => {
-                            println!("Received unknown signal: {}", signal);
-                        }
-                    }
-
-                    // 6. Optionally send a response signal (e.g., Sync Done)
-                    // ... (Implement response signal logic here)
-                } else {
-                    println!("Connection rejected from non-allowlisted IP: {}", addr.ip());
-                }
+            Ok((_stream, addr)) => { 
+                println!("Received connection from: {}", addr); 
+                break; // Exit the loop after receiving one connection 
             }
             Err(e) => {
                 println!("Error accepting connection: {}", e);
             }
-        }
-    }
-    debug_log("Finish: in_queue_sync_loop");
+        } 
+    } 
 }
-
 
 
 // fn in_queue_sync_loop() {
