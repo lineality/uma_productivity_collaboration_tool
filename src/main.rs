@@ -2022,126 +2022,126 @@ fn get_next_sync_request_username(sync_config_data_set: &HashSet<SyncCollaborato
         .map(|collaborator| collaborator.user_name.clone())
 }
 
-// TODO Sync TEst testing only!
-fn out_request_sync_loop() {
-    loop { 
-        sync_flag_ok_or_wait(3); 
-        debug_log("out_request_sync_loop() started after sync_flag_ok");
-                
-        // Check if UMA should continue running
-        let file_content = match fs::read_to_string(CONTINUE_UMA_PATH) {
-            Ok(content) => content,
-            Err(_) => {
-                debug_log("Error reading 'continue_uma.txt'. Continuing..."); 
-                continue; 
-            }
-        };
-        if file_content.trim() == "0" {
-            debug_log("'continue_uma.txt' is 0. out_request_sync_loop Exiting loop.");
-            break; 
-        }
-
-        // Load Bob's collaborator data 
-        let bob_data = load_collaborator_by_username("bob").expect("Failed to load Bob's data");
-
-        // Handle the optional ipv6_addresses 
-        if let Some(ipv6_addrs) = bob_data.ipv6_addresses {
-            if let Some(first_ipv6) = ipv6_addrs.first() { // Get the first IPv6 address in the list
-                let target_addr = SocketAddr::new(IpAddr::V6(*first_ipv6), bob_data.sync_file_transfer_port);
-        
-                // Send the signal
-                send_hello_signal(target_addr).expect("Failed to send Hello World signal");
-            } else {
-                debug_log!("Bob's collaborator data has an empty list of IPv6 addresses.");
-            }
-        } else {
-            debug_log!("Bob's collaborator data is missing IPv6 addresses.");
-        }
-
-
-        // You can add a delay here if needed for testing:
-        // thread::sleep(Duration::from_secs(5));
-    }
-    debug_log("Finish: out_request_sync_loop");
-}
-
-
+// // TODO Sync TEst testing only!
 // fn out_request_sync_loop() {
-//     /*
-//     // Sending Instance
-//     // Within out_request_sync_loop:
-//     // If the node description has been updated:
-//     let toml_data = fs::read_to_string("path/to/node.toml").unwrap();
-//     stream.write_all(toml_data.as_bytes()).unwrap();
-
-//     */
-//     loop {
-//         sync_flag_ok_or_wait(3);
+//     loop { 
+//         sync_flag_ok_or_wait(3); 
 //         debug_log("out_request_sync_loop() started after sync_flag_ok");
-        
-//         // 1. Read the 'continue_uma.txt' file 
+                
+//         // Check if UMA should continue running
 //         let file_content = match fs::read_to_string(CONTINUE_UMA_PATH) {
 //             Ok(content) => content,
 //             Err(_) => {
-//                 debug_log("Error reading 'continue_uma.txt'. Continuing..."); // Handle the error (e.g., log it) but continue for now
-//                 continue; // Skip to the next loop iteration
+//                 debug_log("Error reading 'continue_uma.txt'. Continuing..."); 
+//                 continue; 
 //             }
 //         };
-    
-//         // 2. break loop if continue=0
 //         if file_content.trim() == "0" {
 //             debug_log("'continue_uma.txt' is 0. out_request_sync_loop Exiting loop.");
 //             break; 
 //         }
 
-//         // Load the allowlist once outside the loop
-//         let sync_config_data_set = load_teamchannel_connection_data().unwrap_or_else(|e| { 
-//             debug_log!("Error loading sync_config_data_set: {}", e);
-//             HashSet::new() // Use an empty HashSet here
-//         });
+//         // Load Bob's collaborator data 
+//         let bob_data = load_collaborator_by_username("bob").expect("Failed to load Bob's data");
 
-//         // Use sync_config_data_set directly to choose a random target:
-//         let maybe_target_collaborator = sync_config_data_set
-//         .iter()
-//         .choose(&mut rand::thread_rng());
-
-//         if let Some(target_collaborator) = maybe_target_collaborator {
-//             let target_addr = SocketAddr::new(
-//                 IpAddr::V6(target_collaborator.ipv6_address), 
-//                 target_collaborator.sync_file_transfer_port
-//             ); 
-//             let sync_interval = target_collaborator.sync_interval; 
-
-//             println!(
-//                 "Trying to sync with {} at {}", 
-//                 target_collaborator.user_name, target_addr
-//             );
-
-//             // 3. Establish a connection to the target instance 
-//             match TcpStream::connect(target_addr) { 
-//                 Ok(mut stream) => {
-//                     // 4. Send the TOML file data through the stream
-//                     let toml_data = fs::read_to_string("path/to/toml/file")
-//                         .expect("Failed to read TOML file"); 
-//                     if let Err(e) = stream.write_all(toml_data.as_bytes()) {
-//                         eprintln!("Error sending TOML data to {}: {}", target_addr, e);
-//                     } else {
-//                         println!("Sent TOML file to {}", target_addr);
-//                         // 5. Optionally receive a response signal (e.g., Sync Done)
-//                         // ... (Implement response signal logic here)
-//                     }
-//                 }
-//                 Err(e) => {
-//                     eprintln!("Error connecting to target instance {}: {}", target_addr, e);
-//                 }
+//         // Handle the optional ipv6_addresses 
+//         if let Some(ipv6_addrs) = bob_data.ipv6_addresses {
+//             if let Some(first_ipv6) = ipv6_addrs.first() { // Get the first IPv6 address in the list
+//                 let target_addr = SocketAddr::new(IpAddr::V6(*first_ipv6), bob_data.sync_file_transfer_port);
+        
+//                 // Send the signal
+//                 send_hello_signal(target_addr).expect("Failed to send Hello World signal");
+//             } else {
+//                 debug_log!("Bob's collaborator data has an empty list of IPv6 addresses.");
 //             }
+//         } else {
+//             debug_log!("Bob's collaborator data is missing IPv6 addresses.");
+//         }
 
-//             // 6. Wait for the specified sync interval before checking for the next request
-//             thread::sleep(Duration::from_secs(sync_interval));
-//         } 
+
+//         // You can add a delay here if needed for testing:
+//         // thread::sleep(Duration::from_secs(5));
 //     }
 //     debug_log("Finish: out_request_sync_loop");
 // }
+
+
+fn out_request_sync_loop() {
+    /*
+    // Sending Instance
+    // Within out_request_sync_loop:
+    // If the node description has been updated:
+    let toml_data = fs::read_to_string("path/to/node.toml").unwrap();
+    stream.write_all(toml_data.as_bytes()).unwrap();
+
+    */
+    loop {
+        sync_flag_ok_or_wait(3);
+        debug_log("out_request_sync_loop() started after sync_flag_ok");
+        
+        // 1. Read the 'continue_uma.txt' file 
+        let file_content = match fs::read_to_string(CONTINUE_UMA_PATH) {
+            Ok(content) => content,
+            Err(_) => {
+                debug_log("Error reading 'continue_uma.txt'. Continuing..."); // Handle the error (e.g., log it) but continue for now
+                continue; // Skip to the next loop iteration
+            }
+        };
+    
+        // 2. break loop if continue=0
+        if file_content.trim() == "0" {
+            debug_log("'continue_uma.txt' is 0. out_request_sync_loop Exiting loop.");
+            break; 
+        }
+
+        // Load the allowlist once outside the loop
+        let sync_config_data_set = load_teamchannel_connection_data().unwrap_or_else(|e| { 
+            debug_log!("Error loading sync_config_data_set: {}", e);
+            HashSet::new() // Use an empty HashSet here
+        });
+
+        // Use sync_config_data_set directly to choose a random target:
+        let maybe_target_collaborator = sync_config_data_set
+        .iter()
+        .choose(&mut rand::thread_rng());
+
+        if let Some(target_collaborator) = maybe_target_collaborator {
+            let target_addr = SocketAddr::new(
+                IpAddr::V6(target_collaborator.ipv6_address), 
+                target_collaborator.sync_file_transfer_port
+            ); 
+            let sync_interval = target_collaborator.sync_interval; 
+
+            println!(
+                "Trying to sync with {} at {}", 
+                target_collaborator.user_name, target_addr
+            );
+
+            // 3. Establish a connection to the target instance 
+            match TcpStream::connect(target_addr) { 
+                Ok(mut stream) => {
+                    // 4. Send the TOML file data through the stream
+                    let toml_data = fs::read_to_string("path/to/toml/file")
+                        .expect("Failed to read TOML file"); 
+                    if let Err(e) = stream.write_all(toml_data.as_bytes()) {
+                        eprintln!("Error sending TOML data to {}: {}", target_addr, e);
+                    } else {
+                        println!("Sent TOML file to {}", target_addr);
+                        // 5. Optionally receive a response signal (e.g., Sync Done)
+                        // ... (Implement response signal logic here)
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Error connecting to target instance {}: {}", target_addr, e);
+                }
+            }
+
+            // 6. Wait for the specified sync interval before checking for the next request
+            thread::sleep(Duration::from_secs(sync_interval));
+        } 
+    }
+    debug_log("Finish: out_request_sync_loop");
+}
 
 
 // // TEST ONLY
@@ -2200,7 +2200,7 @@ fn in_queue_sync_loop() {
     
     */
     loop {
-        sync_flag_ok_or_wait(30000);
+        sync_flag_ok_or_wait(5);
         debug_log("in_queue_sync_loop() started after sync_flag_ok");
                 
         // 1. Read the 'continue_uma.txt' file 
