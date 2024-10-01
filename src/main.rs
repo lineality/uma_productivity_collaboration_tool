@@ -1615,8 +1615,8 @@ fn initialize_uma_application() {
         io::stdin().read_line(&mut gpg_key_public).unwrap();
         let gpg_key_public = gpg_key_public.trim().to_string();
 
-        // // Load the collaborator list from the data directory
-        // let mut collaborator_list = load_collaborator_list();
+        // // load names of current collaborators to check for collisions: TODO
+        // if check_collaborator_name_collision();
 
         let mut rng = rand::thread_rng(); 
         let sync_file_transfer_port: u16 = rng.gen_range(40000..=50000); 

@@ -8,3 +8,4 @@ walkdir = "2.5.0"
 toml = "0.8.19"
 serde = { version = "1.0.210", features = ["derive"] }
 rand = "0.8.5"
+snow = "0.9.6"
