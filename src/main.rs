@@ -2203,7 +2203,7 @@ fn in_queue_sync_loop() {
         sync_flag_ok_or_wait(5);
         debug_log("in_queue_sync_loop() started after sync_flag_ok");
                 
-        // 1. Read the 'continue_uma.txt' file 
+        // 0.1  Continue or Quit? Read the 'continue_uma.txt' file 
         let file_content = match fs::read_to_string(CONTINUE_UMA_PATH) {
             Ok(content) => content,
             Err(_) => {
@@ -2212,15 +2212,41 @@ fn in_queue_sync_loop() {
             }
         };
     
-        // 2. break loop if continue=0
+        // 0.2  break loop if continue=0
         if file_content.trim() == "0" {
             debug_log("'continue_uma.txt' is 0. in_queue_sync_loop Exiting loop.");
             break; 
         }
 
+        /*
+        steps:
+        1. get the list of the collaborators in this channel
+        this will be directly or indirectly based on files in the
+        .../project_graph_data/session_state_items directory
+        make an allow-list of ip+port and maybe +gpg public key sets
         
-        // 1. Listen on the designated signal port for incoming connections
-        let listener = TcpListener::bind("0.0.0.0:SIGNAL_PORT").expect("Failed to bind to signal port"); 
+        2. each set (ip+port+gpg) will get a separate listener-thread
+        
+        (Note: future: Padnet)
+        
+
+        3. manage load: 
+        version A.when the listener thread recieves a timestamp or json
+        it gets added to a queue. then another set of parallel threads
+        process the sync job. in this mode the listener does one thing well
+        it just get 'invitations' and dump them into a queue
+        possibly pausing from listening if that keeps traffic down
+        
+        version b. one thread per collaborator: does all sync tasks
+        
+        4. by whaterver thread: the rest of the sync takes place step by step
+        
+        
+        
+        */
+        
+        // // 1. Listen on the designated signal port for incoming connections
+        // let listener = TcpListener::bind("0.0.0.0:SIGNAL_PORT").expect("Failed to bind to signal port"); 
     
         
         // Load the allowlist once outside the loop
@@ -2231,38 +2257,38 @@ fn in_queue_sync_loop() {
         
         sync_flag_ok_or_wait(3);
 
-        // 2. Accept incoming connections
-        match listener.accept() {
-            Ok((mut stream, addr)) => {
-                // 3. Verify the sender's IP address against the allowlist
-                if is_ip_allowlisted(&addr.ip(), &allowlist) {
-                    // 4. Receive the signal data from the stream
-                    let mut buffer = [0; 1024]; // Adjust buffer size as needed
-                    let bytes_read = stream.read(&mut buffer).expect("Failed to read from stream");
+        // // 2. Accept incoming connections
+        // match listener.accept() {
+        //     Ok((mut stream, addr)) => {
+        //         // 3. Verify the sender's IP address against the allowlist
+        //         if is_ip_allowlisted(&addr.ip(), &allowlist) {
+        //             // 4. Receive the signal data from the stream
+        //             let mut buffer = [0; 1024]; // Adjust buffer size as needed
+        //             let bytes_read = stream.read(&mut buffer).expect("Failed to read from stream");
 
-                    // 5. Process the received signal (e.g., Sync Request)
-                    let signal = String::from_utf8_lossy(&buffer[..bytes_read]);
-                    match signal.trim() {
-                        "Sync Request" => {
-                            // Initiate the synchronization operation (e.g., send relevant files)
-                            // ... (Implement sync logic here)
-                            println!("Received Sync Request from {}", addr.ip());
-                        }
-                        _ => {
-                            println!("Received unknown signal: {}", signal);
-                        }
-                    }
+        //             // 5. Process the received signal (e.g., Sync Request)
+        //             let signal = String::from_utf8_lossy(&buffer[..bytes_read]);
+        //             match signal.trim() {
+        //                 "Sync Request" => {
+        //                     // Initiate the synchronization operation (e.g., send relevant files)
+        //                     // ... (Implement sync logic here)
+        //                     println!("Received Sync Request from {}", addr.ip());
+        //                 }
+        //                 _ => {
+        //                     println!("Received unknown signal: {}", signal);
+        //                 }
+        //             }
 
-                    // 6. Optionally send a response signal (e.g., Sync Done)
-                    // ... (Implement response signal logic here)
-                } else {
-                    println!("Connection rejected from non-allowlisted IP: {}", addr.ip());
-                }
-            }
-            Err(e) => {
-                println!("Error accepting connection: {}", e);
-            }
-        }
+        //             // 6. Optionally send a response signal (e.g., Sync Done)
+        //             // ... (Implement response signal logic here)
+        //         } else {
+        //             println!("Connection rejected from non-allowlisted IP: {}", addr.ip());
+        //         }
+        //     }
+        //     Err(e) => {
+        //         println!("Error accepting connection: {}", e);
+        //     }
+        // }
     }
     debug_log("Finish: in_queue_sync_loop");
 }
@@ -2270,9 +2296,12 @@ fn in_queue_sync_loop() {
 
 
 // Function for thread 2's file_sync loop: demo version
-fn you_love_file_sync_base() {
+fn you_love_the_sync_team_office() {
     /*
     "It's all fun and games until someone syncs a file."
+    
+    
+    Version 1 (depricated)
     
     2.2 a user thread:  user_thread
     2.2.1 initialization of the software and file system (especially first setup bootstrapping)
@@ -2281,6 +2310,23 @@ fn you_love_file_sync_base() {
     2.2.4 running one action-set in the user_app()
     2.2.5 saving state in files in uma_state_toml_dir
     (loop, to 2.2.2)
+    
+    
+    Version 2:
+    as set by node.toml in the team_channel node
+    
+    for every other collaborator, you make:
+    two threds:
+        - your in-tray desk
+        - their in-tray desk
+        
+    Each thred has six ports:
+        - three for each 'in-tray desk'
+        
+    For each this-session-active-collaborator you keep a send-queue.
+    For one who never requested a file (who isn't online): no need to make a send-queue
+    
+    
     
     */
     
@@ -2611,7 +2657,7 @@ fn we_love_projects_looop__demo() {
 // Function for thread 2's file_sync loop: demo version
 fn you_love_file_sync_looop__demo() {
     loop {
-        debug_log("you_love_file_sync_loop Thread 2 is running");
+        debug_log("you_love_the_sync_team_office Thread 2 is running");
         thread::sleep(Duration::from_secs(3));
     }
 }
@@ -2701,12 +2747,12 @@ fn main() {
         we_love_projects_loop();
     });
     // Thread 2: Executes the thread2_loop function
-    let you_love_file_sync_loop = thread::spawn(move || {
-        you_love_file_sync_base();
+    let you_love_the_sync_team_office = thread::spawn(move || {
+        you_love_the_sync_team_office();
     });
     // Keep the main thread alive
     we_love_projects_loop.join().unwrap();
-    you_love_file_sync_loop.join().unwrap();
+    you_love_the_sync_team_office.join().unwrap();
     
     println!("All threads completed. The Uma says fare well and strive.");
     debug_log("All threads completed. The Uma says fare well and strive.");
