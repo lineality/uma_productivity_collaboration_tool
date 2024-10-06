@@ -55,6 +55,8 @@ use serde::{
 use std::ffi::OsStr;
 // use std::collections::HashMap;
 use std::collections::HashSet;
+use std::sync::mpsc::channel;
+use std::sync::mpsc::Sender;
 
 use std::process::Command;
 
@@ -83,104 +85,16 @@ use tiny_tui_module::tiny_tui;
 const CONTINUE_UMA_PATH: &str = "project_graph_data/session_state_items/continue_uma.txt";
 const SYNC_START_OK_FLAG_PATH: &str = "project_graph_data/session_state_items/ok_to_start_sync_flag.txt";
 
-
-
-fn dir_at_path_is_empty_returns_false(path_to_dir: &Path) -> bool { 
-
-    debug_log!("dir_at_path_is_empty_returns_false()-> Checking if directory is empty: {:?}", path_to_dir);
-    if let Ok(mut entries) = fs::read_dir(path_to_dir) {
-        
-        entries.next().is_some() // Returns false if the directory is empty
-    } else {
-        true // Assume directory is NOT empty if an error occurs reading it
-    }
-}
-
 enum IpAddrKind { V4, V6 }
 
-fn get_ipv4_addresses() -> Result<Option<Vec<Ipv4Addr>>, io::Error> {
-    let mut addresses = Vec::new();
-    loop {
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
-        let input = input.trim();
-
-        if input.to_lowercase() == "done" {
-            break; 
-        } else if input.is_empty() { 
-            return Ok(None);
-        }
-
-        let addr: Ipv4Addr = input.parse()
-                               .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "Invalid IPv4 address"))?; 
-        addresses.push(addr);
-    }
-    Ok(Some(addresses))
+pub enum SyncError {
+    ConnectionError(std::io::Error),
+    ChecksumMismatch,
+    Timeout,
+    FileReadError(std::io::Error),
+    FileWriteError(std::io::Error),
+    // ... other potential errors ...
 }
-
-fn get_ipv6_addresses() -> Result<Option<Vec<Ipv6Addr>>, io::Error> {
-    let mut addresses = Vec::new();
-    loop {
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
-        let input = input.trim();
-
-        if input.to_lowercase() == "done" {
-            break;
-        } else if input.is_empty() {
-            return Ok(None);
-        }
-
-        let addr: Ipv6Addr = input.parse() 
-                               .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "Invalid IPv6 address"))?; 
-        addresses.push(addr);
-    }
-    Ok(Some(addresses))
-}
-
-
-
-
-// use std::process::Command;
-// use std::io::{Error, ErrorKind};
-// use std::path::Path;
-
-pub fn sign_toml_file(file_path: &Path) -> Result<(), Error> {
-    let output = Command::new("gpg")
-        .arg("--clearsign") 
-        .arg(file_path)
-        .output() 
-        .map_err(|e| Error::new(ErrorKind::Other, format!("Failed to run GPG: {}", e)))?;
-
-    if output.status.success() {
-        fs::write(file_path, output.stdout)?; // Overwrite with the signed content 
-        debug_log!("File {} successfully signed with GPG.", file_path.display()); 
-        Ok(())
-    } else {
-        debug_log!("GPG signing failed: {}", String::from_utf8_lossy(&output.stderr));
-        Err(Error::new(ErrorKind::Other, "GPG signing failed"))
-    }
-}
-
-
-pub fn verify_toml_signature(file_path: &Path) -> Result<(), Error> {
-    let output = Command::new("gpg") 
-        .arg("--verify") 
-        .arg(file_path) 
-        .output()
-        .map_err(|e| Error::new(ErrorKind::Other, format!("Failed to run GPG: {}", e)))?;
-
-    if output.status.success() {
-        debug_log!("GPG signature of {} is valid.", file_path.display()); 
-        Ok(())
-    } else {
-        debug_log!("GPG verification failed: {}", String::from_utf8_lossy(&output.stderr));
-        Err(Error::new(ErrorKind::Other, "GPG signature invalid"))
-    }
-}
-
-
-
 
 
 #[derive(Debug)]
@@ -245,6 +159,177 @@ impl From<toml::de::Error> for MyCustomError {
     }
 }
 
+#[derive(Debug)]
+pub enum UmaError {
+    IoError(io::Error),
+    TomlError(toml::de::Error),
+    InvalidData(String),
+    PortCollision(String), 
+    NetworkError(String),
+    // ... Add other error types as needed ...
+}
+
+// Implement the std::error::Error trait for UmaError
+impl std::error::Error for UmaError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match *self {
+            UmaError::IoError(ref err) => Some(err),
+            UmaError::TomlError(ref err) => Some(err),
+            _ => None, 
+        }
+    }
+}
+
+// Implement the Display trait for UmaError for easy printing 
+impl std::fmt::Display for UmaError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match *self {
+            UmaError::IoError(ref err) => write!(f, "IO Error: {}", err),
+            UmaError::TomlError(ref err) => write!(f, "TOML Error: {}", err),
+            UmaError::InvalidData(ref msg) => write!(f, "Invalid Data: {}", msg),
+            UmaError::PortCollision(ref msg) => write!(f, "Port Collision: {}", msg),
+            UmaError::NetworkError(ref msg) => write!(f, "Network Error: {}", msg), 
+            // ... add formatting for other error types
+        }
+    }
+}
+
+// Implement the From trait to easily convert from other error types into UmaError
+impl From<io::Error> for UmaError {
+    fn from(err: io::Error) -> UmaError {
+        UmaError::IoError(err)
+    }
+}
+
+impl From<toml::de::Error> for UmaError {
+    fn from(err: toml::de::Error) -> UmaError {
+        UmaError::TomlError(err)
+    }
+}
+
+/// get unix time 
+/// e.g. for use with updated_at_timestamp
+fn get_current_unix_timestamp() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("System time is before the Unix epoch!") // Handle errors appropriately
+        .as_secs()
+}
+
+// // 2. Read the 'continue_uma.txt' file 
+// let file_content = match fs::read_to_string(CONTINUE_UMA_PATH) {
+//     Ok(content) => content,
+//     Err(_) => {
+//         println!("Error reading 'continue_uma.txt'. Continuing..."); // Handle the error (e.g., log it) but continue for now
+//         continue; // Skip to the next loop iteration
+//     }
+// };
+// // break loop if continue=0
+// if file_content.trim() == "0" {
+//     debug_log("'continue_uma.txt' is 0. we_love_projects_loop() Exiting loop.");
+//     break; 
+// }
+/// Function for broadcasting to theads to wrapup and end uma session: quit
+fn should_halt() -> bool {
+    // 1. Read the 'continue_uma.txt' file
+    let file_content = match fs::read_to_string(CONTINUE_UMA_PATH) {
+        Ok(content) => content,
+        Err(e) => {
+            eprintln!("Error reading 'continue_uma.txt': {:?}", e); // Log the error
+            return false; // Don't halt on error reading the file
+        }
+    };
+
+    // 2. Check if the file content is "0"
+    file_content.trim() == "0"
+}
+
+
+fn dir_at_path_is_empty_returns_false(path_to_dir: &Path) -> bool { 
+
+    debug_log!("dir_at_path_is_empty_returns_false()-> Checking if directory is empty: {:?}", path_to_dir);
+    if let Ok(mut entries) = fs::read_dir(path_to_dir) {
+        
+        entries.next().is_some() // Returns false if the directory is empty
+    } else {
+        true // Assume directory is NOT empty if an error occurs reading it
+    }
+}
+
+fn get_ipv4_addresses() -> Result<Option<Vec<Ipv4Addr>>, io::Error> {
+    let mut addresses = Vec::new();
+    loop {
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        let input = input.trim();
+
+        if input.to_lowercase() == "done" {
+            break; 
+        } else if input.is_empty() { 
+            return Ok(None);
+        }
+
+        let addr: Ipv4Addr = input.parse()
+                               .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "Invalid IPv4 address"))?; 
+        addresses.push(addr);
+    }
+    Ok(Some(addresses))
+}
+
+fn get_ipv6_addresses() -> Result<Option<Vec<Ipv6Addr>>, io::Error> {
+    let mut addresses = Vec::new();
+    loop {
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        let input = input.trim();
+
+        if input.to_lowercase() == "done" {
+            break;
+        } else if input.is_empty() {
+            return Ok(None);
+        }
+
+        let addr: Ipv6Addr = input.parse() 
+                               .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "Invalid IPv6 address"))?; 
+        addresses.push(addr);
+    }
+    Ok(Some(addresses))
+}
+
+pub fn sign_toml_file(file_path: &Path) -> Result<(), Error> {
+    let output = Command::new("gpg")
+        .arg("--clearsign") 
+        .arg(file_path)
+        .output() 
+        .map_err(|e| Error::new(ErrorKind::Other, format!("Failed to run GPG: {}", e)))?;
+
+    if output.status.success() {
+        fs::write(file_path, output.stdout)?; // Overwrite with the signed content 
+        debug_log!("File {} successfully signed with GPG.", file_path.display()); 
+        Ok(())
+    } else {
+        debug_log!("GPG signing failed: {}", String::from_utf8_lossy(&output.stderr));
+        Err(Error::new(ErrorKind::Other, "GPG signing failed"))
+    }
+}
+
+pub fn verify_toml_signature(file_path: &Path) -> Result<(), Error> {
+    let output = Command::new("gpg") 
+        .arg("--verify") 
+        .arg(file_path) 
+        .output()
+        .map_err(|e| Error::new(ErrorKind::Other, format!("Failed to run GPG: {}", e)))?;
+
+    if output.status.success() {
+        debug_log!("GPG signature of {} is valid.", file_path.display()); 
+        Ok(())
+    } else {
+        debug_log!("GPG verification failed: {}", String::from_utf8_lossy(&output.stderr));
+        Err(Error::new(ErrorKind::Other, "GPG signature invalid"))
+    }
+}
+
+
 
 fn debug_log(message: &str) {
     if DEBUG_FLAG {
@@ -256,6 +341,25 @@ fn debug_log(message: &str) {
     
         writeln!(file, "{}", message).expect("Failed to write to log file");
     }
+}
+
+/// read timestamps from .toml files, like you were born to do just that...on Mars!!
+fn get_toml_file_timestamp(file_path: &Path) -> Result<u64, UmaError> {
+    let toml_string = std::fs::read_to_string(file_path)?;
+    let toml_value: Value = toml::from_str(&toml_string)?;
+
+    let timestamp = toml_value
+        .get("updated_at_timestamp") // Access the "updated_at_timestamp" field
+        .and_then(Value::as_integer) // Try to convert to an integer
+        .and_then(|ts| ts.try_into().ok()) // Try to convert to u64
+        .ok_or_else(|| {
+            UmaError::InvalidData(format!(
+                "Missing or invalid 'updated_at_timestamp' in TOML file: {}",
+                file_path.display()
+            ))
+        })?;
+
+    Ok(timestamp)
 }
 
 // alpha testing
@@ -650,6 +754,7 @@ struct Collaborator {
     gpg_key_public: String,
     sync_file_transfer_port: u16,
     sync_interval: u64,
+    updated_at_timestamp: u64,
 }
 
 impl Collaborator {
@@ -659,7 +764,8 @@ impl Collaborator {
         ipv6_addresses: Option<Vec<Ipv6Addr>>,
         gpg_key_public: String, 
         sync_file_transfer_port: u16, 
-        sync_interval: u64
+        sync_interval: u64,
+        updated_at_timestamp: u64,
     ) -> Collaborator {
         Collaborator {
             user_name,
@@ -668,6 +774,7 @@ impl Collaborator {
             gpg_key_public,
             sync_file_transfer_port,
             sync_interval,
+            updated_at_timestamp,
         }
     }
 
@@ -682,8 +789,9 @@ fn add_collaborator_setup_file(
     gpg_key_public: String,
     sync_file_transfer_port: u16,
     sync_interval: u64,
+    updated_at_timestamp: u64,
 ) -> Result<(), std::io::Error> {
-    debug_log("Stratting: fn add_collaborator_setup_file( ...cupa tea?");
+    debug_log("Starting: fn add_collaborator_setup_file( ...cupa tea?");
     // Create the Collaborator instance using the existing new() method:
     let collaborator = Collaborator::new(
         user_name, 
@@ -692,6 +800,7 @@ fn add_collaborator_setup_file(
         gpg_key_public,
         sync_file_transfer_port,
         sync_interval,
+        updated_at_timestamp,
     );
 
     // Serialize the data:
@@ -812,13 +921,18 @@ fn add_collaborator_qa(
     }
 
     // Create the Collaborator struct
+    // updated_at_now = SystemTime::now()
+    
+    
+    
     let collaborator = Collaborator::new(
         username,
         ipv4_addresses, 
         ipv6_addresses, 
         gpg_key_public, 
         sync_file_transfer_port, 
-        sync_interval
+        sync_interval,
+        get_current_unix_timestamp(),
     ); 
 
     // Load existing collaborators from files
@@ -841,86 +955,14 @@ fn add_collaborator_qa(
         collaborator.ipv6_addresses,
         collaborator.gpg_key_public, 
         collaborator.sync_file_transfer_port, 
-        collaborator.sync_interval 
+        collaborator.sync_interval,
+        collaborator.updated_at_timestamp,
     )?; 
 
     println!("Collaborator '{}' added!", collaborator.user_name); 
     debug_log(&format!("Collaborator '{}' added!", collaborator.user_name)); 
     Ok(())
 } 
-
-
-
-// fn add_collaborator_setup_file(
-//     user_name: String,
-//     ipv4_addresses: Option<Vec<Ipv4Addr>>,
-//     ipv6_addresses: Option<Vec<Ipv6Addr>>,
-//     gpg_key_public: String,
-//     sync_file_transfer_port: u16,
-//     sync_interval: u64,
-// ) -> Result<(), std::io::Error> {
-//     let collaborator = Collaborator {
-//         user_name,
-//         ipv4_addresses: ipv4_addresses.unwrap_or_default(), // Use empty Vec if None
-//         ipv6_addresses: ipv6_addresses.unwrap_or_default(), // Use empty Vec if None
-//         gpg_key_public,
-//         sync_file_transfer_port,
-//         sync_interval,
-//     };
-
-//     let toml_string = toml::to_string(&collaborator).map_err(|e| {
-//         std::io::Error::new(
-//             std::io::ErrorKind::Other,
-//             format!("TOML serialization error: {}", e),
-//         )
-//     })?;
-
-//     let file_path = Path::new("project_graph_data/collaborator_files")
-//         .join(format!("{}__collaborator.toml", collaborator.user_name));
-
-//     let mut file = File::create(file_path)?;
-//     file.write_all(toml_string.as_bytes())?;
-
-//     Ok(())
-// }
-
-// #[derive(Debug, Deserialize, serde::Serialize)]
-// struct CollaboratorList {
-//     collaborators: Vec<Collaborator>,
-// }
-
-// impl CollaboratorList {
-//     fn new() -> CollaboratorList {
-//         CollaboratorList {
-//             collaborators: Vec::new(),
-//         }
-//     }
-
-//     fn add_collaborator_setup_file(
-//         &mut self, 
-//         user_name: String, 
-//         // ipv4_address: Option<IpvAddr>, 
-//         ipv6_address: Option<Ipv6Addr>, 
-//         gpg_key_public: String,
-//         sync_file_transfer_port: u16, // Add sync_file_transfer_port
-//         sync_interval: u64, // Add sync_interval
-//     ) {
-//         let collaborator = Collaborator::new(
-//             user_name, 
-//             // ipv4_addresses,
-//             ipv6_address, 
-//             gpg_key_public,  
-//             sync_file_transfer_port, 
-//             sync_interval,
-//         );
-//         self.collaborators.push(collaborator);
-//     }
-
-//     fn get_collaborator_by_username(&self, user_name: &str) -> Option<&Collaborator> {
-//         self.collaborators.iter().find(|c| c.user_name == user_name)
-//     }
-// }
-
 
 
 // TODO: how to load value for active_team_channel when channel is entered
@@ -1000,7 +1042,7 @@ impl GraphNavigationInstanceState {
         //             self.current_node_directory_path = this_node.directory_path;
         //             self.current_node_unique_id = this_node.node_unique_id;
         //             self.current_node_members = this_node.collaborators_with_access.clone(); // Use collaborators_with_access for members
-        //             // self.current_node_last_updated = node.updated_at; // Assuming Node has an 'updated_at' field
+        //             // self.current_node_last_updated = node.updated_at_timestamp; // Assuming Node has an 'updated_at_timestamp' field
 
         //             debug_log("Successfully loaded node.toml"); // Optional: Indicate success
         //         }
@@ -1103,50 +1145,49 @@ graph-dungeon location.
 
 #[derive(Debug, Deserialize, Serialize)]
 struct CoreNode {
-    // every .toml has these four
-    owner: String, // owner of this item
-    collaborators_with_access: Vec<String>, 
-    updated_at: u64, // utc posix timestamp
-    expires_at: u64, // utc posix timestamp
-    
+    // Metadata
     node_name: String,
-    description_for_tui: String,
-    directory_path: PathBuf,
+    description_for_tui: String, 
     node_unique_id: u64,
-    children: Vec<CoreNode>, // TODO: this will (probably) be depricated and removed
-    order_number: u32, // Add order number
-    priority: NodePriority, // Add priority
+    directory_path: PathBuf,
+    order_number: u32,
+    priority: NodePriority,
+    // Collaboration 
+    owner: String, 
+    collaborators_with_access: Vec<String>, 
+    // Timestamps
+    updated_at_timestamp: u64, 
+    expires_at: u64, 
+    // Children (potentially deprecated)
+    children: Vec<CoreNode>, 
 }
 
 impl CoreNode {
     fn new(
-        collaborators_with_access: Vec<String>,
-        owner: String,
+        node_name: String,
         description_for_tui: String,
         directory_path: PathBuf,
-        node_name: String,
         order_number: u32, // Add order number parameter
         priority: NodePriority, // Add priority parameter
+        owner: String,
+        collaborators_with_access: Vec<String>,
+        // TODO expires_at
     ) -> CoreNode {
-        let node_unique_id = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-        let expires_at = node_unique_id + 86400; // 1 day from now
-        let updated_at = node_unique_id;
-
+        let expires_at = get_current_unix_timestamp() + 86400; // 1 day from now
+        let updated_at_timestamp = get_current_unix_timestamp();
+        let node_unique_id = get_current_unix_timestamp(); // Generate a unique ID using a timestamp 
         CoreNode {
-            collaborators_with_access,
             node_name,
-            owner,
             description_for_tui,
-            directory_path,
             node_unique_id,
-            expires_at,
-            updated_at,
-            children: Vec::new(),
+            directory_path,
             order_number, // Assign the order_number parameter
             priority,       // Assign the priority parameter
+            owner,
+            collaborators_with_access,
+            updated_at_timestamp,
+            expires_at,
+            children: Vec::new(),
         }
     }
 
@@ -1173,23 +1214,25 @@ impl CoreNode {
         owner: String,
         description_for_tui: String,
         directory_path: PathBuf,
-        order_number: u32, // Add order_number
-        priority: NodePriority, // Add priority
+        order_number: u32,
+        priority: NodePriority, 
+        // node_unique_id: u64, // Remove this extra parameter 
     ) {
         let child = CoreNode::new(
-            collaborators_with_access,
-            owner,
+            self.node_name.clone(), 
             description_for_tui,
             directory_path,
-            self.node_name.clone(), // Assuming you want the child to have the same node_name as the parent
             order_number,
             priority,
+            owner,
+            collaborators_with_access, 
+            // node_unique_id, // Remove this extra argument
         );
         self.children.push(child);
     }
-        
-    fn update_updated_at(&mut self) {
-        self.updated_at = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+            
+    fn update_updated_at_timestamp(&mut self) {
+        self.updated_at_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
     }
     fn save_node_to_file(&self) -> Result<(), io::Error> {
         let toml_string = toml::to_string(&self).map_err(|e| {
@@ -1227,7 +1270,7 @@ struct NodeInstMsgBrowserMetadata {
     // every .toml has these four
     owner: String, // owner of this item
     collaborators_with_access: Vec<String>, 
-    updated_at: u64, // utc posix timestamp
+    updated_at_timestamp: u64, // utc posix timestamp
     expires_at: u64, // utc posix timestamp
     
     node_name: String,
@@ -1254,7 +1297,7 @@ impl NodeInstMsgBrowserMetadata {
             expiration_period_days: 30, // Default: 7 days
             max_message_size_char: 4096, // Default: 4096 characters
             total_max_size_mb: 512, // Default: 1024 MB
-            updated_at: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
+            updated_at_timestamp: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
             expires_at: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
             collaborators_with_access: Vec::new(), // by default use state-struct node members
             owner: owner,
@@ -1274,7 +1317,7 @@ struct InstantMessageFile {
     // every .toml has these four
     owner: String, // owner of this item
     collaborators_with_access: Vec<String>, 
-    updated_at: u64, // utc posix timestamp
+    updated_at_timestamp: u64, // utc posix timestamp
     expires_at: u64, // utc posix timestamp
     
     node_name: String, // Name of the node this message belongs to
@@ -1293,10 +1336,7 @@ impl InstantMessageFile {
         signature: Option<String>,
         graph_navigation_instance_state: &GraphNavigationInstanceState,  // gets uma.toml data
     ) -> InstantMessageFile {
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let timestamp = get_current_unix_timestamp();
         // Calculate expiration date using the value from local_user_metadata
         let expires_at = timestamp + 
             (graph_navigation_instance_state.default_im_messages_expiration_days * 24 * 60 * 60);
@@ -1308,8 +1348,8 @@ impl InstantMessageFile {
             node_name: node_name.to_string(), // Store the node name
             filepath_in_node: filepath_in_node.to_string(), // Store the filepath
             text_message: text_message.to_string(),
-            updated_at: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(), // utc posix timestamp
-            expires_at: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(), // utc posix timestamp // TODO!! update this
+            updated_at_timestamp: timestamp, // utc posix timestamp
+            expires_at: expires_at, // utc posix timestamp // TODO!! update this
             links: Vec::new(),
             signature,
         }
@@ -1331,26 +1371,27 @@ fn create_team_channel(team_channel_name: String, owner: String) {
         let metadata = NodeInstMsgBrowserMetadata::new(&team_channel_name, owner.clone());
         save_toml_to_file(&metadata, &metadata_path).expect("Failed to create 0.toml"); 
     }
-//     /*
-//     fn new(
-//         collaborators_with_access: Vec<String>,
-//         owner: String,
-//         description_for_tui: String,
-//         directory_path: PathBuf,
-//         node_name: String,
-//         order_number: u32,
-//         priority: NodePriority, 
-//     ) -> Node {
-//     */
+    //     /*
+    //     fn new(
+    //         collaborators_with_access: Vec<String>,
+    //         owner: String,
+    //         description_for_tui: String,
+    //         directory_path: PathBuf,
+    //         node_name: String,
+    //         order_number: u32,
+    //         priority: NodePriority, 
+    //     ) -> Node {
+    //     */
     // 3. Create node.toml with initial data for the team channel
     let new_node = CoreNode::new(
-        vec![],  // collaborators_with_access
-        owner,   // owner
+        team_channel_name.clone(), // node_name
         team_channel_name.clone(), // description_for_tui
         new_channel_path.clone(),  // directory_path
-        team_channel_name, // node_name
         5,                // Order number (you might want to manage this)
         NodePriority::Medium, // Priority (you might want to make this configurable)
+        owner,   // owner
+        vec![],  // collaborators_with_access
+
     );
     new_node.save_node_to_file().expect("Failed to save initial node data"); 
 }
@@ -1618,6 +1659,8 @@ fn initialize_uma_application() {
         let mut rng = rand::thread_rng(); 
         let sync_file_transfer_port: u16 = rng.gen_range(40000..=50000); 
         
+        // let updated_at_timestamp = get_current_unix_timestamp()
+        
         // // Add a new user to Uma file system
         add_collaborator_setup_file(
             username, 
@@ -1626,6 +1669,7 @@ fn initialize_uma_application() {
             gpg_key_public, 
             sync_file_transfer_port, // sync_file_transfer_port
             60,   // Example sync_interval (in seconds)
+            get_current_unix_timestamp(),
         );
 
         // // Save the updated collaborator list to the data directory
@@ -1739,15 +1783,25 @@ fn handle_command(
                 let new_node_path = graph_navigation_instance_state.current_full_file_path.join(&node_name);
                 fs::create_dir_all(&new_node_path).expect("Failed to create node directory");
 
+                /*
+                fn new(
+                node_name: String,
+                description_for_tui: String,
+                directory_path: PathBuf,
+                order_number: u32, // Add order number parameter
+                priority: NodePriority, // Add priority parameter
+                owner: String,
+                collaborators_with_access: Vec<String>,
+                */
                 // 7. Create the Node instance
                 let new_node = CoreNode::new(
-                    collaborators_with_access,
-                    graph_navigation_instance_state.local_owner_user.clone(),
-                    description_for_tui,
-                    new_node_path,
-                    node_name,
-                    order_number,
-                    priority,
+                    node_name, // node_name: String,
+                    description_for_tui, // description_for_tui: String,
+                    new_node_path, // directory_path: PathBuf,
+                    order_number, // order_number: u32, // Add order number parameter
+                    priority, // priority: NodePriority, // Add priority parameter
+                    graph_navigation_instance_state.local_owner_user.clone(), // owner: String,
+                    collaborators_with_access, // collaborators_with_access: Vec<String>,               
                 );
 
                 // 8. Save the node data to node.toml
@@ -1768,7 +1822,7 @@ fn handle_command(
             }
             // "u" | "updated" => {
             //     debug_log("updated selected");
-            //     // TODO: update the updated_at filed in the node.toml
+            //     // TODO: update the updated_at_timestamp filed in the node.toml
             // }
             // "m" | "message" => {
                 //  debug_log("m selected");
@@ -1848,127 +1902,6 @@ fn load_collaborator_by_username(username: &str) -> Result<Collaborator, MyCusto
     }
 }
 
-// fn make_session_connection_allowlists() -> Result<HashSet<SyncCollaborator>, MyCustomError> { 
-//     /*
-//     step 1: get team_channel_members from externalized sessoin state item doc: 
-//         project_graph_data/session_items/current_node_collaborators_with_access.toml
-//     step 2: get current user project_graph_data/session_items/uma_local_owner_user.txt
-//     stem 3: remove current user from IP allowlist
-//     step 4: get only the ipv4, ipv6 addresses for those members
-//     from the collaborator's file:
-//     project_graph_data/collaborator_files/NAME__collaborator.toml
-
-//     (note: members should have a list of ipv4, ipv6 addresses, not just one)
-
-//     sample: project_graph_data/collaborator_files/alice__collaborator.toml
-//     [[collaborator]]
-//     user_name = "alice"
-//     ipv4_addresses = ["24.0.189.112", "24.0.189.112"]
-//     ipv6_addresses = ["2601:80:4803:9490::2e79","2601:80:4803:9490::2e79"]
-//     gpg_key_public = "304A9A525A5D00D6AD269F765C3E7C56E5A3D0D8"
-//     sync_file_transfer_port = 5000
-//     sync_interval = 5000
-
-//     sample: project_graph_data/collaborator_files/bob__collaborator.tomloml
-//     [[collaborator]]
-//     user_name = "bob"
-//     ipv4_addresses = ["24.0.189.112", "24.0.189.112"]
-//     ipv6_addresses = ["2601:80:4803:9490::2e79","2601:80:4803:9490::2e79"]
-//     gpg_key_public = "304A9A525A5D00D6AD269F765C3E7C56E5A3D0D8"
-//     sync_file_transfer_port = 5000
-//     sync_interval = 5000
-
-//     Do NOT read all data from all collaborators.      
-//     Ethical Data Access: The function only accesses the collaborator data that 
-//     is absolutely necessary for building the IP allowlist for the current channel.
-    
-    
-//     // sample node.toml
-//     owner = "alice"
-//     collaborators_with_access = [
-//         { collaborator_name = "alice", 
-//         ready_port = 50001, 
-//         intray_port = 50002, 
-//         gotit_port = 50003, 
-//         self_ready_port = 50004, 
-//         self_intray_port = 50005, 
-//         self_gotit_port = 50006 
-//         },
-//         { collaborator_name = "bob", 
-//         ready_port = 50011, 
-//         intray_port = 50012, 
-//         gotit_port = 50013, 
-//         self_ready_port = 50014, 
-//         self_intray_port = 50015, 
-//         self_gotit_port = 50016  
-//         },
-//         # Add more collaborators as needed
-//     ]
-
-//     updated_at = 1727641034
-//     expires_at = 1727727434
-//     node_name = "neem"
-//     description_for_tui = "neem"
-//     directory_path = "project_graph_data/team_channels/neem"
-//     node_unique_id = 1727641034
-//     children = []
-//     order_number = 5
-//     priority = "Medium"
-//     */
-
-//     // 1. Load team channel members from session_state_items:
-//     let channel_members_toml = read_state_items_tomls("current_node_collaborators_with_access.toml")
-//         .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
-
-//     let channel_members: Vec<String> = channel_members_toml.as_array()
-//         .ok_or(io::Error::new(io::ErrorKind::InvalidData, "Failed to parse channel members"))?
-//         .iter()
-//         .filter_map(|v| v.as_str().map(String::from))
-//         .collect();
-
-//     // 2. Load current user from session_state_items:
-//     let current_user = read_state_string("local_owner_user.txt")?;
-
-//     // 3. Create an initially mutable allowlist:
-//     let mut sync_config_data_set = HashSet::new();
-
-//     // 4. Extract various connection data, EXCLUDING current_user:
-//     for member_username in &channel_members {
-//         // Find the member in the list of all collaborators:
-//         let collaborator = load_collaborator_by_username(member_username)?;
-
-//         // if collaborator.user_name != current_user {
-//         //     if let Some(ipv6_address) = collaborator.ipv6_address {
-//         //         sync_config_data_set.insert(SyncCollaborator {
-//         //             user_name: collaborator.user_name,
-//         //             ipv6_addresses,
-//         //             sync_file_transfer_port: collaborator.sync_file_transfer_port,
-//         //             sync_interval: collaborator.sync_interval,
-//         //         });
-//         //     } 
-//         // } 
-
-//         if collaborator.user_name != current_user {
-//             // Correct the field access:
-//             if let Some(ipv6_addresses) = collaborator.ipv6_addresses { 
-//                 // Choose a random ipv6 from list, or rather...just use the first in the list
-//                 let ipv6_address = ipv6_addresses[0];
-
-//                 sync_config_data_set.insert(SyncCollaborator {
-//                     user_name: collaborator.user_name,
-//                     ipv6_address, // Use the extracted ipv6_address
-//                     sync_file_transfer_port: collaborator.sync_file_transfer_port,
-//                     sync_interval: collaborator.sync_interval,
-//                 });
-//             } 
-//         } 
-//     }
-//     // Now it's safe to make the allowlist immutable (implicitly)
-//     Ok(sync_config_data_set) 
-// }
-
-
-
 
 
 /// Loads connection data for members of the currently active team channel.
@@ -2042,7 +1975,7 @@ fn load_collaborator_by_username(username: &str) -> Result<Collaborator, MyCusto
 ///     },
 ///     # Add more collaborators as needed
 /// ]
-/// updated_at = 1727641034
+/// updated_at_timestamp = 1727641034
 /// expires_at = 1727727434
 /// node_name = "neem"
 /// description_for_tui = "neem"
@@ -2083,187 +2016,6 @@ fn make_session_connection_allowlists(uma_local_owner_user: &str) -> Result<Hash
     // ... (Rest of your function logic)
 }
 
-////// old archive
-// /// Loads connection data for members of the currently active team channel.
-// /// On success, returns a `HashSet` of `SyncCollaborator` structs, 
-// /// each containing connection 
-// /// data for a collaborator in the current team channel (excluding the current user).
-// fn make_session_connection_allowlists() -> Result<HashSet<SyncCollaborator>, MyCustomError> { 
-//     /*
-//     As a headline this makes an ip-whitelist or ip-allowlist but the overall process is bigger.
-    
-//     This should include 'yourself' so all connection data are there, so you know your ports
-    
-//     Note: this likely should also include the collabortor's last-recieved-timestamp (and the previous one)
-//     this will also need a bootstrap where at first...there is no last timestamp.
-    
-//     Note: making the allow_lists requires information from more than one source:
-//     =uma.toml
-//     =project_graph_data/session_items/current_node_collaborators_with_access.toml
-//     =/project_graph_data/collaborator_files/NAME__collaborator.toml
-    
-//     step 1: get team_channel list of (and data about) all possible team_channel_members
-//         from externalized session state item doc @: 
-//         project_graph_data/session_items/current_node_collaborators_with_access.toml
-//         The 6-port assignments come from this source.
-        
-//     step 2: get /collaborator_files data @:
-//         .../project_graph_data/collaborator_files/ directory
-//         as: NAME__collaborator.toml
-        
-//     step 3: Remove any collaborator from that 'possible list' whose information
-//         is not in the .../project_graph_data/collaborator_files directory
-//         as: NAME__collaborator.toml
-//         The ipv4 and ipv6 lists come from this source.
-    
-//     step 4: make a session dataset for: teamchannel_connection_data
-//         - allowlisted collaborators
-//             - names
-//             - ip lists
-//             - ports
-
-//     (note: members should have a list of ipv4, ipv6 addresses, not just one)
-
-//     sample: project_graph_data/collaborator_files/alice__collaborator.toml
-//     [[collaborator]]
-//     user_name = "alice"
-//     ipv4_addresses = ["24.0.189.112", "24.0.189.112"]
-//     ipv6_addresses = ["2601:80:4803:9490::2e79","2601:80:4803:9490::2e79"]
-//     gpg_key_public = "304A9A525A5D00D6AD269F765C3E7C56E5A3D0D8"
-//     sync_file_transfer_port = 5000
-//     sync_interval = 5000
-
-//     Do NOT read all data from all collaborators.      
-//     Ethical Data Access: The function only accesses the collaborator data that 
-//     is absolutely necessary for building the session_connection_allowlist for the current channel.
-    
-    
-//     // sample node.toml
-//     owner = "alice"
-//     collaborators_with_access = [
-//         { collaborator_name = "alice", 
-//         ready_port = 50001, 
-//         intray_port = 50002, 
-//         gotit_port = 50003, 
-//         self_ready_port = 50004, 
-//         self_intray_port = 50005, 
-//         self_gotit_port = 50006 
-//         },
-//         { collaborator_name = "bob", 
-//         ready_port = 50011, 
-//         intray_port = 50012, 
-//         gotit_port = 50013, 
-//         self_ready_port = 50014, 
-//         self_intray_port = 50015, 
-//         self_gotit_port = 50016  
-//         },
-//         # Add more collaborators as needed
-//     ]
-//     updated_at = 1727641034
-//     expires_at = 1727727434
-//     node_name = "neem"
-//     description_for_tui = "neem"
-//     directory_path = "project_graph_data/team_channels/neem"
-//     node_unique_id = 1727641034
-//     children = []
-//     order_number = 5
-//     priority = "Medium"
-//     */
-//     /*
-//     maybe detects any port collisions, 
-//     excluding those who collide with senior members
-//     or returning an error if found.
-//     */
-
-//     // 1. Load possible team channel members from session_state_items:
-//     let channel_members_toml = read_state_items_tomls("current_node_collaborators_with_access.toml")?;
-//     let channel_members: Vec<String> = channel_members_toml.as_array()
-//         .ok_or(MyCustomError::InvalidData("Failed to parse channel members"))? 
-//         .iter()
-//         .filter_map(|v| v.as_str().map(String::from)) 
-//         .collect();
-
-//     let mut sync_config_data_set: HashSet<SyncCollaborator> = HashSet::new();
-
-//     // ... (Load possible-team-channel-members and their port data)
-//     for member in channel_members { // (Assuming you have parsed the channel members)
-//         let collaborator_ip_info = load_collaborator_by_username(&member.user_name)?; 
-
-//         sync_config_data_set.insert(SyncCollaborator {
-//             user_name: member.user_name,
-//             ipv6_address: collaborator_ip_info.ipv6_addresses.unwrap_or_default()[0], // (Get first IPv6 address, handle potential errors)
-//             sync_file_transfer_port: collaborator_ip_info.sync_file_transfer_port,
-//             sync_interval: collaborator_ip_info.sync_interval,
-//             ready_port: member.ready_port,  
-//             intray_port: member.intray_port, 
-//             gotit_port: member.gotit_port,
-//         });
-//     }
-
-//     // step 2: get real data @: /project_graph_data/collaborator_files/ directory
-//     // as: NAME__collaborator.toml
-//     for member in channel_members { // (Assuming you have parsed the channel members)
-//         let collaborator_ip_info = load_collaborator_by_username(&member.user_name)?; 
-
-//         sync_config_data_set.insert(SyncCollaborator {
-//             user_name: member.user_name,
-//             ipv6_address: collaborator_ip_info.ipv6_addresses.unwrap_or_default()[0], // (Get first IPv6 address, handle potential errors)
-//             sync_file_transfer_port: collaborator_ip_info.sync_file_transfer_port,
-//             sync_interval: collaborator_ip_info.sync_interval,
-//             ready_port: member.ready_port,  
-//             intray_port: member.intray_port, 
-//             gotit_port: member.gotit_port,
-//         });
-//     }
-
-//     // maaybe should be done during initialziation...
-//     // 3. Create sets to track ports and detect collisions:
-//     let mut sync_config_data_set: HashSet<SyncCollaborator> = HashSet::new();
-//     let mut used_ports: HashSet<u16> = HashSet::new(); // Track used port numbers 
-//     // TODO how are collisions detected?
-//     // e.g. if collision detected, simply fail t add that person
-//     // starting with ordered list order in the team_channel node.toml
-
-//     // 4. Process each channel member:
-//     for member_username in &channel_members {
-//     //     if member_username == current_user { 
-//     //         continue; // Skip the current user
-//     //     }
-
-//     //     let collaborator = load_collaborator_by_username(member_username)?;
-
-//     //     // Extract ports (assuming you have separate port fields, e.g., `ready_port`, `intray_port` etc.)
-//     //     let ready_port = collaborator.ready_port;  
-//     //     let intray_port = collaborator.intray_port;
-//     //     let gotit_port = collaborator.gotit_port;
-
-//     //     // Port collision detection:
-//     //     if !used_ports.insert(ready_port) || 
-//     //        !used_ports.insert(intray_port) ||
-//     //        !used_ports.insert(gotit_port)
-//     //     {
-//     //        return Err(MyCustomError::PortCollision(format!("Port collision detected for user: {}", collaborator.user_name)));
-//     //     } 
-
-//         if let Some(ipv6_addresses) = collaborator.ipv6_addresses { 
-//             let ipv6_address = ipv6_addresses.get(0)
-//                                           .ok_or(MyCustomError::InvalidData(format!("Missing IPv6 address for user: {}", collaborator.user_name)))?; 
-
-//             sync_config_data_set.insert(SyncCollaborator {
-//                 user_name: collaborator.user_name,
-//                 ipv6_address: ipv6_address.clone(), // Use .clone() to avoid ownership issues 
-//                 sync_file_transfer_port: collaborator.sync_file_transfer_port,
-//                 sync_interval: collaborator.sync_interval, 
-//             });
-//         } else {
-//             return Err(MyCustomError::InvalidData(format!("Missing IPv6 address list for user: {}", collaborator.user_name)));
-//         }
-//     } 
-
-//     Ok(sync_config_data_set) 
-// }
-
-
 
 
 fn send_hello_signal(target_addr: SocketAddr) -> Result<(), io::Error> {
@@ -2286,20 +2038,6 @@ fn is_ip_allowlisted(ip: &IpAddr, sync_config_data_set: &HashSet<SyncCollaborato
         IpAddr::V6(ip_v6) => *ip_v6 == sc.ipv6_address, 
     })
 }
-
-
-// fn load_collaborators() -> Result<Vec<Collaborator>, io::Error> {
-//     // 1. Read the collaborators.toml file contents
-//     let collaborators_file = "project_graph_data/collaborators.toml";
-//     let toml_string = fs::read_to_string(collaborators_file)?; // Use ? to propagate errors
-
-//     // 2. Deserialize the TOML data into a CollaboratorList struct 
-//     let collaborator_list: CollaboratorList = toml::from_str(&toml_string)
-//         .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("TOML parsing error: {}", e)))?; // Map TOML error to io::Error
-
-//     // 3. Extract the collaborators from the CollaboratorList
-//     Ok(collaborator_list.collaborators) // Return the collaborators wrapped in Ok
-// }
 
 
 // Helper function to check if a port is in use by another collaborator
@@ -2349,200 +2087,11 @@ fn get_next_sync_request_username(sync_config_data_set: &HashSet<SyncCollaborato
 }
 
 
-// depricated function, for reference
-// fn out_request_sync_loop() {
-//     /*
-//     // Sending Instance
-//     // Within out_request_sync_loop:
-//     // If the node description has been updated:
-//     let toml_data = fs::read_to_string("path/to/node.toml").unwrap();
-//     stream.write_all(toml_data.as_bytes()).unwrap();
-
-//     */
-//     loop {
-//         sync_flag_ok_or_wait(3);
-//         debug_log("out_request_sync_loop() started after sync_flag_ok");
-        
-//         // 1. Read the 'continue_uma.txt' file 
-//         let file_content = match fs::read_to_string(CONTINUE_UMA_PATH) {
-//             Ok(content) => content,
-//             Err(_) => {
-//                 debug_log("Error reading 'continue_uma.txt'. Continuing..."); // Handle the error (e.g., log it) but continue for now
-//                 continue; // Skip to the next loop iteration
-//             }
-//         };
-    
-//         // 2. break loop if continue=0
-//         if file_content.trim() == "0" {
-//             debug_log("'continue_uma.txt' is 0. out_request_sync_loop Exiting loop.");
-//             break; 
-//         }
-
-//         // Load the allowlist once outside the loop
-//         let sync_config_data_set = make_session_connection_allowlists().unwrap_or_else(|e| { 
-//             debug_log!("Error loading sync_config_data_set: {}", e);
-//             HashSet::new() // Use an empty HashSet here
-//         });
-
-//         // Use sync_config_data_set directly to choose a random target:
-//         let maybe_target_collaborator = sync_config_data_set
-//         .iter()
-//         .choose(&mut rand::thread_rng());
-
-//         if let Some(target_collaborator) = maybe_target_collaborator {
-//             let target_addr = SocketAddr::new(
-//                 IpAddr::V6(target_collaborator.ipv6_address), 
-//                 target_collaborator.sync_file_transfer_port
-//             ); 
-//             let sync_interval = target_collaborator.sync_interval; 
-
-//             println!(
-//                 "Trying to sync with {} at {}", 
-//                 target_collaborator.user_name, target_addr
-//             );
-
-//             // 3. Establish a connection to the target instance 
-//             match TcpStream::connect(target_addr) { 
-//                 Ok(mut stream) => {
-//                     // 4. Send the TOML file data through the stream
-//                     let toml_data = fs::read_to_string("path/to/toml/file")
-//                         .expect("Failed to read TOML file"); 
-//                     if let Err(e) = stream.write_all(toml_data.as_bytes()) {
-//                         eprintln!("Error sending TOML data to {}: {}", target_addr, e);
-//                     } else {
-//                         println!("Sent TOML file to {}", target_addr);
-//                         // 5. Optionally receive a response signal (e.g., Sync Done)
-//                         // ... (Implement response signal logic here)
-//                     }
-//                 }
-//                 Err(e) => {
-//                     eprintln!("Error connecting to target instance {}: {}", target_addr, e);
-//                 }
-//             }
-
-//             // 6. Wait for the specified sync interval before checking for the next request
-//             thread::sleep(Duration::from_secs(sync_interval));
-//         } 
-//     }
-//     debug_log("Finish: out_request_sync_loop");
-// }
-
-// depricated function, for reference
-// fn in_queue_sync_loop() {
-//     /*
-    
-//     // Receiving Instance 
-//     // Within in_queue_sync_loop:
-//     let mut buffer = Vec::new(); // Dynamically sized buffer
-//     stream.read_to_end(&mut buffer).unwrap();
-//     let received_toml = String::from_utf8_lossy(&buffer).to_string();
-
-//     // ... [verification of gpg signature, etc.] ... 
-
-//     // Assuming the receiving instance can determine the correct path:
-//     fs::write("path/to/node.toml", received_toml).unwrap();
-    
-//     */
-//     loop {
-//         sync_flag_ok_or_wait(5);
-//         debug_log("in_queue_sync_loop() started after sync_flag_ok");
-                
-//         // 0.1  Continue or Quit? Read the 'continue_uma.txt' file 
-//         let file_content = match fs::read_to_string(CONTINUE_UMA_PATH) {
-//             Ok(content) => content,
-//             Err(_) => {
-//                 println!("Error reading 'continue_uma.txt'. Continuing..."); // Handle the error (e.g., log it) but continue for now
-//                 continue; // Skip to the next loop iteration
-//             }
-//         };
-    
-//         // 0.2  break loop if continue=0
-//         if file_content.trim() == "0" {
-//             debug_log("'continue_uma.txt' is 0. in_queue_sync_loop Exiting loop.");
-//             break; 
-//         }
-
-//         /*
-//         steps:
-//         1. get the list of the collaborators in this channel
-//         this will be directly or indirectly based on files in the
-//         .../project_graph_data/session_state_items directory
-//         make an allow-list of ip+port and maybe +gpg public key sets
-        
-//         2. each set (ip+port+gpg) will get a separate listener-thread
-        
-//         (Note: future: Padnet)
-        
-
-//         3. manage load: 
-//         version A.when the listener thread recieves a timestamp or json
-//         it gets added to a queue. then another set of parallel threads
-//         process the sync job. in this mode the listener does one thing well
-//         it just get 'invitations' and dump them into a queue
-//         possibly pausing from listening if that keeps traffic down
-        
-//         version b. one thread per collaborator: does all sync tasks
-        
-//         4. by whaterver thread: the rest of the sync takes place step by step
-        
-        
-        
-//         */
-        
-//         // // 1. Listen on the designated signal port for incoming connections
-//         // let listener = TcpListener::bind("0.0.0.0:SIGNAL_PORT").expect("Failed to bind to signal port"); 
-    
-        
-//         // Load the allowlist once outside the loop
-//         let allowlist = make_session_connection_allowlists().unwrap_or_else(|e| { 
-//             eprintln!("Error loading allowlist: {}", e);
-//             HashSet::new()
-//         });
-        
-//         sync_flag_ok_or_wait(3);
-
-//         // // 2. Accept incoming connections
-//         // match listener.accept() {
-//         //     Ok((mut stream, addr)) => {
-//         //         // 3. Verify the sender's IP address against the allowlist
-//         //         if is_ip_allowlisted(&addr.ip(), &allowlist) {
-//         //             // 4. Receive the signal data from the stream
-//         //             let mut buffer = [0; 1024]; // Adjust buffer size as needed
-//         //             let bytes_read = stream.read(&mut buffer).expect("Failed to read from stream");
-
-//         //             // 5. Process the received signal (e.g., Sync Request)
-//         //             let signal = String::from_utf8_lossy(&buffer[..bytes_read]);
-//         //             match signal.trim() {
-//         //                 "Sync Request" => {
-//         //                     // Initiate the synchronization operation (e.g., send relevant files)
-//         //                     // ... (Implement sync logic here)
-//         //                     println!("Received Sync Request from {}", addr.ip());
-//         //                 }
-//         //                 _ => {
-//         //                     println!("Received unknown signal: {}", signal);
-//         //                 }
-//         //             }
-
-//         //             // 6. Optionally send a response signal (e.g., Sync Done)
-//         //             // ... (Implement response signal logic here)
-//         //         } else {
-//         //             println!("Connection rejected from non-allowlisted IP: {}", addr.ip());
-//         //         }
-//         //     }
-//         //     Err(e) => {
-//         //         println!("Error accepting connection: {}", e);
-//         //     }
-//         // }
-//     }
-//     debug_log("Finish: in_queue_sync_loop");
-// }
-
-
-
 #[derive(Serialize, Deserialize, Debug)] // Add Serialize/Deserialize for sending/receiving
 struct ReadySignal {
     id: u64, // Unique event ID
     timestamp: u64,
+    echo: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -2552,8 +2101,11 @@ struct GotItSignal {
 
 #[derive(Debug, Clone)] // Add other necessary derives later
 struct SendQueue {
-    items: Vec<String>, // You can store file paths as strings for now
+    timestamp: u64,
+    echo: bool,
+    items: Vec<PathBuf>,  // ordered list, filepaths
 }
+
 
 
 fn handle_owner_desk(
@@ -2599,6 +2151,8 @@ fn serialize_ready_signal(signal: &ReadySignal) -> std::io::Result<Vec<u8>> {
     let mut bytes = Vec::new();
     bytes.extend_from_slice(&signal.id.to_be_bytes()); // Convert id to bytes
     bytes.extend_from_slice(&signal.timestamp.to_be_bytes()); // Convert timestamp to bytes
+    // Serialize bool as a single byte (0 for false, 1 for true)
+    bytes.push(if signal.echo { 1 } else { 0 });
     Ok(bytes) 
 }
 
@@ -2618,7 +2172,10 @@ fn deserialize_ready_signal(bytes: &[u8]) -> Result<ReadySignal, io::Error> {
     // Extract timestamp:
     let timestamp = u64::from_be_bytes(bytes[8..16].try_into().unwrap()); 
 
-    Ok(ReadySignal { id, timestamp })
+    // Extract timestamp:
+    let echo = bytes[16] != 0; 
+    
+    Ok(ReadySignal { id, timestamp, echo })
 }
 
 
@@ -2714,134 +2271,346 @@ fn send_file_and_see_next_signal(collaborator: &SyncCollaborator, mut send_queue
 }
 
 
-fn handle_collaborator_desk(
-    collaborator_sync_data: &SyncCollaborator, 
-) {
+
+fn send_file_to_collaborator(
+    collaborator: &SyncCollaborator,
+    is_echo_request: bool,
+    ready_timestamp: u64,
+    file_to_send: &PathBuf, 
+    tx: Sender<SyncResult>, 
+    retry_flag_path: PathBuf, 
+) -> SyncResult {
     /*
-    For each collaborator's-in-tray-desk:
-    - ports are specified in team_channel node.toml
-    - collaborator IP in NAME__collaborator.toml
-    start a loop that:
-
-    0. get session_connection_allowlist data as input:
-        - ipv6 list
-        - ipv4 list
-        - 3 ports
-    1. look for halt command in continue_uma.txt
-    2. listens and waits for an "I'm ready" signal: {id:x, timestamp:y}
-        note: sync-events will share a unique-ID,
-        How does the thread know whether the 'gotit' signal applies to the current sync-event?
-        Because it has the same id.
-    3. get/make your send-queue based on timestamp, or if timestamp is garbage resend backup timestamp(?)
-    4. make thread for event
-    5. make a send-event thread
-    6. send one item from the send-queue-for-collaborator, the oldest item
-    7. listen at both signal ports: 
-        for signals with a relevant ID:
-        - 'got it' signal means: success, log the recent timestamp (and update backup)
-        and end thread
-        - 'ready' signal means: failed, abort, end thread. (let it fail)
-
-    maybe use a match to listen for either single port being first?
+    TODO
+    handling file_transfer_successful
     */
+    // preset/reset
+    let mut file_transfer_successful = false;
     
-    loop {
-        // 1. Read the 'continue_uma.txt' file 
-        let file_content = match fs::read_to_string(CONTINUE_UMA_PATH) {
-            Ok(content) => content,
-            Err(_) => {
-                println!("Error reading 'continue_uma.txt'. Continuing..."); // Handle the error (e.g., log it) but continue for now
-                continue; // Skip to the next loop iteration
-            }
-        };
-    
-        // break loop if continue=0
-        if file_content.trim() == "0" {
-            debug_log("'continue_uma.txt' is 0. we_love_projects_loop() Exiting loop.");
-            break; 
-        }
-        
-        // 2. Listen for "I'm ready" signal
-        let listener = match TcpListener::bind(format!("[{}]:{}", collaborator_sync_data.ipv6_address, collaborator_sync_data.ready_port)) {
-            Ok(listener) => listener,
-            Err(e) => {
-                debug_log(&format!("Failed to bind to ready port for {}: {}", collaborator_sync_data.user_name, e));
-                thread::sleep(Duration::from_secs(1)); // Wait a bit before retrying
-                continue;
-            }
-        };
+    // 1. Establish a connection to the collaborator's intray_port
+    // ... (Implement connection logic)
 
-        for stream in listener.incoming() {
-            match stream {
-                Ok(mut stream) => {
-                    let mut buffer = [0; 1024]; // Adjust buffer size as needed
-                    match stream.read(&mut buffer) {
-                        Ok(n) => {
-                            if n == 0 {
-                                continue; // Connection closed, skip processing
-                            }
+    // 2. Send the file data
+    // ... (Implement file sending logic)
 
-                            // Replace serde_json::from_slice with your custom function:
-                            let ready_signal: ReadySignal = match deserialize_ready_signal(&buffer[..n]) {
-                                Ok(signal) => signal,
-                                Err(e) => {
-                                    debug_log(&format!("Failed to parse ready signal from {}: {}", collaborator_sync_data.user_name, e));
-                                    continue; // Skip processing if signal is invalid
-                                }
-                            };
+    // 3. Listen for confirmation on the gotit_port
+    // ... (Implement confirmation logic)
 
-                            // TODO commented out for development: get_or_create_send_queue does not yet exist
-                            // // 3. Get/Make Send Queue
-                            // let send_queue = get_or_create_send_queue(collaborator_sync_data, ready_signal.timestamp);
+    // 4. Handle Success or Failure
+    if file_transfer_successful && !is_echo_request{
+        // Remove the retry flag
+        // ... (Implement flag removal logic)
+        return SyncResult::Success(ready_timestamp);
+    } else {
+        let error = UmaError::NetworkError("File transfer failed".to_string()); 
+        return SyncResult::Failure(error);
+    }
+} 
 
-                            // // 4. Spawn Sync Event Thread
-                            // let event_id = ready_signal.id; // Capture the event ID from the signal
-                            // thread::spawn(move || {
-                            //     ////////////////////////
-                            //     // Steps 5+ are here...   in send_file_and_see_next_signal()
-                            //     ////////////////////////
-                            //     send_file_and_see_next_signal(collaborator_sync_data, send_queue, event_id, collaborator_sync_data.intray_port, collaborator_sync_data.gotit_port); 
-                            // });
-                        },
-                        Err(e) => {
-                            debug_log(&format!("Failed to read ready signal from {}: {}", collaborator_sync_data.user_name, e));
-                        }
+
+fn get_oldest_retry_timestamp(collaborator_username: &str) -> Result<Option<u64>, io::Error> {
+    let retry_flags_dir = Path::new("project_graph_data/sync_state_items")
+        .join(&collaborator_username) 
+        .join("fail_retry_flags");
+
+    if !retry_flags_dir.exists() {
+        return Ok(None); // No retry flags exist
+    }
+
+    let mut oldest_timestamp: Option<u64> = None;
+
+    for entry in fs::read_dir(retry_flags_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if path.is_file() {
+            let file_name = path.file_name().unwrap().to_str().unwrap();
+            if let Some((_, timestamp_str)) = file_name.split_once("__") {
+                if let Ok(timestamp) = timestamp_str.parse::<u64>() {
+                    if oldest_timestamp.is_none() || timestamp < oldest_timestamp.unwrap() {
+                        oldest_timestamp = Some(timestamp);
                     }
-                },
-                Err(e) => {
-                    debug_log(&format!("Failed to accept connection from {}: {}", collaborator_sync_data.user_name, e));
                 }
             }
-        } 
-    
-        // // 2. listen for ready-signal=timestamp: allow parallel requests
-        // let listen_for_readysignal_timestamp =  // ... port for "I'm ready" signal: {id:x, timestamp:y} from collaborator_sync_data {
-            
-        //     // 3. Make send-queue based on timestamp (usually one zero items or 1 item)
-        //     /*
-        //     - See if timestamp is the same (re-use queue)
-        //     - if timestamp is different, make a new queue
-        //     TODO:
-        //     - new struct impl for send-queue?
-        //     */
-            
-        //     // 4. Thread: send-sync event
-        //     /*
-        //     why is this 'let port = ...?'
-        //     */
-        //     let we_love_projects_loop = thread::spawn(move || {
-                
-        //         let intray_port = // ... port for sending files to collaborator_sync_data 
-                
-        //         let gotit_port = // ... port for listening for confirmations from collaborator_sync_data
-        //     });    
-        // };
-        
-        
-        
+        }
     }
+
+    Ok(oldest_timestamp)
 }
 
+fn create_retry_flag(
+    collaborator: &SyncCollaborator, 
+    file_path: &PathBuf, 
+    timestamp: u64,
+) -> Result<PathBuf, io::Error> {
+    let retry_flags_dir = Path::new("project_graph_data/sync_state_items")
+        .join(&collaborator.user_name)
+        .join("fail_retry_flags");
+
+    fs::create_dir_all(&retry_flags_dir)?; 
+
+    // Generate a unique ID (you might use a UUID library for better uniqueness)
+    let unique_id: u64 = rand::random();
+
+    let retry_flag_file_name = format!("{}__{}.txt", unique_id, timestamp);
+    let retry_flag_path = retry_flags_dir.join(retry_flag_file_name);
+
+    // Create an empty file (the presence of the file acts as the flag)
+    File::create(&retry_flag_path)?;
+
+    Ok(retry_flag_path)
+}
+
+
+
+
+///
+fn get_or_create_send_queue(
+    collaborator_sync_data: &SyncCollaborator,
+    received_timestamp: u64,
+) -> Result<SendQueue, io::Error> {
+    
+
+    let mut new_queue = SendQueue {
+        timestamp: received_timestamp,
+        echo: received_timestamp == 0, // If timestamp is 0, it's an echo request
+        items: Vec::new(),
+    };
+
+    // Iterate over owned files, only considering those modified AFTER the received timestamp
+    let owned_files_dir = Path::new("project_graph_data/owned_files")
+        .join(&collaborator_sync_data.user_name);
+
+    for entry in WalkDir::new(owned_files_dir)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_file())
+    {
+        // let file_timestamp = get_toml_file_timestamp(&entry.path()); 
+        // if file_timestamp > received_timestamp {
+        //     new_queue.items.push(entry.path().to_path_buf());
+        // }
+
+        // Han dle the Result from get_file_timestamp 
+        match get_toml_file_timestamp(&entry.path()) {
+            Ok(file_timestamp) => { 
+                if file_timestamp > received_timestamp {
+                    new_queue.items.push(entry.path().to_path_buf());
+                }
+            }
+            Err(e) => {
+                // Handle the error appropriately. You might want to:
+                // - Log the error
+                // - Skip this file and continue with the next one
+                // - Return an error from get_or_create_send_queue 
+                eprintln!("Error getting timestamp for file: {:?} - {}", entry.path(), e);
+            }
+        }
+    }
+
+    // Sort the files in the queue based on their modification time
+    new_queue.items.sort_by_key(|path| {
+        get_toml_file_timestamp(path).unwrap_or(0) // Handle potential errors in timestamp retrieval
+    });
+
+    Ok(new_queue)
+}
+
+
+
+/// For each collaborator's-in-tray-desk:
+/// - ports are specified in team_channel node.toml
+/// - collaborator IP in NAME__collaborator.toml
+///
+/// Explanation
+/// Listener Creation: The TcpListener is created and bound to the specified IP address and port.
+///
+/// Non-Blocking Mode: Setting the listener to non-blocking allows the loop to check for the halt signal even if no connection is available.
+///
+/// Halt Signal Check: The should_halt() function (which you need to implement based on your halt signal mechanism) is called at the beginning of each loop iteration. If the halt signal is detected, the loop breaks, and the listener is closed.
+///
+/// Connection Handling:
+/// Ok((stream, _addr)): If a connection is successfully established, the code inside the Ok branch will execute. Here, you can spawn a new thread to handle the connection and process the received data.
+///
+/// Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock: If the accept() method returns a WouldBlock error, it means no connection is available at the moment. The code sleeps briefly to avoid consuming excessive CPU resources by busy-waiting.
+///
+/// Err(e): This branch handles any other errors that might occur during the connection process. You can log the error, notify the user, or take other appropriate actions depending on the error type.
+///
+/// Key Points
+/// Non-Blocking Listener: Essential for checking the halt signal without waiting indefinitely for a connection.
+///
+/// Loop Structure: The loop continuously checks for a halt signal and attempts to accept connections.
+/// start a loop that:
+/// TODO add  "Flow" steps: handle_collaborator_intray_desk()
+fn handle_collaborator_intray_desk(
+    collaborator_sync_data: &SyncCollaborator,
+) -> Result<(), UmaError> { // Consider using a custom error type for UMA
+    debug_log("Started the handle_collaborator_intray_desk()");
+
+    // 1. Initialize the send queue
+    let mut send_queue: Option<SendQueue> = None; 
+
+    // 2. Create the listener
+    let listener = TcpListener::bind(format!("[{}]:{}", 
+                                            collaborator_sync_data.ipv6_address, 
+                                            collaborator_sync_data.ready_port))?; 
+    listener.set_nonblocking(true)?;
+
+    // 3. Main loop
+    loop {
+        // 4. Check for halt signal
+        if should_halt() { 
+            break; 
+        }
+
+        // 5. Attempt to accept a connection (non-blocking)
+        match listener.accept() {
+            Ok((mut stream, _addr)) => {
+                // 6. Read the incoming data
+                let mut buffer = [0; 1024]; 
+                match stream.read(&mut buffer) {
+                    Ok(n) => {
+                        if n == 0 {
+                            continue; // Connection closed gracefully, continue to next connection
+                        }
+
+                        // 7. Deserialize the ReadySignal
+                        let ready_signal: ReadySignal = match deserialize_ready_signal(&buffer[..n]) {
+                            Ok(signal) => signal,
+                            Err(e) => {
+                                debug_log(&format!("Failed to parse ready signal: {}", e)); 
+                                continue; 
+                            }
+                        };
+
+                        // 8. Determine if this is an echo request
+                        let is_echo_request = ready_signal.echo; // Directly check the echo field
+                        
+                        let ready_timestamp = ready_signal.timestamp; // Directly check the echo field
+
+                        // 9. Handle echo requests
+                        if is_echo_request {
+                            if let Some(queue) = &mut send_queue {
+                                if let Some(file_to_send) = queue.items.pop() {
+                                    // Call a function to handle the file transfer in a separate thread
+                                    //  You'll need to implement this function 
+                                    handle_sync_event_thread(
+                                        collaborator_sync_data, 
+                                        is_echo_request,
+                                        ready_timestamp,
+                                        &file_to_send, 
+                                        queue.timestamp, 
+                                        queue)?; 
+                                }
+                            }
+                            continue; // Skip to the next iteration 
+                        }
+
+                        // 10. Handle non-echo requests: Get ready_timestamp
+                        let ready_timestamp = ready_signal.timestamp;
+
+                        // 11. Check for retry flags
+                        let oldest_retry_timestamp = get_oldest_retry_timestamp(&collaborator_sync_data.user_name)?;
+
+                        // 12. Create or rebuild the send queue
+                        if let Some(retry_timestamp) = oldest_retry_timestamp {
+                            if retry_timestamp < ready_timestamp {
+                                send_queue = Some(get_or_create_send_queue(collaborator_sync_data, retry_timestamp)?); 
+                            } 
+                        } else if send_queue.is_none() || ready_timestamp < send_queue.as_ref().unwrap().timestamp {
+                            send_queue = Some(get_or_create_send_queue(collaborator_sync_data, ready_timestamp)?); 
+                        }
+
+                        // 13. Process the send queue (send one file) 
+                        if let Some(queue) = &mut send_queue {
+                            if let Some(file_to_send) = queue.items.pop() {
+                                // Call the same thread handling function as in step 9
+                                handle_sync_event_thread(
+                                    collaborator_sync_data,
+                                    is_echo_request,
+                                    ready_timestamp,
+                                    &file_to_send, 
+                                    queue.timestamp,  
+                                    queue)?;
+                            }
+                        }
+                    },
+                    Err(e) => { 
+                        debug_log(&format!("Failed to read data: {}", e)); 
+                    }
+                }
+            },
+            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => { 
+                thread::sleep(Duration::from_millis(100));
+            },
+            Err(e) => { 
+                debug_log(&format!("Failed to accept connection: {}", e)); 
+            }
+        } 
+    }
+
+    Ok(())
+}
+
+// Result enum for the sync operation, allowing communication between threads
+enum SyncResult {
+    Success(u64), // Contains the new timestamp after successful sync
+    Failure(UmaError), // Contains an error if sync failed 
+}
+
+// Function to handle the sync event in a separate thread
+fn handle_sync_event_thread(
+    collaborator_sync_data: &SyncCollaborator,
+    is_echo_request: bool,
+    ready_timestamp: u64,
+    file_to_send: &PathBuf,
+    timestamp: u64, // Current base timestamp of the queue
+    send_queue: &mut SendQueue, // Pass a mutable reference to the send queue
+) -> Result<(), UmaError> {
+    /*
+    TODO
+    possible factors:
+    base-timestamp
+    echo-no-timestamp
+    echo modified success or no return (just remove fail flag?)
+    */
+    // Create a channel for communication between threads
+    let (tx, rx) = channel::<SyncResult>(); 
+
+    // Create the retry flag before spawning the thread
+    // Clone the data before moving it into the thread
+    let collaborator_clone = collaborator_sync_data.clone();
+    let file_to_send_clone = file_to_send.clone(); 
+    let retry_flag_path = create_retry_flag(collaborator_sync_data, file_to_send, timestamp)?;
+
+    // Spawn the thread to handle file transfer
+    thread::spawn(move || {
+        // Now use the cloned data
+        let result = send_file_to_collaborator(
+            &collaborator_clone, // Pass a reference to the clone
+            is_echo_request,
+            ready_timestamp,
+            &file_to_send_clone, 
+            tx.clone(), 
+            retry_flag_path
+        );
+        tx.send(result).unwrap(); 
+    });
+
+    // Receive the result from the thread and update the send queue
+    match rx.recv().unwrap() {
+        SyncResult::Success(new_timestamp) => {
+            // 1. Update the base date 
+            send_queue.timestamp = new_timestamp; 
+        },
+        SyncResult::Failure(error) => {
+            eprintln!("File transfer failed: {:?}", error);
+            // Handle failure (log, potentially notify user)
+        }
+    }
+
+    Ok(())
+}
 
 
 // Function for thread 2's file_sync loop: demo version
@@ -2894,23 +2663,22 @@ fn you_love_the_sync_team_office(
     // let session_connection_allowlists_clone = session_connection_allowlists.clone();
     
     /*issue:
-error[E0597]: `session_connection_allowlists_clone` does not live long enough
-    --> src/main.rs:2898:42
-     |
-2893 |     let session_connection_allowlists_clone = session_connection_allowlists.clone();
-     |         ----------------------------------- binding `session_connection_allowlists_clone` declared here
-...
-2898 |     for this_allowlisted_collaborator in &session_connection_allowlists_clone { 
-     |                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-     |                                          |
-     |                                          borrowed value does not live long enough
-     |                                          argument requires that `session_connection_allowlists_clone` is borrowed for `'static`
-...
-2925 | }
-     | - `session_connection_allowlists_clone` dropped here while still borrowed
-
-    Neither session_connection_allowlists nor a clone can be used...
+    error[E0597]: `session_connection_allowlists_clone` does not live long enough
+        --> src/main.rs:2898:42
+        |
+    2893 |     let session_connection_allowlists_clone = session_connection_allowlists.clone();
+        |         ----------------------------------- binding `session_connection_allowlists_clone` declared here
+    ...
+    2898 |     for this_allowlisted_collaborator in &session_connection_allowlists_clone { 
+        |                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        |                                          |
+        |                                          borrowed value does not live long enough
+        |                                          argument requires that `session_connection_allowlists_clone` is borrowed for `'static`
+    ...
+    2925 | }
+        | - `session_connection_allowlists_clone` dropped here while still borrowed
     
+        Neither session_connection_allowlists nor a clone can be used...
     */
 
     // // Create threads for each collaborator on the allowlist: 
@@ -2927,7 +2695,7 @@ error[E0597]: `session_connection_allowlists_clone` does not live long enough
     //             handle_owner_desk(&this_allowlisted_collaborator); 
     //         });
     //         let collaborator_desk_thread = thread::spawn(move || {
-    //             handle_collaborator_desk(&this_allowlisted_collaborator);
+    //             handle_collaborator_intray_desk(&this_allowlisted_collaborator);
     //         });
 
     //         collaborator_threads.push(owner_desk_thread); 
@@ -2952,7 +2720,7 @@ error[E0597]: `session_connection_allowlists_clone` does not live long enough
                 handle_owner_desk(&owner_desk_collaborator); 
             });
             let collaborator_desk_thread = thread::spawn(move || {
-                handle_collaborator_desk(&collaborator_desk_collaborator);
+                handle_collaborator_intray_desk(&collaborator_desk_collaborator);
             });
 
             collaborator_threads.push(owner_desk_thread); 
@@ -3257,9 +3025,6 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
     debug_log("Finish: we love project loop.");
     Ok(())
 }
-
-
-
 
 
 fn set_sync_start_ok_flag_to_true() { 
