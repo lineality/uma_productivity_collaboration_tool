@@ -22,7 +22,7 @@ rand = "0.8.5"
 // Set debug flag (future: add time stamp with 24 check)
 const DEBUG_FLAG: bool = true;
 
-use std::sync::mpsc;
+// use std::sync::mpsc;
 use std::io;
 use std::io::{
     Error,
@@ -30,6 +30,7 @@ use std::io::{
     Write,
     Read,
 };
+use std::error::Error as StdError; 
 use walkdir::WalkDir;
 use std::path::Path;
 use std::path::{
@@ -96,35 +97,6 @@ fn dir_at_path_is_empty_returns_false(path_to_dir: &Path) -> bool {
 }
 
 enum IpAddrKind { V4, V6 }
-
-
-// fn get_ip_addresses(kind: IpAddrKind) -> Result<Option<Vec<IpAddr>>, io::Error> {
-//     let mut addresses = Vec::new();
-//     loop {
-//         let mut input = String::new();
-//         io::stdin().read_line(&mut input)?;
-//         let input = input.trim();
-
-//         if input.to_lowercase() == "done" { 
-//             break; // Exit loop 
-//         } else if input.is_empty() { // Allow blank input to skip adding IPs
-//             return Ok(None);
-//         }
-
-//         let addr = match kind {
-//             IpAddrKind::V4 => input.parse::<Ipv4Addr>()
-//                                 .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "Invalid IPv4 address"))
-//                                 .map(IpAddr::V4),
-//             IpAddrKind::V6 => input.parse::<Ipv6Addr>()
-//                                 .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "Invalid IPv6 address"))
-//                                 .map(IpAddr::V6),
-//         }?;
-
-//         addresses.push(addr); 
-//     }
-
-//     Ok(Some(addresses))
-// }
 
 fn get_ipv4_addresses() -> Result<Option<Vec<Ipv4Addr>>, io::Error> {
     let mut addresses = Vec::new();
@@ -211,10 +183,12 @@ pub fn verify_toml_signature(file_path: &Path) -> Result<(), Error> {
 
 
 
-#[derive(Debug)] 
+#[derive(Debug)]
 enum MyCustomError {
     IoError(io::Error),
-    TomlError(toml::de::Error), 
+    TomlError(toml::de::Error),
+    InvalidData(String),
+    PortCollision(String), 
     // ... other variants as needed ...
 }
 
@@ -234,12 +208,26 @@ impl PartialEq for MyCustomError {
     }
 }
 
+// Implement the std::error::Error trait
+impl StdError for MyCustomError {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+        match *self {
+            MyCustomError::IoError(ref err) => Some(err),
+            MyCustomError::TomlError(ref err) => Some(err),
+            _ => None, // No underlying source for these variants
+        }
+    }
+}
+
 impl std::fmt::Display for MyCustomError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             MyCustomError::IoError(err) => write!(f, "IO Error: {}", err),
+            // MyCustomError::TomlError(err) => write!(f, "TOML Error: {}", err),
             MyCustomError::TomlError(err) => write!(f, "TOML Error: {}", err),
-            // ... add formatting for other variants
+            // &MyCustomError::InvalidData(_) => todo!(),
+            &MyCustomError::InvalidData(_) => todo!(),
+            &MyCustomError::PortCollision(_) => todo!(),
         }
     }
 }
@@ -292,6 +280,9 @@ struct SyncCollaborator {
     ipv6_address: Ipv6Addr,
     sync_file_transfer_port: u16,
     sync_interval: u64, 
+    ready_port: u16,          // Add ready_port
+    intray_port: u16,         // Add intray_port
+    gotit_port: u16,    
 }
 
 // ALPHA VERSION
@@ -1492,9 +1483,15 @@ fn initialize_uma_application() {
     // Ensure project_graph_data/team_channels directory exists
     let session_state_dir = project_graph_directory.join("session_state_items");
     if !session_state_dir.exists() {
-        fs::create_dir_all(&session_state_dir).expect("Failed to create team_channels directory");
+        fs::create_dir_all(&session_state_dir).expect("Failed to create session_state_items directory");
     }
 
+    // Ensure project_graph_data/team_channels directory exists
+    let sync_state_dir = project_graph_directory.join("sync_state_items");
+    if !sync_state_dir.exists() {
+        fs::create_dir_all(&sync_state_dir).expect("Failed to create sync_state_items directory");
+    }
+    
     // To stop sync from starting before a channel is entered:
     initialize_ok_to_start_sync_flag();
 
@@ -1851,7 +1848,7 @@ fn load_collaborator_by_username(username: &str) -> Result<Collaborator, MyCusto
     }
 }
 
-// fn load_teamchannel_connection_data() -> Result<HashSet<SyncCollaborator>, MyCustomError> { 
+// fn make_session_connection_allowlists() -> Result<HashSet<SyncCollaborator>, MyCustomError> { 
 //     /*
 //     step 1: get team_channel_members from externalized sessoin state item doc: 
 //         project_graph_data/session_items/current_node_collaborators_with_access.toml
@@ -1975,157 +1972,298 @@ fn load_collaborator_by_username(username: &str) -> Result<Collaborator, MyCusto
 
 
 /// Loads connection data for members of the currently active team channel.
-/// 
-/// Reads configuration files from `session_state_items` and `collaborator_files` to:
-/// 1. **Get the list of members:** 
-///     Reads `current_node_collaborators_with_access.toml` for members in the channel.
-/// 2. **Exclude the current user:**  
-///     Reads `local_owner_user.txt` to identify the current user and ensures they are not included in the returned connection data.
-/// 3. **Load collaborator data:** 
-///     Reads each collaborator's configuration file (e.g., `alice__collaborator.toml`) to extract their:
-///       - IPv6 addresses
-///       - File transfer port
-///       - Sync interval
-/// 4. **Detect port collisions:**
-///     Ensures that all ports used by collaborators within the channel are unique. 
-///
-/// # Errors
-///
-/// Returns a `MyCustomError` if:
-///  - There is an error parsing TOML data in the configuration files.
-///  - Invalid data is encountered (e.g., a missing IPv6 address). 
-///  - A port collision is detected among the collaborators in the channel. 
-///
-/// # Returns 
-///
-/// On success, returns a `HashSet` of `SyncCollaborator` structs, each containing connection 
+/// On success, returns a `HashSet` of `SyncCollaborator` structs, 
+/// each containing connection 
 /// data for a collaborator in the current team channel (excluding the current user).
-fn load_teamchannel_connection_data() -> Result<HashSet<SyncCollaborator>, MyCustomError> { 
-        /*
-    step 1: get team_channel_members from externalized sessoin state item doc: 
-        project_graph_data/session_items/current_node_collaborators_with_access.toml
-    step 2: get current user project_graph_data/session_items/uma_local_owner_user.txt
-    stem 3: remove current user from IP allowlist
-    step 4: get only the ipv4, ipv6 addresses for those members
-    from the collaborator's file:
-    project_graph_data/collaborator_files/NAME__collaborator.toml
+/// As a headline this makes an ip-whitelist or ip-allowlist but the overall process is bigger.
+/// This should include 'yourself' so all connection data are there, so you know your ports
+///
+/// Note: this likely should also include the collabortor's last-recieved-timestamp (and the previous one)
+/// this will also need a bootstrap where at first...there is no last timestamp.
+///
+/// Note: making the allow_lists requires information from more than one source:
+/// =uma.toml
+/// =project_graph_data/session_items/current_node_collaborators_with_access.toml
+/// =/project_graph_data/collaborator_files/NAME__collaborator.toml
+///
+/// step 1: get team_channel list of (and data about) all possible team_channel_members
+///     from externalized session state item doc @: 
+///     project_graph_data/session_items/current_node_collaborators_with_access.toml
+///     The 6-port assignments come from this source.
+///
+/// step 2: get /collaborator_files data @:
+///     .../project_graph_data/collaborator_files/ directory
+///     as: NAME__collaborator.toml
+///
+/// step 3: Remove any collaborator from that 'possible list' whose information
+///     is not in the .../project_graph_data/collaborator_files directory
+///     as: NAME__collaborator.toml
+///     The ipv4 and ipv6 lists come from this source.
+///
+/// step 4: make a session dataset for: teamchannel_connection_data
+///     - allowlisted collaborators
+///         - names
+///         - ip lists
+///         - ports
+///
+/// (note: members should have a list of ipv4, ipv6 addresses, not just one)
+///
+/// sample: project_graph_data/collaborator_files/alice__collaborator.toml
+/// [[collaborator]]
+/// user_name = "alice"
+/// ipv4_addresses = ["24.0.189.112", "24.0.189.112"]
+/// ipv6_addresses = ["2601:80:4803:9490::2e79","2601:80:4803:9490::2e79"]
+/// gpg_key_public = "304A9A525A5D00D6AD269F765C3E7C56E5A3D0D8"
+/// sync_file_transfer_port = 5000
+/// sync_interval = 5000
+///
+/// Do NOT read all data from all collaborators.      
+/// Ethical Data Access: The function only accesses the collaborator data that 
+/// is absolutely necessary for building the session_connection_allowlist for the current channel.
+///
+/// sample node.toml
+/// owner = "alice"
+/// collaborators_with_access = [
+///     { collaborator_name = "alice", 
+///     ready_port = 50001, 
+///     intray_port = 50002, 
+///     gotit_port = 50003, 
+///     self_ready_port = 50004, 
+///     self_intray_port = 50005, 
+///     self_gotit_port = 50006 
+///     },
+///     { collaborator_name = "bob", 
+///     ready_port = 50011, 
+///     intray_port = 50012, 
+///     gotit_port = 50013, 
+///     self_ready_port = 50014, 
+///     self_intray_port = 50015, 
+///     self_gotit_port = 50016  
+///     },
+///     # Add more collaborators as needed
+/// ]
+/// updated_at = 1727641034
+/// expires_at = 1727727434
+/// node_name = "neem"
+/// description_for_tui = "neem"
+/// directory_path = "project_graph_data/team_channels/neem"
+/// node_unique_id = 1727641034
+/// children = []
+/// order_number = 5
+/// priority = "Medium"
+/// maybe detects any port collisions, 
+/// excluding those who collide with senior members
+/// or returning an error if found.
+fn make_session_connection_allowlists(uma_local_owner_user: &str) -> Result<HashSet<SyncCollaborator>, MyCustomError> { 
+    // 1. Load team channel node.toml: 
+    let channel_node_toml_path = Path::new("project_graph_data/session_state_items/current_node_directory_path.txt"); // TODO this file and system are not working yet
+    let channel_node_toml = read_state_items_tomls("node.toml")?; // Assuming you have a way to get the correct path 
 
-    (note: members should have a list of ipv4, ipv6 addresses, not just one)
+    // 2. Get the collaborators_with_access array:
+    let collaborators_array = channel_node_toml.get("collaborators_with_access") 
+        .and_then(Value::as_array)
+        .ok_or(MyCustomError::InvalidData(
+            "Missing or invalid 'collaborators_with_access' array in node.toml".to_string() // Add .to_string()
+        ))?;
 
-    sample: project_graph_data/collaborator_files/alice__collaborator.toml
-    [[collaborator]]
-    user_name = "alice"
-    ipv4_addresses = ["24.0.189.112", "24.0.189.112"]
-    ipv6_addresses = ["2601:80:4803:9490::2e79","2601:80:4803:9490::2e79"]
-    gpg_key_public = "304A9A525A5D00D6AD269F765C3E7C56E5A3D0D8"
-    sync_file_transfer_port = 5000
-    sync_interval = 5000
-
-    sample: project_graph_data/collaborator_files/bob__collaborator.tomloml
-    [[collaborator]]
-    user_name = "bob"
-    ipv4_addresses = ["24.0.189.112", "24.0.189.112"]
-    ipv6_addresses = ["2601:80:4803:9490::2e79","2601:80:4803:9490::2e79"]
-    gpg_key_public = "304A9A525A5D00D6AD269F765C3E7C56E5A3D0D8"
-    sync_file_transfer_port = 5000
-    sync_interval = 5000
-
-    Do NOT read all data from all collaborators.      
-    Ethical Data Access: The function only accesses the collaborator data that 
-    is absolutely necessary for building the IP allowlist for the current channel.
-    
-    
-    // sample node.toml
-    owner = "alice"
-    collaborators_with_access = [
-        { collaborator_name = "alice", 
-        ready_port = 50001, 
-        intray_port = 50002, 
-        gotit_port = 50003, 
-        self_ready_port = 50004, 
-        self_intray_port = 50005, 
-        self_gotit_port = 50006 
-        },
-        { collaborator_name = "bob", 
-        ready_port = 50011, 
-        intray_port = 50012, 
-        gotit_port = 50013, 
-        self_ready_port = 50014, 
-        self_intray_port = 50015, 
-        self_gotit_port = 50016  
-        },
-        # Add more collaborators as needed
-    ]
-
-    updated_at = 1727641034
-    expires_at = 1727727434
-    node_name = "neem"
-    description_for_tui = "neem"
-    directory_path = "project_graph_data/team_channels/neem"
-    node_unique_id = 1727641034
-    children = []
-    order_number = 5
-    priority = "Medium"
-    */
-    /*
-    Load connection data for the current team channel's members.
-    Excludes the current user from the resulting allowlist 
-    and detects any port collisions, returning an error if found.
-    */
-
-    // 1. Load team channel members from session_state_items:
-    let channel_members_toml = read_state_items_tomls("current_node_collaborators_with_access.toml")?;
-    let channel_members: Vec<String> = channel_members_toml.as_array()
-        .ok_or(MyCustomError::InvalidData("Failed to parse channel members"))? 
-        .iter()
-        .filter_map(|v| v.as_str().map(String::from)) 
-        .collect(); 
-
-    // 2. Load current user from session_state_items:
-    let current_user = read_state_string("local_owner_user.txt")?; 
-
-    // 3. Create sets to track ports and detect collisions:
+    // 3. Create the allowlist set:
     let mut sync_config_data_set: HashSet<SyncCollaborator> = HashSet::new();
-    let mut used_ports: HashSet<u16> = HashSet::new(); // Track used port numbers 
 
-    // 4. Process each channel member:
-    for member_username in &channel_members {
-        if member_username == ¤t_user { 
-            continue; // Skip the current user
-        }
+    // 4. Parse the collaborators_with_access array:
+    for collaborator_data in collaborators_array {
+        // TODO HERE!! HERE!! HERE!!
+        // ... (parse collaborator_data to get user_name, ready_port, intray_port, gotit_port)
 
-        let collaborator = load_collaborator_by_username(member_username)?;
+        // ... (Load IP information from NAME__collaborator.toml)
 
-        // Extract ports (assuming you have separate port fields, e.g., `ready_port`, `intray_port` etc.)
-        let ready_port = collaborator.ready_port;  
-        let intray_port = collaborator.intray_port;
-        let gotit_port = collaborator.gotit_port;
+        // ... (Construct SyncCollaborator and add to sync_config_data_set) 
+    }
+    Ok(sync_config_data_set)
 
-        // Port collision detection:
-        if !used_ports.insert(ready_port) || 
-           !used_ports.insert(intray_port) ||
-           !used_ports.insert(gotit_port)
-        {
-           return Err(MyCustomError::PortCollision(format!("Port collision detected for user: {}", collaborator.user_name)));
-        } 
-
-        if let Some(ipv6_addresses) = collaborator.ipv6_addresses { 
-            let ipv6_address = ipv6_addresses.get(0)
-                                          .ok_or(MyCustomError::InvalidData(format!("Missing IPv6 address for user: {}", collaborator.user_name)))?; 
-
-            sync_config_data_set.insert(SyncCollaborator {
-                user_name: collaborator.user_name,
-                ipv6_address: ipv6_address.clone(), // Use .clone() to avoid ownership issues 
-                sync_file_transfer_port: collaborator.sync_file_transfer_port,
-                sync_interval: collaborator.sync_interval, 
-            });
-        } else {
-            return Err(MyCustomError::InvalidData(format!("Missing IPv6 address list for user: {}", collaborator.user_name)));
-        }
-    } 
-
-    Ok(sync_config_data_set) 
+    // ... (Rest of your function logic)
 }
+
+////// old archive
+// /// Loads connection data for members of the currently active team channel.
+// /// On success, returns a `HashSet` of `SyncCollaborator` structs, 
+// /// each containing connection 
+// /// data for a collaborator in the current team channel (excluding the current user).
+// fn make_session_connection_allowlists() -> Result<HashSet<SyncCollaborator>, MyCustomError> { 
+//     /*
+//     As a headline this makes an ip-whitelist or ip-allowlist but the overall process is bigger.
+    
+//     This should include 'yourself' so all connection data are there, so you know your ports
+    
+//     Note: this likely should also include the collabortor's last-recieved-timestamp (and the previous one)
+//     this will also need a bootstrap where at first...there is no last timestamp.
+    
+//     Note: making the allow_lists requires information from more than one source:
+//     =uma.toml
+//     =project_graph_data/session_items/current_node_collaborators_with_access.toml
+//     =/project_graph_data/collaborator_files/NAME__collaborator.toml
+    
+//     step 1: get team_channel list of (and data about) all possible team_channel_members
+//         from externalized session state item doc @: 
+//         project_graph_data/session_items/current_node_collaborators_with_access.toml
+//         The 6-port assignments come from this source.
+        
+//     step 2: get /collaborator_files data @:
+//         .../project_graph_data/collaborator_files/ directory
+//         as: NAME__collaborator.toml
+        
+//     step 3: Remove any collaborator from that 'possible list' whose information
+//         is not in the .../project_graph_data/collaborator_files directory
+//         as: NAME__collaborator.toml
+//         The ipv4 and ipv6 lists come from this source.
+    
+//     step 4: make a session dataset for: teamchannel_connection_data
+//         - allowlisted collaborators
+//             - names
+//             - ip lists
+//             - ports
+
+//     (note: members should have a list of ipv4, ipv6 addresses, not just one)
+
+//     sample: project_graph_data/collaborator_files/alice__collaborator.toml
+//     [[collaborator]]
+//     user_name = "alice"
+//     ipv4_addresses = ["24.0.189.112", "24.0.189.112"]
+//     ipv6_addresses = ["2601:80:4803:9490::2e79","2601:80:4803:9490::2e79"]
+//     gpg_key_public = "304A9A525A5D00D6AD269F765C3E7C56E5A3D0D8"
+//     sync_file_transfer_port = 5000
+//     sync_interval = 5000
+
+//     Do NOT read all data from all collaborators.      
+//     Ethical Data Access: The function only accesses the collaborator data that 
+//     is absolutely necessary for building the session_connection_allowlist for the current channel.
+    
+    
+//     // sample node.toml
+//     owner = "alice"
+//     collaborators_with_access = [
+//         { collaborator_name = "alice", 
+//         ready_port = 50001, 
+//         intray_port = 50002, 
+//         gotit_port = 50003, 
+//         self_ready_port = 50004, 
+//         self_intray_port = 50005, 
+//         self_gotit_port = 50006 
+//         },
+//         { collaborator_name = "bob", 
+//         ready_port = 50011, 
+//         intray_port = 50012, 
+//         gotit_port = 50013, 
+//         self_ready_port = 50014, 
+//         self_intray_port = 50015, 
+//         self_gotit_port = 50016  
+//         },
+//         # Add more collaborators as needed
+//     ]
+//     updated_at = 1727641034
+//     expires_at = 1727727434
+//     node_name = "neem"
+//     description_for_tui = "neem"
+//     directory_path = "project_graph_data/team_channels/neem"
+//     node_unique_id = 1727641034
+//     children = []
+//     order_number = 5
+//     priority = "Medium"
+//     */
+//     /*
+//     maybe detects any port collisions, 
+//     excluding those who collide with senior members
+//     or returning an error if found.
+//     */
+
+//     // 1. Load possible team channel members from session_state_items:
+//     let channel_members_toml = read_state_items_tomls("current_node_collaborators_with_access.toml")?;
+//     let channel_members: Vec<String> = channel_members_toml.as_array()
+//         .ok_or(MyCustomError::InvalidData("Failed to parse channel members"))? 
+//         .iter()
+//         .filter_map(|v| v.as_str().map(String::from)) 
+//         .collect();
+
+//     let mut sync_config_data_set: HashSet<SyncCollaborator> = HashSet::new();
+
+//     // ... (Load possible-team-channel-members and their port data)
+//     for member in channel_members { // (Assuming you have parsed the channel members)
+//         let collaborator_ip_info = load_collaborator_by_username(&member.user_name)?; 
+
+//         sync_config_data_set.insert(SyncCollaborator {
+//             user_name: member.user_name,
+//             ipv6_address: collaborator_ip_info.ipv6_addresses.unwrap_or_default()[0], // (Get first IPv6 address, handle potential errors)
+//             sync_file_transfer_port: collaborator_ip_info.sync_file_transfer_port,
+//             sync_interval: collaborator_ip_info.sync_interval,
+//             ready_port: member.ready_port,  
+//             intray_port: member.intray_port, 
+//             gotit_port: member.gotit_port,
+//         });
+//     }
+
+//     // step 2: get real data @: /project_graph_data/collaborator_files/ directory
+//     // as: NAME__collaborator.toml
+//     for member in channel_members { // (Assuming you have parsed the channel members)
+//         let collaborator_ip_info = load_collaborator_by_username(&member.user_name)?; 
+
+//         sync_config_data_set.insert(SyncCollaborator {
+//             user_name: member.user_name,
+//             ipv6_address: collaborator_ip_info.ipv6_addresses.unwrap_or_default()[0], // (Get first IPv6 address, handle potential errors)
+//             sync_file_transfer_port: collaborator_ip_info.sync_file_transfer_port,
+//             sync_interval: collaborator_ip_info.sync_interval,
+//             ready_port: member.ready_port,  
+//             intray_port: member.intray_port, 
+//             gotit_port: member.gotit_port,
+//         });
+//     }
+
+//     // maaybe should be done during initialziation...
+//     // 3. Create sets to track ports and detect collisions:
+//     let mut sync_config_data_set: HashSet<SyncCollaborator> = HashSet::new();
+//     let mut used_ports: HashSet<u16> = HashSet::new(); // Track used port numbers 
+//     // TODO how are collisions detected?
+//     // e.g. if collision detected, simply fail t add that person
+//     // starting with ordered list order in the team_channel node.toml
+
+//     // 4. Process each channel member:
+//     for member_username in &channel_members {
+//     //     if member_username == current_user { 
+//     //         continue; // Skip the current user
+//     //     }
+
+//     //     let collaborator = load_collaborator_by_username(member_username)?;
+
+//     //     // Extract ports (assuming you have separate port fields, e.g., `ready_port`, `intray_port` etc.)
+//     //     let ready_port = collaborator.ready_port;  
+//     //     let intray_port = collaborator.intray_port;
+//     //     let gotit_port = collaborator.gotit_port;
+
+//     //     // Port collision detection:
+//     //     if !used_ports.insert(ready_port) || 
+//     //        !used_ports.insert(intray_port) ||
+//     //        !used_ports.insert(gotit_port)
+//     //     {
+//     //        return Err(MyCustomError::PortCollision(format!("Port collision detected for user: {}", collaborator.user_name)));
+//     //     } 
+
+//         if let Some(ipv6_addresses) = collaborator.ipv6_addresses { 
+//             let ipv6_address = ipv6_addresses.get(0)
+//                                           .ok_or(MyCustomError::InvalidData(format!("Missing IPv6 address for user: {}", collaborator.user_name)))?; 
+
+//             sync_config_data_set.insert(SyncCollaborator {
+//                 user_name: collaborator.user_name,
+//                 ipv6_address: ipv6_address.clone(), // Use .clone() to avoid ownership issues 
+//                 sync_file_transfer_port: collaborator.sync_file_transfer_port,
+//                 sync_interval: collaborator.sync_interval, 
+//             });
+//         } else {
+//             return Err(MyCustomError::InvalidData(format!("Missing IPv6 address list for user: {}", collaborator.user_name)));
+//         }
+//     } 
+
+//     Ok(sync_config_data_set) 
+// }
+
+
 
 
 fn send_hello_signal(target_addr: SocketAddr) -> Result<(), io::Error> {
@@ -2210,50 +2348,8 @@ fn get_next_sync_request_username(sync_config_data_set: &HashSet<SyncCollaborato
         .map(|collaborator| collaborator.user_name.clone())
 }
 
-// // TODO Sync TEst testing only!
-// fn out_request_sync_loop() {
-//     loop { 
-//         sync_flag_ok_or_wait(3); 
-//         debug_log("out_request_sync_loop() started after sync_flag_ok");
-                
-//         // Check if UMA should continue running
-//         let file_content = match fs::read_to_string(CONTINUE_UMA_PATH) {
-//             Ok(content) => content,
-//             Err(_) => {
-//                 debug_log("Error reading 'continue_uma.txt'. Continuing..."); 
-//                 continue; 
-//             }
-//         };
-//         if file_content.trim() == "0" {
-//             debug_log("'continue_uma.txt' is 0. out_request_sync_loop Exiting loop.");
-//             break; 
-//         }
 
-//         // Load Bob's collaborator data 
-//         let bob_data = load_collaborator_by_username("bob").expect("Failed to load Bob's data");
-
-//         // Handle the optional ipv6_addresses 
-//         if let Some(ipv6_addrs) = bob_data.ipv6_addresses {
-//             if let Some(first_ipv6) = ipv6_addrs.first() { // Get the first IPv6 address in the list
-//                 let target_addr = SocketAddr::new(IpAddr::V6(*first_ipv6), bob_data.sync_file_transfer_port);
-        
-//                 // Send the signal
-//                 send_hello_signal(target_addr).expect("Failed to send Hello World signal");
-//             } else {
-//                 debug_log!("Bob's collaborator data has an empty list of IPv6 addresses.");
-//             }
-//         } else {
-//             debug_log!("Bob's collaborator data is missing IPv6 addresses.");
-//         }
-
-
-//         // You can add a delay here if needed for testing:
-//         // thread::sleep(Duration::from_secs(5));
-//     }
-//     debug_log("Finish: out_request_sync_loop");
-// }
-
-
+// depricated function, for reference
 // fn out_request_sync_loop() {
 //     /*
 //     // Sending Instance
@@ -2283,7 +2379,7 @@ fn get_next_sync_request_username(sync_config_data_set: &HashSet<SyncCollaborato
 //         }
 
 //         // Load the allowlist once outside the loop
-//         let sync_config_data_set = load_teamchannel_connection_data().unwrap_or_else(|e| { 
+//         let sync_config_data_set = make_session_connection_allowlists().unwrap_or_else(|e| { 
 //             debug_log!("Error loading sync_config_data_set: {}", e);
 //             HashSet::new() // Use an empty HashSet here
 //         });
@@ -2331,47 +2427,7 @@ fn get_next_sync_request_username(sync_config_data_set: &HashSet<SyncCollaborato
 //     debug_log("Finish: out_request_sync_loop");
 // }
 
-
-// // TEST ONLY
-// // TEST ONLY 
-// fn in_queue_sync_loop() { 
-//     loop {
-//         sync_flag_ok_or_wait(3);
-//         debug_log("in_queue_sync_loop() started after sync_flag_ok");
-                
-//         // Check if UMA should continue running
-//         let file_content = match fs::read_to_string(CONTINUE_UMA_PATH) {
-//             Ok(content) => content,
-//             Err(_) => {
-//                 println!("Error reading 'continue_uma.txt'. Continuing..."); 
-//                 continue; 
-//             }
-//         };
-//         if file_content.trim() == "0" {
-//             debug_log("'continue_uma.txt' is 0. in_queue_sync_loop Exiting loop.");
-//             break; 
-//         }
-
-//         // HARDCODE Bob's IP address and port for this test! 
-//         let bob_ip: Ipv6Addr = "2601:80:4803:9490:22a2:b594:a55:ac64".parse().unwrap(); 
-//         let bob_port: u16 = 40001; // Or whatever port you've assigned to Bob 
-
-//         let my_addr = SocketAddr::new(IpAddr::V6(bob_ip), bob_port); 
-//         let listener = TcpListener::bind(my_addr).expect("Failed to bind to signal port"); 
-
-//         match listener.accept() {
-//             Ok((_stream, addr)) => { 
-//                 println!("Received connection from: {}", addr); 
-//                 break; // Exit the loop after receiving one connection 
-//             }
-//             Err(e) => {
-//                 println!("Error accepting connection: {}", e);
-//             }
-//         } 
-//     } 
-// }
-
-
+// depricated function, for reference
 // fn in_queue_sync_loop() {
 //     /*
     
@@ -2438,7 +2494,7 @@ fn get_next_sync_request_username(sync_config_data_set: &HashSet<SyncCollaborato
     
         
 //         // Load the allowlist once outside the loop
-//         let allowlist = load_teamchannel_connection_data().unwrap_or_else(|e| { 
+//         let allowlist = make_session_connection_allowlists().unwrap_or_else(|e| { 
 //             eprintln!("Error loading allowlist: {}", e);
 //             HashSet::new()
 //         });
@@ -2481,51 +2537,318 @@ fn get_next_sync_request_username(sync_config_data_set: &HashSet<SyncCollaborato
 //     debug_log("Finish: in_queue_sync_loop");
 // }
 
-fn handle_owner_desk(
-    collaborator: &SyncCollaborator, 
-    rx: mpsc::Receiver<YourMessageType>,  // Optional channel receiver
-    tx: mpsc::Sender<YourMessageType>   // Optional channel sender 
-) {
-    let timestamp_request_port = // ... port for sending "ready to receive" to collaborator
-    let file_receive_port = // ...  port for receiving files from collaborator 
-    let receipt_confirmation_port = // ... port for sending confirmations to collaborator
 
-    // ... (Implement timestamp sending, file receiving, and confirmation logic)
+
+#[derive(Serialize, Deserialize, Debug)] // Add Serialize/Deserialize for sending/receiving
+struct ReadySignal {
+    id: u64, // Unique event ID
+    timestamp: u64,
 }
 
-fn handle_collaborator_desk(
+#[derive(Serialize, Deserialize, Debug)]
+struct GotItSignal {
+    id: u64, 
+}
+
+#[derive(Debug, Clone)] // Add other necessary derives later
+struct SendQueue {
+    items: Vec<String>, // You can store file paths as strings for now
+}
+
+
+fn handle_owner_desk(
     collaborator: &SyncCollaborator, 
-    rx: mpsc::Receiver<YourMessageType>, 
-    tx: mpsc::Sender<YourMessageType>  
+//     rx: mpsc::Receiver<YourMessageType>,  // Optional channel receiver
+//     tx: mpsc::Sender<YourMessageType>   // Optional channel sender 
+) {
+    // let timestamp_request_port = // ... port for sending "ready to receive" to collaborator
+    // let file_receive_port = // ...  port for receiving files from collaborator 
+    // let receipt_confirmation_port = // ... port for sending confirmations to collaborator
+
+    // ... (Implement timestamp sending, file receiving, and confirmation logic)
+
+    loop { // Add this dummy loop 
+        // let timestamp_request_port = // ... port for sending "ready to receive" to collaborator
+        // let file_receive_port = // ...  port for receiving files from collaborator 
+        // let receipt_confirmation_port = // ... port for sending confirmations to collaborator
+
+        // ... Implement your logic here using the port variables ...
+
+        break; // Exit the loop immediately - we'll replace this with real logic later 
+    } 
+
+}
+
+
+/// Vanilla serialize (no serde!)
+/// Use With
+/// let socket = UdpSocket::bind(":::0")?; /// Bind to any available IPv6 address
+///
+/// let ready_signal = ReadySignal {
+///     id: 12345,
+///     timestamp: 1673276800,
+/// };
+///
+/// Convert the struct data to bytes:
+/// let data = serialize_ready_signal(&ready_signal)?; 
+///
+/// Send the data:
+/// socket.send_to(&data, "[::1]:34254")?; /// Replace with your target address and port
+/// Ok(())
+fn serialize_ready_signal(signal: &ReadySignal) -> std::io::Result<Vec<u8>> {
+    let mut bytes = Vec::new();
+    bytes.extend_from_slice(&signal.id.to_be_bytes()); // Convert id to bytes
+    bytes.extend_from_slice(&signal.timestamp.to_be_bytes()); // Convert timestamp to bytes
+    Ok(bytes) 
+}
+
+/// Vanilla Deserilize json signal
+fn deserialize_ready_signal(bytes: &[u8]) -> Result<ReadySignal, io::Error> {
+    // Ensure the byte array has enough data for both fields:
+    if bytes.len() != std::mem::size_of::<u64>() * 2 { // 2 u64 fields
+        return Err(Error::new(
+            ErrorKind::InvalidData, 
+            "Invalid byte array length for ReadySignal"
+        ));
+    }
+
+    // Extract id:
+    let id = u64::from_be_bytes(bytes[0..8].try_into().unwrap()); 
+
+    // Extract timestamp:
+    let timestamp = u64::from_be_bytes(bytes[8..16].try_into().unwrap()); 
+
+    Ok(ReadySignal { id, timestamp })
+}
+
+
+// TODO, uncomment and debug 
+fn send_file_and_see_next_signal(collaborator: &SyncCollaborator, mut send_queue: SendQueue, event_id: u64, intray_port: u16, gotit_port: u16) {
+    // // 5. Send Files (One at a Time)
+    // while let Some(file_to_send) = send_queue.items.pop() { // Assuming items are file paths
+    //     // 6. Send One Item 
+    //     match send_file_to_collaborator(collaborator, &file_to_send, intray_port) {
+    //         Ok(_) => {
+    //             // 7. Listen for "Got it" or "Ready" on `gotit_port` (with timeout)
+    //             let listener = match TcpListener::bind(format!("[{}]:{}", collaborator.ipv6, gotit_port)) {
+    //                 Ok(listener) => listener,
+    //                 Err(e) => {
+    //                     debug_log(&format!("Failed to bind to 'Got it' port for {}: {}", collaborator.user_name, e));
+    //                     return; // Exit the sync event if we can't listen 
+    //                 }
+    //             };
+    //             listener.set_nonblocking(true).expect("Cannot set non-blocking");
+
+    //             let timeout = Duration::from_secs(5); // Adjust timeout as needed
+    //             let start_time = std::time::Instant::now();
+
+    //             loop {
+    //                 match listener.accept() {
+    //                     Ok((mut stream, _)) => {
+    //                         let mut buffer = [0; 1024];
+    //                         match stream.read(&mut buffer) {
+    //                             Ok(n) => {
+    //                                 if n == 0 {
+    //                                     continue; // Connection closed, try again
+    //                                 }
+
+    //                                 // Handle either GotItSignal or ReadySignal (both have the `id` field)
+    //                                 let signal_result: Result<GotItSignal, serde_json::Error> = serde_json::from_slice(&buffer[..n]);
+
+    //                                 match signal_result {
+    //                                     Ok(got_it_signal) => {
+    //                                         if got_it_signal.id == event_id {
+    //                                             debug_log(&format!("Got confirmation for file: {} from {}", file_to_send, collaborator.user_name));
+    //                                             break; // File successfully sent, exit the listening loop 
+    //                                         }
+    //                                     },
+    //                                     Err(_) => { 
+    //                                         let ready_signal_result: Result<ReadySignal, serde_json::Error> = serde_json::from_slice(&buffer[..n]);
+    //                                         match ready_signal_result {
+    //                                             Ok(ready_signal) if ready_signal.id == event_id => {
+    //                                                 debug_log(&format!("Collaborator {} is ready for the next file", collaborator.user_name));
+    //                                                 break; // Collaborator is ready, move to the next file
+    //                                             }
+    //                                             Ok(_) => {}, // Ignore ready signals with a different event ID
+    //                                             Err(e) => {
+    //                                                 debug_log(&format!("Failed to parse signal from {}: {}", collaborator.user_name, e));
+    //                                             }
+    //                                         }
+    //                                     }
+    //                                 }
+    //                             }
+    //                             Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+    //                                 // No data available yet, check timeout
+    //                                 if start_time.elapsed() > timeout {
+    //                                     debug_log(&format!("Timeout waiting for confirmation from {}", collaborator.user_name));
+    //                                     return; // Exit sync event on timeout
+    //                                 }
+    //                                 thread::sleep(Duration::from_millis(100)); // Small delay to avoid busy-waiting 
+    //                             }
+    //                             Err(e) => {
+    //                                 debug_log(&format!("Error reading from 'Got it' port for {}: {}", collaborator.user_name, e));
+    //                                 return; // Exit on error 
+    //                             }
+    //                         } 
+    //                     }
+    //                     Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+    //                         // No incoming connections yet, check timeout
+    //                         if start_time.elapsed() > timeout {
+    //                             debug_log(&format!("Timeout waiting for confirmation from {}", collaborator.user_name));
+    //                             return; // Exit sync event on timeout
+    //                         }
+    //                         thread::sleep(Duration::from_millis(100)); // Small delay
+    //                     }
+    //                     Err(e) => {
+    //                         debug_log(&format!("Error accepting connection on 'Got it' port for {}: {}", collaborator.user_name, e));
+    //                         return; // Exit on error
+    //                     }
+    //                 }
+    //             } // End of listening loop
+    //         }, 
+    //         Err(e) => {
+    //             debug_log(&format!("Failed to send file {} to {}: {}", file_to_send, collaborator.user_name, e));
+    //         }
+    //     } 
+    // } // End of file sending loop
+}
+
+
+fn handle_collaborator_desk(
+    collaborator_sync_data: &SyncCollaborator, 
 ) {
     /*
     For each collaborator's-in-tray-desk:
+    - ports are specified in team_channel node.toml
+    - collaborator IP in NAME__collaborator.toml
     start a loop that:
-    1. listens and waits for an "I'm ready" signal: {id:x, timestamp:y}
-    2. get/make your send-queue based on timestamp, or if timestamp is garbage resend backup timestamp(?)
-    3. send one item from the send-queue-for-collaborator, the oldest item
-    4. listen at both signal ports: 
-    - 'got it' signal is success, log the recent timestamp (and update backup)
-    and end thread
-    - 'ready' signal: abort, end thread. (let it fail)
-    
+
+    0. get session_connection_allowlist data as input:
+        - ipv6 list
+        - ipv4 list
+        - 3 ports
+    1. look for halt command in continue_uma.txt
+    2. listens and waits for an "I'm ready" signal: {id:x, timestamp:y}
+        note: sync-events will share a unique-ID,
+        How does the thread know whether the 'gotit' signal applies to the current sync-event?
+        Because it has the same id.
+    3. get/make your send-queue based on timestamp, or if timestamp is garbage resend backup timestamp(?)
+    4. make thread for event
+    5. make a send-event thread
+    6. send one item from the send-queue-for-collaborator, the oldest item
+    7. listen at both signal ports: 
+        for signals with a relevant ID:
+        - 'got it' signal means: success, log the recent timestamp (and update backup)
+        and end thread
+        - 'ready' signal means: failed, abort, end thread. (let it fail)
+
     maybe use a match to listen for either single port being first?
     */
     
-    // horrible meaningless name must be refactored now!
-    let timestamp_latest_received_port =  // ... port for listening for "latest received" from collaborator
+    loop {
+        // 1. Read the 'continue_uma.txt' file 
+        let file_content = match fs::read_to_string(CONTINUE_UMA_PATH) {
+            Ok(content) => content,
+            Err(_) => {
+                println!("Error reading 'continue_uma.txt'. Continuing..."); // Handle the error (e.g., log it) but continue for now
+                continue; // Skip to the next loop iteration
+            }
+        };
     
-    let file_transfer_port = // ... port for sending files to collaborator 
-    let confirmation_port = // ... port for listening for confirmations from collaborator
+        // break loop if continue=0
+        if file_content.trim() == "0" {
+            debug_log("'continue_uma.txt' is 0. we_love_projects_loop() Exiting loop.");
+            break; 
+        }
+        
+        // 2. Listen for "I'm ready" signal
+        let listener = match TcpListener::bind(format!("[{}]:{}", collaborator_sync_data.ipv6_address, collaborator_sync_data.ready_port)) {
+            Ok(listener) => listener,
+            Err(e) => {
+                debug_log(&format!("Failed to bind to ready port for {}: {}", collaborator_sync_data.user_name, e));
+                thread::sleep(Duration::from_secs(1)); // Wait a bit before retrying
+                continue;
+            }
+        };
 
-    // ... (Implement listening for "latest received", file transfer, and confirmation listening logic)
+        for stream in listener.incoming() {
+            match stream {
+                Ok(mut stream) => {
+                    let mut buffer = [0; 1024]; // Adjust buffer size as needed
+                    match stream.read(&mut buffer) {
+                        Ok(n) => {
+                            if n == 0 {
+                                continue; // Connection closed, skip processing
+                            }
+
+                            // Replace serde_json::from_slice with your custom function:
+                            let ready_signal: ReadySignal = match deserialize_ready_signal(&buffer[..n]) {
+                                Ok(signal) => signal,
+                                Err(e) => {
+                                    debug_log(&format!("Failed to parse ready signal from {}: {}", collaborator_sync_data.user_name, e));
+                                    continue; // Skip processing if signal is invalid
+                                }
+                            };
+
+                            // TODO commented out for development: get_or_create_send_queue does not yet exist
+                            // // 3. Get/Make Send Queue
+                            // let send_queue = get_or_create_send_queue(collaborator_sync_data, ready_signal.timestamp);
+
+                            // // 4. Spawn Sync Event Thread
+                            // let event_id = ready_signal.id; // Capture the event ID from the signal
+                            // thread::spawn(move || {
+                            //     ////////////////////////
+                            //     // Steps 5+ are here...   in send_file_and_see_next_signal()
+                            //     ////////////////////////
+                            //     send_file_and_see_next_signal(collaborator_sync_data, send_queue, event_id, collaborator_sync_data.intray_port, collaborator_sync_data.gotit_port); 
+                            // });
+                        },
+                        Err(e) => {
+                            debug_log(&format!("Failed to read ready signal from {}: {}", collaborator_sync_data.user_name, e));
+                        }
+                    }
+                },
+                Err(e) => {
+                    debug_log(&format!("Failed to accept connection from {}: {}", collaborator_sync_data.user_name, e));
+                }
+            }
+        } 
+    
+        // // 2. listen for ready-signal=timestamp: allow parallel requests
+        // let listen_for_readysignal_timestamp =  // ... port for "I'm ready" signal: {id:x, timestamp:y} from collaborator_sync_data {
+            
+        //     // 3. Make send-queue based on timestamp (usually one zero items or 1 item)
+        //     /*
+        //     - See if timestamp is the same (re-use queue)
+        //     - if timestamp is different, make a new queue
+        //     TODO:
+        //     - new struct impl for send-queue?
+        //     */
+            
+        //     // 4. Thread: send-sync event
+        //     /*
+        //     why is this 'let port = ...?'
+        //     */
+        //     let we_love_projects_loop = thread::spawn(move || {
+                
+        //         let intray_port = // ... port for sending files to collaborator_sync_data 
+                
+        //         let gotit_port = // ... port for listening for confirmations from collaborator_sync_data
+        //     });    
+        // };
+        
+        
+        
+    }
 }
+
+
 
 // Function for thread 2's file_sync loop: demo version
 fn you_love_the_sync_team_office(
-    current_collaborator: &Collaborator, // The collaborator running this instance of UMA
-    allowlist: &HashSet<SyncCollaborator>,  // Collaborators to sync with in the current channel 
-) {
+    // current_collaborator: &Collaborator, // The collaborator running this instance of UMA
+    // allowlist: &HashSet<SyncCollaborator>,  // Collaborators to sync with in the current channel 
+) -> Result<(), Box<dyn std::error::Error>> {
     /*
     "It's all fun and games until someone syncs a file."
     
@@ -2559,35 +2882,91 @@ fn you_love_the_sync_team_office(
          break; // Exit the thread's loop.
       }
     */
-    println!("Starting UMA Sync Team Office for {}", current_collaborator.user_name);
+    
+    // Read uma_local_owner_user from uma.toml
+    let uma_toml_path = Path::new("uma.toml");
+    let user_metadata = toml::from_str::<toml::Value>(&fs::read_to_string(uma_toml_path)?)?; 
+    let uma_local_owner_user = user_metadata["uma_local_owner_user"].as_str().unwrap().to_string();
 
+    debug_log!("Starting UMA Sync Team Office for {}", &uma_local_owner_user);
+
+    let session_connection_allowlists = make_session_connection_allowlists(&uma_local_owner_user)?;
+    // let session_connection_allowlists_clone = session_connection_allowlists.clone();
+    
+    /*issue:
+error[E0597]: `session_connection_allowlists_clone` does not live long enough
+    --> src/main.rs:2898:42
+     |
+2893 |     let session_connection_allowlists_clone = session_connection_allowlists.clone();
+     |         ----------------------------------- binding `session_connection_allowlists_clone` declared here
+...
+2898 |     for this_allowlisted_collaborator in &session_connection_allowlists_clone { 
+     |                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |                                          |
+     |                                          borrowed value does not live long enough
+     |                                          argument requires that `session_connection_allowlists_clone` is borrowed for `'static`
+...
+2925 | }
+     | - `session_connection_allowlists_clone` dropped here while still borrowed
+
+    Neither session_connection_allowlists nor a clone can be used...
+    
+    */
+
+    // // Create threads for each collaborator on the allowlist: 
+    // let mut collaborator_threads = Vec::new();
+    // for this_allowlisted_collaborator in &session_connection_allowlists { 
+    //     if this_allowlisted_collaborator.user_name != uma_local_owner_user {
+    //         println!("Setting up connection with {}", this_allowlisted_collaborator.user_name);
+
+    //         // Create the two "meeting room desks" for each collaborator pair:
+    //         // let (tx_owner_desk, rx_owner_desk) = mpsc::channel(); // Optional channels for thread communication
+    //         // let (tx_collaborator_desk, rx_collaborator_desk) = mpsc::channel(); 
+
+    //         let owner_desk_thread = thread::spawn(move || {
+    //             handle_owner_desk(&this_allowlisted_collaborator); 
+    //         });
+    //         let collaborator_desk_thread = thread::spawn(move || {
+    //             handle_collaborator_desk(&this_allowlisted_collaborator);
+    //         });
+
+    //         collaborator_threads.push(owner_desk_thread); 
+    //         collaborator_threads.push(collaborator_desk_thread); 
+    //     } 
+    // } 
+
+        
     // Create threads for each collaborator on the allowlist: 
     let mut collaborator_threads = Vec::new();
-    for collaborator in allowlist { 
-        if collaborator.user_name != current_collaborator.user_name {
-            println!("Setting up connection with {}", collaborator.user_name);
+    for this_allowlisted_collaborator in session_connection_allowlists { 
+        if this_allowlisted_collaborator.user_name != uma_local_owner_user {
+            println!("Setting up connection with {}", this_allowlisted_collaborator.user_name);
+    
+            // Move ownership directly into the threads
+            // Clone the collaborator data before moving it into the closures
+            let owner_desk_collaborator = this_allowlisted_collaborator.clone(); 
+            let collaborator_desk_collaborator = this_allowlisted_collaborator.clone();
 
             // Create the two "meeting room desks" for each collaborator pair:
-            let (tx_owner_desk, rx_owner_desk) = mpsc::channel(); // Optional channels for thread communication
-            let (tx_collaborator_desk, rx_collaborator_desk) = mpsc::channel(); 
-
             let owner_desk_thread = thread::spawn(move || {
-                handle_owner_desk(&collaborator, rx_owner_desk, tx_collaborator_desk); 
+                handle_owner_desk(&owner_desk_collaborator); 
             });
             let collaborator_desk_thread = thread::spawn(move || {
-                handle_collaborator_desk(&collaborator, rx_collaborator_desk, tx_owner_desk);
+                handle_collaborator_desk(&collaborator_desk_collaborator);
             });
 
             collaborator_threads.push(owner_desk_thread); 
-            collaborator_threads.push(collaborator_desk_thread); 
+            collaborator_threads.push(collaborator_desk_thread);
         } 
-    } 
-
+    }    
+    
     // ... Handle join logic for your threads... 
     for thread in collaborator_threads {
         thread.join().expect("Failed to join thread.");
     }
+    debug_log!("UMA Sync Team Office closed");
     println!("UMA Sync Team Office closed");
+    Ok(())
 }
     
     
