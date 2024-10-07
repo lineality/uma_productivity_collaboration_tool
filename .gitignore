@@ -5,6 +5,7 @@ target/
 
 # uma directories
 project_graph_data/
+archive/
 
 # uma files
 uma.toml
