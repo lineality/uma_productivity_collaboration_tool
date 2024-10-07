@@ -918,7 +918,7 @@ fn add_collaborator_qa(
     graph_navigation_instance_state: &GraphNavigationInstanceState
 ) -> Result<(), io::Error> {
 
-    debug_log("Enter collaborator username:");
+    println("Enter collaborator username:");
     let mut username = String::new();
     io::stdin().read_line(&mut username)?;
     let username = username.trim().to_string();
@@ -956,22 +956,22 @@ fn add_collaborator_qa(
         (ipv4_addresses, ipv6_addresses) // Return the detected addresses
     } else {
         // Manual IP address input
-        debug_log("Enter IPv4 address (or 'done' if finished, leave blank to skip):");
+        println("Enter IPv4 address (or 'done' if finished, leave blank to skip):");
         let ipv4_addresses = get_ipv4_addresses()?; 
 
-        debug_log("Enter IPv6 address (or 'done' if finished, leave blank to skip):");
+        println("Enter IPv6 address (or 'done' if finished, leave blank to skip):");
         let ipv6_addresses = get_ipv6_addresses()?; 
         (ipv4_addresses, ipv6_addresses) // Return the manually entered addresses
     };
 
     
     
-    debug_log("Enter the collaborator's public GPG key:");
+    println("Enter the collaborator's public GPG key:");
     let mut gpg_key_public = String::new();
     io::stdin().read_line(&mut gpg_key_public)?; 
     let gpg_key_public = gpg_key_public.trim().to_string();
 
-    debug_log("Enter the collaborator's sync file transfer port (default: 40000):");
+    println("Enter the collaborator's sync file transfer port (default: 40000):");
     let mut sync_port_input = String::new();
     io::stdin().read_line(&mut sync_port_input)?; 
     // let sync_file_transfer_port: u16 = sync_port_input.trim().parse().unwrap_or(40000);
@@ -979,7 +979,7 @@ fn add_collaborator_qa(
     let mut rng = rand::thread_rng(); 
     let sync_file_transfer_port: u16 = rng.gen_range(40000..=50000); 
 
-    debug_log("Enter the collaborator's sync interval in seconds (default: 60):");
+    println("Enter the collaborator's sync interval in seconds (default: 60):");
     let mut sync_interval_input = String::new();
     io::stdin().read_line(&mut sync_interval_input)?;
     let sync_interval: u64 = sync_interval_input.trim().parse().unwrap_or(60);
@@ -995,7 +995,7 @@ fn add_collaborator_qa(
     // Create the Collaborator struct
     // updated_at_now = SystemTime::now()
     
-    
+    // TODO: port not listed here anymore
     
     let collaborator = Collaborator::new(
         username,
@@ -1032,7 +1032,7 @@ fn add_collaborator_qa(
     )?; 
 
     println!("Collaborator '{}' added!", collaborator.user_name); 
-    debug_log(&format!("Collaborator '{}' added!", collaborator.user_name)); 
+    println(&format!("Collaborator '{}' added!", collaborator.user_name)); 
     Ok(())
 } 
 
@@ -1860,7 +1860,12 @@ fn handle_command(
             //     debug_log("Vote!");
             //     // Display help information
             // }
-            "make node" | "new node" | "add node" => {
+            "collaborator" => {
+                debug_log("make node!");
+                add_collaborator_qa(&graph_navigation_instance_state);
+                
+            }
+            "node" => {
                 debug_log("make node!");
 
                 // 1. Get input for node name
@@ -1937,13 +1942,24 @@ fn handle_command(
 
                 // 9. Update the TUI to reflect the new node (if necessary)
             }
-           "d" | "datalab" | "data lab" | "data" => {
+           "d" | "datalab" | "data" => {
                 debug_log("Help!");
+                // Display help information
+            }
+           "storyboard" | "mudd" => {
+                debug_log("storyboard");
                 // Display help information
             }
             "home" => {
                 debug_log("home");
-                app.current_path = PathBuf::from("project_graph_data/team_channels");
+                
+                // // Posix
+                // app.current_path = PathBuf::from("project_graph_data/team_channels");
+                
+                // any file system compiled
+                let mut app_data_dir = PathBuf::from("project_graph_data");
+                app_data_dir.push("team_channels");
+                app.current_path = app_data_dir;
                 // Update TUI display
             }
             // "u" | "updated" => {
