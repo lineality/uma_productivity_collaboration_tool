@@ -1,12 +1,8 @@
 ### uma_productivity_collaboration_tool
 
-# Very Early Development Still!
+# Very Early Development Still
 
-#### Use:
-```bash
-RUST_BACKTRACE=full cargo run
-```
-
+Documentatation and features hopefully coming within 2024
 
 ## cli tui messenger planner
 - Distributed Multi-point Conferencing Unit 
