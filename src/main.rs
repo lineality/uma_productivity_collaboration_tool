@@ -17,6 +17,9 @@ walkdir = "2.5.0"
 toml = "0.8.19"
 serde = { version = "1.0.210", features = ["derive"] }
 rand = "0.8.5"
+getifaddrs = "0.1.4"
+
+https://docs.rs/getifaddrs/latest/getifaddrs/
 */
 
 // Set debug flag (future: add time stamp with 24 check)
@@ -77,6 +80,8 @@ use std::net::{
     TcpStream,
     SocketAddr,
 };
+// https://docs.rs/getifaddrs/latest/getifaddrs/
+use getifaddrs::{getifaddrs, InterfaceFlags};
 
 // For TUI
 mod tiny_tui_module;
@@ -84,6 +89,48 @@ use tiny_tui_module::tiny_tui;
 
 const CONTINUE_UMA_PATH: &str = "project_graph_data/session_state_items/continue_uma.txt";
 const SYNC_START_OK_FLAG_PATH: &str = "project_graph_data/session_state_items/ok_to_start_sync_flag.txt";
+
+/// utility: Gets a list of all IPv4 and IPv6 addresses associated with the current system's network interfaces.
+///
+/// Returns:
+/// - `Ok(Vec<IpAddr>)`: A vector of IP addresses on success.
+/// - `Err(io::Error)`: An error if obtaining network interface information fails.
+/// From: https://docs.rs/getifaddrs/latest/getifaddrs/
+/// use getifaddrs::{getifaddrs, InterfaceFlags};
+fn get_local_ip_addresses() -> Result<Vec<IpAddr>, std::io::Error> {
+    // https://docs.rs/getifaddrs/latest/getifaddrs/
+    
+    // Test Print in Debug Log
+    for interface in getifaddrs()? {
+        debug_log("fn get_local_ip_addresses() -> std::io::Result<()> {");
+        debug_log!("Interface: {}", interface.name);
+        debug_log!("  Address: {}", interface.address);
+        if let Some(netmask) = interface.netmask {
+            debug_log!("  Netmask: {}", netmask);
+        }
+        debug_log!("  Flags: {:?}", interface.flags);
+        if interface.flags.contains(InterfaceFlags::UP) {
+            debug_log!("  Status: Up");
+        } else {
+            debug_log!("  Status: Down");
+        }
+        debug_log!();
+    }
+
+    let mut addresses = Vec::new();
+
+    for interface in getifaddrs()? {
+        if interface.flags.contains(InterfaceFlags::UP) && // Interface is up
+           !interface.flags.contains(InterfaceFlags::LOOPBACK) { // Not a loopback interface
+               match interface.address {
+                   IpAddr::V4(addr) => addresses.push(IpAddr::V4(addr)),
+                   IpAddr::V6(addr) => addresses.push(IpAddr::V6(addr)),
+               }
+           }
+    }
+
+    Ok(addresses)
+}
 
 enum IpAddrKind { V4, V6 }
 
@@ -866,11 +913,6 @@ fn check_collaborator_collisions(
     None // No collisions
 }
 
-fn check_team_channel_collision(channel_name: &str) -> bool {
-     let team_channels_dir = Path::new("project_graph_data/team_channels");
-     let channel_path = team_channels_dir.join(channel_name);
-     channel_path.exists() 
-}
 
 fn add_collaborator_qa(
     graph_navigation_instance_state: &GraphNavigationInstanceState
@@ -881,18 +923,48 @@ fn add_collaborator_qa(
     io::stdin().read_line(&mut username)?;
     let username = username.trim().to_string();
 
-    // debug_log("Enter IPv4 address (or 'done' if finished, leave blank to skip):");
-    // let ipv4_addresses = get_ip_addresses(IpAddrKind::V4)?;
 
-    // debug_log("Enter IPv6 address (or 'done' if finished, leave blank to skip):");
-    // let ipv6_addresses = get_ip_addresses(IpAddrKind::V6)?;
+    // choice...
+    // Get IP address input method
+    println!("Do you want to auto-detect IPv6 and IPv4? ('yes' or 'no' for manual input)");
+    let mut pick_ip_find_method = String::new();
+    io::stdin().read_line(&mut pick_ip_find_method)?;
+    let pick_ip_find_method = pick_ip_find_method.trim().to_string();
 
+    let (ipv4_addresses, ipv6_addresses) = if pick_ip_find_method == "yes" { 
+        // Auto-detect IP addresses
+        let detected_addresses = get_local_ip_addresses()?;
+        let mut ipv4_addresses: Option<Vec<Ipv4Addr>> = None;
+        let mut ipv6_addresses: Option<Vec<Ipv6Addr>> = None;
 
-    debug_log("Enter IPv4 address (or 'done' if finished, leave blank to skip):");
-    let ipv4_addresses = get_ipv4_addresses()?; // Use the new function
+        for addr in detected_addresses {
+            match addr {
+                IpAddr::V4(v4) => {
+                    if ipv4_addresses.is_none() {
+                        ipv4_addresses = Some(Vec::new());
+                    }
+                    ipv4_addresses.as_mut().unwrap().push(v4);
+                }
+                IpAddr::V6(v6) => {
+                    if ipv6_addresses.is_none() {
+                        ipv6_addresses = Some(Vec::new());
+                    }
+                    ipv6_addresses.as_mut().unwrap().push(v6);
+                }
+            }
+        }
+        (ipv4_addresses, ipv6_addresses) // Return the detected addresses
+    } else {
+        // Manual IP address input
+        debug_log("Enter IPv4 address (or 'done' if finished, leave blank to skip):");
+        let ipv4_addresses = get_ipv4_addresses()?; 
 
-    debug_log("Enter IPv6 address (or 'done' if finished, leave blank to skip):");
-    let ipv6_addresses = get_ipv6_addresses()?; // Use the new function
+        debug_log("Enter IPv6 address (or 'done' if finished, leave blank to skip):");
+        let ipv6_addresses = get_ipv6_addresses()?; 
+        (ipv4_addresses, ipv6_addresses) // Return the manually entered addresses
+    };
+
+    
     
     debug_log("Enter the collaborator's public GPG key:");
     let mut gpg_key_public = String::new();
@@ -964,6 +1036,12 @@ fn add_collaborator_qa(
     Ok(())
 } 
 
+
+fn check_team_channel_collision(channel_name: &str) -> bool {
+     let team_channels_dir = Path::new("project_graph_data/team_channels");
+     let channel_path = team_channels_dir.join(channel_name);
+     channel_path.exists() 
+}
 
 // TODO: how to load value for active_team_channel when channel is entered
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -1297,8 +1375,8 @@ impl NodeInstMsgBrowserMetadata {
             expiration_period_days: 30, // Default: 7 days
             max_message_size_char: 4096, // Default: 4096 characters
             total_max_size_mb: 512, // Default: 1024 MB
-            updated_at_timestamp: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
-            expires_at: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
+            updated_at_timestamp: get_current_unix_timestamp(),
+            expires_at: get_current_unix_timestamp(),  // TODO update this with real something
             collaborators_with_access: Vec::new(), // by default use state-struct node members
             owner: owner,
         }
@@ -1432,12 +1510,32 @@ fn add_im_message(
     let node_name = metadata.node_name;
     let filepath_in_node = metadata.path_in_node;
     let message = InstantMessageFile::new(
-        owner, 
-        &node_name, 
-        &filepath_in_node, 
-        text, 
-        signature, 
-        &graph_navigation_instance_state
+        owner, // owner: &str,
+        &node_name, // node_name: &str, , // Add node name as a parameter
+        &filepath_in_node, // filepath_in_node: &str, , // Add filepath_in_node as a parameter
+        text, // text_message: &str,
+        signature, // signature: Option<String>,
+        graph_navigation_instance_state, // graph_navigation_instance_state: &GraphNavigationInstanceState,  // gets uma.toml data
+        
+        
+        
+        // owner, // owner: owner.to_string(),
+        // graph_navigation_instance_state.current_node_members, // collaborators_with_access: collaborators_with_access,
+        // &node_name, // node_name: node_name.to_string(), , // Store the node name
+        // &filepath_in_node, // filepath_in_node: filepath_in_node.to_string(), , // Store the filepath
+        // text, // text_message: text_message.to_string(),
+        // get_current_unix_timestamp(), // updated_at_timestamp: timestamp, , // utc posix timestamp
+        // get_current_unix_timestamp(), // expires_at: expires_at, , // utc posix timestamp , // TODO!! update this
+        // None, // links: Vec::new(),
+        // signature, // signature,
+
+        
+        // owner, 
+        // &node_name, 
+        // &filepath_in_node, 
+        // text, 
+        // signature, 
+        // &graph_navigation_instance_state
     );
     let toml_data = toml::to_string(&message).map_err(|e| {
         io::Error::new(io::ErrorKind::Other, format!("TOML serialization error: {}", e))
@@ -1500,6 +1598,8 @@ fn read_a_collaborator_setup_toml() -> Result<Vec<Collaborator>, MyCustomError> 
 
 fn initialize_uma_application() {
     // Welcome to Uma Land!!
+    
+    get_local_ip_addresses();
     
 
     // Check if the data directory exists
@@ -1596,50 +1696,76 @@ fn initialize_uma_application() {
         // let mut ipv4_address = String::new();
         // io::stdin().read_line(&mut ipv4_address).unwrap();
         // let ipv4_address = ipv4_address.trim().parse().unwrap();
+        
 
-      // Prompt for IPv6 addresses (potentially multiple):
-        let mut ipv6_addresses = Vec::new();
-        loop { 
-            println!("Enter an IPv6 address (or 'done' if finished):"); 
-            let mut ipv6_input = String::new();
-            io::stdin().read_line(&mut ipv6_input).expect("Failed to read input.");
+        // choice...
+        // Get IP address input method
+        // 3. Auto-detect IP Addresses
+        let detected_addresses = get_local_ip_addresses().expect("Failed to auto-detect IP addresses"); 
+        let mut ipv4_addresses: Option<Vec<Ipv4Addr>> = None;
+        let mut ipv6_addresses: Option<Vec<Ipv6Addr>> = None;
 
-            let ipv6_input = ipv6_input.trim();
-            if ipv6_input.to_lowercase() == "done" { 
-                break; // Exit the loop
-            }
-
-            match ipv6_input.parse::<Ipv6Addr>() { 
-                Ok(addr) => {
-                    ipv6_addresses.push(addr);
+        for addr in detected_addresses {
+            match addr {
+                IpAddr::V4(v4) => {
+                    if ipv4_addresses.is_none() {
+                        ipv4_addresses = Some(Vec::new());
+                    }
+                    ipv4_addresses.as_mut().unwrap().push(v4);
                 }
-                Err(_) => {
-                    println!("Invalid IPv6 address. Please try again.");
-                }
-            }
-        }
-
-      // Prompt for IPv6 addresses (potentially multiple):
-        let mut ipv4_addresses = Vec::new();
-        loop { 
-            println!("Enter an IPv4 address (or 'done' if finished):"); 
-            let mut ipv4_input = String::new();
-            io::stdin().read_line(&mut ipv4_input).expect("Failed to read input.");
-
-            let ipv4_input = ipv4_input.trim();
-            if ipv4_input.to_lowercase() == "done" { 
-                break; // Exit the loop
-            }
-
-            match ipv4_input.parse::<Ipv4Addr>() { 
-                Ok(addr) => {
-                    ipv4_addresses.push(addr);
-                }
-                Err(_) => {
-                    println!("Invalid IPv4 address. Please try again.");
+                IpAddr::V6(v6) => {
+                    if ipv6_addresses.is_none() {
+                        ipv6_addresses = Some(Vec::new());
+                    }
+                    ipv6_addresses.as_mut().unwrap().push(v6);
                 }
             }
         }
+        
+
+      // // Prompt for IPv6 addresses (potentially multiple):
+      //   let mut ipv6_addresses = Vec::new();
+      //   loop { 
+      //       println!("Enter an IPv6 address (or 'done' if finished):"); 
+      //       let mut ipv6_input = String::new();
+      //       io::stdin().read_line(&mut ipv6_input).expect("Failed to read input.");
+
+      //       let ipv6_input = ipv6_input.trim();
+      //       if ipv6_input.to_lowercase() == "done" { 
+      //           break; // Exit the loop
+      //       }
+
+      //       match ipv6_input.parse::<Ipv6Addr>() { 
+      //           Ok(addr) => {
+      //               ipv6_addresses.push(addr);
+      //           }
+      //           Err(_) => {
+      //               println!("Invalid IPv6 address. Please try again.");
+      //           }
+      //       }
+      //   }
+
+      // // Prompt for IPv6 addresses (potentially multiple):
+      //   let mut ipv4_addresses = Vec::new();
+      //   loop { 
+      //       println!("Enter an IPv4 address (or 'done' if finished):"); 
+      //       let mut ipv4_input = String::new();
+      //       io::stdin().read_line(&mut ipv4_input).expect("Failed to read input.");
+
+      //       let ipv4_input = ipv4_input.trim();
+      //       if ipv4_input.to_lowercase() == "done" { 
+      //           break; // Exit the loop
+      //       }
+
+      //       match ipv4_input.parse::<Ipv4Addr>() { 
+      //           Ok(addr) => {
+      //               ipv4_addresses.push(addr);
+      //           }
+      //           Err(_) => {
+      //               println!("Invalid IPv4 address. Please try again.");
+      //           }
+      //       }
+      //   }
                         
         // // Prompt the user to enter an IP address
         // println!("Enter an ipv6_addresses:");
@@ -1664,8 +1790,8 @@ fn initialize_uma_application() {
         // // Add a new user to Uma file system
         add_collaborator_setup_file(
             username, 
-            Some(ipv4_addresses), // Wrap ipv4_addresses in Some()
-            Some(ipv6_addresses), // Wrap ipv6_addresses in Some()
+            ipv4_addresses, 
+            ipv6_addresses, 
             gpg_key_public, 
             sync_file_transfer_port, // sync_file_transfer_port
             60,   // Example sync_interval (in seconds)
@@ -2476,7 +2602,11 @@ fn handle_collaborator_intray_desk(
 
                         // 7. Deserialize the ReadySignal
                         let ready_signal: ReadySignal = match deserialize_ready_signal(&buffer[..n]) {
-                            Ok(signal) => signal,
+                            Ok(ready_signal) => {
+                                println!("Received ReadySignal: {:?}", ready_signal); // Print the received signal for testing
+                                debug_log!("Received ReadySignal: {:?}", ready_signal); // Print the received signal for testing
+                                ready_signal // Return the ReadySignal here
+                            },
                             Err(e) => {
                                 debug_log(&format!("Failed to parse ready signal: {}", e)); 
                                 continue; 
