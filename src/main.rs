@@ -281,8 +281,8 @@ fn check_all_ports_in_team_channels() -> Result<(), UmaError> {
             let toml_string = std::fs::read_to_string(&node_toml_path)?;
             let toml_value: Value = toml::from_str(&toml_string)?;
 
-            // Extract the collaborators_with_access array
-            if let Some(collaborators_array) = toml_value.get("collaborators_with_access").and_then(Value::as_array) {
+            // Extract the teamchannel_collaborators_with_access array
+            if let Some(collaborators_array) = toml_value.get("teamchannel_collaborators_with_access").and_then(Value::as_array) {
                 for collaborator_data in collaborators_array {
                     // Extract each port and check if it's in use
                     if let Some(ready_port) = collaborator_data.get("ready_port").and_then(|v| v.as_integer()).map(|p| p as u16) {
@@ -1109,7 +1109,7 @@ struct GraphNavigationInstanceState {
     tui_height: u8,
     tui_width: u8,
     current_full_file_path: PathBuf,
-    current_node_collaborators_with_access: Vec<String>,
+    current_node_teamchannel_collaborators_with_access: Vec<String>,
     current_node_name: String,
     current_node_owner: String,
     current_node_description_for_tui: String,
@@ -1190,13 +1190,13 @@ impl GraphNavigationInstanceState {
             
             
             // 4. Save Vec<String> as TOML:
-            let collaborators_toml = toml::to_string(&self.current_node_collaborators_with_access).map_err(|e| {
+            let collaborators_toml = toml::to_string(&self.current_node_teamchannel_collaborators_with_access).map_err(|e| {
                 io::Error::new(
                     io::ErrorKind::Other,
                     format!("Failed to serialize collaborators to TOML: {}", e),
                 )
             })?;
-            fs::write(session_items_path.join("current_node_collaborators_with_access.toml"), collaborators_toml)?;
+            fs::write(session_items_path.join("current_node_teamchannel_collaborators_with_access.toml"), collaborators_toml)?;
             
             // ... (save other Vec<String> values similarly)
 
@@ -1259,7 +1259,7 @@ graph-dungeon location.
 ///
 /// # Collaborator Ports
 /// 
-/// Collaborator port assignments are stored in the `collaborator_ports` field, which is a 
+/// Collaborator port assignments are stored in the `collaborator_port_assignments` field, which is a 
 /// `HashMap`. The keys of the `HashMap` are the usernames of the collaborators (strings), 
 /// and the values are instances of the `CollaboratorPorts` struct. 
 ///
@@ -1275,17 +1275,17 @@ graph-dungeon location.
 /// ## Serialization and Deserialization
 ///
 /// When saving a `CoreNode` to a `node.toml` file (using the `save_node_to_file` function), 
-/// the `collaborator_ports` field is serialized as a TOML table where the keys are the 
+/// the `collaborator_port_assignments` field is serialized as a TOML table where the keys are the 
 /// collaborator usernames and the values are tables containing the six port assignments.
 ///
 /// When loading a `CoreNode` from a `node.toml` file (using the `load_node_from_file` function),
 /// the TOML table representing collaborator ports is deserialized into the 
-/// `collaborator_ports` field. 
+/// `collaborator_port_assignments` field. 
 ///
 /// ## Example `node.toml` Section 
 /// 
 /// ```toml
-/// [collaborator_ports]
+/// [collaborator_port_assignments]
 /// alice = { ready_port = 50001, tray_port = 50002, gotit_port = 50003, self_ready_port = 50004, self_tray_port = 50005, self_gotit_port = 50006 }
 /// bob = { ready_port = 50011, tray_port = 50012, gotit_port = 50013, self_ready_port = 50014, self_tray_port = 50015, self_gotit_port = 50016 }
 /// ```
@@ -1313,9 +1313,9 @@ struct CoreNode {
     /// A vector of `CoreNode` structs representing the child nodes of this node.
     children: Vec<CoreNode>,
     /// An ordered vector of collaborator usernames associated with this node.
-    collaborators: Vec<String>,
+    teamchannel_collaborators_with_access: Vec<String>,
     /// A map containing port assignments for each collaborator associated with the node.
-    collaborator_ports: HashMap<String, CollaboratorPorts>,
+    collaborator_port_assignments: HashMap<String, CollaboratorPorts>,
 }
 
 // /// Loads CollaboratorData from a TOML file.
@@ -1367,24 +1367,50 @@ fn load_core_node_from_toml_file(file_path: &Path) -> Result<CoreNode, String> {
 }
 
 
-
+/*
+/// The name of the node. This is used for display and identification.
+node_name: String,
+/// A description of the node, intended for display in the TUI.
+description_for_tui: String,
+/// A unique identifier for the node, generated using a timestamp at node creation.
+node_unique_id: u64,
+/// The path to the directory on the file system where the node's data is stored.
+directory_path: PathBuf,
+/// An order number used to define the node's position within a list or hierarchy.
+order_number: u32,
+/// The priority of the node, which can be High, Medium, or Low.
+priority: NodePriority,
+/// The username of the owner of the node.
+owner: String,
+/// The Unix timestamp representing when the node was last updated.
+updated_at_timestamp: u64,
+/// The Unix timestamp representing when the node will expire.
+expires_at: u64,
+/// A vector of `CoreNode` structs representing the child nodes of this node.
+children: Vec<CoreNode>,
+/// An ordered vector of collaborator usernames associated with this node.
+teamchannel_collaborators_with_access: Vec<String>,
+/// A map containing port assignments for each collaborator associated with the node.
+collaborator_port_assignments: HashMap<String, CollaboratorPorts>,
+*/
+/// Creates a new `CoreNode` instance.
+///
+/// # Arguments
+///
+/// * `node_name` - The name of the node.
+/// * `description_for_tui` - A description for display in the TUI.
+/// * `directory_path` - The path to the node's directory.
+/// * `order_number` - The order number for the node.
+/// * `priority` - The priority of the node.
+/// * `owner` - The username of the node's owner.
+/// * `collaborators` - An ordered vector of collaborator usernames.
+/// * `collaborator_port_assignments` - A map of collaborator port assignments.
+///
+/// # Returns
+///
+/// * A new `CoreNode` instance with the given attributes.
 impl CoreNode {
-    /// Creates a new `CoreNode` instance.
-    ///
-    /// # Arguments
-    ///
-    /// * `node_name` - The name of the node.
-    /// * `description_for_tui` - A description for display in the TUI.
-    /// * `directory_path` - The path to the node's directory.
-    /// * `order_number` - The order number for the node.
-    /// * `priority` - The priority of the node.
-    /// * `owner` - The username of the node's owner.
-    /// * `collaborators` - An ordered vector of collaborator usernames.
-    /// * `collaborator_ports` - A map of collaborator port assignments.
-    ///
-    /// # Returns
-    ///
-    /// * A new `CoreNode` instance with the given attributes.
+
     fn new(
         node_name: String,
         description_for_tui: String,
@@ -1392,8 +1418,8 @@ impl CoreNode {
         order_number: u32,
         priority: NodePriority,
         owner: String,
-        collaborators: Vec<String>,
-        collaborator_ports: HashMap<String, CollaboratorPorts>,
+        teamchannel_collaborators_with_access: Vec<String>,
+        collaborator_port_assignments: HashMap<String, CollaboratorPorts>,
     ) -> CoreNode {
         let expires_at = get_current_unix_timestamp() + 86400; // Expires in 1 day (for now)
         let updated_at_timestamp = get_current_unix_timestamp();
@@ -1410,8 +1436,8 @@ impl CoreNode {
             updated_at_timestamp,
             expires_at,
             children: Vec::new(),
-            collaborators,
-            collaborator_ports, 
+            teamchannel_collaborators_with_access,        
+            collaborator_port_assignments, 
         }
     }
 
@@ -1462,7 +1488,7 @@ impl CoreNode {
     /// # Arguments
     ///
     /// * `collaborators` - An ordered vector of usernames for collaborators who have access to this child node.
-    /// * `collaborator_ports` - A HashMap mapping collaborator usernames to their respective `CollaboratorPorts` struct, containing port assignments for synchronization.
+    /// * `collaborator_port_assignments` - A HashMap mapping collaborator usernames to their respective `CollaboratorPorts` struct, containing port assignments for synchronization.
     /// * `owner` - The username of the owner of this child node.
     /// * `description_for_tui` - A description of the child node, intended for display in the TUI.
     /// * `directory_path` - The file path where the child node's data will be stored.
@@ -1470,8 +1496,8 @@ impl CoreNode {
     /// * `priority` - The priority level of the child node (High, Medium, or Low).
     fn add_child(
         &mut self,
-        collaborators: Vec<String>, 
-        collaborator_ports: HashMap<String, CollaboratorPorts>, 
+        teamchannel_collaborators_with_access: Vec<String>, 
+        collaborator_port_assignments: HashMap<String, CollaboratorPorts>, 
         owner: String,
         description_for_tui: String,
         directory_path: PathBuf,
@@ -1485,8 +1511,8 @@ impl CoreNode {
             order_number,
             priority,
             owner,
-            collaborators,        
-            collaborator_ports,   
+            teamchannel_collaborators_with_access,        
+            collaborator_port_assignments,   
         );
         self.children.push(child);
     }
@@ -1521,7 +1547,7 @@ pub fn save_toml_to_file<T: Serialize>(data: &T, file_path: &Path) -> Result<(),
 struct NodeInstMsgBrowserMetadata {
     // every .toml has these four
     owner: String, // owner of this item
-    collaborators_with_access: Vec<String>, 
+    teamchannel_collaborators_with_access: Vec<String>, 
     updated_at_timestamp: u64, // utc posix timestamp
     expires_at: u64, // utc posix timestamp
     
@@ -1551,7 +1577,7 @@ impl NodeInstMsgBrowserMetadata {
             total_max_size_mb: 512, // Default: 1024 MB
             updated_at_timestamp: get_current_unix_timestamp(),
             expires_at: get_current_unix_timestamp(),  // TODO update this with real something
-            collaborators_with_access: Vec::new(), // by default use state-struct node members
+            teamchannel_collaborators_with_access: Vec::new(), // by default use state-struct node members
             owner: owner,
         }
     }
@@ -1568,7 +1594,7 @@ nothing should be included with empirical data in support
 struct InstantMessageFile {
     // every .toml has these four
     owner: String, // owner of this item
-    collaborators_with_access: Vec<String>, 
+    teamchannel_collaborators_with_access: Vec<String>, 
     updated_at_timestamp: u64, // utc posix timestamp
     expires_at: u64, // utc posix timestamp
     
@@ -1592,11 +1618,11 @@ impl InstantMessageFile {
         // Calculate expiration date using the value from local_user_metadata
         let expires_at = timestamp + 
             (graph_navigation_instance_state.default_im_messages_expiration_days * 24 * 60 * 60);
-        let collaborators_with_access = graph_navigation_instance_state.current_node_collaborators_with_access.clone();
+        let teamchannel_collaborators_with_access = graph_navigation_instance_state.current_node_teamchannel_collaborators_with_access.clone();
 
         InstantMessageFile {
             owner: owner.to_string(),
-            collaborators_with_access: collaborators_with_access,
+            teamchannel_collaborators_with_access: teamchannel_collaborators_with_access,
             node_name: node_name.to_string(), // Store the node name
             filepath_in_node: filepath_in_node.to_string(), // Store the filepath
             text_message: text_message.to_string(),
@@ -1638,13 +1664,7 @@ fn create_team_channel(team_channel_name: String, owner: String) {
     }
     //     /*
     //     fn new(
-    //         collaborators_with_access: Vec<String>,
-    //         owner: String,
-    //         description_for_tui: String,
-    //         directory_path: PathBuf,
-    //         node_name: String,
-    //         order_number: u32,
-    //         priority: NodePriority, 
+    // TODO update this
     //     ) -> Node {
     //     */
     
@@ -1668,7 +1688,7 @@ fn create_team_channel(team_channel_name: String, owner: String) {
     //     5,                // Order number (you might want to manage this)
     //     NodePriority::Medium, // Priority (you might want to make this configurable)
     //     owner,   // owner
-    //     HashMap::new(),  // collaborators_with_access, Create an empty HashMap
+    //     HashMap::new(),  // teamchannel_collaborators_with_access, Create an empty HashMap
 
     // );
     new_node.save_node_to_file().expect("Failed to save initial node data"); 
@@ -1720,7 +1740,7 @@ fn add_im_message(
         
         
         // owner, // owner: owner.to_string(),
-        // graph_navigation_instance_state.current_node_members, // collaborators_with_access: collaborators_with_access,
+        // graph_navigation_instance_state.current_node_members, // teamchannel_collaborators_with_access: teamchannel_collaborators_with_access,
         // &node_name, // node_name: node_name.to_string(), , // Store the node name
         // &filepath_in_node, // filepath_in_node: filepath_in_node.to_string(), , // Store the filepath
         // text, // text_message: text_message.to_string(),
@@ -2060,19 +2080,19 @@ fn handle_command(
                 io::stdin().read_line(&mut description_input).expect("Failed to read description input");
                 let description_for_tui = description_input.trim().to_string();
 
-                // 3. Get input for collaborators (comma-separated)
-                println!("Enter collaborators (comma-separated usernames):");
-                let mut collaborators_input = String::new();
-                io::stdin().read_line(&mut collaborators_input).expect("Failed to read collaborators input");
-                let collaborators: Vec<String> = collaborators_input
+                // 3. Get input for teamchannel_collaborators_with_access (comma-separated)
+                println!("Enter teamchannel_collaborators_with_access (comma-separated usernames):");
+                let mut teamchannel_collaborators_with_access_input = String::new();
+                io::stdin().read_line(&mut teamchannel_collaborators_with_access_input).expect("Failed to read teamchannel_collaborators_with_access input");
+                let teamchannel_collaborators_with_access: Vec<String> = teamchannel_collaborators_with_access_input
                     .trim()
                     .split(',')
                     .map(|s| s.trim().to_string())
                     .collect();
 
-                // 4. Construct collaborator_ports HashMap
-                let mut collaborator_ports: HashMap<String, CollaboratorPorts> = HashMap::new();
-                for collaborator_name in &collaborators { 
+                // 4. Construct collaborator_port_assignments HashMap
+                let mut collaborator_port_assignments: HashMap<String, CollaboratorPorts> = HashMap::new();
+                for collaborator_name in &teamchannel_collaborators_with_access { 
                     // Load collaborator from file
                     let collaborator = match load_collaborator_by_username(collaborator_name) {
                         Ok(collaborator) => collaborator,
@@ -2092,7 +2112,7 @@ fn handle_command(
                     let self_gotit_port: u16 = rng.gen_range(40000..=50000);
 
                     // Create CollaboratorPorts and insert into the HashMap
-                    collaborator_ports.insert(
+                    collaborator_port_assignments.insert(
                         collaborator_name.clone(), 
                         CollaboratorPorts {
                             ready_port,
@@ -2137,8 +2157,8 @@ fn handle_command(
                     order_number,
                     priority,
                     graph_navigation_instance_state.local_owner_user.clone(),
-                    collaborators, // Pass the collaborators vector
-                    collaborator_ports, // Pass the collaborator_ports HashMap
+                    teamchannel_collaborators_with_access, // Pass the collaborators vector
+                    collaborator_port_assignments, // Pass the collaborator_port_assignments HashMap
                 );
 
                 // 9. Save the node data to node.toml
@@ -2355,12 +2375,12 @@ fn load_collaborator_by_username(username: &str) -> Result<Collaborator, MyCusto
 ///
 /// Note: making the allow_lists requires information from more than one source:
 /// =uma.toml
-/// =project_graph_data/session_items/current_node_collaborators_with_access.toml
+/// =project_graph_data/session_items/current_node_teamchannel_collaborators_with_access.toml
 /// =/project_graph_data/collaborator_files/NAME__collaborator.toml
 ///
 /// step 1: get team_channel list of (and data about) all possible team_channel_members
 ///     from externalized session state item doc @: 
-///     project_graph_data/session_items/current_node_collaborators_with_access.toml
+///     project_graph_data/session_items/current_node_teamchannel_collaborators_with_access.toml
 ///     The 6-port assignments come from this source.
 ///
 /// step 2: get /collaborator_files data @:
@@ -2404,7 +2424,9 @@ fn load_collaborator_by_username(username: &str) -> Result<Collaborator, MyCusto
 /// updated_at_timestamp = 1728307130
 /// expires_at = 1728393530
 /// children = [] 
+/// teamchannel_collaborators_with_access = ["alice", "bob"]
 ///
+/// # collaborator_port_assignments
 /// [collaborator.alice]
 /// collaborator_name = "alice"
 /// ready_port = 50001
@@ -2431,17 +2453,17 @@ fn make_session_connection_allowlists(uma_local_owner_user: &str) -> Result<Hash
     let channel_node_toml_path = Path::new("project_graph_data/session_state_items/current_node_directory_path.txt"); // TODO this file and system are not working yet
     let channel_node_toml = read_state_items_tomls("node.toml")?; // Assuming you have a way to get the correct path 
 
-    // 2. Get the collaborators_with_access array:
-    let collaborators_array = channel_node_toml.get("collaborators_with_access") 
+    // 2. Get the teamchannel_collaborators_with_access array:
+    let collaborators_array = channel_node_toml.get("teamchannel_collaborators_with_access") 
         .and_then(Value::as_array)
         .ok_or(MyCustomError::InvalidData(
-            "Missing or invalid 'collaborators_with_access' array in node.toml".to_string() // Add .to_string()
+            "Missing or invalid 'teamchannel_collaborators_with_access' array in node.toml".to_string() // Add .to_string()
         ))?;
 
     // 3. Create the allowlist set:
     let mut sync_config_data_set: HashSet<SyncCollaborator> = HashSet::new();
 
-    // 4. Parse the collaborators_with_access array:
+    // 4. Parse the teamchannel_collaborators_with_access array:
     for collaborator_data in collaborators_array {
         // TODO HERE!! HERE!! HERE!!
         // ... (parse collaborator_data to get user_name, ready_port, intray_port, gotit_port)
@@ -3249,7 +3271,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
 
         current_full_file_path: PathBuf::new(),
         // Initialize other fields of GraphNavigationInstanceState
-        current_node_collaborators_with_access: Vec::new(),
+        current_node_teamchannel_collaborators_with_access: Vec::new(),
         current_node_name: String::new(),
         current_node_owner: String::new(),
         current_node_description_for_tui: String::new(),
