@@ -1,0 +1,360 @@
+fn handle_command(), input->"1"
+ 'other' commend? _ => {...
+end fn handle_command()
+main: if item_index < app.tui_directory_list.len()
+main: app.tui_directory_list: ["teamtest"]
+handle_tui_action() started in we_love_projects_loop()
+app.current_path == project_graph_data/team_channels
+current_path: "project_graph_data/team_channels"
+Selected channel: teamtest
+About to set sync flag to true!
+Old 'ok_to_start_sync_flag.txt' file deleted.
+New current_path: "project_graph_data/team_channels/teamtest"
+fn look_read_node_toml() self.current_full_file_path -> "project_graph_data/team_channels/teamtest"
+node_toml_path -> "project_graph_data/team_channels/teamtest/node.toml"
+ERROR: Failed to load node.toml: TOML deserialization error: TOML parse error at line 12, column 3
+   |
+12 |   { collaborator_name = "alice", ready_port = 50001, tray_port = 50002, gotit_port = 50003, self_ready_port = 50004, self_tray_port = 50005, self_gotit_port = 50006 },
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+invalid type: map, expected a string
+
+we_love_projects_loop() State after look_read_node_toml: GraphNavigationInstanceState { local_owner_user: "alice", active_team_channel: "", default_im_messages_expiration_days: 28, default_task_nodes_expiration_days: 90, tui_height: 24, tui_width: 80, current_full_file_path: "project_graph_data/team_channels/teamtest", current_node_collaborators_with_access: [], current_node_name: "", current_node_owner: "", current_node_description_for_tui: "", current_node_directory_path: "", current_node_unique_id: 0, current_node_members: [] }
+end handle_tui_action()
+start loop: we_love_projects_loop()
+ if app.input_mode == InputMode::Command
+tiny_tui::render_list(&app.tui_directory_list, &app.current_path)
+fn handle_command(), input->"q"
+quit
+Old 'continue_uma.txt' file deleted.
+QUIT
+Finish: we love project loop.
+All threads completed. The Uma says fare well and strive.
+Start!
+Staring initialize_uma_application()
+fn get_local_ip_addresses() -> std::io::Result<()> {
+Interface: lo
+  Address: 127.0.0.1
+  Netmask: 255.0.0.0
+  Flags: InterfaceFlags(UP | RUNNING | LOOPBACK)
+  Status: Up
+
+fn get_local_ip_addresses() -> std::io::Result<()> {
+Interface: enp2s0
+  Address: 10.0.0.198
+  Netmask: 255.255.255.0
+  Flags: InterfaceFlags(UP | RUNNING | BROADCAST | MULTICAST)
+  Status: Up
+
+fn get_local_ip_addresses() -> std::io::Result<()> {
+Interface: wlp0s20f3
+  Address: 10.0.0.22
+  Netmask: 255.255.255.0
+  Flags: InterfaceFlags(UP | RUNNING | BROADCAST | MULTICAST)
+  Status: Up
+
+fn get_local_ip_addresses() -> std::io::Result<()> {
+Interface: lo
+  Address: ::1
+  Netmask: ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+  Flags: InterfaceFlags(UP | RUNNING | LOOPBACK)
+  Status: Up
+
+fn get_local_ip_addresses() -> std::io::Result<()> {
+Interface: enp2s0
+  Address: 2601:80:4803:9490::2e79
+  Netmask: ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+  Flags: InterfaceFlags(UP | RUNNING | BROADCAST | MULTICAST)
+  Status: Up
+
+fn get_local_ip_addresses() -> std::io::Result<()> {
+Interface: enp2s0
+  Address: 2601:80:4803:9490:8e3a:faf:4dbd:de1d
+  Netmask: ffff:ffff:ffff:ffff::
+  Flags: InterfaceFlags(UP | RUNNING | BROADCAST | MULTICAST)
+  Status: Up
+
+fn get_local_ip_addresses() -> std::io::Result<()> {
+Interface: enp2s0
+  Address: fe80::dc16:a86e:4978:8468
+  Netmask: ffff:ffff:ffff:ffff::
+  Flags: InterfaceFlags(UP | RUNNING | BROADCAST | MULTICAST)
+  Status: Up
+
+fn get_local_ip_addresses() -> std::io::Result<()> {
+Interface: wlp0s20f3
+  Address: 2601:80:4803:9490::1d46
+  Netmask: ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+  Flags: InterfaceFlags(UP | RUNNING | BROADCAST | MULTICAST)
+  Status: Up
+
+fn get_local_ip_addresses() -> std::io::Result<()> {
+Interface: wlp0s20f3
+  Address: 2601:80:4803:9490:875a:cb9c:2489:8fe3
+  Netmask: ffff:ffff:ffff:ffff::
+  Flags: InterfaceFlags(UP | RUNNING | BROADCAST | MULTICAST)
+  Status: Up
+
+fn get_local_ip_addresses() -> std::io::Result<()> {
+Interface: wlp0s20f3
+  Address: fe80::1280:3060:5df8:70b5
+  Netmask: ffff:ffff:ffff:ffff::
+  Flags: InterfaceFlags(UP | RUNNING | BROADCAST | MULTICAST)
+  Status: Up
+
+Old 'continue_uma.txt' file deleted.
+let number_of_team_channels = fs::read_dir(&team_channels_dir)
+if !dir_at_path_is_empty_returns_false(Path::new(project_graph_data/collaborator_files)) { 
+dir_at_path_is_empty_returns_false()-> Checking if directory is empty: "project_graph_data/collaborator_files"
+Old 'continue_uma.txt' file deleted.
+
+
+Starting UMA Sync Team Office for start loop: we_love_projects_loop()alice
+
+ if app.input_mode == InputMode::Command
+tiny_tui::render_list(&app.tui_directory_list, &app.current_path)
+fn handle_command(), input->"q"
+quit
+Old 'continue_uma.txt' file deleted.
+QUIT
+Finish: we love project loop.
+All threads completed. The Uma says fare well and strive.
+Start!
+Staring initialize_uma_application()
+fn get_local_ip_addresses() -> std::io::Result<()> {
+Interface: lo
+  Address: 127.0.0.1
+  Netmask: 255.0.0.0
+  Flags: InterfaceFlags(UP | RUNNING | LOOPBACK)
+  Status: Up
+
+fn get_local_ip_addresses() -> std::io::Result<()> {
+Interface: enp2s0
+  Address: 10.0.0.198
+  Netmask: 255.255.255.0
+  Flags: InterfaceFlags(UP | RUNNING | BROADCAST | MULTICAST)
+  Status: Up
+
+fn get_local_ip_addresses() -> std::io::Result<()> {
+Interface: wlp0s20f3
+  Address: 10.0.0.22
+  Netmask: 255.255.255.0
+  Flags: InterfaceFlags(UP | RUNNING | BROADCAST | MULTICAST)
+  Status: Up
+
+fn get_local_ip_addresses() -> std::io::Result<()> {
+Interface: lo
+  Address: ::1
+  Netmask: ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+  Flags: InterfaceFlags(UP | RUNNING | LOOPBACK)
+  Status: Up
+
+fn get_local_ip_addresses() -> std::io::Result<()> {
+Interface: enp2s0
+  Address: 2601:80:4803:9490::2e79
+  Netmask: ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+  Flags: InterfaceFlags(UP | RUNNING | BROADCAST | MULTICAST)
+  Status: Up
+
+fn get_local_ip_addresses() -> std::io::Result<()> {
+Interface: enp2s0
+  Address: 2601:80:4803:9490:8e3a:faf:4dbd:de1d
+  Netmask: ffff:ffff:ffff:ffff::
+  Flags: InterfaceFlags(UP | RUNNING | BROADCAST | MULTICAST)
+  Status: Up
+
+fn get_local_ip_addresses() -> std::io::Result<()> {
+Interface: enp2s0
+  Address: fe80::dc16:a86e:4978:8468
+  Netmask: ffff:ffff:ffff:ffff::
+  Flags: InterfaceFlags(UP | RUNNING | BROADCAST | MULTICAST)
+  Status: Up
+
+fn get_local_ip_addresses() -> std::io::Result<()> {
+Interface: wlp0s20f3
+  Address: 2601:80:4803:9490::1d46
+  Netmask: ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+  Flags: InterfaceFlags(UP | RUNNING | BROADCAST | MULTICAST)
+  Status: Up
+
+fn get_local_ip_addresses() -> std::io::Result<()> {
+Interface: wlp0s20f3
+  Address: 2601:80:4803:9490:875a:cb9c:2489:8fe3
+  Netmask: ffff:ffff:ffff:ffff::
+  Flags: InterfaceFlags(UP | RUNNING | BROADCAST | MULTICAST)
+  Status: Up
+
+fn get_local_ip_addresses() -> std::io::Result<()> {
+Interface: wlp0s20f3
+  Address: fe80::1280:3060:5df8:70b5
+  Netmask: ffff:ffff:ffff:ffff::
+  Flags: InterfaceFlags(UP | RUNNING | BROADCAST | MULTICAST)
+  Status: Up
+
+Old 'continue_uma.txt' file deleted.
+let number_of_team_channels = fs::read_dir(&team_channels_dir)
+if !dir_at_path_is_empty_returns_false(Path::new(project_graph_data/collaborator_files)) { 
+dir_at_path_is_empty_returns_false()-> Checking if directory is empty: "project_graph_data/collaborator_files"
+Old 'continue_uma.txt' file deleted.
+
+
+Starting UMA Sync Team Office for alice
+start loop: we_love_projects_loop()
+ if app.input_mode == InputMode::Command
+tiny_tui::render_list(&app.tui_directory_list, &app.current_path)
+fn handle_command(), input->"1"
+ 'other' commend? _ => {...
+end fn handle_command()
+main: if item_index < app.tui_directory_list.len()
+main: app.tui_directory_list: ["teamtest"]
+handle_tui_action() started in we_love_projects_loop()
+app.current_path == project_graph_data/team_channels
+current_path: "project_graph_data/team_channels"
+Selected channel: teamtest
+About to set sync flag to true!
+Old 'ok_to_start_sync_flag.txt' file deleted.
+New current_path: "project_graph_data/team_channels/teamtest"
+fn look_read_node_toml() self.current_full_file_path -> "project_graph_data/team_channels/teamtest"
+node_toml_path -> "project_graph_data/team_channels/teamtest/node.toml"
+ERROR: Failed to load node.toml: Error deserializing TOML: TOML parse error at line 1, column 1
+  |
+1 | node_name = "teamtest"
+  | ^^^^^^^^^^^^^^^^^^^^^^
+missing field `collaborators`
+
+we_love_projects_loop() State after look_read_node_toml: GraphNavigationInstanceState { local_owner_user: "alice", active_team_channel: "", default_im_messages_expiration_days: 28, default_task_nodes_expiration_days: 90, tui_height: 24, tui_width: 80, current_full_file_path: "project_graph_data/team_channels/teamtest", current_node_collaborators_with_access: [], current_node_name: "", current_node_owner: "", current_node_description_for_tui: "", current_node_directory_path: "", current_node_unique_id: 0, current_node_members: [] }
+end handle_tui_action()
+start loop: we_love_projects_loop()
+ if app.input_mode == InputMode::Command
+tiny_tui::render_list(&app.tui_directory_list, &app.current_path)
+fn handle_command(), input->"m"
+m selected
+app.current_path "project_graph_data/team_channels/teamtest"
+app.current_path after joining 'instant_message_browser': "project_graph_data/team_channels/teamtest/instant_message_browser"
+load_im_messages called
+self.current_path  "project_graph_data/team_channels/teamtest/instant_message_browser"
+self.current_path  "project_graph_data/team_channels/teamtest/instant_message_browser"
+=== Files in entries ===
+  "project_graph_data/team_channels/teamtest/instant_message_browser/0.toml"
+=== End of entries ===
+this_file_name "1__alice.toml"
+parent directory  "project_graph_data/team_channels/teamtest/instant_message_browser"
+load_im_messages called
+self.current_path  "project_graph_data/team_channels/teamtest/instant_message_browser"
+self.current_path  "project_graph_data/team_channels/teamtest/instant_message_browser"
+=== Files in entries ===
+  "project_graph_data/team_channels/teamtest/instant_message_browser/0.toml"
+  "project_graph_data/team_channels/teamtest/instant_message_browser/1__alice.toml"
+=== End of entries ===
+file_name from 1__alice.toml
+Added message from alice
+end fn handle_command()
+start loop: we_love_projects_loop()
+tiny_tui::render_list(&app.tui_textmessage_list, &app.current_path);
+handle_insert_text_input
+esc toggled
+start loop: we_love_projects_loop()
+ if app.input_mode == InputMode::Command
+tiny_tui::render_list(&app.tui_directory_list, &app.current_path)
+fn handle_command(), input->"home"
+home
+end fn handle_command()
+start loop: we_love_projects_loop()
+ if app.input_mode == InputMode::Command
+tiny_tui::render_list(&app.tui_directory_list, &app.current_path)
+fn handle_command(), input->"q"
+quit
+Old 'continue_uma.txt' file deleted.
+QUIT
+Finish: we love project loop.
+All threads completed. The Uma says fare well and strive.
+Start!
+Staring initialize_uma_application()
+fn get_local_ip_addresses() -> std::io::Result<()> {
+Interface: lo
+  Address: 127.0.0.1
+  Netmask: 255.0.0.0
+  Flags: InterfaceFlags(UP | RUNNING | LOOPBACK)
+  Status: Up
+
+fn get_local_ip_addresses() -> std::io::Result<()> {
+Interface: enp2s0
+  Address: 10.0.0.198
+  Netmask: 255.255.255.0
+  Flags: InterfaceFlags(UP | RUNNING | BROADCAST | MULTICAST)
+  Status: Up
+
+fn get_local_ip_addresses() -> std::io::Result<()> {
+Interface: wlp0s20f3
+  Address: 10.0.0.22
+  Netmask: 255.255.255.0
+  Flags: InterfaceFlags(UP | RUNNING | BROADCAST | MULTICAST)
+  Status: Up
+
+fn get_local_ip_addresses() -> std::io::Result<()> {
+Interface: lo
+  Address: ::1
+  Netmask: ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+  Flags: InterfaceFlags(UP | RUNNING | LOOPBACK)
+  Status: Up
+
+fn get_local_ip_addresses() -> std::io::Result<()> {
+Interface: enp2s0
+  Address: 2601:80:4803:9490::2e79
+  Netmask: ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+  Flags: InterfaceFlags(UP | RUNNING | BROADCAST | MULTICAST)
+  Status: Up
+
+fn get_local_ip_addresses() -> std::io::Result<()> {
+Interface: enp2s0
+  Address: 2601:80:4803:9490:8e3a:faf:4dbd:de1d
+  Netmask: ffff:ffff:ffff:ffff::
+  Flags: InterfaceFlags(UP | RUNNING | BROADCAST | MULTICAST)
+  Status: Up
+
+fn get_local_ip_addresses() -> std::io::Result<()> {
+Interface: enp2s0
+  Address: fe80::dc16:a86e:4978:8468
+  Netmask: ffff:ffff:ffff:ffff::
+  Flags: InterfaceFlags(UP | RUNNING | BROADCAST | MULTICAST)
+  Status: Up
+
+fn get_local_ip_addresses() -> std::io::Result<()> {
+Interface: wlp0s20f3
+  Address: 2601:80:4803:9490::1d46
+  Netmask: ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+  Flags: InterfaceFlags(UP | RUNNING | BROADCAST | MULTICAST)
+  Status: Up
+
+fn get_local_ip_addresses() -> std::io::Result<()> {
+Interface: wlp0s20f3
+  Address: 2601:80:4803:9490:875a:cb9c:2489:8fe3
+  Netmask: ffff:ffff:ffff:ffff::
+  Flags: InterfaceFlags(UP | RUNNING | BROADCAST | MULTICAST)
+  Status: Up
+
+fn get_local_ip_addresses() -> std::io::Result<()> {
+Interface: wlp0s20f3
+  Address: fe80::1280:3060:5df8:70b5
+  Netmask: ffff:ffff:ffff:ffff::
+  Flags: InterfaceFlags(UP | RUNNING | BROADCAST | MULTICAST)
+  Status: Up
+
+Old 'continue_uma.txt' file deleted.
+let number_of_team_channels = fs::read_dir(&team_channels_dir)
+if !dir_at_path_is_empty_returns_false(Path::new(project_graph_data/collaborator_files)) { 
+dir_at_path_is_empty_returns_false()-> Checking if directory is empty: "project_graph_data/collaborator_files"
+Old 'continue_uma.txt' file deleted.
+
+
+Starting UMA Sync Team Office for start loop: we_love_projects_loop()alice
+
+ if app.input_mode == InputMode::Command
+tiny_tui::render_list(&app.tui_directory_list, &app.current_path)
+fn handle_command(), input->"q"
+quit
+Old 'continue_uma.txt' file deleted.
+QUIT
+Finish: we love project loop.
+All threads completed. The Uma says fare well and strive.
+Start!
+Staring initialize_uma_application()

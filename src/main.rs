@@ -1794,8 +1794,11 @@ fn initialize_uma_application() {
     /////////////////////
 
     // 1. Create the archive directory if it doesn't exist.
-    // Ensure project_graph_data/uma_archive_dir directory exists
-    let uma_archive_dir = project_graph_directory.join("uma_archive");
+    /// saves archives not in the project_graph_data directory, not for sync
+    let mut uma_archive_dir = PathBuf::new(); // Start with an empty PathBuf safe path os
+    uma_archive_dir.push("uma_archive");    // Push the 'uma_archive' directory
+    uma_archive_dir.push("logs");            // Push the 'logs' subdirectory
+
     if !uma_archive_dir.exists() {
         fs::create_dir_all(&uma_archive_dir).expect("Failed to create uma_archive directory");
     }    
@@ -2232,7 +2235,7 @@ fn handle_command(
                 // // Posix
                 // app.current_path = PathBuf::from("project_graph_data/team_channels");
                 
-                // any file system compiled
+                // any file system compiled, safe path posix or other os
                 let mut app_data_dir = PathBuf::from("project_graph_data");
                 app_data_dir.push("team_channels");
                 app.current_path = app_data_dir;
