@@ -56,7 +56,7 @@ use serde::{
 };
 
 use std::ffi::OsStr;
-// use std::collections::HashMap;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::mpsc::channel;
 use std::sync::mpsc::Sender;
@@ -79,6 +79,7 @@ use std::net::{
     TcpListener,
     TcpStream,
     SocketAddr,
+    UdpSocket,
 };
 // https://docs.rs/getifaddrs/latest/getifaddrs/
 use getifaddrs::{getifaddrs, InterfaceFlags};
@@ -519,12 +520,19 @@ enum CompressionAlgorithm {
     None,
 }
 
+/// Represents the different input modes of the UMA application's TUI. 
+///
+/// The TUI can be in one of these modes at a time, determining how user input 
+/// is interpreted and handled. 
 #[derive(PartialEq)]
 enum InputMode {
+    /// Command Mode:  The default mode. The user can type commands (e.g., "help", "quit", "m") 
+    /// to navigate the project graph or interact with UMA features.
     Command,
-    InsertText, // Or Insert_Text
+    /// Insert Text Mode:  Used for entering text, such as instant messages. In this mode, 
+    /// user input is treated as text to be added to the current context.
+    InsertText,
 }
-
 
 struct App {
     tui_directory_list: Vec<String>, // For directories in the current path
@@ -587,7 +595,7 @@ impl App {
                     self.graph_navigation_instance_state.look_read_node_toml(); 
 
                     // Log the state after loading node.toml
-                    debug_log(&format!("State after look_read_node_toml: {:?}", self.graph_navigation_instance_state));
+                    debug_log(&format!("handle_tui_action() State after look_read_node_toml: {:?}", self.graph_navigation_instance_state));
                     
                     // ... enter IM browser or other features ...
                 } else {
@@ -670,16 +678,7 @@ impl App {
                     graph_navigation_instance_state: &GraphNavigationInstanceState, // Pass local_user_metadata here
                 ) -> Result<(), io::Error> {
                 */
-                // add_im_message(
-                //     &self.current_path.join(this_file_name), 
-                //     last_section,
-                //     None,
-                //     &local_owner_user, 
-                //     first_message.trim(), 
-                //     None,
-                // )
 
-                    // .expect("Failed to add first message");
                     
                 debug_log(&format!("this_file_name {:?}", this_file_name));
                 // debug_log(&format!("self.current_path.join(this_file_name)  {:?}", self.current_path.join(this_file_name)));    
@@ -818,6 +817,7 @@ struct LocalUserUma {
     uma_local_owner_user: String,
     uma_default_im_messages_expiration_days: u64,
     uma_default_task_nodes_expiration_days: u64,
+    log_mode_refresh: f32,
 }
 
 impl LocalUserUma {
@@ -826,6 +826,7 @@ impl LocalUserUma {
             uma_local_owner_user,
             uma_default_im_messages_expiration_days: 28, // Default to 7 days
             uma_default_task_nodes_expiration_days: 90, // Default to 30 days 
+            log_mode_refresh: 0.5 // how fast log mode refreshes
             }
     }
 
@@ -1120,95 +1121,47 @@ struct GraphNavigationInstanceState {
 
 impl GraphNavigationInstanceState {
 
-    
     fn look_read_node_toml(&mut self) {
         debug_log(&format!("fn look_read_node_toml() self.current_full_file_path -> {:?}", self.current_full_file_path)); 
 
         let node_toml_path = self.current_full_file_path.join("node.toml");
+        debug_log!("node_toml_path -> {:?}", &node_toml_path);
 
-        if node_toml_path.exists() {
-            match CoreNode::load_node_from_file(&node_toml_path) {
-                Ok(this_node) => {
-                    // ... (Existing node.toml loading logic)
-                    // Check if this node is a team channel:
-                    let path_components: Vec<_> = self.current_full_file_path.components().collect();
-                    if path_components.len() >= 3 
-                        && path_components[path_components.len() - 3].as_os_str() == "team_channels" 
-                    {
-
-                        
-                        if let Some(team_channel_component) = path_components.get(path_components.len() - 2) {
-                            self.active_team_channel = team_channel_component.as_os_str().to_string_lossy().to_string();
-
-
-                        }
-                    } else {
-                        // This node is not a team channel node,
-                        // potentially reset active_team_channel if needed:
-                        // self.active_team_channel = "".to_string(); // Or a default value 
-                    }
-                }
-                Err(e) => {
-                    // ... (Handle node.toml loading error) 
-                }
-            }
-        } else {
-            // Handle case where node.toml doesn't exist (e.g., log a message)
-            debug_log("node.toml not found at the current path. This directory is not a node.");
+        // 1. Handle File Existence Error
+        if !node_toml_path.exists() {
+            debug_log!("ERROR: node.toml not found at {:?}. This directory is not a node.", node_toml_path);
+            // Optionally, you can set a flag in your state to indicate an invalid node
+            return; // Exit early if the file doesn't exist
         }
+
+        // 2. Handle TOML Parsing Error
+        // HERE!! HERE!! HERE!!  Replace this line:
+        // let this_node = match CoreNode::load_node_from_file(&node_toml_path) {
+        // with this line using the new function: 
+        let this_node = match load_core_node_from_toml_file(&node_toml_path) { 
+            Ok(node) => node,
+            Err(e) => {
+                debug_log!("ERROR: Failed to load node.toml: {}", e); 
+                // eprintln!("ERROR: Failed to load node.toml: {}", e);  // Optionally print to console 
+                return; // Exit early if parsing fails
+            }
+        };
+
+        // 3. Extract Team Channel Name (Only if parsing was successful)
+        let path_components: Vec<_> = self.current_full_file_path.components().collect();
+        debug_log!("look_read_node_toml look_read_node_toml -> {:?}", &path_components);
+        debug_log!("path_components.len -> {:?}", path_components.len());
+
+        if path_components.len() >= 2 
+            && path_components[path_components.len() - 2].as_os_str() == "team_channels" 
+        {
+            if let Some(team_channel_component) = path_components.get(path_components.len() - 1) {
+                self.active_team_channel = team_channel_component.as_os_str().to_string_lossy().to_string();
+                debug_log!("self.active_team_channel -> {:?}", &self.active_team_channel);
+            }
+        } 
     }
     
-    // fn look_read_node_toml(&mut self) {
-        
-    //     debug_log(&format!("fn look_read_node_toml() self.current_full_file_path -> {:?}", self.current_full_file_path)); 
-        
-    //     let node_toml_path = self.current_full_file_path.join("node.toml");
-
-        // if node_toml_path.exists() {
-        //     match CoreNode::load_node_from_file(&node_toml_path) { // Load from node_toml_path
-        //         Ok(this_node) => {
-        //             // Update GraphNavigationInstanceState fields with data from node.toml
-        //             self.current_node_collaborators_with_access = this_node.collaborators_with_access.clone(); // Use collaborators_with_access
-        //             self.current_node_name = this_node.node_name;
-        //             self.current_node_owner = this_node.owner;
-        //             self.current_node_description_for_tui = this_node.description_for_tui;
-        //             self.current_node_directory_path = this_node.directory_path;
-        //             self.current_node_unique_id = this_node.node_unique_id;
-        //             self.current_node_members = this_node.collaborators_with_access.clone(); // Use collaborators_with_access for members
-        //             // self.current_node_last_updated = node.updated_at_timestamp; // Assuming Node has an 'updated_at_timestamp' field
-
-        //             debug_log("Successfully loaded node.toml"); // Optional: Indicate success
-        //         }
-        //         Err(e) => {
-        //             // Handle error (e.g., log the error or display an error message)
-        //             eprintln!("Error loading node.toml: {}", e);
-        //             debug_log(&format!("Error loading node.toml: {}", e)); 
-        //         }
-        //     }
-
-
-
-    // /// Loads GraphNavigationInstanceState from a TOML file.
-    // fn load_graph_navigation_state_from_toml(file_path: &Path) -> Result<GraphNavigationInstanceState, Error> {
-    //     let raw_toml_string = fs::read_to_string(file_path)?;
-    //     let state: GraphNavigationInstanceState = toml::from_str(&raw_toml_string).map_err(|e| {
-    //         Error::new(
-    //             ErrorKind::InvalidData,
-    //             format!("Failed to deserialize GraphNavigationInstanceState from TOML: {}", e),
-    //         )
-    //     })?;
-    //     Ok(state)
-    // }
-
-    // /// Saves GraphNavigationInstanceState to a TOML file.
-    // fn save_graph_navigation_state_to_toml(state: &GraphNavigationInstanceState, file_path: &Path) -> Result<(), Error> {
-    //     let toml_string = toml::to_string(state).map_err(|e| {
-    //         Error::new(ErrorKind::Other, format!("TOML serialization error: {}", e))
-    //     })?;
-    //     fs::write(file_path, toml_string)?;
-    //     Ok(())
-    // }
-
     fn save_to_session_items(&self) -> Result<(), io::Error> {
             let session_items_path = Path::new("project_graph_data/session_state_items");
 
@@ -1259,11 +1212,33 @@ impl GraphNavigationInstanceState {
     
 
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 enum NodePriority {
     High,
     Medium,
     Low,
+}
+
+
+/// Represents port assignments for a collaborator in a `CoreNode`.
+///
+/// This struct holds six different ports used for communication and synchronization
+/// between collaborators within a UMA project node. Each collaborator associated with
+/// a node has a unique `CollaboratorPorts` instance. 
+#[derive(Debug, Deserialize, Serialize, Clone)]
+struct CollaboratorPorts {
+    /// The port used by the collaborator to signal readiness to receive data.
+    ready_port: u16,
+    /// The port used to send files to the collaborator (their "in-tray").
+    tray_port: u16,
+    /// The port used by the collaborator to confirm file receipt.
+    gotit_port: u16,
+    /// The port this node listens on for ready signals from the collaborator.
+    self_ready_port: u16,
+    /// The port this node listens on to receive files from the collaborator.
+    self_tray_port: u16,
+    /// The port this node uses to confirm file receipt to the collaborator.
+    self_gotit_port: u16,
 }
 
 /*
@@ -1276,104 +1251,248 @@ graph-dungeon location.
 4. node_name needs to be integrated, and accessed when the node is navigated into
 */
 
-#[derive(Debug, Deserialize, Serialize)]
+/// Represents a core node in the UMA project graph.
+///
+/// This struct holds information about a node, including its name, description, collaborators,
+/// port assignments for collaborators, and other metadata. It is used to save and load node
+/// data to and from `node.toml` files.
+///
+/// # Collaborator Ports
+/// 
+/// Collaborator port assignments are stored in the `collaborator_ports` field, which is a 
+/// `HashMap`. The keys of the `HashMap` are the usernames of the collaborators (strings), 
+/// and the values are instances of the `CollaboratorPorts` struct. 
+///
+/// The `CollaboratorPorts` struct contains six `u16` fields representing the different ports 
+/// assigned to each collaborator for synchronization purposes:
+///  - `ready_port`: The port used by a collaborator to signal they are ready to receive data.
+///  - `tray_port`: The port used to send files to a collaborator (their "in-tray").
+///  - `gotit_port`: The port used by a collaborator to confirm receipt of a file.
+///  - `self_ready_port`: The port this node listens on for ready signals from the collaborator.
+///  - `self_tray_port`: The port this node listens on for incoming files from the collaborator.
+///  - `self_gotit_port`: The port this node uses to confirm file receipt to the collaborator. 
+///
+/// ## Serialization and Deserialization
+///
+/// When saving a `CoreNode` to a `node.toml` file (using the `save_node_to_file` function), 
+/// the `collaborator_ports` field is serialized as a TOML table where the keys are the 
+/// collaborator usernames and the values are tables containing the six port assignments.
+///
+/// When loading a `CoreNode` from a `node.toml` file (using the `load_node_from_file` function),
+/// the TOML table representing collaborator ports is deserialized into the 
+/// `collaborator_ports` field. 
+///
+/// ## Example `node.toml` Section 
+/// 
+/// ```toml
+/// [collaborator_ports]
+/// alice = { ready_port = 50001, tray_port = 50002, gotit_port = 50003, self_ready_port = 50004, self_tray_port = 50005, self_gotit_port = 50006 }
+/// bob = { ready_port = 50011, tray_port = 50012, gotit_port = 50013, self_ready_port = 50014, self_tray_port = 50015, self_gotit_port = 50016 }
+/// ```
+/// 
+#[derive(Debug, Deserialize, Serialize, Clone)]
 struct CoreNode {
-    // Metadata
+    /// The name of the node. This is used for display and identification.
     node_name: String,
-    description_for_tui: String, 
+    /// A description of the node, intended for display in the TUI.
+    description_for_tui: String,
+    /// A unique identifier for the node, generated using a timestamp at node creation.
     node_unique_id: u64,
+    /// The path to the directory on the file system where the node's data is stored.
     directory_path: PathBuf,
+    /// An order number used to define the node's position within a list or hierarchy.
     order_number: u32,
+    /// The priority of the node, which can be High, Medium, or Low.
     priority: NodePriority,
-    // Collaboration 
-    owner: String, 
-    collaborators_with_access: Vec<String>, 
-    // Timestamps
-    updated_at_timestamp: u64, 
-    expires_at: u64, 
-    // Children (potentially deprecated)
-    children: Vec<CoreNode>, 
+    /// The username of the owner of the node.
+    owner: String,
+    /// The Unix timestamp representing when the node was last updated.
+    updated_at_timestamp: u64,
+    /// The Unix timestamp representing when the node will expire.
+    expires_at: u64,
+    /// A vector of `CoreNode` structs representing the child nodes of this node.
+    children: Vec<CoreNode>,
+    /// An ordered vector of collaborator usernames associated with this node.
+    collaborators: Vec<String>,
+    /// A map containing port assignments for each collaborator associated with the node.
+    collaborator_ports: HashMap<String, CollaboratorPorts>,
 }
 
+// /// Loads CollaboratorData from a TOML file.
+// ///
+// /// # Arguments
+// ///
+// /// * `file_path` - The path to the TOML file containing the collaborator data.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<CollaboratorData, UmaError>` - `Ok(CollaboratorData)` if the data is 
+// ///    successfully loaded, `Err(UmaError)` if an error occurs.
+// fn load_collaborator_data_from_toml_file(file_path: &Path) -> Result<CollaboratorData, UmaError> {
+//     let toml_string = fs::read_to_string(file_path)?;
+//     let collaborator_data: CollaboratorData = toml::from_str(&toml_string)?;
+//     Ok(collaborator_data) 
+// }
+
+/// Loads a `CoreNode` from a TOML file, handling potential errors.
+///
+/// # Arguments
+///
+/// * `file_path` - The path to the TOML file containing the node data.
+///
+/// # Returns
+///
+/// * `Result<CoreNode, String>` - `Ok(CoreNode)` if the node is successfully loaded,
+///    `Err(String)` containing an error message if an error occurs. 
+fn load_core_node_from_toml_file(file_path: &Path) -> Result<CoreNode, String> {
+    // 1. Read File Contents 
+    let toml_string = match fs::read_to_string(file_path) {
+        Ok(content) => content,
+        Err(e) => return Err(format!("Error reading file: {}", e)),
+    };
+
+    // 2. Parse TOML String 
+    let toml_value = match toml_string.parse::<Value>() {
+        Ok(value) => value,
+        Err(e) => return Err(format!("Error parsing TOML: {}", e)),
+    };
+
+    // 3. Deserialize into CoreNode Struct 
+    let core_node = match toml::from_str::<CoreNode>(&toml_string) {
+        Ok(node) => node,
+        Err(e) => return Err(format!("Error deserializing TOML: {}", e)),
+    };
+
+    Ok(core_node)
+}
+
+
+
 impl CoreNode {
+    /// Creates a new `CoreNode` instance.
+    ///
+    /// # Arguments
+    ///
+    /// * `node_name` - The name of the node.
+    /// * `description_for_tui` - A description for display in the TUI.
+    /// * `directory_path` - The path to the node's directory.
+    /// * `order_number` - The order number for the node.
+    /// * `priority` - The priority of the node.
+    /// * `owner` - The username of the node's owner.
+    /// * `collaborators` - An ordered vector of collaborator usernames.
+    /// * `collaborator_ports` - A map of collaborator port assignments.
+    ///
+    /// # Returns
+    ///
+    /// * A new `CoreNode` instance with the given attributes.
     fn new(
         node_name: String,
         description_for_tui: String,
         directory_path: PathBuf,
-        order_number: u32, // Add order number parameter
-        priority: NodePriority, // Add priority parameter
+        order_number: u32,
+        priority: NodePriority,
         owner: String,
-        collaborators_with_access: Vec<String>,
-        // TODO expires_at
+        collaborators: Vec<String>,
+        collaborator_ports: HashMap<String, CollaboratorPorts>,
     ) -> CoreNode {
-        let expires_at = get_current_unix_timestamp() + 86400; // 1 day from now
+        let expires_at = get_current_unix_timestamp() + 86400; // Expires in 1 day (for now)
         let updated_at_timestamp = get_current_unix_timestamp();
-        let node_unique_id = get_current_unix_timestamp(); // Generate a unique ID using a timestamp 
+        let node_unique_id = get_current_unix_timestamp(); 
+
         CoreNode {
             node_name,
             description_for_tui,
             node_unique_id,
             directory_path,
-            order_number, // Assign the order_number parameter
-            priority,       // Assign the priority parameter
+            order_number,
+            priority,
             owner,
-            collaborators_with_access,
             updated_at_timestamp,
             expires_at,
             children: Vec::new(),
+            collaborators,
+            collaborator_ports, 
         }
     }
 
+    
 
-    /*
-    TODO
-    not used, not needed?
-    */
-    // fn add_collaborator_setup_file_by_username(&mut self, user_name: &str, contact_list: &CollaboratorList) {
-    //     if let Some(contact) = contact_list.get_collaborator_by_username(user_name) {
-    //         self.collaborators_with_access.push(contact.user_name.clone());
-    //     }
-    // }
+    /// Saves the `CoreNode` data to a `node.toml` file.
+    ///
+    /// This function serializes the `CoreNode` struct into TOML format and writes 
+    /// it to a file at the path specified by the `directory_path` field, creating
+    /// the directory if it doesn't exist.
+    ///
+    /// # Error Handling
+    /// 
+    /// Returns a `Result<(), io::Error>` to handle potential errors during:
+    ///  - TOML serialization.
+    ///  - Directory creation. 
+    ///  - File writing.
+    ///
+    /// If any error occurs, an `io::Error` is returned, containing information 
+    /// about the error. 
+    /// 
+    fn save_node_to_file(&self) -> Result<(), io::Error> {
+        // 1. Serialize the CoreNode struct to a TOML string.
+        let toml_string = toml::to_string(&self).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("TOML serialization error: {}", e),
+            )
+        })?;
 
-    // fn remove_collaborator(&mut self, user_name: &str) {
-    //     if let Some(pos) = self.collaborators_with_access.iter().position(|x| x == user_name) {
-    //         self.collaborators_with_access.remove(pos);
-    //     }
-    // }
+        // 2. Construct the full file path for the node.toml file.
+        let file_path = self.directory_path.join("node.toml");
 
+        // 3. Create the directory if it doesn't exist. 
+        if let Some(parent_dir) = file_path.parent() {
+            fs::create_dir_all(parent_dir)?;
+        }
+
+        // 4. Write the TOML data to the file.
+        fs::write(file_path, toml_string)?;
+
+        // 5. Return Ok(()) if the save was successful.
+        Ok(()) 
+    }
+   
+    /// Adds a new child node to the current node's `children` vector.
+    ///
+    /// # Arguments
+    ///
+    /// * `collaborators` - An ordered vector of usernames for collaborators who have access to this child node.
+    /// * `collaborator_ports` - A HashMap mapping collaborator usernames to their respective `CollaboratorPorts` struct, containing port assignments for synchronization.
+    /// * `owner` - The username of the owner of this child node.
+    /// * `description_for_tui` - A description of the child node, intended for display in the TUI.
+    /// * `directory_path` - The file path where the child node's data will be stored.
+    /// * `order_number` - The order number of the child node, determining its position within a list or hierarchy.
+    /// * `priority` - The priority level of the child node (High, Medium, or Low).
     fn add_child(
         &mut self,
-        collaborators_with_access: Vec<String>,
+        collaborators: Vec<String>, 
+        collaborator_ports: HashMap<String, CollaboratorPorts>, 
         owner: String,
         description_for_tui: String,
         directory_path: PathBuf,
         order_number: u32,
-        priority: NodePriority, 
-        // node_unique_id: u64, // Remove this extra parameter 
+        priority: NodePriority,
     ) {
         let child = CoreNode::new(
-            self.node_name.clone(), 
+            self.node_name.clone(),
             description_for_tui,
             directory_path,
             order_number,
             priority,
             owner,
-            collaborators_with_access, 
-            // node_unique_id, // Remove this extra argument
+            collaborators,        
+            collaborator_ports,   
         );
         self.children.push(child);
     }
-            
+    
     fn update_updated_at_timestamp(&mut self) {
         self.updated_at_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-    }
-    fn save_node_to_file(&self) -> Result<(), io::Error> {
-        let toml_string = toml::to_string(&self).map_err(|e| {
-            io::Error::new(io::ErrorKind::Other, format!("TOML serialization error: {}", e))
-        })?; // Wrap TOML error in io::Error
-        let file_path = self.directory_path.join("node.toml");
-        fs::write(file_path, toml_string)?;
-        Ok(())
     }
 
     fn load_node_from_file(path: &Path) -> Result<CoreNode, io::Error> {
@@ -1490,6 +1609,19 @@ impl InstantMessageFile {
 }
 
 
+/// Creates a new team-channel directory and its associated metadata.
+/// 
+/// This function sets up the basic directory structure and files for a new team channel
+/// within the UMA project graph. It creates the necessary subdirectories and initializes
+/// the `node.toml` file with default values.
+///
+/// # Arguments
+///
+/// * `team_channel_name` - The name of the team channel to be created. This name will be used
+///   for the directory name and in the `node.toml` metadata.
+/// * `owner` - The username of the owner of the team channel.
+///
+/// TODO: where is the port node system setup here?
 fn create_team_channel(team_channel_name: String, owner: String) {
     let team_channels_dir = Path::new("project_graph_data/team_channels");
     let new_channel_path = team_channels_dir.join(&team_channel_name);
@@ -1515,17 +1647,30 @@ fn create_team_channel(team_channel_name: String, owner: String) {
     //         priority: NodePriority, 
     //     ) -> Node {
     //     */
+    
     // 3. Create node.toml with initial data for the team channel
     let new_node = CoreNode::new(
-        team_channel_name.clone(), // node_name
-        team_channel_name.clone(), // description_for_tui
-        new_channel_path.clone(),  // directory_path
-        5,                // Order number (you might want to manage this)
-        NodePriority::Medium, // Priority (you might want to make this configurable)
-        owner,   // owner
-        vec![],  // collaborators_with_access
-
+        team_channel_name.clone(),
+        team_channel_name.clone(),
+        new_channel_path.clone(),
+        5,
+        NodePriority::Medium,
+        owner,
+        Vec::new(), // Empty collaborators list for a new channel
+        HashMap::new(), // Empty collaborator ports map for a new channel
     );
+    
+    //old
+    // let new_node = CoreNode::new(
+    //     team_channel_name.clone(), // node_name
+    //     team_channel_name.clone(), // description_for_tui
+    //     new_channel_path.clone(),  // directory_path
+    //     5,                // Order number (you might want to manage this)
+    //     NodePriority::Medium, // Priority (you might want to make this configurable)
+    //     owner,   // owner
+    //     HashMap::new(),  // collaborators_with_access, Create an empty HashMap
+
+    // );
     new_node.save_node_to_file().expect("Failed to save initial node data"); 
 }
 
@@ -1600,60 +1745,6 @@ fn add_im_message(
 }
 
 
-// // Check if there are any existing users in the system
-// let user_count = get_collaborator_count();
-    
-// fn get_collaborator_count() -> usize {
-//     // Load the collaborator list from the data directory
-//     let collaborator_list = dir_at_path_is_empty_returns_false("project_graph_data/collaborator_files");
-
-//     // Return the number of collaborators in the list
-//     collaborator_list.collaborators.len()
-// }
-
-
-// fn load_collaborator_list() -> CollaboratorList {
-//     // Open the collaborator list file
-//     // debug_log put cwd here
-//     debug_log(&format!("get: project_graph_data/collaborators.toml  {:?}", PathBuf::from("")));
-//     let mut file = File::open("project_graph_data/collaborators.toml").expect("Failed to open collaborator list file");
-
-//     // Read the contents of the file into a string
-//     let mut contents = String::new();
-//     file.read_to_string(&mut contents).expect("Failed to read collaborator list file");
-
-//     // Parse the TOML data into a CollaboratorList
-//     let collaborator_list: CollaboratorList = toml::from_str(&contents).expect("Failed to parse collaborator list file");
-    
-//     debug_log(&format!("collaborator_list  {:?}", &collaborator_list));
-
-//     collaborator_list
-// }
-
-
-
-// fn read_a_collaborator_setup_toml() -> Result<Vec<Collaborator>, MyCustomError> {
-//     /*
-//     this reads one file
-//     used in: add_collaborator_qa
-//     */
-//     let mut collaborators = Vec::new();
-//     let dir_path = Path::new("project_graph_data/collaborator_files");
-
-//     for entry in fs::read_dir(dir_path)? {
-//         let entry = entry?; 
-//         let path = entry.path(); 
-
-//         if path.is_file() && path.extension().and_then(OsStr::to_str) == Some("toml") { 
-//             let toml_string = fs::read_to_string(path)?;
-//             let collaborator: Collaborator = toml::from_str(&toml_string)?;
-//             collaborators.push(collaborator); 
-//         } 
-//     }
-
-//     Ok(collaborators)
-// }
-
 /// read_a_collaborator_setup_toml
 /// e.g. for getting fields from collaborator setup files in roject_graph_data/collaborator_files
 fn read_a_collaborator_setup_toml() -> Result<(Vec<Collaborator>, Vec<UmaError>), UmaError> {
@@ -1689,6 +1780,40 @@ fn read_a_collaborator_setup_toml() -> Result<(Vec<Collaborator>, Vec<UmaError>)
 
 fn initialize_uma_application() {
     // Welcome to Uma Land!!
+    debug_log("Staring initialize_uma_application()");
+
+    // Check if the data directory exists
+    let project_graph_directory = Path::new("project_graph_data");
+    if !project_graph_directory.exists() {
+        // If the data directory does not exist, create it
+        fs::create_dir_all(project_graph_directory).expect("Failed to create data directory");
+    }
+
+    /////////////////////
+    // Log Housekeeping
+    /////////////////////
+
+    // 1. Create the archive directory if it doesn't exist.
+    // Ensure project_graph_data/uma_archive_dir directory exists
+    let uma_archive_dir = project_graph_directory.join("uma_archive");
+    if !uma_archive_dir.exists() {
+        fs::create_dir_all(&uma_archive_dir).expect("Failed to create uma_archive directory");
+    }    
+
+    // 2. Get the current timestamp.
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("Time went backwards!")
+        .as_secs();
+
+    // 3. Construct the new archive file path.
+    let archived_log_path = uma_archive_dir.join(format!("uma__{}.log", timestamp));
+
+    // 4. Rename (move) the uma.log file to the archive directory.
+    if let Err(e) = fs::rename("uma.log", &archived_log_path) {
+        eprintln!("Failed to archive uma.log: {}", e); // Handle the error, but don't stop initialization.
+    }
+
 
     // Check for port collisions across all team channels
     if let Err(e) = check_all_ports_in_team_channels() {
@@ -1701,32 +1826,29 @@ fn initialize_uma_application() {
     get_local_ip_addresses();
     
     
-    // Check if the data directory exists
-    let project_graph_directory = Path::new("project_graph_data");
-    if !project_graph_directory.exists() {
-        // If the data directory does not exist, create it
-        fs::create_dir_all(project_graph_directory).expect("Failed to create data directory");
-    }
 
+
+
+    
     // Ensure project_graph_data/team_channels directory exists
     let team_channels_dir = project_graph_directory.join("team_channels");
     if !team_channels_dir.exists() {
         fs::create_dir_all(&team_channels_dir).expect("Failed to create team_channels directory");
     }
 
-    // Ensure project_graph_data/team_channels directory exists
+    // Ensure project_graph_data/collaborator_files directory exists
     let collaborator_files_dir = project_graph_directory.join("collaborator_files");
     if !collaborator_files_dir.exists() {
         fs::create_dir_all(&collaborator_files_dir).expect("Failed to create collaborator_files directory");
     }
     
-    // Ensure project_graph_data/team_channels directory exists
+    // Ensure project_graph_data/session_state_items directory exists
     let session_state_dir = project_graph_directory.join("session_state_items");
     if !session_state_dir.exists() {
         fs::create_dir_all(&session_state_dir).expect("Failed to create session_state_items directory");
     }
 
-    // Ensure project_graph_data/team_channels directory exists
+    // Ensure project_graph_data/sync_state_items directory exists
     let sync_state_dir = project_graph_directory.join("sync_state_items");
     if !sync_state_dir.exists() {
         fs::create_dir_all(&sync_state_dir).expect("Failed to create sync_state_items directory");
@@ -1736,6 +1858,7 @@ fn initialize_uma_application() {
     initialize_ok_to_start_sync_flag();
 
     // Check if there are any directories in project_graph_data/team_channels
+    debug_log("let number_of_team_channels = fs::read_dir(&team_channels_dir)");
     let number_of_team_channels = fs::read_dir(&team_channels_dir)
         .unwrap()
         .filter(|entry| entry.as_ref().unwrap().path().is_dir())
@@ -1819,51 +1942,6 @@ fn initialize_uma_application() {
                 }
             }
         }
-        
-
-      // // Prompt for IPv6 addresses (potentially multiple):
-      //   let mut ipv6_addresses = Vec::new();
-      //   loop { 
-      //       println!("Enter an IPv6 address (or 'done' if finished):"); 
-      //       let mut ipv6_input = String::new();
-      //       io::stdin().read_line(&mut ipv6_input).expect("Failed to read input.");
-
-      //       let ipv6_input = ipv6_input.trim();
-      //       if ipv6_input.to_lowercase() == "done" { 
-      //           break; // Exit the loop
-      //       }
-
-      //       match ipv6_input.parse::<Ipv6Addr>() { 
-      //           Ok(addr) => {
-      //               ipv6_addresses.push(addr);
-      //           }
-      //           Err(_) => {
-      //               println!("Invalid IPv6 address. Please try again.");
-      //           }
-      //       }
-      //   }
-
-      // // Prompt for IPv6 addresses (potentially multiple):
-      //   let mut ipv4_addresses = Vec::new();
-      //   loop { 
-      //       println!("Enter an IPv4 address (or 'done' if finished):"); 
-      //       let mut ipv4_input = String::new();
-      //       io::stdin().read_line(&mut ipv4_input).expect("Failed to read input.");
-
-      //       let ipv4_input = ipv4_input.trim();
-      //       if ipv4_input.to_lowercase() == "done" { 
-      //           break; // Exit the loop
-      //       }
-
-      //       match ipv4_input.parse::<Ipv4Addr>() { 
-      //           Ok(addr) => {
-      //               ipv4_addresses.push(addr);
-      //           }
-      //           Err(_) => {
-      //               println!("Invalid IPv4 address. Please try again.");
-      //           }
-      //       }
-      //   }
                         
         // // Prompt the user to enter an IP address
         // println!("Enter an ipv6_addresses:");
@@ -1921,7 +1999,7 @@ fn handle_command(
     input: &str, 
     app: &mut App, 
     graph_navigation_instance_state: &GraphNavigationInstanceState
-) -> bool {
+) -> Result<bool, io::Error> {
     /*
     For input command mode
     quit
@@ -1963,8 +2041,9 @@ fn handle_command(
                 add_collaborator_qa(&graph_navigation_instance_state);
                 
             }
+            
             "node" => {
-                debug_log("make node!");
+                debug_log("Creating a new node...");
 
                 // 1. Get input for node name
                 println!("Enter a name for the new node:");
@@ -1982,19 +2061,54 @@ fn handle_command(
                 println!("Enter collaborators (comma-separated usernames):");
                 let mut collaborators_input = String::new();
                 io::stdin().read_line(&mut collaborators_input).expect("Failed to read collaborators input");
-                let collaborators_with_access: Vec<String> = collaborators_input
+                let collaborators: Vec<String> = collaborators_input
                     .trim()
                     .split(',')
                     .map(|s| s.trim().to_string())
                     .collect();
 
-                // 4. Get input for order number
+                // 4. Construct collaborator_ports HashMap
+                let mut collaborator_ports: HashMap<String, CollaboratorPorts> = HashMap::new();
+                for collaborator_name in &collaborators { 
+                    // Load collaborator from file
+                    let collaborator = match load_collaborator_by_username(collaborator_name) {
+                        Ok(collaborator) => collaborator,
+                        Err(e) => {
+                            eprintln!("Error loading collaborator {}: {}", collaborator_name, e);
+                            continue; // Skip to the next collaborator if there's an error
+                        }
+                    };
+
+                    // Generate random ports for the collaborator 
+                    let mut rng = rand::thread_rng();
+                    let ready_port: u16 = rng.gen_range(40000..=50000);
+                    let tray_port: u16 = rng.gen_range(40000..=50000);
+                    let gotit_port: u16 = rng.gen_range(40000..=50000);
+                    let self_ready_port: u16 = rng.gen_range(40000..=50000);
+                    let self_tray_port: u16 = rng.gen_range(40000..=50000);
+                    let self_gotit_port: u16 = rng.gen_range(40000..=50000);
+
+                    // Create CollaboratorPorts and insert into the HashMap
+                    collaborator_ports.insert(
+                        collaborator_name.clone(), 
+                        CollaboratorPorts {
+                            ready_port,
+                            tray_port,
+                            gotit_port,
+                            self_ready_port,
+                            self_tray_port,
+                            self_gotit_port,
+                        }
+                    );
+                }
+
+                // 5. Get input for order number
                 println!("Enter the order number for the new node:");
                 let mut order_number_input = String::new();
                 io::stdin().read_line(&mut order_number_input).expect("Failed to read order number input");
                 let order_number: u32 = order_number_input.trim().parse().expect("Invalid order number");
 
-                // 5. Get input for priority
+                // 6. Get input for priority
                 println!("Enter the priority for the new node (High, Medium, Low):");
                 let mut priority_input = String::new();
                 io::stdin().read_line(&mut priority_input).expect("Failed to read priority input");
@@ -2008,42 +2122,106 @@ fn handle_command(
                     }
                 };
 
-                // 6. Create the new node directory
+                // 7. Create the new node directory
                 let new_node_path = graph_navigation_instance_state.current_full_file_path.join(&node_name);
                 fs::create_dir_all(&new_node_path).expect("Failed to create node directory");
 
-                /*
-                fn new(
-                node_name: String,
-                description_for_tui: String,
-                directory_path: PathBuf,
-                order_number: u32, // Add order number parameter
-                priority: NodePriority, // Add priority parameter
-                owner: String,
-                collaborators_with_access: Vec<String>,
-                */
-                // 7. Create the Node instance
+                // 8. Create the Node instance
                 let new_node = CoreNode::new(
-                    node_name, // node_name: String,
-                    description_for_tui, // description_for_tui: String,
-                    new_node_path, // directory_path: PathBuf,
-                    order_number, // order_number: u32, // Add order number parameter
-                    priority, // priority: NodePriority, // Add priority parameter
-                    graph_navigation_instance_state.local_owner_user.clone(), // owner: String,
-                    collaborators_with_access, // collaborators_with_access: Vec<String>,               
+                    node_name,
+                    description_for_tui,
+                    new_node_path,
+                    order_number,
+                    priority,
+                    graph_navigation_instance_state.local_owner_user.clone(),
+                    collaborators, // Pass the collaborators vector
+                    collaborator_ports, // Pass the collaborator_ports HashMap
                 );
 
-                // 8. Save the node data to node.toml
-                new_node
-                    .save_node_to_file()
-                    .expect("Failed to save node data");
+                // 9. Save the node data to node.toml
+                if let Err(e) = new_node.save_node_to_file() {
+                    eprintln!("Failed to save node data: {}", e);
+                    // Optionally handle the error more gracefully here
+                } else {
+                    debug_log!("New node created successfully!"); 
+                }
+            }, // end of node match arm
 
-                // 9. Update the TUI to reflect the new node (if necessary)
-            }
+            
            "d" | "datalab" | "data" => {
                 debug_log("Help!");
                 // Display help information
             }
+            
+           "l" | "log" | "logmode" | "debug" | "debuglog" | "showlog" => {
+            debug_log("Starting log mode...ctrl+c to exit");
+
+                // 1. Read log_mode_refresh DIRECTLY from uma.toml (without loading user data).
+                let uma_toml_path = Path::new("uma.toml");
+                let toml_data = toml::from_str::<toml::Value>(&fs::read_to_string(uma_toml_path)?)
+                    .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?; // Convert toml::de::Error 
+                
+                // Use a default refresh rate if log_mode_refresh is not found or invalid.
+                // Use a default refresh rate if log_mode_refresh is not found or invalid.
+                let log_mode_refresh = toml_data
+                    .get("log_mode_refresh")
+                    .and_then(toml::Value::as_float) // Use as_float to get the floating-point value
+                    .map(|v| v as f32) // Convert to f32
+                    .unwrap_or(1.0); // Default refresh rate of 1 second
+                
+                debug_log!("log_mode_refresh: {:?}", log_mode_refresh); 
+            
+                loop { // Enter the refresh loop
+                    // 1. Read and display the log contents.
+                    match fs::read_to_string("uma.log") {
+                        Ok(log_contents) => {
+                            println!("{}", log_contents); // Print to console for now
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to read uma.log: {}", e);
+                        }
+                    }
+                    
+                    // // 1. Read the log_mode_refresh value from uma.toml.
+                    // let uma_toml_path = Path::new("uma.toml");
+                    // let user_metadata = match toml::from_str::<LocalUserUma>(&fs::read_to_string(uma_toml_path)?) {
+                    //     Ok(metadata) => metadata,
+                    //     Err(e) => {
+                    //         debug_log!("Error reading or parsing uma.toml: {}", e);
+                    //         eprintln!("Error reading or parsing uma.toml: {}", e);
+                    //         return Ok(false); // Or handle the error differently (e.g., use a default value)
+                    //     }
+                    // };
+                    
+
+
+                    // 2. Sleep for a short duration.
+                    // thread::sleep(Duration::from_secs(log_mode_refresh)); 
+                    thread::sleep(Duration::from_secs_f32(log_mode_refresh)); // Use from_secs_f32
+
+                    // // 3. Check for 'esc' key press to exit.
+                    // if let Ok(input) = tiny_tui::get_input() {
+                    //     if input == "esc" {
+                    //         debug_log("Exiting debug log view.");
+                    //         break; // Exit the loop
+                    //     }
+                    // }
+                }
+            }
+               
+            //     debug_log("Displaying debug log contents...");
+            //     // 1. Read the contents of uma.log.
+            //     match fs::read_to_string("uma.log") {
+            //         Ok(log_contents) => {
+            //             // 2. Print the log contents to the console.
+            //             println!("{}", log_contents);
+            //         }
+            //         Err(e) => {
+            //             debug_log!("Failed to read uma.log: {}", e);
+            //         }
+            //     }
+            // }
+            
            "storyboard" | "mudd" => {
                 debug_log("storyboard");
                 // Display help information
@@ -2089,7 +2267,7 @@ fn handle_command(
                 debug_log("quit");
                 quit_set_continue_uma_to_false();
                 
-                return true; // Signal to exit the loop
+                return Ok(true); // Signal to exit the loop
             }
             _ => {
                 // Display error message (e.g., "Invalid command")
@@ -2100,7 +2278,7 @@ fn handle_command(
         }
     }
     debug_log("end fn handle_command()");
-    false // Don't exit by default
+    return Ok(false); // Don't exit by default
 }
 
 fn extract_last_section(current_path: &PathBuf) -> Option<String> {
@@ -2122,26 +2300,44 @@ fn get_next_message_file_path(current_path: &Path, local_owner_user: &str) -> Pa
 
 
 
-
+/// Loads collaborator data from a TOML file based on the username.
+///
+/// This function constructs the path to the collaborator's TOML file
+/// in the `project_graph_data/collaborator_files` directory, reads the file contents,
+/// deserializes the TOML data into a `Collaborator` struct, and returns the result.
+/// 
+/// # Arguments 
+///
+/// * `username` - The username of the collaborator whose data needs to be loaded.
+///
+/// # Errors
+/// 
+/// This function returns a `Result<Collaborator, MyCustomError>` to handle potential errors:
+///  - `MyCustomError::IoError`: If the collaborator file is not found or if there is an error reading the file.
+///  - `MyCustomError::TomlError`: If there is an error parsing the TOML data.
+///
+/// # Example 
+///
+/// ```
+/// let collaborator = load_collaborator_by_username("alice").unwrap(); // Assuming alice's data exists
+/// println!("Collaborator: {:?}", collaborator); 
+/// ```
 fn load_collaborator_by_username(username: &str) -> Result<Collaborator, MyCustomError> {
     let toml_file_path = Path::new("project_graph_data/collaborator_files")
-        .join(format!("{}__collaborator.toml", username)); 
+        .join(format!("{}__collaborator.toml", username));
 
-    // Check if the file exists before trying to read it:
     if toml_file_path.exists() {
         let toml_string = fs::read_to_string(toml_file_path)?;
         let collaborator: Collaborator = toml::from_str(&toml_string)
             .map_err(|e| MyCustomError::TomlError(e))?;
-
         Ok(collaborator)
     } else {
         Err(MyCustomError::IoError(io::Error::new(
-            io::ErrorKind::NotFound, 
+            io::ErrorKind::NotFound,
             format!("Collaborator file not found for '{}'", username)
-        ))) 
+        )))
     }
 }
-
 
 
 /// Loads connection data for members of the currently active team channel.
@@ -2195,35 +2391,35 @@ fn load_collaborator_by_username(username: &str) -> Result<Collaborator, MyCusto
 /// is absolutely necessary for building the session_connection_allowlist for the current channel.
 ///
 /// sample node.toml
-/// owner = "alice"
-/// collaborators_with_access = [
-///     { collaborator_name = "alice", 
-///     ready_port = 50001, 
-///     intray_port = 50002, 
-///     gotit_port = 50003, 
-///     self_ready_port = 50004, 
-///     self_intray_port = 50005, 
-///     self_gotit_port = 50006 
-///     },
-///     { collaborator_name = "bob", 
-///     ready_port = 50011, 
-///     intray_port = 50012, 
-///     gotit_port = 50013, 
-///     self_ready_port = 50014, 
-///     self_intray_port = 50015, 
-///     self_gotit_port = 50016  
-///     },
-///     # Add more collaborators as needed
-/// ]
-/// updated_at_timestamp = 1727641034
-/// expires_at = 1727727434
-/// node_name = "neem"
-/// description_for_tui = "neem"
-/// directory_path = "project_graph_data/team_channels/neem"
-/// node_unique_id = 1727641034
-/// children = []
+/// node_name = "teamtest"
+/// description_for_tui = "teamtest"
+/// node_unique_id = 1728307130
+/// directory_path = "project_graph_data/team_channels/teamtest"
 /// order_number = 5
 /// priority = "Medium"
+/// owner = "initial_owner"
+/// updated_at_timestamp = 1728307130
+/// expires_at = 1728393530
+/// children = [] 
+///
+/// [collaborator.alice]
+/// collaborator_name = "alice"
+/// ready_port = 50001
+/// tray_port = 50002
+/// gotit_port = 50003
+/// self_ready_port = 50004
+/// self_tray_port = 50005
+/// self_gotit_port = 50006
+///
+/// [collaborator.bob]
+/// collaborator_name = "bob"
+/// ready_port = 50011
+/// tray_port = 50012
+/// gotit_port = 50013
+/// self_ready_port = 50014
+/// self_tray_port = 50015
+/// self_gotit_port = 50016
+///
 /// maybe detects any port collisions, 
 /// excluding those who collide with senior members
 /// or returning an error if found.
@@ -2347,28 +2543,66 @@ struct SendQueue {
 }
 
 
+// let timestamp_request_port = // ... port for sending "ready to receive" to collaborator
+// let file_receive_port = // ...  port for receiving files from collaborator 
+// let receipt_confirmation_port = // ... port for sending confirmations to collaborator
 
+
+fn send_data(data: &[u8], target_addr: SocketAddr) -> Result<(), io::Error> { 
+    let socket = UdpSocket::bind(":::0")?; 
+    socket.send_to(data, target_addr)?;
+    Ok(())
+}
+
+/// local owner users in-try desk
+/// requests to recieve are sent from here
+/// other people's owned docs are recieved here
+/// gpg confirmed
+/// save .toml (handle the type: content, node, etc.)
+/// and 'gotit' signal sent out
+///
+/// echo: if any docuemnt comes in
+/// automatically sent out an echo-type request
 fn handle_owner_desk(
     collaborator: &SyncCollaborator, 
-//     rx: mpsc::Receiver<YourMessageType>,  // Optional channel receiver
-//     tx: mpsc::Sender<YourMessageType>   // Optional channel sender 
 ) {
-    // let timestamp_request_port = // ... port for sending "ready to receive" to collaborator
-    // let file_receive_port = // ...  port for receiving files from collaborator 
-    // let receipt_confirmation_port = // ... port for sending confirmations to collaborator
+    // ALPHA non-parallel version
+    debug_log!("Start handle_owner_desk()");
+        
+    loop { 
+        // 1. check for halt/quit uma signal
+        if should_halt() {
+            break;
+        }
 
-    // ... (Implement timestamp sending, file receiving, and confirmation logic)
+        // TODO eventually this should probably be the id of a thread
+        // Generate a unique event ID
+        let event_id: u64 = rand::random(); 
 
-    loop { // Add this dummy loop 
-        // let timestamp_request_port = // ... port for sending "ready to receive" to collaborator
-        // let file_receive_port = // ...  port for receiving files from collaborator 
-        // let receipt_confirmation_port = // ... port for sending confirmations to collaborator
+        // Create a ReadySignal
+        let ready_signal = ReadySignal {
+            id: event_id,
+            timestamp: get_current_unix_timestamp(), 
+            echo: false,
+        };
 
-        // ... Implement your logic here using the port variables ...
+        // Serialize the ReadySignal
+        let data = serialize_ready_signal(&ready_signal).expect("Failed to serialize ReadySignal"); 
 
-        break; // Exit the loop immediately - we'll replace this with real logic later 
+        // Send the signal to the collaborator's ready_port
+        let target_addr = SocketAddr::new(IpAddr::V6(collaborator.ipv6_address), collaborator.ready_port); 
+        if let Err(e) = send_data(&data, target_addr) { // Assuming you have a send_data function
+            debug_log!("Failed to send ReadySignal to {}: {}", target_addr, e);
+            eprintln!("Failed to send ReadySignal to {}: {}", target_addr, e);
+        } else {
+            debug_log!("Sent ReadySignal to {}", target_addr);
+            // println!("Sent ReadySignal to {}", target_addr);
+            debug_log(&format!("Sent ReadySignal to {}", target_addr));
+
+        }
+
+        thread::sleep(Duration::from_secs(3)); 
     } 
-
 }
 
 
@@ -2901,52 +3135,11 @@ fn you_love_the_sync_team_office(
     let user_metadata = toml::from_str::<toml::Value>(&fs::read_to_string(uma_toml_path)?)?; 
     let uma_local_owner_user = user_metadata["uma_local_owner_user"].as_str().unwrap().to_string();
 
-    debug_log!("Starting UMA Sync Team Office for {}", &uma_local_owner_user);
+    debug_log!("\n\nStarting UMA Sync Team Office for {}", &uma_local_owner_user);
 
     let session_connection_allowlists = make_session_connection_allowlists(&uma_local_owner_user)?;
-    // let session_connection_allowlists_clone = session_connection_allowlists.clone();
+    debug_log!("session_connection_allowlists -> {:?}", &session_connection_allowlists);
     
-    /*issue:
-    error[E0597]: `session_connection_allowlists_clone` does not live long enough
-        --> src/main.rs:2898:42
-        |
-    2893 |     let session_connection_allowlists_clone = session_connection_allowlists.clone();
-        |         ----------------------------------- binding `session_connection_allowlists_clone` declared here
-    ...
-    2898 |     for this_allowlisted_collaborator in &session_connection_allowlists_clone { 
-        |                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        |                                          |
-        |                                          borrowed value does not live long enough
-        |                                          argument requires that `session_connection_allowlists_clone` is borrowed for `'static`
-    ...
-    2925 | }
-        | - `session_connection_allowlists_clone` dropped here while still borrowed
-    
-        Neither session_connection_allowlists nor a clone can be used...
-    */
-
-    // // Create threads for each collaborator on the allowlist: 
-    // let mut collaborator_threads = Vec::new();
-    // for this_allowlisted_collaborator in &session_connection_allowlists { 
-    //     if this_allowlisted_collaborator.user_name != uma_local_owner_user {
-    //         println!("Setting up connection with {}", this_allowlisted_collaborator.user_name);
-
-    //         // Create the two "meeting room desks" for each collaborator pair:
-    //         // let (tx_owner_desk, rx_owner_desk) = mpsc::channel(); // Optional channels for thread communication
-    //         // let (tx_collaborator_desk, rx_collaborator_desk) = mpsc::channel(); 
-
-    //         let owner_desk_thread = thread::spawn(move || {
-    //             handle_owner_desk(&this_allowlisted_collaborator); 
-    //         });
-    //         let collaborator_desk_thread = thread::spawn(move || {
-    //             handle_collaborator_intray_desk(&this_allowlisted_collaborator);
-    //         });
-
-    //         collaborator_threads.push(owner_desk_thread); 
-    //         collaborator_threads.push(collaborator_desk_thread); 
-    //     } 
-    // } 
-
         
     // Create threads for each collaborator on the allowlist: 
     let mut collaborator_threads = Vec::new();
@@ -2980,8 +3173,8 @@ fn you_love_the_sync_team_office(
     println!("UMA Sync Team Office closed");
     Ok(())
 }
-    
-    
+
+
 
 // Proverbial Main()
 fn we_love_projects_loop() -> Result<(), io::Error> {
@@ -3133,7 +3326,8 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
             InputMode::Command => {
                 
                 // Handle commands (including 'm')
-                if handle_command(&input, &mut app, &mut graph_navigation_instance_state) {
+                // if handle_command(&input, &mut app, &mut graph_navigation_instance_state) {
+                if handle_command(&input, &mut app, &mut graph_navigation_instance_state)? {
                     debug_log("QUIT");
                     break; // Exit the loop if handle_command returns true (e.g., for "q")
                 } else if let Ok(index) = input.parse::<usize>() {
@@ -3179,7 +3373,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                                     app.graph_navigation_instance_state.look_read_node_toml(); 
 
                                     // Log the state after loading node.toml
-                                    debug_log(&format!("State after look_read_node_toml: {:?}", app.graph_navigation_instance_state));
+                                    debug_log(&format!("we_love_projects_loop() State after look_read_node_toml: {:?}", app.graph_navigation_instance_state));
                                     
                                     // ... enter IM browser or other features ...
                                 } else {
@@ -3198,10 +3392,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                     }
                 }
             }
-            // InputMode::InsertText => {
-            //     // handle_insert_text_input(&input, &mut app, &mut graph_navigation_instance_state);
-            //     app.handle_insert_text_input(&input);
-            // }
+
             
             
             InputMode::InsertText => {
@@ -3211,10 +3402,6 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                     debug_log("esc toggled");
                     app.input_mode = InputMode::Command; // Access input_mode using self
                     app.current_path.pop(); // Go back to the parent directory
-                // } else if input == "^[" { 
-                //     debug_log("esc toggled");
-                //     app.input_mode = InputMode::Command; // Access input_mode using self
-                //     app.current_path.pop(); // Go back to the parent directory
                 } else if !input.is_empty() {
                     debug_log("!input.is_empty()");
 
@@ -3233,37 +3420,6 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                     app.load_im_messages(); // Access using self
                 }
             }
-
-                // debug_log("what is this code block?");
-                // // Handle insert mode (add message to list)
-                // if input == "^[" { // Exit insert mode if the user types "esc"
-                //     debug_log("esc toggled");
-                //     app.input_mode = InputMode::Command;
-                //     // app.current_path.pop(); // Go back to the parent directory
-                // } else if !input.is_empty() {
-                //     debug_log("!input.is_empty()");
-                
-
-                
-            //     // Get local_owner_user DIRECTLY from the state!
-            //     let local_owner_user = graph_navigation_instance_state.local_owner_user.clone();
-        
-
-      
-            //     let message_path = get_next_message_file_path(&app.current_path, &local_owner_user);
-            //     add_im_message(
-            //         &message_path, 
-            //         &local_owner_user, 
-            //         input.trim(), 
-            //         None,
-            //         &graph_navigation_instance_state,
-            //     ).expect("Failed to add message");
-            //     app.load_im_messages();                
-                            
-                
-
-            //     }
-            // }
         }
     }
     debug_log("Finish: we love project loop.");
