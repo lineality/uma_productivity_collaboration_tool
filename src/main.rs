@@ -1226,6 +1226,17 @@ impl GraphNavigationInstanceState {
                     debug_log!("WARNING: No port assignments found for collaborator: {}", collaborator_name);
                 } 
             }
+            
+            // 5. Update GraphNavigationInstanceState with node.toml data (for Team Channel Nodes)
+            self.current_node_teamchannel_collaborators_with_access = this_node.teamchannel_collaborators_with_access.clone();
+            self.current_node_name = this_node.node_name.clone();
+            self.current_node_owner = this_node.owner.clone();
+            self.current_node_description_for_tui = this_node.description_for_tui.clone();
+            self.current_node_directory_path = this_node.directory_path.clone();
+            self.current_node_unique_id = this_node.node_unique_id;
+            // Note: `current_node_members` appears to be unused, consider removing it
+            
+            
         } // End of Team Channel Node Handling
 
         // ... (Rest of your logic for handling other node types) ...
