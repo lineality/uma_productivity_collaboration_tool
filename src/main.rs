@@ -20,6 +20,40 @@ rand = "0.8.5"
 getifaddrs = "0.1.4"
 
 https://docs.rs/getifaddrs/latest/getifaddrs/
+
+
+// tiny_tui_module.rs
+pub mod tiny_tui {
+    use std::path::Path;
+
+    pub fn render_list(list: &Vec<String>, current_path: &Path) {
+        // 1. Get the path components
+        let path_components: Vec<_> = current_path.components().collect();
+
+        // 2. Display the path, skipping the first two components 
+        if path_components.len() > 2 {
+            let relevant_path = path_components[2..].iter()
+                .map(|c| c.as_os_str().to_string_lossy()) 
+                .collect::<Vec<_>>()
+                .join("/");
+            println!("Current Path: /{}", relevant_path); 
+        } else {
+            println!("Select a Team-Channel (by number):"); // Home directory (root) 
+        }
+
+        // 3. Display the list items as before
+        for (i, item) in list.iter().enumerate() {
+            println!("{}. {}", i + 1, item);
+        }
+    }
+
+    pub fn get_input() -> Result<String, std::io::Error> {
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input)?;
+        Ok(input.trim().to_string())
+    }
+}
+
 */
 
 // Set debug flag (future: add time stamp with 24 check)
@@ -1127,25 +1161,71 @@ struct GraphNavigationInstanceState {
     current_node_directory_path: PathBuf,
     current_node_unique_id: u64,
     current_node_members: Vec<String>,
+    home_square_one: bool,
     // app.&App,  // TODO really?
 }
 // TODO: how to load value for active_team_channel when channel is entered
 
+// todo, maybe make boostrap_uma_session_network()
 impl GraphNavigationInstanceState {
 
 
     /// Loads and updates the `GraphNavigationInstanceState` based on the `current_full_file_path`.
     ///
-    /// This method reads the `node.toml` file at the `current_full_file_path`, extracts relevant 
-    /// data, including team channel name and collaborator port assignments, and updates the 
-    /// corresponding fields in the `GraphNavigationInstanceState` struct.
+    /// This method is called whenever the user navigates to a new directory within the 
+    /// UMA project graph. It determines the type of node (team-channel, project, or task)
+    /// based on the `current_full_file_path` and loads relevant information from the 
+    /// `node.toml` file, updating the internal state accordingly.
+    /// 
+    /// ## Team Channel Nodes
     ///
-    /// If the `node.toml` file is not found or cannot be parsed, appropriate error messages are 
-    /// logged, and the function returns without updating the state. 
+    /// If the `current_full_file_path` indicates a team-channel node (a directory within 
+    /// `project_graph_data/team_channels`), this method performs the following:
+    ///
+    /// 1. Sets the `active_team_channel` to the name of the team-channel. 
+    /// 2. Loads collaborator port assignments from the `node.toml` file.
+    /// 3. Populates the `collaborator_ports` field with a `HashMap` mapping collaborator 
+    ///    usernames to their respective `CollaboratorPorts` struct. 
+    ///
+    /// ## Other Node Types
+    ///
+    /// For project nodes and task nodes, this method will load relevant data from 
+    /// the `node.toml` file but will NOT load collaborator port assignments, as these 
+    /// are only relevant at the team-channel level.
+    /// 
+    /// ## Error Handling
+    ///
+    /// If the `node.toml` file is not found or cannot be parsed, the method logs an error 
+    /// message and returns without updating the state. 
     ///
     /// This function specifically loads Collaborator Port assignments if the `current_full_file_path`
     /// corresponds to a team-channel node, as indicated by the path being within the 
     /// `project_graph_data/team_channels` directory. 
+    ///
+    /// Not all information has the same owner-author and privacy requirements and so cannot be obtained from any mythical singularity. Port-assignments are made by the owner of the team-channel so as to be guaranteed not to collide and adding a new user/collaborator will not disrupt existing processes/collaborators/users/workers/participants/network-connections. 
+    /// A user's ip addresses and gpg keys and screen-name can only come from, and be owned by, that user/collaborator. 
+
+    /// Likewise, the list of possible collaborators is set by the team-channel-owner. But whether another collaborator has actually shared their private connection data with you is and must be 100% their choice done by them and owned by them GPG signed by them and GPG encrypted for only 'you' (the current user) to use. 
+
+    /// The 'collaborators' for your session are then an intersection between these two categories of sources of truth: the collaborators who have connected with you (their choice, their owned documents), and the collaborators invited to the team-channel by the team-channel-owner (their choice, their owned document). 
+    /// Note: Your no-context set of all-collaborators is everyone in every channel, a general no-context address-book. 
+    /// By analogy: Tom is organizing a flower show and says Alice Bob and you are invited, and he asks you to call them.
+    /// Bob is the one who chooses who to invite.
+    /// You have an address book that includes Alice and Bob and everyone else in your address book.
+
+    /// To make these call-connections you need to find the intersection between these two sets:
+    /// 1. Who did the team-owner (Tom) invite to the flower show?
+    /// 2. Who is in your address book?
+
+    /// You cannot call everyone in your address book, because Tom didn't invite everyone in your address book.
+    /// And Tom can't tell you Bob's phone number and call availability information, because only Bob can tell you his own private information. 
+    ///
+    /// This means there are at least two sources or two different categories of truths that must be used when loading "state" for a session in a team-channel in Uma. 
+    ///
+    /// Note: it is crutial that he source of truth for whether a node is a team-channel node be the file-structure itself
+    /// and that code to extract team-channel connection data (such as port-assignments) is never attempted used in other
+    /// nodes such as non-team-channel nodes within that team-channel (nearly ~everything is a node, only a few are team-channels)
+
     fn look_read_node_toml(&mut self) {
         debug_log(&format!("fn look_read_node_toml() self.current_full_file_path -> {:?}", self.current_full_file_path)); 
 
@@ -1241,198 +1321,27 @@ impl GraphNavigationInstanceState {
 
         // ... (Rest of your logic for handling other node types) ...
     }    
+
+    fn bootstrap_uma_session_network(state: &mut GraphNavigationInstanceState, app: &mut App) {
+        // 1. Display list of available team-channels (using the TUI)
+        // ... (You'll need to adapt your TUI code for this) ...
     
-    // /// Loads and updates the `GraphNavigationInstanceState` based on the `current_full_file_path`.
-    // ///
-    // /// This method reads the `node.toml` file at the `current_full_file_path`, extracts relevant
-    // /// data (including team channel name and collaborator port assignments), and updates the
-    // /// corresponding fields in the `GraphNavigationInstanceState` struct.
-    // ///
-    // /// If the `node.toml` file is not found or cannot be parsed, appropriate error messages are
-    // /// logged, and the function returns without updating the state.
-    // fn look_read_node_toml(&mut self) {
-    //     debug_log(&format!("fn look_read_node_toml() self.current_full_file_path -> {:?}", self.current_full_file_path)); 
-
-    //     let node_toml_path = self.current_full_file_path.join("node.toml");
-    //     debug_log!("node_toml_path -> {:?}", &node_toml_path);
-
-    //     // 1. Handle File Existence Error
-    //     if !node_toml_path.exists() {
-    //         debug_log!("ERROR: node.toml not found at {:?}. This directory is not a node.", node_toml_path);
-    //         // Optionally, you can set a flag in your state to indicate an invalid node
-    //         return; // Exit early if the file doesn't exist
-    //     }
-
-    //     // 2. Handle TOML Parsing Error
-    //     // HERE!! HERE!! HERE!!  Replace this line:
-    //     // let this_node = match CoreNode::load_node_from_file(&node_toml_path) {
-    //     // with this line using the new function: 
-    //     let this_node = match load_core_node_from_toml_file(&node_toml_path) { 
-    //         Ok(node) => node,
-    //         Err(e) => {
-    //             debug_log!("ERROR: Failed to load node.toml: {}", e); 
-    //             // eprintln!("ERROR: Failed to load node.toml: {}", e);  // Optionally print to console 
-    //             return; // Exit early if parsing fails
-    //         }
-    //     };
-
-    //     // // 3. Extract Team Channel Name (Only if parsing was successful)
-    //     // let path_components: Vec<_> = self.current_full_file_path.components().collect();
-    //     // debug_log!("look_read_node_toml look_read_node_toml -> {:?}", &path_components);
-    //     // debug_log!("path_components.len -> {:?}", path_components.len());
-
-    //     // if path_components.len() >= 2 
-    //     //     && path_components[path_components.len() - 2].as_os_str() == "team_channels" 
-    //     // {
-    //     //     if let Some(team_channel_component) = path_components.get(path_components.len() - 1) {
-    //     //         self.active_team_channel = team_channel_component.as_os_str().to_string_lossy().to_string();
-    //     //         debug_log!("self.active_team_channel -> {:?}", &self.active_team_channel);
-    //     //     }
-    //     // } 
-
-    //     // 3. Extract Data from CoreNode (conditionally)
-    //     let path_components: Vec<_> = self.current_full_file_path.components().collect();
-        
-    //     // Check if we are at the team channel level 
-    //     if path_components.len() >= 2 
-    //         && path_components[path_components.len() - 2].as_os_str() == "team_channels" 
-    //     {
-    //         self.active_team_channel = this_node.node_name.clone(); // Team channel level
-    //     } 
-
-    //     self.current_node_teamchannel_collaborators_with_access = this_node.teamchannel_collaborators_with_access.clone();
-    //     self.collaborator_port_assignments = this_node.collaborator_port_assignments.clone(); 
-
-        
-    //     // 4. Load Collaborator Ports 
-    //     for collaborator_name in &this_node.teamchannel_collaborators_with_access {
-    //         if let Some(ports) = this_node.collaborator_port_assignments.get(collaborator_name) {
-    //             // You now have the CollaboratorPorts for this collaborator.
-    //             // Create a SyncCollaborator instance:
-    //             let collaborator_sync_data = SyncCollaborator {
-    //                 user_name: collaborator_name.clone(),
-    //                 ipv6_address: // ... (Load IPv6 address from collaborator file),
-    //                 sync_file_transfer_port: // ... (Load from collaborator file),
-    //                 sync_interval: // ... (Load from collaborator file),
-    //                 ready_port: ports.ready_port,
-    //                 intray_port: ports.tray_port,
-    //                 gotit_port: ports.gotit_port,
-    //             };
-
-    //             // Add to the relevant data structure (e.g., a HashSet)
-    //             // ...
-    //         } else {
-    //             debug_log!("WARNING: No port assignments found for collaborator: {}", collaborator_name);
-    //             // Handle the case where port assignments are missing. You might want to:
-    //             // - Skip this collaborator.
-    //             // - Use default port values. 
-    //             // - Log an error and continue.
-    //         }
-    //     }
-        
-        
-    // }
+        // 2. Get user input (team-channel selection)
+        // ...
     
-
-    // /// Loads and updates the `GraphNavigationInstanceState` based on the `current_full_file_path`.
-    // ///
-    // /// This method reads the `node.toml` file at the `current_full_file_path`, extracts relevant 
-    // /// data, including team channel name and collaborator port assignments, and updates the 
-    // /// corresponding fields in the `GraphNavigationInstanceState` struct.
-    // ///
-    // /// If the `node.toml` file is not found or cannot be parsed, appropriate error messages are 
-    // /// logged, and the function returns without updating the state. 
-    // ///
-    // /// This function specifically loads Collaborator Port assignments if the `current_full_file_path`
-    // /// corresponds to a team-channel node, as indicated by the path being within the 
-    // /// `project_graph_data/team_channels` directory. 
-    // fn look_read_node_toml(&mut self) {
-    //     debug_log(&format!("fn look_read_node_toml() self.current_full_file_path -> {:?}", self.current_full_file_path)); 
-
-    //     let node_toml_path = self.current_full_file_path.join("node.toml");
-    //     debug_log!("node_toml_path -> {:?}", &node_toml_path);
-
-    //     // 1. Handle File Existence Error
-    //     if !node_toml_path.exists() {
-    //         debug_log!("ERROR: node.toml not found at {:?}. This directory is not a node.", node_toml_path);
-    //         return; 
-    //     }
-
-    //     // 2. Handle TOML Parsing Error
-    //     let this_node = match load_core_node_from_toml_file(&node_toml_path) { 
-    //         Ok(node) => node,
-    //         Err(e) => {
-    //             debug_log!("ERROR: Failed to load node.toml: {}", e); 
-    //             return; 
-    //         }
-    //     };
-
-    //     // 3. Check if this is a Team Channel Node 
-    //     let path_components: Vec<_> = self.current_full_file_path.components().collect();
-    //     if path_components.len() >= 2 
-    //         && path_components[path_components.len() - 2].as_os_str() == "team_channels" 
-    //     {
-    //         self.active_team_channel = this_node.node_name.clone();
-
-    //         // 4. Load Collaborator Ports (Only for Team Channel Nodes)
-    //         for collaborator_name in &this_node.teamchannel_collaborators_with_access {
-    //             if let Some(ports) = this_node.collaborator_port_assignments.get(collaborator_name) {
-    //                 // Create a SyncCollaborator instance:
-    //                 let collaborator_sync_data = SyncCollaborator {
-    //                     user_name: collaborator_name.clone(),
-    //                     ipv6_address: {
-    //                         // Load IPv6 address from the collaborator's TOML file using `collaborator_name`
-    //                         // Example: 
-    //                         let collaborator_data = load_collaborator_by_username(collaborator_name)
-    //                             .unwrap_or_else(|e| {
-    //                                 debug_log!("Error loading collaborator {}: {}", collaborator_name, e);
-    //                                 panic!("Failed to load collaborator data."); // Or handle the error differently
-    //                             });
-
-    //                         // Assuming `collaborator_data` has a field `ipv6_address`
-    //                         collaborator_data.ipv6_addresses.unwrap()[0]
-    //                     },
-    //                     sync_file_transfer_port:  {
-    //                         // Load sync_file_transfer_port from the collaborator's TOML file
-    //                         // ... similar to loading ipv6_address ...
-    //                         let collaborator_data = load_collaborator_by_username(collaborator_name)
-    //                             .unwrap_or_else(|e| {
-    //                                 debug_log!("Error loading collaborator {}: {}", collaborator_name, e);
-    //                                 panic!("Failed to load collaborator data."); // Or handle the error differently
-    //                             });
-    //                         collaborator_data.sync_file_transfer_port
-    //                     },
-    //                     sync_interval: {
-    //                         // Load sync_interval from the collaborator's TOML file
-    //                         // ... similar to loading ipv6_address ...
-    //                         let collaborator_data = load_collaborator_by_username(collaborator_name)
-    //                             .unwrap_or_else(|e| {
-    //                                 debug_log!("Error loading collaborator {}: {}", collaborator_name, e);
-    //                                 panic!("Failed to load collaborator data."); // Or handle the error differently
-    //                             });
-    //                         collaborator_data.sync_interval
-    //                     },
-    //                     ready_port: ports.ready_port,
-    //                     intray_port: ports.tray_port,
-    //                     gotit_port: ports.gotit_port,
-    //                 };
-
-    //                 // Add to the relevant data structure for managing sync connections (e.g., a HashSet):
-    //                 // ... 
-                    
-    //                 // Log success:
-    //                 debug_log!("Successfully loaded collaborator data for: {}", collaborator_name);
-    //             } else {
-    //                 debug_log!("WARNING: No port assignments found for collaborator: {}", collaborator_name);
-    //             } 
-    //         }
-    //     } // End of Team Channel Node Handling
-
-    //     // ... (Rest of your logic for handling other node types) ...
-    // }
-
+        // 3. Load the selected team-channel's node.toml 
+        // ...
     
+        // 4. Establish sync state
+        // ... (Follow the steps outlined in my previous response for establishing sync state) ... 
     
+        // 5. Update app.current_path to the selected team-channel directory 
+        // ...
+    
+        // 6. (Optional) Trigger an initial sync
+        // ...
+    }
+
     fn save_to_session_items(&self) -> Result<(), io::Error> {
             let session_items_path = Path::new("project_graph_data/session_state_items");
 
@@ -1459,7 +1368,6 @@ impl GraphNavigationInstanceState {
                 self.current_node_directory_path.as_os_str().to_string_lossy().as_bytes(), 
             )?; 
             
-            
             // 4. Save Vec<String> as TOML:
             let collaborators_toml = toml::to_string(&self.current_node_teamchannel_collaborators_with_access).map_err(|e| {
                 io::Error::new(
@@ -1481,8 +1389,6 @@ impl GraphNavigationInstanceState {
 // self.active_team_channel = fs::read_to_string(session_items_path.join("active_team_channel.txt"))?;
     
     
-
-
 #[derive(Debug, Deserialize, Serialize, Clone)]
 enum NodePriority {
     High,
@@ -2073,10 +1979,93 @@ fn read_a_collaborator_setup_toml() -> Result<(Vec<Collaborator>, Vec<UmaError>)
 }
 
 
-fn initialize_uma_application() {
+/// ## State, Initialization & Network
+/// If as a vignette, let's look at a brief walkthrough of Alice starting up Uma as she embarks on a build with Bob. 
+///
+/// 1. Alice starts Uma
+/// 2. Uma run initialization:
+/// Initialization checks:
+/// - is this the first time (here we will assume it is not the first setup)
+/// (perhaps, is there a hash-salt to check the uma.toml configuration file)
+/// - node-graph navigation is set up as starting from square one: location is ~home_square_one=true, because Alice has not yet picked which team_channel she wants to use/sync-with/view/join/enter however said.
+/// - a mostly blank ~GraphNavigationState is filled-in (or filled-out)
+/// - CWD (current working directory (path)) is set to home_square_one, which is not in any team_channel
+/// - a basic home_square_one TUI is displayed showing what team_channels Alice can join/view/enter etc. (ones she has been invited to and has been sent and has loaded the team_channel configuration files for)
+/// - Uma listens for Alice's 'command' which can be the number of a listed team_channel (to go to) or options such as log-view, quit, help, make a new team, etc.
+/// - Alice picks alice_and_bobs_best_team_ever channel, option: "1"
+/// Now Uma needs to do three important things:
+/// 1. Uma needs to update graph navigation as with any 'move' within the dungeon-of-rooms of graph nodes.
+/// 2. Uma needs change from being at home-base-square-one (no context for 'state') to being in a channel with users and configurations: there is now 'state' to fill-in for the ~graph_navigation_state. 
+/// 3. Uma needs to set up the uma_network, which in particular involves:
+/// - getting the 'actual list' of collaborators in that team-channel to connect with (which is an intersection of the team-owner's (potential) team-members list and Alice's actual whole 'address-book' of all real contacts on all teams. 
+/// - uma_network needs the port-assignments from the team_channel toml (set by the team-owner, so there is no port-collision or source-of-truth mixup) 
+/// - uma_network needs the ip (ipv6, ipv4, etc.) for each collaborator, which comes from that collaborator-owned toml (and probably that collaborator's public gpg key)
+///
+/// Note: If Alice returns to home, all this 'state' is deleted and Uma returns to home-square-one as if she restarted the program. (In fact...it might even be easiest to literally restart to make that process clean.)
+fn initialize_uma_application() -> Result<(), Box<dyn std::error::Error>> {
     // Welcome to Uma Land!!
     debug_log("Staring initialize_uma_application()");
 
+
+    
+
+    // --- 1. CHECK FOR & SETUP uma.toml ---
+    let uma_toml_path = Path::new("uma.toml");
+    if !uma_toml_path.exists() {
+        // Prompt for owner and create uma.toml
+        println!("Welcome to Uma! Please enter your username (this will be the owner for this Uma instance):");
+        let mut owner_input = String::new();
+        io::stdin().read_line(&mut owner_input).unwrap();
+        let owner = owner_input.trim().to_string();
+
+        let local_user_metadata = LocalUserUma::new(owner); // Create LocalUserUma
+        
+        if let Err(e) = local_user_metadata.save_owner_to_file(&uma_toml_path) { 
+            eprintln!("Failed to create uma.toml: {}", e);
+            // Handle the error (e.g., exit gracefully) 
+            return Ok(()); 
+        }
+        debug_log!("uma.toml created successfully!"); 
+    } 
+    
+    
+    // // Check if uma.toml exists
+    // let uma_toml_path = Path::new("uma.toml");
+    // if !uma_toml_path.exists() {
+    //     // If uma.toml does not exist, prompt for owner and create it
+    //     println!("Welcome to Uma! Please enter your username (this will be the owner for this Uma instance):");
+    //     let mut owner_input = String::new();
+    //     io::stdin().read_line(&mut owner_input).unwrap();
+    //     let owner = owner_input.trim().to_string();
+
+    //     let local_user_metadata = LocalUserUma::new(owner);
+    //     local_user_metadata.save_owner_to_file(&uma_toml_path).expect("Failed to create uma.toml");
+    // } 
+    
+    // ... 2. Load user metadata from the now-existing uma.toml
+    let user_metadata = match toml::from_str::<LocalUserUma>(&fs::read_to_string(uma_toml_path)?) {
+        Ok(metadata) => {
+            debug_log!("uma.toml loaded successfully!");
+            metadata
+        },
+        Err(e) => {
+            eprintln!("Failed to load or parse uma.toml: {}", e); 
+            return Ok(()); 
+        }
+    };
+
+    
+    // // --- 3. CHECK FOR PORT COLLISIONS ---
+    // // You can now safely access user_metadata.uma_local_owner_user if needed
+    // if let Err(e) = check_all_ports_in_team_channels() {
+    //     eprintln!("Error: {}", e); 
+    //     debug_log!("Error: {}", e);
+    //     return; 
+    // }
+
+    // // ... 4. CREATE DIRECTORIES --- 
+    
+    
     // Check if the data directory exists
     let project_graph_directory = Path::new("project_graph_data");
     if !project_graph_directory.exists() {
@@ -2118,7 +2107,7 @@ fn initialize_uma_application() {
         eprintln!("Error: {}", e); // Print the error message
         debug_log!("Error: {}", e);
         // Handle the error as needed (e.g., exit UMA)
-        return;
+        return Ok(());
     }
     
     get_local_ip_addresses();
@@ -2279,18 +2268,8 @@ fn initialize_uma_application() {
         println!("User added successfully!");
     }
 
-    // Check if uma.toml exists
-    let uma_toml_path = Path::new("uma.toml");
-    if !uma_toml_path.exists() {
-        // If uma.toml does not exist, prompt for owner and create it
-        println!("Welcome to Uma! Please enter your username (this will be the owner for this Uma instance):");
-        let mut owner_input = String::new();
-        io::stdin().read_line(&mut owner_input).unwrap();
-        let owner = owner_input.trim().to_string();
 
-        let local_user_metadata = LocalUserUma::new(owner);
-        local_user_metadata.save_owner_to_file(&uma_toml_path).expect("Failed to create uma.toml");
-    } 
+    Ok(())
 }
 
 fn handle_command(
@@ -2525,17 +2504,45 @@ fn handle_command(
                 debug_log("storyboard");
                 // Display help information
             }
+            // "home" => {
+            //     debug_log("home");
+                
+            //     // // Posix
+            //     // app.current_path = PathBuf::from("project_graph_data/team_channels");
+                
+            //     // any file system compiled, safe path posix or other os
+            //     let mut app_data_dir = PathBuf::from("project_graph_data");
+            //     app_data_dir.push("team_channels");
+            //     app.current_path = app_data_dir;
+            //     // Update TUI display
+            // }
             "home" => {
-                debug_log("home");
-                
-                // // Posix
-                // app.current_path = PathBuf::from("project_graph_data/team_channels");
-                
-                // any file system compiled, safe path posix or other os
+                debug_log("Home command received."); 
+
+                // 1. Reset the current path
                 let mut app_data_dir = PathBuf::from("project_graph_data");
                 app_data_dir.push("team_channels");
                 app.current_path = app_data_dir;
-                // Update TUI display
+                debug_log(&format!("Current path reset to: {:?}", app.current_path)); 
+
+                // 2. Purge state in GraphNavigationInstanceState
+                app.graph_navigation_instance_state.active_team_channel = String::new();
+                app.graph_navigation_instance_state.current_full_file_path = PathBuf::new();
+                // ... Clear other channel-specific data (e.g., current_node_* fields, collaborator_ports) ...
+                debug_log("GraphNavigationInstanceState - Channel specific data purged."); 
+
+                // 3. Reset the home_square_one flag
+                app.graph_navigation_instance_state.home_square_one = true;
+                debug_log("home_square_one flag set to true.");
+
+                // 4.  (Optional) Clear the TUI list to reflect the home screen
+                app.tui_directory_list.clear(); 
+                debug_log("TUI directory list cleared.");
+
+                // 5. (Optional) Trigger a TUI refresh
+                // (not needed for default 'current path' print)
+                // ... (Your TUI refresh logic) ...
+                // debug_log("TUI refresh triggered (if implemented).");
             }
             // "u" | "updated" => {
             //     debug_log("updated selected");
@@ -3392,61 +3399,78 @@ fn handle_sync_event_thread(
 }
 
 
-// Function for thread 2's file_sync loop: demo version
-fn you_love_the_sync_team_office(
-    // current_collaborator: &Collaborator, // The collaborator running this instance of UMA
-    // allowlist: &HashSet<SyncCollaborator>,  // Collaborators to sync with in the current channel 
-) -> Result<(), Box<dyn std::error::Error>> {
+
+
+
+
+/// node.toml toml tables! store the ports: (check they are unique)
+/// { collaborator_name = "bob", ready_port = 50001, 
+///     intray_port = 50002, gotit_port = 50003, 
+///     self_ready_port = 50004, 
+///     self_intray_port = 50005, 
+///     self_gotit_port = 50006 },
+///
+/// /// ... other imports ...
+/// use std::sync::mpsc; /// For message passing between threads (if needed)
+///
+/// Version 2:
+/// as set by node.toml in the team_channel node
+///
+/// for every other collaborator, you make:
+/// two threds:
+///     - your in-tray desk
+///     - their in-tray desk
+///
+/// Each thred has six ports:
+///     - three for each 'in-tray desk'
+///
+/// For each this-session-active-collaborator you keep a send-queue.
+/// For one who never requested a file (who isn't online): no need to make a send-queue
+///
+///  Note current node members are not the same as channel members
+///  a node may have narrower scope, but not broader.
+///  this may especially apply to tasks only shared to relevant members
+fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
     /*
     "It's all fun and games until someone syncs a file."
     
-    node.toml toml tables! store the ports: (check they are unique)
-    { collaborator_name = "bob", ready_port = 50001, 
-        intray_port = 50002, gotit_port = 50003, 
-        self_ready_port = 50004, 
-        self_intray_port = 50005, 
-        self_gotit_port = 50006 },
-    
-    // ... other imports ...
-    use std::sync::mpsc; // For message passing between threads (if needed)
-    
-    Version 2:
-    as set by node.toml in the team_channel node
-    
-    for every other collaborator, you make:
-    two threds:
-        - your in-tray desk
-        - their in-tray desk
-        
-    Each thred has six ports:
-        - three for each 'in-tray desk'
-        
-    For each this-session-active-collaborator you keep a send-queue.
-    For one who never requested a file (who isn't online): no need to make a send-queue
-          
-          if should_halt() { 
-         println!("UMA exiting. Closing connection to collaborator...");
-         // ... (Perform cleanup, close network connections, etc.)
-         break; // Exit the thread's loop.
-      }
+    TODO: 
+    there needs to be a signal to wait to start
+    the home_square_one flag may work
     */
+    // --- WAIT FOR CHANNEL SELECTION ---
+    sync_flag_ok_or_wait(3); // Wait for the sync flag to become "1"
+
+    debug_log("starting UMA Sync Team Office...you_love_the_sync_team_office()");
     
     // Read uma_local_owner_user from uma.toml
+    // maybe add gpg and make this a separate function TODO
     let uma_toml_path = Path::new("uma.toml");
     let user_metadata = toml::from_str::<toml::Value>(&fs::read_to_string(uma_toml_path)?)?; 
     let uma_local_owner_user = user_metadata["uma_local_owner_user"].as_str().unwrap().to_string();
 
     debug_log!("\n\nStarting UMA Sync Team Office for {}", &uma_local_owner_user);
 
-    let session_connection_allowlists = make_session_connection_allowlists(&uma_local_owner_user)?;
-    debug_log!("session_connection_allowlists -> {:?}", &session_connection_allowlists);
-    
+    // let session_connection_allowlists = make_session_connection_allowlists(&uma_local_owner_user)?;
+    // debug_log!("session_connection_allowlists -> {:?}", &session_connection_allowlists);
+    //  --- 1. GET ALLOW LIST ---
+    let session_connection_allowlists = match make_session_connection_allowlists(&uma_local_owner_user) {
+        Ok(allowlist) => {
+            debug_log!("Successfully generated allowlist: {:?}", &allowlist); 
+            allowlist
+        },
+        Err(e) => {
+            debug_log!("Error creating allowlist: {}", e);
+            return Err(Box::new(e)); // Return the error early
+        }
+    };    
         
     // Create threads for each collaborator on the allowlist: 
     let mut collaborator_threads = Vec::new();
     for this_allowlisted_collaborator in session_connection_allowlists { 
         if this_allowlisted_collaborator.user_name != uma_local_owner_user {
-            println!("Setting up connection with {}", this_allowlisted_collaborator.user_name);
+            // debug_log!("Setting up connection with {}", this_allowlisted_collaborator.user_name);
+            debug_log!("Setting up connection with {}", this_allowlisted_collaborator.user_name);
     
             // Move ownership directly into the threads
             // Clone the collaborator data before moving it into the closures
@@ -3522,7 +3546,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
     .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("TOML deserialization error: {}", e)))?;
 
 
-    // 'state'
+    // node-graph navigation 'state' initial setup
     let mut graph_navigation_instance_state = GraphNavigationInstanceState {
         local_owner_user: user_metadata["uma_local_owner_user"].as_str().unwrap().to_string(),
         active_team_channel: String::new(), // or perhaps "None", or "Default"
@@ -3554,6 +3578,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         current_node_directory_path: PathBuf::new(),
         current_node_unique_id: 0,
         current_node_members: Vec::new(),
+        home_square_one: true,
 
     };
 
@@ -3727,7 +3752,8 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
     Ok(())
 }
 
-
+/// set sync_start_ok_flag
+/// also use: sync_flag_ok_or_wait(3);
 fn set_sync_start_ok_flag_to_true() { 
     if fs::remove_file(SYNC_START_OK_FLAG_PATH).is_ok() {
         debug_log("Old 'ok_to_start_sync_flag.txt' file deleted."); // Optional log.
@@ -3740,6 +3766,8 @@ fn set_sync_start_ok_flag_to_true() {
         .expect("Failed to write to 'ok_to_start_sync_flag.txt' file.");
 }
 
+/// initialize sync_start_ok_flag
+/// also use: sync_flag_ok_or_wait(3);
 fn initialize_ok_to_start_sync_flag() { 
     if fs::remove_file(SYNC_START_OK_FLAG_PATH).is_ok() {
         debug_log("Old 'continue_uma.txt' file deleted."); // Optional log.
@@ -3753,6 +3781,7 @@ fn initialize_ok_to_start_sync_flag() {
 }
 
 
+/// signal for continuing or for stoping whole Uma program with all threads
 fn initialize_continue_uma_signal() { 
     if fs::remove_file(CONTINUE_UMA_PATH).is_ok() {
         debug_log("Old 'continue_uma.txt' file deleted."); // Optional log.
@@ -3766,6 +3795,7 @@ fn initialize_continue_uma_signal() {
 }
 
 
+/// set signal to stop whole Uma program with all threads
 fn quit_set_continue_uma_to_false() { 
     if fs::remove_file(CONTINUE_UMA_PATH).is_ok() {
         debug_log("Old 'continue_uma.txt' file deleted."); // Optional log.
@@ -3805,7 +3835,11 @@ fn main() {
     */
     debug_log("Start!");
     
-    initialize_uma_application();
+    if let Err(e) = initialize_uma_application() { 
+            eprintln!("Initialization failed: {}", e);
+            // Potentially add more error-specific handling here
+            std::process::exit(1); // Exit with a non-zero code to indicate an error
+        }
     
     // set boolean flag for loops to know when to hault
     initialize_continue_uma_signal();     
