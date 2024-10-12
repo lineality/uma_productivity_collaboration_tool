@@ -514,9 +514,9 @@ struct SyncCollaborator {
     ipv6_address: Ipv6Addr,
     // sync_file_transfer_port: u16,
     sync_interval: u64, 
-    ready_port__you_listen: u16, // locally: 'you' listen to their port on 'their' desk
-    intray_port__you_send: u16, // locally: 'you' add files to their port on 'their' desk
-    gotit_port__you_listen: u16, // locally: 'you' listen to their port on 'their' desk
+    ready_port__their_desk_you_listen: u16, // locally: 'you' listen to their port on 'their' desk
+    intray_port__their_desk_you_send: u16, // locally: 'you' add files to their port on 'their' desk
+    gotit_port__their_desk_you_listen: u16, // locally: 'you' listen to their port on 'their' desk
 }
 
 // ALPHA VERSION
@@ -877,7 +877,7 @@ impl LocalUserUma {
 
 
 #[derive(Debug, Deserialize, serde::Serialize, Clone)]
-struct Collaborator {
+struct CollaboratorTomlData {
     user_name: String,
     ipv4_addresses: Option<Vec<Ipv4Addr>>,
     ipv6_addresses: Option<Vec<Ipv6Addr>>,
@@ -887,7 +887,7 @@ struct Collaborator {
     updated_at_timestamp: u64,
 }
 
-impl Collaborator {
+impl CollaboratorTomlData {
     fn new(
         user_name: String, 
         ipv4_addresses: Option<Vec<Ipv4Addr>>,
@@ -896,8 +896,8 @@ impl Collaborator {
         // sync_file_transfer_port: u16, 
         sync_interval: u64,
         updated_at_timestamp: u64,
-    ) -> Collaborator {
-        Collaborator {
+    ) -> CollaboratorTomlData {
+        CollaboratorTomlData {
             user_name,
             ipv4_addresses,
             ipv6_addresses,
@@ -922,8 +922,8 @@ fn add_collaborator_setup_file(
     updated_at_timestamp: u64,
 ) -> Result<(), std::io::Error> {
     debug_log("Starting: fn add_collaborator_setup_file( ...cupa tea?");
-    // Create the Collaborator instance using the existing new() method:
-    let collaborator = Collaborator::new(
+    // Create the CollaboratorTomlData instance using the existing new() method:
+    let collaborator = CollaboratorTomlData::new(
         user_name, 
         ipv4_addresses,
         ipv6_addresses, 
@@ -984,8 +984,8 @@ fn add_collaborator_setup_file(
 }
 
 fn check_collaborator_collisions(
-    new_collaborator: &Collaborator, 
-    existing_collaborators: &Vec<Collaborator> 
+    new_collaborator: &CollaboratorTomlData, 
+    existing_collaborators: &Vec<CollaboratorTomlData> 
  ) -> Option<String> { 
     for existing in existing_collaborators { 
         if existing.user_name == new_collaborator.user_name { 
@@ -1075,12 +1075,12 @@ fn add_collaborator_qa(
         ));
     }
 
-    // Create the Collaborator struct
+    // Create the CollaboratorTomlData struct
     // updated_at_now = SystemTime::now()
     
     // TODO: port not listed here anymore
     
-    let collaborator = Collaborator::new(
+    let new_collaborator = CollaboratorTomlData::new(
         username,
         ipv4_addresses, 
         ipv6_addresses, 
@@ -1105,7 +1105,10 @@ fn add_collaborator_qa(
     // (You should add more validation here - for IPs, GPG keys, port uniqueness, etc.)
 
     // Check for collisions with existing collaborators (Add more comprehensive checks as needed)
-    if let Some(error_message) = check_collaborator_collisions(&collaborator, &existing_collaborators) {
+    if let Some(error_message) = check_collaborator_collisions(
+        &new_collaborator, 
+        &existing_collaborators
+    ) {
         return Err(io::Error::new(
             io::ErrorKind::AlreadyExists,
             error_message, 
@@ -1114,16 +1117,16 @@ fn add_collaborator_qa(
 
     // Persist the new collaborator
     add_collaborator_setup_file(
-        collaborator.user_name.clone(), 
-        collaborator.ipv4_addresses, 
-        collaborator.ipv6_addresses,
-        collaborator.gpg_key_public, 
-        // collaborator.sync_file_transfer_port, 
-        collaborator.sync_interval,
-        collaborator.updated_at_timestamp,
+        new_collaborator.user_name.clone(), 
+        new_collaborator.ipv4_addresses, 
+        new_collaborator.ipv6_addresses,
+        new_collaborator.gpg_key_public, 
+        // new_collaborator.sync_file_transfer_port, 
+        new_collaborator.sync_interval,
+        new_collaborator.updated_at_timestamp,
     )?; 
 
-    println!("Collaborator '{}' added!", collaborator.user_name); 
+    println!("CollaboratorTomlData '{}' added!", new_collaborator.user_name); 
     Ok(())
 } 
 
@@ -1200,7 +1203,7 @@ impl GraphNavigationInstanceState {
     /// If the `node.toml` file is not found or cannot be parsed, the method logs an error 
     /// message and returns without updating the state. 
     ///
-    /// This function specifically loads Collaborator Port assignments if the `current_full_file_path`
+    /// This function specifically loads Port assignments if the `current_full_file_path`
     /// corresponds to a team-channel node, as indicated by the path being within the 
     /// `project_graph_data/team_channels` directory. 
     ///
@@ -1295,9 +1298,9 @@ impl GraphNavigationInstanceState {
                             // sync_file_transfer_port: collaborator_data.sync_file_transfer_port,
                             // TODO What is going in here?? tray_port? ready_port?
                             sync_interval: collaborator_data.sync_interval,
-                            ready_port__you_listen: this_collaborators_ports.ready_port,
-                            intray_port__you_send: this_collaborators_ports.tray_port,
-                            gotit_port__you_listen: this_collaborators_ports.gotit_port,
+                            ready_port__their_desk_you_listen: this_collaborators_ports.ready_port,
+                            intray_port__their_desk_you_send: this_collaborators_ports.tray_port,
+                            gotit_port__their_desk_you_listen: this_collaborators_ports.gotit_port,
                         };
             
 
@@ -2001,7 +2004,7 @@ fn add_im_message(
 
 /// read_a_collaborator_setup_toml
 /// e.g. for getting fields from collaborator setup files in roject_graph_data/collaborator_files
-fn read_a_collaborator_setup_toml() -> Result<(Vec<Collaborator>, Vec<UmaError>), UmaError> {
+fn read_a_collaborator_setup_toml() -> Result<(Vec<CollaboratorTomlData>, Vec<UmaError>), UmaError> {
     let mut collaborators = Vec::new();
     let mut errors = Vec::new();
     let dir_path = Path::new("project_graph_data/collaborator_files");
@@ -2013,7 +2016,7 @@ fn read_a_collaborator_setup_toml() -> Result<(Vec<Collaborator>, Vec<UmaError>)
         if path.is_file() && path.extension().and_then(OsStr::to_str) == Some("toml") {
             match fs::read_to_string(&path) {
                 Ok(toml_string) => {
-                    match toml::from_str::<Collaborator>(&toml_string) {
+                    match toml::from_str::<CollaboratorTomlData>(&toml_string) {
                         Ok(collaborator) => collaborators.push(collaborator),
                         Err(e) => errors.push(UmaError::TomlError(e)),
                     }
@@ -2725,24 +2728,24 @@ fn get_next_message_file_path(current_path: &Path, local_owner_user: &str) -> Pa
 /// let collaborator = load_collaborator_by_username("alice").unwrap(); // Assuming alice's data exists
 /// println!("Collaborator: {:?}", collaborator); 
 /// ```
-fn load_collaborator_by_username(username: &str) -> Result<Collaborator, MyCustomError> {
+fn load_collaborator_by_username(username: &str) -> Result<CollaboratorTomlData, MyCustomError> {
     debug_log!("Starting load_collaborator_by_username(username),  for -> '{}'", username);
     let toml_file_path = Path::new("project_graph_data/collaborator_files")
         .join(format!("{}__collaborator.toml", username));
 
     if toml_file_path.exists() {
         let toml_string = fs::read_to_string(&toml_file_path)?;
-        let collaborator: Collaborator = toml::from_str(&toml_string)
+        let loaded_collaborator: CollaboratorTomlData = toml::from_str(&toml_string)
             .map_err(|e| MyCustomError::TomlError(e))?;
-        debug_log!("in load_collaborator_by_username(), Collaborator file found ok: {:?}", &toml_file_path);
-        Ok(collaborator)
+        debug_log!("in load_collaborator_by_username(), ??Collaborator file found ok: {:?}", &toml_file_path);
+        Ok(loaded_collaborator)
     } else {
-        debug_log!("in load_collaborator_by_username(), Collaborator file not found: {:?}", toml_file_path);
-        debug_log!("Collaborator file not found for '{}'", username);
+        debug_log!("in load_collaborator_by_username(), ??Collaborator file not found: {:?}", toml_file_path);
+        debug_log!("??Collaborator file not found for '{}'", username);
 
         Err(MyCustomError::IoError(io::Error::new(
             io::ErrorKind::NotFound,
-            format!("Collaborator file not found: {:?}", toml_file_path),
+            format!("??Collaborator file not found: {:?}", toml_file_path),
         )))
     }
 }
@@ -2889,7 +2892,7 @@ fn make_session_connection_allowlists(uma_local_owner_user: &str) -> Result<Hash
     //         "Missing or invalid 'teamchannel_collaborators_with_access' array in node.toml".to_string())
     //     )?;
 
-    // debug_log!("Collaborator array found: {:?}", &collaborators_array); 
+    // debug_log!("??Collaborator array found: {:?}", &collaborators_array); 
     // for collaborator_data in collaborators_array { // collaborator_data is now a String
     for collaborator_name in collaborators_array { // collaborator_data is now a String
 
@@ -2912,7 +2915,7 @@ fn make_session_connection_allowlists(uma_local_owner_user: &str) -> Result<Hash
             }
         };
 
-        debug_log!("Collaborator data loaded: {:?}", &collaborator);
+        debug_log!("??????Collaborator data loaded: {:?}", &collaborator);
         
 
         // Get the collaborator's ports from `collaborator_port_assignments` in `node.toml`
@@ -2939,9 +2942,9 @@ fn make_session_connection_allowlists(uma_local_owner_user: &str) -> Result<Hash
             ipv6_address, 
             // sync_file_transfer_port: collaborator.sync_file_transfer_port, 
             sync_interval: collaborator.sync_interval,
-            ready_port__you_listen: ports.ready_port, // Access ports directly from the CollaboratorPorts struct
-            intray_port__you_send: ports.tray_port,
-            gotit_port__you_listen: ports.gotit_port,
+            ready_port__their_desk_you_listen: ports.ready_port, // Access ports directly from the CollaboratorPorts struct
+            intray_port__their_desk_you_send: ports.tray_port,
+            gotit_port__their_desk_you_listen: ports.gotit_port,
         };
         debug_log!("Created SyncCollaborator: {:?}", &sync_collaborator);
 
@@ -3096,13 +3099,22 @@ fn send_data(data: &[u8], target_addr: SocketAddr) -> Result<(), io::Error> {
 /// echo: if any docuemnt comes in
 /// automatically sent out an echo-type request
 fn handle_owner_desk(
-    collaborator: &SyncCollaborator, 
+    collaborator_input_for_desk: &SyncCollaborator, 
 ) {
+    // wait, if only for testing
+    thread::sleep(Duration::from_millis(1000)); // Avoid busy-waiting
+    
     // ALPHA non-parallel version
     debug_log!("Start handle_owner_desk()");
-    debug_log!(" for user_name->{}", collaborator.user_name); // Add collaborator name
-    debug_log!(" for user_name->{}", collaborator.user_name); // Add collaborator name
-        
+    // debug_log!(" for user_name->{}", collaborator.user_name); // Add collaborator name
+    // debug_log!(" for user_name->{}", collaborator.user_name); // Add collaborator name
+
+    // Print all sync data for the collaborator
+    debug_log!("
+        handle_owner_desk collaborator_input_for_desk Sync Data: {:?}", 
+        collaborator_input_for_desk
+    );
+
     loop { 
         // 1. check for halt/quit uma signal
         if should_halt() {
@@ -3127,17 +3139,17 @@ fn handle_owner_desk(
 
         // Send the signal to the collaborator's ready_port
         let target_addr = SocketAddr::new(
-            IpAddr::V6(collaborator.ipv6_address), 
-            collaborator.ready_port__you_listen
+            IpAddr::V6(collaborator_input_for_desk.ipv6_address), 
+            collaborator_input_for_desk.ready_port__their_desk_you_listen
         ); 
-        
+
         // Log before sending
         debug_log!(
             "Attempting to send ReadySignal to {}: {:?}", 
             target_addr, 
             ready_signal_to_send_from_this_loop
         );
-        
+
 
         if let Err(e) = send_data(&data, target_addr) { // Assuming you have a send_data function
             debug_log!("Failed to send ReadySignal to {}: {}", target_addr, e);
@@ -3146,12 +3158,14 @@ fn handle_owner_desk(
             debug_log!("Sent ReadySignal to {}", target_addr);
             // println!("Sent ReadySignal to {}", target_addr);
             debug_log(&format!("Sent ReadySignal to {}", target_addr));
-
         }
 
         thread::sleep(Duration::from_secs(3)); 
     }
-    debug_log!("Exiting handle_owner_desk() for {}", collaborator.user_name); // Add collaborator name
+    debug_log!(
+        "Exiting handle_owner_desk() for {}", 
+        collaborator_input_for_desk.user_name
+    ); // Add collaborator name
 }
 
 
@@ -3472,7 +3486,7 @@ fn get_or_create_send_queue(
 ///
 /// TODO add  "Flow" steps: handle_collaborator_intray_desk()
 fn handle_collaborator_intray_desk(
-    // TODO: why are  intray_port__you_send and gotit_port__you_listen never used here????
+    // TODO: why are  intray_port__their_desk_you_send and gotit_port__their_desk_you_listen never used here????
     collaborator_sync_data: &SyncCollaborator,
 ) -> Result<(), UmaError> {
     debug_log!("Started the handle_collaborator_intray_desk() for->{}", collaborator_sync_data.user_name);
@@ -3480,14 +3494,14 @@ fn handle_collaborator_intray_desk(
     // 1. Create UDP socket
     let socket = UdpSocket::bind(format!("[{}]:{}", 
                                         collaborator_sync_data.ipv6_address, 
-                                        collaborator_sync_data.ready_port__you_listen));
+                                        collaborator_sync_data.ready_port__their_desk_you_listen));
 
     // Print all sync data for the collaborator
-    debug_log!("Collaborator Sync Data: {:?}", collaborator_sync_data);
+    debug_log!("???Collaborator Sync Data: {:?}", collaborator_sync_data);
 
     let socket = match socket {
         Ok(sock) => {
-            debug_log!("Bound UDP socket to [{}]:{}", collaborator_sync_data.ipv6_address, collaborator_sync_data.ready_port__you_listen);
+            debug_log!("Bound UDP socket to [{}]:{}", collaborator_sync_data.ipv6_address, collaborator_sync_data.ready_port__their_desk_you_listen);
             sock
         },
         Err(e) => {
@@ -3496,14 +3510,14 @@ fn handle_collaborator_intray_desk(
                 @port->{}", 
                 e, 
                 e.kind(), 
-                collaborator_sync_data.ready_port__you_listen
+                collaborator_sync_data.ready_port__their_desk_you_listen
             );
             // Handle the error appropriately (e.g., return an error from the function)
             return Err(UmaError::NetworkError(e.to_string()));
         }
     };                                     
                                         
-    debug_log!("Bound UDP socket to [{}]:{}", collaborator_sync_data.ipv6_address, collaborator_sync_data.ready_port__you_listen);
+    debug_log!("Bound UDP socket to [{}]:{}", collaborator_sync_data.ipv6_address, collaborator_sync_data.ready_port__their_desk_you_listen);
 
     // 2. Main loop
     let mut last_log_time = Instant::now(); // Track the last time we logged a message
@@ -3541,7 +3555,7 @@ fn handle_collaborator_intray_desk(
                 if last_log_time.elapsed() >= Duration::from_secs(5) {
                     debug_log!("{}: Listening for ReadySignal on port {}", 
                                collaborator_sync_data.user_name, 
-                               collaborator_sync_data.ready_port__you_listen);
+                               collaborator_sync_data.ready_port__their_desk_you_listen);
                     last_log_time = Instant::now();
                 }
             },
@@ -3871,13 +3885,25 @@ fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
     
             // Move ownership directly into the threads
             // Clone the collaborator data before moving it into the closures
-            let owner_desk_collaborator = this_allowlisted_collaborator.clone(); 
-            let collaborator_desk_collaborator = this_allowlisted_collaborator.clone();
-
+            
+            // your desk
+            // Get the local user's data
+            let localowneruser_port_assignments = match make_session_connection_allowlists(&uma_local_owner_user) {
+                Ok(allowlist) => {
+                    allowlist.iter().find(|c| c.user_name == uma_local_owner_user).cloned()
+                },
+                Err(e) => {
+                    debug_log!("Error creating allowlist for owner: {}", e);
+                    return Err(Box::new(e));
+                }
+            }.expect("Local user not found in allowlist"); // Handle this error appropriately
             // Create the two "meeting room desks" for each collaborator pair:
             let owner_desk_thread = thread::spawn(move || {
-                handle_owner_desk(&owner_desk_collaborator); 
+                handle_owner_desk(&localowneruser_port_assignments); 
             });
+
+            // their desk
+            let collaborator_desk_collaborator = this_allowlisted_collaborator.clone();
             let collaborator_desk_thread = thread::spawn(move || {
                 handle_collaborator_intray_desk(&collaborator_desk_collaborator);
             });
