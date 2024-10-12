@@ -124,6 +124,7 @@ mod tiny_tui_module;
 use tiny_tui_module::tiny_tui;
 
 const CONTINUE_UMA_PATH: &str = "project_graph_data/session_state_items/continue_uma.txt";
+const HARD_RESTART_FLAG_PATH: &str = "project_graph_data/session_state_items/yes_hard_restart_flag.txt";
 const SYNC_START_OK_FLAG_PATH: &str = "project_graph_data/session_state_items/ok_to_start_sync_flag.txt";
 
 /// utility: Gets a list of all IPv4 and IPv6 addresses associated with the current system's network interfaces.
@@ -374,6 +375,39 @@ fn should_halt() -> bool {
     file_content.trim() == "0"
 }
 
+/// Check for a Restart
+/// The logic here is easy to get backwards:
+/// There are two flags that are checked
+/// regarding shut-down.
+/// There is the normal shoud_continue flag,
+/// which is checked with a should_halt checker.
+/// To keep things symetric, there is a parallel
+/// system for hard-reboot, working the same way
+/// with one exception:
+/// If you should restart this also re-resets the 'quit'
+/// function (so you are not in an infinite loop of quit-restart).
+/// if you check should_not_hard_restart() (this function)
+/// and find that you should (quite) not-restart, it works the same way.
+fn should_not_hard_restart() -> bool {
+    // 1. Read the 'hard_restart_flag.txt' file
+    let file_content = match fs::read_to_string(HARD_RESTART_FLAG_PATH) {
+        Ok(content) => content,
+        Err(e) => {
+            eprintln!("Error reading 'yes_hard_restart_flag.txt': {:?}", e); // Log the error
+            return false; // Don't halt on error reading the file
+        }
+    };
+
+    if file_content.trim() == "0" {
+        return true; // Hard restart requested
+    } else {
+        // Reset the quit flag using the safe function
+        // In the case that you ARE restarting.
+        // So you don't loop from restart to quit-again.
+        initialize_continue_uma_signal();
+        return false;
+    }
+}
 
 fn dir_at_path_is_empty_returns_false(path_to_dir: &Path) -> bool { 
 
@@ -509,14 +543,25 @@ macro_rules! debug_log {
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
-struct SyncCollaborator {
-    user_name: String, 
+struct OthersCollaboratorPortsData {
+    user_name: String,
     ipv6_address: Ipv6Addr,
     // sync_file_transfer_port: u16,
-    sync_interval: u64, 
+    sync_interval: u64,
     ready_port__their_desk_you_listen: u16, // locally: 'you' listen to their port on 'their' desk
     intray_port__their_desk_you_send: u16, // locally: 'you' add files to their port on 'their' desk
     gotit_port__their_desk_you_listen: u16, // locally: 'you' listen to their port on 'their' desk
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+struct LocalOwnerSyncPortsData {
+    user_name: String,
+    ipv6_address: Ipv6Addr,
+    // sync_file_transfer_port: u16,
+    sync_interval: u64,
+    ready_port__your_desk_you_send: u16, // locally: 'you' send a signal through your port on your desk
+    intray_port__your_desk_you_listen: u16, // locally: 'you' listen for files sent by the other collaborator
+    gotit_port__your_desk_you_send: u16, // locally: 'you' send a signal through your port on your desk
 }
 
 // ALPHA VERSION
@@ -1278,42 +1323,42 @@ impl GraphNavigationInstanceState {
                 
                 
                 
-                
-                // 4. Load Collaborator Ports (Only for Team Channel Nodes)
-                for collaborator_name in &this_node.teamchannel_collaborators_with_access {
-                    debug_log!("Loading this_collaborators_ports for: {}", collaborator_name);
+                // TODO why is graph-nav loading ports??? (and not including local user ports?)
+                // // 4. Load Collaborator Ports (Only for Team Channel Nodes)
+                // for collaborator_name in &this_node.teamchannel_collaborators_with_access {
+                //     debug_log!("Loading this_collaborators_ports for: {}", collaborator_name);
             
-                    if let Some(this_collaborators_ports) = this_node.collaborator_port_assignments.get(collaborator_name) {
-                        // --- LOAD COLLABORATOR DATA ONCE ---
-                        let collaborator_data = load_collaborator_by_username(collaborator_name)
-                            .unwrap_or_else(|e| {
-                                debug_log!("Error loading collaborator {}: {}", collaborator_name, e);
-                                panic!("Failed to load collaborator data."); // Or handle the error differently
-                            });
+                //     if let Some(next_iter_collaborators_ports) = this_node.collaborator_port_assignments.get(collaborator_name) {
+                //         // --- LOAD COLLABORATOR DATA ONCE ---
+                //         let collaborator_data = load_collaborator_by_username(collaborator_name)
+                //             .unwrap_or_else(|e| {
+                //                 debug_log!("Error loading collaborator {}: {}", collaborator_name, e);
+                //                 panic!("Failed to load collaborator data."); // Or handle the error differently
+                //             });
             
-                        // Now, USE collaborator_data to extract the values
-                        let collaborator_sync_data = SyncCollaborator {
-                            user_name: collaborator_name.clone(),
-                            ipv6_address: collaborator_data.ipv6_addresses.unwrap()[0], // Assuming you always have at least one IPv6 address
-                            // sync_file_transfer_port: collaborator_data.sync_file_transfer_port,
-                            // TODO What is going in here?? tray_port? ready_port?
-                            sync_interval: collaborator_data.sync_interval,
-                            ready_port__their_desk_you_listen: this_collaborators_ports.ready_port,
-                            intray_port__their_desk_you_send: this_collaborators_ports.tray_port,
-                            gotit_port__their_desk_you_listen: this_collaborators_ports.gotit_port,
-                        };
+                //         // Now, USE collaborator_data to extract the values
+                //         let collaborator_sync_data = OthersCollaboratorPortsData {
+                //             user_name: collaborator_name.clone(),
+                //             ipv6_address: collaborator_data.ipv6_addresses.unwrap()[0], // Assuming you always have at least one IPv6 address
+                //             // sync_file_transfer_port: collaborator_data.sync_file_transfer_port,
+                //             // TODO What is going in here?? tray_port? ready_port?
+                //             sync_interval: collaborator_data.sync_interval,
+                //             ready_port__their_desk_you_listen: next_iter_collaborators_ports.ready_port__other_collaborator,
+                //             intray_port__their_desk_you_send: next_iter_collaborators_ports.intray_port__other_collaborator,
+                //             gotit_port__their_desk_you_listen: next_iter_collaborators_ports.gotit_port__other_collaborator,
+                //         };
             
 
-                    } else { 
-                        debug_log!("WARNING: No port assignments found for collaborator: {}", collaborator_name); 
-                    }
-                }
+                //     } else { 
+                //         debug_log!("WARNING: No port assignments found for collaborator: {}", collaborator_name); 
+                //     }
+                // }
                 // old archive
                 // // 4. Load Collaborator Ports (Only for Team Channel Nodes)
                 // for collaborator_name in &this_node.teamchannel_collaborators_with_access {
                 //     if let Some(ports) = this_node.collaborator_port_assignments.get(collaborator_name) {
-                //         // Create a SyncCollaborator instance:
-                //         let collaborator_sync_data = SyncCollaborator {
+                //         // Create a OthersCollaboratorPortsData instance:
+                //         let collaborator_sync_data = OthersCollaboratorPortsData {
                 //             user_name: collaborator_name.clone(),
                 //             ipv6_address: {
                 //                 // Load IPv6 address from the collaborator's TOML file using `collaborator_name`
@@ -1457,22 +1502,39 @@ enum NodePriority {
 ///
 /// This struct holds six different ports used for communication and synchronization
 /// between collaborators within a UMA project node. Each collaborator associated with
-/// a node has a unique `CollaboratorPorts` instance. 
+/// a node has a unique `CollaboratorPortsAllData` instance. 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-struct CollaboratorPorts {
-    /// The port used by the collaborator to signal readiness to receive data.
-    ready_port: u16,
-    /// The port used to send files to the collaborator (their "in-tray").
-    tray_port: u16,
-    /// The port used by the collaborator to confirm file receipt.
-    gotit_port: u16,
-    /// The port this node listens on for ready signals from the collaborator.
-    self_ready_port: u16,
-    /// The port this node listens on to receive files from the collaborator.
-    self_tray_port: u16,
-    /// The port this node uses to confirm file receipt to the collaborator.
-    self_gotit_port: u16,
+struct CollaboratorPortsAllData {
+    /// The port used by the REMOTE collaborator to signal readiness to receive data.
+    ready_port__other_collaborator: u16,
+    /// The port used to send files to the REMOTE collaborator (their "in-tray").
+    intray_port__other_collaborator: u16,
+    /// The port used by the REMOTE collaborator to confirm file receipt.
+    gotit_port__other_collaborator: u16,
+    /// The port the LOCAL USER listens on for ready signals from the collaborator.
+    ready_port__localowneruser: u16,
+    /// The port the LOCAL USER listens on to receive files from the collaborator.
+    intray_port__localowneruser: u16,
+    /// The port the LOCAL USER uses to confirm file receipt to the collaborator.
+    gotit_port__localowneruser: u16,
 }
+
+// old archive
+// #[derive(Debug, Deserialize, Serialize, Clone)]
+// struct CollaboratorPorts {
+//     /// The port used by the collaborator to signal readiness to receive data.
+//     ready_port: u16,
+//     /// The port used to send files to the collaborator (their "in-tray").
+//     tray_port: u16,
+//     /// The port used by the collaborator to confirm file receipt.
+//     gotit_port: u16,
+//     /// The port this node listens on for ready signals from the collaborator.
+//     self_ready_port: u16,
+//     /// The port this node listens on to receive files from the collaborator.
+//     self_tray_port: u16,
+//     /// The port this node uses to confirm file receipt to the collaborator.
+//     self_gotit_port: u16,
+// }
 
 /*
 the .toml files and the overall Uma~browser must be able to know their location in the overall project_graph_data/file-system
@@ -1552,7 +1614,7 @@ struct CoreNode {
     /// An ordered vector of collaborator usernames associated with this node.
     teamchannel_collaborators_with_access: Vec<String>,
     /// A map containing port assignments for each collaborator associated with the node.
-    collaborator_port_assignments: HashMap<String, CollaboratorPorts>,
+    collaborator_port_assignments: HashMap<String, CollaboratorPortsAllData>,
 }
 
 // /// Loads CollaboratorData from a TOML file.
@@ -1656,7 +1718,7 @@ impl CoreNode {
         priority: NodePriority,
         owner: String,
         teamchannel_collaborators_with_access: Vec<String>,
-        collaborator_port_assignments: HashMap<String, CollaboratorPorts>,
+        collaborator_port_assignments: HashMap<String, CollaboratorPortsAllData>,
     ) -> CoreNode {
         let expires_at = get_current_unix_timestamp() + 86400; // Expires in 1 day (for now)
         let updated_at_timestamp = get_current_unix_timestamp();
@@ -1734,7 +1796,7 @@ impl CoreNode {
     fn add_child(
         &mut self,
         teamchannel_collaborators_with_access: Vec<String>, 
-        collaborator_port_assignments: HashMap<String, CollaboratorPorts>, 
+        collaborator_port_assignments: HashMap<String, CollaboratorPortsAllData>, 
         owner: String,
         description_for_tui: String,
         directory_path: PathBuf,
@@ -2412,7 +2474,7 @@ fn handle_command(
                     .collect();
 
                 // 4. Construct collaborator_port_assignments HashMap
-                let mut collaborator_port_assignments: HashMap<String, CollaboratorPorts> = HashMap::new();
+                let mut collaborator_port_assignments: HashMap<String, CollaboratorPortsAllData> = HashMap::new();
                 for collaborator_name in &teamchannel_collaborators_with_access { 
                     // Load collaborator from file
                     let collaborator = match load_collaborator_by_username(collaborator_name) {
@@ -2425,23 +2487,23 @@ fn handle_command(
 
                     // Generate random ports for the collaborator 
                     let mut rng = rand::thread_rng();
-                    let ready_port: u16 = rng.gen_range(40000..=50000);
-                    let tray_port: u16 = rng.gen_range(40000..=50000);
-                    let gotit_port: u16 = rng.gen_range(40000..=50000);
-                    let self_ready_port: u16 = rng.gen_range(40000..=50000);
-                    let self_tray_port: u16 = rng.gen_range(40000..=50000);
-                    let self_gotit_port: u16 = rng.gen_range(40000..=50000);
+                    let ready_port__other_collaborator: u16 = rng.gen_range(40000..=50000);
+                    let intray_port__other_collaborator: u16 = rng.gen_range(40000..=50000);
+                    let gotit_port__other_collaborator: u16 = rng.gen_range(40000..=50000);
+                    let ready_port__localowneruser: u16 = rng.gen_range(40000..=50000);
+                    let intray_port__localowneruser: u16 = rng.gen_range(40000..=50000);
+                    let gotit_port__localowneruser: u16 = rng.gen_range(40000..=50000);
 
-                    // Create CollaboratorPorts and insert into the HashMap
+                    // Create CollaboratorPortsAllData and insert into the HashMap
                     collaborator_port_assignments.insert(
                         collaborator_name.clone(), 
-                        CollaboratorPorts {
-                            ready_port,
-                            tray_port,
-                            gotit_port,
-                            self_ready_port,
-                            self_tray_port,
-                            self_gotit_port,
+                        CollaboratorPortsAllData {
+                            ready_port__other_collaborator,
+                            intray_port__other_collaborator,
+                            gotit_port__other_collaborator,
+                            ready_port__localowneruser,
+                            intray_port__localowneruser,
+                            gotit_port__localowneruser,
                         }
                     );
                 }
@@ -2611,33 +2673,39 @@ fn handle_command(
             //     // Update TUI display
             // }
             "home" => {
-                debug_log("Home command received."); 
-
-                //////////////////////////
-                // Enable sync flag here!
-                //////////////////////////
-                debug_log("About to set sync flag to true! (handle_command(), home)");
-                initialize_ok_to_start_sync_flag_to_false();  //TODO turn on to use sync !!! (off for testing)
+                /*
+                For a clean reset, 'home' quits and restarts,
+                ensuring all processes are clean.
+                */
+                debug_log("Home command received.");
                 
-                // 1. Reset the current path
-                let mut app_data_dir = PathBuf::from("project_graph_data");
-                app_data_dir.push("team_channels");
-                app.current_path = app_data_dir;
-                debug_log(&format!("Current path reset to: {:?}", app.current_path)); 
+                quit_set_continue_uma_to_false();
 
-                // 2. Purge state in GraphNavigationInstanceState
-                app.graph_navigation_instance_state.active_team_channel = String::new();
-                app.graph_navigation_instance_state.current_full_file_path = PathBuf::new();
-                // ... Clear other channel-specific data (e.g., current_node_* fields, collaborator_ports) ...
-                debug_log("GraphNavigationInstanceState - Channel specific data purged."); 
+                // //////////////////////////
+                // // Enable sync flag here!
+                // //////////////////////////
+                // debug_log("About to set sync flag to true! (handle_command(), home)");
+                // initialize_ok_to_start_sync_flag_to_false();  //TODO turn on to use sync !!! (off for testing)
+                
+                // // 1. Reset the current path
+                // let mut app_data_dir = PathBuf::from("project_graph_data");
+                // app_data_dir.push("team_channels");
+                // app.current_path = app_data_dir;
+                // debug_log(&format!("Current path reset to: {:?}", app.current_path)); 
 
-                // 3. Reset the home_square_one flag
-                app.graph_navigation_instance_state.home_square_one = true;
-                debug_log("home_square_one flag set to true.");
+                // // 2. Purge state in GraphNavigationInstanceState
+                // app.graph_navigation_instance_state.active_team_channel = String::new();
+                // app.graph_navigation_instance_state.current_full_file_path = PathBuf::new();
+                // // ... Clear other channel-specific data (e.g., current_node_* fields, collaborator_ports) ...
+                // debug_log("GraphNavigationInstanceState - Channel specific data purged."); 
 
-                // 4.  (Optional) Clear the TUI list to reflect the home screen
-                app.tui_directory_list.clear(); 
-                debug_log("TUI directory list cleared.");
+                // // 3. Reset the home_square_one flag
+                // app.graph_navigation_instance_state.home_square_one = true;
+                // debug_log("home_square_one flag set to true.");
+
+                // // 4.  (Optional) Clear the TUI list to reflect the home screen
+                // app.tui_directory_list.clear(); 
+                // debug_log("TUI directory list cleared.");
 
                 // 5. (Optional) Trigger a TUI refresh
                 // (not needed for default 'current path' print)
@@ -2671,6 +2739,7 @@ fn handle_command(
             }
             "q" | "quit" | "exit" => {
                 debug_log("quit");
+                no_restart_set_hard_reset_flag_to_false();
                 quit_set_continue_uma_to_false();
                 
                 return Ok(true); // Signal to exit the loop
@@ -2752,7 +2821,7 @@ fn load_collaborator_by_username(username: &str) -> Result<CollaboratorTomlData,
 
 
 /// Loads connection data for members of the currently active team channel.
-/// On success, returns a `HashSet` of `SyncCollaborator` structs, 
+/// On success, returns a `HashSet` of `OthersCollaboratorPortsData` structs, 
 /// each containing connection 
 /// data for a collaborator in the current team channel (excluding the current user).
 /// As a headline this makes an ip-whitelist or ip-allowlist but the overall process is bigger.
@@ -2836,7 +2905,7 @@ fn load_collaborator_by_username(username: &str) -> Result<CollaboratorTomlData,
 /// maybe detects any port collisions, 
 /// excluding those who collide with senior members
 /// or returning an error if found.
-fn make_session_connection_allowlists(uma_local_owner_user: &str) -> Result<HashSet<SyncCollaborator>, MyCustomError> { 
+fn make_session_connection_allowlists(uma_local_owner_user: &str) -> Result<HashSet<OthersCollaboratorPortsData>, MyCustomError> { 
     debug_log!("Entering make_session_connection_allowlists() function"); 
 
     // --- 1. LOAD TEAM CHANNEL node.toml ---
@@ -2883,7 +2952,7 @@ fn make_session_connection_allowlists(uma_local_owner_user: &str) -> Result<Hash
     // let collaborator_port_assignments = channel_node_toml.collaborator_port_assignments;
 
     // 3. CREATE ALLOWLIST SET
-    let mut sync_config_data_set: HashSet<SyncCollaborator> = HashSet::new();
+    let mut sync_config_data_set: HashSet<OthersCollaboratorPortsData> = HashSet::new();
 
     // // 4. PARSE COLLABORATORS
     // let collaborators_array = channel_node_toml.get("teamchannel_collaborators_with_access") 
@@ -2906,8 +2975,8 @@ fn make_session_connection_allowlists(uma_local_owner_user: &str) -> Result<Hash
         debug_log!("Processing collaborator: {}", collaborator_name);
         
         // --- 6. LOAD COLLABORATOR CONFIGURATION FILE (NAME__collaborator.toml) --- 
-        let collaborator = match load_collaborator_by_username(&collaborator_name) {
-            Ok(collaborator) => collaborator,
+        let this_makelist_collaborator = match load_collaborator_by_username(&collaborator_name) {
+            Ok(this_makelist_collaborator) => this_makelist_collaborator,
             Err(e) => {
                 // This is where you'll most likely get the "No such file or directory" error
                 debug_log!("Error loading collaborator {}. File might be missing. Error: {}", collaborator_name, e); 
@@ -2915,7 +2984,7 @@ fn make_session_connection_allowlists(uma_local_owner_user: &str) -> Result<Hash
             }
         };
 
-        debug_log!("??????Collaborator data loaded: {:?}", &collaborator);
+        debug_log!("??????Collaborator data loaded: {:?}", &this_makelist_collaborator);
         
 
         // Get the collaborator's ports from `collaborator_port_assignments` in `node.toml`
@@ -2928,27 +2997,40 @@ fn make_session_connection_allowlists(uma_local_owner_user: &str) -> Result<Hash
         debug_log!("Port data found for {} : {:?}", collaborator_name, ports);
 
         // 8. GET IPv6 ADDRESS (If available) 
-        let ipv6_address = collaborator
+        let ipv6_address = this_makelist_collaborator
             .ipv6_addresses
             .and_then(|v| v.first().cloned())
             .ok_or_else(|| MyCustomError::InvalidData(format!("No IPv6 address found for {}", collaborator_name)))?;
 
         debug_log!("IPv6 address: {}", ipv6_address);
 
-        // --- 9. CONSTRUCT `SyncCollaborator` AND ADD TO ALLOWLIST ---
-        // TODO HERE HERE HERE: what on earth is going into this? .tray_port???
-        let sync_collaborator = SyncCollaborator {
-            user_name: collaborator_name.clone(), // Clone collaborator_name
-            ipv6_address, 
-            // sync_file_transfer_port: collaborator.sync_file_transfer_port, 
-            sync_interval: collaborator.sync_interval,
-            ready_port__their_desk_you_listen: ports.ready_port, // Access ports directly from the CollaboratorPorts struct
-            intray_port__their_desk_you_send: ports.tray_port,
-            gotit_port__their_desk_you_listen: ports.gotit_port,
-        };
-        debug_log!("Created SyncCollaborator: {:?}", &sync_collaborator);
+        // --- 9. CONSTRUCT `OthersCollaboratorPortsData` AND ADD TO ALLOWLIST ---
 
-        sync_config_data_set.insert(sync_collaborator); 
+        if collaborator_name == uma_local_owner_user {
+            // Create LocalOwnerSyncPortsData
+            let local_owner_sync_data = Some(LocalOwnerSyncPortsData {
+                user_name: collaborator_name.clone(),
+                ipv6_address,
+                sync_interval: this_makelist_collaborator.sync_interval,
+                ready_port__your_desk_you_send: ports.ready_port__localowneruser,
+                intray_port__your_desk_you_listen: ports.intray_port__localowneruser,
+                gotit_port__your_desk_you_send: ports.gotit_port__localowneruser,
+            });
+        } else {
+            // Create OthersCollaboratorPortsData
+            let other_collaborator_syncdata = OthersCollaboratorPortsData {
+                user_name: collaborator_name.clone(),
+                ipv6_address,
+                sync_interval: this_makelist_collaborator.sync_interval,
+                ready_port__their_desk_you_listen: ports.ready_port__other_collaborator,
+                intray_port__their_desk_you_send: ports.intray_port__other_collaborator,
+                gotit_port__their_desk_you_listen: ports.gotit_port__other_collaborator,
+            };
+            // sync_config_data_set.insert(other_collaborator_syncdata);
+            sync_config_data_set.insert(other_collaborator_syncdata.clone());
+            debug_log!("Created OthersCollaboratorPortsData: {:?}", &other_collaborator_syncdata);
+        }
+
     } // End of collaborator loop
 
     debug_log!("Allowlist created: {:?}", &sync_config_data_set);
@@ -2956,9 +3038,29 @@ fn make_session_connection_allowlists(uma_local_owner_user: &str) -> Result<Hash
 }
 
 
+// old archive
+//         // --- 9. CONSTRUCT `OthersCollaboratorPortsData` AND ADD TO ALLOWLIST ---
+//         // TODO HERE HERE HERE: what on earth is going into this? .tray_port???
+//         let sync_collaborator = OthersCollaboratorPortsData {
+//             user_name: collaborator_name.clone(), // Clone collaborator_name
+//             ipv6_address, 
+//             // sync_file_transfer_port: collaborator.sync_file_transfer_port, 
+//             sync_interval: collaborator.sync_interval,
+//             ready_port__their_desk_you_listen: ports.ready_port, // Access ports directly from the CollaboratorPorts struct
+//             intray_port__their_desk_you_send: ports.tray_port,
+//             gotit_port__their_desk_you_listen: ports.gotit_port,
+//         };
+//         debug_log!("Created OthersCollaboratorPortsData: {:?}", &sync_collaborator);
+
+//         sync_config_data_set.insert(sync_collaborator); 
+//     } // End of collaborator loop
+
+//     debug_log!("Allowlist created: {:?}", &sync_config_data_set);
+//     Ok(sync_config_data_set) 
+// }
 
 // old
-// fn make_session_connection_allowlists(uma_local_owner_user: &str) -> Result<HashSet<SyncCollaborator>, MyCustomError> { 
+// fn make_session_connection_allowlists(uma_local_owner_user: &str) -> Result<HashSet<OthersCollaboratorPortsData>, MyCustomError> { 
 //     // 1. Load team channel node.toml: 
 //     let channel_node_toml_path = Path::new("project_graph_data/session_state_items/current_node_directory_path.txt"); // TODO this file and system are not working yet
 //     let channel_node_toml = read_state_items_tomls("node.toml")?; // Assuming you have a way to get the correct path 
@@ -2971,7 +3073,7 @@ fn make_session_connection_allowlists(uma_local_owner_user: &str) -> Result<Hash
 //         ))?;
 
 //     // 3. Create the allowlist set:
-//     let mut sync_config_data_set: HashSet<SyncCollaborator> = HashSet::new();
+//     let mut sync_config_data_set: HashSet<OthersCollaboratorPortsData> = HashSet::new();
 
 //     // 4. Parse the teamchannel_collaborators_with_access array:
 //     for collaborator_data in collaborators_array {
@@ -2980,7 +3082,7 @@ fn make_session_connection_allowlists(uma_local_owner_user: &str) -> Result<Hash
 
 //         // ... (Load IP information from NAME__collaborator.toml)
 
-//         // ... (Construct SyncCollaborator and add to sync_config_data_set) 
+//         // ... (Construct OthersCollaboratorPortsData and add to sync_config_data_set) 
 //     }
 //     Ok(sync_config_data_set)
 
@@ -3003,7 +3105,7 @@ fn send_hello_signal(target_addr: SocketAddr) -> Result<(), io::Error> {
     }
 }
 
-fn is_ip_allowlisted(ip: &IpAddr, sync_config_data_set: &HashSet<SyncCollaborator>) -> bool {
+fn is_ip_allowlisted(ip: &IpAddr, sync_config_data_set: &HashSet<OthersCollaboratorPortsData>) -> bool {
     sync_config_data_set.iter().any(|sc| match ip {
         IpAddr::V4(_) => false, // Currently only handling IPv6 
         IpAddr::V6(ip_v6) => *ip_v6 == sc.ipv6_address, 
@@ -3012,7 +3114,7 @@ fn is_ip_allowlisted(ip: &IpAddr, sync_config_data_set: &HashSet<SyncCollaborato
 
 
 // // Helper function to check if a port is in use by another collaborator
-// fn port_is_used_by_another_collaborator(port: u16, collaborators: &HashSet<SyncCollaborator>) -> bool { 
+// fn port_is_used_by_another_collaborator(port: u16, collaborators: &HashSet<OthersCollaboratorPortsData>) -> bool { 
 //     collaborators.iter().any(|c| c.sync_file_transfer_port == port)
 // }
 
@@ -3049,7 +3151,7 @@ fn sync_flag_ok_or_wait(wait_this_many_seconds: u64) {
     }
 }
 
-fn get_next_sync_request_username(sync_config_data_set: &HashSet<SyncCollaborator>) -> Option<String> {
+fn get_next_sync_request_username(sync_config_data_set: &HashSet<OthersCollaboratorPortsData>) -> Option<String> {
     // Choose a random collaborator from the set:
     sync_config_data_set
         .iter()
@@ -3099,7 +3201,7 @@ fn send_data(data: &[u8], target_addr: SocketAddr) -> Result<(), io::Error> {
 /// echo: if any docuemnt comes in
 /// automatically sent out an echo-type request
 fn handle_owner_desk(
-    collaborator_input_for_desk: &SyncCollaborator, 
+    collaborator_input_for_desk: &OthersCollaboratorPortsData, 
 ) {
     // wait, if only for testing
     thread::sleep(Duration::from_millis(1000)); // Avoid busy-waiting
@@ -3217,7 +3319,7 @@ fn deserialize_ready_signal(bytes: &[u8]) -> Result<ReadySignal, io::Error> {
 
 
 // TODO, uncomment and debug 
-fn send_file_and_see_next_signal(collaborator: &SyncCollaborator, mut send_queue: SendQueue, event_id: u64, intray_port: u16, gotit_port: u16) {
+fn send_file_and_see_next_signal(collaborator: &OthersCollaboratorPortsData, mut send_queue: SendQueue, event_id: u64, intray_port: u16, gotit_port: u16) {
     // // 5. Send Files (One at a Time)
     // while let Some(file_to_send) = send_queue.items.pop() { // Assuming items are file paths
     //     // 6. Send One Item 
@@ -3310,7 +3412,7 @@ fn send_file_and_see_next_signal(collaborator: &SyncCollaborator, mut send_queue
 
 
 fn send_file_to_collaborator(
-    collaborator: &SyncCollaborator,
+    collaborator: &OthersCollaboratorPortsData,
     is_echo_request: bool,
     ready_timestamp: u64,
     file_to_send: &PathBuf, 
@@ -3376,7 +3478,7 @@ fn get_oldest_retry_timestamp(collaborator_username: &str) -> Result<Option<u64>
 }
 
 fn create_retry_flag(
-    collaborator: &SyncCollaborator, 
+    collaborator: &OthersCollaboratorPortsData, 
     file_path: &PathBuf, 
     timestamp: u64,
 ) -> Result<PathBuf, io::Error> {
@@ -3403,7 +3505,7 @@ fn create_retry_flag(
 
 ///
 fn get_or_create_send_queue(
-    collaborator_sync_data: &SyncCollaborator,
+    collaborator_sync_data: &OthersCollaboratorPortsData,
     received_timestamp: u64,
 ) -> Result<SendQueue, io::Error> {
     
@@ -3487,7 +3589,7 @@ fn get_or_create_send_queue(
 /// TODO add  "Flow" steps: handle_collaborator_intray_desk()
 fn handle_collaborator_intray_desk(
     // TODO: why are  intray_port__their_desk_you_send and gotit_port__their_desk_you_listen never used here????
-    collaborator_sync_data: &SyncCollaborator,
+    collaborator_sync_data: &OthersCollaboratorPortsData,
 ) -> Result<(), UmaError> {
     debug_log!("Started the handle_collaborator_intray_desk() for->{}", collaborator_sync_data.user_name);
 
@@ -3578,7 +3680,7 @@ fn handle_collaborator_intray_desk(
 
 // old archive works
 // fn handle_collaborator_intray_desk(
-//     collaborator_sync_data: &SyncCollaborator,
+//     collaborator_sync_data: &OthersCollaboratorPortsData,
 // ) -> Result<(), UmaError> {
 //     debug_log!("Started the handle_collaborator_intray_desk() for {}", collaborator_sync_data.user_name);
 
@@ -3632,7 +3734,7 @@ fn handle_collaborator_intray_desk(
 
 // // tcp version
 // fn handle_collaborator_intray_desk(
-//     collaborator_sync_data: &SyncCollaborator,
+//     collaborator_sync_data: &OthersCollaboratorPortsData,
 // ) -> Result<(), UmaError> { // Consider using a custom error type for UMA
 //     debug_log("Started the handle_collaborator_intray_desk()");
 
@@ -3753,7 +3855,7 @@ enum SyncResult {
 
 // Function to handle the sync event in a separate thread
 fn handle_sync_event_thread(
-    collaborator_sync_data: &SyncCollaborator,
+    collaborator_sync_data: &OthersCollaboratorPortsData,
     is_echo_request: bool,
     ready_timestamp: u64,
     file_to_send: &PathBuf,
@@ -3921,8 +4023,6 @@ fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
     println!("UMA Sync Team Office closed");
     Ok(())
 }
-
-
 
 // Proverbial Main()
 fn we_love_projects_loop() -> Result<(), io::Error> {
@@ -4220,6 +4320,18 @@ fn initialize_continue_uma_signal() {
         .expect("Failed to write to 'continue_uma.txt' file.");
 }
 
+/// signal for continuing or for stoping whole Uma program with all threads
+fn initialize_hard_restart_signal() { 
+    if fs::remove_file(HARD_RESTART_FLAG_PATH).is_ok() {
+        debug_log("Old 'yes_hard_restart_flag.txt' file deleted."); // Optional log.
+    } 
+
+    let mut file = fs::File::create(HARD_RESTART_FLAG_PATH)
+        .expect("Failed to create 'yes_hard_restart_flag.txt' file.");
+
+    file.write_all(b"1")
+        .expect("Failed to write to 'yes_hard_restart_flag.txt' file.");
+}
 
 /// set signal to stop whole Uma program with all threads
 fn quit_set_continue_uma_to_false() { 
@@ -4234,7 +4346,18 @@ fn quit_set_continue_uma_to_false() {
         .expect("Failed to write to 'continue_uma.txt' file.");
 }
 
+/// set signal to stop whole Uma program with all threads
+fn no_restart_set_hard_reset_flag_to_false() { 
+    if fs::remove_file(HARD_RESTART_FLAG_PATH).is_ok() {
+        debug_log("Old 'yes_hard_restart_flag.txt' file deleted."); // Optional log.
+    } 
 
+    let mut file = fs::File::create(HARD_RESTART_FLAG_PATH)
+        .expect("Failed to create 'yes_hard_restart_flag.txt' file.");
+
+    file.write_all(b"0")
+        .expect("Failed to write to 'yes_hard_restart_flag.txt' file.");
+}
 
 
 /*
@@ -4259,29 +4382,44 @@ fn main() {
     - handle new setup files upon load
     - make sure directories all exist, etc.
     */
-    debug_log("Start!");
-    
-    if let Err(e) = initialize_uma_application() { 
-            eprintln!("Initialization failed: {}", e);
-            // Potentially add more error-specific handling here
-            std::process::exit(1); // Exit with a non-zero code to indicate an error
-        }
-    
+
     // set boolean flag for loops to know when to hault
     initialize_continue_uma_signal();     
+
+    // set boolean flag for uma to know when to restart
+    initialize_hard_restart_signal();
+
+    loop {
+        // 3. Check for halt signal
+        if should_not_hard_restart() {
+            debug_log(
+                "Halting handle_collaborator_intray_desk()"
+            );
+            break;
+        }
+
+        debug_log("Start!");
+
+        if let Err(e) = initialize_uma_application() { 
+                eprintln!("Initialization failed: {}", e);
+                // Potentially add more error-specific handling here
+                std::process::exit(1); // Exit with a non-zero code to indicate an error
+            }
+
+        // Thread 1: Executes the thread1_loop function
+        let we_love_projects_loop = thread::spawn(move || {
+            we_love_projects_loop();
+        });
+        // Thread 2: Executes the thread2_loop function
+        let you_love_the_sync_team_office = thread::spawn(move || {
+            you_love_the_sync_team_office();
+        });
+        // Keep the main thread alive
+        we_love_projects_loop.join().unwrap();
+        you_love_the_sync_team_office.join().unwrap();
+
+        println!("All threads completed. The Uma says fare well and strive.");
+        debug_log("All threads completed. The Uma says fare well and strive.");
+    }
     
-    // Thread 1: Executes the thread1_loop function
-    let we_love_projects_loop = thread::spawn(move || {
-        we_love_projects_loop();
-    });
-    // Thread 2: Executes the thread2_loop function
-    let you_love_the_sync_team_office = thread::spawn(move || {
-        you_love_the_sync_team_office();
-    });
-    // Keep the main thread alive
-    we_love_projects_loop.join().unwrap();
-    you_love_the_sync_team_office.join().unwrap();
-    
-    println!("All threads completed. The Uma says fare well and strive.");
-    debug_log("All threads completed. The Uma says fare well and strive.");
 }
