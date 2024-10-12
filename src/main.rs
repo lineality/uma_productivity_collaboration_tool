@@ -512,7 +512,7 @@ macro_rules! debug_log {
 struct SyncCollaborator {
     user_name: String, 
     ipv6_address: Ipv6Addr,
-    sync_file_transfer_port: u16,
+    // sync_file_transfer_port: u16,
     sync_interval: u64, 
     ready_port: u16,          // Add ready_port
     intray_port: u16,         // Add intray_port
@@ -882,7 +882,7 @@ struct Collaborator {
     ipv4_addresses: Option<Vec<Ipv4Addr>>,
     ipv6_addresses: Option<Vec<Ipv6Addr>>,
     gpg_key_public: String,
-    sync_file_transfer_port: u16,
+    // sync_file_transfer_port: u16,
     sync_interval: u64,
     updated_at_timestamp: u64,
 }
@@ -893,7 +893,7 @@ impl Collaborator {
         ipv4_addresses: Option<Vec<Ipv4Addr>>,
         ipv6_addresses: Option<Vec<Ipv6Addr>>,
         gpg_key_public: String, 
-        sync_file_transfer_port: u16, 
+        // sync_file_transfer_port: u16, 
         sync_interval: u64,
         updated_at_timestamp: u64,
     ) -> Collaborator {
@@ -902,7 +902,7 @@ impl Collaborator {
             ipv4_addresses,
             ipv6_addresses,
             gpg_key_public,
-            sync_file_transfer_port,
+            // sync_file_transfer_port,
             sync_interval,
             updated_at_timestamp,
         }
@@ -917,7 +917,7 @@ fn add_collaborator_setup_file(
     ipv4_addresses: Option<Vec<Ipv4Addr>>,
     ipv6_addresses: Option<Vec<Ipv6Addr>>,
     gpg_key_public: String,
-    sync_file_transfer_port: u16,
+    // sync_file_transfer_port: u16,
     sync_interval: u64,
     updated_at_timestamp: u64,
 ) -> Result<(), std::io::Error> {
@@ -928,7 +928,7 @@ fn add_collaborator_setup_file(
         ipv4_addresses,
         ipv6_addresses, 
         gpg_key_public,
-        sync_file_transfer_port,
+        // sync_file_transfer_port,
         sync_interval,
         updated_at_timestamp,
     );
@@ -1060,7 +1060,7 @@ fn add_collaborator_qa(
     // let sync_file_transfer_port: u16 = sync_port_input.trim().parse().unwrap_or(40000);
     // Generate a random port within the desired range
     let mut rng = rand::thread_rng(); 
-    let sync_file_transfer_port: u16 = rng.gen_range(40000..=50000); 
+    // let sync_file_transfer_port: u16 = rng.gen_range(40000..=50000); // depricated
 
     println!("Enter the collaborator's sync interval in seconds (default: 60):");
     let mut sync_interval_input = String::new();
@@ -1085,7 +1085,7 @@ fn add_collaborator_qa(
         ipv4_addresses, 
         ipv6_addresses, 
         gpg_key_public, 
-        sync_file_transfer_port, 
+        // sync_file_transfer_port, 
         sync_interval,
         get_current_unix_timestamp(),
     ); 
@@ -1118,7 +1118,7 @@ fn add_collaborator_qa(
         collaborator.ipv4_addresses, 
         collaborator.ipv6_addresses,
         collaborator.gpg_key_public, 
-        collaborator.sync_file_transfer_port, 
+        // collaborator.sync_file_transfer_port, 
         collaborator.sync_interval,
         collaborator.updated_at_timestamp,
     )?; 
@@ -1292,7 +1292,7 @@ impl GraphNavigationInstanceState {
                         let collaborator_sync_data = SyncCollaborator {
                             user_name: collaborator_name.clone(),
                             ipv6_address: collaborator_data.ipv6_addresses.unwrap()[0], // Assuming you always have at least one IPv6 address
-                            sync_file_transfer_port: collaborator_data.sync_file_transfer_port,
+                            // sync_file_transfer_port: collaborator_data.sync_file_transfer_port,
                             sync_interval: collaborator_data.sync_interval,
                             ready_port: ports.ready_port,
                             intray_port: ports.tray_port,
@@ -2309,7 +2309,7 @@ fn initialize_uma_application() -> Result<(), Box<dyn std::error::Error>> {
         // if check_collaborator_name_collision();
 
         let mut rng = rand::thread_rng(); 
-        let sync_file_transfer_port: u16 = rng.gen_range(40000..=50000); 
+        // let sync_file_transfer_port: u16 = rng.gen_range(40000..=50000); 
         
         // let updated_at_timestamp = get_current_unix_timestamp()
         
@@ -2319,7 +2319,7 @@ fn initialize_uma_application() -> Result<(), Box<dyn std::error::Error>> {
             ipv4_addresses, 
             ipv6_addresses, 
             gpg_key_public, 
-            sync_file_transfer_port, // sync_file_transfer_port
+            // sync_file_transfer_port, // sync_file_transfer_port
             60,   // Example sync_interval (in seconds)
             get_current_unix_timestamp(),
         );
@@ -2935,7 +2935,7 @@ fn make_session_connection_allowlists(uma_local_owner_user: &str) -> Result<Hash
         let sync_collaborator = SyncCollaborator {
             user_name: collaborator_name.clone(), // Clone collaborator_name
             ipv6_address, 
-            sync_file_transfer_port: collaborator.sync_file_transfer_port, 
+            // sync_file_transfer_port: collaborator.sync_file_transfer_port, 
             sync_interval: collaborator.sync_interval,
             ready_port: ports.ready_port, // Access ports directly from the CollaboratorPorts struct
             intray_port: ports.tray_port,
@@ -3006,10 +3006,10 @@ fn is_ip_allowlisted(ip: &IpAddr, sync_config_data_set: &HashSet<SyncCollaborato
 }
 
 
-// Helper function to check if a port is in use by another collaborator
-fn port_is_used_by_another_collaborator(port: u16, collaborators: &HashSet<SyncCollaborator>) -> bool { 
-    collaborators.iter().any(|c| c.sync_file_transfer_port == port)
-}
+// // Helper function to check if a port is in use by another collaborator
+// fn port_is_used_by_another_collaborator(port: u16, collaborators: &HashSet<SyncCollaborator>) -> bool { 
+//     collaborators.iter().any(|c| c.sync_file_transfer_port == port)
+// }
 
 
 fn sync_flag_ok_or_wait(wait_this_many_seconds: u64) {
