@@ -2503,12 +2503,39 @@ fn handle_command(
                 
                 // Use a default refresh rate if log_mode_refresh is not found or invalid.
                 // Use a default refresh rate if log_mode_refresh is not found or invalid.
-                let log_mode_refresh = toml_data
-                    .get("log_mode_refresh")
-                    .and_then(toml::Value::as_float) // Use as_float to get the floating-point value
-                    .map(|v| v as f32) // Convert to f32
-                    .unwrap_or(1.0); // Default refresh rate of 1 second
-                
+                // let log_mode_refresh = toml_data
+                //     .get("log_mode_refresh")
+                //     .and_then(toml::Value::as_float) // Use as_float to get the floating-point value
+                //     .map(|v| v as f32) // Convert to f32
+                //     .unwrap_or(1.0); // Default refresh rate of 1 second
+                let log_mode_refresh = match fs::read_to_string(uma_toml_path) {
+                    Ok(toml_string) => {
+                        match toml::from_str::<toml::Value>(&toml_string) {
+                            Ok(toml_data) => {
+                                toml_data
+                                    .get("log_mode_refresh")
+                                    .and_then(toml::Value::as_float)
+                                    .and_then(|v| {
+                                        if v >= 0.1 && v <= 10.0 {
+                                            Some(v as f32)
+                                        } else {
+                                            None
+                                        }
+                                    })
+                                    .unwrap_or(3.0)
+                            }
+                            Err(e) => {
+                                debug_log!("Error parsing uma.toml: {}", e);
+                                3.0 // Default to 3 seconds on parsing error
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        debug_log!("Error log_mode_refresh reading uma.toml: {}", e);
+                        3.0 // Default to 3 seconds on reading error
+                    }
+                };
+
                 debug_log!("log_mode_refresh: {:?}", log_mode_refresh); 
             
                 loop { // Enter the refresh loop
