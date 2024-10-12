@@ -3420,170 +3420,117 @@ fn get_or_create_send_queue(
 /// TODO add  "Flow" steps: handle_collaborator_intray_desk()
 fn handle_collaborator_intray_desk(
     collaborator_sync_data: &SyncCollaborator,
-) -> Result<(), UmaError> {
-    debug_log!("Started the handle_collaborator_intray_desk() for {}", collaborator_sync_data.user_name);
+) -> Result<(), UmaError> { // Consider using a custom error type for UMA
+    debug_log("Started the handle_collaborator_intray_desk()");
 
-    // 1. Create UDP socket
-    let socket = UdpSocket::bind(format!("[{}]:{}", 
-                                        collaborator_sync_data.ipv6_address, 
-                                        collaborator_sync_data.ready_port))?;
-    debug_log!("Bound UDP socket to [{}]:{}", collaborator_sync_data.ipv6_address, collaborator_sync_data.ready_port);
+    // 1. Initialize the send queue
+    let mut send_queue: Option<SendQueue> = None; 
 
-    // 2. Main loop
+    // 2. Create the listener
+    let listener = TcpListener::bind(format!("[{}]:{}", 
+                                            collaborator_sync_data.ipv6_address, 
+                                            collaborator_sync_data.ready_port))?; 
+    listener.set_nonblocking(true)?;
+
+    // 3. Main loop
     loop {
-        // 3. Check for halt signal
-        if should_halt() {
-            debug_log!("Halting handle_collaborator_intray_desk() for {}", collaborator_sync_data.user_name);
-            break;
+        // 4. Check for halt signal
+        if should_halt() { 
+            break; 
         }
 
-        // 4. Receive data
-        let mut buf = [0; 1024];
-        match socket.recv_from(&mut buf) {
-            Ok((amt, src)) => {
-                debug_log!("Received {} bytes from {} on ready_port", amt, src);
+        // 5. Attempt to accept a connection (non-blocking)
+        match listener.accept() {
+            Ok((mut stream, _addr)) => {
+                // 6. Read the incoming data
+                let mut buffer = [0; 1024]; 
+                match stream.read(&mut buffer) {
+                    Ok(n) => {
+                        if n == 0 {
+                            continue; // Connection closed gracefully, continue to next connection
+                        }
 
-                // 5. Deserialize the ReadySignal
-                let ready_signal: ReadySignal = match deserialize_ready_signal(&buf[..amt]) {
-                    Ok(ready_signal) => {
-                        println!("{}: Received ReadySignal: {:?}", collaborator_sync_data.user_name, ready_signal); // Print to console
-                        debug_log!("{}: Received ReadySignal: {:?}", collaborator_sync_data.user_name, ready_signal); // Log the signal
-                        ready_signal
+                        // 7. Deserialize the ReadySignal
+                        let ready_signal: ReadySignal = match deserialize_ready_signal(&buffer[..n]) {
+                            Ok(ready_signal) => {
+                                println!("Received ReadySignal: {:?}", ready_signal); // Print the received signal for testing
+                                debug_log!("Received ReadySignal: {:?}", ready_signal); // Print the received signal for testing
+                                ready_signal // Return the ReadySignal here
+                            },
+                            Err(e) => {
+                                debug_log(&format!("Failed to parse ready signal: {}", e)); 
+                                continue; 
+                            }
+                        };
+
+                        // 8. Determine if this is an echo request
+                        let is_echo_request = ready_signal.echo; // Directly check the echo field
+                        
+                        let ready_timestamp = ready_signal.timestamp; // Directly check the echo field
+
+                        // 9. Handle echo requests
+                        if is_echo_request {
+                            if let Some(queue) = &mut send_queue {
+                                if let Some(file_to_send) = queue.items.pop() {
+                                    // Call a function to handle the file transfer in a separate thread
+                                    //  You'll need to implement this function 
+                                    handle_sync_event_thread(
+                                        collaborator_sync_data, 
+                                        is_echo_request,
+                                        ready_timestamp,
+                                        &file_to_send, 
+                                        queue.timestamp, 
+                                        queue)?; 
+                                }
+                            }
+                            continue; // Skip to the next iteration 
+                        }
+
+                        // 10. Handle non-echo requests: Get ready_timestamp
+                        let ready_timestamp = ready_signal.timestamp;
+
+                        // 11. Check for retry flags
+                        let oldest_retry_timestamp = get_oldest_retry_timestamp(&collaborator_sync_data.user_name)?;
+
+                        // 12. Create or rebuild the send queue
+                        if let Some(retry_timestamp) = oldest_retry_timestamp {
+                            if retry_timestamp < ready_timestamp {
+                                send_queue = Some(get_or_create_send_queue(collaborator_sync_data, retry_timestamp)?); 
+                            } 
+                        } else if send_queue.is_none() || ready_timestamp < send_queue.as_ref().unwrap().timestamp {
+                            send_queue = Some(get_or_create_send_queue(collaborator_sync_data, ready_timestamp)?); 
+                        }
+
+                        // 13. Process the send queue (send one file) 
+                        if let Some(queue) = &mut send_queue {
+                            if let Some(file_to_send) = queue.items.pop() {
+                                // Call the same thread handling function as in step 9
+                                handle_sync_event_thread(
+                                    collaborator_sync_data,
+                                    is_echo_request,
+                                    ready_timestamp,
+                                    &file_to_send, 
+                                    queue.timestamp,  
+                                    queue)?;
+                            }
+                        }
                     },
-                    Err(e) => {
-                        debug_log!("Failed to parse ready signal: {}", e);
-                        continue;
+                    Err(e) => { 
+                        debug_log(&format!("Failed to read data: {}", e)); 
                     }
-                };
-
-                // ... (You can add logic here to handle the received ReadySignal) ...
+                }
             },
-            Err(e) => {
-                // Handle errors, but don't break the loop unless it's a fatal error
-                debug_log!("Error receiving data on ready_port: {}", e);
+            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => { 
+                thread::sleep(Duration::from_millis(100));
+            },
+            Err(e) => { 
+                debug_log(&format!("Failed to accept connection: {}", e)); 
             }
-        }
+        } 
     }
 
     Ok(())
 }
-
-
-
-// // tcp version
-// fn handle_collaborator_intray_desk(
-//     collaborator_sync_data: &SyncCollaborator,
-// ) -> Result<(), UmaError> { // Consider using a custom error type for UMA
-//     debug_log("Started the handle_collaborator_intray_desk()");
-
-//     // 1. Initialize the send queue
-//     let mut send_queue: Option<SendQueue> = None; 
-
-//     // 2. Create the listener
-//     let listener = TcpListener::bind(format!("[{}]:{}", 
-//                                             collaborator_sync_data.ipv6_address, 
-//                                             collaborator_sync_data.ready_port))?; 
-//     listener.set_nonblocking(true)?;
-
-//     // 3. Main loop
-//     loop {
-//         // 4. Check for halt signal
-//         if should_halt() { 
-//             break; 
-//         }
-
-//         // 5. Attempt to accept a connection (non-blocking)
-//         match listener.accept() {
-//             Ok((mut stream, _addr)) => {
-//                 // 6. Read the incoming data
-//                 let mut buffer = [0; 1024]; 
-//                 match stream.read(&mut buffer) {
-//                     Ok(n) => {
-//                         if n == 0 {
-//                             continue; // Connection closed gracefully, continue to next connection
-//                         }
-
-//                         // 7. Deserialize the ReadySignal
-//                         let ready_signal: ReadySignal = match deserialize_ready_signal(&buffer[..n]) {
-//                             Ok(ready_signal) => {
-//                                 println!("Received ReadySignal: {:?}", ready_signal); // Print the received signal for testing
-//                                 debug_log!("Received ReadySignal: {:?}", ready_signal); // Print the received signal for testing
-//                                 ready_signal // Return the ReadySignal here
-//                             },
-//                             Err(e) => {
-//                                 debug_log(&format!("Failed to parse ready signal: {}", e)); 
-//                                 continue; 
-//                             }
-//                         };
-
-//                         // 8. Determine if this is an echo request
-//                         let is_echo_request = ready_signal.echo; // Directly check the echo field
-                        
-//                         let ready_timestamp = ready_signal.timestamp; // Directly check the echo field
-
-//                         // 9. Handle echo requests
-//                         if is_echo_request {
-//                             if let Some(queue) = &mut send_queue {
-//                                 if let Some(file_to_send) = queue.items.pop() {
-//                                     // Call a function to handle the file transfer in a separate thread
-//                                     //  You'll need to implement this function 
-//                                     handle_sync_event_thread(
-//                                         collaborator_sync_data, 
-//                                         is_echo_request,
-//                                         ready_timestamp,
-//                                         &file_to_send, 
-//                                         queue.timestamp, 
-//                                         queue)?; 
-//                                 }
-//                             }
-//                             continue; // Skip to the next iteration 
-//                         }
-
-//                         // 10. Handle non-echo requests: Get ready_timestamp
-//                         let ready_timestamp = ready_signal.timestamp;
-
-//                         // 11. Check for retry flags
-//                         let oldest_retry_timestamp = get_oldest_retry_timestamp(&collaborator_sync_data.user_name)?;
-
-//                         // 12. Create or rebuild the send queue
-//                         if let Some(retry_timestamp) = oldest_retry_timestamp {
-//                             if retry_timestamp < ready_timestamp {
-//                                 send_queue = Some(get_or_create_send_queue(collaborator_sync_data, retry_timestamp)?); 
-//                             } 
-//                         } else if send_queue.is_none() || ready_timestamp < send_queue.as_ref().unwrap().timestamp {
-//                             send_queue = Some(get_or_create_send_queue(collaborator_sync_data, ready_timestamp)?); 
-//                         }
-
-//                         // 13. Process the send queue (send one file) 
-//                         if let Some(queue) = &mut send_queue {
-//                             if let Some(file_to_send) = queue.items.pop() {
-//                                 // Call the same thread handling function as in step 9
-//                                 handle_sync_event_thread(
-//                                     collaborator_sync_data,
-//                                     is_echo_request,
-//                                     ready_timestamp,
-//                                     &file_to_send, 
-//                                     queue.timestamp,  
-//                                     queue)?;
-//                             }
-//                         }
-//                     },
-//                     Err(e) => { 
-//                         debug_log(&format!("Failed to read data: {}", e)); 
-//                     }
-//                 }
-//             },
-//             Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => { 
-//                 thread::sleep(Duration::from_millis(100));
-//             },
-//             Err(e) => { 
-//                 debug_log(&format!("Failed to accept connection: {}", e)); 
-//             }
-//         } 
-//     }
-
-//     Ok(())
-// }
 
 // Result enum for the sync operation, allowing communication between threads
 enum SyncResult {
