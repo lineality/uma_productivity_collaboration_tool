@@ -514,9 +514,9 @@ struct SyncCollaborator {
     ipv6_address: Ipv6Addr,
     // sync_file_transfer_port: u16,
     sync_interval: u64, 
-    ready_port: u16,          // Add ready_port
-    intray_port: u16,         // Add intray_port
-    gotit_port: u16,    
+    ready_port__you_listen: u16, // locally: 'you' listen to their port on 'their' desk
+    intray_port__you_send: u16, // locally: 'you' add files to their port on 'their' desk
+    gotit_port__you_listen: u16, // locally: 'you' listen to their port on 'their' desk
 }
 
 // ALPHA VERSION
@@ -1278,9 +1278,9 @@ impl GraphNavigationInstanceState {
                 
                 // 4. Load Collaborator Ports (Only for Team Channel Nodes)
                 for collaborator_name in &this_node.teamchannel_collaborators_with_access {
-                    debug_log!("Loading collaborator ports for: {}", collaborator_name);
+                    debug_log!("Loading this_collaborators_ports for: {}", collaborator_name);
             
-                    if let Some(ports) = this_node.collaborator_port_assignments.get(collaborator_name) {
+                    if let Some(this_collaborators_ports) = this_node.collaborator_port_assignments.get(collaborator_name) {
                         // --- LOAD COLLABORATOR DATA ONCE ---
                         let collaborator_data = load_collaborator_by_username(collaborator_name)
                             .unwrap_or_else(|e| {
@@ -1293,10 +1293,11 @@ impl GraphNavigationInstanceState {
                             user_name: collaborator_name.clone(),
                             ipv6_address: collaborator_data.ipv6_addresses.unwrap()[0], // Assuming you always have at least one IPv6 address
                             // sync_file_transfer_port: collaborator_data.sync_file_transfer_port,
+                            // TODO What is going in here?? tray_port? ready_port?
                             sync_interval: collaborator_data.sync_interval,
-                            ready_port: ports.ready_port,
-                            intray_port: ports.tray_port,
-                            gotit_port: ports.gotit_port,
+                            ready_port__you_listen: this_collaborators_ports.ready_port,
+                            intray_port__you_send: this_collaborators_ports.tray_port,
+                            gotit_port__you_listen: this_collaborators_ports.gotit_port,
                         };
             
 
@@ -2443,7 +2444,7 @@ fn handle_command(
                 }
 
                 // 5. Get input for order number
-                /// TODO what is this?
+                // TODO what is this?
                 println!("Enter the (optional) order number for the new node:");
                 let mut order_number_input = String::new();
                 io::stdin().read_line(&mut order_number_input).expect("Failed to read order number input");
@@ -2932,14 +2933,15 @@ fn make_session_connection_allowlists(uma_local_owner_user: &str) -> Result<Hash
         debug_log!("IPv6 address: {}", ipv6_address);
 
         // --- 9. CONSTRUCT `SyncCollaborator` AND ADD TO ALLOWLIST ---
+        // TODO HERE HERE HERE: what on earth is going into this? .tray_port???
         let sync_collaborator = SyncCollaborator {
             user_name: collaborator_name.clone(), // Clone collaborator_name
             ipv6_address, 
             // sync_file_transfer_port: collaborator.sync_file_transfer_port, 
             sync_interval: collaborator.sync_interval,
-            ready_port: ports.ready_port, // Access ports directly from the CollaboratorPorts struct
-            intray_port: ports.tray_port,
-            gotit_port: ports.gotit_port,
+            ready_port__you_listen: ports.ready_port, // Access ports directly from the CollaboratorPorts struct
+            intray_port__you_send: ports.tray_port,
+            gotit_port__you_listen: ports.gotit_port,
         };
         debug_log!("Created SyncCollaborator: {:?}", &sync_collaborator);
 
@@ -3098,6 +3100,8 @@ fn handle_owner_desk(
 ) {
     // ALPHA non-parallel version
     debug_log!("Start handle_owner_desk()");
+    debug_log!(" for user_name->{}", collaborator.user_name); // Add collaborator name
+    debug_log!(" for user_name->{}", collaborator.user_name); // Add collaborator name
         
     loop { 
         // 1. check for halt/quit uma signal
@@ -3107,20 +3111,34 @@ fn handle_owner_desk(
 
         // TODO eventually this should probably be the id of a thread
         // Generate a unique event ID
-        let event_id: u64 = rand::random(); 
+        let sync_event_id__for_this_loop: u64 = rand::random(); 
 
         // Create a ReadySignal
-        let ready_signal = ReadySignal {
-            id: event_id,
+        let ready_signal_to_send_from_this_loop = ReadySignal {
+            id: sync_event_id__for_this_loop,
             timestamp: get_current_unix_timestamp(), 
             echo: false,
         };
 
         // Serialize the ReadySignal
-        let data = serialize_ready_signal(&ready_signal).expect("Failed to serialize ReadySignal"); 
+        let data = serialize_ready_signal(
+            &ready_signal_to_send_from_this_loop
+        ).expect("Failed to serialize ReadySignal, ready_signal_to_send_from_this_loop"); 
 
         // Send the signal to the collaborator's ready_port
-        let target_addr = SocketAddr::new(IpAddr::V6(collaborator.ipv6_address), collaborator.ready_port); 
+        let target_addr = SocketAddr::new(
+            IpAddr::V6(collaborator.ipv6_address), 
+            collaborator.ready_port__you_listen
+        ); 
+        
+        // Log before sending
+        debug_log!(
+            "Attempting to send ReadySignal to {}: {:?}", 
+            target_addr, 
+            ready_signal_to_send_from_this_loop
+        );
+        
+
         if let Err(e) = send_data(&data, target_addr) { // Assuming you have a send_data function
             debug_log!("Failed to send ReadySignal to {}: {}", target_addr, e);
             eprintln!("Failed to send ReadySignal to {}: {}", target_addr, e);
@@ -3132,7 +3150,8 @@ fn handle_owner_desk(
         }
 
         thread::sleep(Duration::from_secs(3)); 
-    } 
+    }
+    debug_log!("Exiting handle_owner_desk() for {}", collaborator.user_name); // Add collaborator name
 }
 
 
@@ -3453,15 +3472,38 @@ fn get_or_create_send_queue(
 ///
 /// TODO add  "Flow" steps: handle_collaborator_intray_desk()
 fn handle_collaborator_intray_desk(
+    // TODO: why are  intray_port__you_send and gotit_port__you_listen never used here????
     collaborator_sync_data: &SyncCollaborator,
 ) -> Result<(), UmaError> {
-    debug_log!("Started the handle_collaborator_intray_desk() for {}", collaborator_sync_data.user_name);
+    debug_log!("Started the handle_collaborator_intray_desk() for->{}", collaborator_sync_data.user_name);
 
     // 1. Create UDP socket
     let socket = UdpSocket::bind(format!("[{}]:{}", 
                                         collaborator_sync_data.ipv6_address, 
-                                        collaborator_sync_data.ready_port))?;
-    debug_log!("Bound UDP socket to [{}]:{}", collaborator_sync_data.ipv6_address, collaborator_sync_data.ready_port);
+                                        collaborator_sync_data.ready_port__you_listen));
+
+    // Print all sync data for the collaborator
+    debug_log!("Collaborator Sync Data: {:?}", collaborator_sync_data);
+
+    let socket = match socket {
+        Ok(sock) => {
+            debug_log!("Bound UDP socket to [{}]:{}", collaborator_sync_data.ipv6_address, collaborator_sync_data.ready_port__you_listen);
+            sock
+        },
+        Err(e) => {
+            debug_log!(
+                "Error in handle_collaborator_intray_desk, binding UDP socket: {} ({:?}), 
+                @port->{}", 
+                e, 
+                e.kind(), 
+                collaborator_sync_data.ready_port__you_listen
+            );
+            // Handle the error appropriately (e.g., return an error from the function)
+            return Err(UmaError::NetworkError(e.to_string()));
+        }
+    };                                     
+                                        
+    debug_log!("Bound UDP socket to [{}]:{}", collaborator_sync_data.ipv6_address, collaborator_sync_data.ready_port__you_listen);
 
     // 2. Main loop
     let mut last_log_time = Instant::now(); // Track the last time we logged a message
@@ -3499,7 +3541,7 @@ fn handle_collaborator_intray_desk(
                 if last_log_time.elapsed() >= Duration::from_secs(5) {
                     debug_log!("{}: Listening for ReadySignal on port {}", 
                                collaborator_sync_data.user_name, 
-                               collaborator_sync_data.ready_port);
+                               collaborator_sync_data.ready_port__you_listen);
                     last_log_time = Instant::now();
                 }
             },
