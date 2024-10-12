@@ -76,6 +76,7 @@ use std::path::{
 use std::time::{
     SystemTime, 
     UNIX_EPOCH,
+    Instant,
 };
 use std::fs;
 use std::fs::{
@@ -3444,6 +3445,12 @@ fn get_or_create_send_queue(
 ///
 /// Loop Structure: The loop continuously checks for a halt signal and attempts to accept connections.
 /// start a loop that:
+///
+/// Error Handling:
+/// 1. Distinguish Between Error Types: Not all errors are equal. Some errors might be transient (e.g., WouldBlock indicating no data is available yet), while others might be fatal (e.g., a socket error).
+/// 2. Handle Transient Errors: For transient errors, we can simply continue the loop and try to receive data again.
+/// 3. Handle Fatal Errors: For fatal errors, we should log the error, potentially notify the user, and consider exiting the function or the entire sync process.
+///
 /// TODO add  "Flow" steps: handle_collaborator_intray_desk()
 fn handle_collaborator_intray_desk(
     collaborator_sync_data: &SyncCollaborator,
@@ -3457,6 +3464,7 @@ fn handle_collaborator_intray_desk(
     debug_log!("Bound UDP socket to [{}]:{}", collaborator_sync_data.ipv6_address, collaborator_sync_data.ready_port);
 
     // 2. Main loop
+    let mut last_log_time = Instant::now(); // Track the last time we logged a message
     loop {
         // 3. Check for halt signal
         if should_halt() {
@@ -3479,21 +3487,90 @@ fn handle_collaborator_intray_desk(
                     },
                     Err(e) => {
                         debug_log!("Failed to parse ready signal: {}", e);
-                        continue;
+                        continue; // Continue to the next iteration of the loop
                     }
                 };
 
                 // ... (You can add logic here to handle the received ReadySignal) ...
             },
+            Err(e) if e.kind() == ErrorKind::WouldBlock => {
+                // No data available yet, continue listening
+                // Periodically log that we're listening
+                if last_log_time.elapsed() >= Duration::from_secs(5) {
+                    debug_log!("{}: Listening for ReadySignal on port {}", 
+                               collaborator_sync_data.user_name, 
+                               collaborator_sync_data.ready_port);
+                    last_log_time = Instant::now();
+                }
+            },
             Err(e) => {
-                // Handle errors, but don't break the loop unless it's a fatal error
-                debug_log!("Error receiving data on ready_port: {}", e);
+                // Handle other errors
+                debug_log!("{}: Error receiving data on ready_port: {} ({:?})", 
+                           collaborator_sync_data.user_name, e, e.kind());
+                // Consider exiting the function or the sync process if it's a fatal error
+                return Err(UmaError::NetworkError(e.to_string())); // Example: Return a NetworkError
             }
         }
+
+        thread::sleep(Duration::from_millis(100)); // Avoid busy-waiting
     }
 
     Ok(())
 }
+
+
+
+// old archive works
+// fn handle_collaborator_intray_desk(
+//     collaborator_sync_data: &SyncCollaborator,
+// ) -> Result<(), UmaError> {
+//     debug_log!("Started the handle_collaborator_intray_desk() for {}", collaborator_sync_data.user_name);
+
+//     // 1. Create UDP socket
+//     let socket = UdpSocket::bind(format!("[{}]:{}", 
+//                                         collaborator_sync_data.ipv6_address, 
+//                                         collaborator_sync_data.ready_port))?;
+//     debug_log!("Bound UDP socket to [{}]:{}", collaborator_sync_data.ipv6_address, collaborator_sync_data.ready_port);
+
+//     // 2. Main loop
+//     // let mut last_log_time = Instant::now(); // Track the last time we logged a message
+//     loop {
+//         // 3. Check for halt signal
+//         if should_halt() {
+//             debug_log!("Halting handle_collaborator_intray_desk() for {}", collaborator_sync_data.user_name);
+//             break;
+//         }
+
+//         // 4. Receive data
+//         let mut buf = [0; 1024];
+//         match socket.recv_from(&mut buf) {
+//             Ok((amt, src)) => {
+//                 debug_log!("Received {} bytes from {} on ready_port", amt, src);
+
+//                 // 5. Deserialize the ReadySignal
+//                 let ready_signal: ReadySignal = match deserialize_ready_signal(&buf[..amt]) {
+//                     Ok(ready_signal) => {
+//                         println!("{}: Received ReadySignal: {:?}", collaborator_sync_data.user_name, ready_signal); // Print to console
+//                         debug_log!("{}: Received ReadySignal: {:?}", collaborator_sync_data.user_name, ready_signal); // Log the signal
+//                         ready_signal
+//                     },
+//                     Err(e) => {
+//                         debug_log!("Failed to parse ready signal: {}", e);
+//                         continue;
+//                     }
+//                 };
+
+//                 // ... (You can add logic here to handle the received ReadySignal) ...
+//             },
+//             Err(e) => {
+//                 // Handle errors, but don't break the loop unless it's a fatal error
+//                 debug_log!("Error receiving data on ready_port: {}", e);
+//             }
+//         }
+//     }
+
+//     Ok(())
+// }
 
 
 
