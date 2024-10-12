@@ -860,7 +860,7 @@ impl LocalUserUma {
             uma_local_owner_user,
             uma_default_im_messages_expiration_days: 28, // Default to 7 days
             uma_default_task_nodes_expiration_days: 90, // Default to 30 days 
-            log_mode_refresh: 0.5 // how fast log mode refreshes
+            log_mode_refresh: 1.5 // how fast log mode refreshes
             }
     }
 
@@ -1173,7 +1173,8 @@ impl GraphNavigationInstanceState {
     /// Loads and updates the `GraphNavigationInstanceState` based on the `current_full_file_path`.
     ///
     /// This method is called whenever the user navigates to a new directory within the 
-    /// UMA project graph. It determines the type of node (team-channel, project, or task)
+    /// UMA project graph. It determines the type of node (team-channel, project, 
+    ///  messages, tasks, etc., etc.)
     /// based on the `current_full_file_path` and loads relevant information from the 
     /// `node.toml` file, updating the internal state accordingly.
     /// 
@@ -1204,19 +1205,19 @@ impl GraphNavigationInstanceState {
     ///
     /// Not all information has the same owner-author and privacy requirements and so cannot be obtained from any mythical singularity. Port-assignments are made by the owner of the team-channel so as to be guaranteed not to collide and adding a new user/collaborator will not disrupt existing processes/collaborators/users/workers/participants/network-connections. 
     /// A user's ip addresses and gpg keys and screen-name can only come from, and be owned by, that user/collaborator. 
-
+    ///
     /// Likewise, the list of possible collaborators is set by the team-channel-owner. But whether another collaborator has actually shared their private connection data with you is and must be 100% their choice done by them and owned by them GPG signed by them and GPG encrypted for only 'you' (the current user) to use. 
-
+    ///
     /// The 'collaborators' for your session are then an intersection between these two categories of sources of truth: the collaborators who have connected with you (their choice, their owned documents), and the collaborators invited to the team-channel by the team-channel-owner (their choice, their owned document). 
     /// Note: Your no-context set of all-collaborators is everyone in every channel, a general no-context address-book. 
     /// By analogy: Tom is organizing a flower show and says Alice Bob and you are invited, and he asks you to call them.
     /// Bob is the one who chooses who to invite.
     /// You have an address book that includes Alice and Bob and everyone else in your address book.
-
+    ///
     /// To make these call-connections you need to find the intersection between these two sets:
     /// 1. Who did the team-owner (Tom) invite to the flower show?
     /// 2. Who is in your address book?
-
+    ///
     /// You cannot call everyone in your address book, because Tom didn't invite everyone in your address book.
     /// And Tom can't tell you Bob's phone number and call availability information, because only Bob can tell you his own private information. 
     ///
@@ -1225,98 +1226,148 @@ impl GraphNavigationInstanceState {
     /// Note: it is crutial that he source of truth for whether a node is a team-channel node be the file-structure itself
     /// and that code to extract team-channel connection data (such as port-assignments) is never attempted used in other
     /// nodes such as non-team-channel nodes within that team-channel (nearly ~everything is a node, only a few are team-channels)
-
     fn look_read_node_toml(&mut self) {
         debug_log(&format!("fn look_read_node_toml() self.current_full_file_path -> {:?}", self.current_full_file_path)); 
 
         let node_toml_path = self.current_full_file_path.join("node.toml");
         debug_log!("node_toml_path -> {:?}", &node_toml_path);
+        
+        // 2. Check if node.toml exists 
+        if node_toml_path.exists() { 
+            debug_log!("node.toml found at: {:?}", node_toml_path);
 
-        // 1. Handle File Existence Error
-        if !node_toml_path.exists() {
-            debug_log!("ERROR: node.toml not found at {:?}. This directory is not a node.", node_toml_path);
-            return; 
-        }
+            // --- UPDATE current_node_directory_path.txt HERE ---
+            let team_channel_dir_path = self.current_full_file_path.clone(); 
+            if let Err(e) = fs::write(
+                "project_graph_data/session_state_items/current_node_directory_path.txt", 
+                team_channel_dir_path.to_string_lossy().as_bytes(), // Convert to byte slice
+            ) {
+                debug_log!("Error writing team channel directory path to file: {}", e);
+                // Handle the error appropriately (e.g., display an error message)
+            }
 
-        // 2. Handle TOML Parsing Error
-        let this_node = match load_core_node_from_toml_file(&node_toml_path) { 
-            Ok(node) => node,
-            Err(e) => {
-                debug_log!("ERROR: Failed to load node.toml: {}", e); 
+            
+            // 1. Handle File Existence Error
+            if !node_toml_path.exists() {
+                debug_log!("ERROR: node.toml not found at {:?}. This directory is not a node.", node_toml_path);
                 return; 
             }
-        };
 
-        // 3. Check if this is a Team Channel Node 
-        let path_components: Vec<_> = self.current_full_file_path.components().collect();
-        if path_components.len() >= 2 
-            && path_components[path_components.len() - 2].as_os_str() == "team_channels" 
-        {
-            self.active_team_channel = this_node.node_name.clone();
+            // 2. Handle TOML Parsing Error
+            let this_node = match load_core_node_from_toml_file(&node_toml_path) { 
+                Ok(node) => node,
+                Err(e) => {
+                    debug_log!("ERROR: Failed to load node.toml: {}", e); 
+                    return; 
+                }
+            };
 
-            // 4. Load Collaborator Ports (Only for Team Channel Nodes)
-            for collaborator_name in &this_node.teamchannel_collaborators_with_access {
-                if let Some(ports) = this_node.collaborator_port_assignments.get(collaborator_name) {
-                    // Create a SyncCollaborator instance:
-                    let collaborator_sync_data = SyncCollaborator {
-                        user_name: collaborator_name.clone(),
-                        ipv6_address: {
-                            // Load IPv6 address from the collaborator's TOML file using `collaborator_name`
-                            // Example: 
-                            let collaborator_data = load_collaborator_by_username(collaborator_name)
-                                .unwrap_or_else(|e| {
-                                    debug_log!("Error loading collaborator {}: {}", collaborator_name, e);
-                                    panic!("Failed to load collaborator data."); // Or handle the error differently
-                                });
+            // 3. Check if this is a Team Channel Node 
+            // TODO maybe also check for a node.toml file
+            let path_components: Vec<_> = self.current_full_file_path.components().collect();
+            if path_components.len() >= 2 
+                && path_components[path_components.len() - 2].as_os_str() == "team_channels" 
+            {
+                self.active_team_channel = this_node.node_name.clone();
 
-                            // Assuming `collaborator_data` has a field `ipv6_address`
-                            collaborator_data.ipv6_addresses.unwrap()[0]
-                        },
-                        sync_file_transfer_port:  {
-                            // Load sync_file_transfer_port from the collaborator's TOML file
-                            // ... similar to loading ipv6_address ...
-                            let collaborator_data = load_collaborator_by_username(collaborator_name)
-                                .unwrap_or_else(|e| {
-                                    debug_log!("Error loading collaborator {}: {}", collaborator_name, e);
-                                    panic!("Failed to load collaborator data."); // Or handle the error differently
-                                });
-                            collaborator_data.sync_file_transfer_port
-                        },
-                        sync_interval: {
-                            // Load sync_interval from the collaborator's TOML file
-                            // ... similar to loading ipv6_address ...
-                            let collaborator_data = load_collaborator_by_username(collaborator_name)
-                                .unwrap_or_else(|e| {
-                                    debug_log!("Error loading collaborator {}: {}", collaborator_name, e);
-                                    panic!("Failed to load collaborator data."); // Or handle the error differently
-                                });
-                            collaborator_data.sync_interval
-                        },
-                        ready_port: ports.ready_port,
-                        intray_port: ports.tray_port,
-                        gotit_port: ports.gotit_port,
-                    };
+                //maybe also check for a node.toml file
+                
+                
+                
+                
+                // 4. Load Collaborator Ports (Only for Team Channel Nodes)
+                for collaborator_name in &this_node.teamchannel_collaborators_with_access {
+                    debug_log!("Loading collaborator ports for: {}", collaborator_name);
+            
+                    if let Some(ports) = this_node.collaborator_port_assignments.get(collaborator_name) {
+                        // --- LOAD COLLABORATOR DATA ONCE ---
+                        let collaborator_data = load_collaborator_by_username(collaborator_name)
+                            .unwrap_or_else(|e| {
+                                debug_log!("Error loading collaborator {}: {}", collaborator_name, e);
+                                panic!("Failed to load collaborator data."); // Or handle the error differently
+                            });
+            
+                        // Now, USE collaborator_data to extract the values
+                        let collaborator_sync_data = SyncCollaborator {
+                            user_name: collaborator_name.clone(),
+                            ipv6_address: collaborator_data.ipv6_addresses.unwrap()[0], // Assuming you always have at least one IPv6 address
+                            sync_file_transfer_port: collaborator_data.sync_file_transfer_port,
+                            sync_interval: collaborator_data.sync_interval,
+                            ready_port: ports.ready_port,
+                            intray_port: ports.tray_port,
+                            gotit_port: ports.gotit_port,
+                        };
+            
 
-                    // Add to the relevant data structure for managing sync connections (e.g., a HashSet):
-                    // ... 
-                    
-                    // Log success:
-                    debug_log!("Successfully loaded collaborator data for: {}", collaborator_name);
-                } else {
-                    debug_log!("WARNING: No port assignments found for collaborator: {}", collaborator_name);
-                } 
+                    } else { 
+                        debug_log!("WARNING: No port assignments found for collaborator: {}", collaborator_name); 
+                    }
+                }
+                // old archive
+                // // 4. Load Collaborator Ports (Only for Team Channel Nodes)
+                // for collaborator_name in &this_node.teamchannel_collaborators_with_access {
+                //     if let Some(ports) = this_node.collaborator_port_assignments.get(collaborator_name) {
+                //         // Create a SyncCollaborator instance:
+                //         let collaborator_sync_data = SyncCollaborator {
+                //             user_name: collaborator_name.clone(),
+                //             ipv6_address: {
+                //                 // Load IPv6 address from the collaborator's TOML file using `collaborator_name`
+                //                 // Example: 
+                //                 let collaborator_data = load_collaborator_by_username(collaborator_name)
+                //                     .unwrap_or_else(|e| {
+                //                         debug_log!("Error loading collaborator {}: {}", collaborator_name, e);
+                //                         panic!("Failed to load collaborator data."); // Or handle the error differently
+                //                     });
+
+                //                 // Assuming `collaborator_data` has a field `ipv6_address`
+                //                 collaborator_data.ipv6_addresses.unwrap()[0]
+                //             },
+                //             sync_file_transfer_port:  {
+                //                 // Load sync_file_transfer_port from the collaborator's TOML file
+                //                 // ... similar to loading ipv6_address ...
+                //                 let collaborator_data = load_collaborator_by_username(collaborator_name)
+                //                     .unwrap_or_else(|e| {
+                //                         debug_log!("Error loading collaborator {}: {}", collaborator_name, e);
+                //                         panic!("Failed to load collaborator data."); // Or handle the error differently
+                //                     });
+                //                 collaborator_data.sync_file_transfer_port
+                //             },
+                //             sync_interval: {
+                //                 // Load sync_interval from the collaborator's TOML file
+                //                 // ... similar to loading ipv6_address ...
+                //                 let collaborator_data = load_collaborator_by_username(collaborator_name)
+                //                     .unwrap_or_else(|e| {
+                //                         debug_log!("Error loading collaborator {}: {}", collaborator_name, e);
+                //                         panic!("Failed to load collaborator data."); // Or handle the error differently
+                //                     });
+                //                 collaborator_data.sync_interval
+                //             },
+                //             ready_port: ports.ready_port,
+                //             intray_port: ports.tray_port,
+                //             gotit_port: ports.gotit_port,
+                //         };
+
+                //         // Add to the relevant data structure for managing sync connections (e.g., a HashSet):
+                //         // ... 
+                        
+                //         // Log success:
+                //         debug_log!("Successfully loaded collaborator data for: {}", collaborator_name);
+                //     } else {
+                //         debug_log!("WARNING: No port assignments found for collaborator: {}", collaborator_name);
+                //     } 
+                // }
+                
+                // 5. Update GraphNavigationInstanceState with node.toml data (for Team Channel Nodes)
+                self.current_node_teamchannel_collaborators_with_access = this_node.teamchannel_collaborators_with_access.clone();
+                self.current_node_name = this_node.node_name.clone();
+                self.current_node_owner = this_node.owner.clone();
+                self.current_node_description_for_tui = this_node.description_for_tui.clone();
+                self.current_node_directory_path = this_node.directory_path.clone();
+                self.current_node_unique_id = this_node.node_unique_id;
+                self.home_square_one = false;
+                // Note: `current_node_members` appears to be unused, consider removing it
+                
             }
-            
-            // 5. Update GraphNavigationInstanceState with node.toml data (for Team Channel Nodes)
-            self.current_node_teamchannel_collaborators_with_access = this_node.teamchannel_collaborators_with_access.clone();
-            self.current_node_name = this_node.node_name.clone();
-            self.current_node_owner = this_node.owner.clone();
-            self.current_node_description_for_tui = this_node.description_for_tui.clone();
-            self.current_node_directory_path = this_node.directory_path.clone();
-            self.current_node_unique_id = this_node.node_unique_id;
-            // Note: `current_node_members` appears to be unused, consider removing it
-            
-            
         } // End of Team Channel Node Handling
 
         // ... (Rest of your logic for handling other node types) ...
@@ -2012,8 +2063,16 @@ fn initialize_uma_application() -> Result<(), Box<dyn std::error::Error>> {
     // --- 1. CHECK FOR & SETUP uma.toml ---
     let uma_toml_path = Path::new("uma.toml");
     if !uma_toml_path.exists() {
+        /*
+        This uses the struct method 'new' to make a standard
+        default but name-less file
+        then Q&A user into sets that owner-name.
+        
+        either way, 'owner' needs to be available 
+        if a new chanel needs to be created (as the owner)
+        */
         // Prompt for owner and create uma.toml
-        println!("Welcome to Uma! Please enter your username (this will be the owner for this Uma instance):");
+        println!("Welcome to the Uma Collaboration Tools. Please enter your username (this will be the owner for this Uma 'instance'):");
         let mut owner_input = String::new();
         io::stdin().read_line(&mut owner_input).unwrap();
         let owner = owner_input.trim().to_string();
@@ -2026,21 +2085,24 @@ fn initialize_uma_application() -> Result<(), Box<dyn std::error::Error>> {
             return Ok(()); 
         }
         debug_log!("uma.toml created successfully!"); 
-    } 
+    }
     
-    
-    // // Check if uma.toml exists
-    // let uma_toml_path = Path::new("uma.toml");
-    // if !uma_toml_path.exists() {
-    //     // If uma.toml does not exist, prompt for owner and create it
-    //     println!("Welcome to Uma! Please enter your username (this will be the owner for this Uma instance):");
-    //     let mut owner_input = String::new();
-    //     io::stdin().read_line(&mut owner_input).unwrap();
-    //     let owner = owner_input.trim().to_string();
+    // ... 2. Load user metadata from the now-existing uma.toml
+    let user_metadata = match toml::from_str::<LocalUserUma>(&fs::read_to_string(uma_toml_path)?) {
+        Ok(metadata) => {
+            debug_log!("uma.toml loaded successfully!");
+            metadata
+        },
+        Err(e) => {
+            eprintln!("Failed to load or parse uma.toml: {}", e); 
+            return Ok(()); 
+        }
+    };
 
-    //     let local_user_metadata = LocalUserUma::new(owner);
-    //     local_user_metadata.save_owner_to_file(&uma_toml_path).expect("Failed to create uma.toml");
-    // } 
+    // Set the owner from the loaded metadata
+    let owner = user_metadata.uma_local_owner_user;
+
+
     
     // ... 2. Load user metadata from the now-existing uma.toml
     let user_metadata = match toml::from_str::<LocalUserUma>(&fs::read_to_string(uma_toml_path)?) {
@@ -2142,7 +2204,7 @@ fn initialize_uma_application() -> Result<(), Box<dyn std::error::Error>> {
     }
     
     // To stop sync from starting before a channel is entered:
-    initialize_ok_to_start_sync_flag();
+    initialize_ok_to_start_sync_flag_to_false();
 
     // Check if there are any directories in project_graph_data/team_channels
     debug_log("let number_of_team_channels = fs::read_dir(&team_channels_dir)");
@@ -2174,9 +2236,9 @@ fn initialize_uma_application() -> Result<(), Box<dyn std::error::Error>> {
 
     
     
-    // In initialize_uma_application, when creating the first channel:
-    // Get the owner from somewhere (e.g., user input or instance metadata)
-    let owner = "initial_owner".to_string(); // Replace with actual owner
+    // // In initialize_uma_application, when creating the first channel:
+    // // Get the owner from somewhere (e.g., user input or instance metadata)
+    // let owner = "initial_owner".to_string(); // Replace with actual owner
 
     create_team_channel(team_channel_name, owner);
     }
@@ -2519,6 +2581,12 @@ fn handle_command(
             "home" => {
                 debug_log("Home command received."); 
 
+                //////////////////////////
+                // Enable sync flag here!
+                //////////////////////////
+                debug_log("About to set sync flag to true! (handle_command(), home)");
+                initialize_ok_to_start_sync_flag_to_false();  //TODO turn on to use sync !!! (off for testing)
+                
                 // 1. Reset the current path
                 let mut app_data_dir = PathBuf::from("project_graph_data");
                 app_data_dir.push("team_channels");
@@ -2629,18 +2697,23 @@ fn get_next_message_file_path(current_path: &Path, local_owner_user: &str) -> Pa
 /// println!("Collaborator: {:?}", collaborator); 
 /// ```
 fn load_collaborator_by_username(username: &str) -> Result<Collaborator, MyCustomError> {
+    debug_log!("Starting load_collaborator_by_username(username),  for -> '{}'", username);
     let toml_file_path = Path::new("project_graph_data/collaborator_files")
         .join(format!("{}__collaborator.toml", username));
 
     if toml_file_path.exists() {
-        let toml_string = fs::read_to_string(toml_file_path)?;
+        let toml_string = fs::read_to_string(&toml_file_path)?;
         let collaborator: Collaborator = toml::from_str(&toml_string)
             .map_err(|e| MyCustomError::TomlError(e))?;
+        debug_log!("in load_collaborator_by_username(), Collaborator file found ok: {:?}", &toml_file_path);
         Ok(collaborator)
     } else {
+        debug_log!("in load_collaborator_by_username(), Collaborator file not found: {:?}", toml_file_path);
+        debug_log!("Collaborator file not found for '{}'", username);
+
         Err(MyCustomError::IoError(io::Error::new(
             io::ErrorKind::NotFound,
-            format!("Collaborator file not found for '{}'", username)
+            format!("Collaborator file not found: {:?}", toml_file_path),
         )))
     }
 }
@@ -2732,33 +2805,154 @@ fn load_collaborator_by_username(username: &str) -> Result<Collaborator, MyCusto
 /// excluding those who collide with senior members
 /// or returning an error if found.
 fn make_session_connection_allowlists(uma_local_owner_user: &str) -> Result<HashSet<SyncCollaborator>, MyCustomError> { 
-    // 1. Load team channel node.toml: 
-    let channel_node_toml_path = Path::new("project_graph_data/session_state_items/current_node_directory_path.txt"); // TODO this file and system are not working yet
-    let channel_node_toml = read_state_items_tomls("node.toml")?; // Assuming you have a way to get the correct path 
+    debug_log!("Entering make_session_connection_allowlists() function"); 
 
-    // 2. Get the teamchannel_collaborators_with_access array:
-    let collaborators_array = channel_node_toml.get("teamchannel_collaborators_with_access") 
-        .and_then(Value::as_array)
-        .ok_or(MyCustomError::InvalidData(
-            "Missing or invalid 'teamchannel_collaborators_with_access' array in node.toml".to_string() // Add .to_string()
-        ))?;
+    // --- 1. LOAD TEAM CHANNEL node.toml ---
+    let channel_dir_path_str = read_state_string("current_node_directory_path.txt")?; // read as string first
+    debug_log!("Channel directory path (from session state): {}", channel_dir_path_str); 
+    
 
-    // 3. Create the allowlist set:
+    // TODO: use absolute file path
+    let channel_dir_path = PathBuf::from(channel_dir_path_str);
+    
+    // A. Print the absolute path of the channel directory
+    match channel_dir_path.canonicalize() {
+        Ok(abs_path) => debug_log!("Absolute channel directory path: {:?}", abs_path),
+        Err(e) => debug_log!("Error getting absolute path of channel directory: {}", e),
+    }
+
+    // let channel_dir_path = base_dir.join(channel_dir_path_str);
+    
+    // Construct the path to node.toml 
+    let channel_node_toml_path = channel_dir_path.join("node.toml");
+    debug_log!("Channel node.toml path: {:?}", &channel_node_toml_path); 
+
+    // B. Print the absolute path of the node.toml file
+    match channel_node_toml_path.canonicalize() {
+        Ok(abs_path) => debug_log!("Absolute channel_dir_path node.toml path: {:?}", abs_path),
+        Err(e) => debug_log!("Error getting absolute path of channel_dir_path node.toml: {}", e),
+    }
+
+    // --- 2. READ node.toml USING load_core_node_from_toml_file ---
+    let channel_node_toml: CoreNode = match load_core_node_from_toml_file(&channel_node_toml_path) { 
+        Ok(node) => {
+            debug_log!("Successfully read channel node.toml"); 
+            node
+        },
+        Err(e) => {
+            debug_log!("Error reading channel node.toml: {:?}", &channel_node_toml_path);
+            debug_log!("Error details: {}", e);
+            return Err(MyCustomError::from(io::Error::new(io::ErrorKind::Other, e))); // Convert the error
+        }
+    };
+
+    // Access data from the loaded CoreNode
+    let collaborators_array = channel_node_toml.teamchannel_collaborators_with_access;
+    // let collaborator_port_assignments = channel_node_toml.collaborator_port_assignments;
+
+    // 3. CREATE ALLOWLIST SET
     let mut sync_config_data_set: HashSet<SyncCollaborator> = HashSet::new();
 
-    // 4. Parse the teamchannel_collaborators_with_access array:
-    for collaborator_data in collaborators_array {
-        // TODO HERE!! HERE!! HERE!!
-        // ... (parse collaborator_data to get user_name, ready_port, intray_port, gotit_port)
+    // // 4. PARSE COLLABORATORS
+    // let collaborators_array = channel_node_toml.get("teamchannel_collaborators_with_access") 
+    //     .and_then(Value::as_array)
+    //     .ok_or_else(|| MyCustomError::InvalidData(
+    //         "Missing or invalid 'teamchannel_collaborators_with_access' array in node.toml".to_string())
+    //     )?;
 
-        // ... (Load IP information from NAME__collaborator.toml)
+    // debug_log!("Collaborator array found: {:?}", &collaborators_array); 
+    // for collaborator_data in collaborators_array { // collaborator_data is now a String
+    for collaborator_name in collaborators_array { // collaborator_data is now a String
 
-        // ... (Construct SyncCollaborator and add to sync_config_data_set) 
-    }
-    Ok(sync_config_data_set)
+        //  5. GET COLLABORATOR USERNAME
+        // let collaborator_name = if let toml::Value::String(name) = collaborator_data {
+        //     name // Assign the string value directly
+        // } else {
+        //     return Err(MyCustomError::InvalidData("Invalid collaborator name in node.toml".to_string()));
+        // };
+            
+        debug_log!("Processing collaborator: {}", collaborator_name);
+        
+        // --- 6. LOAD COLLABORATOR CONFIGURATION FILE (NAME__collaborator.toml) --- 
+        let collaborator = match load_collaborator_by_username(&collaborator_name) {
+            Ok(collaborator) => collaborator,
+            Err(e) => {
+                // This is where you'll most likely get the "No such file or directory" error
+                debug_log!("Error loading collaborator {}. File might be missing. Error: {}", collaborator_name, e); 
+                return Err(e); // Propagate the error
+            }
+        };
 
-    // ... (Rest of your function logic)
+        debug_log!("Collaborator data loaded: {:?}", &collaborator);
+        
+
+        // Get the collaborator's ports from `collaborator_port_assignments` in `node.toml`
+        // 7. GET COLLABORATOR PORTS from CoreNode
+        let ports = channel_node_toml.collaborator_port_assignments.get(&collaborator_name) // Borrow collaborator_name
+            .ok_or_else(|| {
+                MyCustomError::InvalidData(format!("Missing port assignments for {} in node.toml", collaborator_name))
+            })?;
+    
+        debug_log!("Port data found for {} : {:?}", collaborator_name, ports);
+
+        // 8. GET IPv6 ADDRESS (If available) 
+        let ipv6_address = collaborator
+            .ipv6_addresses
+            .and_then(|v| v.first().cloned())
+            .ok_or_else(|| MyCustomError::InvalidData(format!("No IPv6 address found for {}", collaborator_name)))?;
+
+        debug_log!("IPv6 address: {}", ipv6_address);
+
+        // --- 9. CONSTRUCT `SyncCollaborator` AND ADD TO ALLOWLIST ---
+        let sync_collaborator = SyncCollaborator {
+            user_name: collaborator_name.clone(), // Clone collaborator_name
+            ipv6_address, 
+            sync_file_transfer_port: collaborator.sync_file_transfer_port, 
+            sync_interval: collaborator.sync_interval,
+            ready_port: ports.ready_port, // Access ports directly from the CollaboratorPorts struct
+            intray_port: ports.tray_port,
+            gotit_port: ports.gotit_port,
+        };
+        debug_log!("Created SyncCollaborator: {:?}", &sync_collaborator);
+
+        sync_config_data_set.insert(sync_collaborator); 
+    } // End of collaborator loop
+
+    debug_log!("Allowlist created: {:?}", &sync_config_data_set);
+    Ok(sync_config_data_set) 
 }
+
+
+
+// old
+// fn make_session_connection_allowlists(uma_local_owner_user: &str) -> Result<HashSet<SyncCollaborator>, MyCustomError> { 
+//     // 1. Load team channel node.toml: 
+//     let channel_node_toml_path = Path::new("project_graph_data/session_state_items/current_node_directory_path.txt"); // TODO this file and system are not working yet
+//     let channel_node_toml = read_state_items_tomls("node.toml")?; // Assuming you have a way to get the correct path 
+
+//     // 2. Get the teamchannel_collaborators_with_access array:
+//     let collaborators_array = channel_node_toml.get("teamchannel_collaborators_with_access") 
+//         .and_then(Value::as_array)
+//         .ok_or(MyCustomError::InvalidData(
+//             "Missing or invalid 'teamchannel_collaborators_with_access' array in node.toml".to_string() // Add .to_string()
+//         ))?;
+
+//     // 3. Create the allowlist set:
+//     let mut sync_config_data_set: HashSet<SyncCollaborator> = HashSet::new();
+
+//     // 4. Parse the teamchannel_collaborators_with_access array:
+//     for collaborator_data in collaborators_array {
+//         // TODO HERE!! HERE!! HERE!!
+//         // ... (parse collaborator_data to get user_name, ready_port, intray_port, gotit_port)
+
+//         // ... (Load IP information from NAME__collaborator.toml)
+
+//         // ... (Construct SyncCollaborator and add to sync_config_data_set) 
+//     }
+//     Ok(sync_config_data_set)
+
+//     // ... (Rest of your function logic)
+// }
 
 
 
@@ -3402,7 +3596,11 @@ fn handle_sync_event_thread(
 
 
 
-
+/// for normal mode, updates graph-navigation location and graph-state for both
+/// 1. the struct
+/// 2. the file-set version in .../project_graph_data/session_state_items
+/// in both enter-new-node cases, in new-channel, cases, and in other cases
+///
 /// node.toml toml tables! store the ports: (check they are unique)
 /// { collaborator_name = "bob", ready_port = 50001, 
 ///     intray_port = 50002, gotit_port = 50003, 
@@ -3449,7 +3647,7 @@ fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
     let user_metadata = toml::from_str::<toml::Value>(&fs::read_to_string(uma_toml_path)?)?; 
     let uma_local_owner_user = user_metadata["uma_local_owner_user"].as_str().unwrap().to_string();
 
-    debug_log!("\n\nStarting UMA Sync Team Office for {}", &uma_local_owner_user);
+    debug_log!("\n\nStarting UMA Sync Team Office for (local owner) -> {}", &uma_local_owner_user);
 
     // let session_connection_allowlists = make_session_connection_allowlists(&uma_local_owner_user)?;
     // debug_log!("session_connection_allowlists -> {:?}", &session_connection_allowlists);
@@ -3545,7 +3743,10 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
     let user_metadata = toml::from_str::<toml::Value>(&std::fs::read_to_string(uma_toml_path)?)
     .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("TOML deserialization error: {}", e)))?;
 
-
+    // setting up absolute file path
+    let relative_path = PathBuf::from("project_graph_data/team_channels");
+    let abs_current_full_file_path = relative_path.canonicalize().unwrap(); // Handle errors
+    
     // node-graph navigation 'state' initial setup
     let mut graph_navigation_instance_state = GraphNavigationInstanceState {
         local_owner_user: user_metadata["uma_local_owner_user"].as_str().unwrap().to_string(),
@@ -3569,7 +3770,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
             .map(|width| width as u8) // Convert to u8 if valid
             .unwrap_or(80), // Default to 80 if missing or invalid 
 
-        current_full_file_path: PathBuf::new(),
+        current_full_file_path: abs_current_full_file_path, // Set initial absolute path
         // Initialize other fields of GraphNavigationInstanceState
         current_node_teamchannel_collaborators_with_access: Vec::new(),
         current_node_name: String::new(),
@@ -3752,7 +3953,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
     Ok(())
 }
 
-/// set sync_start_ok_flag
+/// set sync_start_ok_flag to true
 /// also use: sync_flag_ok_or_wait(3);
 fn set_sync_start_ok_flag_to_true() { 
     if fs::remove_file(SYNC_START_OK_FLAG_PATH).is_ok() {
@@ -3768,7 +3969,7 @@ fn set_sync_start_ok_flag_to_true() {
 
 /// initialize sync_start_ok_flag
 /// also use: sync_flag_ok_or_wait(3);
-fn initialize_ok_to_start_sync_flag() { 
+fn initialize_ok_to_start_sync_flag_to_false() { 
     if fs::remove_file(SYNC_START_OK_FLAG_PATH).is_ok() {
         debug_log("Old 'continue_uma.txt' file deleted."); // Optional log.
     } 
