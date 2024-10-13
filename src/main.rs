@@ -103,9 +103,11 @@ use std::process::Command;
 use rand::prelude::{
     // SliceRandom,
     IteratorRandom,
-    Rng,
+    // Rng,
 };
+
 use std::thread;
+
 use std::time::Duration;
 use std::net::{
     IpAddr, 
@@ -542,27 +544,91 @@ macro_rules! debug_log {
     )
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-struct OthersCollaboratorPortsData {
-    user_name: String,
-    ipv6_address: Ipv6Addr,
-    // sync_file_transfer_port: u16,
-    sync_interval: u64,
-    ready_port__their_desk_you_listen: u16, // locally: 'you' listen to their port on 'their' desk
-    intray_port__their_desk_you_send: u16, // locally: 'you' add files to their port on 'their' desk
-    gotit_port__their_desk_you_listen: u16, // locally: 'you' listen to their port on 'their' desk
-}
 
+// maybe deprecated
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 struct LocalOwnerSyncPortsData {
-    user_name: String,
-    ipv6_address: Ipv6Addr,
-    // sync_file_transfer_port: u16,
-    sync_interval: u64,
-    ready_port__your_desk_you_send: u16, // locally: 'you' send a signal through your port on your desk
-    intray_port__your_desk_you_listen: u16, // locally: 'you' listen for files sent by the other collaborator
-    gotit_port__your_desk_you_send: u16, // locally: 'you' send a signal through your port on your desk
+    local_user_name: String,
+    local_ipv6_address: Ipv6Addr,
+    local_public_gpg: String,
+    local_sync_interval: u64,
+    local_ready_port__your_desk_you_send: u16, // locally: 'you' send a signal through your port on your desk
+    local_intray_port__your_desk_you_listen: u16, // locally: 'you' listen for files sent by the other collaborator
+    local_gotit_port__your_desk_you_send: u16, // locally: 'you' send a signal through your port on your desk
 }
+
+// maybe deprecated
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+struct RemoteCollaboratorPortsData {
+    remote_collaborator_name: String,
+    remote_ipv6_address: Ipv6Addr,
+    remote_public_gpg: String,
+    remote_sync_interval: u64,
+    remote_ready_port__their_desk_you_listen: u16, // locally: 'you' listen to their port on 'their' desk
+    remote_intray_port__their_desk_you_send: u16, // locally: 'you' add files to their port on 'their' desk
+    remote_gotit_port__their_desk_you_listen: u16, // locally: 'you' listen to their port on 'their' desk
+}
+
+
+/// Instance-Role-Specific Local-Meeting-Room-Struct
+/// This is no longer for an abstract set of data 
+/// that can be used in different ways in different instances, 
+/// This is now one of those specific instances with local roles 
+/// and one local way of using those data.
+/// The abstract port-assignements will be converted into a 
+/// disambiguated and clarified specific local instance roles 
+/// set of port assignments:
+/// - local_user_role, 
+/// - remote_collaborator_role.
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+struct MeetingRoomSyncDataset {
+    local_user_name: String,
+    local_user_ipv6_addr_list: Vec<Ipv6Addr>, // list of ip addresses
+    local_user_ipv4_addr_list: Vec<Ipv4Addr>, // list of ip addresses
+    local_user_public_gpg: String,
+    local_user_sync_interval: u64,
+    local_user_ready_port__your_desk_you_send: u16, // locally: 'you' send a signal through your port on your desk
+    local_user_intray_port__your_desk_you_listen: u16, // locally: 'you' listen for files sent by the other collaborator
+    local_user_gotit_port__your_desk_you_send: u16, // locally: 'you' send a signal through your port on your desk
+    remote_collaborator_name: String,
+    remote_collaborator_ipv6_addr_list: Vec<Ipv6Addr>, // list of ip addresses
+    remote_collaborator_ipv4_addr_list: Vec<Ipv4Addr>, // list of ip addresses
+    remote_collaborator_public_gpg: String,
+    remote_collaborator_sync_interval: u64,
+    remote_collaborator_ready_port__their_desk_you_listen: u16, // locally: 'you' listen to their port on 'their' desk
+    remote_collaborator_intray_port__their_desk_you_send: u16, // locally: 'you' add files to their port on 'their' desk
+    remote_collaborator_gotit_port__their_desk_you_listen: u16, // locally: 'you' listen to their port on 'their' desk
+}
+
+/// ForLocalOwnerDeskThread data from MeetingRoomSyncDataset
+/// Get Needed, When Needed
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+struct ForLocalOwnerDeskThread {
+    local_user_name: String,
+    local_user_ipv6_addr_list: Vec<Ipv6Addr>, // list of ip addresses
+    local_user_ipv4_addr_list: Vec<Ipv4Addr>, // list of ip addresses
+    local_user_public_gpg: String,
+    local_user_sync_interval: u64,
+    local_user_ready_port__your_desk_you_send: u16, // locally: 'you' send a signal through your port on your desk
+    local_user_intray_port__your_desk_you_listen: u16, // locally: 'you' listen for files sent by the other collaborator
+    local_user_gotit_port__your_desk_you_send: u16, // locally: 'you' send a signal through your port on your desk
+}
+
+/// ForRemoteCollaboratorDeskThread data from MeetingRoomSyncDataset
+/// Get Needed, When Needed
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+struct ForRemoteCollaboratorDeskThread {
+    remote_collaborator_name: String,
+    remote_collaborator_ipv6_addr_list: Vec<Ipv6Addr>, // list of ip addresses
+    remote_collaborator_ipv4_addr_list: Vec<Ipv4Addr>, // list of ip addresses
+    remote_collaborator_public_gpg: String,
+    remote_collaborator_sync_interval: u64,
+    remote_collaborator_ready_port__their_desk_you_listen: u16, // locally: 'you' listen to their port on 'their' desk
+    remote_collaborator_intray_port__their_desk_you_send: u16, // locally: 'you' add files to their port on 'their' desk
+    remote_collaborator_gotit_port__their_desk_you_listen: u16, // locally: 'you' listen to their port on 'their' desk
+}
+
+
 
 // ALPHA VERSION
 // Function to read a simple string from a file
@@ -987,7 +1053,7 @@ fn add_collaborator_setup_file(
     })?;
 
     // Construct the file path:
-    let file_path = Path::new("project_graph_data/collaborator_files")
+    let file_path = Path::new("project_graph_data/collaborator_files_address_book")
         .join(format!("{}__collaborator.toml", collaborator.user_name));
 
      // Log the constructed file path:
@@ -1330,14 +1396,14 @@ impl GraphNavigationInstanceState {
             
                 //     if let Some(next_iter_collaborators_ports) = this_node.collaborator_port_assignments.get(collaborator_name) {
                 //         // --- LOAD COLLABORATOR DATA ONCE ---
-                //         let collaborator_data = load_collaborator_by_username(collaborator_name)
+                //         let collaborator_data = get_addressbook_file_by_username(collaborator_name)
                 //             .unwrap_or_else(|e| {
                 //                 debug_log!("Error loading collaborator {}: {}", collaborator_name, e);
                 //                 panic!("Failed to load collaborator data."); // Or handle the error differently
                 //             });
             
                 //         // Now, USE collaborator_data to extract the values
-                //         let collaborator_sync_data = OthersCollaboratorPortsData {
+                //         let collaborator_sync_data = RemoteCollaboratorPortsData {
                 //             user_name: collaborator_name.clone(),
                 //             ipv6_address: collaborator_data.ipv6_addresses.unwrap()[0], // Assuming you always have at least one IPv6 address
                 //             // sync_file_transfer_port: collaborator_data.sync_file_transfer_port,
@@ -1357,13 +1423,13 @@ impl GraphNavigationInstanceState {
                 // // 4. Load Collaborator Ports (Only for Team Channel Nodes)
                 // for collaborator_name in &this_node.teamchannel_collaborators_with_access {
                 //     if let Some(ports) = this_node.collaborator_port_assignments.get(collaborator_name) {
-                //         // Create a OthersCollaboratorPortsData instance:
-                //         let collaborator_sync_data = OthersCollaboratorPortsData {
+                //         // Create a RemoteCollaboratorPortsData instance:
+                //         let collaborator_sync_data = RemoteCollaboratorPortsData {
                 //             user_name: collaborator_name.clone(),
                 //             ipv6_address: {
                 //                 // Load IPv6 address from the collaborator's TOML file using `collaborator_name`
                 //                 // Example: 
-                //                 let collaborator_data = load_collaborator_by_username(collaborator_name)
+                //                 let collaborator_data = get_addressbook_file_by_username(collaborator_name)
                 //                     .unwrap_or_else(|e| {
                 //                         debug_log!("Error loading collaborator {}: {}", collaborator_name, e);
                 //                         panic!("Failed to load collaborator data."); // Or handle the error differently
@@ -1375,7 +1441,7 @@ impl GraphNavigationInstanceState {
                 //             sync_file_transfer_port:  {
                 //                 // Load sync_file_transfer_port from the collaborator's TOML file
                 //                 // ... similar to loading ipv6_address ...
-                //                 let collaborator_data = load_collaborator_by_username(collaborator_name)
+                //                 let collaborator_data = get_addressbook_file_by_username(collaborator_name)
                 //                     .unwrap_or_else(|e| {
                 //                         debug_log!("Error loading collaborator {}: {}", collaborator_name, e);
                 //                         panic!("Failed to load collaborator data."); // Or handle the error differently
@@ -1385,7 +1451,7 @@ impl GraphNavigationInstanceState {
                 //             sync_interval: {
                 //                 // Load sync_interval from the collaborator's TOML file
                 //                 // ... similar to loading ipv6_address ...
-                //                 let collaborator_data = load_collaborator_by_username(collaborator_name)
+                //                 let collaborator_data = get_addressbook_file_by_username(collaborator_name)
                 //                     .unwrap_or_else(|e| {
                 //                         debug_log!("Error loading collaborator {}: {}", collaborator_name, e);
                 //                         panic!("Failed to load collaborator data."); // Or handle the error differently
@@ -1502,21 +1568,21 @@ enum NodePriority {
 ///
 /// This struct holds six different ports used for communication and synchronization
 /// between collaborators within a UMA project node. Each collaborator associated with
-/// a node has a unique `CollaboratorPortsAllData` instance. 
+/// a node has a unique `ReadTeamchannelCollaboratorPortsToml` instance. 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-struct CollaboratorPortsAllData {
+struct ReadTeamchannelCollaboratorPortsToml {
     /// The port used by the REMOTE collaborator to signal readiness to receive data.
-    ready_port__other_collaborator: u16,
+    ready_port: u16,
     /// The port used to send files to the REMOTE collaborator (their "in-tray").
-    intray_port__other_collaborator: u16,
+    intray_port: u16,
     /// The port used by the REMOTE collaborator to confirm file receipt.
-    gotit_port__other_collaborator: u16,
+    gotit_port: u16,
     /// The port the LOCAL USER listens on for ready signals from the collaborator.
-    ready_port__localowneruser: u16,
+    self_ready_port: u16,
     /// The port the LOCAL USER listens on to receive files from the collaborator.
-    intray_port__localowneruser: u16,
+    self_intray_port: u16,
     /// The port the LOCAL USER uses to confirm file receipt to the collaborator.
-    gotit_port__localowneruser: u16,
+    self_gotit_port: u16,
 }
 
 // old archive
@@ -1614,7 +1680,7 @@ struct CoreNode {
     /// An ordered vector of collaborator usernames associated with this node.
     teamchannel_collaborators_with_access: Vec<String>,
     /// A map containing port assignments for each collaborator associated with the node.
-    collaborator_port_assignments: HashMap<String, CollaboratorPortsAllData>,
+    collaborator_port_assignments: HashMap<String, ReadTeamchannelCollaboratorPortsToml>,
 }
 
 // /// Loads CollaboratorData from a TOML file.
@@ -1647,19 +1713,19 @@ fn load_core_node_from_toml_file(file_path: &Path) -> Result<CoreNode, String> {
     // 1. Read File Contents 
     let toml_string = match fs::read_to_string(file_path) {
         Ok(content) => content,
-        Err(e) => return Err(format!("Error reading file: {}", e)),
+        Err(e) => return Err(format!("Error reading file: {} in load_core_node_from_toml_file", e)),
     };
 
     // 2. Parse TOML String 
     let toml_value = match toml_string.parse::<Value>() {
         Ok(value) => value,
-        Err(e) => return Err(format!("Error parsing TOML: {}", e)),
+        Err(e) => return Err(format!("Error parsing TOML in load_core_node_from_toml_file: {}", e)),
     };
 
     // 3. Deserialize into CoreNode Struct 
     let core_node = match toml::from_str::<CoreNode>(&toml_string) {
         Ok(node) => node,
-        Err(e) => return Err(format!("Error deserializing TOML: {}", e)),
+        Err(e) => return Err(format!("Error deserializing TOML in load_core_node_from_toml_file: {}", e)),
     };
 
     Ok(core_node)
@@ -1718,7 +1784,7 @@ impl CoreNode {
         priority: NodePriority,
         owner: String,
         teamchannel_collaborators_with_access: Vec<String>,
-        collaborator_port_assignments: HashMap<String, CollaboratorPortsAllData>,
+        collaborator_port_assignments: HashMap<String, ReadTeamchannelCollaboratorPortsToml>,
     ) -> CoreNode {
         let expires_at = get_current_unix_timestamp() + 86400; // Expires in 1 day (for now)
         let updated_at_timestamp = get_current_unix_timestamp();
@@ -1796,7 +1862,7 @@ impl CoreNode {
     fn add_child(
         &mut self,
         teamchannel_collaborators_with_access: Vec<String>, 
-        collaborator_port_assignments: HashMap<String, CollaboratorPortsAllData>, 
+        collaborator_port_assignments: HashMap<String, ReadTeamchannelCollaboratorPortsToml>, 
         owner: String,
         description_for_tui: String,
         directory_path: PathBuf,
@@ -2065,11 +2131,11 @@ fn add_im_message(
 
 
 /// read_a_collaborator_setup_toml
-/// e.g. for getting fields from collaborator setup files in roject_graph_data/collaborator_files
+/// e.g. for getting fields from collaborator setup files in roject_graph_data/collaborator_files_address_book
 fn read_a_collaborator_setup_toml() -> Result<(Vec<CollaboratorTomlData>, Vec<UmaError>), UmaError> {
     let mut collaborators = Vec::new();
     let mut errors = Vec::new();
-    let dir_path = Path::new("project_graph_data/collaborator_files");
+    let dir_path = Path::new("project_graph_data/collaborator_files_address_book");
 
     for entry in fs::read_dir(dir_path)? {
         let entry = entry?;
@@ -2252,10 +2318,10 @@ fn initialize_uma_application() -> Result<(), Box<dyn std::error::Error>> {
         fs::create_dir_all(&team_channels_dir).expect("Failed to create team_channels directory");
     }
 
-    // Ensure project_graph_data/collaborator_files directory exists
-    let collaborator_files_dir = project_graph_directory.join("collaborator_files");
-    if !collaborator_files_dir.exists() {
-        fs::create_dir_all(&collaborator_files_dir).expect("Failed to create collaborator_files directory");
+    // Ensure project_graph_data/collaborator_files_address_book directory exists
+    let collaborator_files_address_book_dir = project_graph_directory.join("collaborator_files_address_book");
+    if !collaborator_files_address_book_dir.exists() {
+        fs::create_dir_all(&collaborator_files_address_book_dir).expect("Failed to create collaborator_files_address_book directory");
     }
     
     // Ensure project_graph_data/session_state_items directory exists
@@ -2315,9 +2381,9 @@ fn initialize_uma_application() -> Result<(), Box<dyn std::error::Error>> {
 
     
     
-    // if !dir_at_path_is_empty_returns_false("project_graph_data/collaborator_files") {
-    debug_log("if !dir_at_path_is_empty_returns_false(Path::new(project_graph_data/collaborator_files)) { ");
-    if !dir_at_path_is_empty_returns_false(Path::new("project_graph_data/collaborator_files")) { 
+    // if !dir_at_path_is_empty_returns_false("project_graph_data/collaborator_files_address_book") {
+    debug_log("if !dir_at_path_is_empty_returns_false(Path::new(project_graph_data/collaborator_files_address_book)) { ");
+    if !dir_at_path_is_empty_returns_false(Path::new("project_graph_data/collaborator_files_address_book")) { 
         // If there are no existing users, prompt the user to add a new user
         println!("Welcome to the application!");
         println!("To get started, please add a new user.");
@@ -2448,111 +2514,111 @@ fn handle_command(
                 
             }
             
-            "node" => {
-                debug_log("Creating a new node...");
+            // "node" => {
+            //     debug_log("Creating a new node...");
 
-                // 1. Get input for node name
-                println!("Enter a name for the new node:");
-                let mut node_name_input = String::new();
-                io::stdin().read_line(&mut node_name_input).expect("Failed to read node name input");
-                let node_name = node_name_input.trim().to_string();
+            //     // 1. Get input for node name
+            //     println!("Enter a name for the new node:");
+            //     let mut node_name_input = String::new();
+            //     io::stdin().read_line(&mut node_name_input).expect("Failed to read node name input");
+            //     let node_name = node_name_input.trim().to_string();
 
-                // 2. Get input for description
-                println!("Enter a description for the new node:");
-                let mut description_input = String::new();
-                io::stdin().read_line(&mut description_input).expect("Failed to read description input");
-                let description_for_tui = description_input.trim().to_string();
+            //     // 2. Get input for description
+            //     println!("Enter a description for the new node:");
+            //     let mut description_input = String::new();
+            //     io::stdin().read_line(&mut description_input).expect("Failed to read description input");
+            //     let description_for_tui = description_input.trim().to_string();
 
-                // 3. Get input for teamchannel_collaborators_with_access (comma-separated)
-                println!("Enter teamchannel_collaborators_with_access (comma-separated usernames):");
-                let mut teamchannel_collaborators_with_access_input = String::new();
-                io::stdin().read_line(&mut teamchannel_collaborators_with_access_input).expect("Failed to read teamchannel_collaborators_with_access input");
-                let teamchannel_collaborators_with_access: Vec<String> = teamchannel_collaborators_with_access_input
-                    .trim()
-                    .split(',')
-                    .map(|s| s.trim().to_string())
-                    .collect();
+            //     // 3. Get input for teamchannel_collaborators_with_access (comma-separated)
+            //     println!("Enter teamchannel_collaborators_with_access (comma-separated usernames):");
+            //     let mut teamchannel_collaborators_with_access_input = String::new();
+            //     io::stdin().read_line(&mut teamchannel_collaborators_with_access_input).expect("Failed to read teamchannel_collaborators_with_access input");
+            //     let teamchannel_collaborators_with_access: Vec<String> = teamchannel_collaborators_with_access_input
+            //         .trim()
+            //         .split(',')
+            //         .map(|s| s.trim().to_string())
+            //         .collect();
 
-                // 4. Construct collaborator_port_assignments HashMap
-                let mut collaborator_port_assignments: HashMap<String, CollaboratorPortsAllData> = HashMap::new();
-                for collaborator_name in &teamchannel_collaborators_with_access { 
-                    // Load collaborator from file
-                    let collaborator = match load_collaborator_by_username(collaborator_name) {
-                        Ok(collaborator) => collaborator,
-                        Err(e) => {
-                            eprintln!("Error loading collaborator {}: {}", collaborator_name, e);
-                            continue; // Skip to the next collaborator if there's an error
-                        }
-                    };
+            //     // 4. Construct collaborator_port_assignments HashMap
+            //     let mut collaborator_port_assignments: HashMap<String, ReadTeamchannelCollaboratorPortsToml> = HashMap::new();
+            //     for collaborator_name in &teamchannel_collaborators_with_access { 
+            //         // Load collaborator from file
+            //         let collaborator = match get_addressbook_file_by_username(collaborator_name) {
+            //             Ok(collaborator) => collaborator,
+            //             Err(e) => {
+            //                 eprintln!("Error loading collaborator {}: {}", collaborator_name, e);
+            //                 continue; // Skip to the next collaborator if there's an error
+            //             }
+            //         };
 
-                    // Generate random ports for the collaborator 
-                    let mut rng = rand::thread_rng();
-                    let ready_port__other_collaborator: u16 = rng.gen_range(40000..=50000);
-                    let intray_port__other_collaborator: u16 = rng.gen_range(40000..=50000);
-                    let gotit_port__other_collaborator: u16 = rng.gen_range(40000..=50000);
-                    let ready_port__localowneruser: u16 = rng.gen_range(40000..=50000);
-                    let intray_port__localowneruser: u16 = rng.gen_range(40000..=50000);
-                    let gotit_port__localowneruser: u16 = rng.gen_range(40000..=50000);
+            //         // Generate random ports for the collaborator 
+            //         let mut rng = rand::thread_rng();
+            //         let ready_port__other_collaborator: u16 = rng.gen_range(40000..=50000);
+            //         let intray_port__other_collaborator: u16 = rng.gen_range(40000..=50000);
+            //         let gotit_port__other_collaborator: u16 = rng.gen_range(40000..=50000);
+            //         let ready_port__localowneruser: u16 = rng.gen_range(40000..=50000);
+            //         let intray_port__localowneruser: u16 = rng.gen_range(40000..=50000);
+            //         let gotit_port__localowneruser: u16 = rng.gen_range(40000..=50000);
 
-                    // Create CollaboratorPortsAllData and insert into the HashMap
-                    collaborator_port_assignments.insert(
-                        collaborator_name.clone(), 
-                        CollaboratorPortsAllData {
-                            ready_port__other_collaborator,
-                            intray_port__other_collaborator,
-                            gotit_port__other_collaborator,
-                            ready_port__localowneruser,
-                            intray_port__localowneruser,
-                            gotit_port__localowneruser,
-                        }
-                    );
-                }
+            //         // Create ReadTeamchannelCollaboratorPortsToml and insert into the HashMap
+            //         collaborator_port_assignments.insert(
+            //             collaborator_name.clone(), 
+            //             ReadTeamchannelCollaboratorPortsToml {
+            //                 ready_port__other_collaborator,
+            //                 intray_port__other_collaborator,
+            //                 gotit_port__other_collaborator,
+            //                 ready_port__localowneruser,
+            //                 intray_port__localowneruser,
+            //                 gotit_port__localowneruser,
+            //             }
+            //         );
+            //     }
 
-                // 5. Get input for order number
-                // TODO what is this?
-                println!("Enter the (optional) order number for the new node:");
-                let mut order_number_input = String::new();
-                io::stdin().read_line(&mut order_number_input).expect("Failed to read order number input");
-                let order_number: u32 = order_number_input.trim().parse().expect("Invalid order number");
+            //     // 5. Get input for order number
+            //     // TODO what is this?
+            //     println!("Enter the (optional) order number for the new node:");
+            //     let mut order_number_input = String::new();
+            //     io::stdin().read_line(&mut order_number_input).expect("Failed to read order number input");
+            //     let order_number: u32 = order_number_input.trim().parse().expect("Invalid order number");
 
-                // 6. Get input for priority
-                println!("Enter the (optional) priority for the new node (High, Medium, Low):");
-                let mut priority_input = String::new();
-                io::stdin().read_line(&mut priority_input).expect("Failed to read priority input");
-                let priority = match priority_input.trim().to_lowercase().as_str() {
-                    "high" => NodePriority::High,
-                    "medium" => NodePriority::Medium,
-                    "low" => NodePriority::Low,
-                    _ => {
-                        println!("Invalid priority. Defaulting to Medium.");
-                        NodePriority::Medium
-                    }
-                };
+            //     // 6. Get input for priority
+            //     println!("Enter the (optional) priority for the new node (High, Medium, Low):");
+            //     let mut priority_input = String::new();
+            //     io::stdin().read_line(&mut priority_input).expect("Failed to read priority input");
+            //     let priority = match priority_input.trim().to_lowercase().as_str() {
+            //         "high" => NodePriority::High,
+            //         "medium" => NodePriority::Medium,
+            //         "low" => NodePriority::Low,
+            //         _ => {
+            //             println!("Invalid priority. Defaulting to Medium.");
+            //             NodePriority::Medium
+            //         }
+            //     };
 
-                // 7. Create the new node directory
-                let new_node_path = graph_navigation_instance_state.current_full_file_path.join(&node_name);
-                fs::create_dir_all(&new_node_path).expect("Failed to create node directory");
+            //     // 7. Create the new node directory
+            //     let new_node_path = graph_navigation_instance_state.current_full_file_path.join(&node_name);
+            //     fs::create_dir_all(&new_node_path).expect("Failed to create node directory");
 
-                // 8. Create the Node instance
-                let new_node = CoreNode::new(
-                    node_name,
-                    description_for_tui,
-                    new_node_path,
-                    order_number,
-                    priority,
-                    graph_navigation_instance_state.local_owner_user.clone(),
-                    teamchannel_collaborators_with_access, // Pass the collaborators vector
-                    collaborator_port_assignments, // Pass the collaborator_port_assignments HashMap
-                );
+            //     // 8. Create the Node instance
+            //     let new_node = CoreNode::new(
+            //         node_name,
+            //         description_for_tui,
+            //         new_node_path,
+            //         order_number,
+            //         priority,
+            //         graph_navigation_instance_state.local_owner_user.clone(),
+            //         teamchannel_collaborators_with_access, // Pass the collaborators vector
+            //         collaborator_port_assignments, // Pass the collaborator_port_assignments HashMap
+            //     );
 
-                // 9. Save the node data to node.toml
-                if let Err(e) = new_node.save_node_to_file() {
-                    eprintln!("Failed to save node data: {}", e);
-                    // Optionally handle the error more gracefully here
-                } else {
-                    debug_log!("New node created successfully!"); 
-                }
-            }, // end of node match arm
+            //     // 9. Save the node data to node.toml
+            //     if let Err(e) = new_node.save_node_to_file() {
+            //         eprintln!("Failed to save node data: {}", e);
+            //         // Optionally handle the error more gracefully here
+            //     } else {
+            //         debug_log!("New node created successfully!"); 
+            //     }
+            // }, // end of node match arm
 
             
            "d" | "datalab" | "data" => {
@@ -2778,7 +2844,7 @@ fn get_next_message_file_path(current_path: &Path, local_owner_user: &str) -> Pa
 /// Loads collaborator data from a TOML file based on the username.
 ///
 /// This function constructs the path to the collaborator's TOML file
-/// in the `project_graph_data/collaborator_files` directory, reads the file contents,
+/// in the `project_graph_data/collaborator_files_address_book` directory, reads the file contents,
 /// deserializes the TOML data into a `Collaborator` struct, and returns the result.
 /// 
 /// # Arguments 
@@ -2794,22 +2860,22 @@ fn get_next_message_file_path(current_path: &Path, local_owner_user: &str) -> Pa
 /// # Example 
 ///
 /// ```
-/// let collaborator = load_collaborator_by_username("alice").unwrap(); // Assuming alice's data exists
+/// let collaborator = get_addressbook_file_by_username("alice").unwrap(); // Assuming alice's data exists
 /// println!("Collaborator: {:?}", collaborator); 
 /// ```
-fn load_collaborator_by_username(username: &str) -> Result<CollaboratorTomlData, MyCustomError> {
-    debug_log!("Starting load_collaborator_by_username(username),  for -> '{}'", username);
-    let toml_file_path = Path::new("project_graph_data/collaborator_files")
+fn get_addressbook_file_by_username(username: &str) -> Result<CollaboratorTomlData, MyCustomError> {
+    debug_log!("Starting get_addressbook_file_by_username(username),  for -> '{}'", username);
+    let toml_file_path = Path::new("project_graph_data/collaborator_files_address_book")
         .join(format!("{}__collaborator.toml", username));
 
     if toml_file_path.exists() {
         let toml_string = fs::read_to_string(&toml_file_path)?;
         let loaded_collaborator: CollaboratorTomlData = toml::from_str(&toml_string)
             .map_err(|e| MyCustomError::TomlError(e))?;
-        debug_log!("in load_collaborator_by_username(), ??Collaborator file found ok: {:?}", &toml_file_path);
+        debug_log!("in get_addressbook_file_by_username(), ??Collaborator file found ok: {:?}", &toml_file_path);
         Ok(loaded_collaborator)
     } else {
-        debug_log!("in load_collaborator_by_username(), ??Collaborator file not found: {:?}", toml_file_path);
+        debug_log!("in get_addressbook_file_by_username(), ??Collaborator file not found: {:?}", toml_file_path);
         debug_log!("??Collaborator file not found for '{}'", username);
 
         Err(MyCustomError::IoError(io::Error::new(
@@ -2821,7 +2887,7 @@ fn load_collaborator_by_username(username: &str) -> Result<CollaboratorTomlData,
 
 
 /// Loads connection data for members of the currently active team channel.
-/// On success, returns a `HashSet` of `OthersCollaboratorPortsData` structs, 
+/// On success, returns a `HashSet` of `MeetingRoomSyncDataset` structs, 
 /// each containing connection 
 /// data for a collaborator in the current team channel (excluding the current user).
 /// As a headline this makes an ip-whitelist or ip-allowlist but the overall process is bigger.
@@ -2833,19 +2899,19 @@ fn load_collaborator_by_username(username: &str) -> Result<CollaboratorTomlData,
 /// Note: making the allow_lists requires information from more than one source:
 /// =uma.toml
 /// =project_graph_data/session_items/current_node_teamchannel_collaborators_with_access.toml
-/// =/project_graph_data/collaborator_files/NAME__collaborator.toml
+/// =/project_graph_data/collaborator_files_address_book/NAME__collaborator.toml
 ///
 /// step 1: get team_channel list of (and data about) all possible team_channel_members
 ///     from externalized session state item doc @: 
 ///     project_graph_data/session_items/current_node_teamchannel_collaborators_with_access.toml
 ///     The 6-port assignments come from this source.
 ///
-/// step 2: get /collaborator_files data @:
-///     .../project_graph_data/collaborator_files/ directory
+/// step 2: get /collaborator_files_address_book data @:
+///     .../project_graph_data/collaborator_files_address_book/ directory
 ///     as: NAME__collaborator.toml
 ///
 /// step 3: Remove any collaborator from that 'possible list' whose information
-///     is not in the .../project_graph_data/collaborator_files directory
+///     is not in the .../project_graph_data/collaborator_files_address_book directory
 ///     as: NAME__collaborator.toml
 ///     The ipv4 and ipv6 lists come from this source.
 ///
@@ -2857,7 +2923,7 @@ fn load_collaborator_by_username(username: &str) -> Result<CollaboratorTomlData,
 ///
 /// (note: members should have a list of ipv4, ipv6 addresses, not just one)
 ///
-/// sample: project_graph_data/collaborator_files/alice__collaborator.toml
+/// sample: project_graph_data/collaborator_files_address_book/alice__collaborator.toml
 /// [[collaborator]]
 /// user_name = "alice"
 /// ipv4_addresses = ["24.0.189.112", "24.0.189.112"]
@@ -2884,29 +2950,29 @@ fn load_collaborator_by_username(username: &str) -> Result<CollaboratorTomlData,
 /// teamchannel_collaborators_with_access = ["alice", "bob"]
 ///
 /// # collaborator_port_assignments
-/// [collaborator.alice]
-/// collaborator_name = "alice"
-/// ready_port = 50001
-/// tray_port = 50002
-/// gotit_port = 50003
-/// self_ready_port = 50004
-/// self_tray_port = 50005
-/// self_gotit_port = 50006
+/// [collaborator_port_assignments.alice_bob]
+/// collaborator_ports = [
+///     { name = "alice", ready_port = 50001, intray_port = 50002, gotit_port = 50003 },
+///     { name = "bob", ready_port = 50004, intray_port = 50005, gotit_port = 50006 },
+/// ]
 ///
-/// [collaborator.bob]
-/// collaborator_name = "bob"
-/// ready_port = 50011
-/// tray_port = 50012
-/// gotit_port = 50013
-/// self_ready_port = 50014
-/// self_tray_port = 50015
-/// self_gotit_port = 50016
+/// [collaborator_port_assignments.alice_charlotte]
+/// collaborator_ports = [
+///     { name = "alice", ready_port = 50007, intray_port = 50008, gotit_port = 50009 },
+///     { name = "charlotte", ready_port = 50010, intray_port = 50011, gotit_port = 50012 },
+/// ]
+///
+/// [collaborator_port_assignments.bob_charlotte]
+/// collaborator_ports = [
+///     { name = "bob", ready_port = 50013, intray_port = 50014, gotit_port = 50015 },
+///     { name = "charlotte", ready_port = 50016, intray_port = 50017, gotit_port = 50018 },
+/// ]
 ///
 /// maybe detects any port collisions, 
 /// excluding those who collide with senior members
 /// or returning an error if found.
-fn make_session_connection_allowlists(uma_local_owner_user: &str) -> Result<HashSet<OthersCollaboratorPortsData>, MyCustomError> { 
-    debug_log!("Entering make_session_connection_allowlists() function"); 
+fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<HashSet<MeetingRoomSyncDataset>, MyCustomError> { 
+    debug_log!("Entering make_sync_meetingroomconfig_datasets() function"); 
 
     // --- 1. LOAD TEAM CHANNEL node.toml ---
     let channel_dir_path_str = read_state_string("current_node_directory_path.txt")?; // read as string first
@@ -2947,90 +3013,128 @@ fn make_session_connection_allowlists(uma_local_owner_user: &str) -> Result<Hash
         }
     };
 
+    // 3. Create (empty) HashSet of meeting-room structs
+    // TODO maybe this becomes a set of MeetingRoomSyncDataset structs
+    let mut sync_config_data_set: HashSet<MeetingRoomSyncDataset> = HashSet::new();
+
+
+    // // 4. Get & Iterate through address-Book Collaborator Data
     // Access data from the loaded CoreNode
     let collaborators_array = channel_node_toml.teamchannel_collaborators_with_access;
     // let collaborator_port_assignments = channel_node_toml.collaborator_port_assignments;
 
-    // 3. CREATE ALLOWLIST SET
-    let mut sync_config_data_set: HashSet<OthersCollaboratorPortsData> = HashSet::new();
-
-    // // 4. PARSE COLLABORATORS
-    // let collaborators_array = channel_node_toml.get("teamchannel_collaborators_with_access") 
-    //     .and_then(Value::as_array)
-    //     .ok_or_else(|| MyCustomError::InvalidData(
-    //         "Missing or invalid 'teamchannel_collaborators_with_access' array in node.toml".to_string())
-    //     )?;
-
-    // debug_log!("??Collaborator array found: {:?}", &collaborators_array); 
-    // for collaborator_data in collaborators_array { // collaborator_data is now a String
+    // Iterate through all possible team channel member collaborators
     for collaborator_name in collaborators_array { // collaborator_data is now a String
-
-        //  5. GET COLLABORATOR USERNAME
-        // let collaborator_name = if let toml::Value::String(name) = collaborator_data {
-        //     name // Assign the string value directly
-        // } else {
-        //     return Err(MyCustomError::InvalidData("Invalid collaborator name in node.toml".to_string()));
-        // };
-            
+        /*
+        Note: there are two sources of truth that each need to be checked
+        (and which might be updated independently)
+        for channel-user-meeting-room sync information
+        */
         debug_log!("Processing collaborator: {}", collaborator_name);
-        
-        // --- 6. LOAD COLLABORATOR CONFIGURATION FILE (NAME__collaborator.toml) --- 
-        let this_makelist_collaborator = match load_collaborator_by_username(&collaborator_name) {
-            Ok(this_makelist_collaborator) => this_makelist_collaborator,
+
+        // 5. get (that team member's) addressbook file by (their) username
+        // using get_addressbook_file_by_username()
+        // which loads the NAME__collaborator.toml from the collaborator_files_address_books directory 
+        // (owned by that collaborator, it is their own gpg signed data)
+        let these_collaboratorfiles_toml_data = match get_addressbook_file_by_username(&collaborator_name) {
+            Ok(these_collaboratorfiles_toml_data) => these_collaboratorfiles_toml_data,
             Err(e) => {
                 // This is where you'll most likely get the "No such file or directory" error
                 debug_log!("Error loading collaborator {}. File might be missing. Error: {}", collaborator_name, e); 
                 return Err(e); // Propagate the error
             }
         };
+        debug_log!("??????Collaborator data loaded: {:?}", &these_collaboratorfiles_toml_data);
 
-        debug_log!("??????Collaborator data loaded: {:?}", &this_makelist_collaborator);
+        // 6. Get collaborator port-assignments from the team_channel CoreNode 
+        // (owned, set, signed, by team-owner)
+        let meeting_room_key = format!("{}_{}", uma_local_owner_user, collaborator_name); // Create the key for the pair
+        let this_collaborator_port_config = channel_node_toml.collaborator_port_assignments.get(&meeting_room_key)
+            .ok_or_else(|| {
+                MyCustomError::InvalidData(format!("Missing port assignments for collaborator pair: {}", meeting_room_key))
+            })?;
+        // Now you have access to all the ports for this collaborator in this_collaborator_port_config
+        debug_log!("Port config found for {}: {:?}", collaborator_name, this_collaborator_port_config);
+                
+        // TODO very speculative code here
+        /*
+        what are all the fields of information to get?
+        ipv6
+        ipv4
+        (is there some other type of address too?)
+        gpg
+        sync rate?
+        */
+        // 7. extract data or drop collaborator from list: 
+        // IPvX...what else? 
+        // (If not available, drop this person from the list)
+        let ipv6_address = match these_collaboratorfiles_toml_data
+            .ipv6_addresses.clone()
+            .and_then(|v| v.first().cloned()) 
+        {
+            Some(addr) => {
+                debug_log!("IPv6 address for {}: {}", collaborator_name, addr);
+                addr
+            },
+            None => {
+                debug_log!("WARNING: No IPv6 address found for {}. Skipping this collaborator.", collaborator_name);
+                continue; // Skip to the next collaborator in the loop
+            }
+        };
         
+        
+        
+        /*
+        
+        format is:
+        # meeting rooms, collaborator_port_assignments
+        [collaborator_port_assignments.alice_bob]
+        collaborator_ports = [
+            { name = "alice", ready_port = 50001, intray_port = 50002, gotit_port = 50003 },
+            { name = "bob", ready_port = 50004, intray_port = 50005, gotit_port = 50006 },
+        ]
 
+        [collaborator_port_assignments.alice_charlotte]
+        collaborator_ports = [
+            { name = "alice", ready_port = 50007, intray_port = 50008, gotit_port = 50009 },
+            { name = "charlotte", ready_port = 50010, intray_port = 50011, gotit_port = 50012 },
+        ]
+
+        [collaborator_port_assignments.bob_charlotte]
+        collaborator_ports = [
+            { name = "bob", ready_port = 50013, intray_port = 50014, gotit_port = 50015 },
+            { name = "charlotte", ready_port = 50016, intray_port = 50017, gotit_port = 50018 },
+        ]
+        */
+        //old code
         // Get the collaborator's ports from `collaborator_port_assignments` in `node.toml`
         // 7. GET COLLABORATOR PORTS from CoreNode
-        let ports = channel_node_toml.collaborator_port_assignments.get(&collaborator_name) // Borrow collaborator_name
-            .ok_or_else(|| {
-                MyCustomError::InvalidData(format!("Missing port assignments for {} in node.toml", collaborator_name))
-            })?;
+        
+
+        // 8. Construct MeetingRoomSyncDataset (struct)
+        let meeting_room_sync_data = MeetingRoomSyncDataset {
+            local_user_name: uma_local_owner_user.to_string(),
+            local_user_ipv6_addr_list: vec![ipv6_address], // Assuming you want to use the first IPv6 address for the local user
+            local_user_ipv4_addr_list: these_collaboratorfiles_toml_data.ipv4_addresses.clone().unwrap_or_default(), // Get IPv4 addresses or an empty vector
+            local_user_public_gpg: these_collaboratorfiles_toml_data.gpg_key_public.clone(),
+            local_user_sync_interval: these_collaboratorfiles_toml_data.sync_interval,
+            local_user_ready_port__your_desk_you_send: this_collaborator_port_config.ready_port,
+            local_user_intray_port__your_desk_you_listen: this_collaborator_port_config.intray_port,
+            local_user_gotit_port__your_desk_you_send: this_collaborator_port_config.gotit_port,
+            remote_collaborator_name: collaborator_name.clone(),
+            remote_collaborator_ipv6_addr_list: these_collaboratorfiles_toml_data.ipv6_addresses.unwrap_or_default(), // Get IPv6 addresses or an empty vector
+            remote_collaborator_ipv4_addr_list: these_collaboratorfiles_toml_data.ipv4_addresses.unwrap_or_default(), // Get IPv4 addresses or an empty vector
+            remote_collaborator_public_gpg: these_collaboratorfiles_toml_data.gpg_key_public,
+            remote_collaborator_sync_interval: these_collaboratorfiles_toml_data.sync_interval,
+            remote_collaborator_ready_port__their_desk_you_listen: this_collaborator_port_config.self_ready_port,
+            remote_collaborator_intray_port__their_desk_you_send: this_collaborator_port_config.self_intray_port,
+            remote_collaborator_gotit_port__their_desk_you_listen: this_collaborator_port_config.self_gotit_port,
+        };
     
-        debug_log!("Port data found for {} : {:?}", collaborator_name, ports);
-
-        // 8. GET IPv6 ADDRESS (If available) 
-        let ipv6_address = this_makelist_collaborator
-            .ipv6_addresses
-            .and_then(|v| v.first().cloned())
-            .ok_or_else(|| MyCustomError::InvalidData(format!("No IPv6 address found for {}", collaborator_name)))?;
-
-        debug_log!("IPv6 address: {}", ipv6_address);
-
-        // --- 9. CONSTRUCT `OthersCollaboratorPortsData` AND ADD TO ALLOWLIST ---
-
-        if collaborator_name == uma_local_owner_user {
-            // Create LocalOwnerSyncPortsData
-            let local_owner_sync_data = Some(LocalOwnerSyncPortsData {
-                user_name: collaborator_name.clone(),
-                ipv6_address,
-                sync_interval: this_makelist_collaborator.sync_interval,
-                ready_port__your_desk_you_send: ports.ready_port__localowneruser,
-                intray_port__your_desk_you_listen: ports.intray_port__localowneruser,
-                gotit_port__your_desk_you_send: ports.gotit_port__localowneruser,
-            });
-        } else {
-            // Create OthersCollaboratorPortsData
-            let other_collaborator_syncdata = OthersCollaboratorPortsData {
-                user_name: collaborator_name.clone(),
-                ipv6_address,
-                sync_interval: this_makelist_collaborator.sync_interval,
-                ready_port__their_desk_you_listen: ports.ready_port__other_collaborator,
-                intray_port__their_desk_you_send: ports.intray_port__other_collaborator,
-                gotit_port__their_desk_you_listen: ports.gotit_port__other_collaborator,
-            };
-            // sync_config_data_set.insert(other_collaborator_syncdata);
-            sync_config_data_set.insert(other_collaborator_syncdata.clone());
-            debug_log!("Created OthersCollaboratorPortsData: {:?}", &other_collaborator_syncdata);
-        }
-
+        sync_config_data_set.insert(meeting_room_sync_data.clone()); 
+        debug_log!("Created MeetingRoomSyncDataset: {:?}", &meeting_room_sync_data);
+            
+        
     } // End of collaborator loop
 
     debug_log!("Allowlist created: {:?}", &sync_config_data_set);
@@ -3039,9 +3143,9 @@ fn make_session_connection_allowlists(uma_local_owner_user: &str) -> Result<Hash
 
 
 // old archive
-//         // --- 9. CONSTRUCT `OthersCollaboratorPortsData` AND ADD TO ALLOWLIST ---
+//         // --- 9. CONSTRUCT `RemoteCollaboratorPortsData` AND ADD TO ALLOWLIST ---
 //         // TODO HERE HERE HERE: what on earth is going into this? .tray_port???
-//         let sync_collaborator = OthersCollaboratorPortsData {
+//         let sync_collaborator = RemoteCollaboratorPortsData {
 //             user_name: collaborator_name.clone(), // Clone collaborator_name
 //             ipv6_address, 
 //             // sync_file_transfer_port: collaborator.sync_file_transfer_port, 
@@ -3050,7 +3154,7 @@ fn make_session_connection_allowlists(uma_local_owner_user: &str) -> Result<Hash
 //             intray_port__their_desk_you_send: ports.tray_port,
 //             gotit_port__their_desk_you_listen: ports.gotit_port,
 //         };
-//         debug_log!("Created OthersCollaboratorPortsData: {:?}", &sync_collaborator);
+//         debug_log!("Created RemoteCollaboratorPortsData: {:?}", &sync_collaborator);
 
 //         sync_config_data_set.insert(sync_collaborator); 
 //     } // End of collaborator loop
@@ -3060,7 +3164,7 @@ fn make_session_connection_allowlists(uma_local_owner_user: &str) -> Result<Hash
 // }
 
 // old
-// fn make_session_connection_allowlists(uma_local_owner_user: &str) -> Result<HashSet<OthersCollaboratorPortsData>, MyCustomError> { 
+// fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<HashSet<RemoteCollaboratorPortsData>, MyCustomError> { 
 //     // 1. Load team channel node.toml: 
 //     let channel_node_toml_path = Path::new("project_graph_data/session_state_items/current_node_directory_path.txt"); // TODO this file and system are not working yet
 //     let channel_node_toml = read_state_items_tomls("node.toml")?; // Assuming you have a way to get the correct path 
@@ -3073,7 +3177,7 @@ fn make_session_connection_allowlists(uma_local_owner_user: &str) -> Result<Hash
 //         ))?;
 
 //     // 3. Create the allowlist set:
-//     let mut sync_config_data_set: HashSet<OthersCollaboratorPortsData> = HashSet::new();
+//     let mut sync_config_data_set: HashSet<RemoteCollaboratorPortsData> = HashSet::new();
 
 //     // 4. Parse the teamchannel_collaborators_with_access array:
 //     for collaborator_data in collaborators_array {
@@ -3082,7 +3186,7 @@ fn make_session_connection_allowlists(uma_local_owner_user: &str) -> Result<Hash
 
 //         // ... (Load IP information from NAME__collaborator.toml)
 
-//         // ... (Construct OthersCollaboratorPortsData and add to sync_config_data_set) 
+//         // ... (Construct RemoteCollaboratorPortsData and add to sync_config_data_set) 
 //     }
 //     Ok(sync_config_data_set)
 
@@ -3105,16 +3209,16 @@ fn send_hello_signal(target_addr: SocketAddr) -> Result<(), io::Error> {
     }
 }
 
-fn is_ip_allowlisted(ip: &IpAddr, sync_config_data_set: &HashSet<OthersCollaboratorPortsData>) -> bool {
+fn is_ip_allowlisted(ip: &IpAddr, sync_config_data_set: &HashSet<RemoteCollaboratorPortsData>) -> bool {
     sync_config_data_set.iter().any(|sc| match ip {
         IpAddr::V4(_) => false, // Currently only handling IPv6 
-        IpAddr::V6(ip_v6) => *ip_v6 == sc.ipv6_address, 
+        IpAddr::V6(ip_v6) => *ip_v6 == sc.remote_ipv6_address, 
     })
 }
 
 
 // // Helper function to check if a port is in use by another collaborator
-// fn port_is_used_by_another_collaborator(port: u16, collaborators: &HashSet<OthersCollaboratorPortsData>) -> bool { 
+// fn port_is_used_by_another_collaborator(port: u16, collaborators: &HashSet<RemoteCollaboratorPortsData>) -> bool { 
 //     collaborators.iter().any(|c| c.sync_file_transfer_port == port)
 // }
 
@@ -3151,18 +3255,18 @@ fn sync_flag_ok_or_wait(wait_this_many_seconds: u64) {
     }
 }
 
-fn get_next_sync_request_username(sync_config_data_set: &HashSet<OthersCollaboratorPortsData>) -> Option<String> {
+fn get_next_sync_request_username(sync_config_data_set: &HashSet<RemoteCollaboratorPortsData>) -> Option<String> {
     // Choose a random collaborator from the set:
     sync_config_data_set
         .iter()
         .choose(&mut rand::thread_rng())
-        .map(|collaborator| collaborator.user_name.clone())
+        .map(|collaborator| collaborator.remote_collaborator_name.clone())
 }
 
 
 #[derive(Serialize, Deserialize, Debug)] // Add Serialize/Deserialize for sending/receiving
 struct ReadySignal {
-    id: u64, // Unique event ID
+    id: String, // Unique event ID get a u64 representation of the ThreadId using the as_u64() method.
     timestamp: u64,
     echo: bool,
 }
@@ -3191,30 +3295,61 @@ fn send_data(data: &[u8], target_addr: SocketAddr) -> Result<(), io::Error> {
     Ok(())
 }
 
-/// local owner users in-try desk
+/// Set up the local owner users in-tray desk
 /// requests to recieve are sent from here
 /// other people's owned docs are recieved here
 /// gpg confirmed
 /// save .toml (handle the type: content, node, etc.)
-/// and 'gotit' signal sent out
+/// and 'gotit' signal sent out from here
 ///
-/// echo: if any docuemnt comes in
-/// automatically sent out an echo-type request
+/// echo: if any document comes in
+/// automatically send out an echo-type request
+/// to get a next file, in parallel
+/// a thread per 'sync-event'
+///     after entering loop
+///     Alice follows these steps...
+///     1. Check for halt/quit uma signal
+///     2. Make a sync-event thread, enter thread
+///     3. set sync_event_id to be unique thread id
+///     4. Creates a ReadySignal instance to be the ready signal
+///     5. Serialize the ReadySignal 
+///     6. Send the signal @ local_user_ready_port__your_desk_you_send (exact ip choice pending...)
+///     7. Listen at in-box for file for that event:
+///        Alice waits N-miliseconds. If no reply, end thread.
+///     if there is a reply to that event unqiue ID:
+///     - gpg verify input (if not, kill thread)
+///     - save .toml etc if ok (if not, end thread)
+///     - make another echo-thread (repeat)
+///     - if ok: send 'gotit!!' signal
+///     - update 'last updated' file log (maybe append a timestamp stub file to a dir)
+///     - end thread
 fn handle_owner_desk(
-    collaborator_input_for_desk: &OthersCollaboratorPortsData, 
+    own_desk_setup_data: ForLocalOwnerDeskThread, 
 ) {
+    /*
+    TODO:
+    I think there is supposed to be a thread per 'sync-event'
+    Alice makes an event thread:
+    Alice says ready: in the thread
+    Alice waits N-miliseconds
+    If no reply, kill thread.
+    if there is a reply to that event unqiue ID,
+    - gpg verify input (if not, kill thread)
+    - save .toml etc if ok (if not, kill thread)
+    - make another echo-thread (repeat)
+    - if ok: send 'gotit!!' signal
+    - kill thread
+    
+    */
     // wait, if only for testing
     thread::sleep(Duration::from_millis(1000)); // Avoid busy-waiting
     
     // ALPHA non-parallel version
     debug_log!("Start handle_owner_desk()");
-    // debug_log!(" for user_name->{}", collaborator.user_name); // Add collaborator name
-    // debug_log!(" for user_name->{}", collaborator.user_name); // Add collaborator name
-
-    // Print all sync data for the collaborator
+    // Print all sync data for the desk
     debug_log!("
-        handle_owner_desk collaborator_input_for_desk Sync Data: {:?}", 
-        collaborator_input_for_desk
+        handle_owner_desk own_desk_setup_data: {:?}", 
+        &own_desk_setup_data
     );
 
     loop { 
@@ -3223,50 +3358,93 @@ fn handle_owner_desk(
             break;
         }
 
-        // TODO eventually this should probably be the id of a thread
-        // Generate a unique event ID
-        let sync_event_id__for_this_loop: u64 = rand::random(); 
+        // Clone the data before moving it into the thread
+        let own_desk_setup_data_clone = own_desk_setup_data.clone();
 
-        // Create a ReadySignal
-        let ready_signal_to_send_from_this_loop = ReadySignal {
-            id: sync_event_id__for_this_loop,
-            timestamp: get_current_unix_timestamp(), 
-            echo: false,
-        };
+        // TODO (ideally put all this into a function...so it can echo itself)
+        // 2. Spawn a thread to send the ReadySignal
+        thread::spawn(move || {
+            
+            // 3. thread_id = 
+            let sync_event_id__for_this_thread = format!("{:?}", thread::current().id()); 
+            debug_log!(
+                "New sync-event thread id: {:?}; in handle_owner_desk()", 
+                sync_event_id__for_this_thread
+            );
+            
+            // // TODO eventually this should be the id of a thread
+            // // Generate a unique event ID
+            // let sync_event_id__for_this_thread: u64 = rand::random(); 
 
-        // Serialize the ReadySignal
-        let data = serialize_ready_signal(
-            &ready_signal_to_send_from_this_loop
-        ).expect("Failed to serialize ReadySignal, ready_signal_to_send_from_this_loop"); 
+            // 4. Creates a ReadySignal instance to be the ready signal
+            let ready_signal_to_send_from_this_loop = ReadySignal {
+                id: sync_event_id__for_this_thread,
+                timestamp: get_current_unix_timestamp(), 
+                echo: false,
+            };
 
-        // Send the signal to the collaborator's ready_port
-        let target_addr = SocketAddr::new(
-            IpAddr::V6(collaborator_input_for_desk.ipv6_address), 
-            collaborator_input_for_desk.ready_port__their_desk_you_listen
-        ); 
-
-        // Log before sending
-        debug_log!(
-            "Attempting to send ReadySignal to {}: {:?}", 
-            target_addr, 
-            ready_signal_to_send_from_this_loop
-        );
+            // 5. Serialize the ReadySignal
+            let data = serialize_ready_signal(
+                &ready_signal_to_send_from_this_loop
+            ).expect("Failed to serialize ReadySignal, ready_signal_to_send_from_this_loop"); 
 
 
-        if let Err(e) = send_data(&data, target_addr) { // Assuming you have a send_data function
-            debug_log!("Failed to send ReadySignal to {}: {}", target_addr, e);
-            eprintln!("Failed to send ReadySignal to {}: {}", target_addr, e);
-        } else {
-            debug_log!("Sent ReadySignal to {}", target_addr);
-            // println!("Sent ReadySignal to {}", target_addr);
-            debug_log(&format!("Sent ReadySignal to {}", target_addr));
-        }
+            // TODO possibly have some mechanism to try addresses until one works?
+            // 6. Send the signal @ local_user_ready_port__your_desk_you_send
+            // TODO figure out way to specify ipv6, 4, prioritizing, trying, etc.
+            // (in theory...you could try them all?)
+            // Select the first IPv6 address if available
+            if let Some(first_ipv6_address) = own_desk_setup_data_clone.local_user_ipv6_addr_list.first() {
+                // Copy the IPv6 address
+                let ipv6_address_copy = *first_ipv6_address; 
+            
+                // Send the signal to the collaborator's ready_port
+                let target_addr = SocketAddr::new(
+                    IpAddr::V6(ipv6_address_copy), // Use the copied address
+                    own_desk_setup_data_clone.local_user_ready_port__your_desk_you_send
+                ); 
 
+                // Log before sending
+                debug_log(
+                    "Attempting to send ReadySignal to {}: {:?}"//, 
+                    // target_addr, 
+                    // &ready_signal_to_send_from_this_loop
+                );
+
+                // If sending to the first address succeeds, no need to iterate further
+                if send_data(&data, target_addr).is_ok() {
+                    debug_log("Successfully sent ReadySignal to {} (first address)"//, target_addr
+                        );
+                    return; // Exit the thread
+                } else {
+                    debug_log("Failed to send ReadySignal to {} (first address)"//, target_addr
+                        );
+                }
+            } else {
+                debug_log("No IPv6 addresses available for {}"
+                    // , own_desk_setup_data.local_user_name
+                    );
+            }
+
+        
+        // 7. Listen at in-box for file for that event:
+        //     Alice waits N-miliseconds. If no reply, end thread.
+        // if there is a reply to that event unqiue ID:
+        // - gpg verify input (if not, kill thread)
+        // - save .toml etc if ok (if not, end thread)
+        // - make another echo-thread (repeat)
+        // - if ok: send 'gotit!!' signal
+        // - update 'last updated' file log (maybe append a timestamp stub file to a dir)
+        // - end thread
+        
+        }); // End Thread
+        
+        // Pause and Tea
         thread::sleep(Duration::from_secs(3)); 
-    }
+    } // end loop
     debug_log!(
         "Exiting handle_owner_desk() for {}", 
-        collaborator_input_for_desk.user_name
+        own_desk_setup_data.local_user_name
     ); // Add collaborator name
 }
 
@@ -3288,13 +3466,14 @@ fn handle_owner_desk(
 /// Ok(())
 fn serialize_ready_signal(signal: &ReadySignal) -> std::io::Result<Vec<u8>> {
     let mut bytes = Vec::new();
-    bytes.extend_from_slice(&signal.id.to_be_bytes()); // Convert id to bytes
-    bytes.extend_from_slice(&signal.timestamp.to_be_bytes()); // Convert timestamp to bytes
-    // Serialize bool as a single byte (0 for false, 1 for true)
+
+    // Convert String to bytes using as_bytes()
+    bytes.extend_from_slice(signal.id.as_bytes()); 
+
+    bytes.extend_from_slice(&signal.timestamp.to_be_bytes()); 
     bytes.push(if signal.echo { 1 } else { 0 });
     Ok(bytes) 
 }
-
 /// Vanilla Deserilize json signal
 fn deserialize_ready_signal(bytes: &[u8]) -> Result<ReadySignal, io::Error> {
     // Ensure the byte array has enough data for both fields:
@@ -3314,12 +3493,13 @@ fn deserialize_ready_signal(bytes: &[u8]) -> Result<ReadySignal, io::Error> {
     // Extract timestamp:
     let echo = bytes[16] != 0; 
     
-    Ok(ReadySignal { id, timestamp, echo })
+    Ok(ReadySignal { id: id.to_string(), timestamp, echo })
+
 }
 
 
 // TODO, uncomment and debug 
-fn send_file_and_see_next_signal(collaborator: &OthersCollaboratorPortsData, mut send_queue: SendQueue, event_id: u64, intray_port: u16, gotit_port: u16) {
+fn send_file_and_see_next_signal(collaborator: &RemoteCollaboratorPortsData, mut send_queue: SendQueue, event_id: u64, intray_port: u16, gotit_port: u16) {
     // // 5. Send Files (One at a Time)
     // while let Some(file_to_send) = send_queue.items.pop() { // Assuming items are file paths
     //     // 6. Send One Item 
@@ -3412,7 +3592,7 @@ fn send_file_and_see_next_signal(collaborator: &OthersCollaboratorPortsData, mut
 
 
 fn send_file_to_collaborator(
-    collaborator: &OthersCollaboratorPortsData,
+    collaborator: &RemoteCollaboratorPortsData,
     is_echo_request: bool,
     ready_timestamp: u64,
     file_to_send: &PathBuf, 
@@ -3478,12 +3658,12 @@ fn get_oldest_retry_timestamp(collaborator_username: &str) -> Result<Option<u64>
 }
 
 fn create_retry_flag(
-    collaborator: &OthersCollaboratorPortsData, 
+    collaborator: &RemoteCollaboratorPortsData, 
     file_path: &PathBuf, 
     timestamp: u64,
 ) -> Result<PathBuf, io::Error> {
     let retry_flags_dir = Path::new("project_graph_data/sync_state_items")
-        .join(&collaborator.user_name)
+        .join(&collaborator.remote_collaborator_name)
         .join("fail_retry_flags");
 
     fs::create_dir_all(&retry_flags_dir)?; 
@@ -3505,7 +3685,7 @@ fn create_retry_flag(
 
 ///
 fn get_or_create_send_queue(
-    collaborator_sync_data: &OthersCollaboratorPortsData,
+    collaborator_sync_data: &RemoteCollaboratorPortsData,
     received_timestamp: u64,
 ) -> Result<SendQueue, io::Error> {
     
@@ -3518,7 +3698,7 @@ fn get_or_create_send_queue(
 
     // Iterate over owned files, only considering those modified AFTER the received timestamp
     let owned_files_dir = Path::new("project_graph_data/owned_files")
-        .join(&collaborator_sync_data.user_name);
+        .join(&collaborator_sync_data.remote_collaborator_name);
 
     for entry in WalkDir::new(owned_files_dir)
         .into_iter()
@@ -3588,45 +3768,100 @@ fn get_or_create_send_queue(
 ///
 /// TODO add  "Flow" steps: handle_collaborator_intray_desk()
 fn handle_collaborator_intray_desk(
-    // TODO: why are  intray_port__their_desk_you_send and gotit_port__their_desk_you_listen never used here????
-    collaborator_sync_data: &OthersCollaboratorPortsData,
+    meeting_room_sync_data_fn_input: &ForRemoteCollaboratorDeskThread,
 ) -> Result<(), UmaError> {
-    debug_log!("Started the handle_collaborator_intray_desk() for->{}", collaborator_sync_data.user_name);
+        /*
+    loop:
+    // 2. Create listeners for each IP address
+    for ipv6_address in &own_desk_setup_data.local_user_ipv6_addr_list {
+        let tx = tx.clone(); // Clone the sender for each thread
+        let ready_port = own_desk_setup_data.local_user_ready_port__your_desk_you_send;
+
+        thread::spawn(move || {...
+            
+            
+    for ipv4_address in &own_desk_setup_data.local_user_ipv6_addr_list {
+        let tx = tx.clone(); // Clone the sender for each thread
+        let ready_port = own_desk_setup_data.local_user_ready_port__your_desk_you_send;
+
+        thread::spawn(move || {...
+    */
+    // TODO: why are  intray_port__their_desk_you_send and gotit_port__their_desk_you_listen never used here????
+    debug_log!(
+        "Started the handle_collaborator_intray_desk() for->{}", 
+        meeting_room_sync_data_fn_input.remote_collaborator_name
+    );
 
     // 1. Create UDP socket
-    let socket = UdpSocket::bind(format!("[{}]:{}", 
-                                        collaborator_sync_data.ipv6_address, 
-                                        collaborator_sync_data.ready_port__their_desk_you_listen));
+    // let socket = UdpSocket::bind(format!(
+    //     "[{}]:{}", 
+    //     meeting_room_sync_data_fn_input.remote_collaborator_ipv6_addr_list, 
+    //     meeting_room_sync_data_fn_input.remote_collaborator_ready_port__their_desk_you_listen));
+    // 1. Iterate over IPv6 addresses and attempt to bind the socket
+    let mut socket: Option<UdpSocket> = None;
+    for ipv6_address in &meeting_room_sync_data_fn_input.remote_collaborator_ipv6_addr_list {
+        let bind_result = UdpSocket::bind(SocketAddr::new(
+            IpAddr::V6(*ipv6_address), 
+            meeting_room_sync_data_fn_input.remote_collaborator_ready_port__their_desk_you_listen
+        ));
 
-    // Print all sync data for the collaborator
-    debug_log!("???Collaborator Sync Data: {:?}", collaborator_sync_data);
-
-    let socket = match socket {
-        Ok(sock) => {
-            debug_log!("Bound UDP socket to [{}]:{}", collaborator_sync_data.ipv6_address, collaborator_sync_data.ready_port__their_desk_you_listen);
-            sock
-        },
-        Err(e) => {
-            debug_log!(
-                "Error in handle_collaborator_intray_desk, binding UDP socket: {} ({:?}), 
-                @port->{}", 
-                e, 
-                e.kind(), 
-                collaborator_sync_data.ready_port__their_desk_you_listen
-            );
-            // Handle the error appropriately (e.g., return an error from the function)
-            return Err(UmaError::NetworkError(e.to_string()));
+        match bind_result {
+            Ok(sock) => {
+                socket = Some(sock);
+                debug_log!("Bound UDP socket to [{}]:{}", ipv6_address, meeting_room_sync_data_fn_input.remote_collaborator_ready_port__their_desk_you_listen);
+                break; // Exit the loop if binding is successful
+            },
+            Err(e) => {
+                debug_log!("Failed to bind to [{}]:{}: {}", ipv6_address, meeting_room_sync_data_fn_input.remote_collaborator_ready_port__their_desk_you_listen, e);
+                // Continue to the next address
+            }
         }
-    };                                     
+    }
+    // Print all sync data for the collaborator
+    debug_log!("???Collaborator Sync Data: {:?}", meeting_room_sync_data_fn_input);
+
+    // 2. Check if socket binding was successful (simplified)
+    let socket = socket.ok_or(UmaError::NetworkError("Failed to bind to any IPv6 address".to_string()))?;
+    
+    // let socket = match socket {
+    //     Ok(sock) => {
+    //         // debug_log!("Bound UDP socket to [{}]:{}", meeting_room_sync_data_fn_input.ipv6_address, meeting_room_sync_data_fn_input.remote_ready_port__their_desk_you_listen);
+    //         debug_log!(
+    //             "Bound UDP socket to [{:?}]:{:?}", 
+    //             meeting_room_sync_data_fn_input.remote_collaborator_ipv6_addr_list, 
+    //             meeting_room_sync_data_fn_input.remote_collaborator_ready_port__their_desk_you_listen
+    //         );
+
+    //         sock
+    //     },
+    //     Err(e) => {
+    //         debug_log!(
+    //             "Error in handle_collaborator_intray_desk, binding UDP socket: {} ({:?}), 
+    //             @port->{}", 
+    //             e, 
+    //             e.kind(), 
+    //             meeting_room_sync_data_fn_input.remote_collaborator_ready_port__their_desk_you_listen
+    //         );
+    //         // Handle the error appropriately (e.g., return an error from the function)
+    //         return Err(UmaError::NetworkError(e.to_string()));
+    //     }
+    // };                                     
                                         
-    debug_log!("Bound UDP socket to [{}]:{}", collaborator_sync_data.ipv6_address, collaborator_sync_data.ready_port__their_desk_you_listen);
+    debug_log!(
+        "Bound UDP socket to [{:?}]:{:?}", 
+        meeting_room_sync_data_fn_input.remote_collaborator_ipv6_addr_list,
+        meeting_room_sync_data_fn_input.remote_collaborator_ready_port__their_desk_you_listen,
+    );
 
     // 2. Main loop
     let mut last_log_time = Instant::now(); // Track the last time we logged a message
     loop {
         // 3. Check for halt signal
         if should_halt() {
-            debug_log!("Halting handle_collaborator_intray_desk() for {}", collaborator_sync_data.user_name);
+            debug_log!(
+                "Halting handle_collaborator_intray_desk() for {}", 
+                meeting_room_sync_data_fn_input.remote_collaborator_name
+            );
             break;
         }
 
@@ -3639,8 +3874,8 @@ fn handle_collaborator_intray_desk(
                 // 5. Deserialize the ReadySignal
                 let ready_signal: ReadySignal = match deserialize_ready_signal(&buf[..amt]) {
                     Ok(ready_signal) => {
-                        println!("{}: Received ReadySignal: {:?}", collaborator_sync_data.user_name, ready_signal); // Print to console
-                        debug_log!("{}: Received ReadySignal: {:?}", collaborator_sync_data.user_name, ready_signal); // Log the signal
+                        println!("{}: Received ReadySignal: {:?}", meeting_room_sync_data_fn_input.remote_collaborator_name, ready_signal); // Print to console
+                        debug_log!("{}: Received ReadySignal: {:?}", meeting_room_sync_data_fn_input.remote_collaborator_name, ready_signal); // Log the signal
                         ready_signal
                     },
                     Err(e) => {
@@ -3656,15 +3891,15 @@ fn handle_collaborator_intray_desk(
                 // Periodically log that we're listening
                 if last_log_time.elapsed() >= Duration::from_secs(5) {
                     debug_log!("{}: Listening for ReadySignal on port {}", 
-                               collaborator_sync_data.user_name, 
-                               collaborator_sync_data.ready_port__their_desk_you_listen);
+                               meeting_room_sync_data_fn_input.remote_collaborator_name, 
+                               meeting_room_sync_data_fn_input.remote_collaborator_ready_port__their_desk_you_listen);
                     last_log_time = Instant::now();
                 }
             },
             Err(e) => {
                 // Handle other errors
                 debug_log!("{}: Error receiving data on ready_port: {} ({:?})", 
-                           collaborator_sync_data.user_name, e, e.kind());
+                           meeting_room_sync_data_fn_input.remote_collaborator_name, e, e.kind());
                 // Consider exiting the function or the sync process if it's a fatal error
                 return Err(UmaError::NetworkError(e.to_string())); // Example: Return a NetworkError
             }
@@ -3680,7 +3915,7 @@ fn handle_collaborator_intray_desk(
 
 // old archive works
 // fn handle_collaborator_intray_desk(
-//     collaborator_sync_data: &OthersCollaboratorPortsData,
+//     collaborator_sync_data: &RemoteCollaboratorPortsData,
 // ) -> Result<(), UmaError> {
 //     debug_log!("Started the handle_collaborator_intray_desk() for {}", collaborator_sync_data.user_name);
 
@@ -3734,7 +3969,7 @@ fn handle_collaborator_intray_desk(
 
 // // tcp version
 // fn handle_collaborator_intray_desk(
-//     collaborator_sync_data: &OthersCollaboratorPortsData,
+//     collaborator_sync_data: &RemoteCollaboratorPortsData,
 // ) -> Result<(), UmaError> { // Consider using a custom error type for UMA
 //     debug_log("Started the handle_collaborator_intray_desk()");
 
@@ -3855,7 +4090,7 @@ enum SyncResult {
 
 // Function to handle the sync event in a separate thread
 fn handle_sync_event_thread(
-    collaborator_sync_data: &OthersCollaboratorPortsData,
+    collaborator_sync_data: &RemoteCollaboratorPortsData,
     is_echo_request: bool,
     ready_timestamp: u64,
     file_to_send: &PathBuf,
@@ -3964,55 +4199,71 @@ fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
 
     debug_log!("\n\nStarting UMA Sync Team Office for (local owner) -> {}", &uma_local_owner_user);
 
-    // let session_connection_allowlists = make_session_connection_allowlists(&uma_local_owner_user)?;
+    // let session_connection_allowlists = make_sync_meetingroomconfig_datasets(&uma_local_owner_user)?;
     // debug_log!("session_connection_allowlists -> {:?}", &session_connection_allowlists);
-    //  --- 1. GET ALLOW LIST ---
-    let session_connection_allowlists = match make_session_connection_allowlists(&uma_local_owner_user) {
-        Ok(allowlist) => {
-            debug_log!("Successfully generated allowlist: {:?}", &allowlist); 
-            allowlist
+    
+    // 1. get sync_meetingroom_config_datasets
+    let sync_meetingroom_config_datasets = match make_sync_meetingroomconfig_datasets(&uma_local_owner_user) {
+        
+        // TODO What is this doing? re: room_config_datasets
+        Ok(room_config_datasets) => {
+            debug_log!("Successfully generated room_config_datasets: {:?}", &room_config_datasets); 
+            room_config_datasets
         },
         Err(e) => {
-            debug_log!("Error creating allowlist: {}", e);
+            debug_log!("Error creating room_config_datasets: {}", e);
             return Err(Box::new(e)); // Return the error early
         }
     };    
         
-    // Create threads for each collaborator on the allowlist: 
+    // 2. Create a list for threads for each collaborator on the room_config_datasets: 
+    /*
+    TODO explain why/how a list:
+    to gather for shutdown?
+    */
     let mut collaborator_threads = Vec::new();
-    for this_allowlisted_collaborator in session_connection_allowlists { 
-        if this_allowlisted_collaborator.user_name != uma_local_owner_user {
-            // debug_log!("Setting up connection with {}", this_allowlisted_collaborator.user_name);
-            debug_log!("Setting up connection with {}", this_allowlisted_collaborator.user_name);
     
-            // Move ownership directly into the threads
-            // Clone the collaborator data before moving it into the closures
-            
-            // your desk
-            // Get the local user's data
-            let localowneruser_port_assignments = match make_session_connection_allowlists(&uma_local_owner_user) {
-                Ok(allowlist) => {
-                    allowlist.iter().find(|c| c.user_name == uma_local_owner_user).cloned()
-                },
-                Err(e) => {
-                    debug_log!("Error creating allowlist for owner: {}", e);
-                    return Err(Box::new(e));
-                }
-            }.expect("Local user not found in allowlist"); // Handle this error appropriately
-            // Create the two "meeting room desks" for each collaborator pair:
-            let owner_desk_thread = thread::spawn(move || {
-                handle_owner_desk(&localowneruser_port_assignments); 
-            });
+    // 3. get sync_meetingroom_config_dataset 
+    // with MeetingRoomSyncDataset, ForLocalOwnerDeskThread, ForRemoteCollaboratorDeskThread
 
-            // their desk
-            let collaborator_desk_collaborator = this_allowlisted_collaborator.clone();
-            let collaborator_desk_thread = thread::spawn(move || {
-                handle_collaborator_intray_desk(&collaborator_desk_collaborator);
-            });
+    for this_meetingroom_iter in sync_meetingroom_config_datasets { 
+        // Extract data from this_meetingroom_iter
+        // and place each pile in a nice baggy for each desk.
+        debug_log!("Setting up connection with {}", this_meetingroom_iter.remote_collaborator_name);
+        
+        // Create sub-structs
+        let data_baggy_for_owner_desk = ForLocalOwnerDeskThread { 
+            local_user_name: this_meetingroom_iter.local_user_name.clone(),
+            local_user_ipv6_addr_list: this_meetingroom_iter.local_user_ipv6_addr_list,
+            local_user_ipv4_addr_list: this_meetingroom_iter.local_user_ipv4_addr_list,
+            local_user_public_gpg: this_meetingroom_iter.local_user_public_gpg.clone(),
+            local_user_sync_interval: this_meetingroom_iter.local_user_sync_interval,
+            local_user_ready_port__your_desk_you_send: this_meetingroom_iter.local_user_ready_port__your_desk_you_send,
+            local_user_intray_port__your_desk_you_listen: this_meetingroom_iter.local_user_intray_port__your_desk_you_listen,
+            local_user_gotit_port__your_desk_you_send: this_meetingroom_iter.local_user_gotit_port__your_desk_you_send,
+        };
+        let data_baggy_for_collaborator_desk = ForRemoteCollaboratorDeskThread {
+            remote_collaborator_name: this_meetingroom_iter.remote_collaborator_name.clone(),
+            remote_collaborator_ipv6_addr_list: this_meetingroom_iter.remote_collaborator_ipv6_addr_list,
+            remote_collaborator_ipv4_addr_list: this_meetingroom_iter.remote_collaborator_ipv4_addr_list,
+            remote_collaborator_public_gpg: this_meetingroom_iter.remote_collaborator_public_gpg.clone(),
+            remote_collaborator_sync_interval: this_meetingroom_iter.remote_collaborator_sync_interval,
+            remote_collaborator_ready_port__their_desk_you_listen: this_meetingroom_iter.remote_collaborator_ready_port__their_desk_you_listen,
+            remote_collaborator_intray_port__their_desk_you_send: this_meetingroom_iter.remote_collaborator_intray_port__their_desk_you_send,
+            remote_collaborator_gotit_port__their_desk_you_listen: this_meetingroom_iter.remote_collaborator_gotit_port__their_desk_you_listen, 
+        };
 
-            collaborator_threads.push(owner_desk_thread); 
-            collaborator_threads.push(collaborator_desk_thread);
-        } 
+        // Create the two "meeting room desks" for each collaborator pair:
+        // Your Desk
+        let owner_desk_thread = thread::spawn(move || {
+            handle_owner_desk(data_baggy_for_owner_desk); 
+        });
+        // Their Desk
+        let collaborator_desk_thread = thread::spawn(move || {
+            handle_collaborator_intray_desk(&data_baggy_for_collaborator_desk);
+        });
+        collaborator_threads.push(owner_desk_thread); 
+        collaborator_threads.push(collaborator_desk_thread);
     }    
     
     // ... Handle join logic for your threads... 
