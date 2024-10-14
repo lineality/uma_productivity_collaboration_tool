@@ -182,10 +182,10 @@ pub enum SyncError {
     // ... other potential errors ...
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
-struct CollaboratorPairPorts {
-    collaborator_ports: Vec<ReadTeamchannelCollaboratorPortsToml>,
-}
+// #[derive(Debug, Deserialize, Serialize, Clone)]
+// struct CollaboratorPairPorts {
+//     collaborator_ports: Vec<ReadTeamchannelCollaboratorPortsToml>,
+// }
 
 #[derive(Debug)]
 enum MyCustomError {
@@ -1673,6 +1673,7 @@ fn load_core_node_from_toml_file(file_path: &Path) -> Result<CoreNode, String> {
     // 4. Handle collaborator_port_assignments
     if let Some(collaborator_assignments_table) = toml_value.get("collaborator_port_assignments").and_then(Value::as_table) {
         for (pair_name, pair_data) in collaborator_assignments_table {
+            debug_log("Looking for 'collaborator_ports' load_core...");
             if let Some(ports_list) = pair_data.get("collaborator_ports").and_then(Value::as_array) {
                 let mut collaborator_ports = Vec::new();
                 for port_data in ports_list {
