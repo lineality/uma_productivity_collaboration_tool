@@ -788,44 +788,85 @@ fn extract_ports_from_table(port_set: &toml::map::Map<String, Value>) -> Result<
 /// * `Result<Vec<String>, String>` - A `Result` containing a vector of collaborator names
 ///   on success, or a `String` describing the error on failure.
 fn get_collaborator_names_from_node_toml(node_toml_path: &Path) -> Result<Vec<String>, String> {
-    /*
-    call with
-        // Inside make_sync_meetingroomconfig_datasets
-    let collaborator_names = match get_collaborator_names_from_node_toml(&channel_node_toml_path) {
-        Ok(names) => names,
-        Err(e) => {
-            debug_log!("Error getting collaborator names: {}", e);
-            return Err(MyCustomError::from(io::Error::new(io::ErrorKind::Other, e)));
-        }
-    };   
-    
-    
-    */
+    debug_log!("Entering get_collaborator_names_from_node_toml() with path: {:?}", node_toml_path);
+
     // 1. Read the node.toml file
     let toml_string = match std::fs::read_to_string(node_toml_path) {
-        Ok(content) => content,
+        Ok(content) => {
+            debug_log!("Successfully read node.toml file. Contents:\n{}", content);
+            content
+        },
         Err(e) => return Err(format!("Error reading node.toml file: {}", e)),
     };
 
     // 2. Parse the TOML data
     let toml_value: Value = match toml::from_str(&toml_string) {
-        Ok(value) => value,
+        Ok(value) => {
+            debug_log!("Successfully parsed TOML data. Value: {:?}", value);
+            value
+        },
         Err(e) => return Err(format!("Error parsing node.toml data: {}", e)),
     };
 
     // 3. Extract collaborator names from abstract_collaborator_port_assignments
     let mut collaborator_names = Vec::new();
+    debug_log!("Looking for table 'abstract_collaborator_port_assignments'");
     if let Some(collaborator_assignments_table) = toml_value.get("abstract_collaborator_port_assignments").and_then(Value::as_table) {
+        debug_log!("Found table 'abstract_collaborator_port_assignments'. Entries: {:?}", collaborator_assignments_table);
         for (pair_name, _) in collaborator_assignments_table {
+            debug_log!("Processing pair: {}", pair_name);
             // Split the pair name (e.g., "alice_bob") into individual names
             let names: Vec<&str> = pair_name.split('_').collect();
             collaborator_names.extend(names.iter().map(|&s| s.to_string()));
         }
+    } else {
+        debug_log!("Table 'abstract_collaborator_port_assignments' not found.");
     }
 
+    debug_log!("Exiting get_collaborator_names_from_node_toml() with names: {:?}", collaborator_names);
     // 4. Return the list of collaborator names
     Ok(collaborator_names)
 }
+// fn get_collaborator_names_from_node_toml(node_toml_path: &Path) -> Result<Vec<String>, String> {
+//     /*
+//     call with
+//         // Inside make_sync_meetingroomconfig_datasets
+//     let collaborator_names = match get_collaborator_names_from_node_toml(&channel_node_toml_path) {
+//         Ok(names) => names,
+//         Err(e) => {
+//             debug_log!("Error getting collaborator names: {}", e);
+//             return Err(MyCustomError::from(io::Error::new(io::ErrorKind::Other, e)));
+//         }
+//     };   
+    
+    
+//     */
+//     debug_log!("get_collaborator_names_from_node_toml->{:?}", 0);
+//     // 1. Read the node.toml file
+//     let toml_string = match std::fs::read_to_string(node_toml_path) {
+//         Ok(content) => content,
+//         Err(e) => return Err(format!("Error reading node.toml file: {}", e)),
+//     };
+
+//     // 2. Parse the TOML data
+//     let toml_value: Value = match toml::from_str(&toml_string) {
+//         Ok(value) => value,
+//         Err(e) => return Err(format!("Error parsing node.toml data: {}", e)),
+//     };
+
+//     // 3. Extract collaborator names from abstract_collaborator_port_assignments
+//     let mut collaborator_names = Vec::new();
+//     if let Some(collaborator_assignments_table) = toml_value.get("abstract_collaborator_port_assignments").and_then(Value::as_table) {
+//         for (pair_name, _) in collaborator_assignments_table {
+//             // Split the pair name (e.g., "alice_bob") into individual names
+//             let names: Vec<&str> = pair_name.split('_').collect();
+//             collaborator_names.extend(names.iter().map(|&s| s.to_string()));
+//         }
+//     }
+
+//     // 4. Return the list of collaborator names
+//     Ok(collaborator_names)
+// }
 
 
 // ALPHA VERSION
@@ -3235,14 +3276,38 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
     
     // 5. Get raw-abstract port-assignments from team_channel node
     let abstract_collaborator_port_assignments = teamchannel_nodetoml_data.abstract_collaborator_port_assignments;
-    debug_log!("5. abstract_collaborator_port_assignments->{:?}", &abstract_collaborator_port_assignments);
+    debug_log!(
+        "5. abstract_collaborator_port_assignments->{:?}", 
+        &abstract_collaborator_port_assignments
+    );
 
-    // 6. Iterate through the address-book-name-list 
+    // 6. filter-pass: remove non-contacts from list
+    //    - remove self
+    //    - remove duplicates
+    //    - remove names not in address-book  
+
+    let mut filtered_collaboratorsarray = collaborators_names_array.clone();
+    // 1. Remove Self
+    filtered_collaboratorsarray.retain(|name| name != &uma_local_owner_user);
+
+    // 2. Remove Duplicates
+    filtered_collaboratorsarray.sort();
+    filtered_collaboratorsarray.dedup();
+
+    // 3. Remove Names Not in Address Book
+    filtered_collaboratorsarray.retain(|name| {
+        let toml_file_path = Path::new("project_graph_data/collaborator_files_address_book")
+            .join(format!("{}__collaborator.toml", name));
+        toml_file_path.exists()
+    });
+    
+
+    // 7. sync-pass: Iterate through the address-book-name-list 
     // This is a list of all possible team channel member collaborators.
     // Go through the list make a set of meeting room information for each team-member, 
     // so that you (e.g. Alice) can sync with other team members.
     // Note: only team-members who are also in your address book can be contacted.
-    for collaborator_name in collaborators_names_array { // collaborator_data is now a String
+    for collaborator_name in filtered_collaboratorsarray { // collaborator_data is now a String
         /*
         Note: there are two sources of truth that each need to be checked
         (and which might be updated independently)
