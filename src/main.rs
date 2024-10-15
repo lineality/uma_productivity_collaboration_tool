@@ -4567,7 +4567,15 @@ fn initialize_ok_to_start_sync_flag_to_false() {
 
 
 /// signal for continuing or for stoping whole Uma program with all threads
-fn initialize_continue_uma_signal() { 
+/// Initializes the UMA continue/halt signal by creating or resetting the 
+/// `continue_uma.txt` file and setting its value to "1" (continue).
+/// set to halt by `quit_set_continue_uma_to_false()`
+fn initialize_continue_uma_signal() {
+    // 1. Ensure the directory exists
+    let directory_path = Path::new(CONTINUE_UMA_PATH).parent().unwrap(); // Get the parent directory
+    fs::create_dir_all(directory_path).expect("Failed to create directory for continue_uma.txt");
+
+    // 2. Create or overwrite the file
     if fs::remove_file(CONTINUE_UMA_PATH).is_ok() {
         debug_log("Old 'continue_uma.txt' file deleted."); // Optional log.
     } 
@@ -4580,7 +4588,12 @@ fn initialize_continue_uma_signal() {
 }
 
 /// signal for continuing or for stoping whole Uma program with all threads
-fn initialize_hard_restart_signal() { 
+fn initialize_hard_restart_signal() {
+    // 1. Ensure the directory exists
+    let directory_path = Path::new(HARD_RESTART_FLAG_PATH).parent().unwrap(); // Get the parent directory
+    fs::create_dir_all(directory_path).expect("Failed to create directory for yes_hard_restart_flag.txt");
+
+    // 2. Create or overwrite the file
     if fs::remove_file(HARD_RESTART_FLAG_PATH).is_ok() {
         debug_log("Old 'yes_hard_restart_flag.txt' file deleted."); // Optional log.
     } 
@@ -4591,6 +4604,7 @@ fn initialize_hard_restart_signal() {
     file.write_all(b"1")
         .expect("Failed to write to 'yes_hard_restart_flag.txt' file.");
 }
+
 
 /// set signal to stop whole Uma program with all threads
 fn quit_set_continue_uma_to_false() { 
