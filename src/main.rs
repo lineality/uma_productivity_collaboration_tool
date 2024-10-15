@@ -3211,11 +3211,13 @@ fn get_addressbook_file_by_username(username: &str) -> Result<CollaboratorTomlDa
 fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<HashSet<MeetingRoomSyncDataset>, MyCustomError> { 
     debug_log!("Entering the make_sync_meetingroomconfig_datasets() function..."); 
 
-    // --- 1. load the team_channel node.toml ---
+    // --- 1. find node.toml ---
     /*
-    1. load the team_channel node.toml, which contains 
-    the port assignments and the list of team-members 
-    (collaborators with access to that channel)
+    1. Find Path to team-channel node.toml, 
+    which contains the port assignments 
+    and the list of (all possible) team-members 
+    (collaborators with access to that channel, 
+    though perhaps not shared yet with you)
     */
     // get path, derive name from path
     let channel_dir_path_str = read_state_string("current_node_directory_path.txt")?; // read as string first
@@ -3226,8 +3228,8 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
     
     // A. Print the absolute path of the channel directory
     match channel_dir_path.canonicalize() {
-        Ok(abs_path) => debug_log!("Absolute channel directory path: {:?}", abs_path),
-        Err(e) => debug_log!("Error getting absolute path of channel directory: {}", e),
+        Ok(abs_path) => debug_log!("1. Absolute channel directory path: {:?}", abs_path),
+        Err(e) => debug_log!("Error 1. getting absolute path of channel directory: {}", e),
     }
     
     // Construct the path to node.toml 
@@ -3237,85 +3239,92 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
     // B. Print the absolute path of the node.toml file
     match channel_node_toml_path.canonicalize() {
         Ok(abs_path) => debug_log!("1. Absolute channel_dir_path node.toml path: {:?}", abs_path),
-        Err(e) => debug_log!("Error getting absolute path of channel_dir_path node.toml: {}", e),
+        Err(e) => debug_log!("Error 1. getting absolute path of channel_dir_path node.toml: {}", e),
     }
 
-    // --- 2. Read that (node toml) data into an organized 'struct' of variables
-    // Read node.toml data with fn load_core_node_from_toml_file() ---
+    // --- 2. Load/Read node.toml ---
+    // Read that (node toml) data into an organized 'struct' of variables
+    // Read node.toml data with fn load_core_node_from_toml_file()
     // loading the fields into an organized struct with datatypes
     let teamchannel_nodetoml_data: CoreNode = match load_core_node_from_toml_file(&channel_node_toml_path) { 
         Ok(node) => {
-            debug_log!("Successfully read channel node.toml");
+            debug_log!("2. Successfully read channel node.toml");
             node // ???
         },
         Err(e) => {
-            debug_log!("Error reading channel node.toml: {:?}", &channel_node_toml_path);
-            debug_log!("Error details: {}", e);
+            debug_log!("Error 2. reading channel node.toml: {:?}", &channel_node_toml_path);
+            debug_log!("Error 2. details: {}", e);
             return Err(MyCustomError::from(io::Error::new(io::ErrorKind::Other, e))); // Convert the error
         }
     };
     debug_log!("2. teamchannel_nodetoml_data->{:?}", &teamchannel_nodetoml_data);
     
-    // 3. Create an (empty) lookup-table (hash-set) to put all the meeting-room-data-sets in.
+    // --- 3. Empty Table for Later ---
+    // Create an (empty) lookup-table (hash-set) to put all the meeting-room-data-sets in.
     // This will contain the local-port-assignments for each desk.
     let mut sync_config_data_set: HashSet<MeetingRoomSyncDataset> = HashSet::new();
     debug_log!("3. sync_config_data_set->{:?} <should be empty, ok>", &sync_config_data_set);
     
-
-    // 4. Get team member names from team_channel node
+    // --- 4. Team-Channel Memebers ---
+    // Get team member names from team_channel node
+    // (Example of derived-functional definitions: 
+    // compile this from the list of port-assignments,
+    // rather than having multiple 'sources of truth' for members)
     // let collaborators_names_array = teamchannel_nodetoml_data.teamchannel_collaborators_with_access;
     // derive list functionally from port-assignemnt list
     let collaborators_names_array = match get_collaborator_names_from_node_toml(&channel_node_toml_path) {
         Ok(names) => names,
         Err(e) => {
-            debug_log!("Error getting collaborator names: {}", e);
+            debug_log!("Error 3. getting collaborator names: {}", e);
             return Err(MyCustomError::from(io::Error::new(io::ErrorKind::Other, e)));
         }
     };
     debug_log!("4. collaborators_names_array->{:?}", &collaborators_names_array);
     
-    // 5. Get raw-abstract port-assignments from team_channel node
+    // --- 5. raw-abstract port-assignments ---
+    // Get the raw-abstract port-assignments 
+    // from the team_channel node
     let abstract_collaborator_port_assignments = teamchannel_nodetoml_data.abstract_collaborator_port_assignments;
     debug_log!(
         "5. abstract_collaborator_port_assignments->{:?}", 
         &abstract_collaborator_port_assignments
     );
 
-    // 6. filter-pass: remove non-contacts from list
+    // --- 6. filtered collaborators array ---
+    // filter-pass: remove non-contacts from list
     //    - remove self
     //    - remove duplicates
     //    - remove names not in address-book  
-
     let mut filtered_collaboratorsarray = collaborators_names_array.clone();
-    // 1. Remove Self
+
+    // 6.1  Remove Self (don't try to call yourself on the phone)
     filtered_collaboratorsarray.retain(|name| name != &uma_local_owner_user);
 
-    // 2. Remove Duplicates
+    // 6.2  Remove Duplicates
     filtered_collaboratorsarray.sort();
     filtered_collaboratorsarray.dedup();
 
-    // 3. Remove Names Not in Address Book
+    // 6.3  Actual Meeting Contacts
+    // Remove Names Not in your Address Book
+    // the team-owner invites people to the team
+    // each collaborator invites you to connect with them
     filtered_collaboratorsarray.retain(|name| {
         let toml_file_path = Path::new("project_graph_data/collaborator_files_address_book")
             .join(format!("{}__collaborator.toml", name));
         toml_file_path.exists()
     });
-    
+    debug_log!(
+        "6. filtered_collaboratorsarray->{:?}", 
+        &filtered_collaboratorsarray
+    );
 
-    // 7. sync-pass: Iterate through the address-book-name-list 
-    // This is a list of all possible team channel member collaborators.
+    // --- 7. Iterate through the filtered address-book-name-list ---
     // Go through the list make a set of meeting room information for each team-member, 
     // so that you (e.g. Alice) can sync with other team members.
-    // Note: only team-members who are also in your address book can be contacted.
     for collaborator_name in filtered_collaboratorsarray { // collaborator_data is now a String
-        /*
-        Note: there are two sources of truth that each need to be checked
-        (and which might be updated independently)
-        to compile real-local channel-user-meeting-room sync information.
-        */
-        debug_log!("Processing collaborator: {}", collaborator_name);
+        debug_log!("7. Processing collaborator: {}", collaborator_name);
 
-        // 7. get (that team member's) addressbook file by (their) username
+        // --- 8. get (that team member's) addressbook file by (their) username ---
         // using get_addressbook_file_by_username()
         // which loads the NAME__collaborator.toml from the collaborator_files_address_books directory 
         // (owned by that collaborator, it is their own gpg signed data)
@@ -3323,13 +3332,19 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
             Ok(these_collaboratorfiles_toml_data) => these_collaboratorfiles_toml_data,
             Err(e) => {
                 // This is where you'll most likely get the "No such file or directory" error
-                debug_log!("Error loading collaborator {}. File might be missing. Error: {}", collaborator_name, e); 
+                debug_log!("Error 8. loading collaborator {}. File might be missing. Error: {}", collaborator_name, e); 
                 return Err(e); // Propagate the error
             }
         };
-        debug_log!("??????Collaborator data loaded: {:?}", &these_collaboratorfiles_toml_data);
+        debug_log!(
+            "8. Collaborator data these_collaboratorfiles_toml_data: {:?}", 
+            &these_collaboratorfiles_toml_data
+        );
 
-        // TODO very speculative code here
+
+
+        // --- 9. extract data or drop collaborator from list ---
+        // TODO addresses plural?
         /*
         what are all the fields of information to get?
         ipv6
@@ -3338,7 +3353,6 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
         gpg
         sync rate?
         */
-        // 8. extract data or drop collaborator from list: 
         // IPvX...what else? 
         // (If not available, drop this person from the list)
         let ipv6_address = match these_collaboratorfiles_toml_data
@@ -3346,70 +3360,62 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
             .and_then(|v| v.first().cloned()) 
         {
             Some(addr) => {
-                debug_log!("IPv6 address for {}: {}", collaborator_name, addr);
-                addr
+                debug_log!(
+                    "8. IPv6 address for {}: {}", 
+                    collaborator_name, addr
+                );
+                addr // ?
             },
             None => {
-                debug_log!("WARNING: No IPv6 address found for {}. Skipping this collaborator.", collaborator_name);
+                debug_log!("WARNING: 8. No IPv6 address found for {}. Skipping this collaborator.", collaborator_name);
                 continue; // Skip to the next collaborator in the loop
             }
         };
-        
+        debug_log!(
+            "8. ipv6_address {:?}->", 
+            &ipv6_address
+        );
         
         // TODO Alpha under construction
-        // 9. Translate abstract port assignments to local role-specific structs
+        // --- 10. Translate abstract port assignments to local role-specific structs ---
         /*
-        TODO
-        What format should the ports be in?
-        the same final standard local format?
-        9. Make local port assignments: Translate abstract port assignments to local role-specific structs
+        Make local port assignments: Translate abstract port assignments to local role-specific structs
         per real remote collaborator:
-        
-        - load the raw data from the team_channel node.toml an AbstractTeamchannelNodeTomlPortsData struct
-        - 
-        or:
-        make and use a lookup table per other collaborator name (and dispose of it after this step (unless rust does so already)
-        
-        e.g.
-        remote_collaborator_name = MeetingRoomSyncDataset struct (or an intermediate with only struct values, and names)
-        
+
         Instance-Role-Specific Local-Meeting-Room-Struct
-        This is no longer an abstract set of data that can be used in different ways in different instances, this is now one of those specific instances with local roles and one local way of using those data.
-        The abstract port-assignments will be converted into a disambiguated and clarified specific local instance roles set of port assignments, namely, local_user_role, remote_collaborator_role
-        
+        This is no longer an abstract set of data that can be used 
+        in different ways in different instances, 
+        this is now one of those specific instances 
+        with local roles and one local way of using those data.
+        The abstract port-assignments will be converted 
+        into a disambiguated and clarified specific local 
+        instance roles set of port assignments, namely, 
+        local_user_role, remote_collaborator_role
         */
         let role_based_ports = translate_port_assignments(
             uma_local_owner_user, 
             &collaborator_name, 
             abstract_collaborator_port_assignments.clone(), // Clone to avoid ownership issues
         )?;
-
+        debug_log!(
+            "9. role_based_ports {:?}->", 
+            &role_based_ports
+        );
         /*
-        
-        format is:
+        abstract format is:
         # meeting rooms, abstract_collaborator_port_assignments
         [abstract_collaborator_port_assignments.alice_bob]
         collaborator_ports = [
             { name = "alice", ready_port = 50001, intray_port = 50002, gotit_port = 50003 },
             { name = "bob", ready_port = 50004, intray_port = 50005, gotit_port = 50006 },
         ]
-
-        [abstract_collaborator_port_assignments.alice_charlotte]
-        collaborator_ports = [
-            { name = "alice", ready_port = 50007, intray_port = 50008, gotit_port = 50009 },
-            { name = "charlotte", ready_port = 50010, intray_port = 50011, gotit_port = 50012 },
-        ]
-
-        [abstract_collaborator_port_assignments.bob_charlotte]
-        collaborator_ports = [
-            { name = "bob", ready_port = 50013, intray_port = 50014, gotit_port = 50015 },
-            { name = "charlotte", ready_port = 50016, intray_port = 50017, gotit_port = 50018 },
-        ]
         */
 
-                
-
-        // 10. Construct MeetingRoomSyncDataset (struct)
+        // --- 11. Construct MeetingRoomSyncDataset (struct) ---
+        // Assemble this one meeting room data-bundle from multiple sources
+        // - from node.toml data
+        // - from addressbook data
+        // - from Instance-Role-Specific Local-Meeting-Room-Struct
         let mut meeting_room_sync_data = MeetingRoomSyncDataset {
             local_user_name: uma_local_owner_user.to_string(),  // TODO source?
             
@@ -3438,9 +3444,10 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
             remote_collaborator_gotit_port__their_desk_you_listen: role_based_ports.remote_collaborator_gotit_port__their_desk_you_listen,
         };
                 
-        // 12. add this one meeting room data-bundle to the larger set
+        // --- 12. add meeting room to set-of-rooms-table ---
+        // add this one meeting room data-bundle to the larger set
         sync_config_data_set.insert(meeting_room_sync_data.clone()); 
-        debug_log!("Created MeetingRoomSyncDataset: {:?}", &meeting_room_sync_data);
+        debug_log!("12. Created MeetingRoomSyncDataset: {:?}", &meeting_room_sync_data);
             
         
     } // End of collaborator loop
