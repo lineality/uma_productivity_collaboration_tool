@@ -1876,7 +1876,8 @@ fn load_core_node_from_toml_file(file_path: &Path) -> Result<CoreNode, String> {
     //     }
     // }
     // Inside load_core_node_from_toml_file
-    if let Some(collaborator_assignments_table) = toml_value.get("abstract_collaborator_port_assignments").and_then(Value::as_table) {
+    // if let Some(collaborator_assignments_table) = toml_value.get("abstract_collaborator_port_assignments").and_then(Value::as_table) {
+    if let Some(collaborator_assignments_table) = toml_value.get("collaborator_port_assignments").and_then(Value::as_table) {
         for (pair_name, pair_data) in collaborator_assignments_table {
             debug_log("Looking for 'collaborator_ports' load_core...");
             if let Some(ports_list) = pair_data.get("collaborator_ports").and_then(Value::as_array) {
@@ -3167,7 +3168,7 @@ fn get_addressbook_file_by_username(username: &str) -> Result<CollaboratorTomlDa
 /// excluding those who collide with senior members
 /// or returning an error if found.
 fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<HashSet<MeetingRoomSyncDataset>, MyCustomError> { 
-    debug_log!("Entering make_sync_meetingroomconfig_datasets() function"); 
+    debug_log!("Entering the make_sync_meetingroomconfig_datasets() function..."); 
 
     // --- 1. load the team_channel node.toml ---
     /*
@@ -3177,7 +3178,7 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
     */
     // get path, derive name from path
     let channel_dir_path_str = read_state_string("current_node_directory_path.txt")?; // read as string first
-    debug_log!("Channel directory path (from session state): {}", channel_dir_path_str); 
+    debug_log!("1. Channel directory path (from session state): {}", channel_dir_path_str); 
     
     // use absolute file path
     let channel_dir_path = PathBuf::from(channel_dir_path_str);
@@ -3190,11 +3191,11 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
     
     // Construct the path to node.toml 
     let channel_node_toml_path = channel_dir_path.join("node.toml");
-    debug_log!("Channel node.toml path: {:?}", &channel_node_toml_path); 
+    debug_log!("1. Channel node.toml path: {:?}", &channel_node_toml_path); 
 
     // B. Print the absolute path of the node.toml file
     match channel_node_toml_path.canonicalize() {
-        Ok(abs_path) => debug_log!("Absolute channel_dir_path node.toml path: {:?}", abs_path),
+        Ok(abs_path) => debug_log!("1. Absolute channel_dir_path node.toml path: {:?}", abs_path),
         Err(e) => debug_log!("Error getting absolute path of channel_dir_path node.toml: {}", e),
     }
 
@@ -3203,8 +3204,8 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
     // loading the fields into an organized struct with datatypes
     let teamchannel_nodetoml_data: CoreNode = match load_core_node_from_toml_file(&channel_node_toml_path) { 
         Ok(node) => {
-            debug_log!("Successfully read channel node.toml"); 
-            node
+            debug_log!("Successfully read channel node.toml");
+            node // ???
         },
         Err(e) => {
             debug_log!("Error reading channel node.toml: {:?}", &channel_node_toml_path);
@@ -3212,10 +3213,13 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
             return Err(MyCustomError::from(io::Error::new(io::ErrorKind::Other, e))); // Convert the error
         }
     };
-
+    debug_log!("2. teamchannel_nodetoml_data->{:?}", &teamchannel_nodetoml_data);
+    
     // 3. Create an (empty) lookup-table (hash-set) to put all the meeting-room-data-sets in.
     // This will contain the local-port-assignments for each desk.
     let mut sync_config_data_set: HashSet<MeetingRoomSyncDataset> = HashSet::new();
+    debug_log!("3. sync_config_data_set->{:?}", &sync_config_data_set);
+    
 
     // 4. Get team member names from team_channel node
     // let collaborators_names_array = teamchannel_nodetoml_data.teamchannel_collaborators_with_access;
@@ -3227,9 +3231,11 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
             return Err(MyCustomError::from(io::Error::new(io::ErrorKind::Other, e)));
         }
     };
+    debug_log!("4. collaborators_names_array->{:?}", &collaborators_names_array);
     
     // 5. Get raw-abstract port-assignments from team_channel node
     let abstract_collaborator_port_assignments = teamchannel_nodetoml_data.abstract_collaborator_port_assignments;
+    debug_log!("5. abstract_collaborator_port_assignments->{:?}", &abstract_collaborator_port_assignments);
 
     // 6. Iterate through the address-book-name-list 
     // This is a list of all possible team channel member collaborators.
@@ -3374,7 +3380,7 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
         
     } // End of collaborator loop
 
-    debug_log!("Allowlist created: {:?}", &sync_config_data_set);
+    debug_log!("sync_config_data_set created: {:?}", &sync_config_data_set);
     
     // 13. after iterating, return full set of meeting-rooms
     Ok(sync_config_data_set) 
@@ -4076,70 +4082,11 @@ fn handle_collaborator_intray_desk(
 }
 
 
-
-
 // Result enum for the sync operation, allowing communication between threads
 enum SyncResult {
     Success(u64), // Contains the new timestamp after successful sync
     Failure(UmaError), // Contains an error if sync failed 
 }
-
-// // Function to handle the sync event in a separate thread
-// fn handle_sync_event_thread(
-//     collaborator_sync_data: &RemoteCollaboratorPortsData,
-//     is_echo_request: bool,
-//     ready_timestamp: u64,
-//     file_to_send: &PathBuf,
-//     timestamp: u64, // Current base timestamp of the queue
-//     send_queue: &mut SendQueue, // Pass a mutable reference to the send queue
-// ) -> Result<(), UmaError> {
-//     /*
-//     TODO
-//     possible factors:
-//     base-timestamp
-//     echo-no-timestamp
-//     echo modified success or no return (just remove fail flag?)
-//     */
-//     // Create a channel for communication between threads
-//     let (tx, rx) = channel::<SyncResult>(); 
-
-//     // Create the retry flag before spawning the thread
-//     // Clone the data before moving it into the thread
-//     let collaborator_clone = collaborator_sync_data.clone();
-//     let file_to_send_clone = file_to_send.clone(); 
-//     let retry_flag_path = create_retry_flag(collaborator_sync_data, file_to_send, timestamp)?;
-
-//     // Spawn the thread to handle file transfer
-//     thread::spawn(move || {
-//         // Now use the cloned data
-//         let result = send_file_to_collaborator(
-//             &collaborator_clone, // Pass a reference to the clone
-//             is_echo_request,
-//             ready_timestamp,
-//             &file_to_send_clone, 
-//             tx.clone(), 
-//             retry_flag_path
-//         );
-//         tx.send(result).unwrap(); 
-//     });
-
-//     // Receive the result from the thread and update the send queue
-//     match rx.recv().unwrap() {
-//         SyncResult::Success(new_timestamp) => {
-//             // 1. Update the base date 
-//             send_queue.timestamp = new_timestamp; 
-//         },
-//         SyncResult::Failure(error) => {
-//             eprintln!("File transfer failed: {:?}", error);
-//             // Handle failure (log, potentially notify user)
-//         }
-//     }
-
-//     Ok(())
-// }
-
-
-
 
 
 /// for normal mode, updates graph-navigation location and graph-state for both
@@ -4610,7 +4557,6 @@ fn no_restart_set_hard_reset_flag_to_false() {
 /*
 An Appropriately Svelt Mainland:
 */
-
 /// Initializes the UMA continue/halt signal by creating or resetting the 
 /// `continue_uma.txt` file and setting its value to "1" (continue).
 /// set to hault by quit_set_continue_uma_to_false()
@@ -4621,14 +4567,7 @@ An Appropriately Svelt Mainland:
 /// and just as reliable in this context.
 ///
 /// This also allows the user to manually set the halt signal.
-
 fn main() {
-    /* initialize_uma should happen in main
-    before spawning threads:
-    - safely start application for the first time ever
-    - handle new setup files upon load
-    - make sure directories all exist, etc.
-    */
 
     // set boolean flag for loops to know when to hault
     initialize_continue_uma_signal();     
