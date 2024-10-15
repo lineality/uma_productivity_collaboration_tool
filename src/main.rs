@@ -3218,7 +3218,7 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
     // 3. Create an (empty) lookup-table (hash-set) to put all the meeting-room-data-sets in.
     // This will contain the local-port-assignments for each desk.
     let mut sync_config_data_set: HashSet<MeetingRoomSyncDataset> = HashSet::new();
-    debug_log!("3. sync_config_data_set->{:?}", &sync_config_data_set);
+    debug_log!("3. sync_config_data_set->{:?} <should be empty, ok>", &sync_config_data_set);
     
 
     // 4. Get team member names from team_channel node
@@ -3380,7 +3380,7 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
         
     } // End of collaborator loop
 
-    debug_log!("sync_config_data_set created: {:?}", &sync_config_data_set);
+    debug_log!("12,13: sync_config_data_set created: {:?}", &sync_config_data_set);
     
     // 13. after iterating, return full set of meeting-rooms
     Ok(sync_config_data_set) 
