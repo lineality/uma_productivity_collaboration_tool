@@ -573,6 +573,15 @@ struct RemoteCollaboratorPortsData {
     remote_gotit_port__their_desk_you_listen: u16, // locally: 'you' listen to their port on 'their' desk
 }
 
+// struct for reading/extracting raw abstract port assignments 
+/// from the team_channels/NAME/node.toml
+#[derive(Debug, Deserialize, Serialize, Clone, Hash, PartialEq, Eq)] // Add
+struct AbstractTeamchannelNodeTomlPortsData {
+    user_name: String,
+    ready_port: u16,
+    intray_port: u16,
+    gotit_port: u16, // locally: 'you' listen to their port on 'their' desk
+}
 
 /// Instance-Role-Specific Local-Meeting-Room-Struct
 /// This is no longer for an abstract set of data 
@@ -633,6 +642,191 @@ struct ForRemoteCollaboratorDeskThread {
 }
 
 
+/// for translate_port_assignments() to export as
+/// Get Needed, When Needed
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+struct RoleBasedLocalPortSet {
+    local_user_ready_port__your_desk_you_send: u16, // locally: 'you' send a signal through your port on your desk
+    local_user_intray_port__your_desk_you_listen: u16, // locally: 'you' listen for files sent by the other collaborator
+    local_user_gotit_port__your_desk_you_send: u16, // locally: 'you' send a signal through your port on your desk
+    remote_collaborator_ready_port__their_desk_you_listen: u16, // locally: 'you' listen to their port on 'their' desk
+    remote_collaborator_intray_port__their_desk_you_send: u16, // locally: 'you' add files to their port on 'their' desk
+    remote_collaborator_gotit_port__their_desk_you_listen: u16, // locally: 'you' listen to their port on 'their' desk
+}
+
+
+fn translate_port_assignments(
+    local_user_name: &str,
+    remote_collaborator_name: &str,
+    abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
+) -> Result<RoleBasedLocalPortSet, MyCustomError> {
+    debug_log!("Entering translate_port_assignments() function");
+
+    // 1. Construct the key for the meeting room based on user names
+    let meeting_room_key = get_meeting_room_key(local_user_name, remote_collaborator_name);
+    debug_log!("Meeting room key: {}", meeting_room_key);
+
+    // 2. Get the port assignment vector for this meeting room
+    let meeting_room_ports = abstract_collaborator_port_assignments
+        .get(&meeting_room_key)
+        .ok_or_else(|| MyCustomError::from(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("Port assignments not found for meeting room: {}", meeting_room_key),
+        )))?;
+
+    // 3. Extract local and remote ports from the vector
+    let mut local_ports = None;
+    let mut remote_ports = None;
+
+    // Iterate through the ReadTeamchannelCollaboratorPortsToml structs
+    for port_data in meeting_room_ports {
+        // Iterate through the collaborator_ports vector within each struct
+        for port_set in &port_data.collaborator_ports { 
+            if port_set.user_name == local_user_name {
+                local_ports = Some(port_set.clone());
+            } else if port_set.user_name == remote_collaborator_name {
+                remote_ports = Some(port_set.clone());
+            }
+        }
+    }
+
+    // 4. Ensure both local and remote ports were found
+    let local_ports = local_ports.ok_or_else(|| MyCustomError::from(io::Error::new(
+        io::ErrorKind::NotFound,
+        format!("Local port assignments not found for user: {}", local_user_name),
+    )))?;
+    let remote_ports = remote_ports.ok_or_else(|| MyCustomError::from(io::Error::new(
+        io::ErrorKind::NotFound,
+        format!("Remote port assignments not found for user: {}", remote_collaborator_name),
+    )))?;
+
+    // 5. Construct and return the RoleBasedLocalPortSet
+    Ok(RoleBasedLocalPortSet {
+        local_user_ready_port__your_desk_you_send: local_ports.ready_port,
+        local_user_intray_port__your_desk_you_listen: local_ports.intray_port,
+        local_user_gotit_port__your_desk_you_send: local_ports.gotit_port,
+        remote_collaborator_ready_port__their_desk_you_listen: remote_ports.ready_port,
+        remote_collaborator_intray_port__their_desk_you_send: remote_ports.intray_port,
+        remote_collaborator_gotit_port__their_desk_you_listen: remote_ports.gotit_port,
+    })
+}
+
+
+
+
+// // Helper function for translate_port_assignments
+// // to construct the meeting room key
+// Helper function to construct the meeting room key
+fn get_meeting_room_key(user1: &str, user2: &str) -> String {
+    let mut names = vec![user1, user2];
+    names.sort(); // Ensure consistent key regardless of user order
+    format!("{}_{}", names[0], names[1])
+}
+
+// Helper function to extract ports from a TOML table
+fn extract_ports_from_table(port_set: &toml::map::Map<String, Value>) -> Result<AbstractTeamchannelNodeTomlPortsData, MyCustomError> {
+    Ok(AbstractTeamchannelNodeTomlPortsData {
+        user_name: port_set
+            .get("user_name")
+            .ok_or_else(|| MyCustomError::from(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Missing 'user_name' in port set",
+            )))?
+            .as_str()
+            .ok_or_else(|| MyCustomError::from(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "'user_name' is not a string",
+            )))?
+            .to_string(),
+        ready_port: port_set
+            .get("ready_port")
+            .ok_or_else(|| MyCustomError::from(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Missing 'ready_port' in port set",
+            )))?
+            .as_integer()
+            .ok_or_else(|| MyCustomError::from(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "'ready_port' is not an integer",
+            )))? as u16,
+        intray_port: port_set
+            .get("intray_port")
+            .ok_or_else(|| MyCustomError::from(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Missing 'intray_port' in port set",
+            )))?
+            .as_integer()
+            .ok_or_else(|| MyCustomError::from(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "'intray_port' is not an integer",
+            )))? as u16,
+        gotit_port: port_set
+            .get("gotit_port")
+            .ok_or_else(|| MyCustomError::from(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Missing 'gotit_port' in port set",
+            )))?
+            .as_integer()
+            .ok_or_else(|| MyCustomError::from(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "'gotit_port' is not an integer",
+            )))? as u16,
+    })
+}
+
+/// Extracts the list of collaborator names from a team channel's `node.toml` file.
+///
+/// This function reads the `node.toml` file at the specified path, parses the TOML data,
+/// and extracts the collaborator names from the `abstract_collaborator_port_assignments` table.
+///
+/// # Arguments
+///
+/// * `node_toml_path` - The path to the team channel's `node.toml` file.
+///
+/// # Returns
+///
+/// * `Result<Vec<String>, String>` - A `Result` containing a vector of collaborator names
+///   on success, or a `String` describing the error on failure.
+fn get_collaborator_names_from_node_toml(node_toml_path: &Path) -> Result<Vec<String>, String> {
+    /*
+    call with
+        // Inside make_sync_meetingroomconfig_datasets
+    let collaborator_names = match get_collaborator_names_from_node_toml(&channel_node_toml_path) {
+        Ok(names) => names,
+        Err(e) => {
+            debug_log!("Error getting collaborator names: {}", e);
+            return Err(MyCustomError::from(io::Error::new(io::ErrorKind::Other, e)));
+        }
+    };   
+    
+    
+    */
+    // 1. Read the node.toml file
+    let toml_string = match std::fs::read_to_string(node_toml_path) {
+        Ok(content) => content,
+        Err(e) => return Err(format!("Error reading node.toml file: {}", e)),
+    };
+
+    // 2. Parse the TOML data
+    let toml_value: Value = match toml::from_str(&toml_string) {
+        Ok(value) => value,
+        Err(e) => return Err(format!("Error parsing node.toml data: {}", e)),
+    };
+
+    // 3. Extract collaborator names from abstract_collaborator_port_assignments
+    let mut collaborator_names = Vec::new();
+    if let Some(collaborator_assignments_table) = toml_value.get("abstract_collaborator_port_assignments").and_then(Value::as_table) {
+        for (pair_name, _) in collaborator_assignments_table {
+            // Split the pair name (e.g., "alice_bob") into individual names
+            let names: Vec<&str> = pair_name.split('_').collect();
+            collaborator_names.extend(names.iter().map(|&s| s.to_string()));
+        }
+    }
+
+    // 4. Return the list of collaborator names
+    Ok(collaborator_names)
+}
+
 
 // ALPHA VERSION
 // Function to read a simple string from a file
@@ -641,13 +835,13 @@ pub fn read_state_string(file_name: &str) -> Result<String, std::io::Error> {
     fs::read_to_string(file_path)
 }
 
-// ALPHA VERSION
-// Function to read a TOML file and deserialize it into a Value
-pub fn read_state_items_tomls(file_name: &str) -> Result<Value, MyCustomError> {
-    let file_path = Path::new("project_graph_data/session_state_items").join(file_name);
-    let toml_string = fs::read_to_string(file_path)?; // Now `?` converts to MyCustomError
-    toml::from_str(&toml_string).map_err(MyCustomError::from)  // Convert TomlError
-} 
+// // ALPHA VERSION
+// // Function to read a TOML file and deserialize it into a Value
+// pub fn read_state_items_tomls(file_name: &str) -> Result<Value, MyCustomError> {
+//     let file_path = Path::new("project_graph_data/session_state_items").join(file_name);
+//     let toml_string = fs::read_to_string(file_path)?; // Now `?` converts to MyCustomError
+//     toml::from_str(&toml_string).map_err(MyCustomError::from)  // Convert TomlError
+// } 
 
 // ALPHA VERSION
 // Function to validate a simple string 
@@ -1485,32 +1679,16 @@ enum NodePriority {
 /// Represents port assignments for a collaborator in a `CoreNode`.
 ///
 /// This struct holds six different ports used for communication and synchronization
-/// between collaborators within a UMA project node. Each collaborator associated with
-/// a node has a unique `ReadTeamchannelCollaboratorPortsToml` instance. 
+/// between two collaborators. 
+/// Because Rust does not automatically deal with 'list of dicts' in python terms
+/// this struct is a list (array) of 'dictionaries/hashmaps' which are a separate struct
+/// so this list is a single list, that is a list of other structs that are dicts/hashmaps
 #[derive(Debug, Deserialize, Serialize, Clone)]
 struct ReadTeamchannelCollaboratorPortsToml {
     /// The port used by the REMOTE collaborator to signal readiness to receive data.
-    collaborator_ports: Vec<TeamchannelCollaboratorPortsElement>,
-
+    collaborator_ports: Vec<AbstractTeamchannelNodeTomlPortsData>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
-struct TeamchannelCollaboratorPortsElement {
-    // abstract user/collaborator field (local or remote)
-    name: String, // Add the 'name' field
-    /// The port used by the REMOTE collaborator to signal readiness to receive data.
-    ready_port: u16,
-    /// The port used to send files to the REMOTE collaborator (their "in-tray").
-    intray_port: u16,
-    /// The port used by the REMOTE collaborator to confirm file receipt.
-    gotit_port: u16,
-    /// The port the LOCAL USER listens on for ready signals from the collaborator.
-    self_ready_port: u16,
-    /// The port the LOCAL USER listens on to receive files from the collaborator.
-    self_intray_port: u16,
-    /// The port the LOCAL USER uses to confirm file receipt to the collaborator.
-    self_gotit_port: u16,
-}
 
 // old archive
 // #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -1547,7 +1725,7 @@ graph-dungeon location.
 ///
 /// # Collaborator Ports
 /// 
-/// Collaborator port assignments are stored in the `collaborator_port_assignments` field, which is a 
+/// Collaborator port assignments are stored in the `abstract_collaborator_port_assignments` field, which is a 
 /// `HashMap`. The keys of the `HashMap` are the usernames of the collaborators (strings), 
 /// and the values are instances of the `CollaboratorPorts` struct. 
 ///
@@ -1563,17 +1741,17 @@ graph-dungeon location.
 /// ## Serialization and Deserialization
 ///
 /// When saving a `CoreNode` to a `node.toml` file (using the `save_node_to_file` function), 
-/// the `collaborator_port_assignments` field is serialized as a TOML table where the keys are the 
+/// the `abstract_collaborator_port_assignments` field is serialized as a TOML table where the keys are the 
 /// collaborator usernames and the values are tables containing the six port assignments.
 ///
 /// When loading a `CoreNode` from a `node.toml` file (using the `load_node_from_file` function),
 /// the TOML table representing collaborator ports is deserialized into the 
-/// `collaborator_port_assignments` field. 
+/// `abstract_collaborator_port_assignments` field. 
 ///
 /// ## Example `node.toml` Section 
 /// 
 /// ```toml
-/// [collaborator_port_assignments]
+/// [abstract_collaborator_port_assignments]
 /// alice = { ready_port = 50001, tray_port = 50002, gotit_port = 50003, self_ready_port = 50004, self_tray_port = 50005, self_gotit_port = 50006 }
 /// bob = { ready_port = 50011, tray_port = 50012, gotit_port = 50013, self_ready_port = 50014, self_tray_port = 50015, self_gotit_port = 50016 }
 /// ```
@@ -1607,7 +1785,7 @@ struct CoreNode {
     /// An ordered vector of collaborator usernames associated with this node.
     teamchannel_collaborators_with_access: Vec<String>,
     /// A map containing port assignments for each collaborator associated with the node.
-    collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
+    abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
 }
 
 // /// Loads CollaboratorData from a TOML file.
@@ -1667,28 +1845,62 @@ fn load_core_node_from_toml_file(file_path: &Path) -> Result<CoreNode, String> {
         expires_at: toml_value.get("expires_at").and_then(Value::as_integer).unwrap_or(0) as u64,
         children: Vec::new(), // You might need to load children recursively
         teamchannel_collaborators_with_access: toml_value.get("teamchannel_collaborators_with_access").and_then(Value::as_array).map(|arr| arr.iter().filter_map(Value::as_str).map(String::from).collect()).unwrap_or_default(),
-        collaborator_port_assignments: HashMap::new(),
+        abstract_collaborator_port_assignments: HashMap::new(),
     };
 
-    // 4. Handle collaborator_port_assignments
-    if let Some(collaborator_assignments_table) = toml_value.get("collaborator_port_assignments").and_then(Value::as_table) {
+    // // 4. Handle abstract_collaborator_port_assignments
+    // if let Some(collaborator_assignments_table) = toml_value.get("abstract_collaborator_port_assignments").and_then(Value::as_table) {
+    //     for (pair_name, pair_data) in collaborator_assignments_table {
+    //         debug_log("Looking for 'collaborator_ports' load_core...");
+    //         if let Some(ports_list) = pair_data.get("collaborator_ports").and_then(Value::as_array) {
+    //             let mut collaborator_ports = Vec::new();
+    //             for port_data in ports_list {
+    //                 // Deserialize each AbstractTeamchannelNodeTomlPortsData from the array
+    //                 let port_data_str = toml::to_string(&port_data).unwrap(); // Convert Value to String
+    //                 // let collaborator_port: AbstractTeamchannelNodeTomlPortsData = toml::from_str(&port_data_str).map_err(|e| format!("Error deserializing collaborator port: {}", e))?;
+    //                 let collaborator_port: ReadTeamchannelCollaboratorPortsToml = toml::from_str(&port_data_str).map_err(|e| format!("Error deserializing collaborator port: {}", e))?;
+    //                 collaborator_ports.push(collaborator_port);
+    //             }
+    //             core_node.abstract_collaborator_port_assignments.insert(pair_name.clone(), collaborator_ports);
+    //             // let mut collaborator_ports = Vec::new();
+    //             // for port_data in ports_list {
+    //             //     // Deserialize each ReadTeamchannelCollaboratorPortsToml from the array
+    //             //     let port_data_str = toml::to_string(&port_data).unwrap(); // Convert Value to String
+    //             //     let collaborator_port: ReadTeamchannelCollaboratorPortsToml = toml::from_str(&port_data_str).map_err(|e| format!("Error deserializing collaborator port: {}", e))?;
+    //             //     collaborator_ports.push(collaborator_port);
+    //             // }
+    //             // // this is doing what?
+    //             // core_node.abstract_collaborator_port_assignments.insert(pair_name.clone(), collaborator_ports);
+
+    //         }
+    //     }
+    // }
+    // Inside load_core_node_from_toml_file
+    if let Some(collaborator_assignments_table) = toml_value.get("abstract_collaborator_port_assignments").and_then(Value::as_table) {
         for (pair_name, pair_data) in collaborator_assignments_table {
             debug_log("Looking for 'collaborator_ports' load_core...");
             if let Some(ports_list) = pair_data.get("collaborator_ports").and_then(Value::as_array) {
-                let mut collaborator_ports = Vec::new();
+                // Create a vector to hold ReadTeamchannelCollaboratorPortsToml instances for this pair
+                let mut ports_for_pair = Vec::new();
+    
                 for port_data in ports_list {
-                    // Deserialize each ReadTeamchannelCollaboratorPortsToml from the array
+                    // Deserialize each AbstractTeamchannelNodeTomlPortsData from the array
                     let port_data_str = toml::to_string(&port_data).unwrap(); // Convert Value to String
-                    let collaborator_port: ReadTeamchannelCollaboratorPortsToml = toml::from_str(&port_data_str).map_err(|e| format!("Error deserializing collaborator port: {}", e))?;
-                    collaborator_ports.push(collaborator_port);
+                    let collaborator_port: AbstractTeamchannelNodeTomlPortsData = toml::from_str(&port_data_str).map_err(|e| format!("Error deserializing collaborator port: {}", e))?;
+    
+                    // Create ReadTeamchannelCollaboratorPortsToml and add it to the vector
+                    let read_teamchannel_collaborator_ports_toml = ReadTeamchannelCollaboratorPortsToml {
+                        collaborator_ports: vec![collaborator_port], // Wrap in a vector
+                    };
+                    ports_for_pair.push(read_teamchannel_collaborator_ports_toml);
                 }
-                // this is doing what?
-                core_node.collaborator_port_assignments.insert(pair_name.clone(), collaborator_ports);
-
+    
+                // Insert the vector of ReadTeamchannelCollaboratorPortsToml into the HashMap
+                core_node.abstract_collaborator_port_assignments.insert(pair_name.clone(), ports_for_pair);
             }
         }
     }
-
+    
     Ok(core_node)
 }
 
@@ -1740,7 +1952,7 @@ children: Vec<CoreNode>,
 /// An ordered vector of collaborator usernames associated with this node.
 teamchannel_collaborators_with_access: Vec<String>,
 /// A map containing port assignments for each collaborator associated with the node.
-collaborator_port_assignments: HashMap<String, CollaboratorPorts>,
+abstract_collaborator_port_assignments: HashMap<String, CollaboratorPorts>,
 */
 /// Creates a new `CoreNode` instance.
 ///
@@ -1753,7 +1965,7 @@ collaborator_port_assignments: HashMap<String, CollaboratorPorts>,
 /// * `priority` - The priority of the node.
 /// * `owner` - The username of the node's owner.
 /// * `collaborators` - An ordered vector of collaborator usernames.
-/// * `collaborator_port_assignments` - A map of collaborator port assignments.
+/// * `abstract_collaborator_port_assignments` - A map of collaborator port assignments.
 ///
 /// # Returns
 ///
@@ -1768,7 +1980,7 @@ impl CoreNode {
         priority: NodePriority,
         owner: String,
         teamchannel_collaborators_with_access: Vec<String>,
-        collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
+        abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
     ) -> CoreNode {
         let expires_at = get_current_unix_timestamp() + 86400; // Expires in 1 day (for now)
         let updated_at_timestamp = get_current_unix_timestamp();
@@ -1786,7 +1998,7 @@ impl CoreNode {
             expires_at,
             children: Vec::new(),
             teamchannel_collaborators_with_access,        
-            collaborator_port_assignments, 
+            abstract_collaborator_port_assignments, 
         }
     }
 
@@ -1837,7 +2049,7 @@ impl CoreNode {
     /// # Arguments
     ///
     /// * `collaborators` - An ordered vector of usernames for collaborators who have access to this child node.
-    /// * `collaborator_port_assignments` - A HashMap mapping collaborator usernames to their respective `CollaboratorPorts` struct, containing port assignments for synchronization.
+    /// * `abstract_collaborator_port_assignments` - A HashMap mapping collaborator usernames to their respective `CollaboratorPorts` struct, containing port assignments for synchronization.
     /// * `owner` - The username of the owner of this child node.
     /// * `description_for_tui` - A description of the child node, intended for display in the TUI.
     /// * `directory_path` - The file path where the child node's data will be stored.
@@ -1846,7 +2058,7 @@ impl CoreNode {
     fn add_child(
         &mut self,
         teamchannel_collaborators_with_access: Vec<String>, 
-        collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
+        abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
         owner: String,
         description_for_tui: String,
         directory_path: PathBuf,
@@ -1861,7 +2073,7 @@ impl CoreNode {
             priority,
             owner,
             teamchannel_collaborators_with_access,        
-            collaborator_port_assignments,   
+            abstract_collaborator_port_assignments,   
         );
         self.children.push(child);
     }
@@ -2523,8 +2735,8 @@ fn handle_command(
             //         .map(|s| s.trim().to_string())
             //         .collect();
 
-            //     // 4. Construct collaborator_port_assignments HashMap
-            //     let mut collaborator_port_assignments: HashMap<String, ReadTeamchannelCollaboratorPortsToml> = HashMap::new();
+            //     // 4. Construct abstract_collaborator_port_assignments HashMap
+            //     let mut abstract_collaborator_port_assignments: HashMap<String, ReadTeamchannelCollaboratorPortsToml> = HashMap::new();
             //     for collaborator_name in &teamchannel_collaborators_with_access { 
             //         // Load collaborator from file
             //         let collaborator = match get_addressbook_file_by_username(collaborator_name) {
@@ -2545,7 +2757,7 @@ fn handle_command(
             //         let gotit_port__localowneruser: u16 = rng.gen_range(40000..=50000);
 
             //         // Create ReadTeamchannelCollaboratorPortsToml and insert into the HashMap
-            //         collaborator_port_assignments.insert(
+            //         abstract_collaborator_port_assignments.insert(
             //             collaborator_name.clone(), 
             //             ReadTeamchannelCollaboratorPortsToml {
             //                 ready_port__other_collaborator,
@@ -2592,7 +2804,7 @@ fn handle_command(
             //         priority,
             //         graph_navigation_instance_state.local_owner_user.clone(),
             //         teamchannel_collaborators_with_access, // Pass the collaborators vector
-            //         collaborator_port_assignments, // Pass the collaborator_port_assignments HashMap
+            //         abstract_collaborator_port_assignments, // Pass the abstract_collaborator_port_assignments HashMap
             //     );
 
             //     // 9. Save the node data to node.toml
@@ -2869,7 +3081,6 @@ fn get_addressbook_file_by_username(username: &str) -> Result<CollaboratorTomlDa
     }
 }
 
-
 /// Loads connection data for members of the currently active team channel.
 /// On success, returns a `HashSet` of `MeetingRoomSyncDataset` structs, 
 /// each containing connection 
@@ -2933,20 +3144,20 @@ fn get_addressbook_file_by_username(username: &str) -> Result<CollaboratorTomlDa
 /// children = [] 
 /// teamchannel_collaborators_with_access = ["alice", "bob"]
 ///
-/// # collaborator_port_assignments
-/// [collaborator_port_assignments.alice_bob]
+/// # abstract_collaborator_port_assignments
+/// [abstract_collaborator_port_assignments.alice_bob]
 /// collaborator_ports = [
 ///     { name = "alice", ready_port = 50001, intray_port = 50002, gotit_port = 50003 },
 ///     { name = "bob", ready_port = 50004, intray_port = 50005, gotit_port = 50006 },
 /// ]
 ///
-/// [collaborator_port_assignments.alice_charlotte]
+/// [abstract_collaborator_port_assignments.alice_charlotte]
 /// collaborator_ports = [
 ///     { name = "alice", ready_port = 50007, intray_port = 50008, gotit_port = 50009 },
 ///     { name = "charlotte", ready_port = 50010, intray_port = 50011, gotit_port = 50012 },
 /// ]
 ///
-/// [collaborator_port_assignments.bob_charlotte]
+/// [abstract_collaborator_port_assignments.bob_charlotte]
 /// collaborator_ports = [
 ///     { name = "bob", ready_port = 50013, intray_port = 50014, gotit_port = 50015 },
 ///     { name = "charlotte", ready_port = 50016, intray_port = 50017, gotit_port = 50018 },
@@ -2958,12 +3169,17 @@ fn get_addressbook_file_by_username(username: &str) -> Result<CollaboratorTomlDa
 fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<HashSet<MeetingRoomSyncDataset>, MyCustomError> { 
     debug_log!("Entering make_sync_meetingroomconfig_datasets() function"); 
 
-    // --- 1. LOAD TEAM CHANNEL node.toml ---
+    // --- 1. load the team_channel node.toml ---
+    /*
+    1. load the team_channel node.toml, which contains 
+    the port assignments and the list of team-members 
+    (collaborators with access to that channel)
+    */
+    // get path, derive name from path
     let channel_dir_path_str = read_state_string("current_node_directory_path.txt")?; // read as string first
     debug_log!("Channel directory path (from session state): {}", channel_dir_path_str); 
     
-
-    // TODO: use absolute file path
+    // use absolute file path
     let channel_dir_path = PathBuf::from(channel_dir_path_str);
     
     // A. Print the absolute path of the channel directory
@@ -2971,8 +3187,6 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
         Ok(abs_path) => debug_log!("Absolute channel directory path: {:?}", abs_path),
         Err(e) => debug_log!("Error getting absolute path of channel directory: {}", e),
     }
-
-    // let channel_dir_path = base_dir.join(channel_dir_path_str);
     
     // Construct the path to node.toml 
     let channel_node_toml_path = channel_dir_path.join("node.toml");
@@ -2984,8 +3198,10 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
         Err(e) => debug_log!("Error getting absolute path of channel_dir_path node.toml: {}", e),
     }
 
-    // --- 2. READ node.toml USING load_core_node_from_toml_file ---
-    let channel_node_toml: CoreNode = match load_core_node_from_toml_file(&channel_node_toml_path) { 
+    // --- 2. Read that (node toml) data into an organized 'struct' of variables
+    // Read node.toml data with fn load_core_node_from_toml_file() ---
+    // loading the fields into an organized struct with datatypes
+    let teamchannel_nodetoml_data: CoreNode = match load_core_node_from_toml_file(&channel_node_toml_path) { 
         Ok(node) => {
             debug_log!("Successfully read channel node.toml"); 
             node
@@ -2997,26 +3213,38 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
         }
     };
 
-    // 3. Create (empty) HashSet of meeting-room structs
-    // TODO maybe this becomes a set of MeetingRoomSyncDataset structs
+    // 3. Create an (empty) lookup-table (hash-set) to put all the meeting-room-data-sets in.
+    // This will contain the local-port-assignments for each desk.
     let mut sync_config_data_set: HashSet<MeetingRoomSyncDataset> = HashSet::new();
 
+    // 4. Get team member names from team_channel node
+    // let collaborators_names_array = teamchannel_nodetoml_data.teamchannel_collaborators_with_access;
+    // derive list functionally from port-assignemnt list
+    let collaborators_names_array = match get_collaborator_names_from_node_toml(&channel_node_toml_path) {
+        Ok(names) => names,
+        Err(e) => {
+            debug_log!("Error getting collaborator names: {}", e);
+            return Err(MyCustomError::from(io::Error::new(io::ErrorKind::Other, e)));
+        }
+    };
+    
+    // 5. Get raw-abstract port-assignments from team_channel node
+    let abstract_collaborator_port_assignments = teamchannel_nodetoml_data.abstract_collaborator_port_assignments;
 
-    // // 4. Get & Iterate through address-Book Collaborator Data
-    // Access data from the loaded CoreNode
-    let collaborators_array = channel_node_toml.teamchannel_collaborators_with_access;
-    // let collaborator_port_assignments = channel_node_toml.collaborator_port_assignments;
-
-    // Iterate through all possible team channel member collaborators
-    for collaborator_name in collaborators_array { // collaborator_data is now a String
+    // 6. Iterate through the address-book-name-list 
+    // This is a list of all possible team channel member collaborators.
+    // Go through the list make a set of meeting room information for each team-member, 
+    // so that you (e.g. Alice) can sync with other team members.
+    // Note: only team-members who are also in your address book can be contacted.
+    for collaborator_name in collaborators_names_array { // collaborator_data is now a String
         /*
         Note: there are two sources of truth that each need to be checked
         (and which might be updated independently)
-        for channel-user-meeting-room sync information
+        to compile real-local channel-user-meeting-room sync information.
         */
         debug_log!("Processing collaborator: {}", collaborator_name);
 
-        // 5. get (that team member's) addressbook file by (their) username
+        // 7. get (that team member's) addressbook file by (their) username
         // using get_addressbook_file_by_username()
         // which loads the NAME__collaborator.toml from the collaborator_files_address_books directory 
         // (owned by that collaborator, it is their own gpg signed data)
@@ -3030,16 +3258,6 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
         };
         debug_log!("??????Collaborator data loaded: {:?}", &these_collaboratorfiles_toml_data);
 
-        // 6. Get collaborator port-assignments from the team_channel CoreNode 
-        // (owned, set, signed, by team-owner)
-        let meeting_room_key = format!("{}_{}", uma_local_owner_user, collaborator_name); // Create the key for the pair
-        let this_collaborator_port_config = channel_node_toml.collaborator_port_assignments.get(&meeting_room_key)
-            .ok_or_else(|| {
-                MyCustomError::InvalidData(format!("Missing port assignments for collaborator pair: {}", meeting_room_key))
-            })?;
-        // Now you have access to all the ports for this collaborator in this_collaborator_port_config
-        debug_log!("Port config found for {}: {:?}", collaborator_name, this_collaborator_port_config);
-                
         // TODO very speculative code here
         /*
         what are all the fields of information to get?
@@ -3049,7 +3267,7 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
         gpg
         sync rate?
         */
-        // 7. extract data or drop collaborator from list: 
+        // 8. extract data or drop collaborator from list: 
         // IPvX...what else? 
         // (If not available, drop this person from the list)
         let ipv6_address = match these_collaboratorfiles_toml_data
@@ -3067,50 +3285,60 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
         };
         
         
+        // TODO Alpha under construction
+        // 9. Translate abstract port assignments to local role-specific structs
+        /*
+        TODO
+        What format should the ports be in?
+        the same final standard local format?
+        9. Make local port assignments: Translate abstract port assignments to local role-specific structs
+        per real remote collaborator:
         
+        - load the raw data from the team_channel node.toml an AbstractTeamchannelNodeTomlPortsData struct
+        - 
+        or:
+        make and use a lookup table per other collaborator name (and dispose of it after this step (unless rust does so already)
+        
+        e.g.
+        remote_collaborator_name = MeetingRoomSyncDataset struct (or an intermediate with only struct values, and names)
+        
+        Instance-Role-Specific Local-Meeting-Room-Struct
+        This is no longer an abstract set of data that can be used in different ways in different instances, this is now one of those specific instances with local roles and one local way of using those data.
+        The abstract port-assignments will be converted into a disambiguated and clarified specific local instance roles set of port assignments, namely, local_user_role, remote_collaborator_role
+        
+        */
+        let role_based_ports = translate_port_assignments(
+            uma_local_owner_user, 
+            &collaborator_name, 
+            abstract_collaborator_port_assignments.clone(), // Clone to avoid ownership issues
+        )?;
+
         /*
         
         format is:
-        # meeting rooms, collaborator_port_assignments
-        [collaborator_port_assignments.alice_bob]
+        # meeting rooms, abstract_collaborator_port_assignments
+        [abstract_collaborator_port_assignments.alice_bob]
         collaborator_ports = [
             { name = "alice", ready_port = 50001, intray_port = 50002, gotit_port = 50003 },
             { name = "bob", ready_port = 50004, intray_port = 50005, gotit_port = 50006 },
         ]
 
-        [collaborator_port_assignments.alice_charlotte]
+        [abstract_collaborator_port_assignments.alice_charlotte]
         collaborator_ports = [
             { name = "alice", ready_port = 50007, intray_port = 50008, gotit_port = 50009 },
             { name = "charlotte", ready_port = 50010, intray_port = 50011, gotit_port = 50012 },
         ]
 
-        [collaborator_port_assignments.bob_charlotte]
+        [abstract_collaborator_port_assignments.bob_charlotte]
         collaborator_ports = [
             { name = "bob", ready_port = 50013, intray_port = 50014, gotit_port = 50015 },
             { name = "charlotte", ready_port = 50016, intray_port = 50017, gotit_port = 50018 },
         ]
         */
-        //old code
-        // Get the collaborator's ports from `collaborator_port_assignments` in `node.toml`
-        // // 7. GET COLLABORATOR PORTS from CoreNode
-        // for port_config in this_collaborator_port_config {
-        //     for port_element in &port_config.collaborator_ports {
-        //         if port_element.name == uma_local_owner_user {
-        //             // Assign local user ports
-        //             let local_user_ready_port__your_desk_you_send = port_element.ready_port;
-        //             let local_user_intray_port__your_desk_you_listen = port_element.intray_port;
-        //             let local_user_gotit_port__your_desk_you_send = port_element.gotit_port;
-        //         } else if port_element.name == collaborator_name {
-        //             // Assign remote collaborator ports
-        //             let remote_collaborator_ready_port__their_desk_you_listen = port_element.ready_port;
-        //             let remote_collaborator_intray_port__their_desk_you_send = port_element.intray_port;
-        //             let remote_collaborator_gotit_port__their_desk_you_listen = port_element.gotit_port;
-        //         }
-        //     }
-        // }
+
                 
 
-        // 8. Construct MeetingRoomSyncDataset (struct)
+        // 10. Construct MeetingRoomSyncDataset (struct)
         let mut meeting_room_sync_data = MeetingRoomSyncDataset {
             local_user_name: uma_local_owner_user.to_string(),  // TODO source?
             
@@ -3121,9 +3349,9 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
             local_user_public_gpg: these_collaboratorfiles_toml_data.gpg_key_public.clone(),
             local_user_sync_interval: these_collaboratorfiles_toml_data.sync_interval,
             
-            local_user_ready_port__your_desk_you_send: 0, // placeholder
-            local_user_intray_port__your_desk_you_listen: 0, // placeholder
-            local_user_gotit_port__your_desk_you_send: 0, // placeholder
+            local_user_ready_port__your_desk_you_send: role_based_ports.local_user_ready_port__your_desk_you_send,
+            local_user_intray_port__your_desk_you_listen: role_based_ports.local_user_intray_port__your_desk_you_listen,
+            local_user_gotit_port__your_desk_you_send: role_based_ports.local_user_gotit_port__your_desk_you_send,
             
             remote_collaborator_name: collaborator_name.clone(), // TODO source?
             
@@ -3134,30 +3362,12 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
             remote_collaborator_public_gpg: these_collaboratorfiles_toml_data.gpg_key_public,
             remote_collaborator_sync_interval: these_collaboratorfiles_toml_data.sync_interval,
             
-            remote_collaborator_ready_port__their_desk_you_listen: 0, // placeholder
-            remote_collaborator_intray_port__their_desk_you_send: 0, // placeholder
-            remote_collaborator_gotit_port__their_desk_you_listen: 0, // placeholder
+            remote_collaborator_ready_port__their_desk_you_listen: role_based_ports.remote_collaborator_ready_port__their_desk_you_listen,
+            remote_collaborator_intray_port__their_desk_you_send: role_based_ports.remote_collaborator_intray_port__their_desk_you_send,
+            remote_collaborator_gotit_port__their_desk_you_listen: role_based_ports.remote_collaborator_gotit_port__their_desk_you_listen,
         };
-    
-        
-        // 7. GET COLLABORATOR PORTS from CoreNode
-        for port_config in this_collaborator_port_config {
-            for port_element in &port_config.collaborator_ports {
-                if port_element.name == uma_local_owner_user {
-                    // Assign local user ports directly to the struct fields
-                    meeting_room_sync_data.local_user_ready_port__your_desk_you_send = port_element.ready_port;
-                    meeting_room_sync_data.local_user_intray_port__your_desk_you_listen = port_element.intray_port;
-                    meeting_room_sync_data.local_user_gotit_port__your_desk_you_send = port_element.gotit_port;
-                } else if port_element.name == collaborator_name {
-                    // Assign remote collaborator ports directly to the struct fields
-                    meeting_room_sync_data.remote_collaborator_ready_port__their_desk_you_listen = port_element.ready_port;
-                    meeting_room_sync_data.remote_collaborator_intray_port__their_desk_you_send = port_element.intray_port;
-                    meeting_room_sync_data.remote_collaborator_gotit_port__their_desk_you_listen = port_element.gotit_port;
-                }
-            }
-        }
                 
-                
+        // 12. add this one meeting room data-bundle to the larger set
         sync_config_data_set.insert(meeting_room_sync_data.clone()); 
         debug_log!("Created MeetingRoomSyncDataset: {:?}", &meeting_room_sync_data);
             
@@ -3165,6 +3375,8 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
     } // End of collaborator loop
 
     debug_log!("Allowlist created: {:?}", &sync_config_data_set);
+    
+    // 13. after iterating, return full set of meeting-rooms
     Ok(sync_config_data_set) 
 }
 
