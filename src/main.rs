@@ -660,18 +660,18 @@ fn translate_port_assignments(
     remote_collaborator_name: &str,
     abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
 ) -> Result<RoleBasedLocalPortSet, MyCustomError> {
-    debug_log!("Entering translate_port_assignments() function");
+    debug_log!("tpa: Entering translate_port_assignments() function");
 
     // 1. Construct the key for the meeting room based on user names
     let meeting_room_key = get_meeting_room_key(local_user_name, remote_collaborator_name);
-    debug_log!("Meeting room key: {}", meeting_room_key);
+    debug_log!("tpa 1. Meeting room key: {}", meeting_room_key);
 
     // 2. Get the port assignment vector for this meeting room
     let meeting_room_ports = abstract_collaborator_port_assignments
         .get(&meeting_room_key)
         .ok_or_else(|| MyCustomError::from(io::Error::new(
             io::ErrorKind::NotFound,
-            format!("Port assignments not found for meeting room: {}", meeting_room_key),
+            format!("tpa 2. Port assignments not found for meeting room: {}", meeting_room_key),
         )))?;
 
     // 3. Extract local and remote ports from the vector
@@ -693,11 +693,11 @@ fn translate_port_assignments(
     // 4. Ensure both local and remote ports were found
     let local_ports = local_ports.ok_or_else(|| MyCustomError::from(io::Error::new(
         io::ErrorKind::NotFound,
-        format!("Local port assignments not found for user: {}", local_user_name),
+        format!("tpa 4. Local port assignments not found for user: {}", local_user_name),
     )))?;
     let remote_ports = remote_ports.ok_or_else(|| MyCustomError::from(io::Error::new(
         io::ErrorKind::NotFound,
-        format!("Remote port assignments not found for user: {}", remote_collaborator_name),
+        format!("tpa 4. Remote port assignments not found for user: {}", remote_collaborator_name),
     )))?;
 
     // 5. Construct and return the RoleBasedLocalPortSet
@@ -788,7 +788,7 @@ fn extract_ports_from_table(port_set: &toml::map::Map<String, Value>) -> Result<
 /// * `Result<Vec<String>, String>` - A `Result` containing a vector of collaborator names
 ///   on success, or a `String` describing the error on failure.
 fn get_collaborator_names_from_node_toml(node_toml_path: &Path) -> Result<Vec<String>, String> {
-    debug_log!("Entering get_collaborator_names_from_node_toml() with path: {:?}", node_toml_path);
+    debug_log!("4. Entering get_collaborator_names_from_node_toml() with path: {:?}", node_toml_path);
 
     // 1. Read the node.toml file
     let toml_string = match std::fs::read_to_string(node_toml_path) {
@@ -827,47 +827,137 @@ fn get_collaborator_names_from_node_toml(node_toml_path: &Path) -> Result<Vec<St
     // 4. Return the list of collaborator names
     Ok(collaborator_names)
 }
-// fn get_collaborator_names_from_node_toml(node_toml_path: &Path) -> Result<Vec<String>, String> {
-//     /*
-//     call with
-//         // Inside make_sync_meetingroomconfig_datasets
-//     let collaborator_names = match get_collaborator_names_from_node_toml(&channel_node_toml_path) {
-//         Ok(names) => names,
-//         Err(e) => {
-//             debug_log!("Error getting collaborator names: {}", e);
-//             return Err(MyCustomError::from(io::Error::new(io::ErrorKind::Other, e)));
-//         }
-//     };   
+
+/// Extracts the abstract port assignments from a team channel's `node.toml` file.
+///
+/// This function reads the `node.toml` file, parses the TOML data, and extracts the
+/// `collaborator_port_assignments` table, returning it as a HashMap.
+///
+/// # Arguments
+///
+/// * `node_toml_path` - The path to the team channel's `node.toml` file.
+///
+/// # Returns
+///
+/// * `Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, String>` - A `Result` containing a HashMap of 
+///   collaborator pair names to their port assignments on success, or a `String` describing the error on failure.
+fn get_abstract_port_assignments_from_node_toml(
+    node_toml_path: &Path
+) -> Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, String> {
+    debug_log!("5. starting get_abstract_port_assignments_from_node_toml(): 1. Entering function with path: {:?}", node_toml_path);
+
+    // 1. Read the node.toml file
+    let toml_string = match std::fs::read_to_string(node_toml_path) {
+        Ok(content) => {
+            debug_log!("get_abstract_port_assignments_from_node_toml: 2. Successfully read node.toml file.");
+            content
+        },
+        Err(e) => {
+            let error_message = format!("get_abstract_port_assignments_from_node_toml: Error reading node.toml file: {}", e);
+            debug_log!("{}", error_message);
+            return Err(error_message);
+        }
+    };
+
+    // 2. Parse the TOML data
+    let toml_value: Value = match toml::from_str(&toml_string) {
+        Ok(value) => {
+            debug_log!("get_abstract_port_assignments_from_node_toml: 3. Successfully parsed TOML data.");
+            value
+        },
+        Err(e) => {
+            let error_message = format!("get_abstract_port_assignments_from_node_toml: Error parsing node.toml data: {}", e);
+            debug_log!("{}", error_message);
+            return Err(error_message);
+        }
+    };
+
+    // 3. Extract the abstract_collaborator_port_assignments table
+    let mut abstract_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>> = HashMap::new();
+    debug_log!("get_abstract_port_assignments_from_node_toml: 4. Looking for 'abstract_collaborator_port_assignments' table.");
+    if let Some(collaborator_assignments_table) = toml_value.get("abstract_collaborator_port_assignments").and_then(Value::as_table) {
+        debug_log!("get_abstract_port_assignments_from_node_toml: 5. Found 'abstract_collaborator_port_assignments' table.");
+        for (pair_name, pair_data) in collaborator_assignments_table {
+            debug_log!("get_abstract_port_assignments_from_node_toml: 6. Processing pair: {}", pair_name);
+            if let Some(ports_array) = pair_data.get("collaborator_ports").and_then(Value::as_array) {
+                debug_log!("get_abstract_port_assignments_from_node_toml: 7. Found 'collaborator_ports' array for pair: {}", pair_name);
+                let mut ports_for_pair = Vec::new();
+                for port_data in ports_array {
+                    debug_log!("get_abstract_port_assignments_from_node_toml: 8. Processing port data: {:?}", port_data);
+                    let port_data_str = toml::to_string(&port_data).unwrap();
+                    let collaborator_port: AbstractTeamchannelNodeTomlPortsData = toml::from_str(&port_data_str)
+                        .map_err(|e| format!("get_abstract_port_assignments_from_node_toml: Error deserializing collaborator port: {}", e))?;
+                    debug_log!("get_abstract_port_assignments_from_node_toml: 9. Deserialized port data: {:?}", collaborator_port);
+                    ports_for_pair.push(ReadTeamchannelCollaboratorPortsToml {
+                        collaborator_ports: vec![collaborator_port],
+                    });
+                }
+                debug_log!("get_abstract_port_assignments_from_node_toml: 10. Inserting ports for pair: {} into HashMap.", pair_name);
+                abstract_port_assignments.insert(pair_name.to_string(), ports_for_pair);
+            } else {
+                debug_log!("get_abstract_port_assignments_from_node_toml: 11. 'collaborator_ports' array not found for pair: {}", pair_name);
+            }
+        }
+    } else {
+        debug_log!("get_abstract_port_assignments_from_node_toml: 12. 'abstract_collaborator_port_assignments' table not found.");
+    }
+
+    debug_log!("get_abstract_port_assignments_from_node_toml: 13. Exiting function with port assignments: {:?}", abstract_port_assignments);
+    // 4. Return the abstract_port_assignments HashMap
+    Ok(abstract_port_assignments)
+}
+// /// Extracts the abstract port assignments from a team channel's `node.toml` file.
+// ///
+// /// This function reads the `node.toml` file, parses the TOML data, and extracts the
+// /// `collaborator_port_assignments` table, returning it as a HashMap.
+// ///
+// /// # Arguments
+// ///
+// /// * `node_toml_path` - The path to the team channel's `node.toml` file.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, String>` - A `Result` containing a HashMap of 
+// ///   collaborator pair names to their port assignments on success, or a `String` describing the error on failure.
+// fn get_abstract_port_assignments_from_node_toml(
+//     node_toml_path: &Path
+// ) -> Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, String> {
+//     debug_log!("4. GAP Entering get_collaborator_names_from_node_toml() with path: {:?}", node_toml_path);
     
-    
-//     */
-//     debug_log!("get_collaborator_names_from_node_toml->{:?}", 0);
 //     // 1. Read the node.toml file
 //     let toml_string = match std::fs::read_to_string(node_toml_path) {
 //         Ok(content) => content,
-//         Err(e) => return Err(format!("Error reading node.toml file: {}", e)),
+//         Err(e) => return Err(format!("Error 4. GAP reading node.toml file: {}", e)),
 //     };
 
 //     // 2. Parse the TOML data
 //     let toml_value: Value = match toml::from_str(&toml_string) {
 //         Ok(value) => value,
-//         Err(e) => return Err(format!("Error parsing node.toml data: {}", e)),
+//         Err(e) => return Err(format!("Error 4. GAP parsing node.toml data: {}", e)),
 //     };
 
-//     // 3. Extract collaborator names from abstract_collaborator_port_assignments
-//     let mut collaborator_names = Vec::new();
-//     if let Some(collaborator_assignments_table) = toml_value.get("abstract_collaborator_port_assignments").and_then(Value::as_table) {
-//         for (pair_name, _) in collaborator_assignments_table {
-//             // Split the pair name (e.g., "alice_bob") into individual names
-//             let names: Vec<&str> = pair_name.split('_').collect();
-//             collaborator_names.extend(names.iter().map(|&s| s.to_string()));
+//     // 3. Extract the collaborator_port_assignments table
+//     let mut abstract_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>> = HashMap::new();
+//     if let Some(collaborator_assignments_table) = toml_value.get("collaborator_port_assignments").and_then(Value::as_table) {
+//         for (pair_name, pair_data) in collaborator_assignments_table {
+//             if let Some(ports_array) = pair_data.get("collaborator_ports").and_then(Value::as_array) {
+//                 let mut ports_for_pair = Vec::new();
+//                 for port_data in ports_array {
+//                     let port_data_str = toml::to_string(&port_data).unwrap();
+//                     let collaborator_port: AbstractTeamchannelNodeTomlPortsData = toml::from_str(&port_data_str)
+//                         .map_err(|e| format!("Error 4. GAP deserializing collaborator port: {}", e))?;
+//                     ports_for_pair.push(ReadTeamchannelCollaboratorPortsToml {
+//                         collaborator_ports: vec![collaborator_port],
+//                     });
+//                 }
+//                 abstract_port_assignments.insert(pair_name.to_string(), ports_for_pair);
+//             }
 //         }
 //     }
 
-//     // 4. Return the list of collaborator names
-//     Ok(collaborator_names)
+//     // 4. Return the abstract_port_assignments HashMap
+//     Ok(abstract_port_assignments)
 // }
-
 
 // ALPHA VERSION
 // Function to read a simple string from a file
@@ -3275,7 +3365,7 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
     let collaborators_names_array = match get_collaborator_names_from_node_toml(&channel_node_toml_path) {
         Ok(names) => names,
         Err(e) => {
-            debug_log!("Error 3. getting collaborator names: {}", e);
+            debug_log!("Error 4. getting collaborator names: {}", e);
             return Err(MyCustomError::from(io::Error::new(io::ErrorKind::Other, e)));
         }
     };
@@ -3284,7 +3374,18 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
     // --- 5. raw-abstract port-assignments ---
     // Get the raw-abstract port-assignments 
     // from the team_channel node
-    let abstract_collaborator_port_assignments = teamchannel_nodetoml_data.abstract_collaborator_port_assignments;
+    // let abstract_collaborator_port_assignments = teamchannel_nodetoml_data.abstract_collaborator_port_assignments;
+    // debug_log!(
+    //     "5. abstract_collaborator_port_assignments->{:?}", 
+    //     &abstract_collaborator_port_assignments
+    // );
+    let abstract_collaborator_port_assignments = match get_abstract_port_assignments_from_node_toml(&channel_node_toml_path) {
+        Ok(names) => names,
+        Err(e) => {
+            debug_log!("Error 5. getting abstract_collaborator_port_assignments: {}", e);
+            return Err(MyCustomError::from(io::Error::new(io::ErrorKind::Other, e)));
+        }
+    };
     debug_log!(
         "5. abstract_collaborator_port_assignments->{:?}", 
         &abstract_collaborator_port_assignments
@@ -3361,23 +3462,24 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
         {
             Some(addr) => {
                 debug_log!(
-                    "8. IPv6 address for {}: {}", 
+                    "9. IPv6 address for {}: {}", 
                     collaborator_name, addr
                 );
                 addr // ?
             },
             None => {
-                debug_log!("WARNING: 8. No IPv6 address found for {}. Skipping this collaborator.", collaborator_name);
+                debug_log!("WARNING: 9. No IPv6 address found for {}. Skipping this collaborator.", collaborator_name);
                 continue; // Skip to the next collaborator in the loop
             }
         };
         debug_log!(
-            "8. ipv6_address {:?}->", 
+            "9. ipv6_address {:?}->", 
             &ipv6_address
         );
         
         // TODO Alpha under construction
         // --- 10. Translate abstract port assignments to local role-specific structs ---
+        // let role_based_ports = translate_port_assignments()
         /*
         Make local port assignments: Translate abstract port assignments to local role-specific structs
         per real remote collaborator:
@@ -3392,13 +3494,14 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
         instance roles set of port assignments, namely, 
         local_user_role, remote_collaborator_role
         */
+        debug_log("10. Starting translate_port_assignments()");
         let role_based_ports = translate_port_assignments(
             uma_local_owner_user, 
             &collaborator_name, 
             abstract_collaborator_port_assignments.clone(), // Clone to avoid ownership issues
         )?;
         debug_log!(
-            "9. role_based_ports {:?}->", 
+            "10. role_based_ports {:?}->", 
             &role_based_ports
         );
         /*
