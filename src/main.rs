@@ -1270,7 +1270,6 @@ struct CollaboratorTomlData {
     ipv4_addresses: Option<Vec<Ipv4Addr>>,
     ipv6_addresses: Option<Vec<Ipv6Addr>>,
     gpg_key_public: String,
-    // sync_file_transfer_port: u16,
     sync_interval: u64,
     updated_at_timestamp: u64,
 }
@@ -1281,7 +1280,6 @@ impl CollaboratorTomlData {
         ipv4_addresses: Option<Vec<Ipv4Addr>>,
         ipv6_addresses: Option<Vec<Ipv6Addr>>,
         gpg_key_public: String, 
-        // sync_file_transfer_port: u16, 
         sync_interval: u64,
         updated_at_timestamp: u64,
     ) -> CollaboratorTomlData {
@@ -1290,7 +1288,6 @@ impl CollaboratorTomlData {
             ipv4_addresses,
             ipv6_addresses,
             gpg_key_public,
-            // sync_file_transfer_port,
             sync_interval,
             updated_at_timestamp,
         }
@@ -1305,7 +1302,6 @@ fn add_collaborator_setup_file(
     ipv4_addresses: Option<Vec<Ipv4Addr>>,
     ipv6_addresses: Option<Vec<Ipv6Addr>>,
     gpg_key_public: String,
-    // sync_file_transfer_port: u16,
     sync_interval: u64,
     updated_at_timestamp: u64,
 ) -> Result<(), std::io::Error> {
@@ -1316,7 +1312,6 @@ fn add_collaborator_setup_file(
         ipv4_addresses,
         ipv6_addresses, 
         gpg_key_public,
-        // sync_file_transfer_port,
         sync_interval,
         updated_at_timestamp,
     );
@@ -1445,10 +1440,9 @@ fn add_collaborator_qa(
     println!("Enter the collaborator's sync file transfer port (default: 40000):");
     let mut sync_port_input = String::new();
     io::stdin().read_line(&mut sync_port_input)?; 
-    // let sync_file_transfer_port: u16 = sync_port_input.trim().parse().unwrap_or(40000);
+
     // Generate a random port within the desired range
     let mut rng = rand::thread_rng(); 
-    // let sync_file_transfer_port: u16 = rng.gen_range(40000..=50000); // depricated
 
     println!("Enter the collaborator's sync interval in seconds (default: 60):");
     let mut sync_interval_input = String::new();
@@ -1473,7 +1467,6 @@ fn add_collaborator_qa(
         ipv4_addresses, 
         ipv6_addresses, 
         gpg_key_public, 
-        // sync_file_transfer_port, 
         sync_interval,
         get_current_unix_timestamp(),
     ); 
@@ -1509,7 +1502,6 @@ fn add_collaborator_qa(
         new_collaborator.ipv4_addresses, 
         new_collaborator.ipv6_addresses,
         new_collaborator.gpg_key_public, 
-        // new_collaborator.sync_file_transfer_port, 
         new_collaborator.sync_interval,
         new_collaborator.updated_at_timestamp,
     )?; 
@@ -2700,7 +2692,6 @@ fn initialize_uma_application() -> Result<(), Box<dyn std::error::Error>> {
         // if check_collaborator_name_collision();
 
         let mut rng = rand::thread_rng(); 
-        // let sync_file_transfer_port: u16 = rng.gen_range(40000..=50000); 
         
         // let updated_at_timestamp = get_current_unix_timestamp()
         
@@ -2710,7 +2701,6 @@ fn initialize_uma_application() -> Result<(), Box<dyn std::error::Error>> {
             ipv4_addresses, 
             ipv6_addresses, 
             gpg_key_public, 
-            // sync_file_transfer_port, // sync_file_transfer_port
             60,   // Example sync_interval (in seconds)
             get_current_unix_timestamp(),
         );
@@ -3187,7 +3177,6 @@ fn get_addressbook_file_by_username(username: &str) -> Result<CollaboratorTomlDa
 /// ipv4_addresses = ["24.0.189.112", "24.0.189.112"]
 /// ipv6_addresses = ["2601:80:4803:9490::2e79","2601:80:4803:9490::2e79"]
 /// gpg_key_public = "304A9A525A5D00D6AD269F765C3E7C56E5A3D0D8"
-/// sync_file_transfer_port = 5000
 /// sync_interval = 5000
 ///
 /// Do NOT read all data from all collaborators.      
@@ -3519,7 +3508,6 @@ fn send_hello_signal(target_addr: SocketAddr) -> Result<(), io::Error> {
 
 // // Helper function to check if a port is in use by another collaborator
 // fn port_is_used_by_another_collaborator(port: u16, collaborators: &HashSet<RemoteCollaboratorPortsData>) -> bool { 
-//     collaborators.iter().any(|c| c.sync_file_transfer_port == port)
 // }
 
 
