@@ -906,58 +906,6 @@ fn get_abstract_port_assignments_from_node_toml(
     // 4. Return the abstract_port_assignments HashMap
     Ok(abstract_port_assignments)
 }
-// /// Extracts the abstract port assignments from a team channel's `node.toml` file.
-// ///
-// /// This function reads the `node.toml` file, parses the TOML data, and extracts the
-// /// `collaborator_port_assignments` table, returning it as a HashMap.
-// ///
-// /// # Arguments
-// ///
-// /// * `node_toml_path` - The path to the team channel's `node.toml` file.
-// ///
-// /// # Returns
-// ///
-// /// * `Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, String>` - A `Result` containing a HashMap of 
-// ///   collaborator pair names to their port assignments on success, or a `String` describing the error on failure.
-// fn get_abstract_port_assignments_from_node_toml(
-//     node_toml_path: &Path
-// ) -> Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, String> {
-//     debug_log!("4. GAP Entering get_collaborator_names_from_node_toml() with path: {:?}", node_toml_path);
-    
-//     // 1. Read the node.toml file
-//     let toml_string = match std::fs::read_to_string(node_toml_path) {
-//         Ok(content) => content,
-//         Err(e) => return Err(format!("Error 4. GAP reading node.toml file: {}", e)),
-//     };
-
-//     // 2. Parse the TOML data
-//     let toml_value: Value = match toml::from_str(&toml_string) {
-//         Ok(value) => value,
-//         Err(e) => return Err(format!("Error 4. GAP parsing node.toml data: {}", e)),
-//     };
-
-//     // 3. Extract the collaborator_port_assignments table
-//     let mut abstract_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>> = HashMap::new();
-//     if let Some(collaborator_assignments_table) = toml_value.get("collaborator_port_assignments").and_then(Value::as_table) {
-//         for (pair_name, pair_data) in collaborator_assignments_table {
-//             if let Some(ports_array) = pair_data.get("collaborator_ports").and_then(Value::as_array) {
-//                 let mut ports_for_pair = Vec::new();
-//                 for port_data in ports_array {
-//                     let port_data_str = toml::to_string(&port_data).unwrap();
-//                     let collaborator_port: AbstractTeamchannelNodeTomlPortsData = toml::from_str(&port_data_str)
-//                         .map_err(|e| format!("Error 4. GAP deserializing collaborator port: {}", e))?;
-//                     ports_for_pair.push(ReadTeamchannelCollaboratorPortsToml {
-//                         collaborator_ports: vec![collaborator_port],
-//                     });
-//                 }
-//                 abstract_port_assignments.insert(pair_name.to_string(), ports_for_pair);
-//             }
-//         }
-//     }
-
-//     // 4. Return the abstract_port_assignments HashMap
-//     Ok(abstract_port_assignments)
-// }
 
 // ALPHA VERSION
 // Function to read a simple string from a file
@@ -1820,23 +1768,6 @@ struct ReadTeamchannelCollaboratorPortsToml {
     collaborator_ports: Vec<AbstractTeamchannelNodeTomlPortsData>,
 }
 
-
-// old archive
-// #[derive(Debug, Deserialize, Serialize, Clone)]
-// struct CollaboratorPorts {
-//     /// The port used by the collaborator to signal readiness to receive data.
-//     ready_port: u16,
-//     /// The port used to send files to the collaborator (their "in-tray").
-//     tray_port: u16,
-//     /// The port used by the collaborator to confirm file receipt.
-//     gotit_port: u16,
-//     /// The port this node listens on for ready signals from the collaborator.
-//     self_ready_port: u16,
-//     /// The port this node listens on to receive files from the collaborator.
-//     self_tray_port: u16,
-//     /// The port this node uses to confirm file receipt to the collaborator.
-//     self_gotit_port: u16,
-// }
 
 /*
 the .toml files and the overall Uma~browser must be able to know their location in the overall project_graph_data/file-system
@@ -4157,7 +4088,7 @@ fn handle_collaborator_intray_desk(
     */
     // TODO: why are  intray_port__their_desk_you_send and gotit_port__their_desk_you_listen never used here????
     debug_log!(
-        "Started the handle_collaborator_intray_desk() for->{}", 
+        "Started HCID the handle_collaborator_intray_desk() for->{}", 
         meeting_room_sync_data_fn_input.remote_collaborator_name
     );
 
@@ -4177,34 +4108,37 @@ fn handle_collaborator_intray_desk(
         match bind_result {
             Ok(sock) => {
                 socket = Some(sock);
-                debug_log!("Bound UDP socket to [{}]:{}", ipv6_address, meeting_room_sync_data_fn_input.remote_collaborator_ready_port__their_desk_you_listen);
+                debug_log!("HCID Bound UDP socket to [{}]:{}", ipv6_address, meeting_room_sync_data_fn_input.remote_collaborator_ready_port__their_desk_you_listen);
                 break; // Exit the loop if binding is successful
             },
             Err(e) => {
-                debug_log!("Failed to bind to [{}]:{}: {}", ipv6_address, meeting_room_sync_data_fn_input.remote_collaborator_ready_port__their_desk_you_listen, e);
+                debug_log!("HCID Failed to bind to [{}]:{}: {}", ipv6_address, meeting_room_sync_data_fn_input.remote_collaborator_ready_port__their_desk_you_listen, e);
                 // Continue to the next address
             }
         }
     }
     // Print all sync data for the collaborator
-    debug_log!("???Collaborator Sync Data: {:?}", meeting_room_sync_data_fn_input);
+    debug_log!(
+        "HCID Print all sync data for the collaborator:meeting_room_sync_data_fn_input {:?}", 
+        meeting_room_sync_data_fn_input
+    );
 
-    // 2. Check if socket binding was successful (simplified)
-    let socket = socket.ok_or(UmaError::NetworkError("Failed to bind to any IPv6 address".to_string()))?;
+    // 3. Check if socket binding was successful (simplified)
+    let socket = socket.ok_or(UmaError::NetworkError("HCID Failed to bind to any IPv6 address".to_string()))?;
                     
     debug_log!(
-        "Bound UDP socket to [{:?}]:{:?}", 
-        meeting_room_sync_data_fn_input.remote_collaborator_ipv6_addr_list,
-        meeting_room_sync_data_fn_input.remote_collaborator_ready_port__their_desk_you_listen,
+        "HCID 3. socket {:?}", 
+        &socket,
     );
 
     // 2. Main loop
     let mut last_log_time = Instant::now(); // Track the last time we logged a message
     loop {
+        debug_log("HCID starting Main loop...");
         // 3. Check for halt signal
         if should_halt() {
             debug_log!(
-                "Halting handle_collaborator_intray_desk() for {}", 
+                "HCID Check for halt signal. Halting handle_collaborator_intray_desk() for {}", 
                 meeting_room_sync_data_fn_input.remote_collaborator_name
             );
             break;
@@ -4214,17 +4148,22 @@ fn handle_collaborator_intray_desk(
         let mut buf = [0; 1024];
         match socket.recv_from(&mut buf) {
             Ok((amt, src)) => {
-                debug_log!("Received {} bytes from {} on ready_port", amt, src);
+                debug_log!("HCID 4. Received {} bytes from {} on ready_port", amt, src);
 
                 // 5. Deserialize the ReadySignal
                 let ready_signal: ReadySignal = match deserialize_ready_signal(&buf[..amt]) {
                     Ok(ready_signal) => {
-                        println!("{}: Received ReadySignal: {:?}", meeting_room_sync_data_fn_input.remote_collaborator_name, ready_signal); // Print to console
-                        debug_log!("{}: Received ReadySignal: {:?}", meeting_room_sync_data_fn_input.remote_collaborator_name, ready_signal); // Log the signal
+                        println!("HCID 4. {}: Received ReadySignal: {:?}",
+                             meeting_room_sync_data_fn_input.remote_collaborator_name, ready_signal
+                        ); // Print to console
+                        debug_log!("HCID 4. {}: Received ReadySignal: {:?}",
+                             meeting_room_sync_data_fn_input.remote_collaborator_name, 
+                             ready_signal
+                        ); // Log the signal
                         ready_signal
                     },
                     Err(e) => {
-                        debug_log!("Failed to parse ready signal: {}", e);
+                        debug_log!("HCID 4. Receive data Failed to parse ready signal: {}", e);
                         continue; // Continue to the next iteration of the loop
                     }
                 };
@@ -4235,7 +4174,7 @@ fn handle_collaborator_intray_desk(
                 // No data available yet, continue listening
                 // Periodically log that we're listening
                 if last_log_time.elapsed() >= Duration::from_secs(5) {
-                    debug_log!("{}: Listening for ReadySignal on port {}", 
+                    debug_log!("HCID 4. {}: Listening for ReadySignal on port {}", 
                                meeting_room_sync_data_fn_input.remote_collaborator_name, 
                                meeting_room_sync_data_fn_input.remote_collaborator_ready_port__their_desk_you_listen);
                     last_log_time = Instant::now();
@@ -4243,7 +4182,7 @@ fn handle_collaborator_intray_desk(
             },
             Err(e) => {
                 // Handle other errors
-                debug_log!("{}: Error receiving data on ready_port: {} ({:?})", 
+                debug_log!("HCID 4. {}: Error receiving data on ready_port: {} ({:?})", 
                            meeting_room_sync_data_fn_input.remote_collaborator_name, e, e.kind());
                 // Consider exiting the function or the sync process if it's a fatal error
                 return Err(UmaError::NetworkError(e.to_string())); // Example: Return a NetworkError
@@ -4252,7 +4191,7 @@ fn handle_collaborator_intray_desk(
 
         thread::sleep(Duration::from_millis(100)); // Avoid busy-waiting
     }
-
+    debug_log("ending HCID");
     Ok(())
 }
 
