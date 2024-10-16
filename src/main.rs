@@ -3645,10 +3645,10 @@ fn handle_owner_desk(
     thread::sleep(Duration::from_millis(1000)); // Avoid busy-waiting
     
     // ALPHA non-parallel version
-    debug_log!("Start handle_owner_desk()");
+    debug_log!("Start HOD handle_owner_desk()");
     // Print all sync data for the desk
     debug_log!("
-        handle_owner_desk own_desk_setup_data: {:?}", 
+        HOD handle_owner_desk own_desk_setup_data: {:?}", 
         &own_desk_setup_data
     );
 
@@ -3668,7 +3668,7 @@ fn handle_owner_desk(
             // 3. thread_id = 
             let sync_event_id__for_this_thread = format!("{:?}", thread::current().id()); 
             debug_log!(
-                "New sync-event thread id: {:?}; in handle_owner_desk()", 
+                "HOD New sync-event thread id: {:?}; in handle_owner_desk()", 
                 sync_event_id__for_this_thread
             );
             
@@ -3686,7 +3686,7 @@ fn handle_owner_desk(
             // 5. Serialize the ReadySignal
             let data = serialize_ready_signal(
                 &ready_signal_to_send_from_this_loop
-            ).expect("Failed to serialize ReadySignal, ready_signal_to_send_from_this_loop"); 
+            ).expect("HOD Failed to serialize ReadySignal, ready_signal_to_send_from_this_loop"); 
 
 
             // TODO possibly have some mechanism to try addresses until one works?
@@ -3705,23 +3705,23 @@ fn handle_owner_desk(
                 ); 
 
                 // Log before sending
-                debug_log(
-                    "Attempting to send ReadySignal to {}: {:?}"//, 
-                    // target_addr, 
-                    // &ready_signal_to_send_from_this_loop
+                debug_log!(
+                    "HOD Attempting to send ReadySignal to {}: {:?}", 
+                    target_addr, 
+                    &data
                 );
 
                 // If sending to the first address succeeds, no need to iterate further
                 if send_data(&data, target_addr).is_ok() {
-                    debug_log("Successfully sent ReadySignal to {} (first address)"//, target_addr
+                    debug_log("HOD Successfully sent ReadySignal to {} (first address)"//, target_addr
                         );
                     return; // Exit the thread
                 } else {
-                    debug_log("Failed to send ReadySignal to {} (first address)"//, target_addr
+                    debug_log("HOD Failed to send ReadySignal to {} (first address)"//, target_addr
                         );
                 }
             } else {
-                debug_log("No IPv6 addresses available for {}"
+                debug_log("HOD No IPv6 addresses available for {}"
                     // , own_desk_setup_data.local_user_name
                     );
             }
@@ -3743,7 +3743,7 @@ fn handle_owner_desk(
         thread::sleep(Duration::from_secs(3)); 
     } // end loop
     debug_log!(
-        "Exiting handle_owner_desk() for {}", 
+        "HOD Exiting handle_owner_desk() for {}", 
         own_desk_setup_data.local_user_name
     ); // Add collaborator name
 }
@@ -4127,7 +4127,7 @@ fn handle_collaborator_intray_desk(
     let socket = socket.ok_or(UmaError::NetworkError("HCID Failed to bind to any IPv6 address".to_string()))?;
                     
     debug_log!(
-        "HCID 3. socket {:?}", 
+        "HCID 3. listen at this socket {:?}", 
         &socket,
     );
 
