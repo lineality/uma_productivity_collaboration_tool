@@ -54,6 +54,251 @@ pub mod tiny_tui {
     }
 }
 
+# IP Addresses, From and To, in Uma
+
+How do ip addresses work when "connecting" one computer to another over the internet, for example as relates to udp vs. tcp and ports vs. IP addresses? When Alice sends a signal to Bob, and when Alice listens for a signal from Bob, what is happening? How should terms such as "connect", "bind", "listen", and "aim at", be used?
+
+
+## IP Addresses From and To in Uma for UDP Communication (UDP, not TCP)
+
+#### Connectionless Protocol: 
+UDP is a connectionless protocol, meaning there is no persistent "connection" established between the sender and the receiver.
+
+#### Binding is Local: 
+Binding (or binding to?) a socket only is performed by and affects a local machine; it does not establish any "connection" to the remote machine.
+
+
+# Terminology:
+
+## "Binding" & "Socket"
+Binding a Socket:
+
+#### Socket: 
+A pair: one ip-address paired with one "port"
+
+#### Port: 
+A more or less completely arbitrary and abstract 'field' that identifies a unique "path" for signals. By convention: 
+- ports are named as integers up to to four digits: 430, 8080, 40000
+- some network ports are reserved for common uses
+
+#### Purpose of binding a socket: 
+To prepare the operating system to receive information sent to a specific IP address and port combination on the local machine.
+
+#### Code: 
+```Rust
+let socket = UdpSocket::bind(SocketAddr::new(IpAddr::V6(address), port))?;```
+
+### No "Connection" in the case of UPD:
+There is no Outgoing "Connection" on a bound-socket: Binding a socket does not establish any outgoing "connection" to another machine. Like setting up an in-tray for mail at your house, you are not sending mail to anyone else by the act of setting up an in-tray to hold mail sent to you.
+
+
+## Listening: 
+When Alice listens for a "signal" from Bob, Alice will be listening at (one or more of her own) IP addresses at a specific port, the combination of which is called a 'socket.' Bob's IP-address, which Bob uses on his local-machine, does not matter for Alice to listen for a signal from Bob. Alice does not bind to and listen at Bob's IP-address. Alice only listens at her own 'socket' IP+Port.
+
+### Code: 
+// Alice sets up a place to listen for Bob to send something
+```Rust
+let socket = UdpSocket::bind(SocketAddr::new(IpAddr::V6(Alices_id_address), Alices_listening_port))?;
+```
+
+## Sending:
+There are two parts to send, but the first part is largely a background process that can be ignored. The terms and steps however can be confusing in terms of separating the descriptions. There are some not quite nuanced distinctions. Bob aims the signal at the socket (ip, port) that Alice is bound to on her end (her 'in tray' to which Bob is sending something). Bob neither "binds" to nor "connects to" Alice's socket (ip & port); Bob aims at Alice's socket. But, but Bob does need to bind to something on his end to send something over the internet; the thing is that this step is completely arbitrary (and perhaps done ad hoc by the OS) and not meaningful for the otherwise very sensitive and careful management of shared ports and ip addresses. Perhap by analogy, Alice may be waiting at one window at which Bob strictly must aim when he tosses her a sandwich; but it is entirely arbitrary how Bob got access to being outside of his house so he could aim at her window. His aiming at Alice's window is 100% necessary, but he could have gone outside by any door, window, passage, hole, or any means, in order to aim at her window. It makes no difference to any part of the conversation how he did that.
+
+### The two steps in binding.
+When Bob sends a signal, or information, to Alice...
+1. The arbitrary step: Bob binds locally to any ephemeral socket to send from.
+2. The important step: Bob 'aims at' and sends to Alice's exact socket-address.
+
+#### code:
+```Rust
+// Bob sends a datagram to Alice
+let socket = UdpSocket::bind("0.0.0.0:0")?; // Bind to any available source IP and port
+socket.send_to(data, SocketAddr::new(IpAddr::V6(Alices_ip_address), Alices_listening_port))?;
+```
+
+## Binding & Aiming-At
+#### Categories:
+1. Bind to Listen (important details)
+2. Aim-At to Send (important details)
+3. Bind to Send (ephemeral, arbitrary) 
+
+
+## Summary
+- When you are listening you are always binding (to) and listening at a local bound socket (ip + port) that is always your ip-address, but the 'port' may be arbitrarily given any description, name, title, or role. Port 8765 may be called "Bob's baseball lunch port" and port 5678 may be called "Alice's baroque quartet dinner port." The IP is 'decided' by what your local hardware allows, it physically yours and must be. The port exists more abstractly in social-agreement space, it may be described as 'belonging' to anyone or anything or nothing.  
+
+- When sending you are always aiming at (but neither 'binding' to nor 'connecting' to) the socket (ip + port) that the recipient is bound to and listening at. (As a formality you have to first have bound to some, any, socket to have outside access to in order to send something, but that is arbitrary and has nothing to do with the recipient-listener's socket specifications.) 
+
+- UDP is 'connectionless' and does not involve any 'connections' in jargon terms.
+
+
+# Meeting-Desks vs. "Mailboxes": Ports and IP and Sockets and Binding-for-Listening
+Some info-tainment examples use mailboxes and datagrams to illustrate UDP. Uma has two in-trays for the meeting-room shared by collaborators, but there is no single 'mailbox' or single port.
+
+Even if the rules above seem straight forward, hopefully they do enough (bind to your thing to list, aim at their thing to send, etc.) you may have spotted a potentially less-clear area waiting in the eves. IP is physical and concrete and always locally yours, but if ports are highly arbitrary, then you may be sometimes listening at and binding to (or aiming at to send to) "someone else's port" paired with (always) your own IP, and sometimes to a port "assigned" to you. 
+
+To clarify this (and perhaps head off how it can sound confusing) let's clearly lay out all the situations for Uma, and show that these specifications can be clearly documented in the variable names so no one gets lost in the arbitrariness. Again, the raw agreements are abstract, but the roles are locally-interpreted. "Mine and yours" have opposite meanings for Alice and for Bob.
+
+
+[Listen: The Three Listen Cases]
+Alice listens using the Local User Desk handler function:
+- Alice listens at her own in-tray, 
+so Alice sets up a binding-for-listening at her port
+(old) local_user_intray_port__your_desk_you_listen,
+localuser_intray_port__yourdesk_youlisten__bind_yourlocal_ip
+(your port, your IP, bind to socket)
+
+
+Alice listens using the Remote Collaborator Desk Handler:
+- Alice listens for Bob's 'I'm Ready' signal, so Alice sets up a binding-for-listening (at her own IP-address) at Bob's port
+(old) remote_collaborator_ready_port__their_desk_you_listen
+      remote_collaborator_ready_port__their_desk_you_listen,
+remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip
+
+(their port, your IP, bind to socket)
+
+Alice listens using the Remote Collaborator Desk Handler:
+- Alice listens for Bob's 'I got it!' signal, so Alice sets up a binding-for-listening (at her own IP-address) at Bob's port
+(old) remote_collaborator_gotit_port__their_desk_you_listen,
+remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip
+(their port, your IP, bind to socket)
+
+[Send: The Three Send Cases]
+Alice sends using the Remote Collaborator Desk Handler:
+- Alice sends to Bob's desk in-tray, so Alice 
+(sets up an ephemeral binding-for-sending and) 
+Aims-At & sends to Bob's port
+(old) remote_collaborator_intray_port__their_desk_you_send,
+remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip
+(their port, their IP, aim at socket)
+
+Alice sends using the Local User Desk handler:
+- Alice sends her own 'I'm Ready' signal, so Alice 
+(sets up an ephemeral binding-for-sending and) 
+Aims-At & sends to her own port
+(old) local_user_ready_port__your_desk_you_send,
+local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
+(your port, their IP, aim at socket)
+
+Alice sends using the Local User Desk handler:
+- Alice sends her own 'I Got it!!' signal, so Alice 
+(sets up an ephemeral binding-for-sending and) 
+Aims-At & sends to her own port
+(old) local_user_gotit_port__your_desk_you_send,
+local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip
+(your port, their IP, aim at socket),
+
+
+For Bob, from Bob's point of view, the process description is like Alice's but switches names from Alice to Bob. Each local user sets up local-role processes as 'me' and 'you' (whomever is in those roles).
+
+
+
+## In review:
+- When you listen, you are always binding to an ip+port->socket to listen.
+- The ip-address you bind at is always (can only be) a physical local ip-connection for your local hardware.
+- When you send, (in step 1 of sending) you are arbitrarily binding to something to send from but the important part is that (in step 2 of sendind) you are aiming-at the ip+port->socket that the recipient is bound to listen at.
+- Sending is always aiming at their ip-address (not necessarily 'their desk's port). 
+- When you listen at your own desk (one port) you are using your own ip and your port.
+- When you listen at someone else's desk (a remote collaborator), you listen at their port BUT at YOUR ip.
+- When you send to your own desk (two ports: send "I'm ready" and send "I got it!") you are using your port but THEIR ip (that collaborator's ip-address): aim to send to
+- When you send to your own desk, you use your desk's assigned port but the remote collaborator's ip-address: aim to send
+- When you send to their (remote collaborators) desk you use their port and their ip.
+
+This additional layer is not as easy to hold in your head as the first part. Clear naming, documentation, and careful alignment should help with predictable mistakes due to confusion.
+
+
+
+# Picking ipv6
+
+During startup, UMA will check the local IP addresses:
+```
+fn get_local_ip_addresses() -> std::io::Result<()> {
+Interface: lo
+  Address: 127.0.0.1
+  Netmask: 255.0.0.0
+  Flags: InterfaceFlags(UP | RUNNING | LOOPBACK)
+  Status: Up
+
+fn get_local_ip_addresses() -> std::io::Result<()> {
+Interface: wlp0s20f3
+  Address: 10.0.0.22
+  Netmask: 255.255.255.0
+  Flags: InterfaceFlags(UP | RUNNING | BROADCAST | MULTICAST)
+  Status: Up
+
+fn get_local_ip_addresses() -> std::io::Result<()> {
+Interface: lo
+  Address: ::1
+  Netmask: ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+  Flags: InterfaceFlags(UP | RUNNING | LOOPBACK)
+  Status: Up
+
+fn get_local_ip_addresses() -> std::io::Result<()> {
+Interface: wlp0s20f3
+  Address: [redacted]
+  Netmask: ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+  Flags: InterfaceFlags(UP | RUNNING | BROADCAST | MULTICAST)
+  Status: Up
+
+fn get_local_ip_addresses() -> std::io::Result<()> {
+Interface: wlp0s20f3
+  Address: [redacted]
+  Netmask: ffff:ffff:ffff:ffff::
+  Flags: InterfaceFlags(UP | RUNNING | BROADCAST | MULTICAST)
+  Status: Up
+
+fn get_local_ip_addresses() -> std::io::Result<()> {
+Interface: wlp0s20f3
+  Address: [redacted]
+  Netmask: ffff:ffff:ffff:ffff::
+  Flags: InterfaceFlags(UP | RUNNING | BROADCAST | MULTICAST)
+  Status: Up
+```
+
+
+## Link-Local Addresses (Avoid)
+
+### Do Not Use Link-Local Addresses:
+Scope: Link-local addresses (those starting with fe80::) are only valid and usable within the same local network segment (link). They are not routable beyond the local network.
+
+### Link-Local Address Purpose: 
+Link-Local Addresses are typically used for automatic address configuration and communication between devices on the same link, e.g. neighbor discovery protocols.
+
+### Link-Local Address Binding Restrictions: 
+Most operating systems have restrictions on binding UDP sockets to link-local addresses. This is because link-local addresses are not globally unique and can lead to conflicts if used for communication beyond the local link.
+
+
+## IP Address Types:
+
+1. **Loopback Address (127.0.0.1 and ::1):**
+    - **Purpose:** Used for communication within the same machine. When a program sends data to a loopback address, it's essentially sending it to itself.
+    - **Relevance to Uma:**  Uma should **not** use loopback addresses for communication between different instances. They are only useful for testing or internal communication within a single instance.
+
+2. **Private IPv4 Address (10.0.0.22):**
+    - **Purpose:** Used within private networks, such as home or office networks. They are not directly routable on the public internet.
+    - **Relevance to Uma:** Uma can use private IPv4 addresses for communication between instances **within the same private network**. However, if collaborators are on different networks, Uma will need to use public IP addresses.
+
+3. **Global Unicast IPv6 Address (2601:80:4803:9490::52b1 and 2601:80:4803:9490:875a:cb9c:2489:8fe3):**
+    - **Purpose:**  Globally unique and routable on the internet.
+    - **Relevance to Uma:**  These are the **ideal addresses for Uma to use** for communication between collaborators on different networks.
+
+4. **Link-Local IPv6 Address (fe80::1280:3060:5df8:70b5):**
+    - **Purpose:**  Valid and usable only within the same local network segment (link). Not routable beyond the local network.
+    - **Relevance to Uma:** Uma should **avoid using link-local addresses** for inter-instance communication, as they can lead to binding errors and communication failures.
+
+## Recommended:
+
+- **Recommended:** Global unicast IPv6 addresses for communication between instances on different networks.
+- **Acceptable (Within Same Network):** Private IPv4 addresses for communication within the same private network.
+- **Avoid:** Loopback addresses and link-local IPv6 addresses.
+
+## Notes:
+
+- **Interface Names:** The interface names (e.g., "lo" for loopback, "wlp0s20f3" for a wireless interface) can vary depending on the operating system and hardware.
+- **Netmask:** The netmask indicates the portion of the IP address that identifies the network, while the remaining portion identifies the host within that network.
+- **Flags:** The interface flags provide information about the capabilities and status of the interface.
+
+
+
 */
 
 // Set debug flag (future: add time stamp with 24 check)
@@ -3633,10 +3878,10 @@ fn handle_owner_desk(
     thread::sleep(Duration::from_millis(1000)); // Avoid busy-waiting
     
     // ALPHA non-parallel version
-    debug_log!("Start HOD handle_owner_desk()");
+    debug_log!("\n Start HOD handle_owner_desk()");
     // Print all sync data for the desk
     debug_log!("
-        HOD handle_owner_desk own_desk_setup_data: {:?}", 
+        HOD handle_owner_desk: own_desk_setup_data -> {:?}", 
         &own_desk_setup_data
     );
 
@@ -3656,7 +3901,7 @@ fn handle_owner_desk(
             // 3. thread_id = 
             let sync_event_id__for_this_thread = format!("{:?}", thread::current().id()); 
             debug_log!(
-                "HOD New sync-event thread id: {:?}; in handle_owner_desk()", 
+                "HOD 2. New sync-event thread id: {:?}; in handle_owner_desk()", 
                 sync_event_id__for_this_thread
             );
             
@@ -3672,10 +3917,12 @@ fn handle_owner_desk(
             };
 
             // 5. Serialize the ReadySignal
-            let data = serialize_ready_signal(
+            let readysignal_data = serialize_ready_signal(
                 &ready_signal_to_send_from_this_loop
-            ).expect("HOD Failed to serialize ReadySignal, ready_signal_to_send_from_this_loop"); 
+            ).expect("HOD 5. err Failed to serialize ReadySignal, ready_signal_to_send_from_this_loop"); 
 
+            // --- Inspect Serialized Data ---
+            debug_log!("HOD 5. inspect Serialized Data: {:?}", readysignal_data);
 
             // TODO possibly have some mechanism to try addresses until one works?
             // 6. Send the signal @ local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
@@ -3694,22 +3941,22 @@ fn handle_owner_desk(
 
                 // Log before sending
                 debug_log!(
-                    "HOD Attempting to send ReadySignal to {}: {:?}", 
+                    "HOD 6. Attempting to send ReadySignal to {}: {:?}", 
                     target_addr, 
-                    &data
+                    &readysignal_data
                 );
 
                 // If sending to the first address succeeds, no need to iterate further
-                if send_data(&data, target_addr).is_ok() {
-                    debug_log("HOD Successfully sent ReadySignal to {} (first address)"//, target_addr
+                if send_data(&readysignal_data, target_addr).is_ok() {
+                    debug_log("HOD 6. Successfully sent ReadySignal to {} (first address)"//, target_addr
                         );
                     return; // Exit the thread
                 } else {
-                    debug_log("HOD Failed to send ReadySignal to {} (first address)"//, target_addr
+                    debug_log("HOD err 6. Failed to send ReadySignal to {} (first address)"//, target_addr
                         );
                 }
             } else {
-                debug_log("HOD No IPv6 addresses available for {}"
+                debug_log("HOD ERROR No IPv6 addresses available for {}"
                     // , own_desk_setup_data.local_user_name
                     );
             }
