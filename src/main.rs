@@ -4076,10 +4076,13 @@ fn handle_collaborator_intray_desk(
     */
     // TODO: why are  intray_port__their_desk_you_send and gotit_port__their_desk_you_listen never used here????
     debug_log!(
-        "Started HCID the handle_collaborator_intray_desk() for->{}", 
+        "\n Started HCID the handle_collaborator_intray_desk() for->{}", 
         meeting_room_sync_data_fn_input.remote_collaborator_name
     );
-
+    debug_log!(
+        "meeting_room_sync_data_fn_input -> {:?}", 
+        meeting_room_sync_data_fn_input
+    );
     // 1. Create UDP socket
     // let socket = UdpSocket::bind(format!(
     //     "[{}]:{}", 
