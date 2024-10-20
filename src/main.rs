@@ -435,7 +435,7 @@ pub enum SyncError {
 #[derive(Debug)]
 enum MyCustomError {
     IoError(io::Error),
-    TomlError(toml::de::Error),
+    TomlDeserializationError(toml::de::Error),
     InvalidData(String),
     PortCollision(String), 
     // ... other variants as needed ...
@@ -450,7 +450,7 @@ impl PartialEq for MyCustomError {
                 // Or you can use:
                 // e1.to_string() == e2.to_string() 
             },
-            (MyCustomError::TomlError(e1), MyCustomError::TomlError(e2)) => e1 == e2, 
+            (MyCustomError::TomlDeserializationError(e1), MyCustomError::TomlDeserializationError(e2)) => e1 == e2, 
             // Add other arms for your variants as needed
             _ => false, // Different variants are never equal
         }
@@ -462,7 +462,7 @@ impl StdError for MyCustomError {
     fn source(&self) -> Option<&(dyn StdError + 'static)> {
         match *self {
             MyCustomError::IoError(ref err) => Some(err),
-            MyCustomError::TomlError(ref err) => Some(err),
+            MyCustomError::TomlDeserializationError(ref err) => Some(err),
             _ => None, // No underlying source for these variants
         }
     }
@@ -472,8 +472,8 @@ impl std::fmt::Display for MyCustomError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             MyCustomError::IoError(err) => write!(f, "IO Error: {}", err),
-            // MyCustomError::TomlError(err) => write!(f, "TOML Error: {}", err),
-            MyCustomError::TomlError(err) => write!(f, "TOML Error: {}", err),
+            // MyCustomError::TomlDeserializationError(err) => write!(f, "TOML Error: {}", err),
+            MyCustomError::TomlDeserializationError(err) => write!(f, "TOML Error: {}", err),
             // &MyCustomError::InvalidData(_) => todo!(),
             &MyCustomError::InvalidData(_) => todo!(),
             &MyCustomError::PortCollision(_) => todo!(),
@@ -490,18 +490,25 @@ impl From<io::Error> for MyCustomError {
 
 impl From<toml::de::Error> for MyCustomError {
     fn from(error: toml::de::Error) -> Self {
-        MyCustomError::TomlError(error)
+        MyCustomError::TomlDeserializationError(error)
     }
 }
 
 #[derive(Debug)]
 pub enum UmaError {
     IoError(io::Error),
-    TomlError(toml::de::Error),
+    TomlDeserializationError(toml::de::Error),
     InvalidData(String),
     PortCollision(String), 
     NetworkError(String),
     // ... Add other error types as needed ...
+}
+
+// Implement From<toml::de::Error> for UmaError
+impl From<toml::de::Error> for UmaError {
+    fn from(err: toml::de::Error) -> Self {
+        UmaError::TomlDeserializationError(err)
+    }
 }
 
 // Implement the std::error::Error trait for UmaError
@@ -509,7 +516,7 @@ impl std::error::Error for UmaError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match *self {
             UmaError::IoError(ref err) => Some(err),
-            UmaError::TomlError(ref err) => Some(err),
+            UmaError::TomlDeserializationError(ref err) => Some(err),
             _ => None, 
         }
     }
@@ -520,7 +527,7 @@ impl std::fmt::Display for UmaError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match *self {
             UmaError::IoError(ref err) => write!(f, "IO Error: {}", err),
-            UmaError::TomlError(ref err) => write!(f, "TOML Error: {}", err),
+            UmaError::TomlDeserializationError(ref err) => write!(f, "TOML Error: {}", err),
             UmaError::InvalidData(ref msg) => write!(f, "Invalid Data: {}", msg),
             UmaError::PortCollision(ref msg) => write!(f, "Port Collision: {}", msg),
             UmaError::NetworkError(ref msg) => write!(f, "Network Error: {}", msg), 
@@ -536,11 +543,11 @@ impl From<io::Error> for UmaError {
     }
 }
 
-impl From<toml::de::Error> for UmaError {
-    fn from(err: toml::de::Error) -> UmaError {
-        UmaError::TomlError(err)
-    }
-}
+// impl From<toml::de::Error> for UmaError {
+//     fn from(err: toml::de::Error) -> UmaError {
+//         UmaError::TomlDeserializationError(err)
+//     }
+// }
 
 /// get unix time 
 /// e.g. for use with updated_at_timestamp
@@ -1164,7 +1171,7 @@ pub fn read_state_string(file_name: &str) -> Result<String, std::io::Error> {
 // pub fn read_state_items_tomls(file_name: &str) -> Result<Value, MyCustomError> {
 //     let file_path = Path::new("project_graph_data/session_state_items").join(file_name);
 //     let toml_string = fs::read_to_string(file_path)?; // Now `?` converts to MyCustomError
-//     toml::from_str(&toml_string).map_err(MyCustomError::from)  // Convert TomlError
+//     toml::from_str(&toml_string).map_err(MyCustomError::from)  // Convert TomlDeserializationError
 // } 
 
 // ALPHA VERSION
@@ -2642,7 +2649,7 @@ fn read_a_collaborator_setup_toml() -> Result<(Vec<CollaboratorTomlData>, Vec<Um
                 Ok(toml_string) => {
                     match toml::from_str::<CollaboratorTomlData>(&toml_string) {
                         Ok(collaborator) => collaborators.push(collaborator),
-                        Err(e) => errors.push(UmaError::TomlError(e)),
+                        Err(e) => errors.push(UmaError::TomlDeserializationError(e)),
                     }
                 }
                 Err(e) => errors.push(UmaError::IoError(e)),
@@ -3349,7 +3356,7 @@ fn get_next_message_file_path(current_path: &Path, local_owner_user: &str) -> Pa
 /// 
 /// This function returns a `Result<Collaborator, MyCustomError>` to handle potential errors:
 ///  - `MyCustomError::IoError`: If the collaborator file is not found or if there is an error reading the file.
-///  - `MyCustomError::TomlError`: If there is an error parsing the TOML data.
+///  - `MyCustomError::TomlDeserializationError`: If there is an error parsing the TOML data.
 ///
 /// # Example 
 ///
@@ -3365,7 +3372,7 @@ fn get_addressbook_file_by_username(username: &str) -> Result<CollaboratorTomlDa
     if toml_file_path.exists() {
         let toml_string = fs::read_to_string(&toml_file_path)?;
         let loaded_collaborator: CollaboratorTomlData = toml::from_str(&toml_string)
-            .map_err(|e| MyCustomError::TomlError(e))?;
+            .map_err(|e| MyCustomError::TomlDeserializationError(e))?;
         debug_log!("in get_addressbook_file_by_username(), ??Collaborator file found ok: {:?}", &toml_file_path);
         Ok(loaded_collaborator)
     } else {
@@ -4098,6 +4105,65 @@ fn deserialize_ready_signal(bytes: &[u8]) -> Result<ReadySignal, io::Error> {
     
     Ok(ReadySignal { id: id.to_string(), timestamp, echo_send })
 }
+
+
+/// Serialization (Sending):
+/// Read TOML File: Read the contents of the TOML file into a string using fs::read_to_string().
+/// Convert to Bytes: Convert the string to a byte array (Vec<u8>) using the as_bytes() method. 
+/// This assumes the TOML file is already in ASCII encoding.
+/// Send Bytes: Send the byte array over the network using UDP.
+fn send_toml_file(socket: &UdpSocket, file_path: &str, target_addr: SocketAddr) -> Result<(), std::io::Error> {
+    // 1. Read TOML file
+    let toml_string = fs::read_to_string(file_path)?;
+
+    // 2. Convert to bytes
+    let toml_bytes = toml_string.as_bytes();
+
+    // 3. Send bytes
+    socket.send_to(toml_bytes, target_addr)?;
+
+    Ok(())
+}
+
+/// File Deserialization (Receiving):
+/// Receive Bytes: Receive the byte array from the network using socket.recv_from().
+/// Convert to String: Convert the byte array back to a string using String::from_utf8(). This assumes the received bytes are in ASCII encoding.
+/// Parse TOML: Parse the TOML string using the toml::from_str() function to create a TOML Value or a custom struct representing the data.
+/// Save to File: Write the parsed TOML data to a file using fs::write().
+fn receive_toml_file(socket: &UdpSocket) -> Result<(Value, SocketAddr), UmaError> {
+    let mut buf = [0; 65536]; // Maximum UDP datagram size
+    let (amt, src) = socket.recv_from(&mut buf)?;
+
+    // 2. Convert to string (handling FromUtf8Error)
+    let toml_string = String::from_utf8(buf[..amt].to_vec())
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.utf8_error()))?;
+
+    // 3. Parse TOML (handling toml::de::Error)
+    let toml_value: Value = toml::from_str(&toml_string)?;
+
+    // 4. Save to file (you'll need to determine the file path)
+    // ...
+
+    Ok((toml_value, src))
+}
+// fn receive_toml_file(socket: &UdpSocket) -> Result<(Value, SocketAddr), std::io::Error> {
+//     let mut buf = [0; 65536]; // Maximum UDP datagram size
+//     let (amt, src) = socket.recv_from(&mut buf)?;
+
+//     // 1. Receive bytes (done in recv_from())
+
+//     // 2. Convert to string
+//     let toml_string = String::from_utf8(buf[..amt].to_vec())
+//         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.utf8_error()))?;
+
+//     // 3. Parse TOML
+//     let toml_value: Value = toml::from_str(&toml_string)?;
+
+//     // 4. Save to file (you'll need to determine the file path)
+//     // ...
+
+//     Ok((toml_value, src))
+// }
 
 // // TODO, uncomment and debug 
 // fn send_file_and_see_next_signal(collaborator: &RemoteCollaboratorPortsData, mut send_queue: SendQueue, event_id: u64, intray_port: u16, gotit_port: u16) {
