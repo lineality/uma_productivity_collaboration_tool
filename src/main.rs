@@ -4139,22 +4139,31 @@ fn handle_collaborator_intray_desk(
         let mut buf = [0; 1024];
         match socket.recv_from(&mut buf) {
             Ok((amt, src)) => {
-                debug_log!("HCID 4. Received {} bytes from {} on ready_port", amt, src);
+                debug_log!("HCID 4.Ok((amt, src)) Received {} bytes from {} on ready_port", amt, src);
 
+                // --- Inspect Raw Bytes ---
+                debug_log!("HCID 4. Raw bytes received: {:?}", &buf[..amt]); 
+        
+                // --- Inspect Bytes as Hex ---
+                let hex_string = buf[..amt].iter()
+                    .map(|b| format!("{:02X}", b))
+                    .collect::<String>();
+                debug_log!("HCID 4. Raw bytes as hex: {}", hex_string);
+                
                 // 5. Deserialize the ReadySignal
                 let ready_signal: ReadySignal = match deserialize_ready_signal(&buf[..amt]) {
                     Ok(ready_signal) => {
-                        println!("HCID 4. {}: Received ReadySignal: {:?}",
+                        println!("HCID 5. Ok(ready_signal) {}: Received ReadySignal: {:?}",
                              meeting_room_sync_data_fn_input.remote_collaborator_name, ready_signal
                         ); // Print to console
-                        debug_log!("HCID 4. {}: Received ReadySignal: {:?}",
+                        debug_log!("HCID 5. Ok(ready_signal) {}: Received ReadySignal: {:?}",
                              meeting_room_sync_data_fn_input.remote_collaborator_name, 
                              ready_signal
                         ); // Log the signal
                         ready_signal
                     },
                     Err(e) => {
-                        debug_log!("HCID 4. Receive data Failed to parse ready signal: {}", e);
+                        debug_log!("HCID 5.Err Receive data Failed to parse ready signal: {}", e);
                         continue; // Continue to the next iteration of the loop
                     }
                 };
