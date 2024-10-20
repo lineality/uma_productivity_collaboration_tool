@@ -3801,7 +3801,7 @@ fn sync_flag_ok_or_wait(wait_this_many_seconds: u64) {
 struct ReadySignal {
     id: String, // Unique event ID get a u64 representation of the ThreadId using the as_u64() method.
     timestamp: u64,
-    echo: bool,
+    echo_send: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -3812,7 +3812,7 @@ struct GotItSignal {
 #[derive(Debug, Clone)] // Add other necessary derives later
 struct SendQueue {
     timestamp: u64,
-    echo: bool,
+    echo_send: bool,
     items: Vec<PathBuf>,  // ordered list, filepaths
 }
 
@@ -3835,7 +3835,7 @@ fn send_data(data: &[u8], target_addr: SocketAddr) -> Result<(), io::Error> {
 /// save .toml (handle the type: content, node, etc.)
 /// and 'gotit' signal sent out from here
 ///
-/// echo: if any document comes in
+/// echo_send: if any document comes in
 /// automatically send out an echo-type request
 /// to get a next file, in parallel
 /// a thread per 'sync-event'
@@ -3894,7 +3894,7 @@ fn handle_owner_desk(
         // Clone the data before moving it into the thread
         let own_desk_setup_data_clone = own_desk_setup_data.clone();
 
-        // TODO (ideally put all this into a function...so it can echo itself)
+        // TODO (ideally put all this into a function...so it can echo_send itself)
         // 2. Spawn a thread to send the ReadySignal
         thread::spawn(move || {
             
@@ -3913,7 +3913,7 @@ fn handle_owner_desk(
             let ready_signal_to_send_from_this_loop = ReadySignal {
                 id: sync_event_id__for_this_thread,
                 timestamp: get_current_unix_timestamp(), 
-                echo: false,
+                echo_send: false,
             };
 
             // 5. Serialize the ReadySignal
@@ -3967,7 +3967,7 @@ fn handle_owner_desk(
         // if there is a reply to that event unqiue ID:
         // - gpg verify input (if not, kill thread)
         // - save .toml etc if ok (if not, end thread)
-        // - make another echo-thread (repeat)
+        // - make another echo_send-thread (repeat)
         // - if ok: send 'gotit!!' signal
         // - update 'last updated' file log (maybe append a timestamp stub file to a dir)
         // - end thread
@@ -4006,13 +4006,74 @@ fn serialize_ready_signal(signal: &ReadySignal) -> std::io::Result<Vec<u8>> {
     bytes.extend_from_slice(signal.id.as_bytes()); 
 
     bytes.extend_from_slice(&signal.timestamp.to_be_bytes()); 
-    bytes.push(if signal.echo { 1 } else { 0 });
+    bytes.push(if signal.echo_send { 1 } else { 0 });
     Ok(bytes) 
 }
+
+// /// Vanilla Deserilize json signal
+// fn deserialize_ready_signal(bytes: &[u8]) -> Result<ReadySignal, io::Error> {
+//     // Ensure the byte array has enough data for both fields:
+//     if bytes.len() != std::mem::size_of::<u64>() * 2 { // 2 u64 fields
+//         return Err(Error::new(
+//             ErrorKind::InvalidData, 
+//             "Invalid byte array length for ReadySignal"
+//         ));
+//     }
+
+//     // Extract id:
+//     let id = u64::from_be_bytes(bytes[0..8].try_into().unwrap()); 
+
+//     // Extract timestamp:
+//     let timestamp = u64::from_be_bytes(bytes[8..16].try_into().unwrap()); 
+
+//     // Extract timestamp:
+//     let echo_send = bytes[16] != 0; 
+    
+//     Ok(ReadySignal { id: id.to_string(), timestamp, echo_send })
+
+// }
+/// Vanilla Deserilize json signal
+// fn deserialize_ready_signal(bytes: &[u8]) -> Result<ReadySignal, io::Error> {
+//     debug_log!("DRS input: Entering deserialize_ready_signal() with {} bytes", bytes.len());
+//     debug_log!("DRS input: Raw bytes -> {:?}", bytes);
+//     debug_log!("DRS input: Raw bytes as hex -> {}", bytes.iter().map(|b| format!("{:02X}", b)).collect::<String>());
+
+//     // Ensure the byte array has enough data for both fields:
+//     if bytes.len() != std::mem::size_of::<u64>() * 2 { // 2 u64 fields
+//         debug_log!("DRS: Error: Invalid byte array length for ReadySignal. Expected {}, got {}", std::mem::size_of::<u64>() * 2, bytes.len());
+//         return Err(Error::new(
+//             ErrorKind::InvalidData, 
+//             "Invalid byte array length for ReadySignal"
+//         ));
+//     }
+
+//     // Extract id:
+//     let id_bytes: [u8; 8] = bytes[0..8].try_into().unwrap();
+//     debug_log!("DRS Extract id: id_bytes -> {:?}", id_bytes);
+//     let id = u64::from_be_bytes(id_bytes); 
+//     debug_log!("DRS: id -> {}", id);
+
+//     // Extract timestamp:
+//     let timestamp_bytes: [u8; 8] = bytes[8..16].try_into().unwrap();
+//     debug_log!("DRS Extract timestamp: timestamp_bytes -> {:?}", timestamp_bytes);
+//     let timestamp = u64::from_be_bytes(timestamp_bytes);
+//     debug_log!("DRS Extract timestamp: timestamp -> {}", timestamp);
+
+//     // Extract echo_send:
+//     let echo_send = bytes[16] != 0; 
+//     debug_log!("DRS Extract echo_send: echo_send -> {}", echo_send);
+    
+//     Ok(ReadySignal { id: id.to_string(), timestamp, echo_send })
+// }
 /// Vanilla Deserilize json signal
 fn deserialize_ready_signal(bytes: &[u8]) -> Result<ReadySignal, io::Error> {
+    debug_log!("DRS: Entering deserialize_ready_signal() with {} bytes", bytes.len());
+    debug_log!("DRS: Raw bytes: {:?}", bytes);
+    debug_log!("DRS: Raw bytes as hex: {}", bytes.iter().map(|b| format!("{:02X}", b)).collect::<String>());
+
     // Ensure the byte array has enough data for both fields:
-    if bytes.len() != std::mem::size_of::<u64>() * 2 { // 2 u64 fields
+    if bytes.len() < std::mem::size_of::<u64>() * 2 { // At least 2 u64 fields
+        debug_log!("DRS: Error: Invalid byte array length for ReadySignal. Expected at least {}, got {}", std::mem::size_of::<u64>() * 2, bytes.len());
         return Err(Error::new(
             ErrorKind::InvalidData, 
             "Invalid byte array length for ReadySignal"
@@ -4020,18 +4081,23 @@ fn deserialize_ready_signal(bytes: &[u8]) -> Result<ReadySignal, io::Error> {
     }
 
     // Extract id:
-    let id = u64::from_be_bytes(bytes[0..8].try_into().unwrap()); 
+    let id_bytes: [u8; 8] = bytes[0..8].try_into().unwrap();
+    debug_log!("DRS: id_bytes: {:?}", id_bytes);
+    let id = u64::from_be_bytes(id_bytes); 
+    debug_log!("DRS: id: {}", id);
 
     // Extract timestamp:
-    let timestamp = u64::from_be_bytes(bytes[8..16].try_into().unwrap()); 
+    let timestamp_bytes: [u8; 8] = bytes[8..16].try_into().unwrap();
+    debug_log!("DRS: timestamp_bytes: {:?}", timestamp_bytes);
+    let timestamp = u64::from_be_bytes(timestamp_bytes);
+    debug_log!("DRS: timestamp: {}", timestamp);
 
-    // Extract timestamp:
-    let echo = bytes[16] != 0; 
+    // Extract echo_send (if present):
+    let echo_send = if bytes.len() > 16 { bytes[16] != 0 } else { false };
+    debug_log!("DRS: echo_send: {}", echo_send);
     
-    Ok(ReadySignal { id: id.to_string(), timestamp, echo })
-
+    Ok(ReadySignal { id: id.to_string(), timestamp, echo_send })
 }
-
 
 // // TODO, uncomment and debug 
 // fn send_file_and_see_next_signal(collaborator: &RemoteCollaboratorPortsData, mut send_queue: SendQueue, event_id: u64, intray_port: u16, gotit_port: u16) {
@@ -4227,7 +4293,7 @@ fn get_or_create_send_queue(
 
     let mut new_queue = SendQueue {
         timestamp: received_timestamp,
-        echo: received_timestamp == 0, // If timestamp is 0, it's an echo request
+        echo_send: received_timestamp == 0, // If timestamp is 0, it's an echo_send request
         items: Vec::new(),
     };
 
@@ -4346,11 +4412,11 @@ fn handle_collaborator_intray_desk(
         match bind_result {
             Ok(sock) => {
                 socket = Some(sock);
-                debug_log!("HCID Bound UDP socket to [{}]:{}", ipv6_address, meeting_room_sync_data_fn_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip);
+                debug_log!("HCID 1. Bound UDP socket to [{}]:{}", ipv6_address, meeting_room_sync_data_fn_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip);
                 break; // Exit the loop if binding is successful
             },
             Err(e) => {
-                debug_log!("HCID Failed to bind to [{}]:{}: {}", ipv6_address, meeting_room_sync_data_fn_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip, e);
+                debug_log!("HCID err 1. Failed to bind to [{}]:{}: {}", ipv6_address, meeting_room_sync_data_fn_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip, e);
                 // Continue to the next address
             }
         }
@@ -4361,22 +4427,22 @@ fn handle_collaborator_intray_desk(
         meeting_room_sync_data_fn_input
     );
 
-    // 3. Check if socket binding was successful (simplified)
+    // 2. Check if socket binding was successful (simplified)
     let socket = socket.ok_or(UmaError::NetworkError("HCID Failed to bind to any IPv6 address".to_string()))?;
                     
     debug_log!(
-        "HCID 3. listen at this socket {:?}", 
+        "HCID 2. listen at this socket {:?}", 
         &socket,
     );
 
-    // 2. Main loop
+    // 3. Main loop
     let mut last_log_time = Instant::now(); // Track the last time we logged a message
     loop {
-        debug_log("HCID starting Main loop...");
+        debug_log("HCID 3. starting Main loop...");
         // 3. Check for halt signal
         if should_halt() {
             debug_log!(
-                "HCID Check for halt signal. Halting handle_collaborator_intray_desk() for {}", 
+                "HCID 3. Check for halt signal. Halting handle_collaborator_intray_desk() for {}", 
                 meeting_room_sync_data_fn_input.remote_collaborator_name
             );
             break;
