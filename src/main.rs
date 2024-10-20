@@ -352,7 +352,7 @@ use rand::prelude::{
 };
 
 use std::thread;
-
+use std::num::ParseIntError;
 use std::time::Duration;
 use std::net::{
     IpAddr, 
@@ -501,7 +501,22 @@ pub enum UmaError {
     InvalidData(String),
     PortCollision(String), 
     NetworkError(String),
-    // ... Add other error types as needed ...
+    WalkDirError(walkdir::Error),
+    ParseIntError(ParseIntError),
+}
+
+// Implement From<walkdir::Error> for UmaError
+impl From<walkdir::Error> for UmaError {
+    fn from(err: walkdir::Error) -> Self {
+        UmaError::WalkDirError(err)
+    }
+}
+
+// Implement From<ParseIntError> for UmaError
+impl From<ParseIntError> for UmaError {
+    fn from(err: ParseIntError) -> Self {
+        UmaError::ParseIntError(err)
+    }
 }
 
 // Implement From<toml::de::Error> for UmaError
@@ -530,7 +545,9 @@ impl std::fmt::Display for UmaError {
             UmaError::TomlDeserializationError(ref err) => write!(f, "TOML Error: {}", err),
             UmaError::InvalidData(ref msg) => write!(f, "Invalid Data: {}", msg),
             UmaError::PortCollision(ref msg) => write!(f, "Port Collision: {}", msg),
-            UmaError::NetworkError(ref msg) => write!(f, "Network Error: {}", msg), 
+            UmaError::NetworkError(ref msg) => write!(f, "Network Error: {}", msg),
+            UmaError::WalkDirError(ref err) => write!(f, "WalkDir Error: {}", err), // Add this arm
+            UmaError::ParseIntError(ref err) => write!(f, "ParseInt Error: {}", err), // Add this arm
             // ... add formatting for other error types
         }
     }
@@ -2094,6 +2111,133 @@ struct CoreNode {
     abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
 }
 
+
+/// update_collaborator_timestamp_log
+/// ### making a new timestamp (maybe good to do each session)
+/// 1. pick a target collaborator
+/// 2. make sure path exists:
+/// ```path
+/// sync_data/team_channel/collaborator_name/
+/// ```
+/// 2. make a mut u64 variable called back_of_queue_timestamp = 0
+/// 3. crawl through the files and subdirectories (recursively) in the teamchannel (only the team_channel directory tree, not all of uma) looking at files:
+/// 4. if a .toml file, 
+/// 5. if owner=target_collaborator, 
+/// 6. if updated_at_timestamp exists
+/// 7. write/rewrite a stub-file of that timestamp to:
+/// ```path
+/// sync_data/team_channel/collaborator_name/372385339229
+/// ```
+/// 8. if timestamp is higher than back_of_queue_timestamp, then
+/// back_of_queue_timestamp = new value
+/// 9. write/rewrite:
+/// ```path
+/// sync_data/team_channel/collaborator_name/back_of_queue_timestamp
+/// ```
+/// - Note: the paper trail of timestamps allows backtracking easily for error correction. quick sort to e.g. go-back-five 
+fn update_collaborator_timestamp_log(
+    team_channel_name: &str,
+    collaborator_name: &str,
+) -> Result<u64, UmaError> {
+    let sync_data_dir = PathBuf::from("sync_data")
+        .join(team_channel_name)
+        .join(collaborator_name);
+    fs::create_dir_all(&sync_data_dir)?;
+
+    let mut back_of_queue_timestamp = 0;
+
+    // 3. Crawl through the team channel directory tree
+    for entry in WalkDir::new(PathBuf::from("project_graph_data").join(team_channel_name)) {
+        let entry = entry?;
+        if entry.file_type().is_file() && entry.path().extension() == Some(OsStr::new("toml")) {
+            // 4. If a .toml file
+            let toml_string = fs::read_to_string(entry.path())?;
+            let toml_value: Value = toml::from_str(&toml_string)?;
+
+            // 5. If owner = target collaborator
+            if toml_value.get("owner").and_then(Value::as_str) == Some(collaborator_name) {
+                // 6. If updated_at_timestamp exists
+                if let Some(timestamp) = toml_value.get("updated_at_timestamp").and_then(Value::as_integer) {
+                    let timestamp = timestamp as u64;
+
+                    // 7. Write stub file
+                    let stub_file_path = sync_data_dir.join(timestamp.to_string());
+                    fs::File::create(stub_file_path)?;
+
+                    // 8. Update back_of_queue_timestamp
+                    if timestamp > back_of_queue_timestamp {
+                        back_of_queue_timestamp = timestamp;
+                    }
+                }
+            }
+        }
+    }
+
+    // 9. Write back_of_queue_timestamp
+    let timestamp_file_path = sync_data_dir.join("back_of_queue_timestamp");
+    fs::write(timestamp_file_path, back_of_queue_timestamp.to_string())?;
+
+    Ok(back_of_queue_timestamp)
+}
+
+
+/// --- making a fresh send_queue ---
+/// 1. pick a target_collaborator
+/// 2. get the back_of_queue_timestamp
+/// ```path
+/// sync_data/team_channel/collaborator_name/back_of_queue_timestamp
+/// ```
+/// 3. crawl through the files and subdirectories (recursively) in the teamchannel (only the team_channel directory tree, not all of uma) looking at files:
+/// 4. if a .toml file, 
+/// 5. if owner=target_collaborator, 
+/// 6. if updated_at_timestamp exists
+/// 7. if updated_at_timestamp > back_of_queue_timestamp
+/// 8. add that filepath to the sene_queue
+/// - Note: this only has to be done once after getting a first-in-session ready-signal from a collaborator, after that any new file made (e.g. a new message) is added to the queue automatically. Though this can be repeated any time, e.g. in case of error or if requested.
+fn create_fresh_send_queue(
+    team_channel_name: &str,
+    collaborator_name: &str,
+) -> Result<Vec<PathBuf>, UmaError> {
+    let sync_data_dir = PathBuf::from("sync_data")
+        .join(team_channel_name)
+        .join(collaborator_name);
+
+    // 2. Get back_of_queue_timestamp
+    let timestamp_file_path = sync_data_dir.join("back_of_queue_timestamp");
+    let back_of_queue_timestamp = fs::read_to_string(timestamp_file_path)?
+        .parse::<u64>()?;
+
+    let mut send_queue = Vec::new();
+
+    // 3. Crawl through the team channel directory tree
+    for entry in WalkDir::new(PathBuf::from("project_graph_data").join(team_channel_name)) {
+        let entry = entry?;
+        if entry.file_type().is_file() && entry.path().extension() == Some(OsStr::new("toml")) {
+            // 4. If a .toml file
+            let toml_string = fs::read_to_string(entry.path())?;
+            let toml_value: Value = toml::from_str(&toml_string)?;
+
+            // 5. If owner = target collaborator
+            if toml_value.get("owner").and_then(Value::as_str) == Some(collaborator_name) {
+                // 6. If updated_at_timestamp exists
+                if let Some(timestamp) = toml_value.get("updated_at_timestamp").and_then(Value::as_integer) {
+                    let timestamp = timestamp as u64;
+
+                    // 7. If updated_at_timestamp > back_of_queue_timestamp
+                    if timestamp > back_of_queue_timestamp {
+                        // 8. Add filepath to send_queue
+                        send_queue.push(entry.path().to_path_buf());
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(send_queue)
+}
+
+
+
 // /// Loads CollaboratorData from a TOML file.
 // ///
 // /// # Arguments
@@ -2767,10 +2911,18 @@ fn initialize_uma_application() -> Result<(), Box<dyn std::error::Error>> {
     // Check if the data directory exists
     let project_graph_directory = Path::new("project_graph_data");
     if !project_graph_directory.exists() {
-        // If the data directory does not exist, create it
-        fs::create_dir_all(project_graph_directory).expect("Failed to create data directory");
+        // If the directory does not exist, create it
+        fs::create_dir_all(project_graph_directory).expect("Failed to create project_graph_data directory");
     }
 
+
+    // Check if the sycn_data directory exists
+    let sync_data_directory = Path::new("sync_data");
+    if !sync_data_directory.exists() {
+        // If the directory does not exist, create it
+        fs::create_dir_all(sync_data_directory).expect("Failed to create sync_data directory");
+    }
+    
     /////////////////////
     // Log Housekeeping
     /////////////////////
