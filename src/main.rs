@@ -600,17 +600,17 @@ struct MeetingRoomSyncDataset {
     local_user_ipv4_addr_list: Vec<Ipv4Addr>, // list of ip addresses
     local_user_public_gpg: String,
     local_user_sync_interval: u64,
-    local_user_ready_port__your_desk_you_send: u16, // locally: 'you' send a signal through your port on your desk
-    local_user_intray_port__your_desk_you_listen: u16, // locally: 'you' listen for files sent by the other collaborator
-    local_user_gotit_port__your_desk_you_send: u16, // locally: 'you' send a signal through your port on your desk
+    local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip: u16, // locally: 'you' send a signal through your port on your desk
+    localuser_intray_port__yourdesk_youlisten__bind_yourlocal_ip: u16, // locally: 'you' listen for files sent by the other collaborator
+    local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip: u16, // locally: 'you' send a signal through your port on your desk
     remote_collaborator_name: String,
     remote_collaborator_ipv6_addr_list: Vec<Ipv6Addr>, // list of ip addresses
     remote_collaborator_ipv4_addr_list: Vec<Ipv4Addr>, // list of ip addresses
     remote_collaborator_public_gpg: String,
     remote_collaborator_sync_interval: u64,
-    remote_collaborator_ready_port__their_desk_you_listen: u16, // locally: 'you' listen to their port on 'their' desk
-    remote_collaborator_intray_port__their_desk_you_send: u16, // locally: 'you' add files to their port on 'their' desk
-    remote_collaborator_gotit_port__their_desk_you_listen: u16, // locally: 'you' listen to their port on 'their' desk
+    remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip: u16, // locally: 'you' listen to their port on 'their' desk
+    remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip: u16, // locally: 'you' add files to their port on 'their' desk
+    remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip: u16, // locally: 'you' listen to their port on 'their' desk
 }
 
 /// ForLocalOwnerDeskThread data from MeetingRoomSyncDataset
@@ -622,9 +622,9 @@ struct ForLocalOwnerDeskThread {
     local_user_ipv4_addr_list: Vec<Ipv4Addr>, // list of ip addresses
     local_user_public_gpg: String,
     local_user_sync_interval: u64,
-    local_user_ready_port__your_desk_you_send: u16, // locally: 'you' send a signal through your port on your desk
-    local_user_intray_port__your_desk_you_listen: u16, // locally: 'you' listen for files sent by the other collaborator
-    local_user_gotit_port__your_desk_you_send: u16, // locally: 'you' send a signal through your port on your desk
+    local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip: u16, // locally: 'you' send a signal through your port on your desk
+    localuser_intray_port__yourdesk_youlisten__bind_yourlocal_ip: u16, // locally: 'you' listen for files sent by the other collaborator
+    local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip: u16, // locally: 'you' send a signal through your port on your desk
 }
 
 /// ForRemoteCollaboratorDeskThread data from MeetingRoomSyncDataset
@@ -636,9 +636,9 @@ struct ForRemoteCollaboratorDeskThread {
     remote_collaborator_ipv4_addr_list: Vec<Ipv4Addr>, // list of ip addresses
     remote_collaborator_public_gpg: String,
     remote_collaborator_sync_interval: u64,
-    remote_collaborator_ready_port__their_desk_you_listen: u16, // locally: 'you' listen to their port on 'their' desk
-    remote_collaborator_intray_port__their_desk_you_send: u16, // locally: 'you' add files to their port on 'their' desk
-    remote_collaborator_gotit_port__their_desk_you_listen: u16, // locally: 'you' listen to their port on 'their' desk
+    remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip: u16, // locally: 'you' listen to their port on 'their' desk
+    remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip: u16, // locally: 'you' add files to their port on 'their' desk
+    remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip: u16, // locally: 'you' listen to their port on 'their' desk
 }
 
 
@@ -646,12 +646,12 @@ struct ForRemoteCollaboratorDeskThread {
 /// Get Needed, When Needed
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 struct RoleBasedLocalPortSet {
-    local_user_ready_port__your_desk_you_send: u16, // locally: 'you' send a signal through your port on your desk
-    local_user_intray_port__your_desk_you_listen: u16, // locally: 'you' listen for files sent by the other collaborator
-    local_user_gotit_port__your_desk_you_send: u16, // locally: 'you' send a signal through your port on your desk
-    remote_collaborator_ready_port__their_desk_you_listen: u16, // locally: 'you' listen to their port on 'their' desk
-    remote_collaborator_intray_port__their_desk_you_send: u16, // locally: 'you' add files to their port on 'their' desk
-    remote_collaborator_gotit_port__their_desk_you_listen: u16, // locally: 'you' listen to their port on 'their' desk
+    local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip: u16, // locally: 'you' send a signal through your port on your desk
+    localuser_intray_port__yourdesk_youlisten__bind_yourlocal_ip: u16, // locally: 'you' listen for files sent by the other collaborator
+    local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip: u16, // locally: 'you' send a signal through your port on your desk
+    remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip: u16, // locally: 'you' listen to their port on 'their' desk
+    remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip: u16, // locally: 'you' add files to their port on 'their' desk
+    remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip: u16, // locally: 'you' listen to their port on 'their' desk
 }
 
 
@@ -702,12 +702,12 @@ fn translate_port_assignments(
 
     // 5. Construct and return the RoleBasedLocalPortSet
     Ok(RoleBasedLocalPortSet {
-        local_user_ready_port__your_desk_you_send: local_ports.ready_port,
-        local_user_intray_port__your_desk_you_listen: local_ports.intray_port,
-        local_user_gotit_port__your_desk_you_send: local_ports.gotit_port,
-        remote_collaborator_ready_port__their_desk_you_listen: remote_ports.ready_port,
-        remote_collaborator_intray_port__their_desk_you_send: remote_ports.intray_port,
-        remote_collaborator_gotit_port__their_desk_you_listen: remote_ports.gotit_port,
+        local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip: local_ports.ready_port,
+        localuser_intray_port__yourdesk_youlisten__bind_yourlocal_ip: local_ports.intray_port,
+        local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip: local_ports.gotit_port,
+        remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip: remote_ports.ready_port,
+        remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip: remote_ports.intray_port,
+        remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip: remote_ports.gotit_port,
     })
 }
 
@@ -3449,9 +3449,9 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
             local_user_public_gpg: these_collaboratorfiles_toml_data.gpg_key_public.clone(),
             local_user_sync_interval: these_collaboratorfiles_toml_data.sync_interval,
             
-            local_user_ready_port__your_desk_you_send: role_based_ports.local_user_ready_port__your_desk_you_send,
-            local_user_intray_port__your_desk_you_listen: role_based_ports.local_user_intray_port__your_desk_you_listen,
-            local_user_gotit_port__your_desk_you_send: role_based_ports.local_user_gotit_port__your_desk_you_send,
+            local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip: role_based_ports.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip,
+            localuser_intray_port__yourdesk_youlisten__bind_yourlocal_ip: role_based_ports.localuser_intray_port__yourdesk_youlisten__bind_yourlocal_ip,
+            local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip: role_based_ports.local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip,
             
             remote_collaborator_name: collaborator_name.clone(), // TODO source?
             
@@ -3462,9 +3462,9 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
             remote_collaborator_public_gpg: these_collaboratorfiles_toml_data.gpg_key_public,
             remote_collaborator_sync_interval: these_collaboratorfiles_toml_data.sync_interval,
             
-            remote_collaborator_ready_port__their_desk_you_listen: role_based_ports.remote_collaborator_ready_port__their_desk_you_listen,
-            remote_collaborator_intray_port__their_desk_you_send: role_based_ports.remote_collaborator_intray_port__their_desk_you_send,
-            remote_collaborator_gotit_port__their_desk_you_listen: role_based_ports.remote_collaborator_gotit_port__their_desk_you_listen,
+            remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip: role_based_ports.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip,
+            remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip: role_based_ports.remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip,
+            remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip: role_based_ports.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip,
         };
                 
         // --- 12. add meeting room to set-of-rooms-table ---
@@ -3601,7 +3601,7 @@ fn send_data(data: &[u8], target_addr: SocketAddr) -> Result<(), io::Error> {
 ///     3. set sync_event_id to be unique thread id
 ///     4. Creates a ReadySignal instance to be the ready signal
 ///     5. Serialize the ReadySignal 
-///     6. Send the signal @ local_user_ready_port__your_desk_you_send (exact ip choice pending...)
+///     6. Send the signal @ local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip (exact ip choice pending...)
 ///     7. Listen at in-box for file for that event:
 ///        Alice waits N-miliseconds. If no reply, end thread.
 ///     if there is a reply to that event unqiue ID:
@@ -3678,7 +3678,7 @@ fn handle_owner_desk(
 
 
             // TODO possibly have some mechanism to try addresses until one works?
-            // 6. Send the signal @ local_user_ready_port__your_desk_you_send
+            // 6. Send the signal @ local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
             // TODO figure out way to specify ipv6, 4, prioritizing, trying, etc.
             // (in theory...you could try them all?)
             // Select the first IPv6 address if available
@@ -3689,7 +3689,7 @@ fn handle_owner_desk(
                 // Send the signal to the collaborator's ready_port
                 let target_addr = SocketAddr::new(
                     IpAddr::V6(ipv6_address_copy), // Use the copied address
-                    own_desk_setup_data_clone.local_user_ready_port__your_desk_you_send
+                    own_desk_setup_data_clone.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
                 ); 
 
                 // Log before sending
@@ -4063,14 +4063,14 @@ fn handle_collaborator_intray_desk(
     // 2. Create listeners for each IP address
     for ipv6_address in &own_desk_setup_data.local_user_ipv6_addr_list {
         let tx = tx.clone(); // Clone the sender for each thread
-        let ready_port = own_desk_setup_data.local_user_ready_port__your_desk_you_send;
+        let ready_port = own_desk_setup_data.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip;
 
         thread::spawn(move || {...
             
             
     for ipv4_address in &own_desk_setup_data.local_user_ipv6_addr_list {
         let tx = tx.clone(); // Clone the sender for each thread
-        let ready_port = own_desk_setup_data.local_user_ready_port__your_desk_you_send;
+        let ready_port = own_desk_setup_data.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip;
 
         thread::spawn(move || {...
     */
@@ -4084,23 +4084,23 @@ fn handle_collaborator_intray_desk(
     // let socket = UdpSocket::bind(format!(
     //     "[{}]:{}", 
     //     meeting_room_sync_data_fn_input.remote_collaborator_ipv6_addr_list, 
-    //     meeting_room_sync_data_fn_input.remote_collaborator_ready_port__their_desk_you_listen));
+    //     meeting_room_sync_data_fn_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip));
     // 1. Iterate over IPv6 addresses and attempt to bind the socket
     let mut socket: Option<UdpSocket> = None;
     for ipv6_address in &meeting_room_sync_data_fn_input.remote_collaborator_ipv6_addr_list {
         let bind_result = UdpSocket::bind(SocketAddr::new(
             IpAddr::V6(*ipv6_address), 
-            meeting_room_sync_data_fn_input.remote_collaborator_ready_port__their_desk_you_listen
+            meeting_room_sync_data_fn_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip
         ));
 
         match bind_result {
             Ok(sock) => {
                 socket = Some(sock);
-                debug_log!("HCID Bound UDP socket to [{}]:{}", ipv6_address, meeting_room_sync_data_fn_input.remote_collaborator_ready_port__their_desk_you_listen);
+                debug_log!("HCID Bound UDP socket to [{}]:{}", ipv6_address, meeting_room_sync_data_fn_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip);
                 break; // Exit the loop if binding is successful
             },
             Err(e) => {
-                debug_log!("HCID Failed to bind to [{}]:{}: {}", ipv6_address, meeting_room_sync_data_fn_input.remote_collaborator_ready_port__their_desk_you_listen, e);
+                debug_log!("HCID Failed to bind to [{}]:{}: {}", ipv6_address, meeting_room_sync_data_fn_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip, e);
                 // Continue to the next address
             }
         }
@@ -4164,7 +4164,7 @@ fn handle_collaborator_intray_desk(
                 if last_log_time.elapsed() >= Duration::from_secs(5) {
                     debug_log!("HCID 4. {}: Listening for ReadySignal on port {}", 
                                meeting_room_sync_data_fn_input.remote_collaborator_name, 
-                               meeting_room_sync_data_fn_input.remote_collaborator_ready_port__their_desk_you_listen);
+                               meeting_room_sync_data_fn_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip);
                     last_log_time = Instant::now();
                 }
             },
@@ -4283,9 +4283,12 @@ fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
             local_user_ipv4_addr_list: this_meetingroom_iter.local_user_ipv4_addr_list,
             local_user_public_gpg: this_meetingroom_iter.local_user_public_gpg.clone(),
             local_user_sync_interval: this_meetingroom_iter.local_user_sync_interval,
-            local_user_ready_port__your_desk_you_send: this_meetingroom_iter.local_user_ready_port__your_desk_you_send,
-            local_user_intray_port__your_desk_you_listen: this_meetingroom_iter.local_user_intray_port__your_desk_you_listen,
-            local_user_gotit_port__your_desk_you_send: this_meetingroom_iter.local_user_gotit_port__your_desk_you_send,
+            // ready! (local)
+            local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip: this_meetingroom_iter.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip,
+            // in-tray (local)
+            localuser_intray_port__yourdesk_youlisten__bind_yourlocal_ip: this_meetingroom_iter.localuser_intray_port__yourdesk_youlisten__bind_yourlocal_ip,
+            // got-it! (local)
+            local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip: this_meetingroom_iter.local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip,
         };
         let data_baggy_for_collaborator_desk = ForRemoteCollaboratorDeskThread {
             remote_collaborator_name: this_meetingroom_iter.remote_collaborator_name.clone(),
@@ -4293,9 +4296,12 @@ fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
             remote_collaborator_ipv4_addr_list: this_meetingroom_iter.remote_collaborator_ipv4_addr_list,
             remote_collaborator_public_gpg: this_meetingroom_iter.remote_collaborator_public_gpg.clone(),
             remote_collaborator_sync_interval: this_meetingroom_iter.remote_collaborator_sync_interval,
-            remote_collaborator_ready_port__their_desk_you_listen: this_meetingroom_iter.remote_collaborator_ready_port__their_desk_you_listen,
-            remote_collaborator_intray_port__their_desk_you_send: this_meetingroom_iter.remote_collaborator_intray_port__their_desk_you_send,
-            remote_collaborator_gotit_port__their_desk_you_listen: this_meetingroom_iter.remote_collaborator_gotit_port__their_desk_you_listen, 
+            // ready! (remote)
+            remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip: this_meetingroom_iter.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip,
+            // in-tray (remote)
+            remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip: this_meetingroom_iter.remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip,
+            // got-it! (remote)
+            remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip: this_meetingroom_iter.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip, 
         };
 
         // Create the two "meeting room desks" for each collaborator pair:
