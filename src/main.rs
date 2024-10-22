@@ -3959,7 +3959,7 @@ fn sync_flag_ok_or_wait(wait_this_many_seconds: u64) {
 #[derive(Serialize, Deserialize, Debug)] // Add Serialize/Deserialize for sending/receiving
 struct ReadySignal {
     id: String, // Unique event ID get a u64 representation of the ThreadId using the as_u64() method.
-    timestamp: u64,
+    ready_signal_timestamp: u64,
     echo_send: bool,
 }
 
@@ -4071,7 +4071,7 @@ fn handle_owner_desk(
             // 4. Creates a ReadySignal instance to be the ready signal
             let ready_signal_to_send_from_this_loop = ReadySignal {
                 id: sync_event_id__for_this_thread,
-                timestamp: get_current_unix_timestamp(), 
+                ready_signal_timestamp: get_current_unix_timestamp(), 
                 echo_send: false,
             };
 
@@ -4164,7 +4164,7 @@ fn serialize_ready_signal(signal: &ReadySignal) -> std::io::Result<Vec<u8>> {
     // Convert String to bytes using as_bytes()
     bytes.extend_from_slice(signal.id.as_bytes()); 
 
-    bytes.extend_from_slice(&signal.timestamp.to_be_bytes()); 
+    bytes.extend_from_slice(&signal.ready_signal_timestamp.to_be_bytes()); 
     bytes.push(if signal.echo_send { 1 } else { 0 });
     Ok(bytes) 
 }
@@ -4248,14 +4248,31 @@ fn deserialize_ready_signal(bytes: &[u8]) -> Result<ReadySignal, io::Error> {
     // Extract timestamp:
     let timestamp_bytes: [u8; 8] = bytes[8..16].try_into().unwrap();
     debug_log!("DRS: timestamp_bytes: {:?}", timestamp_bytes);
-    let timestamp = u64::from_be_bytes(timestamp_bytes);
-    debug_log!("DRS: timestamp: {}", timestamp);
+    let ready_signal_timestamp = u64::from_be_bytes(timestamp_bytes);
+    debug_log!("DRS: ready_signal_timestamp: {}", ready_signal_timestamp);
 
     // Extract echo_send (if present):
     let echo_send = if bytes.len() > 16 { bytes[16] != 0 } else { false };
     debug_log!("DRS: echo_send: {}", echo_send);
     
-    Ok(ReadySignal { id: id.to_string(), timestamp, echo_send })
+    Ok(ReadySignal { id: id.to_string(), ready_signal_timestamp, echo_send })
+}
+
+
+fn serialize_gotit_signal(signal: &GotItSignal) -> Vec<u8> {
+    signal.id.to_be_bytes().to_vec()
+}
+
+fn deserialize_gotit_signal(bytes: &[u8]) -> Result<GotItSignal, io::Error> {
+    if bytes.len() != std::mem::size_of::<u64>() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Invalid byte array length for GotItSignal",
+        ));
+    }
+
+    let id = u64::from_be_bytes(bytes.try_into().unwrap());
+    Ok(GotItSignal { id })
 }
 
 
@@ -4504,7 +4521,7 @@ fn create_retry_flag(
 
 // TODO this is using a depricated struct...should this have its own struct? (WHY SO MANY STRUCTS???)
 fn get_or_create_send_queue(
-    collaborator_sync_data: &RemoteCollaboratorPortsData,
+    collaborator_name: &str, // Change the parameter type to &str
     received_timestamp: u64,
 ) -> Result<SendQueue, io::Error> {
     
@@ -4517,7 +4534,7 @@ fn get_or_create_send_queue(
 
     // Iterate over owned files, only considering those modified AFTER the received timestamp
     let owned_files_dir = Path::new("project_graph_data/owned_files")
-        .join(&collaborator_sync_data.remote_collaborator_name);
+        .join(collaborator_name); // Use collaborator_name here
 
     for entry in WalkDir::new(owned_files_dir)
         .into_iter()
@@ -4556,7 +4573,434 @@ fn get_or_create_send_queue(
 
 
 
-/// For each collaborator's-in-tray-desk:
+
+// /// // (ignore echo-send for now design needs improvement)
+// /// handle_collaborator_meetingroom_desk
+// /// overview:
+// /// 1. listen for 'ready' signal
+// /// if a ready signal is recieved
+// /// 2. use the current send queue or if this is the first time make a sendqueue to get the next send-file path
+// /// 3. get and send the file at the send-file path (and hold it's timestamp in reserve)
+// /// 4. if got-it signal is recieved, put the timestamp of the successfuly sent file into the queue as back_of_queue_timestamp
+// /// delete/rewrite:
+// /// ```path
+// /// sync_data/team_channel/collaborator_name/back_of_queue_timestamp
+// /// ```
+// /// and remove the sent-item from the send-queues
+// ///
+// /// For each collaborator's meetingroom desk:
+// /// - ports are specified in team_channel node.toml
+// /// - collaborator IP in NAME__collaborator.toml
+// ///
+// /// Explanation
+// /// Listener Creation: The TcpListener is created and bound to the specified IP address and port.
+// ///
+// /// Non-Blocking Mode: Setting the listener to non-blocking allows the loop to check for the halt signal even if no connection is available.
+// ///
+// /// Halt Signal Check: The should_halt() function (which you need to implement based on your halt signal mechanism) is called at the beginning of each loop iteration. If the halt signal is detected, the loop breaks, and the listener is closed.
+// ///
+// /// Connection Handling:
+// /// Ok((stream, _addr)): If a connection is successfully established, the code inside the Ok branch will execute. Here, you can spawn a new thread to handle the connection and process the received data.
+// ///
+// /// Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock: If the accept() method returns a WouldBlock error, it means no connection is available at the moment. The code sleeps briefly to avoid consuming excessive CPU resources by busy-waiting.
+// ///
+// /// Err(e): This branch handles any other errors that might occur during the connection process. You can log the error, notify the user, or take other appropriate actions depending on the error type.
+// ///
+// /// Key Points
+// /// Non-Blocking Listener: Essential for checking the halt signal without waiting indefinitely for a connection.
+// ///
+// /// Loop Structure: The loop continuously checks for a halt signal and attempts to accept connections.
+// /// start a loop that:
+// ///
+// /// Error Handling:
+// /// 1. Distinguish Between Error Types: Not all errors are equal. Some errors might be transient (e.g., WouldBlock indicating no data is available yet), while others might be fatal (e.g., a socket error).
+// /// 2. Handle Transient Errors: For transient errors, we can simply continue the loop and try to receive data again.
+// /// 3. Handle Fatal Errors: For fatal errors, we should log the error, potentially notify the user, and consider exiting the function or the entire sync process.
+// ///
+// /// TODO add  "Flow" steps: handle_collaborator_meetingroom_desk()
+// fn handle_collaborator_meetingroom_desk(
+//     meeting_room_sync_data_fn_input: &ForRemoteCollaboratorDeskThread,
+// ) -> Result<(), UmaError> {
+//         /*
+//     loop:
+//     // 2. Create listeners for each IP address
+//     for ipv6_address in &own_desk_setup_data.local_user_ipv6_addr_list {
+//         let tx = tx.clone(); // Clone the sender for each thread
+//         let ready_port = own_desk_setup_data.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip;
+
+//         thread::spawn(move || {...
+            
+            
+//     for ipv4_address in &own_desk_setup_data.local_user_ipv6_addr_list {
+//         let tx = tx.clone(); // Clone the sender for each thread
+//         let ready_port = own_desk_setup_data.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip;
+
+//         thread::spawn(move || {...
+//     */
+//     // TODO: why are  intray_port__their_desk_you_send and gotit_port__their_desk_you_listen never used here????
+//     debug_log!(
+//         "\n Started HCMD the handle_collaborator_meetingroom_desk() for->{}", 
+//         meeting_room_sync_data_fn_input.remote_collaborator_name
+//     );
+//     debug_log!(
+//         "meeting_room_sync_data_fn_input -> {:?}", 
+//         meeting_room_sync_data_fn_input
+//     );
+//     // 1. Create UDP socket
+//     // let socket = UdpSocket::bind(format!(
+//     //     "[{}]:{}", 
+//     //     meeting_room_sync_data_fn_input.remote_collaborator_ipv6_addr_list, 
+//     //     meeting_room_sync_data_fn_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip));
+//     // 1. Iterate over IPv6 addresses and attempt to bind the socket
+//     let mut socket: Option<UdpSocket> = None;
+//     for ipv6_address in &meeting_room_sync_data_fn_input.remote_collaborator_ipv6_addr_list {
+//         let bind_result = UdpSocket::bind(SocketAddr::new(
+//             IpAddr::V6(*ipv6_address), 
+//             meeting_room_sync_data_fn_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip
+//         ));
+
+//         match bind_result {
+//             Ok(sock) => {
+//                 socket = Some(sock);
+//                 debug_log!("HCMD 1. ready Bound UDP socket to [{}]:{}", ipv6_address, meeting_room_sync_data_fn_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip);
+//                 break; // Exit the loop if binding is successful
+//             },
+//             Err(e) => {
+//                 debug_log!("HCMD err 1. ready Failed to bind to [{}]:{}: {}", ipv6_address, meeting_room_sync_data_fn_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip, e);
+//                 // Continue to the next address
+//             }
+//         }
+//     }
+//     // Print all sync data for the collaborator
+//     debug_log!(
+//         "HCMD 2. ready Print all sync data for the collaborator:meeting_room_sync_data_fn_input {:?}", 
+//         meeting_room_sync_data_fn_input
+//     );
+
+//     // 2. Check if socket binding was successful (simplified)
+//     let socket = socket.ok_or(UmaError::NetworkError("HCMD Failed to bind to any IPv6 address".to_string()))?;
+                    
+//     debug_log!(
+//         "HCMD 2. ready listen at this socket {:?}", 
+//         &socket,
+//     );
+
+    
+//     // ?? Make first blank send_queue here?
+//     let mut session_sendqueue = create_fresh_send_queue(
+//             team_channel_name: &str,
+//             collaborator_name: &str,
+//         );
+    
+//     // 3. Main loop
+//     let mut last_log_time = Instant::now(); // Track the last time we logged a message
+//     loop {
+//         debug_log("HCMD 3. starting Main loop...");
+//         // 3. Check for halt signal
+//         if should_halt() {
+//             debug_log!(
+//                 "HCMD 3. Check for halt signal. Halting handle_collaborator_meetingroom_desk() for {}", 
+//                 meeting_room_sync_data_fn_input.remote_collaborator_name
+//             );
+//             break;
+//         }
+
+//         // 4. Receive data
+//         let mut buf = [0; 1024];
+//         match socket.recv_from(&mut buf) {
+//             Ok((amt, src)) => {
+//                 debug_log!("HCMD 4.Ok((amt, src)) Received {} bytes from {} on ready_port", amt, src);
+
+//                 // --- Inspect Raw Bytes ---
+//                 debug_log!("HCMD 4. Raw bytes received: {:?}", &buf[..amt]); 
+        
+//                 // --- Inspect Bytes as Hex ---
+//                 let hex_string = buf[..amt].iter()
+//                     .map(|b| format!("{:02X}", b))
+//                     .collect::<String>();
+//                 debug_log!("HCMD 4. Raw bytes as hex: {}", hex_string);
+                
+//                 // 5. Deserialize the ReadySignal
+//                 let ready_signal: ReadySignal = match deserialize_ready_signal(&buf[..amt]) {
+//                     Ok(ready_signal) => {
+//                         println!("HCMD 5. Ok(ready_signal) {}: Received ReadySignal: {:?}",
+//                              meeting_room_sync_data_fn_input.remote_collaborator_name, ready_signal
+//                         ); // Print to console
+//                         debug_log!("HCMD 5. Ok(ready_signal) {}: Received ReadySignal: {:?}",
+//                              meeting_room_sync_data_fn_input.remote_collaborator_name, 
+//                              ready_signal
+//                         ); // Log the signal
+//                         ready_signal
+//                     },
+//                     Err(e) => {
+//                         debug_log!("HCMD 5.Err Receive data Failed to parse ready signal: {}", e);
+//                         continue; // Continue to the next iteration of the loop
+//                     }
+//                 };
+
+//                 // ... (You can add logic here to handle the received ReadySignal) ...
+//                 // TODO under construction!!!
+//                 /////////////////////////////
+//                 // Get ready_signal_timestamp from ready_signal
+//                 /////////////////////////////
+//                 if !ready_signal.ready_signal_timestamp{
+//                     let ready_signal_timestamp = 0;
+//                 }
+//                 /////////////////////////////
+//                 // Get / Make Send Queue
+//                 /////////////////////////////
+//                 if !session_sendqueue{
+//                     let mut session_sendqueue = create_fresh_send_queue(
+//                             team_channel_name: &str,
+//                             collaborator_name: &str,
+//                         );
+//                 }
+//                 /////////////////////////////
+//                 // Send one Que Item
+//                 /////////////////////////////
+//                 ???
+
+
+                
+                
+//             },
+//             Err(e) if e.kind() == ErrorKind::WouldBlock => {
+//                 // No data available yet, continue listening
+//                 // Periodically log that we're listening
+//                 if last_log_time.elapsed() >= Duration::from_secs(5) {
+//                     debug_log!("HCMD 4. {}: Listening for ReadySignal on port {}", 
+//                                meeting_room_sync_data_fn_input.remote_collaborator_name, 
+//                                meeting_room_sync_data_fn_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip);
+//                     last_log_time = Instant::now();
+//                 }
+//             },
+//             Err(e) => {
+//                 // Handle other errors
+//                 debug_log!("HCMD 4. {}: Error receiving data on ready_port: {} ({:?})", 
+//                            meeting_room_sync_data_fn_input.remote_collaborator_name, e, e.kind());
+//                 // Consider exiting the function or the sync process if it's a fatal error
+//                 return Err(UmaError::NetworkError(e.to_string())); // Example: Return a NetworkError
+//             }
+//         }
+
+     
+//         // NEW NEW NEW CODE HERE HERE HERE adding sendqueue sent file etc.   
+//         // 5. Aim and send file
+
+//         // TODO (ideally put all this into a function...so it can echo_send itself)
+//         // 5. Spawn a thread to send the one sendquequee item
+//         thread::spawn(move || {
+
+//             // 5.1 send_toml thread_id = 
+//             let sync_event_id__for_this_thread = format!("{:?}", thread::current().id()); 
+//             debug_log!(
+//                 "HCMD 2. New sync-event thread id: {:?}; in handle_owner_desk()", 
+//                 sync_event_id__for_this_thread
+//             );
+            
+//             // // TODO eventually this should be the id of a thread
+//             // // Generate a unique event ID
+//             // let sync_event_id__for_this_thread: u64 = rand::random(); 
+
+//             // 5. Creates a ReadySignal instance to be the ready signal
+//             let ready_signal_to_send_from_this_loop = ReadySignal {
+//                 id: sync_event_id__for_this_thread,
+//                 timestamp: get_current_unix_timestamp(), 
+//                 echo_send: false,
+//             };
+
+//             // 5. Serialize the ReadySignal
+//             let readysignal_data = serialize_ready_signal(
+//                 &ready_signal_to_send_from_this_loop
+//             ).expect("HCMD 5.2 send_toml err Failed to serialize ReadySignal, ready_signal_to_send_from_this_loop"); 
+
+//             // --- Inspect Serialized Data ---
+//             debug_log!("HCMD 5.2 send_toml inspect Serialized Data: {:?}", readysignal_data);
+
+//             // TODO possibly have some mechanism to try addresses until one works?
+//             // 5.3 send_toml Send the signal @ local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
+//             // TODO figure out way to specify ipv6, 4, prioritizing, trying, etc.
+//             // (in theory...you could try them all?)
+//             // Select the first IPv6 address if available
+//             if let Some(first_ipv6_address) = own_desk_setup_data_clone.local_user_ipv6_addr_list.first() {
+//                 // Copy the IPv6 address
+//                 let ipv6_address_copy = *first_ipv6_address; 
+            
+//                 // Send the signal to the collaborator's ready_port
+//                 let target_addr = SocketAddr::new(
+//                     IpAddr::V6(ipv6_address_copy), // Use the copied address
+//                     own_desk_setup_data_clone.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
+//                 ); 
+
+//                 // Log before sending
+//                 debug_log!(
+//                     "HCMD 5.3 send_toml Attempting to send ReadySignal to {}: {:?}", 
+//                     target_addr, 
+//                     &readysignal_data
+//                 );
+
+//                 // If sending to the first address succeeds, no need to iterate further
+//                 if send_data(&readysignal_data, target_addr).is_ok() {
+//                     debug_log("HHCMD 5.3 send_toml Successfully sent ReadySignal to {} (first address)"//, target_addr
+//                         );
+//                     return; // Exit the thread
+//                 } else {
+//                     debug_log("HCMD 5.3 send_toml ERR Failed to send ReadySignal to {} (first address)"//, target_addr
+//                         );
+//                 }
+//             } else {
+//                 debug_log("HCMD 5.3 send_toml ERROR No IPv6 addresses available for {}"
+//                     // , own_desk_setup_data.local_user_name
+//                     );
+//             }
+        
+        
+        
+        
+        
+//         // NEW NEW NEW CODE HERE HERE HERE adding sendqueue sent file etc.   
+//         // 5. Create got_it UDP socket
+//         // let socket = UdpSocket::bind(format!(
+//         //     "[{}]:{}", 
+//         //     meeting_room_sync_data_fn_input.remote_collaborator_ipv6_addr_list, 
+//         //     meeting_room_sync_data_fn_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip));
+//         // 5. Iterate over IPv6 addresses and attempt to bind the socket
+//         let mut socket: Option<UdpSocket> = None;
+//         for ipv6_address in &meeting_room_sync_data_fn_input.remote_collaborator_ipv6_addr_list {
+//             let bind_result = UdpSocket::bind(SocketAddr::new(
+//                 IpAddr::V6(*ipv6_address), 
+//                 meeting_room_sync_data_fn_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip
+//             ));
+
+//             match bind_result {
+//                 Ok(sock) => {
+//                     socket = Some(sock);
+//                     debug_log!("HCMD 5. got_it Bound UDP socket to [{}]:{}", ipv6_address, meeting_room_sync_data_fn_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip);
+//                     break; // Exit the loop if binding is successful
+//                 },
+//                 Err(e) => {
+//                     debug_log!("HCMD 5. got_it err 1. Failed to bind to [{}]:{}: {}", ipv6_address, meeting_room_sync_data_fn_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip, e);
+//                     // Continue to the next address
+//                 }
+//             }
+//         }
+//         // Print all sync data for the collaborator
+//         debug_log!(
+//             "HCMD 5. Print all sync data for the collaborator:meeting_room_sync_data_fn_input {:?}", 
+//             meeting_room_sync_data_fn_input
+//         );
+
+//         // 2. Check if socket binding was successful (simplified)
+//         let socket = socket.ok_or(UmaError::NetworkError("HCMD Failed to bind to any IPv6 address".to_string()))?;
+                        
+//         debug_log!(
+//             "HCMD 5. listen at this socket {:?}", 
+//             &socket,
+//         );
+        
+//         /////////////////////////////
+//         // Listen for 'I got it'
+//         /////////////////////////////
+//         // 4. Receive data
+//         let mut buf = [0; 1024];
+//         match socket.recv_from(&mut buf) {
+//             Ok((amt, src)) => {
+//                 debug_log!("HCMD 4.Ok((amt, src)) Received {} bytes from {} on ready_port", amt, src);
+
+//                 // --- Inspect Raw Bytes ---
+//                 debug_log!("HCMD 4. Raw bytes received: {:?}", &buf[..amt]); 
+        
+//                 // --- Inspect Bytes as Hex ---
+//                 let hex_string = buf[..amt].iter()
+//                     .map(|b| format!("{:02X}", b))
+//                     .collect::<String>();
+//                 debug_log!("HCMD 4. Raw bytes as hex: {}", hex_string);
+                
+//                 // 5. Deserialize the ReadySignal
+//                 let ready_signal: ReadySignal = match deserialize_ready_signal(&buf[..amt]) {
+//                     Ok(ready_signal) => {
+//                         println!("HCMD 5. Ok(ready_signal) {}: Received ReadySignal: {:?}",
+//                              meeting_room_sync_data_fn_input.remote_collaborator_name, ready_signal
+//                         ); // Print to console
+//                         debug_log!("HCMD 5. Ok(ready_signal) {}: Received ReadySignal: {:?}",
+//                              meeting_room_sync_data_fn_input.remote_collaborator_name, 
+//                              ready_signal
+//                         ); // Log the signal
+//                         ready_signal
+//                     },
+//                     Err(e) => {
+//                         debug_log!("HCMD 5.Err Receive data Failed to parse ready signal: {}", e);
+//                         continue; // Continue to the next iteration of the loop
+//                     }
+//                 };
+
+//                 // ... (You can add logic here to handle the received ReadySignal) ...
+//                 // TODO under construction!!!
+//                 /////////////////////////////
+//                 // Get ready_signal_timestamp from ready_signal
+//                 /////////////////////////////
+//                 if !ready_signal.ready_signal_timestamp{
+//                     let ready_signal_timestamp = 0;
+//                 }
+//                 /////////////////////////////
+//                 // Get / Make Send Queue
+//                 /////////////////////////////
+//                 if !session_sendqueue{
+//                     let mut session_sendqueue = create_fresh_send_queue(
+//                             team_channel_name: &str,
+//                             collaborator_name: &str,
+//                         );
+//                 }
+//                 /////////////////////////////
+//                 // Send one Que Item
+//                 /////////////////////////////
+//                 ???
+
+
+                
+                
+//             },
+//             Err(e) if e.kind() == ErrorKind::WouldBlock => {
+//                 // No data available yet, continue listening
+//                 // Periodically log that we're listening
+//                 if last_log_time.elapsed() >= Duration::from_secs(5) {
+//                     debug_log!("HCMD 4. {}: Listening for ReadySignal on port {}", 
+//                                meeting_room_sync_data_fn_input.remote_collaborator_name, 
+//                                meeting_room_sync_data_fn_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip);
+//                     last_log_time = Instant::now();
+//                 }
+//             },
+//             Err(e) => {
+//                 // Handle other errors
+//                 debug_log!("HCMD 4. {}: Error receiving data on ready_port: {} ({:?})", 
+//                            meeting_room_sync_data_fn_input.remote_collaborator_name, e, e.kind());
+//                 // Consider exiting the function or the sync process if it's a fatal error
+//                 return Err(UmaError::NetworkError(e.to_string())); // Example: Return a NetworkError
+//             }
+//         }
+        
+
+//         thread::sleep(Duration::from_millis(100)); // Avoid busy-waiting
+//     }
+    
+//     debug_log("ending HCMD");
+//     Ok(())
+// }
+
+
+
+/// handle_collaborator_meetingroom_desk
+/// overview:
+/// 1. listen for 'ready' signal
+/// if a ready signal is recieved
+/// 2. use the current send queue or if this is the first time make a sendqueue to get the next send-file path
+/// 3. get and send the file at the send-file path (and hold it's timestamp in reserve)
+/// 4. if got-it signal is recieved, put the timestamp of the successfuly sent file into the queue as back_of_queue_timestamp
+/// delete/rewrite:
+/// ```path
+/// sync_data/team_channel/collaborator_name/back_of_queue_timestamp
+/// ```
+/// For each collaborator's meetingroom desk:
 /// - ports are specified in team_channel node.toml
 /// - collaborator IP in NAME__collaborator.toml
 ///
@@ -4585,11 +5029,11 @@ fn get_or_create_send_queue(
 /// 2. Handle Transient Errors: For transient errors, we can simply continue the loop and try to receive data again.
 /// 3. Handle Fatal Errors: For fatal errors, we should log the error, potentially notify the user, and consider exiting the function or the entire sync process.
 ///
-/// TODO add  "Flow" steps: handle_collaborator_intray_desk()
-fn handle_collaborator_intray_desk(
+/// TODO add  "Flow" steps: handle_collaborator_meetingroom_desk()
+fn handle_collaborator_meetingroom_desk(
     meeting_room_sync_data_fn_input: &ForRemoteCollaboratorDeskThread,
 ) -> Result<(), UmaError> {
-        /*
+    /*
     loop:
     // 2. Create listeners for each IP address
     for ipv6_address in &own_desk_setup_data.local_user_ipv6_addr_list {
@@ -4607,122 +5051,168 @@ fn handle_collaborator_intray_desk(
     */
     // TODO: why are  intray_port__their_desk_you_send and gotit_port__their_desk_you_listen never used here????
     debug_log!(
-        "\n Started HCID the handle_collaborator_intray_desk() for->{}", 
+        "\n Started HCMD the handle_collaborator_meetingroom_desk() for->{}", 
         meeting_room_sync_data_fn_input.remote_collaborator_name
     );
     debug_log!(
         "meeting_room_sync_data_fn_input -> {:?}", 
         meeting_room_sync_data_fn_input
     );
-    // 1. Create UDP socket
-    // let socket = UdpSocket::bind(format!(
-    //     "[{}]:{}", 
-    //     meeting_room_sync_data_fn_input.remote_collaborator_ipv6_addr_list, 
-    //     meeting_room_sync_data_fn_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip));
-    // 1. Iterate over IPv6 addresses and attempt to bind the socket
-    let mut socket: Option<UdpSocket> = None;
-    for ipv6_address in &meeting_room_sync_data_fn_input.remote_collaborator_ipv6_addr_list {
-        let bind_result = UdpSocket::bind(SocketAddr::new(
-            IpAddr::V6(*ipv6_address), 
-            meeting_room_sync_data_fn_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip
-        ));
 
-        match bind_result {
-            Ok(sock) => {
-                socket = Some(sock);
-                debug_log!("HCID 1. Bound UDP socket to [{}]:{}", ipv6_address, meeting_room_sync_data_fn_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip);
-                break; // Exit the loop if binding is successful
-            },
-            Err(e) => {
-                debug_log!("HCID err 1. Failed to bind to [{}]:{}: {}", ipv6_address, meeting_room_sync_data_fn_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip, e);
-                // Continue to the next address
-            }
-        }
-    }
-    // Print all sync data for the collaborator
-    debug_log!(
-        "HCID Print all sync data for the collaborator:meeting_room_sync_data_fn_input {:?}", 
-        meeting_room_sync_data_fn_input
-    );
+    // --- 1. Create UDP Sockets for Ready and GotIt Signals ---
+    let ready_socket = create_udp_socket(
+        &meeting_room_sync_data_fn_input.remote_collaborator_ipv6_addr_list,
+        meeting_room_sync_data_fn_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip,
+    )?;
+    let gotit_socket = create_udp_socket(
+        &meeting_room_sync_data_fn_input.remote_collaborator_ipv6_addr_list,
+        meeting_room_sync_data_fn_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip,
+    )?;
 
-    // 2. Check if socket binding was successful (simplified)
-    let socket = socket.ok_or(UmaError::NetworkError("HCID Failed to bind to any IPv6 address".to_string()))?;
-                    
-    debug_log!(
-        "HCID 2. listen at this socket {:?}", 
-        &socket,
-    );
+    // --- 2. Initialize Send Queue ---
+    let mut session_send_queue: Option<SendQueue> = None;
 
-    // 3. Main loop
-    let mut last_log_time = Instant::now(); // Track the last time we logged a message
+    // --- 3. Main Loop ---
+    let mut last_log_time = Instant::now();
     loop {
-        debug_log("HCID 3. starting Main loop...");
-        // 3. Check for halt signal
+        // --- 3.1 Check for Halt Signal ---
         if should_halt() {
             debug_log!(
-                "HCID 3. Check for halt signal. Halting handle_collaborator_intray_desk() for {}", 
+                "HCMD 3.1 Check for halt signal. Halting handle_collaborator_meetingroom_desk() for {}", 
                 meeting_room_sync_data_fn_input.remote_collaborator_name
             );
             break;
         }
 
-        // 4. Receive data
+        // --- 3.2 Receive Ready Signal ---
         let mut buf = [0; 1024];
-        match socket.recv_from(&mut buf) {
+        match ready_socket.recv_from(&mut buf) {
             Ok((amt, src)) => {
-                debug_log!("HCID 4.Ok((amt, src)) Received {} bytes from {} on ready_port", amt, src);
+                debug_log!("HCMD 3.2 Ok((amt, src)) Received {} bytes from {} on ready_port", amt, src);
 
                 // --- Inspect Raw Bytes ---
-                debug_log!("HCID 4. Raw bytes received: {:?}", &buf[..amt]); 
+                debug_log!("HCMD 3.2 Raw bytes received: {:?}", &buf[..amt]); 
         
                 // --- Inspect Bytes as Hex ---
                 let hex_string = buf[..amt].iter()
                     .map(|b| format!("{:02X}", b))
                     .collect::<String>();
-                debug_log!("HCID 4. Raw bytes as hex: {}", hex_string);
+                debug_log!("HCMD 3.2 Raw bytes as hex: {}", hex_string);
                 
-                // 5. Deserialize the ReadySignal
+                // --- 3.3 Deserialize the ReadySignal ---
                 let ready_signal: ReadySignal = match deserialize_ready_signal(&buf[..amt]) {
                     Ok(ready_signal) => {
-                        println!("HCID 5. Ok(ready_signal) {}: Received ReadySignal: {:?}",
+                        println!("HCMD 3.3 Ok(ready_signal) {}: Received ReadySignal: {:?}",
                              meeting_room_sync_data_fn_input.remote_collaborator_name, ready_signal
                         ); // Print to console
-                        debug_log!("HCID 5. Ok(ready_signal) {}: Received ReadySignal: {:?}",
+                        debug_log!("HCMD 3.3 Ok(ready_signal) {}: Received ReadySignal: {:?}",
                              meeting_room_sync_data_fn_input.remote_collaborator_name, 
                              ready_signal
                         ); // Log the signal
                         ready_signal
                     },
                     Err(e) => {
-                        debug_log!("HCID 5.Err Receive data Failed to parse ready signal: {}", e);
+                        debug_log!("HCMD 3.3 Err Receive data Failed to parse ready signal: {}", e);
                         continue; // Continue to the next iteration of the loop
                     }
                 };
 
-                // ... (You can add logic here to handle the received ReadySignal) ...
+                // --- 3.4 Get or Create Send Queue ---
+                let remote_timestamp = ready_signal.ready_signal_timestamp;
+                session_send_queue = Some(get_or_create_send_queue(
+                    &meeting_room_sync_data_fn_input.remote_collaborator_name, // Pass the collaborator name
+                    remote_timestamp,
+                )?);
+
+                // --- 3.5 Send Files from Queue ---
+                if let Some(ref mut queue) = session_send_queue {
+                    while let Some(file_path) = queue.items.pop() {
+                        // --- 3.5.1 Send File ---
+                        let file_send_result = send_file(
+                            &file_path,
+                            src,
+                            meeting_room_sync_data_fn_input.remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip,
+                        );
+
+                        // --- 3.5.2 Handle File Send Result ---
+                        match file_send_result {
+                            Ok(_) => {
+                                debug_log!("HCMD 3.5.2 File sent successfully: {:?}", file_path);
+
+                                // --- 3.5.3 Send "Got It" Signal ---
+                                let gotit_signal = GotItSignal { id: ready_signal.id.parse().unwrap_or(0) };
+                                // --- 3.5.3 Send "Got It" Signal ---
+                                let gotit_signal = GotItSignal { id: ready_signal.id.parse().unwrap_or(0) };
+                                let gotit_signal_data = serialize_gotit_signal(&gotit_signal); // Use the new function
+                                send_data(
+                                    &gotit_signal_data, 
+                                    src,
+                                )?;
+                                debug_log!("HCMD 3.5.3 Sent GotItSignal to {}", src);
+                                debug_log!("HCMD 3.5.3 Sent GotItSignal to {}", src);
+
+                                // --- 3.5.4 Update Timestamp Log ---
+                                if let Ok(timestamp) = get_toml_file_timestamp(&file_path) {
+                                    update_collaborator_timestamp_log(
+                                        // TODO: Replace with the actual team channel name
+                                        "team_channel_name", 
+                                        &meeting_room_sync_data_fn_input.remote_collaborator_name,
+                                    )?;
+                                    debug_log!("HCMD 3.5.4 Updated timestamp log for {}", meeting_room_sync_data_fn_input.remote_collaborator_name);
+                                }
+                            },
+                            Err(e) => {
+                                debug_log!("HCMD 3.5.2 Error sending file: {:?} - {}", file_path, e);
+                                // TODO: Handle file send error (e.g., retry, log, etc.)
+                            }
+                        }
+
+                        // --- ECHO SEND (TODO) ---
+                        // ... (Implement echo send logic if needed) ...
+                    }
+                }
             },
             Err(e) if e.kind() == ErrorKind::WouldBlock => {
-                // No data available yet, continue listening
-                // Periodically log that we're listening
+                // --- 3.6 No Ready Signal, Log Periodically ---
                 if last_log_time.elapsed() >= Duration::from_secs(5) {
-                    debug_log!("HCID 4. {}: Listening for ReadySignal on port {}", 
+                    debug_log!("HCMD 3.6 {}: Listening for ReadySignal on port {}", 
                                meeting_room_sync_data_fn_input.remote_collaborator_name, 
                                meeting_room_sync_data_fn_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip);
                     last_log_time = Instant::now();
                 }
             },
             Err(e) => {
-                // Handle other errors
-                debug_log!("HCID 4. {}: Error receiving data on ready_port: {} ({:?})", 
+                // --- 3.7 Handle Other Errors ---
+                debug_log!("HCMD 3.7 {}: Error receiving data on ready_port: {} ({:?})", 
                            meeting_room_sync_data_fn_input.remote_collaborator_name, e, e.kind());
-                // Consider exiting the function or the sync process if it's a fatal error
-                return Err(UmaError::NetworkError(e.to_string())); // Example: Return a NetworkError
+                return Err(UmaError::NetworkError(e.to_string()));
             }
         }
 
-        thread::sleep(Duration::from_millis(100)); // Avoid busy-waiting
+        thread::sleep(Duration::from_millis(100));
     }
-    debug_log("ending HCID");
+
+    debug_log!("ending HCMD");
+    Ok(())
+}
+
+// --- Helper Function to Create UDP Socket ---
+fn create_udp_socket(ip_addresses: &[Ipv6Addr], port: u16) -> Result<UdpSocket, UmaError> {
+    for ip_address in ip_addresses {
+        let bind_result = UdpSocket::bind(SocketAddr::new(IpAddr::V6(*ip_address), port));
+        match bind_result {
+            Ok(socket) => return Ok(socket),
+            Err(e) => debug_log!("Failed to bind to [{}]:{}: {}", ip_address, port, e),
+        }
+    }
+    Err(UmaError::NetworkError("Failed to bind to any IPv6 address".to_string()))
+}
+
+// --- Helper Function to Send File ---
+fn send_file(file_path: &PathBuf, target_addr: SocketAddr, port: u16) -> Result<(), UmaError> {
+    let socket = UdpSocket::bind(":::0")?;
+    send_toml_file(&socket, &file_path.to_string_lossy(), SocketAddr::new(target_addr.ip(), port))?;
+    debug_log!("File sent to {}:{}", target_addr.ip(), port);
     Ok(())
 }
 
@@ -4854,7 +5344,7 @@ fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
         });
         // Their Desk
         let collaborator_desk_thread = thread::spawn(move || {
-            handle_collaborator_intray_desk(&data_baggy_for_collaborator_desk);
+            handle_collaborator_meetingroom_desk(&data_baggy_for_collaborator_desk);
         });
         collaborator_threads.push(owner_desk_thread); 
         collaborator_threads.push(collaborator_desk_thread);
@@ -5244,7 +5734,7 @@ fn main() {
         // 3. Check for halt signal
         if should_not_hard_restart() {
             debug_log(
-                "Halting handle_collaborator_intray_desk()"
+                "Halting handle_collaborator_meetingroom_desk()"
             );
             break;
         }
