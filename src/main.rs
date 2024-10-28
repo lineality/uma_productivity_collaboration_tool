@@ -54,251 +54,6 @@ pub mod tiny_tui {
     }
 }
 
-# IP Addresses, From and To, in Uma
-
-How do ip addresses work when "connecting" one computer to another over the internet, for example as relates to udp vs. tcp and ports vs. IP addresses? When Alice sends a signal to Bob, and when Alice listens for a signal from Bob, what is happening? How should terms such as "connect", "bind", "listen", and "aim at", be used?
-
-
-## IP Addresses From and To in Uma for UDP Communication (UDP, not TCP)
-
-#### Connectionless Protocol: 
-UDP is a connectionless protocol, meaning there is no persistent "connection" established between the sender and the receiver.
-
-#### Binding is Local: 
-Binding (or binding to?) a socket only is performed by and affects a local machine; it does not establish any "connection" to the remote machine.
-
-
-# Terminology:
-
-## "Binding" & "Socket"
-Binding a Socket:
-
-#### Socket: 
-A pair: one ip-address paired with one "port"
-
-#### Port: 
-A more or less completely arbitrary and abstract 'field' that identifies a unique "path" for signals. By convention: 
-- ports are named as integers up to to four digits: 430, 8080, 40000
-- some network ports are reserved for common uses
-
-#### Purpose of binding a socket: 
-To prepare the operating system to receive information sent to a specific IP address and port combination on the local machine.
-
-#### Code: 
-```Rust
-let socket = UdpSocket::bind(SocketAddr::new(IpAddr::V6(address), port))?;```
-
-### No "Connection" in the case of UPD:
-There is no Outgoing "Connection" on a bound-socket: Binding a socket does not establish any outgoing "connection" to another machine. Like setting up an in-tray for mail at your house, you are not sending mail to anyone else by the act of setting up an in-tray to hold mail sent to you.
-
-
-## Listening: 
-When Alice listens for a "signal" from Bob, Alice will be listening at (one or more of her own) IP addresses at a specific port, the combination of which is called a 'socket.' Bob's IP-address, which Bob uses on his local-machine, does not matter for Alice to listen for a signal from Bob. Alice does not bind to and listen at Bob's IP-address. Alice only listens at her own 'socket' IP+Port.
-
-### Code: 
-// Alice sets up a place to listen for Bob to send something
-```Rust
-let socket = UdpSocket::bind(SocketAddr::new(IpAddr::V6(Alices_id_address), Alices_listening_port))?;
-```
-
-## Sending:
-There are two parts to send, but the first part is largely a background process that can be ignored. The terms and steps however can be confusing in terms of separating the descriptions. There are some not quite nuanced distinctions. Bob aims the signal at the socket (ip, port) that Alice is bound to on her end (her 'in tray' to which Bob is sending something). Bob neither "binds" to nor "connects to" Alice's socket (ip & port); Bob aims at Alice's socket. But, but Bob does need to bind to something on his end to send something over the internet; the thing is that this step is completely arbitrary (and perhaps done ad hoc by the OS) and not meaningful for the otherwise very sensitive and careful management of shared ports and ip addresses. Perhap by analogy, Alice may be waiting at one window at which Bob strictly must aim when he tosses her a sandwich; but it is entirely arbitrary how Bob got access to being outside of his house so he could aim at her window. His aiming at Alice's window is 100% necessary, but he could have gone outside by any door, window, passage, hole, or any means, in order to aim at her window. It makes no difference to any part of the conversation how he did that.
-
-### The two steps in binding.
-When Bob sends a signal, or information, to Alice...
-1. The arbitrary step: Bob binds locally to any ephemeral socket to send from.
-2. The important step: Bob 'aims at' and sends to Alice's exact socket-address.
-
-#### code:
-```Rust
-// Bob sends a datagram to Alice
-let socket = UdpSocket::bind("0.0.0.0:0")?; // Bind to any available source IP and port
-socket.send_to(data, SocketAddr::new(IpAddr::V6(Alices_ip_address), Alices_listening_port))?;
-```
-
-## Binding & Aiming-At
-#### Categories:
-1. Bind to Listen (important details)
-2. Aim-At to Send (important details)
-3. Bind to Send (ephemeral, arbitrary) 
-
-
-## Summary
-- When you are listening you are always binding (to) and listening at a local bound socket (ip + port) that is always your ip-address, but the 'port' may be arbitrarily given any description, name, title, or role. Port 8765 may be called "Bob's baseball lunch port" and port 5678 may be called "Alice's baroque quartet dinner port." The IP is 'decided' by what your local hardware allows, it physically yours and must be. The port exists more abstractly in social-agreement space, it may be described as 'belonging' to anyone or anything or nothing.  
-
-- When sending you are always aiming at (but neither 'binding' to nor 'connecting' to) the socket (ip + port) that the recipient is bound to and listening at. (As a formality you have to first have bound to some, any, socket to have outside access to in order to send something, but that is arbitrary and has nothing to do with the recipient-listener's socket specifications.) 
-
-- UDP is 'connectionless' and does not involve any 'connections' in jargon terms.
-
-
-# Meeting-Desks vs. "Mailboxes": Ports and IP and Sockets and Binding-for-Listening
-Some info-tainment examples use mailboxes and datagrams to illustrate UDP. Uma has two in-trays for the meeting-room shared by collaborators, but there is no single 'mailbox' or single port.
-
-Even if the rules above seem straight forward, hopefully they do enough (bind to your thing to list, aim at their thing to send, etc.) you may have spotted a potentially less-clear area waiting in the eves. IP is physical and concrete and always locally yours, but if ports are highly arbitrary, then you may be sometimes listening at and binding to (or aiming at to send to) "someone else's port" paired with (always) your own IP, and sometimes to a port "assigned" to you. 
-
-To clarify this (and perhaps head off how it can sound confusing) let's clearly lay out all the situations for Uma, and show that these specifications can be clearly documented in the variable names so no one gets lost in the arbitrariness. Again, the raw agreements are abstract, but the roles are locally-interpreted. "Mine and yours" have opposite meanings for Alice and for Bob.
-
-
-[Listen: The Three Listen Cases]
-Alice listens using the Local User Desk handler function:
-- Alice listens at her own in-tray, 
-so Alice sets up a binding-for-listening at her port
-(old) local_user_intray_port__your_desk_you_listen,
-localuser_intray_port__yourdesk_youlisten__bind_yourlocal_ip
-(your port, your IP, bind to socket)
-
-
-Alice listens using the Remote Collaborator Desk Handler:
-- Alice listens for Bob's 'I'm Ready' signal, so Alice sets up a binding-for-listening (at her own IP-address) at Bob's port
-(old) remote_collaborator_ready_port__their_desk_you_listen
-      remote_collaborator_ready_port__their_desk_you_listen,
-remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip
-
-(their port, your IP, bind to socket)
-
-Alice listens using the Remote Collaborator Desk Handler:
-- Alice listens for Bob's 'I got it!' signal, so Alice sets up a binding-for-listening (at her own IP-address) at Bob's port
-(old) remote_collaborator_gotit_port__their_desk_you_listen,
-remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip
-(their port, your IP, bind to socket)
-
-[Send: The Three Send Cases]
-Alice sends using the Remote Collaborator Desk Handler:
-- Alice sends to Bob's desk in-tray, so Alice 
-(sets up an ephemeral binding-for-sending and) 
-Aims-At & sends to Bob's port
-(old) remote_collaborator_intray_port__their_desk_you_send,
-remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip
-(their port, their IP, aim at socket)
-
-Alice sends using the Local User Desk handler:
-- Alice sends her own 'I'm Ready' signal, so Alice 
-(sets up an ephemeral binding-for-sending and) 
-Aims-At & sends to her own port
-(old) local_user_ready_port__your_desk_you_send,
-local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
-(your port, their IP, aim at socket)
-
-Alice sends using the Local User Desk handler:
-- Alice sends her own 'I Got it!!' signal, so Alice 
-(sets up an ephemeral binding-for-sending and) 
-Aims-At & sends to her own port
-(old) local_user_gotit_port__your_desk_you_send,
-local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip
-(your port, their IP, aim at socket),
-
-
-For Bob, from Bob's point of view, the process description is like Alice's but switches names from Alice to Bob. Each local user sets up local-role processes as 'me' and 'you' (whomever is in those roles).
-
-
-
-## In review:
-- When you listen, you are always binding to an ip+port->socket to listen.
-- The ip-address you bind at is always (can only be) a physical local ip-connection for your local hardware.
-- When you send, (in step 1 of sending) you are arbitrarily binding to something to send from but the important part is that (in step 2 of sendind) you are aiming-at the ip+port->socket that the recipient is bound to listen at.
-- Sending is always aiming at their ip-address (not necessarily 'their desk's port). 
-- When you listen at your own desk (one port) you are using your own ip and your port.
-- When you listen at someone else's desk (a remote collaborator), you listen at their port BUT at YOUR ip.
-- When you send to your own desk (two ports: send "I'm ready" and send "I got it!") you are using your port but THEIR ip (that collaborator's ip-address): aim to send to
-- When you send to your own desk, you use your desk's assigned port but the remote collaborator's ip-address: aim to send
-- When you send to their (remote collaborators) desk you use their port and their ip.
-
-This additional layer is not as easy to hold in your head as the first part. Clear naming, documentation, and careful alignment should help with predictable mistakes due to confusion.
-
-
-
-# Picking ipv6
-
-During startup, UMA will check the local IP addresses:
-```
-fn get_local_ip_addresses() -> std::io::Result<()> {
-Interface: lo
-  Address: 127.0.0.1
-  Netmask: 255.0.0.0
-  Flags: InterfaceFlags(UP | RUNNING | LOOPBACK)
-  Status: Up
-
-fn get_local_ip_addresses() -> std::io::Result<()> {
-Interface: wlp0s20f3
-  Address: 10.0.0.22
-  Netmask: 255.255.255.0
-  Flags: InterfaceFlags(UP | RUNNING | BROADCAST | MULTICAST)
-  Status: Up
-
-fn get_local_ip_addresses() -> std::io::Result<()> {
-Interface: lo
-  Address: ::1
-  Netmask: ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
-  Flags: InterfaceFlags(UP | RUNNING | LOOPBACK)
-  Status: Up
-
-fn get_local_ip_addresses() -> std::io::Result<()> {
-Interface: wlp0s20f3
-  Address: [redacted]
-  Netmask: ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
-  Flags: InterfaceFlags(UP | RUNNING | BROADCAST | MULTICAST)
-  Status: Up
-
-fn get_local_ip_addresses() -> std::io::Result<()> {
-Interface: wlp0s20f3
-  Address: [redacted]
-  Netmask: ffff:ffff:ffff:ffff::
-  Flags: InterfaceFlags(UP | RUNNING | BROADCAST | MULTICAST)
-  Status: Up
-
-fn get_local_ip_addresses() -> std::io::Result<()> {
-Interface: wlp0s20f3
-  Address: [redacted]
-  Netmask: ffff:ffff:ffff:ffff::
-  Flags: InterfaceFlags(UP | RUNNING | BROADCAST | MULTICAST)
-  Status: Up
-```
-
-
-## Link-Local Addresses (Avoid)
-
-### Do Not Use Link-Local Addresses:
-Scope: Link-local addresses (those starting with fe80::) are only valid and usable within the same local network segment (link). They are not routable beyond the local network.
-
-### Link-Local Address Purpose: 
-Link-Local Addresses are typically used for automatic address configuration and communication between devices on the same link, e.g. neighbor discovery protocols.
-
-### Link-Local Address Binding Restrictions: 
-Most operating systems have restrictions on binding UDP sockets to link-local addresses. This is because link-local addresses are not globally unique and can lead to conflicts if used for communication beyond the local link.
-
-
-## IP Address Types:
-
-1. **Loopback Address (127.0.0.1 and ::1):**
-    - **Purpose:** Used for communication within the same machine. When a program sends data to a loopback address, it's essentially sending it to itself.
-    - **Relevance to Uma:**  Uma should **not** use loopback addresses for communication between different instances. They are only useful for testing or internal communication within a single instance.
-
-2. **Private IPv4 Address (10.0.0.22):**
-    - **Purpose:** Used within private networks, such as home or office networks. They are not directly routable on the public internet.
-    - **Relevance to Uma:** Uma can use private IPv4 addresses for communication between instances **within the same private network**. However, if collaborators are on different networks, Uma will need to use public IP addresses.
-
-3. **Global Unicast IPv6 Address (2601:80:4803:9490::52b1 and 2601:80:4803:9490:875a:cb9c:2489:8fe3):**
-    - **Purpose:**  Globally unique and routable on the internet.
-    - **Relevance to Uma:**  These are the **ideal addresses for Uma to use** for communication between collaborators on different networks.
-
-4. **Link-Local IPv6 Address (fe80::1280:3060:5df8:70b5):**
-    - **Purpose:**  Valid and usable only within the same local network segment (link). Not routable beyond the local network.
-    - **Relevance to Uma:** Uma should **avoid using link-local addresses** for inter-instance communication, as they can lead to binding errors and communication failures.
-
-## Recommended:
-
-- **Recommended:** Global unicast IPv6 addresses for communication between instances on different networks.
-- **Acceptable (Within Same Network):** Private IPv4 addresses for communication within the same private network.
-- **Avoid:** Loopback addresses and link-local IPv6 addresses.
-
-## Notes:
-
-- **Interface Names:** The interface names (e.g., "lo" for loopback, "wlp0s20f3" for a wireless interface) can vary depending on the operating system and hardware.
-- **Netmask:** The netmask indicates the portion of the IP address that identifies the network, while the remaining portion identifies the host within that network.
-- **Flags:** The interface flags provide information about the capabilities and status of the interface.
-
-
-
 */
 
 // Set debug flag (future: add time stamp with 24 check)
@@ -310,7 +65,7 @@ use std::io::{
     Error,
     ErrorKind,
     Write,
-    Read,
+    // Read,
 };
 use std::error::Error as StdError; 
 use walkdir::WalkDir;
@@ -321,7 +76,7 @@ use std::path::{
 use std::time::{
     SystemTime, 
     UNIX_EPOCH,
-    Instant,
+    // Instant,
 };
 use std::fs;
 use std::fs::{
@@ -338,17 +93,17 @@ use serde::{
 use std::ffi::OsStr;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::sync::mpsc::channel;
-use std::sync::mpsc::Sender;
+// use std::sync::mpsc::channel;
+// use std::sync::mpsc::Sender;
 
 use std::process::Command;
-
+use std::sync::mpsc;
 
 // For Sync
 use rand::prelude::{
     // SliceRandom,
-    IteratorRandom,
-    // Rng,
+    // IteratorRandom,
+    Rng,
 };
 
 use std::thread;
@@ -636,7 +391,7 @@ fn is_port_in_use(port: u16) -> bool {
 //     break; 
 // }
 /// Function for broadcasting to theads to wrapup and end uma session: quit
-fn should_halt() -> bool {
+fn should_halt_uma() -> bool {
     // 1. Read the 'continue_uma.txt' file
     let file_content = match fs::read_to_string(CONTINUE_UMA_PATH) {
         Ok(content) => content,
@@ -655,7 +410,7 @@ fn should_halt() -> bool {
 /// There are two flags that are checked
 /// regarding shut-down.
 /// There is the normal shoud_continue flag,
-/// which is checked with a should_halt checker.
+/// which is checked with a should_halt_uma checker.
 /// To keep things symetric, there is a parallel
 /// system for hard-reboot, working the same way
 /// with one exception:
@@ -801,6 +556,13 @@ fn get_toml_file_timestamp(file_path: &Path) -> Result<u64, UmaError> {
     Ok(timestamp)
 }
 
+
+// fn get_local_owner_field(field_name: String,)
+
+
+
+
+
 // alpha testing
 #[macro_export] 
 macro_rules! debug_log {
@@ -865,6 +627,7 @@ struct AbstractTeamchannelNodeTomlPortsData {
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 struct MeetingRoomSyncDataset {
     local_user_name: String,
+    local_user_salt_list: Vec<u128>,
     local_user_ipv6_addr_list: Vec<Ipv6Addr>, // list of ip addresses
     local_user_ipv4_addr_list: Vec<Ipv4Addr>, // list of ip addresses
     local_user_public_gpg: String,
@@ -872,7 +635,9 @@ struct MeetingRoomSyncDataset {
     local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip: u16, // locally: 'you' send a signal through your port on your desk
     localuser_intray_port__yourdesk_youlisten__bind_yourlocal_ip: u16, // locally: 'you' listen for files sent by the other collaborator
     local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip: u16, // locally: 'you' send a signal through your port on your desk
+    
     remote_collaborator_name: String,
+    remote_collaborator_salt_list: Vec<u128>,
     remote_collaborator_ipv6_addr_list: Vec<Ipv6Addr>, // list of ip addresses
     remote_collaborator_ipv4_addr_list: Vec<Ipv4Addr>, // list of ip addresses
     remote_collaborator_public_gpg: String,
@@ -887,6 +652,9 @@ struct MeetingRoomSyncDataset {
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 struct ForLocalOwnerDeskThread {
     local_user_name: String,
+    remote_collaborator_name: String,
+    local_user_salt_list: Vec<u128>,
+    remote_collaborator_salt_list: Vec<u128>,
     local_user_ipv6_addr_list: Vec<Ipv6Addr>, // list of ip addresses
     local_user_ipv4_addr_list: Vec<Ipv4Addr>, // list of ip addresses
     local_user_public_gpg: String,
@@ -901,6 +669,9 @@ struct ForLocalOwnerDeskThread {
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 struct ForRemoteCollaboratorDeskThread {
     remote_collaborator_name: String,
+    local_user_name: String,
+    remote_collaborator_salt_list: Vec<u128>,
+    local_user_salt_list: Vec<u128>,
     remote_collaborator_ipv6_addr_list: Vec<Ipv6Addr>, // list of ip addresses
     remote_collaborator_ipv4_addr_list: Vec<Ipv4Addr>, // list of ip addresses
     remote_collaborator_public_gpg: String,
@@ -980,7 +751,47 @@ fn translate_port_assignments(
     })
 }
 
+/// Encrypts data using GPG with the specified recipient's public key.
+///
+/// This function uses the `gpg` command-line tool to encrypt the data. It assumes that `gpg`
+/// is installed and accessible in the system's PATH. 
+///
+/// # Arguments 
+///
+/// * `data`: The data to encrypt as a byte slice.
+/// * `recipient_public_key`: The recipient's public GPG key. 
+///
+/// # Returns 
+/// 
+/// * `Result<Vec<u8>, UmaError>`:  A `Result` containing the encrypted data as a `Vec<u8>` on success,
+///   or a `UmaError` on failure.
+fn encrypt_with_gpg(data: &[u8], recipient_public_key: &str) -> Result<Vec<u8>, UmaError> {
+    let mut child = Command::new("gpg")
+        .arg("--encrypt")
+        .arg("--recipient")
+        .arg(recipient_public_key)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped()) 
+        .spawn()?;
 
+    // Write the data to encrypt to the GPG process's standard input
+    {
+        let stdin = child.stdin.as_mut().ok_or_else(|| UmaError::NetworkError("Failed to open stdin for GPG process".to_string()))?;
+        stdin.write_all(data)?; 
+    }
+
+    let output = child.wait_with_output()?;
+
+    if output.status.success() {
+        Ok(output.stdout) // Return the encrypted data
+    } else {
+        // Log the GPG error 
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        debug_log!("GPG encryption error: {}", stderr);
+        Err(UmaError::NetworkError(format!("GPG encryption failed: {}", stderr)))
+    }
+}
 
 
 // // Helper function for translate_port_assignments
@@ -1532,10 +1343,43 @@ impl LocalUserUma {
     }
 }
 
+/// Extract Salt Value:
+/// It uses get("user_salt") to access the user_salt field in the TOML data.
+/// and_then(Value::as_integer) attempts to convert the value to an integer.
+/// and_then(|salt| salt.try_into().ok()) attempts to convert the integer to a u8.
+/// ok_or_else(|| ...) handles the case where the salt is missing or invalid, 
+/// returning a UmaError::InvalidData.
+fn get_team_member_collaborator_salt(collaborator_name: &str) -> Result<u8, UmaError> {
+    // 1. Construct File Path
+    let file_path = Path::new("project_graph_data/collaborator_files_address_book")
+        .join(format!("{}__collaborator.toml", collaborator_name));
+
+    // 2. Read File Contents
+    let toml_string = fs::read_to_string(&file_path)?;
+
+    // 3. Parse TOML Data
+    let toml_value: Value = toml::from_str(&toml_string)?;
+
+    // 4. Extract Salt Value
+    let user_salt: u8 = toml_value
+        .get("user_salt")
+        .and_then(Value::as_integer)
+        .and_then(|salt| salt.try_into().ok())
+        .ok_or_else(|| {
+            UmaError::InvalidData(format!(
+                "Missing or invalid 'user_salt' in collaborator file: {}",
+                file_path.display()
+            ))
+        })?;
+
+    // 5. Return Salt
+    Ok(user_salt)
+}
 
 #[derive(Debug, Deserialize, serde::Serialize, Clone)]
 struct CollaboratorTomlData {
     user_name: String,
+    user_salt_list: Vec<u128>,
     ipv4_addresses: Option<Vec<Ipv4Addr>>,
     ipv6_addresses: Option<Vec<Ipv6Addr>>,
     gpg_key_public: String,
@@ -1546,6 +1390,7 @@ struct CollaboratorTomlData {
 impl CollaboratorTomlData {
     fn new(
         user_name: String, 
+        user_salt_list: Vec<u128>,
         ipv4_addresses: Option<Vec<Ipv4Addr>>,
         ipv6_addresses: Option<Vec<Ipv6Addr>>,
         gpg_key_public: String, 
@@ -1554,6 +1399,7 @@ impl CollaboratorTomlData {
     ) -> CollaboratorTomlData {
         CollaboratorTomlData {
             user_name,
+            user_salt_list, 
             ipv4_addresses,
             ipv6_addresses,
             gpg_key_public,
@@ -1565,9 +1411,9 @@ impl CollaboratorTomlData {
     // Add any other methods you need here
 }
 
-
 fn add_collaborator_setup_file(
     user_name: String,
+    user_salt_list: Vec<u128>,
     ipv4_addresses: Option<Vec<Ipv4Addr>>,
     ipv6_addresses: Option<Vec<Ipv6Addr>>,
     gpg_key_public: String,
@@ -1578,6 +1424,7 @@ fn add_collaborator_setup_file(
     // Create the CollaboratorTomlData instance using the existing new() method:
     let collaborator = CollaboratorTomlData::new(
         user_name, 
+        user_salt_list,
         ipv4_addresses,
         ipv6_addresses, 
         gpg_key_public,
@@ -1585,6 +1432,13 @@ fn add_collaborator_setup_file(
         updated_at_timestamp,
     );
 
+    // maybe not needed as salts are required input
+    // // Generate 4 random u128 salts
+    // let user_salt_list: Vec<u128> = (0..4)
+    //     .map(|_| rand::thread_rng().gen())
+    //     .collect();
+    
+    
     // Serialize the data:
     let toml_string = toml::to_string(&collaborator).map_err(|e| {
         std::io::Error::new(
@@ -1653,14 +1507,40 @@ fn add_collaborator_qa(
     graph_navigation_instance_state: &GraphNavigationInstanceState
 ) -> Result<(), io::Error> {
 
-    println!("Enter collaborator username:");
-    let mut username = String::new();
-    io::stdin().read_line(&mut username)?;
-    let username = username.trim().to_string();
+    println!("Name: Enter collaborator user name:");
+    let mut new_username = String::new();
+    io::stdin().read_line(&mut new_username)?;
+    let new_username = new_username.trim().to_string();
 
+    // Salt List!
+    println!("Salt List: Press Enter for random, or type 'manual' for manual input");
+    let mut new_usersalt_list_input = String::new();
+    io::stdin().read_line(&mut new_usersalt_list_input)?;
+    let new_usersalt_list_input = new_usersalt_list_input.trim().to_string();
 
+    let new_usersalt_list: Vec<u128> = if new_usersalt_list_input == "manual" {
+        let mut salts = Vec::new();
+        for i in 1..=4 {
+            println!("Enter salt {} (u128):", i);
+            let mut salt_input = String::new();
+            io::stdin().read_line(&mut salt_input)?;
+            let salt: u128 = salt_input.trim().parse().expect("Invalid input, so using u128 input for salt");
+            salts.push(salt);
+        }
+        salts
+    } else {
+        // Generate 4 random u128 salts
+        (0..4)
+            .map(|_| rand::thread_rng().gen())
+            .collect()
+    };
+    
+    println!("Using salts: {:?}", new_usersalt_list);
+    
+    
     // choice...
     // Get IP address input method
+    // TODO for auto-detect don't use local-only ports... duh!!
     println!("Do you want to auto-detect IPv6 and IPv4? ('yes' or 'no' for manual input)");
     let mut pick_ip_find_method = String::new();
     io::stdin().read_line(&mut pick_ip_find_method)?;
@@ -1699,19 +1579,10 @@ fn add_collaborator_qa(
         (ipv4_addresses, ipv6_addresses) // Return the manually entered addresses
     };
 
-    
-    
-    println!("Enter the collaborator's public GPG key:");
+    println!("Enter the collaborator's public GPG key (public, NOT PRIVATE!!):");
     let mut gpg_key_public = String::new();
     io::stdin().read_line(&mut gpg_key_public)?; 
     let gpg_key_public = gpg_key_public.trim().to_string();
-
-    println!("Enter the collaborator's sync file transfer port (default: 40000):");
-    let mut sync_port_input = String::new();
-    io::stdin().read_line(&mut sync_port_input)?; 
-
-    // Generate a random port within the desired range
-    let mut rng = rand::thread_rng(); 
 
     println!("Enter the collaborator's sync interval in seconds (default: 60):");
     let mut sync_interval_input = String::new();
@@ -1719,7 +1590,7 @@ fn add_collaborator_qa(
     let sync_interval: u64 = sync_interval_input.trim().parse().unwrap_or(60);
 
     // Error Handling (You'll want to add more robust error handling here)
-    if username.is_empty() { 
+    if new_username.is_empty() { 
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
             "Username cannot be empty",
@@ -1727,17 +1598,14 @@ fn add_collaborator_qa(
     }
 
     // Create the CollaboratorTomlData struct
-    // updated_at_now = SystemTime::now()
-    
-    // TODO: port not listed here anymore
-    
     let new_collaborator = CollaboratorTomlData::new(
-        username,
+        new_username, // for: user_name
+        new_usersalt_list, // for: user_salt
         ipv4_addresses, 
         ipv6_addresses, 
         gpg_key_public, 
-        sync_interval,
-        get_current_unix_timestamp(),
+        sync_interval, 
+        get_current_unix_timestamp(), // for: updated_at_timestamp
     ); 
 
     // Load existing collaborators from files
@@ -1768,6 +1636,7 @@ fn add_collaborator_qa(
     // Persist the new collaborator
     add_collaborator_setup_file(
         new_collaborator.user_name.clone(), 
+        new_collaborator.user_salt_list.clone(), 
         new_collaborator.ipv4_addresses, 
         new_collaborator.ipv6_addresses,
         new_collaborator.gpg_key_public, 
@@ -2112,7 +1981,7 @@ struct CoreNode {
 }
 
 
-/// update_collaborator_timestamp_log
+/// update_collaborator_sendqueue_timestamp_log
 /// ### making a new timestamp (maybe good to do each session)
 /// 1. pick a target collaborator
 /// 2. make sure path exists:
@@ -2135,7 +2004,7 @@ struct CoreNode {
 /// sync_data/team_channel/collaborator_name/back_of_queue_timestamp
 /// ```
 /// - Note: the paper trail of timestamps allows backtracking easily for error correction. quick sort to e.g. go-back-five 
-fn update_collaborator_timestamp_log(
+fn update_collaborator_sendqueue_timestamp_log(
     team_channel_name: &str,
     collaborator_name: &str,
 ) -> Result<u64, UmaError> {
@@ -2180,61 +2049,6 @@ fn update_collaborator_timestamp_log(
     Ok(back_of_queue_timestamp)
 }
 
-
-/// --- making a fresh send_queue ---
-/// 1. pick a target_collaborator
-/// 2. get the back_of_queue_timestamp
-/// ```path
-/// sync_data/team_channel/collaborator_name/back_of_queue_timestamp
-/// ```
-/// 3. crawl through the files and subdirectories (recursively) in the teamchannel (only the team_channel directory tree, not all of uma) looking at files:
-/// 4. if a .toml file, 
-/// 5. if owner=target_collaborator, 
-/// 6. if updated_at_timestamp exists
-/// 7. if updated_at_timestamp > back_of_queue_timestamp
-/// 8. add that filepath to the sene_queue
-/// - Note: this only has to be done once after getting a first-in-session ready-signal from a collaborator, after that any new file made (e.g. a new message) is added to the queue automatically. Though this can be repeated any time, e.g. in case of error or if requested.
-fn create_fresh_send_queue(
-    team_channel_name: &str,
-    collaborator_name: &str,
-) -> Result<Vec<PathBuf>, UmaError> {
-    let sync_data_dir = PathBuf::from("sync_data")
-        .join(team_channel_name)
-        .join(collaborator_name);
-
-    // 2. Get back_of_queue_timestamp
-    let timestamp_file_path = sync_data_dir.join("back_of_queue_timestamp");
-    let back_of_queue_timestamp = fs::read_to_string(timestamp_file_path)?
-        .parse::<u64>()?;
-
-    let mut send_queue = Vec::new();
-
-    // 3. Crawl through the team channel directory tree
-    for entry in WalkDir::new(PathBuf::from("project_graph_data").join(team_channel_name)) {
-        let entry = entry?;
-        if entry.file_type().is_file() && entry.path().extension() == Some(OsStr::new("toml")) {
-            // 4. If a .toml file
-            let toml_string = fs::read_to_string(entry.path())?;
-            let toml_value: Value = toml::from_str(&toml_string)?;
-
-            // 5. If owner = target collaborator
-            if toml_value.get("owner").and_then(Value::as_str) == Some(collaborator_name) {
-                // 6. If updated_at_timestamp exists
-                if let Some(timestamp) = toml_value.get("updated_at_timestamp").and_then(Value::as_integer) {
-                    let timestamp = timestamp as u64;
-
-                    // 7. If updated_at_timestamp > back_of_queue_timestamp
-                    if timestamp > back_of_queue_timestamp {
-                        // 8. Add filepath to send_queue
-                        send_queue.push(entry.path().to_path_buf());
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(send_queue)
-}
 
 
 
@@ -2928,7 +2742,7 @@ fn initialize_uma_application() -> Result<(), Box<dyn std::error::Error>> {
     /////////////////////
 
     // 1. Create the archive directory if it doesn't exist.
-    /// saves archives not in the project_graph_data directory, not for sync
+    // saves archives not in the project_graph_data directory, not for sync
     let mut uma_archive_dir = PathBuf::new(); // Start with an empty PathBuf safe path os
     uma_archive_dir.push("uma_archive");    // Push the 'uma_archive' directory
     uma_archive_dir.push("logs");            // Push the 'logs' subdirectory
@@ -3099,9 +2913,38 @@ fn initialize_uma_application() -> Result<(), Box<dyn std::error::Error>> {
         
         // let updated_at_timestamp = get_current_unix_timestamp()
         
+
+        // Salt List!
+        println!("Salt List: Press Enter for random, or type 'manual' for manual input");
+        let mut new_usersalt_list_input = String::new();
+        io::stdin().read_line(&mut new_usersalt_list_input)?;
+        let new_usersalt_list_input = new_usersalt_list_input.trim().to_string();
+    
+        let new_usersalt_list: Vec<u128> = if new_usersalt_list_input == "manual" {
+            let mut salts = Vec::new();
+            for i in 1..=4 {
+                println!("Enter salt {} (u128):", i);
+                let mut salt_input = String::new();
+                io::stdin().read_line(&mut salt_input)?;
+                let salt: u128 = salt_input.trim().parse().expect("Invalid input, so using u128 input for salt");
+                salts.push(salt);
+            }
+            salts
+        } else {
+            // Generate 4 random u128 salts
+            (0..4)
+                .map(|_| rand::thread_rng().gen())
+                .collect()
+        };
+        
+        println!("Using salts: {:?}", new_usersalt_list);
+        
+        
+        
         // // Add a new user to Uma file system
         add_collaborator_setup_file(
             username, 
+            new_usersalt_list,
             ipv4_addresses, 
             ipv6_addresses, 
             gpg_key_public, 
@@ -3743,6 +3586,15 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
         &filtered_collaboratorsarray
     );
 
+    // --- Get local user's salt list ---
+    let local_user_salt_list = match get_addressbook_file_by_username(uma_local_owner_user) {
+        Ok(data) => data.user_salt_list,
+        Err(e) => {
+            debug_log!("Error loading local user's salt list: {}", e);
+            return Err(e); 
+        }
+    };     
+    
     // --- 7. Iterate through the filtered address-book-name-list ---
     // Go through the list make a set of meeting room information for each team-member, 
     // so that you (e.g. Alice) can sync with other team members.
@@ -3837,15 +3689,27 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
             { name = "bob", ready_port = 50004, intray_port = 50005, gotit_port = 50006 },
         ]
         */
+    
+
+    
+        // --- Get local user's salt list ---
+        // let remote_collaborator_salt_list = match get_addressbook_file_by_username(collaborator_name.clone()) {
+        let remote_collaborator_salt_list = match get_addressbook_file_by_username(&collaborator_name.clone()) {
+            Ok(data) => data.user_salt_list,
+            Err(e) => {
+                debug_log!("Error loading local user's salt list: {}", e);
+                return Err(e); 
+            }
+        }; 
 
         // --- 11. Construct MeetingRoomSyncDataset (struct) ---
         // Assemble this one meeting room data-bundle from multiple sources
         // - from node.toml data
         // - from addressbook data
         // - from Instance-Role-Specific Local-Meeting-Room-Struct
-        let mut meeting_room_sync_data = MeetingRoomSyncDataset {
+        let meeting_room_sync_data = MeetingRoomSyncDataset {
             local_user_name: uma_local_owner_user.to_string(),  // TODO source?
-            
+            local_user_salt_list: local_user_salt_list.clone(), // Include the local salt list
             local_user_ipv6_addr_list: these_collaboratorfiles_toml_data.ipv6_addresses.clone().unwrap_or_default(), // Assuming you want to use the first IPv6 address for the local user
             // local_user_ipv6_addr_list: these_collaboratorfiles_toml_data.ipv6_addresses.expect("REASON"), // Assuming you want to use the first IPv6 address for the local user
             local_user_ipv4_addr_list: these_collaboratorfiles_toml_data.ipv4_addresses.clone().unwrap_or_default(), // Get IPv4 addresses or an empty vector
@@ -3858,7 +3722,7 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
             local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip: role_based_ports.local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip,
             
             remote_collaborator_name: collaborator_name.clone(), // TODO source?
-            
+            remote_collaborator_salt_list: remote_collaborator_salt_list,
             remote_collaborator_ipv6_addr_list: these_collaboratorfiles_toml_data.ipv6_addresses.unwrap_or_default(), // Get ip addresses or empty vector
             remote_collaborator_ipv4_addr_list: these_collaboratorfiles_toml_data.ipv4_addresses.unwrap_or_default(), // Get IP addresses or empty vector
             // remote_collaborator_ipv6_addr_list: these_collaboratorfiles_toml_data.ipv6_addresses.expect("REASON"), // Get ip addresses or empty vector
@@ -3915,6 +3779,269 @@ fn send_hello_signal(target_addr: SocketAddr) -> Result<(), io::Error> {
 // }
 
 
+/// Calculates the Pearson hash of a given input slice.
+fn pearson_hash_base(input_u8_int: &[u8]) -> Result<u8, std::io::Error> {  // Returns std::io::Error
+    /*
+    use with:
+                match pearson_hash_base(&salted_data) {
+                Ok(hash) => hashes.push(hash), // Push the hash if successful
+                Err(e) => {
+                    // Handle the error from pearson_hash_base
+                    // Optional: log the error and return None:
+                    debug_log!("Error calculating Pearson hash: {}", e);
+                    return None; 
+                }
+            }
+    */
+    // based on: https://en.wikipedia.org/wiki/Pearson_hashing
+    // based on: https://hashing.mojoauth.com/pearson-hashing-in-rust/
+    let mut p_hash_table = [0u8; 256];
+    for p_iter_item in 0..256 {
+        // Explicit pattern matching
+        let u8_value: u8 = (p_iter_item % 256).try_into().map_err(|_| {
+            std::io::Error::new(std::io::ErrorKind::InvalidData, "usize value too large for u8")
+        })?;
+        p_hash_table[p_iter_item] = (p_iter_item as u8).wrapping_sub(u8_value);
+    }
+    // for p_iter_item in 0..256 {
+    //     p_hash_table[p_iter_item] = (p_iter_item as u8).wrapping_sub(p_iter_item % 256);
+    // }
+    
+    let mut pearson_hash_output: u8 = 0;
+    for p_iter_byte in input_u8_int {
+        pearson_hash_output = p_hash_table[(pearson_hash_output ^ p_iter_byte) as usize];
+    }
+    Ok(pearson_hash_output)
+}
+
+
+// /// person hash of ready signal struct
+// /// uses: pearson_hash_base(input_u8_int: &[u8])
+// fn ready_signal_struct_to_pearson_hash(signal: &ReadySignal) -> Option<u8> {
+//     if let (Some(timestamp), Some(echo_send)) = (signal.rt, signal.re) {
+//         let mut data_to_hash = Vec::new();
+//         data_to_hash.extend_from_slice(×tamp.to_be_bytes());
+//         data_to_hash.push(if echo_send { 1 } else { 0 });
+//         Some(pearson_hash_base(&data_to_hash))
+//     } else {
+//         None // Handle the case where rt or re is None
+//     }
+// }
+
+
+/// Add Pearson hashes to ReadySignal struct
+/// Uses: pearson_hash_base(input_u8_int: &[u8])
+/// to an array Vec<u8> of four hashes, from two salts
+fn add_pearson_hash_to_readysignal_struct(
+    signal: &ReadySignal,
+    local_user_salt_list: &[u128], 
+) -> Option<ReadySignal> {
+    if let (Some(rt), Some(rst), Some(re)) = (signal.rt, signal.rst, signal.re) {
+        let mut data_to_hash = Vec::new();
+        data_to_hash.extend_from_slice(&rt.to_be_bytes());
+        data_to_hash.extend_from_slice(&rst.to_be_bytes()); // Add rst to the hash
+        data_to_hash.push(if re { 1 } else { 0 });
+
+        let mut hashes: Vec<u8> = Vec::new();
+        for salt in local_user_salt_list {
+            let mut salted_data = data_to_hash.clone();
+            salted_data.extend_from_slice(&salt.to_be_bytes());
+            match pearson_hash_base(&salted_data) {
+                Ok(hash) => hashes.push(hash),
+                Err(e) => {
+                    debug_log!("Error calculating Pearson hash: {}", e);
+                    return None;
+                }
+            }
+        }
+
+        Some(ReadySignal {
+            rt: Some(rt),
+            rst: Some(rst),
+            re: Some(re),
+            rh: Some(hashes), 
+        })
+    } else {
+        None 
+    }
+}
+
+
+/// Verifies the Pearson hashes in a ReadySignal against a provided salt list.
+///
+/// This function calculates the expected hashes based on the `rt`, `rst`, and `re` fields of the `ReadySignal`
+/// and the provided `salt_list`. It then compares the calculated hashes to the `rh` field of the `ReadySignal`.
+///
+/// # Arguments
+///
+/// * `ready_signal`: The ReadySignal to verify.
+/// * `salt_list`: The list of salts to use for hash calculation.
+///
+/// # Returns
+///
+/// * `bool`: `true` if all hashes match, `false` otherwise.
+fn verify_readysignal_hashes(
+    ready_signal: &ReadySignal, 
+    salt_list: &[u128]
+) -> bool {
+    if let (Some(rt), Some(rst), Some(re), Some(rh)) = 
+        (ready_signal.rt, ready_signal.rst, ready_signal.re, &ready_signal.rh) 
+    {
+        let mut data_to_hash = Vec::new();
+        data_to_hash.extend_from_slice(&rt.to_be_bytes());
+        data_to_hash.extend_from_slice(&rst.to_be_bytes()); 
+        data_to_hash.push(if re { 1 } else { 0 });
+
+        for (i, salt) in salt_list.iter().enumerate() {
+            let mut salted_data = data_to_hash.clone();
+            salted_data.extend_from_slice(&salt.to_be_bytes());
+            match pearson_hash_base(&salted_data) {
+                Ok(calculated_hash) => {
+                    if calculated_hash != rh[i] { // Compare with the received hash
+                        return false; // Hash mismatch
+                    }
+                }
+                Err(e) => {
+                    debug_log!("Error calculating Pearson hash: {}", e);
+                    return false; // Error during hash calculation
+                }
+            }
+        }
+
+        // All hashes match
+        true 
+    } else {
+        // Missing fields in ReadySignal, consider this a failure 
+        false 
+    }
+}
+
+/// Add Pearson hashes to ReadySignal struct
+/// Uses: pearson_hash_base(input_u8_int: &[u8])
+/// to an array Vec<u8> of four hashes, from two salts
+/// h1: Option<u8>, // hash with salt1
+/// h2: Option<u8>, // hash with salt2
+/// h3: Option<u8>, // hash with salt3  
+/// h4: Option<u8>, // hash with salt4
+// fn add_pearson_hash_to_readysignal_struct(
+//     signal: &ReadySignal,
+//     local_user_salt_list: &[u128], // Use u8 for salts
+// ) -> Option<ReadySignal> {
+//     if let (
+//         Some(rt),
+//         Some(rst), 
+//         Some(re),
+//         ) = (
+//             signal.rt,
+//             signal.rst, 
+//             signal.re,
+//             ) {
+//         let mut data_to_hash = Vec::new();
+//         data_to_hash.extend_from_slice(&rt.to_be_bytes());
+//         data_to_hash.push(if re { 1 } else { 0 });
+
+//         // Calculate the four hashes (with list of four salts)
+//         // Calculate hashes using each salt
+//         let mut hashes: Vec<u8> = Vec::new();
+//         for salt in local_user_salt_list {
+//             // ... (Your existing code) ...
+
+//             // Handle the Result from pearson_hash_base
+//             match pearson_hash_base(&salted_data) {
+//                 Ok(hash) => hashes.push(hash), // Push the hash if successful
+//                 Err(e) => {
+//                     // Handle the error from pearson_hash_base. 
+//                     // You might want to log the error and return None:
+//                     debug_log!("Error calculating Pearson hash: {}", e);
+//                     return None; 
+//                 }
+//             }
+//         }
+//         // for salt in local_user_salt_list {
+//         //     let mut salted_data = data_to_hash.clone(); // Clone the base data for each salt
+//         //     salted_data.extend_from_slice(&salt.to_be_bytes()); // Append the salt
+//         //     // Convert std::io::Error to UmaError// Calculate and add the hash
+//         //     let hash = pearson_hash_base(data).map_err(UmaError::from)?; 
+//         // }
+
+//         // Create a new ReadySignal with the hashes
+//         Some(ReadySignal {
+//             rt: Some(rt),
+//             rst: Some(rst),
+//             re: Some(re),
+//             rh: Some(hashes), // Store hashes in a Vec<u8>
+//         })
+//     } else {
+//         None // Handle the case where rt or re is None
+//     }
+// }
+
+// fn add_pearson_hash_to_readysignal_struct(
+//     signal: &ReadySignal,
+//     local_user_salt_list: vec<u128>, // Use u8 for salts
+// ) -> Option<ReadySignal> {
+//     if let (
+//         Some(rt),
+//         Some(rst), 
+//         Some(re),
+//         ) = (
+//             signal.rt,
+//             signal.rst, 
+//             signal.re,
+//             ) {
+//         let mut data_to_hash = Vec::new();
+//         data_to_hash.extend_from_slice(×tamp.to_be_bytes());
+//         data_to_hash.push(if echo_send { 1 } else { 0 });
+
+//         // Calculate the four hashes (with list of four salts)
+//         // Calculate hashes using each salt
+//         let mut hashes: Vec<u8> = Vec::new();
+//         for salt in local_user_salt_list {
+//             let mut salted_data = data_to_hash.clone(); // Clone the base data for each salt
+//             salted_data.extend_from_slice(&salt.to_be_bytes()); // Append the salt
+//             hashes.push(pearson_hash_base(&salted_data)); // Calculate and add the hash
+//         }
+
+//         // Create a new ReadySignal with the hashes
+//         Some(ReadySignal {
+//             rt: Some(timestamp),
+//             re: Some(echo_send),
+//             rh: Some(vec![hash1, hash2, hash3, hash4]), // Store hashes in a Vec<u8>
+//         })
+//     } else {
+//         None // Handle the case where rt or re is None
+//     }
+// }
+
+// /// Add Pearson hashes to ReadySignal struct
+// /// Uses: pearson_hash_base(input_u8_int: &[u8])
+// /// to an array Vec<u8> of four hashes, from two salts
+// /// h1: Option<u8>, // hash with salt1
+// /// h2: Option<u8>, // hash with salt2
+// /// h3: Option<u8>, // hash with salt1 + salt2
+// /// h4: Option<u8>, // hash with salt1 - salt2 (abs?)
+// fn add_pearson_hash_to_readysignal_struct(
+//     signal: &ReadySignal,
+//     local_user_salt: u64,
+//     ) -> Option<ReadySignal> {
+//     if let (Some(timestamp), Some(echo_send)) = (signal.rt, signal.re) {
+//         let mut data_to_hash = Vec::new();
+//         data_to_hash.extend_from_slice(×tamp.to_be_bytes());
+//         data_to_hash.push(if echo_send { 1 } else { 0 });
+//         ? data_to_hash. local_user_salt ; //todo
+//         let hash = pearson_hash_base(&data_to_hash);
+
+//         // Create a new ReadySignal with the hash
+//         Some(ReadySignal {
+//             rt: Some(timestamp),
+//             re: Some(echo_send),
+//             rh: Some(format!("{:x}", hash)), // Convert hash to hexadecimal string
+//         })
+//     } else {
+//         None // Handle the case where rt or re is None
+//     }
+// }
+
 fn sync_flag_ok_or_wait(wait_this_many_seconds: u64) {
     // check for quit
     loop {
@@ -3947,6 +4074,126 @@ fn sync_flag_ok_or_wait(wait_this_many_seconds: u64) {
     }
 }
 
+
+/// ### four byte array nearly 30 year timestamp v1
+/// ## posix time scale notes
+/// ```
+/// (u1 to 1; u2 to 2; u4 to 8)
+/// 1  1 			= 1 sec
+/// 2  10			= 10 sec
+/// (u8 to 256)
+/// 3  100		= 1.67 min
+/// (u16 to 65,536; 256^2)
+/// 4  1000		= 16.7 minutes
+/// 5  10000		= 2.7 hours
+/// (u32 to 16,777,216; 256^3)
+/// 6  100000		= 1.157 days / 0.165 weeks
+/// 7  1000000 	= 0.381 months / 1.65 Weeks
+/// 8  10000000	= 3.81 months / .317 years
+/// (u64 to 4,294,967,296; 245^4)
+/// 9  100000000	= 3.17 years
+/// 10 1000000000	= 31.7 years
+/// 11 10000000000	= 317 years
+/// 12 100000000000	= 3171 years
+/// ```
+/// ## Compressed nonce-like timestamp freshness proxy
+/// Use a four u8 byte array to get a nearly 31 year nonce timestamp
+///
+/// You need 8 digits: (skip the seconds digit)
+/// ```
+/// 10 (10sec) ->  100000000 (3.17 years)
+/// +
+/// some information about the 10th digit
+/// ```
+///
+/// byte 1:
+/// - digit 2 		(in the ones place)
+/// - digit 3 		(in the tens place)
+/// - fragment-1	(in the hundreds' place), not mod !%2
+///
+/// byte 2:
+/// - digit 4 		(in the ones place)
+/// - digit 5 		(in the tens place)
+/// - fragment-2	(in the hundreds' place), not mod !%3
+///
+/// byte 3:
+/// - digit 6 		(in the ones place)
+/// - digit 7 		(in the tens place)
+/// - fragment-3	(in the hundreds' place), not 0 or 4
+///
+/// byte 4:
+/// - digit 8 		(in the ones place)
+/// - digit 9 		(in the tens place)
+/// - fragment-4	(in the hundreds' place), is prime
+///
+/// 10th digit fragments:
+/// 1. not mod !%2
+/// 2. not mod !%3
+/// 3. not 0 or 4
+/// 4. is prime
+///
+/// ## One Collision Case
+/// The "5" value and "7" value from the compressed 10th-digit(31 year scale) collide, but at least most information from the 10th-digit could be expressed. 
+/// - The largest u32 number is: 16,777,216
+/// - The largest u64 number is: 4,294,967,296 (Feb 7, year:2106)
+/// - With the exception of 5 vs 7 in the last place, this system can mostly reflect posix time up to 9,999,999,999, (or Saturday, November 20, year:2286 5:46:39 PM) which is more than u64 can.
+///
+/// ### Without Bit Manipulation
+/// This works without bitwise operations (fun though those are).
+/// There are four u8 (unsigned 8-bit) values,
+/// each of which can hold (in decimal terms)
+/// up to 0-255
+/// including 199
+/// The hundres's place can safely be 1 or 0 (though it can be 2 also if we know the whole value is less than 255).
+///
+/// ## future research
+/// For specified time ranges a smaller system should be possible.
+/// e.g. if only months and not minutes are needed
+fn generate_terse_timestamp_freshness_proxy_v4(posix_timestamp: u64) -> [u8; 4] {
+
+    // 1. Extract relevant digits
+    let digit_2 = ((posix_timestamp / 10) % 10) as u8;
+    let digit_3 = ((posix_timestamp / 100) % 10) as u8;
+    let digit_4 = ((posix_timestamp / 1000) % 10) as u8;
+    let digit_5 = ((posix_timestamp / 10000) % 10) as u8;
+    let digit_6 = ((posix_timestamp / 100000) % 10) as u8;
+    let digit_7 = ((posix_timestamp / 1000000) % 10) as u8;
+    let digit_8 = ((posix_timestamp / 10000000) % 10) as u8;
+    let digit_9 = ((posix_timestamp / 100000000) % 10) as u8;
+    let digit_10 = ((posix_timestamp / 1000000000) % 10) as u8;
+
+    // 2. Determine 10th digit fragments
+    let fragment_1 = (digit_10 % 2 != 0) as u8;
+    let fragment_2 = (digit_10 % 3 != 0) as u8;
+    let fragment_3 = (digit_10 != 0 && digit_10 != 4) as u8;
+    let fragment_4 = (is_prime(digit_10)) as u8;
+
+    // 3. Pack into u8 array (4 bytes, fragment in hundreds place)
+    //let packed_timestamp = [
+    //    (fragment_1 * 100) + (digit_2 * 10) + digit_3, 
+    //    (fragment_2 * 100) + (digit_4 * 10) + digit_5,
+    //    (fragment_3 * 100) + (digit_6 * 10) + digit_7,
+    //    (fragment_4 * 100) + (digit_8 * 10) + digit_9,
+    //];
+
+    // For readability, left to right
+    let packed_timestamp = [
+        (fragment_1 * 100) + (digit_9 * 10) + digit_8, 
+        (fragment_2 * 100) + (digit_7 * 10) + digit_6,
+        (fragment_3 * 100) + (digit_5 * 10) + digit_4,
+        (fragment_4 * 100) + (digit_3 * 10) + digit_2,
+    ];
+
+    packed_timestamp
+}
+
+fn is_prime(n: u8) -> bool {
+    match n {
+        2 | 3 | 5 | 7 => true,
+        _ => false,
+    }
+}
+
 // fn get_next_sync_request_username(sync_config_data_set: &HashSet<RemoteCollaboratorPortsData>) -> Option<String> {
 //     // Choose a random collaborator from the set:
 //     sync_config_data_set
@@ -3956,22 +4203,124 @@ fn sync_flag_ok_or_wait(wait_this_many_seconds: u64) {
 // }
 
 
-#[derive(Serialize, Deserialize, Debug)] // Add Serialize/Deserialize for sending/receiving
-struct ReadySignal {
-    id: String, // Unique event ID get a u64 representation of the ThreadId using the as_u64() method.
-    ready_signal_timestamp: u64,
-    echo_send: bool,
+/// sends file as struct items to remote collaborator intray
+/// 1. intray_send_time (for freshness check)
+/// 2. intray_hash_list (for intact-ness and author-ness)
+/// 3. gpg_encrypted_file_contents (the content)
+fn send_toml_file_to_intray(
+    send_file: &SendFile, 
+    target_addr: SocketAddr, 
+    port: u16,
+) -> Result<(), UmaError> {
+
+    // 1. Serialize SendFile (Manually)
+    let mut serialized_send_file: Vec<u8> = Vec::new();
+    
+    // Add intray_send_time 
+    serialized_send_file.extend_from_slice(&send_file.intray_send_time.to_be_bytes());
+    
+    // Add intray_hash_list 
+    // Handle the Option and extract the Vec<u8>
+    // if let Some(hash_list) = &send_file.intray_hash_list {
+    //     serialized_send_file.extend_from_slice(hash_list);
+    // }
+    // intray_hash_list is not optional:
+    serialized_send_file.extend_from_slice(&send_file.intray_hash_list);
+
+    // Add gpg_encrypted_file_contents
+    serialized_send_file.extend_from_slice(&send_file.gpg_encrypted_intray_file);
+    
+    // 2. Send Data
+    let socket = UdpSocket::bind(":::0")?; 
+    socket.send_to(&serialized_send_file, SocketAddr::new(target_addr.ip(), port))?;
+    
+    debug_log!("File sent to {}:{}", target_addr.ip(), port); 
+    Ok(())
 }
 
+// /// sends file as struct items to remote collaborator intray
+// /// 1. intray_send_time (for freshness check)
+// /// 2. intray_hash_list (for intact-ness and author-ness)
+// /// 3. gpg_encrypted_file_contents (the content)
+// fn send_toml_file_to_intray(
+//     send_file: &SendFile, 
+//     target_addr: SocketAddr, 
+//     port: u16,
+// ) -> Result<(), UmaError> {
+
+//     // 1. Serialize SendFile (Manually)
+//     let mut serialized_send_file: Vec<u8> = Vec::new();
+    
+//     // Add intray_send_time 
+//     // serialized_send_file.extend_from_slice(&send_file.intray_send_time.to_be_bytes());
+//     serialized_send_file.extend_from_slice(&send_file.intray_send_time.expect("REASON").to_be_bytes());
+    
+//     // Add intray_hash_list 
+//     serialized_send_file.extend_from_slice(&send_file.intray_hash_list);
+
+//     // Add gpg_encrypted_file_contents
+//     serialized_send_file.extend_from_slice(&send_file.gpg_encrypted_file_contents);
+    
+//     // 2. Send Data
+//     let socket = UdpSocket::bind(":::0")?; 
+//     socket.send_to(&serialized_send_file, SocketAddr::new(target_addr.ip(), port))?;
+    
+//     debug_log!("File sent to {}:{}", target_addr.ip(), port); 
+//     Ok(())
+// }
+
+/// Struct for sending file to in-tray (file sync)
+/// Salted-Pearson-Hash-List system for quick verification that packet is intact and sent by owner at timestamp
+#[derive(Serialize, Deserialize, Debug)] // Add Serialize/Deserialize for sending/receiving
+struct SendFile {
+    intray_send_time: u64, // send-time: generate_terse_timestamp_freshness_proxy(); for replay-attack protection
+    gpg_encrypted_intray_file: Vec<u8>, // Holds the GPG-encrypted file contents
+    intray_hash_list: Vec<u8>, // N hashes of intray_this_send_timestamp + gpg_encrypted_intray_file
+}
+
+/// ReadySignal struct
+/// - Contents are 'Option<T>' so that assembly and inspection can occur in steps.
+/// - Terse names to reduce network traffic, as an exceptional circumstance
+/// - Ready-signals are the most commonly sent and most disposable
+#[derive(Serialize, Deserialize, Debug)] // Add Serialize/Deserialize for sending/receiving
+struct ReadySignal {
+    rt: Option<u64>, // ready signal timestamp: last file obtained timestamp
+    rst: Option<u64>, // send-time: generate_terse_timestamp_freshness_proxy(); for replay-attack protection
+    re: Option<bool>, // echo_send
+    rh: Option<Vec<u8>>, // N hashes of rt + re
+}
+
+// review use of gpg here
+/// GotItSignal struct
+/// Terse names to reduce network traffic, as an esceptional circumstatnce
+/// Probably does not need a nonce because repeat does nothing...
+/// less hash?
 #[derive(Serialize, Deserialize, Debug)]
 struct GotItSignal {
-    id: u64, 
+    gst: Option<u64>, // send-time: generate_terse_timestamp_freshness_proxy(); for replay-attack protection
+    di: Option<u64>, // Unique document ID TODO: maybe only this?
+    gh: Option<Vec<u8>>, // N hashes of rt + re
 }
+
+
+// // review use of gpg here
+// /// GotItSignal struct
+// /// Terse names to reduce network traffic, as an esceptional circumstatnce
+// /// Probably does not need a nonce because repeat does nothing...
+// /// less hash?
+// #[derive(Serialize, Deserialize, Debug)]
+// struct GotItSignal {
+//     // gi: Option<u64>, // Unique sync event_id ID get a u64 representation of the ThreadId using the as_u64() // ?
+//     // gg: Option<str>, // gpg_confirm_gotit /// ?
+//     di: Option<u64>, // Unique document ID TODO: maybe only this?
+//     // gn: Option<u16>, // Nonce for GotIt Signal
+//     // maybe gotit_signal_timestamp: u64,
+// }
 
 #[derive(Debug, Clone)] // Add other necessary derives later
 struct SendQueue {
-    timestamp: u64,
-    echo_send: bool,
+    back_of_queue_timestamp: u64,
+    // echo_send: bool, //
     items: Vec<PathBuf>,  // ordered list, filepaths
 }
 
@@ -4015,8 +4364,8 @@ fn send_data(data: &[u8], target_addr: SocketAddr) -> Result<(), io::Error> {
 ///     - if ok: send 'gotit!!' signal
 ///     - update 'last updated' file log (maybe append a timestamp stub file to a dir)
 ///     - end thread
-fn handle_owner_desk(
-    own_desk_setup_data: ForLocalOwnerDeskThread, 
+fn handle_local_owner_desk(
+    local_owner_desk_setup_data: ForLocalOwnerDeskThread, 
 ) {
     /*
     TODO:
@@ -4037,88 +4386,183 @@ fn handle_owner_desk(
     thread::sleep(Duration::from_millis(1000)); // Avoid busy-waiting
     
     // ALPHA non-parallel version
-    debug_log!("\n Start HOD handle_owner_desk()");
+    debug_log!("\n Start HLOD handle_local_owner_desk()");
     // Print all sync data for the desk
     debug_log!("
-        HOD handle_owner_desk: own_desk_setup_data -> {:?}", 
-        &own_desk_setup_data
+        HLOD handle_local_owner_desk: local_owner_desk_setup_data -> {:?}", 
+        &local_owner_desk_setup_data
     );
 
     loop { 
+        /*
+        - every time you send an echo, add true to echo_stack
+        - next time you non-echo send, wait for X-sec/stack item
+        */
         // 1. check for halt/quit uma signal
-        if should_halt() {
+        if should_halt_uma() {
             break;
         }
 
         // Clone the data before moving it into the thread
-        let own_desk_setup_data_clone = own_desk_setup_data.clone();
+        let local_owner_desk_setup_data_clone = local_owner_desk_setup_data.clone();
 
         // TODO (ideally put all this into a function...so it can echo_send itself)
         // 2. Spawn a thread to send the ReadySignal
-        thread::spawn(move || {
+        // thread::spawn(move || {
+            
+        //     // 3. thread_id = 
+        //     let sync_event_id__for_this_thread = format!("{:?}", thread::current().id()); 
+        //     debug_log!(
+        //         "HLOD 2. New sync-event thread id: {:?}; in handle_local_owner_desk()", 
+        //         sync_event_id__for_this_thread
+        //     );
+            
+        //     // // TODO eventually this should be the id of a thread
+        //     // // Generate a unique event ID
+        //     // let sync_event_id__for_this_thread: u64 = rand::random(); 
+            
+            
+        //     // get path, derive name from path
+        //     let channel_dir_path_str = read_state_string("current_node_directory_path.txt")?; // read as string first
+        //     debug_log!("1. Channel directory path (from session state): {}", channel_dir_path_str); 
+        thread::spawn(move || -> Result<(), UmaError> { // Change the closure to return a Result
             
             // 3. thread_id = 
             let sync_event_id__for_this_thread = format!("{:?}", thread::current().id()); 
             debug_log!(
-                "HOD 2. New sync-event thread id: {:?}; in handle_owner_desk()", 
+                "HLOD 2. New sync-event thread id: {:?}; in handle_local_owner_desk()", 
                 sync_event_id__for_this_thread
             );
             
-            // // TODO eventually this should be the id of a thread
-            // // Generate a unique event ID
-            // let sync_event_id__for_this_thread: u64 = rand::random(); 
+            // get path, derive name from path
+            let channel_dir_path_str = read_state_string("current_node_directory_path.txt")?; // Now you can use ?
 
-            // 4. Creates a ReadySignal instance to be the ready signal
-            let ready_signal_to_send_from_this_loop = ReadySignal {
-                id: sync_event_id__for_this_thread,
-                ready_signal_timestamp: get_current_unix_timestamp(), 
-                echo_send: false,
+
+            // TODO: rt is the latest date
+            // of a file recieved from the remote collaborator
+            // process likely similar to making send_queue
+            // but only looking for top date
+            // 
+            // // 4. Creates a ReadySignal instance to be the ready signal
+            // let proto_ready_signal = ReadySignal {
+            //     di: sync_event_id__for_this_thread,
+            //     rt: TODO(), // 
+            //     rst: get_latest_recieved_from_collaborator_in_teamchannel_file_timestamp(
+            //         local_owner_desk_setup_data.remote_collaborator_name.clone()
+            //     ), 
+            //     re: Some(false),
+            // };
+            // 4. Creates a ReadySignal instance to be the ready signal (Corrected)
+            // let proto_ready_signal = match get_latest_recieved_from_collaborator_in_teamchannel_file_timestamp(
+            //     &local_owner_desk_setup_data.remote_collaborator_name.clone()
+            // ) {
+
+            // 4. Creates a ReadySignal instance to be the ready signal (Corrected)
+            let proto_ready_signal = match get_latest_recieved_from_collaborator_in_teamchannel_file_timestamp(
+                // Clone the remote_collaborator_name
+                &local_owner_desk_setup_data_clone.remote_collaborator_name.clone() 
+            ) {
+                Ok(latest_received_file_timestamp) => ReadySignal {
+                    rt: Some(latest_received_file_timestamp), // Correct field name and type
+                    rst: Some(get_current_unix_timestamp()), 
+                    re: Some(false), // Correct field name and type
+                    rh: None, // You'll need to calculate and add the hashes here later
+                },
+                Err(e) => {
+                    debug_log!("Error getting last received timestamp: {}", e); 
+                    // Handle the error here. You might want to:
+                    return Ok(()); // Exit the thread
+
+                    // or
+                    // continue; // Skip to the next iteration of the loop (if this is inside a loop)
+                    // or 
+                    // create a ReadySignal with a default timestamp value:
+                    // ReadySignal {
+                    //     rt: Some(0), // Default timestamp
+                    //     rst: Some(get_current_unix_timestamp()),
+                    //     re: Some(false),
+                    //     rh: None, 
+                    // }
+                }
             };
 
+            // 4.2 complete ready signal struct with pearson hash
+            let ready_signal_to_send_from_this_loop = add_pearson_hash_to_readysignal_struct(
+                &proto_ready_signal,
+                // Clone the local_user_salt_list
+                &local_owner_desk_setup_data_clone.local_user_salt_list.clone(), 
+            ).expect("Failed to add hash to ReadySignal"); 
+            
+            // // 4.2 complete ready signal struct with pearson hash
+            // let ready_signal_to_send_from_this_loop = add_pearson_hash_to_readysignal_struct(
+            //     proto_ready_signal,
+            //     local_user_salt,
+            //     );
+            
+                        
+            // // 4.2 complete ready signal struct with pearson hash
+            // // Access the salt from the collaborator data
+            // let ready_signal_to_send_from_this_loop = add_pearson_hash_to_readysignal_struct(
+            //     &proto_ready_signal,
+            //     &local_owner_desk_setup_data.local_user_salt_list.clone(),
+            // ).expect("Failed to add hash to ReadySignal"); // Handle potential None
+            
+            
             // 5. Serialize the ReadySignal
             let readysignal_data = serialize_ready_signal(
                 &ready_signal_to_send_from_this_loop
-            ).expect("HOD 5. err Failed to serialize ReadySignal, ready_signal_to_send_from_this_loop"); 
+            ).expect("HLOD 5. err Failed to serialize ReadySignal, ready_signal_to_send_from_this_loop"); 
 
             // --- Inspect Serialized Data ---
-            debug_log!("HOD 5. inspect Serialized Data: {:?}", readysignal_data);
+            debug_log!("HLOD 5. inspect Serialized Data: {:?}", readysignal_data);
 
             // TODO possibly have some mechanism to try addresses until one works?
-            // 6. Send the signal @ local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
+            // 6. Send the signal @ 
+            //    local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
             // TODO figure out way to specify ipv6, 4, prioritizing, trying, etc.
             // (in theory...you could try them all?)
             // Select the first IPv6 address if available
-            if let Some(first_ipv6_address) = own_desk_setup_data_clone.local_user_ipv6_addr_list.first() {
+            if let Some(first_ipv6_address) = local_owner_desk_setup_data_clone.local_user_ipv6_addr_list.first() {
                 // Copy the IPv6 address
                 let ipv6_address_copy = *first_ipv6_address; 
             
-                // Send the signal to the collaborator's ready_port
+                // Send the readysignal_data to the collaborator's ready_port
                 let target_addr = SocketAddr::new(
                     IpAddr::V6(ipv6_address_copy), // Use the copied address
-                    own_desk_setup_data_clone.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
+                    local_owner_desk_setup_data_clone.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
                 ); 
 
                 // Log before sending
                 debug_log!(
-                    "HOD 6. Attempting to send ReadySignal to {}: {:?}", 
+                    "HLOD 6. Attempting to send ReadySignal to {}: {:?}", 
                     target_addr, 
                     &readysignal_data
                 );
 
+                // // If sending to the first address succeeds, no need to iterate further
+                // if send_data(&readysignal_data, target_addr).is_ok() {
+                //     debug_log("HLOD 6. Successfully sent ReadySignal to {} (first address)"//, target_addr
+                //         );
+                //     return Ok(()); // Exit the thread
+
+                // } else {
+                //     debug_log("HLOD err 6. Failed to send ReadySignal to {} (first address)"//, target_addr
+                //         );
+                // }
                 // If sending to the first address succeeds, no need to iterate further
                 if send_data(&readysignal_data, target_addr).is_ok() {
-                    debug_log("HOD 6. Successfully sent ReadySignal to {} (first address)"//, target_addr
-                        );
-                    return; // Exit the thread
+                    debug_log("HLOD 6. Successfully sent ReadySignal to {} (first address)");
+                    return Ok(()); // Exit the thread
                 } else {
-                    debug_log("HOD err 6. Failed to send ReadySignal to {} (first address)"//, target_addr
-                        );
+                    debug_log("HLOD err 6. Failed to send ReadySignal to {} (first address)");
+                    return Err(UmaError::NetworkError("Failed to send ReadySignal".to_string())); // Return an error
                 }
-            } else {
-                debug_log("HOD ERROR No IPv6 addresses available for {}"
-                    // , own_desk_setup_data.local_user_name
-                    );
-            }
+                
+
+                } else {
+                    debug_log("HLOD ERROR No IPv6 addresses available for {}");
+                    return Err(UmaError::NetworkError("No IPv6 addresses available".to_string())); // Return an error
+                }
 
         
         // 7. Listen at in-box for file for that event:
@@ -4137,13 +4581,17 @@ fn handle_owner_desk(
         thread::sleep(Duration::from_secs(3)); 
     } // end loop
     debug_log!(
-        "HOD Exiting handle_owner_desk() for {}", 
-        own_desk_setup_data.local_user_name
+        "HLOD Exiting handle_local_owner_desk() for {}", 
+        local_owner_desk_setup_data.local_user_name
     ); // Add collaborator name
 }
 
 
 /// Vanilla serialize (no serde!)
+/// Due to exceptional priority of minimizing network load:
+/// terse key names are used here, these still must not collide
+/// though readability is regretibly reduced.
+///
 /// Use With
 /// let socket = UdpSocket::bind(":::0")?; /// Bind to any available IPv6 address
 ///
@@ -4158,16 +4606,58 @@ fn handle_owner_desk(
 /// Send the data:
 /// socket.send_to(&data, "[::1]:34254")?; /// Replace with your target address and port
 /// Ok(())
-fn serialize_ready_signal(signal: &ReadySignal) -> std::io::Result<Vec<u8>> {
+fn serialize_ready_signal(this_readysignal: &ReadySignal) -> std::io::Result<Vec<u8>> {
     let mut bytes = Vec::new();
 
-    // Convert String to bytes using as_bytes()
-    bytes.extend_from_slice(signal.id.as_bytes()); 
+    // Handle rt (timestamp) -  return an error if None:
+    if let Some(rt) = this_readysignal.rt {
+        bytes.extend_from_slice(&rt.to_be_bytes()); 
+    } else {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData, 
+            "Missing timestamp (rt) in ReadySignal",
+        )); 
+    }
 
-    bytes.extend_from_slice(&signal.ready_signal_timestamp.to_be_bytes()); 
-    bytes.push(if signal.echo_send { 1 } else { 0 });
+    // Handle rst (send timestamp) - return an error if None: 
+    if let Some(rst) = this_readysignal.rst {
+        bytes.extend_from_slice(&rst.to_be_bytes()); 
+    } else {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData, 
+            "Missing send timestamp (rst) in ReadySignal",
+        )); 
+    }
+
+    // Handle re (echo_send) -  use a default value (false) if None:
+    let re = this_readysignal.re.unwrap_or(false); // Default to false if None
+    bytes.push(if re { 1 } else { 0 }); 
+    
     Ok(bytes) 
 }
+
+
+// fn serialize_ready_signal(this_readysignal: &ReadySignal) -> std::io::Result<Vec<u8>> {
+//     /*TODO note: it is still not known how GPG and OTP (one time pads)
+//     will be used exactly, e.g.
+//     gpt the whole signal, or just one field
+//     and or one-time-pad the fields*/
+    
+//     let mut bytes = Vec::new();
+
+//     // Convert String to bytes using as_bytes()
+
+//     bytes.extend_from_slice(this_readysignal.di.as_bytes()); // document ID
+
+//     // bytes.extend_from_slice(&this_readysignal.rt.to_be_bytes()); // ready signal timestamp
+//     bytes.extend_from_slice(&this_readysignal.rt.expect("REASON").to_be_bytes()); // ready signal timestamp
+    
+    
+//     // bytes.push(if this_readysignal.re { 1 } else { 0 }); // ready signal Echo_Flag
+//     bytes.push(if this_readysignal.re.expect("REASON") { 1 } else { 0 }); // ready signal Echo_Flag
+    
+//     Ok(bytes) 
+// }
 
 // /// Vanilla Deserilize json signal
 // fn deserialize_ready_signal(bytes: &[u8]) -> Result<ReadySignal, io::Error> {
@@ -4224,75 +4714,281 @@ fn serialize_ready_signal(signal: &ReadySignal) -> std::io::Result<Vec<u8>> {
     
 //     Ok(ReadySignal { id: id.to_string(), timestamp, echo_send })
 // }
-/// Vanilla Deserilize json signal
-fn deserialize_ready_signal(bytes: &[u8]) -> Result<ReadySignal, io::Error> {
-    debug_log!("DRS: Entering deserialize_ready_signal() with {} bytes", bytes.len());
-    debug_log!("DRS: Raw bytes: {:?}", bytes);
-    debug_log!("DRS: Raw bytes as hex: {}", bytes.iter().map(|b| format!("{:02X}", b)).collect::<String>());
 
-    // Ensure the byte array has enough data for both fields:
-    if bytes.len() < std::mem::size_of::<u64>() * 2 { // At least 2 u64 fields
-        debug_log!("DRS: Error: Invalid byte array length for ReadySignal. Expected at least {}, got {}", std::mem::size_of::<u64>() * 2, bytes.len());
-        return Err(Error::new(
-            ErrorKind::InvalidData, 
-            "Invalid byte array length for ReadySignal"
-        ));
+
+// fn calculate_pearson_hashes_parallel(
+//     data_sets: Vec<&[u8]>, // A vector of byte slices to hash
+// ) -> Result<Vec<u8>, UmaError> {
+//     let (tx, rx) = mpsc::channel();
+
+//     // Spawn a thread for each hash calculation
+//     for (index, data) in data_sets.clone().into_iter().enumerate() { // Clone data_sets
+
+//         let tx = tx.clone(); 
+//         thread::spawn(move || {
+//             // Clone the data before calculating the hash
+//             let hash = pearson_hash_base(data); // Clone the slice as a Vec<u8>
+
+//             tx.send((index, hash)).unwrap(); 
+//         });
+//     }
+//     // Collect the hashes in the correct order
+//     let mut hashes = vec![0u8; data_sets.len()]; // Initialize with default values
+//     for _ in 0..data_sets.len() {
+//         let (index, hash) = rx.recv().unwrap();
+//         hashes[index] = hash?;
+//     }
+
+//     Ok(hashes)
+// }
+
+/// Calculates Pearson hashes for a vector of byte slices.
+///
+/// This function iterates through the input `data_sets` and calculates the Pearson hash for each slice,
+/// returning a vector of the calculated hashes.
+///
+/// # Arguments
+///
+/// * `data_sets`: A vector of byte slices to hash.
+///
+/// # Returns
+///
+/// * `Result<Vec<u8>, UmaError>`: A `Result` containing a vector of the calculated Pearson hashes,
+///   or a `UmaError` if an error occurs during hash calculation. 
+fn calculate_pearson_hashes(data_sets: &[&[u8]]) -> Result<Vec<u8>, UmaError> {
+    let mut hashes = Vec::new();
+    for data in data_sets {
+        let hash = pearson_hash_base(data)?;
+        hashes.push(hash);
     }
-
-    // Extract id:
-    let id_bytes: [u8; 8] = bytes[0..8].try_into().unwrap();
-    debug_log!("DRS: id_bytes: {:?}", id_bytes);
-    let id = u64::from_be_bytes(id_bytes); 
-    debug_log!("DRS: id: {}", id);
-
-    // Extract timestamp:
-    let timestamp_bytes: [u8; 8] = bytes[8..16].try_into().unwrap();
-    debug_log!("DRS: timestamp_bytes: {:?}", timestamp_bytes);
-    let ready_signal_timestamp = u64::from_be_bytes(timestamp_bytes);
-    debug_log!("DRS: ready_signal_timestamp: {}", ready_signal_timestamp);
-
-    // Extract echo_send (if present):
-    let echo_send = if bytes.len() > 16 { bytes[16] != 0 } else { false };
-    debug_log!("DRS: echo_send: {}", echo_send);
-    
-    Ok(ReadySignal { id: id.to_string(), ready_signal_timestamp, echo_send })
+    Ok(hashes)
 }
 
+// fn calculate_pearson_hashes_parallel(
+//     data_sets: Vec<&[u8]>, // A vector of byte slices to hash
+// ) -> Result<Vec<u8>, UmaError> {
+//     let (tx, rx) = mpsc::channel();
 
-fn serialize_gotit_signal(signal: &GotItSignal) -> Vec<u8> {
-    signal.id.to_be_bytes().to_vec()
+//     // Spawn a thread for each hash calculation
+//     for (index, data) in data_sets.clone().into_iter().enumerate() {
+
+//         let tx = tx.clone(); // Clone the sender for each thread
+//         thread::spawn(move || {
+//             let hash = pearson_hash_base(data);
+//             tx.send((index, hash)).unwrap(); // Send the hash and its index
+//         });
+//     }
+
+//     // Collect the hashes in the correct order
+//     let mut hashes = vec![0u8; data_sets.len()]; // Initialize with default values
+//     for _ in 0..data_sets.len() {
+//         let (index, hash) = rx.recv().unwrap();
+//         hashes[index] = hash?;
+//     }
+
+//     Ok(hashes)
+// }
+
+
+// // HERE!! HERE!! // HERE!! HERE!!
+/// Vanilla Deserilize json signal
+/// The idea of the salt-hash or salt-checksum
+/// is that it is a faster and more anonymous way
+/// to target the goals of packet-soundness checking
+/// and spoof-protection
+/// while keeping the computer and network load lite
+/// Do not attempt to use Serde crate with this function!!!
+fn deserialize_ready_signal(bytes: &[u8]) -> Result<ReadySignal, io::Error> {
+    // ... [Your existing code for logging and length checking] ...
+
+    // Extract timestamp (rt):
+    let rt = u64::from_be_bytes(bytes[0..8].try_into().unwrap());
+    debug_log!("DRS: ready_signal_timestamp: {}", rt);
+
+    // Extract send timestamp (rst):
+    let rst = u64::from_be_bytes(bytes[8..16].try_into().unwrap());
+    debug_log!("DRS: ready_signal_send_timestamp: {}", rst);
+
+    // Extract echo_send (re):
+    let re = if bytes.len() > 16 { bytes[16] != 0 } else { false };
+    debug_log!("DRS: echo_send: {}", re);
+    
+    // Extract hashes (rh):
+    let rh = if bytes.len() > 17 { 
+        Some(bytes[17..].to_vec()) 
+    } else {
+        None
+    };
+    
+    // Correct the return statement to include rst:
+    Ok(ReadySignal { 
+        rt: Some(rt), 
+        rst: Some(rst), // Include rst
+        re: Some(re), 
+        rh 
+    })
+}
+
+// /// Vanilla Deserilize json signal
+// /// The idea of the salt-hash or salt-checksum
+// /// is that it is a faster and more anonymous way
+// /// to target the goals of packet-soundness checking
+// /// and spoof-protection
+// /// while keeping the computer and network load lite
+// /// Do not attempt to use Serde crate with this function!!!
+// fn deserialize_ready_signal(bytes: &[u8]) -> Result<ReadySignal, io::Error> {
+//     debug_log!("DRS: Entering deserialize_ready_signal() with {} bytes", bytes.len());
+//     debug_log!("DRS: Raw bytes: {:?}", bytes);
+//     debug_log!("DRS: Raw bytes as hex: {}", bytes.iter().map(|b| format!("{:02X}", b)).collect::<String>());
+//     /*
+//     #[derive(Serialize, Deserialize, Debug)] // Add Serialize/Deserialize for sending/receiving
+//     struct ReadySignal {
+//         ri: Option<String>, // Unique sync event_id ID get a u64 representation of the ThreadId using the as_u64() method.
+//         rt: Option<u64>, // ready signal timestamp? TODO needed?
+//         re: Option<bool>, // echo_send
+//         rh: Option<str>, // ready signal salted hash of other fields using user_salt from collaborator_file
+//     }
+//     */
+
+//     // Ensure the byte array has enough data for both fields:
+//     if bytes.len() < std::mem::size_of::<u64>() * 2 { // At least 2 u64 fields
+//         debug_log!("DRS: Error: Invalid byte array length for ReadySignal. Expected at least {}, got {}", std::mem::size_of::<u64>() * 2, bytes.len());
+//         return Err(Error::new(
+//             ErrorKind::InvalidData, 
+//             "Invalid byte array length for ReadySignal"
+//         ));
+//     }
+
+//     // Extract timestamp:
+//     let timestamp_bytes: [u8; 8] = bytes[8..16].try_into().unwrap();
+//     debug_log!("DRS: timestamp_bytes: {:?}", timestamp_bytes);
+    
+//     let rt = u64::from_be_bytes(timestamp_bytes);
+//     debug_log!("DRS: ready_signal_timestamp: {}", rt);
+
+//     // Extract echo_send (if present):
+//     let re = if bytes.len() > 16 { bytes[16] != 0 } else { false };
+//     debug_log!("DRS: echo_send: {}", re);
+    
+    
+//     // Deserialize the hash (rh)
+//     let rh = if bytes.len() > 17 { // 16 bytes for timestamps + 1 for echo_send
+//         Some(String::from_utf8_lossy(&bytes[17..]).to_string())
+//     } else {
+//         None
+//     };
+    
+//     // Ok(ReadySignal { id: id.to_string(), ready_signal_timestamp, echo_send })
+//     Ok(ReadySignal { rt: Some(rt), re: Some(re), rh })
+// }
+
+fn serialize_gotit_signal(signal: &GotItSignal) -> std::io::Result<Vec<u8>> {
+    let mut bytes = Vec::new();
+
+    // bytes.extend_from_slice(&signal.gst.to_be_bytes());
+    bytes.extend_from_slice(&signal.gst.expect("REASON").to_be_bytes());
+    bytes.extend_from_slice(&signal.di.expect("REASON").to_be_bytes()); 
+    // bytes.extend_from_slice(signal.gh.as_bytes());
+    // Handle the gh Option
+    if let Some(hash_list) = &signal.gh { 
+        // If gh is Some, extend the bytes vector with the hash_list
+        bytes.extend_from_slice(hash_list);
+    } else {
+        // Handle the None case (e.g., add a placeholder or return an error)
+        // bytes.extend_from_slice(&[0u8; 32]); // Example: Add a 32-byte placeholder
+    }
+
+    Ok(bytes)
 }
 
 fn deserialize_gotit_signal(bytes: &[u8]) -> Result<GotItSignal, io::Error> {
-    if bytes.len() != std::mem::size_of::<u64>() {
+    // Calculate expected lengths (assuming a u64 for both timestamp and ID)
+    let timestamp_len = std::mem::size_of::<u64>();
+    let id_len = std::mem::size_of::<u64>();
+    let expected_min_length = timestamp_len + id_len; // Minimum length for timestamp and ID
+
+    // Check if the byte array has enough data for at least the timestamp and document ID
+    if bytes.len() < expected_min_length {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
-            "Invalid byte array length for GotItSignal",
+            "Invalid byte array length for GotItSignal: too short",
         ));
     }
 
-    let id = u64::from_be_bytes(bytes.try_into().unwrap());
-    Ok(GotItSignal { id })
+    // Extract the timestamp
+    let gst = u64::from_be_bytes(bytes[0..timestamp_len].try_into().unwrap());
+
+    // Extract the document ID
+    let di = u64::from_be_bytes(bytes[timestamp_len..expected_min_length].try_into().unwrap());
+
+    // Extract the hash list (if present)
+    let gh = if bytes.len() > expected_min_length {
+        Some(bytes[expected_min_length..].to_vec()) // Take the remaining bytes as the hash list
+    } else {
+        None // No hash list present
+    };
+
+    Ok(GotItSignal { 
+        gst: Some(gst), 
+        di: Some(di), 
+        gh: gh, 
+    }) 
 }
 
 
-/// Serialization (Sending):
-/// Read TOML File: Read the contents of the TOML file into a string using fs::read_to_string().
-/// Convert to Bytes: Convert the string to a byte array (Vec<u8>) using the as_bytes() method. 
-/// This assumes the TOML file is already in ASCII encoding.
-/// Send Bytes: Send the byte array over the network using UDP.
-fn send_toml_file(socket: &UdpSocket, file_path: &str, target_addr: SocketAddr) -> Result<(), std::io::Error> {
-    // 1. Read TOML file
-    let toml_string = fs::read_to_string(file_path)?;
+// fn deserialize_gotit_signal(bytes: &[u8]) -> Result<GotItSignal, io::Error> {
+//     // Check if the byte array has the correct length
+//     if bytes.len() != std::mem::size_of::<u64>() {
+//         return Err(io::Error::new(
+//             io::ErrorKind::InvalidData,
+//             "Invalid byte array length for GotItSignal",
+//         ));
+//     }
 
-    // 2. Convert to bytes
-    let toml_bytes = toml_string.as_bytes();
+//     // Extract the document ID
+//     let gst = u64::from_be_bytes(bytes.try_into().unwrap());
+//     let di = u64::from_be_bytes(bytes.try_into().unwrap());
+//     let gh = u64::from_be_bytes(bytes.try_into().unwrap());
 
-    // 3. Send bytes
-    socket.send_to(toml_bytes, target_addr)?;
+//     Ok(GotItSignal { gst: Some(gst), di: Some(di), gh: Some(gh) }) 
+// }
 
-    Ok(())
-}
+// fn deserialize_gotit_signal(bytes: &[u8]) -> Result<GotItSignal, io::Error> {
+//     // Calculate the expected byte length
+//     let expected_length = std::mem::size_of::<u64>() * 2 + signal.gg.len(); 
+
+//     if bytes.len() != expected_length {
+//         return Err(io::Error::new(
+//             io::ErrorKind::InvalidData,
+//             format!("Invalid byte array length for GotItSignal. Expected {}, got {}", expected_length, bytes.len()),
+//         ));
+//     }
+
+//     // let gi = u64::from_be_bytes(bytes[0..8].try_into().unwrap());
+//     // let gg_length = bytes.len() - std::mem::size_of::<u64>() * 2; // Calculate gg length
+//     // let gg = String::from_utf8_lossy(&bytes[8..8 + gg_length]).to_string();
+//     // let di = u64::from_be_bytes(bytes[8 + gg_length..].try_into().unwrap());
+//     let di = u64::from_be_bytes(bytes[0..8].try_into().unwrap());
+
+//     Ok(GotItSignal { di })
+// }
+
+// fn serialize_gotit_signal(signal: &GotItSignal) -> Vec<u8> {
+//     signal.id.to_be_bytes().to_vec()
+// }
+
+// fn deserialize_gotit_signal(bytes: &[u8]) -> Result<GotItSignal, io::Error> {
+//     if bytes.len() != std::mem::size_of::<u64>() {
+//         return Err(io::Error::new(
+//             io::ErrorKind::InvalidData,
+//             "Invalid byte array length for GotItSignal",
+//         ));
+//     }
+
+//     let id = u64::from_be_bytes(bytes.try_into().unwrap());
+//     Ok(GotItSignal { id })
+// }
+
 
 /// File Deserialization (Receiving):
 /// Receive Bytes: Receive the byte array from the network using socket.recv_from().
@@ -4426,41 +5122,149 @@ fn receive_toml_file(socket: &UdpSocket) -> Result<(Value, SocketAddr), UmaError
 // }
 
 
-// TODO: which struct?
-fn send_file_to_collaborator(
-    collaborator: &RemoteCollaboratorPortsData,
-    is_echo_request: bool,
-    ready_timestamp: u64,
-    file_to_send: &PathBuf, 
-    tx: Sender<SyncResult>, 
-    retry_flag_path: PathBuf, 
-) -> SyncResult {
-    /*
-    TODO
-    handling file_transfer_successful
-    */
-    // preset/reset
-    let mut file_transfer_successful = false;
+// /*
+// #[derive(Serialize, Deserialize, Debug)] // Add Serialize/Deserialize for sending/receiving
+// struct SendFile {
+//     intray_send_time: Option<u64>, // send-time: generate_terse_timestamp_freshness_proxy(); for replay-attack protection
+//     gpg_encrypted_intray_file: Option<bool>, 
+//     intray_hash_list: Option<Vec<u8>>, // N hashes of intray_this_send_timestamp + gpg_encrypted_intray_file
+// }
+
+// hashes
+
+// if later gpg encrypt file
+
+// */
+// fn send_toml_file_to_intray(
+//     file_path: &PathBuf, 
+//     target_addr: SocketAddr, 
+//     port: u16,
+//     collaborator_salt_list: &[u128], // Pass the salt list here
+// ) -> Result<(), UmaError> {
+
+//     // 1. Get File Send Time
+//     let intray_send_time = get_current_unix_timestamp(); // You can replace this with your terse timestamp function later
+
+//     // 2. Read File Contents
+//     let file_contents = fs::read(file_path)?;
+
+//     // 3. (Future) GPG Encrypt File
+//     // TODO: Implement GPG encryption
+//     let gpg_encrypted_intray_file = false; // Placeholder -  change to true once GPG is implemented
+
+//     // 4. Calculate Hashes (Using Collaborator's Salts)
+//     let mut data_sets: Vec<&[u8]> = Vec::new();
     
-    // 1. Establish a connection to the collaborator's intray_port
-    // ... (Implement connection logic)
+//     // data_sets.push(&intray_send_time.to_be_bytes());
+//     let binding = intray_send_time.to_be_bytes();
+//     data_sets.push(&binding);
+    
+//     data_sets.push(if gpg_encrypted_intray_file { &[1] } else { &[0] });
+//     data_sets.push(&file_contents);
+//     for salt in collaborator_salt_list {
+//         data_sets.push(&salt.to_be_bytes());
+//     }
+//     let intray_hash_list = calculate_pearson_hashes_parallel(data_sets)?;
 
-    // 2. Send the file data
-    // ... (Implement file sending logic)
+//     // 5. Create SendFile Struct 
+//     let send_file = SendFile {
+//         intray_send_time: Some(intray_send_time),
+//         gpg_encrypted_intray_file: Some(gpg_encrypted_intray_file),
+//         intray_hash_list: Some(intray_hash_list),
+//     }; 
 
-    // 3. Listen for confirmation on the gotit_port
-    // ... (Implement confirmation logic)
+//     // 6. Serialize SendFile
+//     // 6. Serialize SendFile (Manually)
+//     let mut serialized_send_file: Vec<u8> = Vec::new();
+    
+//     // Add intray_send_time 
+//     serialized_send_file.extend_from_slice(&send_file.intray_send_time.unwrap_or(0).to_be_bytes());
+    
+//     // Add gpg_encrypted_intray_file flag
+//     serialized_send_file.push(if send_file.gpg_encrypted_intray_file.unwrap_or(false) { 1 } else { 0 });
+    
+//     // Add intray_hash_list (You'll need to serialize the vector of hashes appropriately)
+//     if let Some(hash_list) = &send_file.intray_hash_list {
+//         // Iterate through the hash list and append each hash to serialized_send_file
+//         for hash in hash_list {
+//             serialized_send_file.extend_from_slice(&hash.to_be_bytes());
+//         }
+//     }
+    
+//     // 7. Send Data
+//     let socket = UdpSocket::bind(":::0")?; // Consider binding to a specific interface if needed
+//     socket.send_to(&serialized_send_file, SocketAddr::new(target_addr.ip(), port))?;
+    
+//     debug_log!("File sent to {}:{}", target_addr.ip(), port); 
+//     Ok(())
+// }
 
-    // 4. Handle Success or Failure
-    if file_transfer_successful && !is_echo_request{
-        // Remove the retry flag
-        // ... (Implement flag removal logic)
-        return SyncResult::Success(ready_timestamp);
-    } else {
-        let error = UmaError::NetworkError("File transfer failed".to_string()); 
-        return SyncResult::Failure(error);
-    }
-} 
+
+
+// --- Helper Function to Send File ---
+// fn send_toml_file_to_intray(file_path: &PathBuf, target_addr: SocketAddr, port: u16) -> Result<(), UmaError> {
+//     let socket = UdpSocket::bind(":::0")?;
+//     send_toml_file(&socket, &file_path.to_string_lossy(), SocketAddr::new(target_addr.ip(), port))?;
+//     debug_log!("File sent to {}:{}", target_addr.ip(), port);
+//     Ok(())
+// }
+
+
+// Depricated
+// /// Serialization (Sending):
+// /// Read TOML File: Read the contents of the TOML file into a string using fs::read_to_string().
+// /// Convert to Bytes: Convert the string to a byte array (Vec<u8>) using the as_bytes() method. 
+// /// This assumes the TOML file is already in ASCII encoding.
+// /// Send Bytes: Send the byte array over the network using UDP.
+// fn send_toml_file(socket: &UdpSocket, file_path: &str, target_addr: SocketAddr) -> Result<(), std::io::Error> {
+//     // 1. Read TOML file
+//     let toml_string = fs::read_to_string(file_path)?;
+
+//     // 2. Convert to bytes
+//     let toml_bytes = toml_string.as_bytes();
+
+//     // 3. Send bytes
+//     socket.send_to(toml_bytes, target_addr)?;
+
+//     Ok(())
+// }
+
+// depricated
+// // TODO: which struct?
+// fn send_file_to_collaborator(
+//     collaborator: &RemoteCollaboratorPortsData,
+//     is_echo_request: bool,
+//     ready_timestamp: u64,
+//     file_to_send: &PathBuf, 
+//     tx: Sender<SyncResult>, 
+//     retry_flag_path: PathBuf, 
+// ) -> SyncResult {
+//     /*
+//     TODO
+//     handling file_transfer_successful
+//     */
+//     // preset/reset
+//     let mut file_transfer_successful = false;
+    
+//     // 1. Establish a connection to the collaborator's intray_port
+//     // ... (Implement connection logic)
+
+//     // 2. Send the file data
+//     // ... (Implement file sending logic)
+
+//     // 3. Listen for confirmation on the gotit_port
+//     // ... (Implement confirmation logic)
+
+//     // 4. Handle Success or Failure
+//     if file_transfer_successful && !is_echo_request{
+//         // Remove the retry flag
+//         // ... (Implement flag removal logic)
+//         return SyncResult::Success(ready_timestamp);
+//     } else {
+//         let error = UmaError::NetworkError("File transfer failed".to_string()); 
+//         return SyncResult::Failure(error);
+//     }
+// } 
 
 
 fn get_oldest_retry_timestamp(collaborator_username: &str) -> Result<Option<u64>, io::Error> {
@@ -4517,65 +5321,266 @@ fn create_retry_flag(
 }
 
 
-
-
-// TODO this is using a depricated struct...should this have its own struct? (WHY SO MANY STRUCTS???)
+/// Creates a new send queue based on the provided timestamp and collaborator name.
+///
+/// This function crawls through the team channel directory tree, looking for TOML files owned by the specified collaborator.
+/// It adds file paths to the send queue if their `updated_at_timestamp` is greater than the provided `back_of_queue_timestamp`.
+///
+/// # Arguments
+///
+/// * `team_channel_name`: The name of the team channel.
+/// * `collaborator_name`: The name of the collaborator.
+/// * `back_of_queue_timestamp`: The timestamp to use as the starting point for the queue. If 0, all files are added to the queue.
+///
+/// # Returns
+///
+/// * `Result<SendQueue, UmaError>`: A `Result` containing the new `SendQueue` on success, or a `UmaError` on failure.
 fn get_or_create_send_queue(
-    collaborator_name: &str, // Change the parameter type to &str
-    received_timestamp: u64,
-) -> Result<SendQueue, io::Error> {
-    
-
-    let mut new_queue = SendQueue {
-        timestamp: received_timestamp,
-        echo_send: received_timestamp == 0, // If timestamp is 0, it's an echo_send request
+    team_channel_name: &str,
+    collaborator_name: &str,
+    session_send_queue: SendQueue,
+    back_of_queue_timestamp: u64,
+) -> Result<SendQueue, UmaError> {
+    let mut send_queue = SendQueue {
+        back_of_queue_timestamp,
         items: Vec::new(),
     };
 
-    // Iterate over owned files, only considering those modified AFTER the received timestamp
-    let owned_files_dir = Path::new("project_graph_data/owned_files")
-        .join(collaborator_name); // Use collaborator_name here
+    // // Safely check when re (echo_send) is false
+    // if !ready_signal.re.unwrap_or(true) { // Default to true if re is None (meaning not an echo)
+    //     // Time Check! 
+    //     if let Some(queue) = &session_send_queue { // Check if session_send_queue is Some
+    //         if ready_signal.rt.unwrap_or(0) < queue.back_of_queue_timestamp {
 
-    for entry in WalkDir::new(owned_files_dir)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .filter(|e| e.file_type().is_file())
-    {
-        // let file_timestamp = get_toml_file_timestamp(&entry.path()); 
-        // if file_timestamp > received_timestamp {
-        //     new_queue.items.push(entry.path().to_path_buf());
-        // }
+    //             debug_log("Note: earlier than expected: ready_signal.rt < session_send_queue.back_of_queue_timestamp");
+    //         }
+    //     }
+    // }
 
-        // Han dle the Result from get_file_timestamp 
-        match get_toml_file_timestamp(&entry.path()) {
-            Ok(file_timestamp) => { 
-                if file_timestamp > received_timestamp {
-                    new_queue.items.push(entry.path().to_path_buf());
+    
+    // Crawl through the team channel directory tree
+    for entry in WalkDir::new(PathBuf::from("project_graph_data").join(team_channel_name)) {
+        let entry = entry?;
+        if entry.file_type().is_file() && entry.path().extension() == Some(OsStr::new("toml")) {
+            // If a .toml file
+            let toml_string = fs::read_to_string(entry.path())?;
+            let toml_value: Value = toml::from_str(&toml_string)?;
+
+            // If owner = target collaborator
+            if toml_value.get("owner").and_then(Value::as_str) == Some(collaborator_name) {
+                // If updated_at_timestamp exists
+                if let Some(timestamp) = toml_value.get("updated_at_timestamp").and_then(Value::as_integer) {
+                    let timestamp = timestamp as u64;
+
+                    // If updated_at_timestamp > back_of_queue_timestamp (or back_of_queue_timestamp is 0)
+                    if timestamp > back_of_queue_timestamp || back_of_queue_timestamp == 0 {
+                        // Add filepath to send_queue
+                        send_queue.items.push(entry.path().to_path_buf());
+                    }
                 }
-            }
-            Err(e) => {
-                // Handle the error appropriately. You might want to:
-                // - Log the error
-                // - Skip this file and continue with the next one
-                // - Return an error from get_or_create_send_queue 
-                eprintln!("Error getting timestamp for file: {:?} - {}", entry.path(), e);
             }
         }
     }
 
     // Sort the files in the queue based on their modification time
-    new_queue.items.sort_by_key(|path| {
+    send_queue.items.sort_by_key(|path| {
         get_toml_file_timestamp(path).unwrap_or(0) // Handle potential errors in timestamp retrieval
     });
 
-    Ok(new_queue)
+    Ok(send_queue)
 }
 
+/// get latest Remote Collaborator file timestamp 
+/// for use by handl local owner desk
+fn get_latest_recieved_from_collaborator_in_teamchannel_file_timestamp(
+    collaborator_name: &str,
+) -> Result<u64, UmaError> {
+    let mut last_timestamp: u64 = 0; // Initialize with 0 (for bootstrap when no files exist)
+    debug_log!("get_last_file_timestamp() started"); 
+
+    let channel_dir_path_str = read_state_string("current_node_directory_path.txt")?; // read as string first
+    debug_log!("1. Channel directory path (from session state): {}", channel_dir_path_str); 
+    // Crawl through the team channel directory
+    for entry in WalkDir::new(channel_dir_path_str) {
+        let entry = entry?;
+        let path = entry.path();
+
+        if path.is_file() && path.extension() == Some(OsStr::new("toml")) {
+            let toml_string = fs::read_to_string(path)?;
+            let toml_value: Value = toml::from_str(&toml_string)?;
+
+            // Check if the file is owned by the collaborator
+            if toml_value.get("owner").and_then(Value::as_str) == Some(collaborator_name) {
+                // Get the updated_at_timestamp
+                if let Some(timestamp) = toml_value
+                    .get("updated_at_timestamp")
+                    .and_then(Value::as_integer)
+                    .map(|ts| ts as u64) // Convert to u64
+                {
+                    if timestamp > last_timestamp {
+                        last_timestamp = timestamp;
+                    }
+                }
+            }
+        }
+    }
+
+    debug_log!("get_last_file_timestamp() -> last_timestamp {:?}", &last_timestamp); 
+    Ok(last_timestamp) // Returns 0 if no matching files are found
+}
+
+// fn get_latest_recieved_from_collaborator_in_teamchannel_file_timestamp(
+//     team_channel_name: &str, 
+//     collaborator_name: &str,
+// ) -> Result<u64, UmaError> {
+//     let mut last_timestamp: u64 = 0; // Initialize with 0 (assuming no files are older than the Unix epoch)
+//     debug_log!("get_last_file_timestamp() started"); 
+    
+//     let team_channel_dir = Path::new("project_graph_data/team_channels").join(team_channel_name);
+
+//     // Crawl through the team channel directory
+//     for entry in WalkDir::new(team_channel_dir) {
+//         let entry = entry?;
+//         let path = entry.path();
+
+//         if path.is_file() && path.extension() == Some(OsStr::new("toml")) {
+//             let toml_string = fs::read_to_string(path)?;
+//             let toml_value: Value = toml::from_str(&toml_string)?;
+
+//             // Check if the file is owned by the collaborator
+//             if toml_value.get("owner").and_then(Value::as_str) == Some(collaborator_name) {
+//                 // Get the updated_at_timestamp
+//                 if let Some(timestamp) = toml_value
+//                     .get("updated_at_timestamp")
+//                     .and_then(Value::as_integer)
+//                     .map(|ts| ts as u64) // Convert to u64
+//                 {
+//                     if timestamp > last_timestamp {
+//                         last_timestamp = timestamp;
+//                     }
+//                 }
+//             }
+//         }
+//     }
+
+//     debug_log!("get_last_file_timestamp() -> last_timestamp {:?}", &last_timestamp); 
+//     Ok(last_timestamp)
+// }
+
+
+// /// --- making a fresh send_queue ---
+// /// 1. pick a target_collaborator
+// /// 2. get the back_of_queue_timestamp
+// /// ```path
+// /// sync_data/team_channel/collaborator_name/back_of_queue_timestamp
+// /// ```
+// /// 3. crawl through the files and subdirectories (recursively) in the teamchannel (only the team_channel directory tree, not all of uma) looking at files:
+// /// 4. if a .toml file, 
+// /// 5. if owner=target_collaborator, 
+// /// 6. if updated_at_timestamp exists
+// /// 7. if updated_at_timestamp > back_of_queue_timestamp
+// /// 8. add that filepath to the sene_queue
+// /// - Note: this only has to be done once after getting a first-in-session ready-signal from a collaborator, after that any new file made (e.g. a new message) is added to the queue automatically. Though this can be repeated any time, e.g. in case of error or if requested.
+// fn make_fresh_send_queue(
+//     team_channel_name: &str,
+//     collaborator_name: &str,
+//     back_of_queue_timestamp: u64,
+// ) -> Result<Vec<PathBuf>, UmaError> {
+//     let sync_data_dir = PathBuf::from("sync_data")
+//         .join(team_channel_name)
+//         .join(collaborator_name);
+
+//     // 2. Get back_of_queue_timestamp
+//     // let timestamp_file_path = sync_data_dir.join("back_of_queue_timestamp");
+//     // let back_of_queue_timestamp = fs::read_to_string(timestamp_file_path)?
+//     //     .parse::<u64>()?;
+
+//     let mut send_queue = Vec::new();
+
+//     // 3. Crawl through the team channel directory tree
+//     for entry in WalkDir::new(PathBuf::from("project_graph_data").join(team_channel_name)) {
+//         let entry = entry?;
+//         if entry.file_type().is_file() && entry.path().extension() == Some(OsStr::new("toml")) {
+//             // 4. If a .toml file
+//             let toml_string = fs::read_to_string(entry.path())?;
+//             let toml_value: Value = toml::from_str(&toml_string)?;
+
+//             // 5. If owner = target collaborator
+//             if toml_value.get("owner").and_then(Value::as_str) == Some(collaborator_name) {
+//                 // 6. If updated_at_timestamp exists
+//                 if let Some(timestamp) = toml_value.get("updated_at_timestamp").and_then(Value::as_integer) {
+//                     let timestamp = timestamp as u64;
+
+//                     // 7. If updated_at_timestamp > back_of_queue_timestamp
+//                     if timestamp > back_of_queue_timestamp {
+//                         // 8. Add filepath to send_queue
+//                         send_queue.push(entry.path().to_path_buf());
+//                     }
+//                 }
+//             }
+//         }
+//     }
+
+//     Ok(send_queue)
+// }
+
+
+// // TODO this is using a depricated struct...should this have its own struct? (WHY SO MANY STRUCTS???)
+// fn get_or_create_send_queue(
+//     collaborator_name: &str, // Change the parameter type to &str
+//     received_timestamp: u64,
+// ) -> Result<SendQueue, io::Error> {
+    
+
+//     let mut new_queue = SendQueue {
+//         timestamp: received_timestamp,
+//         echo_send: received_timestamp == 0, // If timestamp is 0, it's an echo_send request
+//         items: Vec::new(),
+//     };
+
+//     // Iterate over owned files, only considering those modified AFTER the received timestamp
+//     let owned_files_dir = Path::new("project_graph_data/owned_files")
+//         .join(collaborator_name); // Use collaborator_name here
+
+//     for entry in WalkDir::new(owned_files_dir)
+//         .into_iter()
+//         .filter_map(|e| e.ok())
+//         .filter(|e| e.file_type().is_file())
+//     {
+//         // let file_timestamp = get_toml_file_timestamp(&entry.path()); 
+//         // if file_timestamp > received_timestamp {
+//         //     new_queue.items.push(entry.path().to_path_buf());
+//         // }
+
+//         // Han dle the Result from get_file_timestamp 
+//         match get_toml_file_timestamp(&entry.path()) {
+//             Ok(file_timestamp) => { 
+//                 if file_timestamp > received_timestamp {
+//                     new_queue.items.push(entry.path().to_path_buf());
+//                 }
+//             }
+//             Err(e) => {
+//                 // Handle the error appropriately. You might want to:
+//                 // - Log the error
+//                 // - Skip this file and continue with the next one
+//                 // - Return an error from get_or_create_send_queue 
+//                 eprintln!("Error getting timestamp for file: {:?} - {}", entry.path(), e);
+//             }
+//         }
+//     }
+
+//     // Sort the files in the queue based on their modification time
+//     new_queue.items.sort_by_key(|path| {
+//         get_toml_file_timestamp(path).unwrap_or(0) // Handle potential errors in timestamp retrieval
+//     });
+
+//     Ok(new_queue)
+// }
 
 
 
 // /// // (ignore echo-send for now design needs improvement)
-// /// handle_collaborator_meetingroom_desk
+// /// handle_remote_collaborator_meetingroom_desk
 // /// overview:
 // /// 1. listen for 'ready' signal
 // /// if a ready signal is recieved
@@ -4597,7 +5602,7 @@ fn get_or_create_send_queue(
 // ///
 // /// Non-Blocking Mode: Setting the listener to non-blocking allows the loop to check for the halt signal even if no connection is available.
 // ///
-// /// Halt Signal Check: The should_halt() function (which you need to implement based on your halt signal mechanism) is called at the beginning of each loop iteration. If the halt signal is detected, the loop breaks, and the listener is closed.
+// /// Halt Signal Check: The should_halt_uma() function (which you need to implement based on your halt signal mechanism) is called at the beginning of each loop iteration. If the halt signal is detected, the loop breaks, and the listener is closed.
 // ///
 // /// Connection Handling:
 // /// Ok((stream, _addr)): If a connection is successfully established, the code inside the Ok branch will execute. Here, you can spawn a new thread to handle the connection and process the received data.
@@ -4617,9 +5622,9 @@ fn get_or_create_send_queue(
 // /// 2. Handle Transient Errors: For transient errors, we can simply continue the loop and try to receive data again.
 // /// 3. Handle Fatal Errors: For fatal errors, we should log the error, potentially notify the user, and consider exiting the function or the entire sync process.
 // ///
-// /// TODO add  "Flow" steps: handle_collaborator_meetingroom_desk()
-// fn handle_collaborator_meetingroom_desk(
-//     meeting_room_sync_data_fn_input: &ForRemoteCollaboratorDeskThread,
+// // /// TODO add  "Flow" steps: handle_remote_collaborator_meetingroom_desk()
+// fn old_handle_remote_collaborator_meetingroom_desk(
+//     room_sync_input: &ForRemoteCollaboratorDeskThread,
 // ) -> Result<(), UmaError> {
 //         /*
 //     loop:
@@ -4639,68 +5644,68 @@ fn get_or_create_send_queue(
 //     */
 //     // TODO: why are  intray_port__their_desk_you_send and gotit_port__their_desk_you_listen never used here????
 //     debug_log!(
-//         "\n Started HCMD the handle_collaborator_meetingroom_desk() for->{}", 
-//         meeting_room_sync_data_fn_input.remote_collaborator_name
+//         "\n Started HRCD the handle_remote_collaborator_meetingroom_desk() for->{}", 
+//         room_sync_input.remote_collaborator_name
 //     );
 //     debug_log!(
-//         "meeting_room_sync_data_fn_input -> {:?}", 
-//         meeting_room_sync_data_fn_input
+//         "room_sync_input -> {:?}", 
+//         room_sync_input
 //     );
 //     // 1. Create UDP socket
 //     // let socket = UdpSocket::bind(format!(
 //     //     "[{}]:{}", 
-//     //     meeting_room_sync_data_fn_input.remote_collaborator_ipv6_addr_list, 
-//     //     meeting_room_sync_data_fn_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip));
+//     //     room_sync_input.remote_collaborator_ipv6_addr_list, 
+//     //     room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip));
 //     // 1. Iterate over IPv6 addresses and attempt to bind the socket
 //     let mut socket: Option<UdpSocket> = None;
-//     for ipv6_address in &meeting_room_sync_data_fn_input.remote_collaborator_ipv6_addr_list {
+//     for ipv6_address in &room_sync_input.remote_collaborator_ipv6_addr_list {
 //         let bind_result = UdpSocket::bind(SocketAddr::new(
 //             IpAddr::V6(*ipv6_address), 
-//             meeting_room_sync_data_fn_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip
+//             room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip
 //         ));
 
 //         match bind_result {
 //             Ok(sock) => {
 //                 socket = Some(sock);
-//                 debug_log!("HCMD 1. ready Bound UDP socket to [{}]:{}", ipv6_address, meeting_room_sync_data_fn_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip);
+//                 debug_log!("HRCD 1. ready Bound UDP socket to [{}]:{}", ipv6_address, room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip);
 //                 break; // Exit the loop if binding is successful
 //             },
 //             Err(e) => {
-//                 debug_log!("HCMD err 1. ready Failed to bind to [{}]:{}: {}", ipv6_address, meeting_room_sync_data_fn_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip, e);
+//                 debug_log!("HRCD err 1. ready Failed to bind to [{}]:{}: {}", ipv6_address, room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip, e);
 //                 // Continue to the next address
 //             }
 //         }
 //     }
 //     // Print all sync data for the collaborator
 //     debug_log!(
-//         "HCMD 2. ready Print all sync data for the collaborator:meeting_room_sync_data_fn_input {:?}", 
-//         meeting_room_sync_data_fn_input
+//         "HRCD 2. ready Print all sync data for the collaborator:room_sync_input {:?}", 
+//         room_sync_input
 //     );
 
 //     // 2. Check if socket binding was successful (simplified)
-//     let socket = socket.ok_or(UmaError::NetworkError("HCMD Failed to bind to any IPv6 address".to_string()))?;
+//     let socket = socket.ok_or(UmaError::NetworkError("HRCD Failed to bind to any IPv6 address".to_string()))?;
                     
 //     debug_log!(
-//         "HCMD 2. ready listen at this socket {:?}", 
+//         "HRCD 2. ready listen at this socket {:?}", 
 //         &socket,
 //     );
 
     
 //     // ?? Make first blank send_queue here?
-//     let mut session_sendqueue = create_fresh_send_queue(
+//     let mut session_sendqueue = make_fresh_send_queue(
 //             team_channel_name: &str,
 //             collaborator_name: &str,
 //         );
     
 //     // 3. Main loop
-//     let mut last_log_time = Instant::now(); // Track the last time we logged a message
+//     let mut last_debug_log_time = Instant::now(); // Track the last time we logged a message
 //     loop {
-//         debug_log("HCMD 3. starting Main loop...");
+//         debug_log("HRCD 3. starting Main loop...");
 //         // 3. Check for halt signal
-//         if should_halt() {
+//         if should_halt_uma() {
 //             debug_log!(
-//                 "HCMD 3. Check for halt signal. Halting handle_collaborator_meetingroom_desk() for {}", 
-//                 meeting_room_sync_data_fn_input.remote_collaborator_name
+//                 "HRCD 3. Check for halt signal. Halting handle_remote_collaborator_meetingroom_desk() for {}", 
+//                 room_sync_input.remote_collaborator_name
 //             );
 //             break;
 //         }
@@ -4709,31 +5714,31 @@ fn get_or_create_send_queue(
 //         let mut buf = [0; 1024];
 //         match socket.recv_from(&mut buf) {
 //             Ok((amt, src)) => {
-//                 debug_log!("HCMD 4.Ok((amt, src)) Received {} bytes from {} on ready_port", amt, src);
+//                 debug_log!("HRCD 4.Ok((amt, src)) Received {} bytes from {} on ready_port", amt, src);
 
 //                 // --- Inspect Raw Bytes ---
-//                 debug_log!("HCMD 4. Raw bytes received: {:?}", &buf[..amt]); 
+//                 debug_log!("HRCD 4. Raw bytes received: {:?}", &buf[..amt]); 
         
 //                 // --- Inspect Bytes as Hex ---
 //                 let hex_string = buf[..amt].iter()
 //                     .map(|b| format!("{:02X}", b))
 //                     .collect::<String>();
-//                 debug_log!("HCMD 4. Raw bytes as hex: {}", hex_string);
+//                 debug_log!("HRCD 4. Raw bytes as hex: {}", hex_string);
                 
 //                 // 5. Deserialize the ReadySignal
 //                 let ready_signal: ReadySignal = match deserialize_ready_signal(&buf[..amt]) {
 //                     Ok(ready_signal) => {
-//                         println!("HCMD 5. Ok(ready_signal) {}: Received ReadySignal: {:?}",
-//                              meeting_room_sync_data_fn_input.remote_collaborator_name, ready_signal
+//                         println!("HRCD 5. Ok(ready_signal) {}: Received ReadySignal: {:?}",
+//                              room_sync_input.remote_collaborator_name, ready_signal
 //                         ); // Print to console
-//                         debug_log!("HCMD 5. Ok(ready_signal) {}: Received ReadySignal: {:?}",
-//                              meeting_room_sync_data_fn_input.remote_collaborator_name, 
+//                         debug_log!("HRCD 5. Ok(ready_signal) {}: Received ReadySignal: {:?}",
+//                              room_sync_input.remote_collaborator_name, 
 //                              ready_signal
 //                         ); // Log the signal
 //                         ready_signal
 //                     },
 //                     Err(e) => {
-//                         debug_log!("HCMD 5.Err Receive data Failed to parse ready signal: {}", e);
+//                         debug_log!("HRCD 5.Err Receive data Failed to parse ready signal: {}", e);
 //                         continue; // Continue to the next iteration of the loop
 //                     }
 //                 };
@@ -4750,7 +5755,7 @@ fn get_or_create_send_queue(
 //                 // Get / Make Send Queue
 //                 /////////////////////////////
 //                 if !session_sendqueue{
-//                     let mut session_sendqueue = create_fresh_send_queue(
+//                     let mut session_sendqueue = make_fresh_send_queue(
 //                             team_channel_name: &str,
 //                             collaborator_name: &str,
 //                         );
@@ -4767,17 +5772,17 @@ fn get_or_create_send_queue(
 //             Err(e) if e.kind() == ErrorKind::WouldBlock => {
 //                 // No data available yet, continue listening
 //                 // Periodically log that we're listening
-//                 if last_log_time.elapsed() >= Duration::from_secs(5) {
-//                     debug_log!("HCMD 4. {}: Listening for ReadySignal on port {}", 
-//                                meeting_room_sync_data_fn_input.remote_collaborator_name, 
-//                                meeting_room_sync_data_fn_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip);
-//                     last_log_time = Instant::now();
+//                 if last_debug_log_time.elapsed() >= Duration::from_secs(5) {
+//                     debug_log!("HRCD 4. {}: Listening for ReadySignal on port {}", 
+//                                room_sync_input.remote_collaborator_name, 
+//                                room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip);
+//                     last_debug_log_time = Instant::now();
 //                 }
 //             },
 //             Err(e) => {
 //                 // Handle other errors
-//                 debug_log!("HCMD 4. {}: Error receiving data on ready_port: {} ({:?})", 
-//                            meeting_room_sync_data_fn_input.remote_collaborator_name, e, e.kind());
+//                 debug_log!("HRCD 4. {}: Error receiving data on ready_port: {} ({:?})", 
+//                            room_sync_input.remote_collaborator_name, e, e.kind());
 //                 // Consider exiting the function or the sync process if it's a fatal error
 //                 return Err(UmaError::NetworkError(e.to_string())); // Example: Return a NetworkError
 //             }
@@ -4794,7 +5799,7 @@ fn get_or_create_send_queue(
 //             // 5.1 send_toml thread_id = 
 //             let sync_event_id__for_this_thread = format!("{:?}", thread::current().id()); 
 //             debug_log!(
-//                 "HCMD 2. New sync-event thread id: {:?}; in handle_owner_desk()", 
+//                 "HRCD 2. New sync-event thread id: {:?}; in handle_local_owner_desk()", 
 //                 sync_event_id__for_this_thread
 //             );
             
@@ -4812,10 +5817,10 @@ fn get_or_create_send_queue(
 //             // 5. Serialize the ReadySignal
 //             let readysignal_data = serialize_ready_signal(
 //                 &ready_signal_to_send_from_this_loop
-//             ).expect("HCMD 5.2 send_toml err Failed to serialize ReadySignal, ready_signal_to_send_from_this_loop"); 
+//             ).expect("HRCD 5.2 send_toml err Failed to serialize ReadySignal, ready_signal_to_send_from_this_loop"); 
 
 //             // --- Inspect Serialized Data ---
-//             debug_log!("HCMD 5.2 send_toml inspect Serialized Data: {:?}", readysignal_data);
+//             debug_log!("HRCD 5.2 send_toml inspect Serialized Data: {:?}", readysignal_data);
 
 //             // TODO possibly have some mechanism to try addresses until one works?
 //             // 5.3 send_toml Send the signal @ local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
@@ -4834,22 +5839,22 @@ fn get_or_create_send_queue(
 
 //                 // Log before sending
 //                 debug_log!(
-//                     "HCMD 5.3 send_toml Attempting to send ReadySignal to {}: {:?}", 
+//                     "HRCD 5.3 send_toml Attempting to send ReadySignal to {}: {:?}", 
 //                     target_addr, 
 //                     &readysignal_data
 //                 );
 
 //                 // If sending to the first address succeeds, no need to iterate further
 //                 if send_data(&readysignal_data, target_addr).is_ok() {
-//                     debug_log("HHCMD 5.3 send_toml Successfully sent ReadySignal to {} (first address)"//, target_addr
+//                     debug_log("HHRCD 5.3 send_toml Successfully sent ReadySignal to {} (first address)"//, target_addr
 //                         );
 //                     return; // Exit the thread
 //                 } else {
-//                     debug_log("HCMD 5.3 send_toml ERR Failed to send ReadySignal to {} (first address)"//, target_addr
+//                     debug_log("HRCD 5.3 send_toml ERR Failed to send ReadySignal to {} (first address)"//, target_addr
 //                         );
 //                 }
 //             } else {
-//                 debug_log("HCMD 5.3 send_toml ERROR No IPv6 addresses available for {}"
+//                 debug_log("HRCD 5.3 send_toml ERROR No IPv6 addresses available for {}"
 //                     // , own_desk_setup_data.local_user_name
 //                     );
 //             }
@@ -4862,77 +5867,79 @@ fn get_or_create_send_queue(
 //         // 5. Create got_it UDP socket
 //         // let socket = UdpSocket::bind(format!(
 //         //     "[{}]:{}", 
-//         //     meeting_room_sync_data_fn_input.remote_collaborator_ipv6_addr_list, 
-//         //     meeting_room_sync_data_fn_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip));
+//         //     room_sync_input.remote_collaborator_ipv6_addr_list, 
+//         //     room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip));
 //         // 5. Iterate over IPv6 addresses and attempt to bind the socket
 //         let mut socket: Option<UdpSocket> = None;
-//         for ipv6_address in &meeting_room_sync_data_fn_input.remote_collaborator_ipv6_addr_list {
+//         for ipv6_address in &room_sync_input.remote_collaborator_ipv6_addr_list {
 //             let bind_result = UdpSocket::bind(SocketAddr::new(
 //                 IpAddr::V6(*ipv6_address), 
-//                 meeting_room_sync_data_fn_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip
+//                 room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip
 //             ));
 
 //             match bind_result {
 //                 Ok(sock) => {
 //                     socket = Some(sock);
-//                     debug_log!("HCMD 5. got_it Bound UDP socket to [{}]:{}", ipv6_address, meeting_room_sync_data_fn_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip);
+//                     debug_log!("HRCD 5. got_it Bound UDP socket to [{}]:{}", ipv6_address, room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip);
 //                     break; // Exit the loop if binding is successful
 //                 },
 //                 Err(e) => {
-//                     debug_log!("HCMD 5. got_it err 1. Failed to bind to [{}]:{}: {}", ipv6_address, meeting_room_sync_data_fn_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip, e);
+//                     debug_log!("HRCD 5. got_it err 1. Failed to bind to [{}]:{}: {}", ipv6_address, room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip, e);
 //                     // Continue to the next address
 //                 }
 //             }
 //         }
 //         // Print all sync data for the collaborator
 //         debug_log!(
-//             "HCMD 5. Print all sync data for the collaborator:meeting_room_sync_data_fn_input {:?}", 
-//             meeting_room_sync_data_fn_input
+//             "HRCD 5. Print all sync data for the collaborator:room_sync_input {:?}", 
+//             room_sync_input
 //         );
 
 //         // 2. Check if socket binding was successful (simplified)
-//         let socket = socket.ok_or(UmaError::NetworkError("HCMD Failed to bind to any IPv6 address".to_string()))?;
+//         let socket = socket.ok_or(UmaError::NetworkError("HRCD Failed to bind to any IPv6 address".to_string()))?;
                         
 //         debug_log!(
-//             "HCMD 5. listen at this socket {:?}", 
+//             "HRCD 5. listen at this socket {:?}", 
 //             &socket,
 //         );
         
 //         /////////////////////////////
-//         // Listen for 'I got it'
+//         // Listen for 'I got it' GotItSignal
 //         /////////////////////////////
 //         // 4. Receive data
 //         let mut buf = [0; 1024];
 //         match socket.recv_from(&mut buf) {
 //             Ok((amt, src)) => {
-//                 debug_log!("HCMD 4.Ok((amt, src)) Received {} bytes from {} on ready_port", amt, src);
+//                 debug_log!("HRCD 4.Ok((amt, src)) Received {} bytes from {} on gotit port", amt, src);
 
 //                 // --- Inspect Raw Bytes ---
-//                 debug_log!("HCMD 4. Raw bytes received: {:?}", &buf[..amt]); 
+//                 debug_log!("HRCD 4. Raw bytes received: {:?}", &buf[..amt]); 
         
 //                 // --- Inspect Bytes as Hex ---
 //                 let hex_string = buf[..amt].iter()
 //                     .map(|b| format!("{:02X}", b))
 //                     .collect::<String>();
-//                 debug_log!("HCMD 4. Raw bytes as hex: {}", hex_string);
+//                 debug_log!("HRCD 4. Raw bytes as hex: {}", hex_string);
                 
-//                 // 5. Deserialize the ReadySignal
-//                 let ready_signal: ReadySignal = match deserialize_ready_signal(&buf[..amt]) {
-//                     Ok(ready_signal) => {
-//                         println!("HCMD 5. Ok(ready_signal) {}: Received ReadySignal: {:?}",
-//                              meeting_room_sync_data_fn_input.remote_collaborator_name, ready_signal
+//                 // 5. Deserialize the GotItSignal
+//                 let gotit_signal: GotItSignal = match deserialize_gotit_signal(&buf[..amt]) {
+//                     Ok(gotit_signal) => {
+//                         println!("HRCD 5. Ok(gotit_signal) {}: Received GotItSignal: {:?}",
+//                              room_sync_input.remote_collaborator_name, gotit_signal
 //                         ); // Print to console
-//                         debug_log!("HCMD 5. Ok(ready_signal) {}: Received ReadySignal: {:?}",
-//                              meeting_room_sync_data_fn_input.remote_collaborator_name, 
-//                              ready_signal
+//                         debug_log!("HRCD 5. Ok(gotit_signal) {}: Received GotItSignal: {:?}",
+//                              room_sync_input.remote_collaborator_name, 
+//                              gotit_signal
 //                         ); // Log the signal
-//                         ready_signal
+//                         gotit_signal
 //                     },
 //                     Err(e) => {
-//                         debug_log!("HCMD 5.Err Receive data Failed to parse ready signal: {}", e);
+//                         debug_log!("HRCD 5.Err Receive data Failed to parse ready signal: {}", e);
 //                         continue; // Continue to the next iteration of the loop
 //                     }
 //                 };
+                
+//                 // 
 
 //                 // ... (You can add logic here to handle the received ReadySignal) ...
 //                 // TODO under construction!!!
@@ -4946,7 +5953,7 @@ fn get_or_create_send_queue(
 //                 // Get / Make Send Queue
 //                 /////////////////////////////
 //                 if !session_sendqueue{
-//                     let mut session_sendqueue = create_fresh_send_queue(
+//                     let mut session_sendqueue = make_fresh_send_queue(
 //                             team_channel_name: &str,
 //                             collaborator_name: &str,
 //                         );
@@ -4963,17 +5970,17 @@ fn get_or_create_send_queue(
 //             Err(e) if e.kind() == ErrorKind::WouldBlock => {
 //                 // No data available yet, continue listening
 //                 // Periodically log that we're listening
-//                 if last_log_time.elapsed() >= Duration::from_secs(5) {
-//                     debug_log!("HCMD 4. {}: Listening for ReadySignal on port {}", 
-//                                meeting_room_sync_data_fn_input.remote_collaborator_name, 
-//                                meeting_room_sync_data_fn_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip);
-//                     last_log_time = Instant::now();
+//                 if last_debug_log_time.elapsed() >= Duration::from_secs(5) {
+//                     debug_log!("HRCD 4. {}: Listening for ReadySignal on port {}", 
+//                                room_sync_input.remote_collaborator_name, 
+//                                room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip);
+//                     last_debug_log_time = Instant::now();
 //                 }
 //             },
 //             Err(e) => {
 //                 // Handle other errors
-//                 debug_log!("HCMD 4. {}: Error receiving data on ready_port: {} ({:?})", 
-//                            meeting_room_sync_data_fn_input.remote_collaborator_name, e, e.kind());
+//                 debug_log!("HRCD 4. {}: Error receiving data on ready_port: {} ({:?})", 
+//                            room_sync_input.remote_collaborator_name, e, e.kind());
 //                 // Consider exiting the function or the sync process if it's a fatal error
 //                 return Err(UmaError::NetworkError(e.to_string())); // Example: Return a NetworkError
 //             }
@@ -4983,57 +5990,38 @@ fn get_or_create_send_queue(
 //         thread::sleep(Duration::from_millis(100)); // Avoid busy-waiting
 //     }
     
-//     debug_log("ending HCMD");
+//     debug_log("ending HRCD");
 //     Ok(())
 // }
 
 
 
-/// handle_collaborator_meetingroom_desk
-/// overview:
-/// 1. listen for 'ready' signal
-/// if a ready signal is recieved
-/// 2. use the current send queue or if this is the first time make a sendqueue to get the next send-file path
-/// 3. get and send the file at the send-file path (and hold it's timestamp in reserve)
-/// 4. if got-it signal is recieved, put the timestamp of the successfuly sent file into the queue as back_of_queue_timestamp
+/// handle_remote_collaborator_meetingroom_desk (send files here)
+/// very brief overview:
+/// 1. listen for got-it signals and remove fail-flags (yes, their 'last' 3rd step is actually done first)
+/// 2. listen for 'ready' signal
+/// 3. send one send-queue item at at time & update send-queue (pop item and update back_of_queue_timestamp)
+///
 /// delete/rewrite:
 /// ```path
 /// sync_data/team_channel/collaborator_name/back_of_queue_timestamp
 /// ```
-/// For each collaborator's meetingroom desk:
-/// - ports are specified in team_channel node.toml
-/// - collaborator IP in NAME__collaborator.toml
-///
-/// Explanation
-/// Listener Creation: The TcpListener is created and bound to the specified IP address and port.
-///
-/// Non-Blocking Mode: Setting the listener to non-blocking allows the loop to check for the halt signal even if no connection is available.
-///
-/// Halt Signal Check: The should_halt() function (which you need to implement based on your halt signal mechanism) is called at the beginning of each loop iteration. If the halt signal is detected, the loop breaks, and the listener is closed.
-///
-/// Connection Handling:
-/// Ok((stream, _addr)): If a connection is successfully established, the code inside the Ok branch will execute. Here, you can spawn a new thread to handle the connection and process the received data.
-///
-/// Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock: If the accept() method returns a WouldBlock error, it means no connection is available at the moment. The code sleeps briefly to avoid consuming excessive CPU resources by busy-waiting.
-///
-/// Err(e): This branch handles any other errors that might occur during the connection process. You can log the error, notify the user, or take other appropriate actions depending on the error type.
-///
-/// Key Points
-/// Non-Blocking Listener: Essential for checking the halt signal without waiting indefinitely for a connection.
-///
-/// Loop Structure: The loop continuously checks for a halt signal and attempts to accept connections.
-/// start a loop that:
 ///
 /// Error Handling:
 /// 1. Distinguish Between Error Types: Not all errors are equal. Some errors might be transient (e.g., WouldBlock indicating no data is available yet), while others might be fatal (e.g., a socket error).
 /// 2. Handle Transient Errors: For transient errors, we can simply continue the loop and try to receive data again.
 /// 3. Handle Fatal Errors: For fatal errors, we should log the error, potentially notify the user, and consider exiting the function or the entire sync process.
 ///
-/// TODO add  "Flow" steps: handle_collaborator_meetingroom_desk()
-fn handle_collaborator_meetingroom_desk(
-    meeting_room_sync_data_fn_input: &ForRemoteCollaboratorDeskThread,
+/// TODO add  "workflow" steps: handle_remote_collaborator_meetingroom_desk()
+fn handle_remote_collaborator_meetingroom_desk(
+    room_sync_input: &ForRemoteCollaboratorDeskThread,
 ) -> Result<(), UmaError> {
     /*
+    future: this should listen at all allowlisted ips for that remote collaborator
+    to identify the correct ip for this session.
+    e.g. a first setup just to listen to pick the IP
+    then enter the real loop and listen for
+    
     loop:
     // 2. Create listeners for each IP address
     for ipv6_address in &own_desk_setup_data.local_user_ipv6_addr_list {
@@ -5048,151 +6036,462 @@ fn handle_collaborator_meetingroom_desk(
         let ready_port = own_desk_setup_data.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip;
 
         thread::spawn(move || {...
+            
+            
+    future: idea for GPG signed signal
+    sender uses your gpg to sign the timestamp
+    if you confirm that, then go ahead with that IP and request. 
+    this may be equivilent to clearsigning the read signal with less baggage
+    
+    note: same can be done with gotit signal
+    
+    Echosend may pre-fail all the send-events (making a fail-flag file)
+    then calling a loop to call an eqcho-send function for each echo-event
+    if each thread can listen for a got-it and remove the flag
+    
+    or maybe there is an always running got it listener that removes
+    fail flags for any got-it recieved
     */
-    // TODO: why are  intray_port__their_desk_you_send and gotit_port__their_desk_you_listen never used here????
-    debug_log!(
-        "\n Started HCMD the handle_collaborator_meetingroom_desk() for->{}", 
-        meeting_room_sync_data_fn_input.remote_collaborator_name
-    );
-    debug_log!(
-        "meeting_room_sync_data_fn_input -> {:?}", 
-        meeting_room_sync_data_fn_input
-    );
-
-    // --- 1. Create UDP Sockets for Ready and GotIt Signals ---
-    let ready_socket = create_udp_socket(
-        &meeting_room_sync_data_fn_input.remote_collaborator_ipv6_addr_list,
-        meeting_room_sync_data_fn_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip,
-    )?;
-    let gotit_socket = create_udp_socket(
-        &meeting_room_sync_data_fn_input.remote_collaborator_ipv6_addr_list,
-        meeting_room_sync_data_fn_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip,
-    )?;
-
-    // --- 2. Initialize Send Queue ---
-    let mut session_send_queue: Option<SendQueue> = None;
-
-    // --- 3. Main Loop ---
-    let mut last_log_time = Instant::now();
     loop {
-        // --- 3.1 Check for Halt Signal ---
-        if should_halt() {
+        // --- overall loop to restard handler in case of failure ---
+        if should_halt_uma() {
             debug_log!(
-                "HCMD 3.1 Check for halt signal. Halting handle_collaborator_meetingroom_desk() for {}", 
-                meeting_room_sync_data_fn_input.remote_collaborator_name
+                "HRCD 3.1 Check for halt signal. Halting handle_remote_collaborator_meetingroom_desk() for {}", 
+                room_sync_input.remote_collaborator_name
             );
             break;
         }
-
-        // --- 3.2 Receive Ready Signal ---
-        let mut buf = [0; 1024];
-        match ready_socket.recv_from(&mut buf) {
-            Ok((amt, src)) => {
-                debug_log!("HCMD 3.2 Ok((amt, src)) Received {} bytes from {} on ready_port", amt, src);
-
-                // --- Inspect Raw Bytes ---
-                debug_log!("HCMD 3.2 Raw bytes received: {:?}", &buf[..amt]); 
+    
         
-                // --- Inspect Bytes as Hex ---
-                let hex_string = buf[..amt].iter()
-                    .map(|b| format!("{:02X}", b))
-                    .collect::<String>();
-                debug_log!("HCMD 3.2 Raw bytes as hex: {}", hex_string);
+        
+        debug_log!(
+            "\n Started HRCD the handle_remote_collaborator_meetingroom_desk() for->{}", 
+            room_sync_input.remote_collaborator_name
+        );
+        debug_log!(
+            "room_sync_input -> {:?}", 
+            room_sync_input
+        );
+        
+        // --- 1.1 set bootstrap-flag -> do_sendqueue_bootstrap = true;
+        let do_sendqueue_bootstrap = true;
+
+        // --- 1.2 Create two UDP Sockets for Ready and GotIt Signals ---
+        let ready_socket = create_udp_socket(
+            &room_sync_input.remote_collaborator_ipv6_addr_list,
+            room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip,
+        )?;
+        let gotit_socket = create_udp_socket(
+            &room_sync_input.remote_collaborator_ipv6_addr_list,
+            room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip,
+        )?;
+
+        // --- 1.3 Initialize (empty for starting) Send Queue ---
+        let mut session_send_queue: Option<SendQueue> = None;
+
+        // let mut last_debug_log_time = Instant::now();
+        // let mut last_debug_log_time = Instant::now();
+        /*
+        I don't think this makes sense here,
+        shouldn't this be file-timestamps?
+        */
+
+
+        // --- 1.4 Spawn a thread to handle "Got It" signals & fail-flag removal ---
+        let gotit_thread = thread::spawn(move || {
+            //////////////////////////////////////
+            // Listen for 'I got it' GotItSignal
+            ////////////////////////////////////
+
+            loop {
+                // 4.1. Check for halt-uma signal
+                if should_halt_uma() {
+                    debug_log!("HRCD 4.1GotItloop Got It loop: Halt signal received. Exiting.");
+                    break; // Exit the loop
+                }
+
+                // 4.2. Receive and handle "Got It" signals // under construction TODO
+                let mut buf = [0; 1024];
+                match gotit_socket.recv_from(&mut buf) {
+                    Ok((amt, src)) => {
+                        debug_log!("HRCD 4.2GotItloop Ok((amt, src)) Received {} bytes from {} on gotit port", amt, src);
+        
+                        // --- Inspect Raw Bytes ---
+                        debug_log!("HRCD 4.2GotItloop Raw bytes received: {:?}", &buf[..amt]); 
                 
-                // --- 3.3 Deserialize the ReadySignal ---
-                let ready_signal: ReadySignal = match deserialize_ready_signal(&buf[..amt]) {
-                    Ok(ready_signal) => {
-                        println!("HCMD 3.3 Ok(ready_signal) {}: Received ReadySignal: {:?}",
-                             meeting_room_sync_data_fn_input.remote_collaborator_name, ready_signal
-                        ); // Print to console
-                        debug_log!("HCMD 3.3 Ok(ready_signal) {}: Received ReadySignal: {:?}",
-                             meeting_room_sync_data_fn_input.remote_collaborator_name, 
-                             ready_signal
-                        ); // Log the signal
-                        ready_signal
-                    },
-                    Err(e) => {
-                        debug_log!("HCMD 3.3 Err Receive data Failed to parse ready signal: {}", e);
-                        continue; // Continue to the next iteration of the loop
-                    }
-                };
-
-                // --- 3.4 Get or Create Send Queue ---
-                let remote_timestamp = ready_signal.ready_signal_timestamp;
-                session_send_queue = Some(get_or_create_send_queue(
-                    &meeting_room_sync_data_fn_input.remote_collaborator_name, // Pass the collaborator name
-                    remote_timestamp,
-                )?);
-
-                // --- 3.5 Send Files from Queue ---
-                if let Some(ref mut queue) = session_send_queue {
-                    while let Some(file_path) = queue.items.pop() {
-                        // --- 3.5.1 Send File ---
-                        let file_send_result = send_file(
-                            &file_path,
-                            src,
-                            meeting_room_sync_data_fn_input.remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip,
-                        );
-
-                        // --- 3.5.2 Handle File Send Result ---
-                        match file_send_result {
-                            Ok(_) => {
-                                debug_log!("HCMD 3.5.2 File sent successfully: {:?}", file_path);
-
-                                // --- 3.5.3 Send "Got It" Signal ---
-                                let gotit_signal = GotItSignal { id: ready_signal.id.parse().unwrap_or(0) };
-                                // --- 3.5.3 Send "Got It" Signal ---
-                                let gotit_signal = GotItSignal { id: ready_signal.id.parse().unwrap_or(0) };
-                                let gotit_signal_data = serialize_gotit_signal(&gotit_signal); // Use the new function
-                                send_data(
-                                    &gotit_signal_data, 
-                                    src,
-                                )?;
-                                debug_log!("HCMD 3.5.3 Sent GotItSignal to {}", src);
-                                debug_log!("HCMD 3.5.3 Sent GotItSignal to {}", src);
-
-                                // --- 3.5.4 Update Timestamp Log ---
-                                if let Ok(timestamp) = get_toml_file_timestamp(&file_path) {
-                                    update_collaborator_timestamp_log(
-                                        // TODO: Replace with the actual team channel name
-                                        "team_channel_name", 
-                                        &meeting_room_sync_data_fn_input.remote_collaborator_name,
-                                    )?;
-                                    debug_log!("HCMD 3.5.4 Updated timestamp log for {}", meeting_room_sync_data_fn_input.remote_collaborator_name);
-                                }
+                        // --- Inspect Bytes as Hex ---
+                        let hex_string = buf[..amt].iter()
+                            .map(|b| format!("{:02X}", b))
+                            .collect::<String>();
+                        debug_log!("HRCD 4.2GotItloop Raw bytes as hex: {}", hex_string);
+                        
+                        // Clone the values you need from room_sync_input
+                        // let remote_collaborator_name = room_sync_input.remote_collaborator_name.clone(); 
+                        
+                        // 4.3. Deserialize the GotItSignal
+                        let gotit_signal: GotItSignal = match deserialize_gotit_signal(&buf[..amt]) {
+                            Ok(gotit_signal) => {
+                                debug_log!("HRCD 4.3GotItloop Ok(gotit_signal) : Received GotItSignal: {:?}",
+                                    // remote_collaborator_name, 
+                                    gotit_signal
+                                ); // Log the signal
+                                gotit_signal
                             },
                             Err(e) => {
-                                debug_log!("HCMD 3.5.2 Error sending file: {:?} - {}", file_path, e);
-                                // TODO: Handle file send error (e.g., retry, log, etc.)
+                                debug_log!("HRCD 4.3GotItloop Err Receive data Failed to parse ready signal: {}", e);
+                                continue; // Continue to the next iteration of the loop
                             }
-                        }
-
-                        // --- ECHO SEND (TODO) ---
-                        // ... (Implement echo send logic if needed) ...
+                        };
+        
+                        // 4.4  get document_id from signal
+                        let document_id = gotit_signal.di;
+                            
+                
+                    // 3. Sleep for a short duration (e.g., 100ms)
+                    thread::sleep(Duration::from_millis(100));
+                    
+                    
+                    },
+                    Err(e) => {
+                        debug_log!("HRCD 4.2GotItloop Error receiving data on gotit_port: {}", e);
+                        // You might want to handle the error more specifically here (e.g., retry, break the loop, etc.)
+                        // For now, we'll just log the error and continue listening. 
+                        continue;
                     }
+                    
                 }
-            },
-            Err(e) if e.kind() == ErrorKind::WouldBlock => {
-                // --- 3.6 No Ready Signal, Log Periodically ---
-                if last_log_time.elapsed() >= Duration::from_secs(5) {
-                    debug_log!("HCMD 3.6 {}: Listening for ReadySignal on port {}", 
-                               meeting_room_sync_data_fn_input.remote_collaborator_name, 
-                               meeting_room_sync_data_fn_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip);
-                    last_log_time = Instant::now();
-                }
-            },
-            Err(e) => {
-                // --- 3.7 Handle Other Errors ---
-                debug_log!("HCMD 3.7 {}: Error receiving data on ready_port: {} ({:?})", 
-                           meeting_room_sync_data_fn_input.remote_collaborator_name, e, e.kind());
-                return Err(UmaError::NetworkError(e.to_string()));
-            }
         }
+        
+        });
 
-        thread::sleep(Duration::from_millis(100));
-    }
+        
+        
+        // --- 2. Enter Main Loop ---
+        // enter main loop (to handling signals, sending)
+        loop {
+            // --- 3 Check for 'should_halt_uma' Signal ---
+            if should_halt_uma() {
+                debug_log!(
+                    "HRCD 3.1 Check for halt signal. Halting handle_remote_collaborator_meetingroom_desk() for {}", 
+                    room_sync_input.remote_collaborator_name
+                );
+                break;
+            }
 
-    debug_log!("ending HCMD");
+            // --- 4. Handle Ready Signal:  ---
+            // 4.1 Receive Ready Signal
+            let mut buf = [0; 1024]; // TODO size?
+            match ready_socket.recv_from(&mut buf) {
+                Ok((amt, src)) => {
+                    debug_log!(
+                        "HRCD 4.1 Ok((amt, src)) ready_port Signal Received {} bytes from {}", 
+                        amt, 
+                        src
+                    );
+
+                    // --- Inspect Raw Bytes ---
+                    debug_log!(
+                        "HRCD 4.1 Ready Signal Raw bytes received: {:?}", 
+                        &buf[..amt]
+                    ); 
+            
+                    // --- Inspect Bytes as Hex ---
+                    let hex_string = buf[..amt].iter()
+                        .map(|b| format!("{:02X}", b))
+                        .collect::<String>();
+                    debug_log!(
+                        "HRCD 4.1 Ready Signal Raw bytes as hex: {}", 
+                        hex_string
+                    );
+                    
+                    // --- 4.2 Deserialize the ReadySignal ---
+                    let mut ready_signal: ReadySignal = match deserialize_ready_signal(&buf[..amt]) {
+                        Ok(ready_signal) => {
+                            println!("HRCD 4.2 Ok(ready_signal) {}: Received ReadySignal: {:?}",
+                                room_sync_input.remote_collaborator_name, ready_signal
+                            ); // Print to console
+                            debug_log!("HRCD 4.2 Ok(ready_signal) {}: Received ReadySignal: {:?}",
+                                room_sync_input.remote_collaborator_name, 
+                                ready_signal
+                            ); // Log the signal
+                            ready_signal
+                        },
+                        Err(e) => {
+                            debug_log!("HRCD 4.2 Err Receive data Failed to parse ready signal: {}", e);
+                            continue; // Continue to the next iteration of the loop
+                        }
+                    };
+
+                    // --- 4.3 Inspect & edge cases ---
+                    // - look for missing required fields e.g. timestamp
+                    // - only re(is_echo_send_boolean) can be empty, all other cases must drop packet
+                    // - handle edge cases such as valid echo-request...with no queue
+                    // or maybe there is a queue but empty so just let it do nothing?
+                    // maybe ok, make sure this works
+                    /*
+                        struct ReadySignal {
+                            rt: Option<u64>, // ready signal timestamp: last file obtained timestamp
+                            rst: Option<u64>, // send-time
+                            re: Option<bool>, // echo_send
+                            rh: Option<Vec<u8>>, // N hashes of rt + re [can be empty]
+                            
+                        no echo signal, then re = false
+                    */
+                    
+                    // Check .rh timestamp
+                    if ready_signal.rh.is_none() {
+                        debug_log!("HRCD: rh hash field is empty. Drop packet and keep going.");
+                        continue; // Drop packet: Restart the loop to listen for the next signal
+                    }
+                    
+                    // Check .rt timestamp
+                    if ready_signal.rt.is_none() {
+                        debug_log!("HRCD: rt Timestamp field is empty. Drop packet and keep going.");
+                        continue; // Drop packet: Restart the loop to listen for the next signal
+                    }
+                    
+                    // Check .rst timestamp
+                    if ready_signal.rst.is_none() {
+                        debug_log!("HRCD: rst field is empty. Drop packet and keep going.");
+                        continue; // Drop packet: Restart the loop to listen for the next signal
+                    }
+                    
+                    // Check .rst timestamp
+                    if ready_signal.re.is_none() {
+                        ready_signal.re = Some(false);
+                        debug_log!("HRCD: echo field is empty, so is_send_echo = false");
+                    }
+
+                    // --- 4.3.2 Hash-Check for ReadySignal ---
+                    // Drop packet when fail check
+                    if !verify_readysignal_hashes(
+                        &ready_signal, 
+                        &room_sync_input.remote_collaborator_salt_list,
+                    ) {
+                        debug_log!("HRCD: ReadySignal hash verification failed. Discarding signal.");
+                        continue; // Discard the signal and continue listening
+                    }
+
+                    // // --- check for edge case: echo without there being a queue item ---      
+                    // // Check: Nothing to Echo?
+                    // if ready_signal.re.expect("REASON") {
+                    //     if let Some(ref mut queue) = session_send_queue {
+                    //         if queue.items.is_empty() {
+                    //             debug_log!("HRCD: Received echo request but send queue is empty. Dropping request.");
+                    //             continue; // Restart the loop to listen for the next signal
+                    //         }
+
+                    //     } else {
+                    //         debug_log!("HRCD: Received echo request but send queue is not initialized. Dropping request.");
+                    //         continue; // Restart the loop
+                    //     }
+                    // }
+                    
+                    
+                    // // --- 4.3 Get or Create Send Queue ---
+                    // // Step: look at ready_signal.re echo_send
+                    // if !ready_signal.re { // echo_send
+
+                    //     // Time Check!
+                    //     // if the timestamp in the ready-reqeust is earlier than expected: rebuild the send_queue
+                    //     if ready_signal.rt < session_send_queue.back_of_queue_timestamp {
+                    //         let do_sendqueue_bootstrap = true;
+                    //         debug_log("Note: earlier than expected: ready_signal.rt < session_send_queue.back_of_queue_timestamp")
+                    //     }
+                    // }
+                    
+                    
+                    // --- 4.3 Get or Create Send Queue ---
+                    
+                
+                    
+                    let ready_signal_timestamp = ready_signal.rst;
+                    
+                    
+                    // Get / Make Send-Queue
+                    // TODO this maybe should have do_sendqueue_bootstrap as parameter to force new bootstrap
+                    // or is zero signal enough? 
+                    // note: rules on how many zero-signals to do in a session...
+                    
+                    // TODO add request rules:
+                    // no future dated requests
+                    // no requests older than ~10 sec
+                    // only 3 0=timstamp requests per session (count them!)
+                    
+                    
+                    let this_team_channelname = match get_current_team_channel_name() {
+                        Some(name) => name,
+                        None => {
+                            debug_log!("HRCD: Error: Could not get current channel name. Skipping send queue creation.");
+                            continue; // Skip to the next iteration of the loop
+                        }
+                    }; 
+                    
+                    session_send_queue = Some(get_or_create_send_queue(
+                        &this_team_channelname,
+                        &room_sync_input.remote_collaborator_name,
+                        session_send_queue.expect("REASON"),
+                        ready_signal_timestamp.expect("REASON"),
+                    )?);
+
+                    /*
+                    send_toml_file_to_intray(
+                        file_path: &PathBuf, 
+                        target_addr: SocketAddr, 
+                        port: u16,
+                        collaborator_salt_list: &[u128], // Pass the salt list here
+                    )
+                    */
+                    // --- 4.4 Send File: Send One File from Queue ---
+                    if let Some(ref mut queue) = session_send_queue {
+                        while let Some(file_path) = queue.items.pop() {
+                            
+                            // 4.4.1. Get File Send Time
+                            let intray_send_time = get_current_unix_timestamp(); 
+
+                            // 4.4.2. Read File Contents
+                            let file_contents = fs::read(&file_path)?;
+
+                            // 4.4.3. GPG Encrypt File
+                            // GPG encrypt with my private, with their public
+                            let gpg_encrypted_intray_file = encrypt_with_gpg(
+                                &file_contents,
+                                &room_sync_input.remote_collaborator_public_gpg,
+                            )?; 
+
+                            // 4.4.4. Calculate Hashes (Using Collaborator's Salts)
+                            // Change the type to hold Vec<u8>
+                            let mut sendfile_struct_data_to_hash: Vec<Vec<u8>> = Vec::new();
+                            let sendtime_bytes = intray_send_time.to_be_bytes();
+                            sendfile_struct_data_to_hash.push(sendtime_bytes.to_vec()); // Push a Vec<u8>
+                            sendfile_struct_data_to_hash.push(gpg_encrypted_intray_file.clone()); 
+
+                            for salt in &room_sync_input.local_user_salt_list {
+                                // Create a new Vec<u8> for each salt
+                                let salt_bytes = salt.to_be_bytes().to_vec(); 
+                                sendfile_struct_data_to_hash.push(salt_bytes); // Push the owned Vec<u8>
+                            }
+
+                            // Convert to &[u8] slices for the hashing function
+                            let intray_hash_list = calculate_pearson_hashes(
+                                &sendfile_struct_data_to_hash.iter().map(|v| v.as_slice()).collect::<Vec<&[u8]>>() // Specify type here
+                            )?;
+                            
+                            // // Convert to &[u8] slices for the hashing function
+                            // let intray_hash_list = calculate_pearson_hashes(
+                            //     sendfile_struct_data_to_hash.iter().map(|v| v.as_slice()).collect()
+                            // )?;
+
+                            // let mut sendfile_struct_data_to_hash: Vec<&[u8]> = Vec::new();
+                            // let sendtime_bytes = intray_send_time.to_be_bytes();
+                            // sendfile_struct_data_to_hash.push(&sendtime_bytes);
+                            // sendfile_struct_data_to_hash.push(&gpg_encrypted_intray_file);
+
+
+                            // for salt in &room_sync_input.local_user_salt_list {
+                            //     // Create a new Vec<u8> for each salt
+                            //     let salt_bytes = salt.to_be_bytes().to_vec(); 
+                            //     sendfile_struct_data_to_hash.push(salt_bytes.as_slice()); // Push a slice
+                            // }
+
+                            // let intray_hash_list = calculate_pearson_hashes_parallel(sendfile_struct_data_to_hash)?;
+
+                            // // Declare salt_bytes outside the loop, initializing with an empty array
+                            // let salt_bytes: [u8; 16] = [0; 16]; // 16 bytes for u128
+
+                            // for salt in &room_sync_input.local_user_salt_list {
+                            //     salt_bytes.copy_from_slice(&salt.to_be_bytes()); // Copy into the existing array
+                            //     sendfile_struct_data_to_hash.push(&salt_bytes);
+                            // }
+
+                            // let intray_hash_list = calculate_pearson_hashes_parallel(sendfile_struct_data_to_hash)?;
+
+                            // for salt in &room_sync_input.local_user_salt_list {
+                            //     let salt_bytes = salt.to_be_bytes(); // Create a longer-lived value
+                            //     sendfile_struct_data_to_hash.push(&salt_bytes);
+                            // }
+                            // let intray_hash_list = calculate_pearson_hashes_parallel(sendfile_struct_data_to_hash)?;
+                            // let mut sendfile_struct_data_to_hash: Vec<&[u8]> = Vec::new();
+                            // let sendtime_bytes = intray_send_time.to_be_bytes();
+                            // sendfile_struct_data_to_hash.push(&sendtime_bytes);
+                            // sendfile_struct_data_to_hash.push(&gpg_encrypted_intray_file);
+                            // for salt in &room_sync_input.local_user_salt_list {
+                            //     sendfile_struct_data_to_hash.push(&salt.to_be_bytes());
+                            // }
+                            // let intray_hash_list = calculate_pearson_hashes_parallel(sendfile_struct_data_to_hash)?;
+
+                            // 4.4.5. Create SendFile Struct 
+                            let send_file = SendFile {
+                                intray_send_time: intray_send_time,
+                                gpg_encrypted_intray_file: gpg_encrypted_intray_file,
+                                intray_hash_list: intray_hash_list,
+                            }; 
+                            
+                            // --- 4.4.6. Send file: send UDP to intray ---
+                            let file_send_result = send_toml_file_to_intray(
+                                &send_file, 
+                                src,
+                                room_sync_input.remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip,
+                            );
+                            
+
+                            // let file_send_result = send_toml_file_to_intray(
+                            //     &file_path,
+                            //     src,
+                            //     room_sync_input.remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip,
+                            //     &room_sync_input.collaborator_salt_list
+                            // );
+
+                            // --- 4.4.7. Handle File Send Result ---
+                            // If file send does not produce an error:
+                            // 1. update send-queue pop off file path
+                            // 2. update file-queue update queue_back_timestamp
+                            match file_send_result {
+                                Ok(_) => {
+
+                                    // --- 4.4.7.2 Update Timestamp Log ---
+                                    if let Ok(timestamp) = get_toml_file_timestamp(&file_path) {
+                                        update_collaborator_sendqueue_timestamp_log(
+                                            // TODO: Replace with the actual team channel name
+                                            "team_channel_name", 
+                                            &room_sync_input.remote_collaborator_name,
+                                        )?;
+                                        debug_log!("HRCD 4.4.7.2  Updated timestamp log for {}", room_sync_input.remote_collaborator_name);
+                                    }
+                                },
+                                Err(e) => {
+                                    debug_log!("HRCD 4.4.7.2  Error sending file: {:?} - {}", file_path, e);
+                                    // TODO: Handle file send error (e.g., retry, log, etc.)
+                                }
+                            }
+
+                        } // end of while
+                    } // end of 4.4: if let Some(ref mut queue) = session_send_queue {
+                }, // end of the Ok inside the match: Ok((amt, src)) => {
+                Err(e) if e.kind() == ErrorKind::WouldBlock => {
+                    // // --- 3.6 No Ready Signal, Log Periodically ---
+                    // terrible idea: most people are simply not online most of the time
+                    // this is not an error!!
+                    // if last_debug_log_time.elapsed() >= Duration::from_secs(5) {
+                    //     debug_log!("HRCD 3.6 {}: Listening for ReadySignal on port {}", 
+                    //                room_sync_input.remote_collaborator_name, 
+                    //                room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip);
+                    //     last_debug_log_time = Instant::now();
+                    // }
+                },
+                Err(e) => {
+                    // --- 3.7 Handle Other Errors ---
+                    debug_log!("HRCD 3.7 {}: Error receiving data on ready_port: {} ({:?})", 
+                            room_sync_input.remote_collaborator_name, e, e.kind());
+                    return Err(UmaError::NetworkError(e.to_string()));
+                }
+                // }
+            // thread::sleep(Duration::from_millis(100));
+            } // 6091 match ready_socket.recv_from(&mut buf) { 
+        } // 6091... match ready_socket.recv_from(&mut buf) {
+    } // 6091 match ready_socket.recv_from(&mut buf) {
+    // nothing closes the main loop
+    debug_log!("ending HRCD");
     Ok(())
 }
 
@@ -5208,13 +6507,7 @@ fn create_udp_socket(ip_addresses: &[Ipv6Addr], port: u16) -> Result<UdpSocket, 
     Err(UmaError::NetworkError("Failed to bind to any IPv6 address".to_string()))
 }
 
-// --- Helper Function to Send File ---
-fn send_file(file_path: &PathBuf, target_addr: SocketAddr, port: u16) -> Result<(), UmaError> {
-    let socket = UdpSocket::bind(":::0")?;
-    send_toml_file(&socket, &file_path.to_string_lossy(), SocketAddr::new(target_addr.ip(), port))?;
-    debug_log!("File sent to {}:{}", target_addr.ip(), port);
-    Ok(())
-}
+
 
 
 // Result enum for the sync operation, allowing communication between threads
@@ -5223,6 +6516,24 @@ enum SyncResult {
     Failure(UmaError), // Contains an error if sync failed 
 }
 
+
+/// Extracts the channel name from a team channel directory path. 
+/// 
+/// This function assumes the path is in the format 
+/// "project_graph_data/team_channels/channel_name". 
+/// It returns the "channel_name" part of the path.
+///
+/// # Returns
+/// 
+/// * `Option<String>`: The channel name if successfully extracted, `None` otherwise.
+fn get_current_team_channel_name() -> Option<String> {
+    // get path, derive name from path
+    let channel_dir_path_str = read_state_string("current_node_directory_path.txt").ok()?; // read as string first
+    debug_log!("1. Channel directory path (from session state): {}", channel_dir_path_str); 
+    
+    let path = Path::new(&channel_dir_path_str);
+    path.file_name()?.to_str().map(String::from) 
+}
 
 /// for normal mode, updates graph-navigation location and graph-state for both
 /// 1. the struct
@@ -5283,7 +6594,6 @@ fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
     // 1. get sync_meetingroom_config_datasets
     let sync_meetingroom_config_datasets = match make_sync_meetingroomconfig_datasets(&uma_local_owner_user) {
         
-        // TODO What is this doing? re: room_config_datasets
         Ok(room_config_datasets) => {
             debug_log!("Successfully generated room_config_datasets: {:?}", &room_config_datasets); 
             room_config_datasets
@@ -5303,7 +6613,7 @@ fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
     
     // 3. get sync_meetingroom_config_dataset 
     // with MeetingRoomSyncDataset, ForLocalOwnerDeskThread, ForRemoteCollaboratorDeskThread
-
+    
     for this_meetingroom_iter in sync_meetingroom_config_datasets { 
         // Extract data from this_meetingroom_iter
         // and place each pile in a nice baggy for each desk.
@@ -5312,6 +6622,9 @@ fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
         // Create sub-structs
         let data_baggy_for_owner_desk = ForLocalOwnerDeskThread { 
             local_user_name: this_meetingroom_iter.local_user_name.clone(),
+            remote_collaborator_name: this_meetingroom_iter.remote_collaborator_name.clone(),
+            local_user_salt_list: this_meetingroom_iter.local_user_salt_list.clone(),
+            remote_collaborator_salt_list: this_meetingroom_iter.remote_collaborator_salt_list.clone(),
             local_user_ipv6_addr_list: this_meetingroom_iter.local_user_ipv6_addr_list,
             local_user_ipv4_addr_list: this_meetingroom_iter.local_user_ipv4_addr_list,
             local_user_public_gpg: this_meetingroom_iter.local_user_public_gpg.clone(),
@@ -5325,6 +6638,9 @@ fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
         };
         let data_baggy_for_collaborator_desk = ForRemoteCollaboratorDeskThread {
             remote_collaborator_name: this_meetingroom_iter.remote_collaborator_name.clone(),
+            local_user_name: this_meetingroom_iter.local_user_name.clone(),
+            remote_collaborator_salt_list: this_meetingroom_iter.remote_collaborator_salt_list.clone(),
+            local_user_salt_list: this_meetingroom_iter.local_user_salt_list.clone(),
             remote_collaborator_ipv6_addr_list: this_meetingroom_iter.remote_collaborator_ipv6_addr_list,
             remote_collaborator_ipv4_addr_list: this_meetingroom_iter.remote_collaborator_ipv4_addr_list,
             remote_collaborator_public_gpg: this_meetingroom_iter.remote_collaborator_public_gpg.clone(),
@@ -5340,11 +6656,12 @@ fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
         // Create the two "meeting room desks" for each collaborator pair:
         // Your Desk
         let owner_desk_thread = thread::spawn(move || {
-            handle_owner_desk(data_baggy_for_owner_desk); 
+            handle_local_owner_desk(data_baggy_for_owner_desk); 
+            
         });
         // Their Desk
         let collaborator_desk_thread = thread::spawn(move || {
-            handle_collaborator_meetingroom_desk(&data_baggy_for_collaborator_desk);
+            handle_remote_collaborator_meetingroom_desk(&data_baggy_for_collaborator_desk);
         });
         collaborator_threads.push(owner_desk_thread); 
         collaborator_threads.push(collaborator_desk_thread);
@@ -5377,12 +6694,8 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
     2.2 user_app: running one loop-action-set in the user_app()
     
     2.3 saving state in files in uma_state_toml_dir
-    (loop again)
-    
-    
+    (loop again)    
     */
-
-
 
     // Load UMA configuration from uma.toml
     let uma_toml_path = Path::new("uma.toml");
@@ -5734,7 +7047,7 @@ fn main() {
         // 3. Check for halt signal
         if should_not_hard_restart() {
             debug_log(
-                "Halting handle_collaborator_meetingroom_desk()"
+                "Halting handle_remote_collaborator_meetingroom_desk()"
             );
             break;
         }
