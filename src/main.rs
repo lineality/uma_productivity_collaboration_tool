@@ -97,7 +97,7 @@ use std::collections::HashSet;
 // use std::sync::mpsc::Sender;
 
 use std::process::Command;
-use std::sync::mpsc;
+// use std::sync::mpsc;
 
 // For Sync
 use rand::prelude::{
@@ -2652,8 +2652,6 @@ fn initialize_uma_application() -> Result<(), Box<dyn std::error::Error>> {
     debug_log("Staring initialize_uma_application()");
 
 
-    
-
     // --- 1. CHECK FOR & SETUP uma.toml ---
     let uma_toml_path = Path::new("uma.toml");
     if !uma_toml_path.exists() {
@@ -2776,11 +2774,7 @@ fn initialize_uma_application() -> Result<(), Box<dyn std::error::Error>> {
     
     get_local_ip_addresses();
     
-    
 
-
-
-    
     // Ensure project_graph_data/team_channels directory exists
     let team_channels_dir = project_graph_directory.join("team_channels");
     if !team_channels_dir.exists() {
@@ -2845,11 +2839,7 @@ fn initialize_uma_application() -> Result<(), Box<dyn std::error::Error>> {
     create_team_channel(team_channel_name, owner);
     }
     
-    
 
-
-    
-    
     // if !dir_at_path_is_empty_returns_false("project_graph_data/collaborator_files_address_book") {
     debug_log("if !dir_at_path_is_empty_returns_false(Path::new(project_graph_data/collaborator_files_address_book)) { ");
     if !dir_at_path_is_empty_returns_false(Path::new("project_graph_data/collaborator_files_address_book")) { 
@@ -3122,6 +3112,108 @@ fn handle_command(
                 // Display help information
             }
             
+           // "l" | "log" | "logmode" | "debug" | "debuglog" | "showlog" => {
+           //      debug_log("Starting log mode...ctrl+c to exit");
+           //      print!("Starting log mode...ctrl+c to exit");
+
+           //      // 1. Read log_mode_refresh DIRECTLY from uma.toml (without loading user data).
+           //      let uma_toml_path = Path::new("uma.toml");
+           //      let toml_data = toml::from_str::<toml::Value>(&fs::read_to_string(uma_toml_path)?)
+           //          .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?; // Convert toml::de::Error 
+                
+           //      // Use a default refresh rate if log_mode_refresh is not found or invalid.
+           //      // Use a default refresh rate if log_mode_refresh is not found or invalid.
+           //      // let log_mode_refresh = toml_data
+           //      //     .get("log_mode_refresh")
+           //      //     .and_then(toml::Value::as_float) // Use as_float to get the floating-point value
+           //      //     .map(|v| v as f32) // Convert to f32
+           //      //     .unwrap_or(1.0); // Default refresh rate of 1 second
+           //      let log_mode_refresh = match fs::read_to_string(uma_toml_path) {
+           //          Ok(toml_string) => {
+           //              match toml::from_str::<toml::Value>(&toml_string) {
+           //                  Ok(toml_data) => {
+           //                      toml_data
+           //                          .get("log_mode_refresh")
+           //                          .and_then(toml::Value::as_float)
+           //                          .and_then(|v| {
+           //                              if v >= 0.1 && v <= 10.0 {
+           //                                  Some(v as f32)
+           //                              } else {
+           //                                  None
+           //                              }
+           //                          })
+           //                          .unwrap_or(3.0)
+           //                  }
+           //                  Err(e) => {
+           //                      debug_log!("Error parsing uma.toml: {}", e);
+           //                      3.0 // Default to 3 seconds on parsing error
+           //                  }
+           //              }
+           //          }
+           //          Err(e) => {
+           //              debug_log!("Error log_mode_refresh reading uma.toml: {}", e);
+           //              3.0 // Default to 3 seconds on reading error
+           //          }
+           //      };
+
+           //      debug_log!("log_mode_refresh: {:?}", log_mode_refresh); 
+
+           //  // HERE!! HERE!! 
+           //  // Initializing last_log_file_size here 
+           //  let mut last_log_file_size = fs::metadata("uma.log")
+           //      .map(|metadata| metadata.len())
+           //      .unwrap_or(0); // Get initial size, or 0 if error 
+            
+           //  loop { // Enter the refresh loop
+           //      // 1. Read and display the log contents. 
+                
+           //      // HERE!! HERE!!
+           //      // Check for file size changes before reading
+           //      let current_log_file_size = fs::metadata("uma.log") 
+           //          .map(|metadata| metadata.len())
+           //          .unwrap_or(0); 
+           //      if current_log_file_size != last_log_file_size { 
+           //          match fs::read_to_string("uma.log") {
+           //              Ok(log_contents) => {
+           //                  // print!("{}", log_contents); // Print to console for now
+           //                  print!("\x1B[2J\x1B[1;1H"); // Clear the screen
+           //                  println!("{}", log_contents); 
+           //                  // Update the last_log_file_size after reading
+           //                  last_log_file_size = current_log_file_size; 
+           //              }
+           //              Err(e) => {
+           //                  eprintln!("Failed to read uma.log: {}", e);
+           //              }
+           //          }
+           //      }
+                
+           //      // // 1. Read the log_mode_refresh value from uma.toml.
+           //      // let uma_toml_path = Path::new("uma.toml");
+           //      // let user_metadata = match toml::from_str::<LocalUserUma>(&fs::read_to_string(uma_toml_path)?) {
+           //      //     Ok(metadata) => metadata,
+           //      //     Err(e) => {
+           //      //         debug_log!("Error reading or parsing uma.toml: {}", e);
+           //      //         eprintln!("Error reading or parsing uma.toml: {}", e);
+           //      //         return Ok(false); // Or handle the error differently (e.g., use a default value)
+           //      //     }
+           //      // };
+                    
+
+
+           //          // 2. Sleep for a short duration.
+           //          // thread::sleep(Duration::from_secs(log_mode_refresh)); 
+           //          thread::sleep(Duration::from_secs_f32(log_mode_refresh)); // Use from_secs_f32
+
+           //          // // 3. Check for 'esc' key press to exit.
+           //          // if let Ok(input) = tiny_tui::get_input() {
+           //          //     if input == "esc" {
+           //          //         debug_log("Exiting debug log view.");
+           //          //         break; // Exit the loop
+           //          //     }
+           //          // }
+           //      }
+           //  }
+            
            "l" | "log" | "logmode" | "debug" | "debuglog" | "showlog" => {
             debug_log("Starting log mode...ctrl+c to exit");
 
@@ -3166,17 +3258,55 @@ fn handle_command(
                 };
 
                 debug_log!("log_mode_refresh: {:?}", log_mode_refresh); 
-            
-                loop { // Enter the refresh loop
-                    // 1. Read and display the log contents.
-                    match fs::read_to_string("uma.log") {
-                        Ok(log_contents) => {
-                            println!("{}", log_contents); // Print to console for now
-                        }
-                        Err(e) => {
-                            eprintln!("Failed to read uma.log: {}", e);
-                        }
+                
+                let mut last_log_file_size = fs::metadata("uma.log")
+                    .map(|metadata| metadata.len())
+                    .unwrap_or(0); // Get initial size, or 0 if error
+
+                // bootstrap, first print
+                // File size has changed, read and display new contents 
+                match fs::read_to_string("uma.log") {
+                    Ok(log_contents) => {
+                        println!("{}", log_contents); // Print to console for now
                     }
+                    Err(e) => {
+                        eprintln!("Failed to read uma.log: {}", e);
+                    }
+                }
+                        
+                loop { // Enter the refresh loop
+
+                    // Check for file size changes 
+                    let current_log_file_size = fs::metadata("uma.log") 
+                        .map(|metadata| metadata.len())
+                        .unwrap_or(0);
+                    if current_log_file_size != last_log_file_size {
+                        
+                        // 1. Read and display the log contents.
+                        // File size has changed, read and display new contents 
+                        match fs::read_to_string("uma.log") {
+                            Ok(log_contents) => { 
+                                print!("\x1B[2J\x1B[1;1H"); // Clear the screen 
+                                println!("{}", log_contents);
+                                // Update the last_log_file_size after reading
+                                last_log_file_size = current_log_file_size; 
+                            }
+                            Err(e) => {
+                                eprintln!("Failed to read uma.log: {}", e);
+                            }
+                        } 
+                    } 
+                                        
+                                                            
+                    // // 1. Read and display the log contents.
+                    // match fs::read_to_string("uma.log") {
+                    //     Ok(log_contents) => {
+                    //         println!("{}", log_contents); // Print to console for now
+                    //     }
+                    //     Err(e) => {
+                    //         eprintln!("Failed to read uma.log: {}", e);
+                    //     }
+                    // }
                     
                     // // 1. Read the log_mode_refresh value from uma.toml.
                     // let uma_toml_path = Path::new("uma.toml");
@@ -3204,19 +3334,7 @@ fn handle_command(
                     // }
                 }
             }
-               
-            //     debug_log("Displaying debug log contents...");
-            //     // 1. Read the contents of uma.log.
-            //     match fs::read_to_string("uma.log") {
-            //         Ok(log_contents) => {
-            //             // 2. Print the log contents to the console.
-            //             println!("{}", log_contents);
-            //         }
-            //         Err(e) => {
-            //             debug_log!("Failed to read uma.log: {}", e);
-            //         }
-            //     }
-            // }
+
             
            "storyboard" | "mudd" => {
                 debug_log("storyboard");
@@ -3749,20 +3867,20 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
     Ok(sync_config_data_set) 
 }
 
-
-fn send_hello_signal(target_addr: SocketAddr) -> Result<(), io::Error> {
-    match TcpStream::connect(target_addr) {
-        Ok(mut stream) => {
-            stream.write_all(b"Hello, UMA!")?;
-            println!("Sent 'Hello, UMA!' signal to {}", target_addr);
-            Ok(())
-        }
-        Err(e) => {
-            eprintln!("Failed to send signal to {}: {}", target_addr, e);
-            Err(e) 
-        }
-    }
-}
+// // a hello world function for testing
+// fn send_hello_signal(target_addr: SocketAddr) -> Result<(), io::Error> {
+//     match TcpStream::connect(target_addr) {
+//         Ok(mut stream) => {
+//             stream.write_all(b"Hello, UMA!")?;
+//             println!("Sent 'Hello, UMA!' signal to {}", target_addr);
+//             Ok(())
+//         }
+//         Err(e) => {
+//             eprintln!("Failed to send signal to {}: {}", target_addr, e);
+//             Err(e) 
+//         }
+//     }
+// }
 
 // // TODO which struct?
 // // fn is_ip_allowlisted(ip: &IpAddr, sync_config_data_set: &HashSet<RemoteCollaboratorPortsData>) -> bool {
