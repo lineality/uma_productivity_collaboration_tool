@@ -114,7 +114,7 @@ use std::net::{
     Ipv4Addr, 
     Ipv6Addr,
     TcpListener,
-    TcpStream,
+    // TcpStream,
     SocketAddr,
     UdpSocket,
 };
@@ -189,7 +189,7 @@ pub enum SyncError {
 
 #[derive(Debug)]
 enum MyCustomError {
-    IoError(io::Error),
+    IoError(std::io::Error),
     TomlDeserializationError(toml::de::Error),
     InvalidData(String),
     PortCollision(String), 
@@ -250,9 +250,10 @@ impl From<toml::de::Error> for MyCustomError {
 }
 
 #[derive(Debug)]
-pub enum UmaError {
-    IoError(io::Error),
-    TomlDeserializationError(toml::de::Error),
+pub enum ThisProjectError {
+    IoError(std::io::Error),
+    TomlDeserializationError(toml::de::Error), // May be depricated along with serde-crate
+    TomlVanillaDeserialStrError(String), // use without serede crate (good)
     InvalidData(String),
     PortCollision(String), 
     NetworkError(String),
@@ -260,66 +261,549 @@ pub enum UmaError {
     ParseIntError(ParseIntError),
 }
 
-// Implement From<walkdir::Error> for UmaError
-impl From<walkdir::Error> for UmaError {
+// Implement From<walkdir::Error> for ThisProjectError
+impl From<walkdir::Error> for ThisProjectError {
     fn from(err: walkdir::Error) -> Self {
-        UmaError::WalkDirError(err)
+        ThisProjectError::WalkDirError(err)
     }
 }
 
-// Implement From<ParseIntError> for UmaError
-impl From<ParseIntError> for UmaError {
+// Implement From<ParseIntError> for ThisProjectError
+impl From<ParseIntError> for ThisProjectError {
     fn from(err: ParseIntError) -> Self {
-        UmaError::ParseIntError(err)
+        ThisProjectError::ParseIntError(err)
     }
 }
 
-// Implement From<toml::de::Error> for UmaError
-impl From<toml::de::Error> for UmaError {
+// Implement From<toml::de::Error> for ThisProjectError
+impl From<toml::de::Error> for ThisProjectError {
     fn from(err: toml::de::Error) -> Self {
-        UmaError::TomlDeserializationError(err)
+        ThisProjectError::TomlDeserializationError(err)
     }
 }
 
-// Implement the std::error::Error trait for UmaError
-impl std::error::Error for UmaError {
+// Implement the std::error::Error trait for ThisProjectError
+impl std::error::Error for ThisProjectError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match *self {
-            UmaError::IoError(ref err) => Some(err),
-            UmaError::TomlDeserializationError(ref err) => Some(err),
+            ThisProjectError::IoError(ref err) => Some(err),
+            ThisProjectError::TomlDeserializationError(ref err) => Some(err),
             _ => None, 
         }
     }
 }
 
-// Implement the Display trait for UmaError for easy printing 
-impl std::fmt::Display for UmaError {
+// Implement the Display trait for ThisProjectError for easy printing 
+impl std::fmt::Display for ThisProjectError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match *self {
-            UmaError::IoError(ref err) => write!(f, "IO Error: {}", err),
-            UmaError::TomlDeserializationError(ref err) => write!(f, "TOML Error: {}", err),
-            UmaError::InvalidData(ref msg) => write!(f, "Invalid Data: {}", msg),
-            UmaError::PortCollision(ref msg) => write!(f, "Port Collision: {}", msg),
-            UmaError::NetworkError(ref msg) => write!(f, "Network Error: {}", msg),
-            UmaError::WalkDirError(ref err) => write!(f, "WalkDir Error: {}", err), // Add this arm
-            UmaError::ParseIntError(ref err) => write!(f, "ParseInt Error: {}", err), // Add this arm
+            ThisProjectError::IoError(ref err) => write!(f, "IO Error: {}", err),
+            ThisProjectError::TomlDeserializationError(ref err) => write!(f, "TOML TomlDeserializationError  Error: {}", err),
+            ThisProjectError::TomlVanillaDeserialStrError(ref err) => write!(f, "TomlVanillaDeserialStrError TOML Error: {}", err),
+            ThisProjectError::InvalidData(ref msg) => write!(f, "Invalid Data: {}", msg),
+            ThisProjectError::PortCollision(ref msg) => write!(f, "Port Collision: {}", msg),
+            ThisProjectError::NetworkError(ref msg) => write!(f, "Network Error: {}", msg),
+            ThisProjectError::WalkDirError(ref err) => write!(f, "WalkDir Error: {}", err), // Add this arm
+            ThisProjectError::ParseIntError(ref err) => write!(f, "ParseInt Error: {}", err), // Add this arm
             // ... add formatting for other error types
         }
     }
 }
 
-// Implement the From trait to easily convert from other error types into UmaError
-impl From<io::Error> for UmaError {
-    fn from(err: io::Error) -> UmaError {
-        UmaError::IoError(err)
+// Implement the From trait to easily convert from other error types into ThisProjectError
+impl From<io::Error> for ThisProjectError {
+    fn from(err: io::Error) -> ThisProjectError {
+        ThisProjectError::IoError(err)
     }
 }
 
-// impl From<toml::de::Error> for UmaError {
-//     fn from(err: toml::de::Error) -> UmaError {
-//         UmaError::TomlDeserializationError(err)
+// impl From<toml::de::Error> for ThisProjectError {
+//     fn from(err: toml::de::Error) -> ThisProjectError {
+//         ThisProjectError::TomlDeserializationError(err)
 //     }
 // }
+
+
+/*
+Seri_Deseri Serialize To Start
+*/
+
+
+
+/// Serialize struct to .toml file
+/// Serializes a `CollaboratorTomlData` struct into a TOML-formatted string.
+///
+/// This function takes a `CollaboratorTomlData` struct and manually constructs 
+/// a TOML-formatted string representation of the data. 
+///
+/// # No `serde` Crate
+///
+/// This function implements TOML serialization *without* using the `serde` 
+/// crate. It manually formats each field of the `CollaboratorTomlData` struct 
+/// into the TOML syntax.
+///
+/// This approach is taken to avoid the dependency on the `serde` crate 
+/// while still providing a way to generate TOML output.
+///
+/// # TOML Format
+///
+/// The function generates a TOML string with the following structure:
+///
+/// ```toml
+/// user_name = "value"
+/// user_salt_list = [
+///     "0xhex_value",
+///     "0xhex_value",
+///     ...
+/// ]
+/// ipv4_addresses = [
+///     "ip_address",
+///     "ip_address",
+///     ...
+/// ]
+/// ipv6_addresses = [
+///     "ip_address",
+///     "ip_address",
+///     ...
+/// ]
+/// gpg_key_public = "value"
+/// sync_interval = value
+/// updated_at_timestamp = value
+/// ```
+///
+/// # Helper Function
+///
+/// The `serialize_ip_addresses` helper function is used to format the 
+/// `ipv4_addresses` and `ipv6_addresses` fields into TOML array syntax.
+///
+/// # Parameters
+///
+/// - `collaborator`: A reference to the `CollaboratorTomlData` struct to be serialized.
+///
+/// # Returns
+///
+/// Returns a `Result` containing:
+/// - `Ok`: The TOML-formatted string representation of the `CollaboratorTomlData`.
+/// - `Err`: A `ThisProjectError` if an error occurs during serialization (although 
+///           errors are unlikely in this simplified implementation). 
+/// 
+/// # use with
+/// // Serialize the collaborator data to a TOML string
+/// match serialize_collaborator_to_toml(&collaborator) {
+///     Ok(toml_string) => {
+///         println!("Serialized TOML:\n{}", toml_string);
+///
+///         // Write the TOML string to a file (example file path)
+///         match write_toml_to_file("collaborator_data.toml", &toml_string) {
+///             Ok(_) => println!("TOML data written to file successfully."),
+///             Err(e) => println!("Error writing to file: {}", e),
+///         }
+///     }
+///     Err(e) => println!("Error serializing to TOML: {}", e),
+/// }
+fn serialize_collaborator_to_toml(collaborator: &CollaboratorTomlData) -> Result<String, ThisProjectError> {
+    let mut toml_string = String::new();
+
+    // Add user_name
+    toml_string.push_str(&format!("user_name = \"{}\"\n", collaborator.user_name));
+
+    // Add user_salt_list
+    toml_string.push_str("user_salt_list = [\n");
+    for salt in &collaborator.user_salt_list {
+        toml_string.push_str(&format!("    \"0x{:x}\",\n", salt));
+    }
+    toml_string.push_str("]\n");
+
+    // Add ipv4_addresses
+    serialize_ip_addresses(&mut toml_string, "ipv4_addresses", &collaborator.ipv4_addresses)?;
+
+    // Add ipv6_addresses
+    serialize_ip_addresses(&mut toml_string, "ipv6_addresses", &collaborator.ipv6_addresses)?;
+
+    // Add gpg_key_public
+    toml_string.push_str(&format!("gpg_key_public = \"{}\"\n", collaborator.gpg_key_public));
+
+    // Add sync_interval
+    toml_string.push_str(&format!("sync_interval = {}\n", collaborator.sync_interval));
+
+    // Add updated_at_timestamp
+    toml_string.push_str(&format!("updated_at_timestamp = {}\n", collaborator.updated_at_timestamp));
+
+    Ok(toml_string)
+}
+
+// Helper function to serialize IP addresses to TOML array format
+fn serialize_ip_addresses<T: std::fmt::Display>(
+    toml_string: &mut String, 
+    key: &str, 
+    addresses: &Option<Vec<T>>
+) -> Result<(), ThisProjectError> {
+    if let Some(addr_vec) = addresses {
+        toml_string.push_str(&format!("{} = [\n", key));
+        for addr in addr_vec {
+            toml_string.push_str(&format!("    \"{}\",\n", addr));
+        }
+        toml_string.push_str("]\n");
+    }
+    Ok(()) // Return Ok(()) if the addresses field is None
+}
+
+// Function to write a TOML string to a file
+// Function to write a TOML string to a file
+fn write_toml_to_file(file_path: &str, toml_string: &str) -> Result<(), ThisProjectError> {
+    // Attempt to create the file. 
+    let mut file = match File::create(file_path) {
+        Ok(file) => file,
+        Err(e) => return Err(ThisProjectError::IoError(e)), 
+    };
+
+    // Attempt to write to the file.
+    if let Err(e) = file.write_all(toml_string.as_bytes()) {
+        return Err(ThisProjectError::IoError(e));
+    }
+
+    // Everything successful!
+    Ok(()) 
+}
+/*
+Seri_Deseri Serialize To End
+*/
+
+/*
+Seri_Deseri Deserialize From Start
+*/
+
+
+// impl From<std::io::Error> for ThisProjectError {
+//     fn from(err: std::io::Error) -> Self {
+//         ThisProjectError::IoError(err)
+//     }
+// }
+
+// impl From<std::num::ParseIntError> for ThisProjectError {
+//     fn from(err: std::num::ParseIntError) -> Self {
+//         ThisProjectError::ParseIntError(err)
+//     }
+// }
+
+// impl fmt::Display for ThisProjectError {
+//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//         match self {
+//             ThisProjectError::IoError(err) => write!(f, "IO Error: {}", err),
+//             ThisProjectError::TomlVanillaDeserialStrError(err) => write!(f, "TOML Error: {}", err),
+//             ThisProjectError::ParseIntError(err) => write!(f, "Parse Int Error: {}", err),
+//         }
+//     }
+// }
+
+/// Toml Deserialization: Reads collaborator setup data from TOML files in a specified directory.
+///
+/// # Requires: 
+/// the toml crate (use a current version)
+/// 
+/// [dependencies]
+/// toml = "0.8"
+/// 
+/// # Terms:
+/// Serialization: The process of converting a data structure (like your CollaboratorTomlData struct) into a textual representation (like a TOML file).
+/// 
+/// Deserialization: The process of converting a textual representation (like a TOML file) into a data structure (like your CollaboratorTomlData struct).
+/// 
+/// This function reads and parses TOML files located in the directory 
+/// `project_graph_data/collaborator_files_address_book`. Each file is expected to 
+/// contain data for a single collaborator in a structure that can be mapped to 
+/// the `CollaboratorTomlData` struct.
+///
+/// # No `serde` Crate
+///
+/// This function implements TOML parsing *without* using the `serde` crate. 
+/// It manually extracts values from the TOML data using the `toml` crate's 
+/// `Value` enum and pattern matching. 
+///
+/// This approach is taken to avoid the dependency on the `serde` crate 
+/// while still providing a way to parse TOML files.
+///
+/// # Data Extraction
+///
+/// The function extracts the following fields from each TOML file:
+///
+/// - `user_name` (String)
+/// - `user_salt_list` (Vec<u128>): Stored as hexadecimal strings in the TOML file.
+/// - `ipv4_addresses` (Option<Vec<Ipv4Addr>>): Stored as strings in the TOML file.
+/// - `ipv6_addresses` (Option<Vec<Ipv6Addr>>): Stored as strings in the TOML file.
+/// - `gpg_key_public` (String)
+/// - `sync_interval` (u64)
+/// - `updated_at_timestamp` (u64)
+///
+/// # Helper Functions
+///
+/// The following helper functions are used to extract and parse specific data types:
+///
+/// - `extract_ipv4_addresses`: Parses a string array into `Option<Vec<Ipv4Addr>>`.
+/// - `extract_ipv6_addresses`: Parses a string array into `Option<Vec<Ipv6Addr>>`.
+/// - `extract_u64`: Parses a TOML integer into a `u64` value, handling potential errors.
+///
+/// # Error Handling
+///
+/// The function returns a `Result` type to handle potential errors during file 
+/// reading, TOML parsing, and data extraction. The `ThisProjectError` enum is used to 
+/// represent different error types.
+///
+/// # Example TOML File
+///
+/// ```toml
+/// user_name = "Alice"
+/// user_salt_list = ["0x11111111111111111111111111111111", "0x11111111111111111111111111111112"]
+/// ipv4_addresses = ["192.168.1.1", "10.0.0.1"]
+/// ipv6_addresses = ["fe80::1", "::1"]
+/// gpg_key_public = "-----BEGIN PGP PUBLIC KEY BLOCK----- ..."
+/// sync_interval = 60
+/// updated_at_timestamp = 1728307160
+/// ```
+///
+/// # Returns
+///
+/// Returns a `Result` containing:
+/// - `Ok`: A tuple with:
+///     - A vector of successfully parsed `CollaboratorTomlData` instances.
+///     - A vector of any `ThisProjectError` encountered during parsing.
+/// - `Err`: A `ThisProjectError` if there was an error reading the directory or any file.
+/// 
+/// This was developed for the UMA project, as the naming reflects:
+/// https://github.com/lineality/uma_productivity_collaboration_tool
+fn read_a_collaborator_setup_toml() -> Result<(Vec<CollaboratorTomlData>, Vec<ThisProjectError>), ThisProjectError> {
+    let mut collaborators = Vec::new();
+    let mut errors = Vec::new();
+    let dir_path = Path::new("project_graph_data/collaborator_files_address_book");
+
+    for entry in fs::read_dir(dir_path)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if path.is_file() && path.extension().and_then(OsStr::to_str) == Some("toml") {
+            let toml_string = fs::read_to_string(&path)?;
+
+            match toml::from_str::<Value>(&toml_string) {
+                Ok(toml_value) => {
+                    if let Value::Table(table) = toml_value {
+                        // Extract user_name
+                        let user_name = if let Some(Value::String(s)) = table.get("user_name") {
+                            s.clone()
+                        } else {
+                            errors.push(ThisProjectError::TomlVanillaDeserialStrError("Missing user_name".into()));
+                            continue;
+                        };
+
+                        // Extract user_salt_list
+                        let user_salt_list = if let Some(Value::Array(arr)) = table.get("user_salt_list") {
+                            arr.iter()
+                                .map(|val| {
+                                    if let Value::String(s) = val {
+                                        u128::from_str_radix(s.trim_start_matches("0x"), 16)
+                                            .map_err(|e| ThisProjectError::ParseIntError(e))
+                                    } else {
+                                        Err(ThisProjectError::TomlVanillaDeserialStrError("Invalid salt format: Expected string".into()))
+                                    }
+                                })
+                                .collect::<Result<Vec<u128>, ThisProjectError>>()?
+                        } else {
+                            errors.push(ThisProjectError::TomlVanillaDeserialStrError("Missing user_salt_list".into()));
+                            continue;
+                        };
+
+                        // Extract ipv4_addresses
+                        let ipv4_addresses = extract_ipv4_addresses(&table, "ipv4_addresses", &mut errors)?;
+
+                        // Extract ipv6_addresses
+                        let ipv6_addresses = extract_ipv6_addresses(&table, "ipv6_addresses", &mut errors)?;
+
+                        // Extract gpg_key_public
+                        let gpg_key_public = if let Some(Value::String(s)) = table.get("gpg_key_public") {
+                            s.clone()
+                        } else {
+                            errors.push(ThisProjectError::TomlVanillaDeserialStrError("Missing or invalid gpg_key_public".into()));
+                            continue;
+                        };
+
+                        // Extract sync_interval
+                        let sync_interval = extract_u64(&table, "sync_interval", &mut errors)?;
+
+                        // Extract updated_at_timestamp
+                        let updated_at_timestamp = extract_u64(&table, "updated_at_timestamp", &mut errors)?;
+
+                        // Create CollaboratorTomlData instance
+                        collaborators.push(CollaboratorTomlData {
+                            user_name,
+                            user_salt_list,
+                            ipv4_addresses,
+                            ipv6_addresses,
+                            gpg_key_public,
+                            sync_interval,
+                            updated_at_timestamp,
+                        });
+                    } else {
+                        errors.push(ThisProjectError::TomlVanillaDeserialStrError("Invalid TOML structure".into()));
+                    }
+                }
+                Err(e) => {
+                    errors.push(ThisProjectError::TomlVanillaDeserialStrError(e.to_string()));
+                }
+            }
+        }
+    }
+
+    Ok((collaborators, errors))
+}
+
+// // Helper function to extract and parse IPv4 addresses from a toml::Value::Table
+// fn extract_ipv4_addresses(table: &toml::map::Map<String, Value>, key: &str, errors: &mut Vec<ThisProjectError>) -> Result<Option<Vec<Ipv4Addr>>, ThisProjectError> {
+//     if let Some(Value::Array(arr)) = table.get(key) {
+//         let addresses = arr.iter()
+//             .map(|val| {
+//                 if let Value::String(s) = val {
+//                     s.parse::<Ipv4Addr>()
+//                         .map_err(|e| ThisProjectError::TomlVanillaDeserialStrError(format!("Invalid {} format: {}", key, e)))
+//                 } else {
+//                     Err(ThisProjectError::TomlVanillaDeserialStrError(format!("Invalid {} format: Expected string", key)))
+//                 }
+//             })
+//             .collect::<Result<Vec<Ipv4Addr>, ThisProjectError>>()?;
+//         Ok(Some(addresses))
+//     } else {
+//         Ok(None) 
+//     }
+// }
+// Helper function to extract and parse IPv4 addresses from a toml::Value::Table
+fn extract_ipv4_addresses(
+    table: &toml::map::Map<String, Value>, 
+    key: &str, 
+    errors: &mut Vec<ThisProjectError>
+) -> Result<Option<Vec<Ipv4Addr>>, ThisProjectError> {
+    if let Some(Value::Array(arr)) = table.get(key) {
+        let mut addresses = Vec::new(); // Create an empty vector to store addresses
+        for val in arr {
+            if let Value::String(s) = val {
+                match s.parse::<Ipv4Addr>() {
+                    Ok(ip) => addresses.push(ip), // Push successful IP address
+                    Err(e) => errors.push(ThisProjectError::TomlVanillaDeserialStrError(format!("Invalid {} format: {}. Skipping this address.", key, e))),
+                }
+            } else {
+                errors.push(ThisProjectError::TomlVanillaDeserialStrError(format!("Invalid {} format: Expected string. Skipping this address.", key)));
+            }
+        }
+
+        if addresses.is_empty() { // If no valid addresses were found
+            Ok(None)
+        } else {
+            Ok(Some(addresses))
+        }
+    } else {
+        Ok(None) // Return None if the key is not present 
+    }
+}
+
+// // Helper function to extract and parse IPv6 addresses from a toml::Value::Table
+// fn extract_ipv6_addresses(table: &toml::map::Map<String, Value>, key: &str, errors: &mut Vec<ThisProjectError>) -> Result<Option<Vec<Ipv6Addr>>, ThisProjectError> {
+//     if let Some(Value::Array(arr)) = table.get(key) {
+//         let addresses = arr.iter()
+//             .map(|val| {
+//                 if let Value::String(s) = val {
+//                     s.parse::<Ipv6Addr>()
+//                         .map_err(|e| ThisProjectError::TomlVanillaDeserialStrError(format!("Invalid {} format: {}", key, e)))
+//                 } else {
+//                     Err(ThisProjectError::TomlVanillaDeserialStrError(format!("Invalid {} format: Expected string", key)))
+//                 }
+//             })
+//             .collect::<Result<Vec<Ipv6Addr>, ThisProjectError>>()?;
+//         Ok(Some(addresses))
+//     } else {
+//         Ok(None)
+//     }
+// }
+// Helper function to extract and parse IPv6 addresses from a toml::Value::Table
+fn extract_ipv6_addresses(table: &toml::map::Map<String, Value>, key: &str, errors: &mut Vec<ThisProjectError>) -> Result<Option<Vec<Ipv6Addr>>, ThisProjectError> {
+    if let Some(Value::Array(arr)) = table.get(key) {
+        let mut addresses = Vec::new(); // Create an empty vector to store addresses
+        for val in arr {
+            if let Value::String(s) = val {
+                match s.parse::<Ipv6Addr>() {
+                    Ok(ip) => addresses.push(ip), // Push successful IP address
+                    Err(e) => errors.push(ThisProjectError::TomlVanillaDeserialStrError(format!("Invalid {} format: {}. Skipping this address.", key, e))),
+                }
+            } else {
+                errors.push(ThisProjectError::TomlVanillaDeserialStrError(format!("Invalid {} format: Expected string. Skipping this address.", key)));
+            }
+        }
+
+        if addresses.is_empty() { // If no valid addresses were found
+            Ok(None) 
+        } else {
+            Ok(Some(addresses)) 
+        }
+    } else {
+        Ok(None) // Return None if the key is not present
+    }
+}
+
+// Helper function to extract a u64 from a toml::Value::Table
+/// Extracts a `u64` value from a `toml::Value::Table` for a given key.
+///
+/// This helper function attempts to extract a `u64` value associated with the 
+/// specified `key` from a `toml::map::Map` (representing a TOML table). It 
+/// handles cases where the key is missing, the value is not an integer, or 
+/// the integer value is outside the valid range for a `u64`.
+///
+/// # Parameters
+///
+/// - `table`: A reference to the `toml::map::Map` (TOML table) from which to extract the value.
+/// - `key`: The key (as a string slice) associated with the value to extract.
+/// - `errors`: A mutable reference to a vector of `ThisProjectError` to collect any errors encountered during extraction.
+///
+/// # Error Handling
+///
+/// The function uses a `Result` type to handle potential errors. It returns:
+///
+/// - `Ok(u64)`: If the key is found and the value can be successfully parsed as a `u64`.
+/// - `Err(ThisProjectError)`: If:
+///     - The key is missing from the table.
+///     - The value associated with the key is not a `toml::Value::Integer`.
+///     - The integer value is negative or exceeds the maximum value of a `u64`.
+///
+/// In case of errors, a descriptive error message is added to the `errors` vector.
+///
+/// # Example
+///
+/// ```rust
+/// use toml::Value;
+///
+/// let mut errors = Vec::new();
+/// let mut table = toml::map::Map::new();
+/// table.insert("my_key".to_string(), Value::Integer(12345));
+///
+/// let my_value = extract_u64(&table, "my_key", &mut errors);
+///
+/// assert_eq!(my_value.unwrap(), 12345);
+/// assert!(errors.is_empty()); // No errors
+/// ```
+fn extract_u64(table: &toml::map::Map<String, Value>, key: &str, errors: &mut Vec<ThisProjectError>) -> Result<u64, ThisProjectError> {
+    if let Some(Value::Integer(i)) = table.get(key) {
+        // Correct comparison for u64 values:
+        if *i >= 0 && *i <= i64::MAX { // Compare against i64::MAX 
+            Ok(*i as u64) // Safe to cast since it's within i64::MAX
+        } else {
+            errors.push(ThisProjectError::TomlVanillaDeserialStrError(format!("Invalid {}: Out of range for u64", key)));
+            Err(ThisProjectError::TomlVanillaDeserialStrError(format!("Invalid {}: Out of range for u64", key)))
+        }
+    } else {
+        errors.push(ThisProjectError::TomlVanillaDeserialStrError(format!("Missing or invalid {}", key)));
+        Err(ThisProjectError::TomlVanillaDeserialStrError(format!("Missing or invalid {}", key)))
+    }
+}
+
+
+/*
+Seri_Deseri Deserialize From End
+*/
 
 /// get unix time 
 /// e.g. for use with updated_at_timestamp
@@ -331,7 +815,7 @@ fn get_current_unix_timestamp() -> u64 {
 }
 
 
-fn check_all_ports_in_team_channels() -> Result<(), UmaError> {
+fn check_all_ports_in_team_channels() -> Result<(), ThisProjectError> {
     let team_channels_dir = Path::new("project_graph_data/team_channels");
     let mut ports_in_use = HashSet::new();
 
@@ -353,7 +837,7 @@ fn check_all_ports_in_team_channels() -> Result<(), UmaError> {
                     // Extract each port and check if it's in use
                     if let Some(ready_port) = collaborator_data.get("ready_port").and_then(|v| v.as_integer()).map(|p| p as u16) {
                         if is_port_in_use(ready_port) && !ports_in_use.insert(ready_port) {
-                            return Err(UmaError::PortCollision(format!("Port {} is already in use.", ready_port)));
+                            return Err(ThisProjectError::PortCollision(format!("Port {} is already in use.", ready_port)));
                         }
                     }
                     // Repeat for intray_port, gotit_port, self_ready_port, self_intray_port, self_gotit_port
@@ -368,6 +852,31 @@ fn check_all_ports_in_team_channels() -> Result<(), UmaError> {
 
 
 /// check for port collision
+/// Checks if a given port is currently in use.
+///
+/// This function attempts to bind a TCP listener to the specified port on the loopback 
+/// interface (127.0.0.1). If the binding is successful, it means the port is likely 
+/// available. If the binding fails, it suggests the port is already in use.
+///
+/// # Caveats:
+///
+/// * **TCP-Specific:** This check only verifies if a TCP listener can be bound. 
+///   It does not guarantee that the port is not being used by a UDP process
+///   or a process using a different protocol. 
+/// * **UMA is UDP-Only:** Ideally, this function should be replaced with a more
+///   accurate check that is specific to UDP port availability. 
+/// * **Resource Usage:** Binding a TCP listener, even momentarily, consumes system resources. 
+/// * **Race Conditions:** It's possible for another process to bind to the port 
+///   between the time this check is performed and the time UMA actually attempts
+///   to use the port.
+///
+/// # Arguments
+///
+/// * `port` - The port number to check.
+///
+/// # Returns
+///
+/// * `bool` - `true` if the port is likely in use, `false` if it's likely available. 
 fn is_port_in_use(port: u16) -> bool {
     match TcpListener::bind(("127.0.0.1", port)) {
         Ok(_) => false, // Port is available
@@ -538,7 +1047,7 @@ fn debug_log(message: &str) {
 }
 
 /// read timestamps from .toml files, like you were born to do just that...on Mars!!
-fn get_toml_file_timestamp(file_path: &Path) -> Result<u64, UmaError> {
+fn get_toml_file_timestamp(file_path: &Path) -> Result<u64, ThisProjectError> {
     let toml_string = std::fs::read_to_string(file_path)?;
     let toml_value: Value = toml::from_str(&toml_string)?;
 
@@ -547,7 +1056,7 @@ fn get_toml_file_timestamp(file_path: &Path) -> Result<u64, UmaError> {
         .and_then(Value::as_integer) // Try to convert to an integer
         .and_then(|ts| ts.try_into().ok()) // Try to convert to u64
         .ok_or_else(|| {
-            UmaError::InvalidData(format!(
+            ThisProjectError::InvalidData(format!(
                 "Missing or invalid 'updated_at_timestamp' in TOML file: {}",
                 file_path.display()
             ))
@@ -763,9 +1272,9 @@ fn translate_port_assignments(
 ///
 /// # Returns 
 /// 
-/// * `Result<Vec<u8>, UmaError>`:  A `Result` containing the encrypted data as a `Vec<u8>` on success,
-///   or a `UmaError` on failure.
-fn encrypt_with_gpg(data: &[u8], recipient_public_key: &str) -> Result<Vec<u8>, UmaError> {
+/// * `Result<Vec<u8>, ThisProjectError>`:  A `Result` containing the encrypted data as a `Vec<u8>` on success,
+///   or a `ThisProjectError` on failure.
+fn encrypt_with_gpg(data: &[u8], recipient_public_key: &str) -> Result<Vec<u8>, ThisProjectError> {
     let mut child = Command::new("gpg")
         .arg("--encrypt")
         .arg("--recipient")
@@ -777,7 +1286,7 @@ fn encrypt_with_gpg(data: &[u8], recipient_public_key: &str) -> Result<Vec<u8>, 
 
     // Write the data to encrypt to the GPG process's standard input
     {
-        let stdin = child.stdin.as_mut().ok_or_else(|| UmaError::NetworkError("Failed to open stdin for GPG process".to_string()))?;
+        let stdin = child.stdin.as_mut().ok_or_else(|| ThisProjectError::NetworkError("Failed to open stdin for GPG process".to_string()))?;
         stdin.write_all(data)?; 
     }
 
@@ -789,7 +1298,7 @@ fn encrypt_with_gpg(data: &[u8], recipient_public_key: &str) -> Result<Vec<u8>, 
         // Log the GPG error 
         let stderr = String::from_utf8_lossy(&output.stderr);
         debug_log!("GPG encryption error: {}", stderr);
-        Err(UmaError::NetworkError(format!("GPG encryption failed: {}", stderr)))
+        Err(ThisProjectError::NetworkError(format!("GPG encryption failed: {}", stderr)))
     }
 }
 
@@ -1348,8 +1857,8 @@ impl LocalUserUma {
 /// and_then(Value::as_integer) attempts to convert the value to an integer.
 /// and_then(|salt| salt.try_into().ok()) attempts to convert the integer to a u8.
 /// ok_or_else(|| ...) handles the case where the salt is missing or invalid, 
-/// returning a UmaError::InvalidData.
-fn get_team_member_collaborator_salt(collaborator_name: &str) -> Result<u8, UmaError> {
+/// returning a ThisProjectError::InvalidData.
+fn get_team_member_collaborator_salt(collaborator_name: &str) -> Result<u8, ThisProjectError> {
     // 1. Construct File Path
     let file_path = Path::new("project_graph_data/collaborator_files_address_book")
         .join(format!("{}__collaborator.toml", collaborator_name));
@@ -1366,7 +1875,7 @@ fn get_team_member_collaborator_salt(collaborator_name: &str) -> Result<u8, UmaE
         .and_then(Value::as_integer)
         .and_then(|salt| salt.try_into().ok())
         .ok_or_else(|| {
-            UmaError::InvalidData(format!(
+            ThisProjectError::InvalidData(format!(
                 "Missing or invalid 'user_salt' in collaborator file: {}",
                 file_path.display()
             ))
@@ -1380,6 +1889,19 @@ fn get_team_member_collaborator_salt(collaborator_name: &str) -> Result<u8, UmaE
 struct CollaboratorTomlData {
     user_name: String,
     user_salt_list: Vec<u128>,
+    ipv4_addresses: Option<Vec<Ipv4Addr>>,
+    ipv6_addresses: Option<Vec<Ipv6Addr>>,
+    gpg_key_public: String,
+    sync_interval: u64,
+    updated_at_timestamp: u64,
+}
+
+
+/// for an intermediate step in converting data types
+#[derive(Debug, Deserialize, serde::Serialize, Clone)]
+struct RawProtoDataToml {
+    user_name: String,
+    user_salt_list: Vec<String>,
     ipv4_addresses: Option<Vec<Ipv4Addr>>,
     ipv6_addresses: Option<Vec<Ipv6Addr>>,
     gpg_key_public: String,
@@ -1501,6 +2023,203 @@ fn check_collaborator_collisions(
     }
     None // No collisions
 }
+
+// /// depreicated
+// /// read_a_collaborator_setup_toml
+// /// e.g. for getting fields from collaborator setup files in roject_graph_data/collaborator_files_address_book
+// // 3. Modified function to read and parse the data
+// fn read_a_collaborator_setup_toml() -> Result<(Vec<CollaboratorTomlData>, Vec<ThisProjectError>), ThisProjectError> {
+//     let mut collaborators = Vec::new();
+//     let mut errors = Vec::new();
+//     let dir_path = Path::new("project_graph_data/collaborator_files_address_book");
+
+//     for entry in fs::read_dir(dir_path)? {
+//         let entry = entry?;
+//         let path = entry.path();
+
+//         if path.is_file() && path.extension().and_then(OsStr::to_str) == Some("toml") {
+//             let toml_string = fs::read_to_string(&path)?;
+
+//             // 4. Deserialize into the raw struct first
+//             match toml::from_str::<RawProtoDataToml>(&toml_string) { 
+//                 Ok(raw_collaborator) => {
+//                     // 5. Convert the raw data into the final struct
+//                     let collaborator = CollaboratorTomlData {
+//                         user_name: raw_collaborator.user_name, 
+//                         ipv4_addresses: raw_collaborator.ipv4_addresses,
+//                         ipv6_addresses: raw_collaborator.ipv6_addresses,
+//                         gpg_key_public: raw_collaborator.gpg_key_public,
+//                         sync_interval: raw_collaborator.sync_interval,
+//                         updated_at_timestamp: raw_collaborator.updated_at_timestamp,
+//                         user_salt_list: raw_collaborator.user_salt_list
+//                             .iter()
+//                             .map(|salt_str| {
+//                                 u128::from_str_radix(salt_str.trim_start_matches("0x"), 16)
+//                                     .map_err(ThisProjectError::from)
+//                             })
+//                             .collect::<Result<Vec<u128>, ThisProjectError>>()?,
+//                     };
+
+//                     collaborators.push(collaborator);
+//                 }
+//                 Err(e) => errors.push(ThisProjectError::from(e)),
+//             }
+//         }
+//     }
+
+//     // Return the parsed collaborators and any errors encountered
+//     if errors.is_empty() {
+//         Ok((collaborators, errors))
+//     } else {
+//         Ok((collaborators, errors))
+//     }
+// }
+
+
+// fn read_a_collaborator_setup_toml() -> Result<(Vec<CollaboratorTomlData>, Vec<ThisProjectError>), ThisProjectError> {
+//     let mut collaborators = Vec::new();
+//     let mut errors = Vec::new();
+//     let dir_path = Path::new("project_graph_data/collaborator_files_address_book");
+
+//     for entry in fs::read_dir(dir_path)? {
+//         let entry = entry?;
+//         let path = entry.path();
+
+//         if path.is_file() && path.extension().and_then(OsStr::to_str) == Some("toml") {
+//             let toml_string = fs::read_to_string(&path)?;
+
+//             // Deserialize the TOML data into a CollaboratorTomlData struct
+//             match toml::from_str::<CollaboratorTomlData>(&toml_string) {
+//                 Ok(mut collaborator) => {
+//                     // Parse the hex salt strings into u128 values
+//                     collaborator.user_salt_list = collaborator.user_salt_list
+//                         .iter()
+//                         .map(|salt_str| {
+//                             u128::from_str_radix(salt_str.trim_start_matches("0x"), 16)
+//                                 .map_err(ThisProjectError::from)
+//                         })
+//                         .collect::<Result<Vec<u128>, ThisProjectError>>()?; 
+
+//                     // The collaborator now has u128 salts, so push it onto the vector
+//                     collaborators.push(collaborator); 
+//                 }
+//                 Err(e) => errors.push(ThisProjectError::from(e)), // Handle deserialization errors
+//             }
+//         }
+//     }
+
+//     // Return the parsed collaborators and any errors encountered
+//     if errors.is_empty() {
+//         Ok((collaborators, errors))
+//     } else {
+//         Ok((collaborators, errors))
+//     }
+// }
+
+// fn read_a_collaborator_setup_toml() -> Result<(Vec<CollaboratorTomlData>, Vec<ThisProjectError>), ThisProjectError> {
+//     let mut collaborators = Vec::new();
+//     let mut errors = Vec::new();
+//     let dir_path = Path::new("project_graph_data/collaborator_files_address_book");
+
+//     for entry in fs::read_dir(dir_path)? {
+//         let entry = entry?;
+//         let path = entry.path();
+
+//         if path.is_file() && path.extension().and_then(OsStr::to_str) == Some("toml") {
+//             let toml_string = fs::read_to_string(&path)?;
+//             match toml::from_str::<CollaboratorTomlData>(&toml_string) {
+//                 Ok(collaborator) => {
+//                     // No need to parse, salts are already u128
+//                     collaborators.push(collaborator); 
+//                 }
+//                 Err(e) => errors.push(ThisProjectError::from(e)),
+//             }
+//         }
+//     }
+
+//     if errors.is_empty() {
+//         Ok((collaborators, errors))
+//     } else {
+//         Ok((collaborators, errors)) 
+//     }
+// }
+
+
+
+// fn read_a_collaborator_setup_toml() -> Result<(Vec<CollaboratorTomlData>, Vec<ThisProjectError>), ThisProjectError> {
+//     let mut collaborators = Vec::new();
+//     let mut errors = Vec::new();
+//     let dir_path = Path::new("project_graph_data/collaborator_files_address_book");
+
+//     for entry in fs::read_dir(dir_path)? {
+//         let entry = entry?;
+//         let path = entry.path();
+
+//         if path.is_file() && path.extension().and_then(OsStr::to_str) == Some("toml") {
+//             let toml_string = fs::read_to_string(&path)?;
+//             match toml::from_str::<CollaboratorTomlData>(&toml_string) {
+//                 Ok(mut collaborator) => {
+//                     // Parse salt strings into u128
+//                     collaborator.user_salt_list = collaborator.user_salt_list
+//                         .iter()
+//                         .map(|salt_str| salt_str.parse::<u128>().map_err(ThisProjectError::from))
+//                         .collect::<Result<Vec<u128>, ThisProjectError>>()?;
+
+//                     collaborators.push(collaborator);
+//                 }
+//                 Err(e) => errors.push(ThisProjectError::from(e)),
+//             }
+//         }
+//     }
+
+//     if errors.is_empty() {
+//         Ok((collaborators, errors))
+//     } else {
+//         Ok((collaborators, errors)) 
+//     }
+// }
+
+
+// fn read_a_collaborator_setup_toml() -> Result<(Vec<CollaboratorTomlData>, Vec<ThisProjectError>), ThisProjectError> {
+//     let mut collaborators = Vec::new();
+//     let mut errors = Vec::new();
+//     let dir_path = Path::new("project_graph_data/collaborator_files_address_book");
+
+//     for entry in fs::read_dir(dir_path)? {
+//         let entry = entry?;
+//         let path = entry.path();
+
+//         if path.is_file() && path.extension().and_then(OsStr::to_str) == Some("toml") {
+//             // match fs::read_to_string(&path) {
+//             //     Ok(toml_string) => {
+//             //         match toml::from_str::<CollaboratorTomlData>(&toml_string) {
+//             //             Ok(collaborator) => collaborators.push(collaborator),
+//             //             Err(e) => errors.push(ThisProjectError::TomlDeserializationError(e)),
+//             //         }
+//             //     }
+//             match toml::from_str::<CollaboratorTomlData>(&toml_string) {
+//                 Ok(mut collaborator) => {
+//                     // Parse salt strings into u128
+//                     collaborator.user_salt_list = collaborator.user_salt_list
+//                         .iter()
+//                         .map(|salt_str| salt_str.parse::<u128>().map_err(ThisProjectError::from))
+//                         .collect::<Result<Vec<u128>, ThisProjectError>>()?; // Handle potential parsing errors
+        
+//                     collaborators.push(collaborator);
+//                 }
+//                 Err(e) => errors.push(ThisProjectError::IoError(e)),
+//             }
+//         }
+//     }
+
+//     if errors.is_empty() {
+//         Ok((collaborators, errors)) // All files parsed successfully
+//     } else {
+//         // Some files failed to parse, return the successfully parsed collaborators and the errors
+//         Ok((collaborators, errors)) 
+//     }
+// }
+
 
 
 fn add_collaborator_qa(
@@ -2007,7 +2726,7 @@ struct CoreNode {
 fn update_collaborator_sendqueue_timestamp_log(
     team_channel_name: &str,
     collaborator_name: &str,
-) -> Result<u64, UmaError> {
+) -> Result<u64, ThisProjectError> {
     let sync_data_dir = PathBuf::from("sync_data")
         .join(team_channel_name)
         .join(collaborator_name);
@@ -2060,9 +2779,9 @@ fn update_collaborator_sendqueue_timestamp_log(
 // ///
 // /// # Returns
 // ///
-// /// * `Result<CollaboratorData, UmaError>` - `Ok(CollaboratorData)` if the data is 
-// ///    successfully loaded, `Err(UmaError)` if an error occurs.
-// fn load_collaborator_data_from_toml_file(file_path: &Path) -> Result<CollaboratorData, UmaError> {
+// /// * `Result<CollaboratorData, ThisProjectError>` - `Ok(CollaboratorData)` if the data is 
+// ///    successfully loaded, `Err(ThisProjectError)` if an error occurs.
+// fn load_collaborator_data_from_toml_file(file_path: &Path) -> Result<CollaboratorData, ThisProjectError> {
 //     let toml_string = fs::read_to_string(file_path)?;
 //     let collaborator_data: CollaboratorData = toml::from_str(&toml_string)?;
 //     Ok(collaborator_data) 
@@ -2588,39 +3307,6 @@ fn add_im_message(
     })?; // Wrap TOML error in io::Error
     fs::write(path, toml_data)?;
     Ok(())
-}
-
-
-/// read_a_collaborator_setup_toml
-/// e.g. for getting fields from collaborator setup files in roject_graph_data/collaborator_files_address_book
-fn read_a_collaborator_setup_toml() -> Result<(Vec<CollaboratorTomlData>, Vec<UmaError>), UmaError> {
-    let mut collaborators = Vec::new();
-    let mut errors = Vec::new();
-    let dir_path = Path::new("project_graph_data/collaborator_files_address_book");
-
-    for entry in fs::read_dir(dir_path)? {
-        let entry = entry?;
-        let path = entry.path();
-
-        if path.is_file() && path.extension().and_then(OsStr::to_str) == Some("toml") {
-            match fs::read_to_string(&path) {
-                Ok(toml_string) => {
-                    match toml::from_str::<CollaboratorTomlData>(&toml_string) {
-                        Ok(collaborator) => collaborators.push(collaborator),
-                        Err(e) => errors.push(UmaError::TomlDeserializationError(e)),
-                    }
-                }
-                Err(e) => errors.push(UmaError::IoError(e)),
-            }
-        }
-    }
-
-    if errors.is_empty() {
-        Ok((collaborators, errors)) // All files parsed successfully
-    } else {
-        // Some files failed to parse, return the successfully parsed collaborators and the errors
-        Ok((collaborators, errors)) 
-    }
 }
 
 
@@ -3499,6 +4185,16 @@ fn get_addressbook_file_by_username(username: &str) -> Result<CollaboratorTomlDa
     }
 }
 
+/// Used to make a random hex string
+/// to store the u128 salt for salted pearson hash
+/// in the toml file as hex-string
+fn generate_random_salt() -> String {
+    let mut rng = rand::thread_rng();
+    let salt: u128 = rng.gen(); // Generate a random u128
+    format!("0x{:X}", salt) // Convert to hexadecimal string with "0x" prefix
+}
+
+
 /// Loads connection data for members of the currently active team channel.
 /// On success, returns a `HashSet` of `MeetingRoomSyncDataset` structs, 
 /// each containing connection 
@@ -4078,8 +4774,8 @@ fn verify_readysignal_hashes(
 //         // for salt in local_user_salt_list {
 //         //     let mut salted_data = data_to_hash.clone(); // Clone the base data for each salt
 //         //     salted_data.extend_from_slice(&salt.to_be_bytes()); // Append the salt
-//         //     // Convert std::io::Error to UmaError// Calculate and add the hash
-//         //     let hash = pearson_hash_base(data).map_err(UmaError::from)?; 
+//         //     // Convert std::io::Error to ThisProjectError// Calculate and add the hash
+//         //     let hash = pearson_hash_base(data).map_err(ThisProjectError::from)?; 
 //         // }
 
 //         // Create a new ReadySignal with the hashes
@@ -4329,7 +5025,7 @@ fn send_toml_file_to_intray(
     send_file: &SendFile, 
     target_addr: SocketAddr, 
     port: u16,
-) -> Result<(), UmaError> {
+) -> Result<(), ThisProjectError> {
 
     // 1. Serialize SendFile (Manually)
     let mut serialized_send_file: Vec<u8> = Vec::new();
@@ -4364,7 +5060,7 @@ fn send_toml_file_to_intray(
 //     send_file: &SendFile, 
 //     target_addr: SocketAddr, 
 //     port: u16,
-// ) -> Result<(), UmaError> {
+// ) -> Result<(), ThisProjectError> {
 
 //     // 1. Serialize SendFile (Manually)
 //     let mut serialized_send_file: Vec<u8> = Vec::new();
@@ -4543,7 +5239,7 @@ fn handle_local_owner_desk(
         //     // get path, derive name from path
         //     let channel_dir_path_str = read_state_string("current_node_directory_path.txt")?; // read as string first
         //     debug_log!("1. Channel directory path (from session state): {}", channel_dir_path_str); 
-        thread::spawn(move || -> Result<(), UmaError> { // Change the closure to return a Result
+        thread::spawn(move || -> Result<(), ThisProjectError> { // Change the closure to return a Result
             
             // 3. thread_id = 
             let sync_event_id__for_this_thread = format!("{:?}", thread::current().id()); 
@@ -4673,13 +5369,13 @@ fn handle_local_owner_desk(
                     return Ok(()); // Exit the thread
                 } else {
                     debug_log("HLOD err 6. Failed to send ReadySignal to {} (first address)");
-                    return Err(UmaError::NetworkError("Failed to send ReadySignal".to_string())); // Return an error
+                    return Err(ThisProjectError::NetworkError("Failed to send ReadySignal".to_string())); // Return an error
                 }
                 
 
                 } else {
                     debug_log("HLOD ERROR No IPv6 addresses available for {}");
-                    return Err(UmaError::NetworkError("No IPv6 addresses available".to_string())); // Return an error
+                    return Err(ThisProjectError::NetworkError("No IPv6 addresses available".to_string())); // Return an error
                 }
 
         
@@ -4836,7 +5532,7 @@ fn serialize_ready_signal(this_readysignal: &ReadySignal) -> std::io::Result<Vec
 
 // fn calculate_pearson_hashes_parallel(
 //     data_sets: Vec<&[u8]>, // A vector of byte slices to hash
-// ) -> Result<Vec<u8>, UmaError> {
+// ) -> Result<Vec<u8>, ThisProjectError> {
 //     let (tx, rx) = mpsc::channel();
 
 //     // Spawn a thread for each hash calculation
@@ -4871,9 +5567,9 @@ fn serialize_ready_signal(this_readysignal: &ReadySignal) -> std::io::Result<Vec
 ///
 /// # Returns
 ///
-/// * `Result<Vec<u8>, UmaError>`: A `Result` containing a vector of the calculated Pearson hashes,
-///   or a `UmaError` if an error occurs during hash calculation. 
-fn calculate_pearson_hashes(data_sets: &[&[u8]]) -> Result<Vec<u8>, UmaError> {
+/// * `Result<Vec<u8>, ThisProjectError>`: A `Result` containing a vector of the calculated Pearson hashes,
+///   or a `ThisProjectError` if an error occurs during hash calculation. 
+fn calculate_pearson_hashes(data_sets: &[&[u8]]) -> Result<Vec<u8>, ThisProjectError> {
     let mut hashes = Vec::new();
     for data in data_sets {
         let hash = pearson_hash_base(data)?;
@@ -4884,7 +5580,7 @@ fn calculate_pearson_hashes(data_sets: &[&[u8]]) -> Result<Vec<u8>, UmaError> {
 
 // fn calculate_pearson_hashes_parallel(
 //     data_sets: Vec<&[u8]>, // A vector of byte slices to hash
-// ) -> Result<Vec<u8>, UmaError> {
+// ) -> Result<Vec<u8>, ThisProjectError> {
 //     let (tx, rx) = mpsc::channel();
 
 //     // Spawn a thread for each hash calculation
@@ -5113,7 +5809,7 @@ fn deserialize_gotit_signal(bytes: &[u8]) -> Result<GotItSignal, io::Error> {
 /// Convert to String: Convert the byte array back to a string using String::from_utf8(). This assumes the received bytes are in ASCII encoding.
 /// Parse TOML: Parse the TOML string using the toml::from_str() function to create a TOML Value or a custom struct representing the data.
 /// Save to File: Write the parsed TOML data to a file using fs::write().
-fn receive_toml_file(socket: &UdpSocket) -> Result<(Value, SocketAddr), UmaError> {
+fn receive_toml_file(socket: &UdpSocket) -> Result<(Value, SocketAddr), ThisProjectError> {
     let mut buf = [0; 65536]; // Maximum UDP datagram size
     let (amt, src) = socket.recv_from(&mut buf)?;
 
@@ -5258,7 +5954,7 @@ fn receive_toml_file(socket: &UdpSocket) -> Result<(Value, SocketAddr), UmaError
 //     target_addr: SocketAddr, 
 //     port: u16,
 //     collaborator_salt_list: &[u128], // Pass the salt list here
-// ) -> Result<(), UmaError> {
+// ) -> Result<(), ThisProjectError> {
 
 //     // 1. Get File Send Time
 //     let intray_send_time = get_current_unix_timestamp(); // You can replace this with your terse timestamp function later
@@ -5320,7 +6016,7 @@ fn receive_toml_file(socket: &UdpSocket) -> Result<(Value, SocketAddr), UmaError
 
 
 // --- Helper Function to Send File ---
-// fn send_toml_file_to_intray(file_path: &PathBuf, target_addr: SocketAddr, port: u16) -> Result<(), UmaError> {
+// fn send_toml_file_to_intray(file_path: &PathBuf, target_addr: SocketAddr, port: u16) -> Result<(), ThisProjectError> {
 //     let socket = UdpSocket::bind(":::0")?;
 //     send_toml_file(&socket, &file_path.to_string_lossy(), SocketAddr::new(target_addr.ip(), port))?;
 //     debug_log!("File sent to {}:{}", target_addr.ip(), port);
@@ -5379,7 +6075,7 @@ fn receive_toml_file(socket: &UdpSocket) -> Result<(Value, SocketAddr), UmaError
 //         // ... (Implement flag removal logic)
 //         return SyncResult::Success(ready_timestamp);
 //     } else {
-//         let error = UmaError::NetworkError("File transfer failed".to_string()); 
+//         let error = ThisProjectError::NetworkError("File transfer failed".to_string()); 
 //         return SyncResult::Failure(error);
 //     }
 // } 
@@ -5452,13 +6148,13 @@ fn create_retry_flag(
 ///
 /// # Returns
 ///
-/// * `Result<SendQueue, UmaError>`: A `Result` containing the new `SendQueue` on success, or a `UmaError` on failure.
+/// * `Result<SendQueue, ThisProjectError>`: A `Result` containing the new `SendQueue` on success, or a `ThisProjectError` on failure.
 fn get_or_create_send_queue(
     team_channel_name: &str,
     collaborator_name: &str,
     session_send_queue: SendQueue,
     back_of_queue_timestamp: u64,
-) -> Result<SendQueue, UmaError> {
+) -> Result<SendQueue, ThisProjectError> {
     let mut send_queue = SendQueue {
         back_of_queue_timestamp,
         items: Vec::new(),
@@ -5512,7 +6208,7 @@ fn get_or_create_send_queue(
 /// for use by handl local owner desk
 fn get_latest_recieved_from_collaborator_in_teamchannel_file_timestamp(
     collaborator_name: &str,
-) -> Result<u64, UmaError> {
+) -> Result<u64, ThisProjectError> {
     let mut last_timestamp: u64 = 0; // Initialize with 0 (for bootstrap when no files exist)
     debug_log!("get_last_file_timestamp() started"); 
 
@@ -5550,7 +6246,7 @@ fn get_latest_recieved_from_collaborator_in_teamchannel_file_timestamp(
 // fn get_latest_recieved_from_collaborator_in_teamchannel_file_timestamp(
 //     team_channel_name: &str, 
 //     collaborator_name: &str,
-// ) -> Result<u64, UmaError> {
+// ) -> Result<u64, ThisProjectError> {
 //     let mut last_timestamp: u64 = 0; // Initialize with 0 (assuming no files are older than the Unix epoch)
 //     debug_log!("get_last_file_timestamp() started"); 
     
@@ -5603,7 +6299,7 @@ fn get_latest_recieved_from_collaborator_in_teamchannel_file_timestamp(
 //     team_channel_name: &str,
 //     collaborator_name: &str,
 //     back_of_queue_timestamp: u64,
-// ) -> Result<Vec<PathBuf>, UmaError> {
+// ) -> Result<Vec<PathBuf>, ThisProjectError> {
 //     let sync_data_dir = PathBuf::from("sync_data")
 //         .join(team_channel_name)
 //         .join(collaborator_name);
@@ -5743,7 +6439,7 @@ fn get_latest_recieved_from_collaborator_in_teamchannel_file_timestamp(
 // // /// TODO add  "Flow" steps: handle_remote_collaborator_meetingroom_desk()
 // fn old_handle_remote_collaborator_meetingroom_desk(
 //     room_sync_input: &ForRemoteCollaboratorDeskThread,
-// ) -> Result<(), UmaError> {
+// ) -> Result<(), ThisProjectError> {
 //         /*
 //     loop:
 //     // 2. Create listeners for each IP address
@@ -5801,7 +6497,7 @@ fn get_latest_recieved_from_collaborator_in_teamchannel_file_timestamp(
 //     );
 
 //     // 2. Check if socket binding was successful (simplified)
-//     let socket = socket.ok_or(UmaError::NetworkError("HRCD Failed to bind to any IPv6 address".to_string()))?;
+//     let socket = socket.ok_or(ThisProjectError::NetworkError("HRCD Failed to bind to any IPv6 address".to_string()))?;
                     
 //     debug_log!(
 //         "HRCD 2. ready listen at this socket {:?}", 
@@ -5902,7 +6598,7 @@ fn get_latest_recieved_from_collaborator_in_teamchannel_file_timestamp(
 //                 debug_log!("HRCD 4. {}: Error receiving data on ready_port: {} ({:?})", 
 //                            room_sync_input.remote_collaborator_name, e, e.kind());
 //                 // Consider exiting the function or the sync process if it's a fatal error
-//                 return Err(UmaError::NetworkError(e.to_string())); // Example: Return a NetworkError
+//                 return Err(ThisProjectError::NetworkError(e.to_string())); // Example: Return a NetworkError
 //             }
 //         }
 
@@ -6014,7 +6710,7 @@ fn get_latest_recieved_from_collaborator_in_teamchannel_file_timestamp(
 //         );
 
 //         // 2. Check if socket binding was successful (simplified)
-//         let socket = socket.ok_or(UmaError::NetworkError("HRCD Failed to bind to any IPv6 address".to_string()))?;
+//         let socket = socket.ok_or(ThisProjectError::NetworkError("HRCD Failed to bind to any IPv6 address".to_string()))?;
                         
 //         debug_log!(
 //             "HRCD 5. listen at this socket {:?}", 
@@ -6100,7 +6796,7 @@ fn get_latest_recieved_from_collaborator_in_teamchannel_file_timestamp(
 //                 debug_log!("HRCD 4. {}: Error receiving data on ready_port: {} ({:?})", 
 //                            room_sync_input.remote_collaborator_name, e, e.kind());
 //                 // Consider exiting the function or the sync process if it's a fatal error
-//                 return Err(UmaError::NetworkError(e.to_string())); // Example: Return a NetworkError
+//                 return Err(ThisProjectError::NetworkError(e.to_string())); // Example: Return a NetworkError
 //             }
 //         }
         
@@ -6133,7 +6829,7 @@ fn get_latest_recieved_from_collaborator_in_teamchannel_file_timestamp(
 /// TODO add  "workflow" steps: handle_remote_collaborator_meetingroom_desk()
 fn handle_remote_collaborator_meetingroom_desk(
     room_sync_input: &ForRemoteCollaboratorDeskThread,
-) -> Result<(), UmaError> {
+) -> Result<(), ThisProjectError> {
     /*
     future: this should listen at all allowlisted ips for that remote collaborator
     to identify the correct ip for this session.
@@ -6601,7 +7297,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                     // --- 3.7 Handle Other Errors ---
                     debug_log!("HRCD 3.7 {}: Error receiving data on ready_port: {} ({:?})", 
                             room_sync_input.remote_collaborator_name, e, e.kind());
-                    return Err(UmaError::NetworkError(e.to_string()));
+                    return Err(ThisProjectError::NetworkError(e.to_string()));
                 }
                 // }
             // thread::sleep(Duration::from_millis(100));
@@ -6614,7 +7310,7 @@ fn handle_remote_collaborator_meetingroom_desk(
 }
 
 // --- Helper Function to Create UDP Socket ---
-fn create_udp_socket(ip_addresses: &[Ipv6Addr], port: u16) -> Result<UdpSocket, UmaError> {
+fn create_udp_socket(ip_addresses: &[Ipv6Addr], port: u16) -> Result<UdpSocket, ThisProjectError> {
     for ip_address in ip_addresses {
         let bind_result = UdpSocket::bind(SocketAddr::new(IpAddr::V6(*ip_address), port));
         match bind_result {
@@ -6622,7 +7318,7 @@ fn create_udp_socket(ip_addresses: &[Ipv6Addr], port: u16) -> Result<UdpSocket, 
             Err(e) => debug_log!("Failed to bind to [{}]:{}: {}", ip_address, port, e),
         }
     }
-    Err(UmaError::NetworkError("Failed to bind to any IPv6 address".to_string()))
+    Err(ThisProjectError::NetworkError("Failed to bind to any IPv6 address".to_string()))
 }
 
 
@@ -6631,7 +7327,7 @@ fn create_udp_socket(ip_addresses: &[Ipv6Addr], port: u16) -> Result<UdpSocket, 
 // Result enum for the sync operation, allowing communication between threads
 enum SyncResult {
     Success(u64), // Contains the new timestamp after successful sync
-    Failure(UmaError), // Contains an error if sync failed 
+    Failure(ThisProjectError), // Contains an error if sync failed 
 }
 
 
