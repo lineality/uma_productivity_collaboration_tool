@@ -5046,27 +5046,29 @@ fn is_prime(n: u8) -> bool {
 /// 2. intray_hash_list (for intact-ness and author-ness)
 /// 3. gpg_encrypted_file_contents (the content)
 fn send_toml_file_to_intray(
-    send_file: &SendFile, 
+    file_struct_to_send: &SendFile, 
     target_addr: SocketAddr, 
     port: u16,
 ) -> Result<(), ThisProjectError> {
+    debug_log("\n");
+    debug_log("Starting send_toml_file_to_intray");
 
     // 1. Serialize SendFile (Manually)
     let mut serialized_send_file: Vec<u8> = Vec::new();
     
     // Add intray_send_time 
-    serialized_send_file.extend_from_slice(&send_file.intray_send_time.to_be_bytes());
+    serialized_send_file.extend_from_slice(&file_struct_to_send.intray_send_time.to_be_bytes());
     
     // Add intray_hash_list 
     // Handle the Option and extract the Vec<u8>
-    // if let Some(hash_list) = &send_file.intray_hash_list {
+    // if let Some(hash_list) = &file_struct_to_send.intray_hash_list {
     //     serialized_send_file.extend_from_slice(hash_list);
     // }
     // intray_hash_list is not optional:
-    serialized_send_file.extend_from_slice(&send_file.intray_hash_list);
+    serialized_send_file.extend_from_slice(&file_struct_to_send.intray_hash_list);
 
     // Add gpg_encrypted_file_contents
-    serialized_send_file.extend_from_slice(&send_file.gpg_encrypted_intray_file);
+    serialized_send_file.extend_from_slice(&file_struct_to_send.gpg_encrypted_intray_file);
     
     // 2. Send Data
     let socket = UdpSocket::bind(":::0")?; 
@@ -5220,10 +5222,9 @@ fn handle_local_owner_desk(
     - kill thread
     
     */
-    // wait, if only for testing
+    // wait, if only for testing, so thread debug prints do not ~overlap
     thread::sleep(Duration::from_millis(1000)); // Avoid busy-waiting
-    
-    // ALPHA non-parallel version
+
     debug_log!("\n Start HLOD handle_local_owner_desk()");
     // Print all sync data for the desk
     debug_log!("
@@ -5231,13 +5232,14 @@ fn handle_local_owner_desk(
         &local_owner_desk_setup_data
     );
 
-    loop { 
+    loop { // 1. start/restart main loop for handle_local_owner_desk()
         /*
         - every time you send an echo, add true to echo_stack
         - next time you non-echo send, wait for X-sec/stack item
         */
-        // 1. check for halt/quit uma signal
+        // 1.1 check for halt/quit uma signal
         if should_halt_uma() {
+            debug_log!("should_halt_uma(), exiting Uma in handle_local_owner_desk()");
             break;
         }
 
@@ -5246,32 +5248,16 @@ fn handle_local_owner_desk(
 
         // TODO (ideally put all this into a function...so it can echo_send itself)
         // 2. Spawn a thread to send the ReadySignal
-        // thread::spawn(move || {
-            
-        //     // 3. thread_id = 
-        //     let sync_event_id__for_this_thread = format!("{:?}", thread::current().id()); 
-        //     debug_log!(
-        //         "HLOD 2. New sync-event thread id: {:?}; in handle_local_owner_desk()", 
-        //         sync_event_id__for_this_thread
-        //     );
-            
-        //     // // TODO eventually this should be the id of a thread
-        //     // // Generate a unique event ID
-        //     // let sync_event_id__for_this_thread: u64 = rand::random(); 
-            
-            
-        //     // get path, derive name from path
-        //     let channel_dir_path_str = read_state_string("current_node_directory_path.txt")?; // read as string first
-        //     debug_log!("1. Channel directory path (from session state): {}", channel_dir_path_str); 
+
         thread::spawn(move || -> Result<(), ThisProjectError> { // Change the closure to return a Result
-            
+
             // 3. thread_id = 
             let sync_event_id__for_this_thread = format!("{:?}", thread::current().id()); 
             debug_log!(
                 "HLOD 2. New sync-event thread id: {:?}; in handle_local_owner_desk()", 
                 sync_event_id__for_this_thread
             );
-            
+
             // get path, derive name from path
             let channel_dir_path_str = read_state_string("current_node_directory_path.txt")?; // Now you can use ?
 
@@ -6890,11 +6876,12 @@ fn handle_remote_collaborator_meetingroom_desk(
     or maybe there is an always running got it listener that removes
     fail flags for any got-it recieved
     */
-    loop {
-        // --- overall loop to restard handler in case of failure ---
+    loop { // 1. start overall loop to restart whole desk
+        // --- 1. overall loop to restard handler in case of failure ---
+        //  1.1 Check for halt signal.
         if should_halt_uma() {
             debug_log!(
-                "HRCD 3.1 Check for halt signal. Halting handle_remote_collaborator_meetingroom_desk() for {}", 
+                "HRCD 1.1 Check for halt signal. Halting handle_remote_collaborator_meetingroom_desk() for {}", 
                 room_sync_input.remote_collaborator_name
             );
             break;
@@ -6911,10 +6898,10 @@ fn handle_remote_collaborator_meetingroom_desk(
             room_sync_input
         );
         
-        // --- 1.1 set bootstrap-flag -> do_sendqueue_bootstrap = true;
+        // --- 1.2 set bootstrap-flag -> do_sendqueue_bootstrap = true;
         let do_sendqueue_bootstrap = true;
 
-        // --- 1.2 Create two UDP Sockets for Ready and GotIt Signals ---
+        // --- 1.3 Create two UDP Sockets for Ready and GotIt Signals ---
         let ready_socket = create_udp_socket(
             &room_sync_input.remote_collaborator_ipv6_addr_list,
             room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip,
@@ -6924,7 +6911,7 @@ fn handle_remote_collaborator_meetingroom_desk(
             room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip,
         )?;
 
-        // --- 1.3 Initialize (empty for starting) Send Queue ---
+        // --- 1.4 Initialize (empty for starting) Send Queue ---
         let mut session_send_queue: Option<SendQueue> = None;
 
         // let mut last_debug_log_time = Instant::now();
@@ -6935,63 +6922,63 @@ fn handle_remote_collaborator_meetingroom_desk(
         */
 
 
-        // --- 1.4 Spawn a thread to handle "Got It" signals & fail-flag removal ---
+        // --- 1.5 Spawn a thread to handle "Got It" signals & fail-flag removal ---
         let gotit_thread = thread::spawn(move || {
             //////////////////////////////////////
             // Listen for 'I got it' GotItSignal
             ////////////////////////////////////
 
             loop {
-                // 4.1. Check for halt-uma signal
+                // 1.5.1 Check for halt-uma signal
                 if should_halt_uma() {
-                    debug_log!("HRCD 4.1GotItloop Got It loop: Halt signal received. Exiting.");
+                    debug_log!("HRCD 1.5.1 GotItloop Got It loop: Halt signal received. Exiting. in handle_remote_collaborator_meetingroom_desk");
                     break; // Exit the loop
                 }
 
-                // 4.2. Receive and handle "Got It" signals // under construction TODO
+                // 1.5.2 Receive and handle "Got It" signals // under construction TODO
                 let mut buf = [0; 1024];
                 match gotit_socket.recv_from(&mut buf) {
                     Ok((amt, src)) => {
-                        debug_log!("HRCD 4.2GotItloop Ok((amt, src)) Received {} bytes from {} on gotit port", amt, src);
+                        debug_log!("HRCD 1.5.2 GotItloop Ok((amt, src)) Received {} bytes from {} on gotit port", amt, src);
         
                         // --- Inspect Raw Bytes ---
-                        debug_log!("HRCD 4.2GotItloop Raw bytes received: {:?}", &buf[..amt]); 
+                        debug_log!("HRCD 1.5.2 GotItloop Raw bytes received: {:?}", &buf[..amt]); 
                 
                         // --- Inspect Bytes as Hex ---
                         let hex_string = buf[..amt].iter()
                             .map(|b| format!("{:02X}", b))
                             .collect::<String>();
-                        debug_log!("HRCD 4.2GotItloop Raw bytes as hex: {}", hex_string);
+                        debug_log!("HRCD 1.5.2 GotItloop Raw bytes as hex: {}", hex_string);
                         
                         // Clone the values you need from room_sync_input
                         // let remote_collaborator_name = room_sync_input.remote_collaborator_name.clone(); 
                         
-                        // 4.3. Deserialize the GotItSignal
+                        // 1.5.3 Deserialize the GotItSignal
                         let gotit_signal: GotItSignal = match deserialize_gotit_signal(&buf[..amt]) {
                             Ok(gotit_signal) => {
-                                debug_log!("HRCD 4.3GotItloop Ok(gotit_signal) : Received GotItSignal: {:?}",
+                                debug_log!("HRCD 1.5.3 GotItloop Ok(gotit_signal) : Received GotItSignal: {:?}",
                                     // remote_collaborator_name, 
                                     gotit_signal
                                 ); // Log the signal
                                 gotit_signal
                             },
                             Err(e) => {
-                                debug_log!("HRCD 4.3GotItloop Err Receive data Failed to parse ready signal: {}", e);
+                                debug_log!("HRCD 1.5.3 GotItloop Err Receive data Failed to parse ready signal: {}", e);
                                 continue; // Continue to the next iteration of the loop
                             }
                         };
         
-                        // 4.4  get document_id from signal
+                        // 1.5.4  get document_id from signal
                         let document_id = gotit_signal.di;
                             
                 
-                    // 3. Sleep for a short duration (e.g., 100ms)
+                    // 1.5.6 Sleep for a short duration (e.g., 100ms)
                     thread::sleep(Duration::from_millis(100));
                     
                     
                     },
                     Err(e) => {
-                        debug_log!("HRCD 4.2GotItloop Error receiving data on gotit_port: {}", e);
+                        debug_log!("HRCD 1.5 GotItloop Error receiving data on gotit_port: {}", e);
                         // You might want to handle the error more specifically here (e.g., retry, break the loop, etc.)
                         // For now, we'll just log the error and continue listening. 
                         continue;
@@ -7416,6 +7403,12 @@ fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
     // --- WAIT FOR CHANNEL SELECTION ---
     sync_flag_ok_or_wait(3); // Wait for the sync flag to become "1"
 
+    // 1.5.1 Check for halt-uma signal
+    if should_halt_uma() {
+        debug_log!(">*< Halt signal received. Exiting The Uma... in you_love_the_sync_team_office() |o|");
+        return Ok(()); // Exit the function
+    }
+    
     debug_log("starting UMA Sync Team Office...you_love_the_sync_team_office()");
     
     // Read uma_local_owner_user from uma.toml
