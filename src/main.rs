@@ -310,6 +310,21 @@ impl std::fmt::Display for ThisProjectError {
     }
 }
 
+// Implement From<ThisProjectError> for MyCustomError
+impl From<ThisProjectError> for MyCustomError {
+    fn from(error: ThisProjectError) -> Self {
+        match error {
+            ThisProjectError::IoError(e) => MyCustomError::IoError(e),
+            ThisProjectError::TomlDeserializationError(e) => MyCustomError::TomlDeserializationError(e),
+            ThisProjectError::InvalidData(msg) => MyCustomError::InvalidData(msg),
+            ThisProjectError::PortCollision(msg) => MyCustomError::PortCollision(msg),
+            // ... add other conversions for your variants ...
+            _ => MyCustomError::InvalidData("Unknown error".to_string()), // Default case
+        }
+    }
+}
+
+
 // Implement the From trait to easily convert from other error types into ThisProjectError
 impl From<io::Error> for ThisProjectError {
     fn from(err: io::Error) -> ThisProjectError {
@@ -4111,50 +4126,85 @@ fn get_next_message_file_path(current_path: &Path, local_owner_user: &str) -> Pa
 
 
 
+// /// Loads collaborator data from a TOML file based on the username.
+// ///
+// /// This function constructs the path to the collaborator's TOML file
+// /// in the `project_graph_data/collaborator_files_address_book` directory, reads the file contents,
+// /// deserializes the TOML data into a `Collaborator` struct, and returns the result.
+// /// 
+// /// # Arguments 
+// ///
+// /// * `username` - The username of the collaborator whose data needs to be loaded.
+// ///
+// /// # Errors
+// /// 
+// /// This function returns a `Result<Collaborator, MyCustomError>` to handle potential errors:
+// ///  - `MyCustomError::IoError`: If the collaborator file is not found or if there is an error reading the file.
+// ///  - `MyCustomError::TomlDeserializationError`: If there is an error parsing the TOML data.
+// ///
+// /// # Example 
+// ///
+// /// ```
+// /// let collaborator = get_addressbook_file_by_username("alice").unwrap(); // Assuming alice's data exists
+// /// println!("Collaborator: {:?}", collaborator); 
+// /// ```
+// fn get_addressbook_file_by_username(username: &str) -> Result<CollaboratorTomlData, MyCustomError> {
+//     debug_log!("Starting get_addressbook_file_by_username(username),  for -> '{}'", username);
+//     let toml_file_path = Path::new("project_graph_data/collaborator_files_address_book")
+//         .join(format!("{}__collaborator.toml", username));
+
+//     if toml_file_path.exists() {
+//         let toml_string = fs::read_to_string(&toml_file_path)?;
+//         let loaded_collaborator: CollaboratorTomlData = toml::from_str(&toml_string)
+//             .map_err(|e| MyCustomError::TomlDeserializationError(e))?;
+//         debug_log!("in get_addressbook_file_by_username(), ??Collaborator file found ok: {:?}", &toml_file_path);
+//         Ok(loaded_collaborator)
+//     } else {
+//         debug_log!("in get_addressbook_file_by_username(), ??Collaborator file not found: {:?}", toml_file_path);
+//         debug_log!("??Collaborator file not found for '{}'", username);
+
+//         Err(MyCustomError::IoError(io::Error::new(
+//             io::ErrorKind::NotFound,
+//             format!("??Collaborator file not found: {:?}", toml_file_path),
+//         )))
+//     }
+// }
+
 /// Loads collaborator data from a TOML file based on the username.
 ///
-/// This function constructs the path to the collaborator's TOML file
-/// in the `project_graph_data/collaborator_files_address_book` directory, reads the file contents,
-/// deserializes the TOML data into a `Collaborator` struct, and returns the result.
-/// 
-/// # Arguments 
+/// This function uses `read_one_collaborator_setup_toml` to deserialize the collaborator data.
+///
+/// # Arguments
 ///
 /// * `username` - The username of the collaborator whose data needs to be loaded.
 ///
 /// # Errors
-/// 
-/// This function returns a `Result<Collaborator, MyCustomError>` to handle potential errors:
-///  - `MyCustomError::IoError`: If the collaborator file is not found or if there is an error reading the file.
-///  - `MyCustomError::TomlDeserializationError`: If there is an error parsing the TOML data.
 ///
-/// # Example 
+/// This function returns a `Result<CollaboratorTomlData, ThisProjectError>` to handle potential errors:
+///  - `ThisProjectError::IoError`: If the collaborator file is not found or if there is an error reading the file.
+///  - `ThisProjectError::TomlDeserializationError`: If there is an error parsing the TOML data.
+///
+/// # Example
 ///
 /// ```
 /// let collaborator = get_addressbook_file_by_username("alice").unwrap(); // Assuming alice's data exists
-/// println!("Collaborator: {:?}", collaborator); 
+/// println!("Collaborator: {:?}", collaborator);
 /// ```
-fn get_addressbook_file_by_username(username: &str) -> Result<CollaboratorTomlData, MyCustomError> {
+fn get_addressbook_file_by_username(username: &str) -> Result<CollaboratorTomlData, ThisProjectError> {
     debug_log!("Starting get_addressbook_file_by_username(username),  for -> '{}'", username);
-    let toml_file_path = Path::new("project_graph_data/collaborator_files_address_book")
-        .join(format!("{}__collaborator.toml", username));
 
-    if toml_file_path.exists() {
-        let toml_string = fs::read_to_string(&toml_file_path)?;
-        let loaded_collaborator: CollaboratorTomlData = toml::from_str(&toml_string)
-            .map_err(|e| MyCustomError::TomlDeserializationError(e))?;
-        debug_log!("in get_addressbook_file_by_username(), ??Collaborator file found ok: {:?}", &toml_file_path);
-        Ok(loaded_collaborator)
-    } else {
-        debug_log!("in get_addressbook_file_by_username(), ??Collaborator file not found: {:?}", toml_file_path);
-        debug_log!("??Collaborator file not found for '{}'", username);
-
-        Err(MyCustomError::IoError(io::Error::new(
-            io::ErrorKind::NotFound,
-            format!("??Collaborator file not found: {:?}", toml_file_path),
-        )))
+    // Use read_one_collaborator_setup_toml to read and deserialize the data
+    match read_one_collaborator_setup_toml(username) {
+        Ok(loaded_collaborator) => {
+            debug_log!("Collaborator file found ok.");
+            Ok(loaded_collaborator)
+        }
+        Err(e) => {
+            debug_log!("Collaborator file not found: {:?}", e);
+            Err(e) // Propagate the error from read_one_collaborator_setup_toml
+        }
     }
 }
-
 
 
 /// Used to make a random hex string
@@ -4377,7 +4427,8 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
         Ok(data) => data.user_salt_list,
         Err(e) => {
             debug_log!("Error loading local user's salt list: {}", e);
-            return Err(e); 
+            // return Err(e); 
+            return Err(e.into()); // Convert ThisProjectError to MyCustomError
         }
     };     
     
@@ -4396,7 +4447,7 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
             Err(e) => {
                 // This is where you'll most likely get the "No such file or directory" error
                 debug_log!("Error 8. loading collaborator {}. File might be missing. Error: {}", collaborator_name, e); 
-                return Err(e); // Propagate the error
+                return Err(e.into()); // Convert ThisProjectError to MyCustomError
             }
         };
         debug_log!(
@@ -4484,7 +4535,8 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
             Ok(data) => data.user_salt_list,
             Err(e) => {
                 debug_log!("Error loading remote_collaborator_salt_list user's salt list: {}", e);
-                return Err(e); 
+                // return Err(e); 
+                return Err(e.into()); // Convert ThisProjectError to MyCustomError
             }
         }; 
 
