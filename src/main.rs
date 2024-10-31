@@ -6897,9 +6897,6 @@ fn handle_remote_collaborator_meetingroom_desk(
             "room_sync_input -> {:?}", 
             room_sync_input
         );
-        
-        // --- 1.2 set bootstrap-flag -> do_sendqueue_bootstrap = true;
-        let do_sendqueue_bootstrap = true;
 
         // --- 1.3 Create two UDP Sockets for Ready and GotIt Signals ---
         let ready_socket = create_udp_socket(
@@ -6989,7 +6986,11 @@ fn handle_remote_collaborator_meetingroom_desk(
         
         });
 
+        // 1.6.1 zero_timestamp_counter = 0 for ready signal send-at timestamps
+        let mut zero_timestamp_counter = 0;
         
+        // 1.6.2 hash_set_session_nonce = HashSet::new() as protection against replay attacks Create a HashSet to store received hashes
+        let mut hash_set_session_nonce = HashSet::new();  // Create a HashSet to store received hashes
         
         // --- 2. Enter Main Loop ---
         // enter main loop (to handling signals, sending)
@@ -7030,6 +7031,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                     );
 
                     // --- 2.3 Deserialize the ReadySignal ---
+                    // TODO add size check to deserialize function
                     let mut ready_signal: ReadySignal = match deserialize_ready_signal(&buf[..amt]) {
                         Ok(ready_signal) => {
                             println!("HRCD 2.3 Deserialize Ok(ready_signal) {}: Received ReadySignal: {:?}",
@@ -7063,6 +7065,10 @@ fn handle_remote_collaborator_meetingroom_desk(
                         no echo signal, then re = false
                     */
 
+                    
+                    
+                    
+                    
                     // Check .rh hash
                     if ready_signal.rh.is_none() {
                         debug_log!("HRCD 2.4.1: rh hash field is empty. Drop packet and keep going.");
@@ -7097,6 +7103,24 @@ fn handle_remote_collaborator_meetingroom_desk(
                         continue; // Discard the signal and continue listening
                     }
 
+                    // --- 2.6 Check / Add Hash-Nonce for per-session ready-signals ---
+                    // ...e.g. guarding against the few seconds of expiration-gap
+                    // After you deserialize the ReadySignal and before the other checks:
+                    let ready_signal_hash_vec = ready_signal.rh.clone().expect("rh is none");
+
+                    if !ready_signal_hash_vec.is_empty() {
+                        if hash_set_session_nonce.contains(&ready_signal_hash_vec) {
+                            debug_log!("HRCD: Duplicate ReadySignal received (hash match). Discarding.");
+                            continue; // Discard the duplicate signal
+                        }
+                        hash_set_session_nonce.insert(ready_signal_hash_vec); // Add hash to the set
+                    } else {
+                        debug_log!("HRCD: ReadySignal received without hashes. Discarding."); // Or handle differently
+                        continue;
+                    }
+
+
+
                     // // --- check for edge case: echo without there being a queue item ---      
                     // // Check: Nothing to Echo?
                     // if ready_signal.re.expect("REASON") {
@@ -7112,21 +7136,20 @@ fn handle_remote_collaborator_meetingroom_desk(
                     //     }
                     // }
                     
+                    // TODO add request rules:
+                    // no future dated requests
+                    // no requests older than ~10 sec
+                    // only 3 0=timstamp requests per session (count them!)
                     
-                    // // --- 4.3 Get or Create Send Queue ---
-                    // // Step: look at ready_signal.re echo_send
-                    // if !ready_signal.re { // echo_send
 
-                    //     // Time Check!
-                    //     // if the timestamp in the ready-reqeust is earlier than expected: rebuild the send_queue
-                    //     if ready_signal.rt < session_send_queue.back_of_queue_timestamp {
-                    //         let do_sendqueue_bootstrap = true;
-                    //         debug_log("Note: earlier than expected: ready_signal.rt < session_send_queue.back_of_queue_timestamp")
-                    //     }
-                    // }
-                    
-                    
+
+
                     // --- 3. Get or Create Send Queue ---
+                    /* 
+                    avoided edge case of echo with no queue:
+                    echo_send: if send_que is empty, Uma drops request as usual 
+                    */
+                    
                     // 3.1 ready_signal_timestamp for send-queue
                     let ready_signal_timestamp = ready_signal.rst;
                     debug_log!(
@@ -7134,21 +7157,36 @@ fn handle_remote_collaborator_meetingroom_desk(
                         ready_signal_timestamp
                     );
                     
-                    // Get / Make Send-Queue
-                    // TODO this maybe should have do_sendqueue_bootstrap as parameter to force new bootstrap
-                    // or is zero signal enough? 
-                    // note: rules on how many zero-signals to do in a session...
-                    
                     // TODO add request rules:
-                    // no future dated requests
-                    // no requests older than ~10 sec
-                    // only 3 0=timstamp requests per session (count them!)
                     
+                    // --- 3.2 timestamp freshness checks ---
+                    let current_timestamp = get_current_unix_timestamp();
+
+                    // 3.2.1 No Future Dated Requests
+                    if ready_signal_timestamp > Some(current_timestamp + 5) { // Allow for some clock skew (5 seconds)
+                        debug_log!("HRCD 3.2.1: Received future-dated timestamp. Discarding.");
+                        continue;
+                    }
                     
+                    // 3.2.2 No Requests Older Than ~10 sec
+                    if Some(current_timestamp - 10) > ready_signal_timestamp {
+                        debug_log!("HRCD 3.2.2: Received outdated timestamp (older than 10 seconds). Discarding.");
+                        continue;
+                    }
+                    // 3.2.3 only 3 0=timstamp requests per session (count them!)
+                    if ready_signal_timestamp == Some(0) {
+                        if zero_timestamp_counter >= 3 {
+                            debug_log!("HRCD 3.2.3: Too many zero-timestamp requests. Discarding.");
+                            continue;
+                        }
+                        zero_timestamp_counter += 1;
+                    }
+                    
+                    // --- 3.3 Get / Make Send-Queue ---
                     let this_team_channelname = match get_current_team_channel_name() {
                         Some(name) => name,
                         None => {
-                            debug_log!("HRCD 3: Error: Could not get current channel name. Skipping send queue creation.");
+                            debug_log!("HRCD 3.3: Error: Could not get current channel name. Skipping send queue creation.");
                             continue; // Skip to the next iteration of the loop
                         }
                     }; 
@@ -7168,7 +7206,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                         collaborator_salt_list: &[u128], // Pass the salt list here
                     )
                     */
-                    // --- 4.4 Send File: Send One File from Queue ---
+                    // --- 4. Send File: Send One File from Queue ---
                     if let Some(ref mut queue) = session_send_queue {
                         while let Some(file_path) = queue.items.pop() {
                             
