@@ -6994,60 +6994,60 @@ fn handle_remote_collaborator_meetingroom_desk(
         // --- 2. Enter Main Loop ---
         // enter main loop (to handling signals, sending)
         loop {
-            // --- 3 Check for 'should_halt_uma' Signal ---
+            // --- 2.1 Check for 'should_halt_uma' Signal ---
             if should_halt_uma() {
                 debug_log!(
-                    "HRCD 3.1 Check for halt signal. Halting handle_remote_collaborator_meetingroom_desk() for {}", 
+                    "HRCD 2.1 main loop Check for halt signal. Halting handle_remote_collaborator_meetingroom_desk() for {}", 
                     room_sync_input.remote_collaborator_name
                 );
                 break;
             }
 
-            // --- 4. Handle Ready Signal:  ---
-            // 4.1 Receive Ready Signal
+            // --- 2.2. Handle Ready Signal:  ---
+            // 2.2.1 Receive Ready Signal
             let mut buf = [0; 1024]; // TODO size?
             match ready_socket.recv_from(&mut buf) {
                 Ok((amt, src)) => {
                     debug_log!(
-                        "HRCD 4.1 Ok((amt, src)) ready_port Signal Received {} bytes from {}", 
+                        "HRCD 2.2.1 Ok((amt, src)) ready_port Signal Received {} bytes from {}", 
                         amt, 
                         src
                     );
 
                     // --- Inspect Raw Bytes ---
                     debug_log!(
-                        "HRCD 4.1 Ready Signal Raw bytes received: {:?}", 
+                        "HRCD 2.2.1 Ready Signal Raw bytes received: {:?}", 
                         &buf[..amt]
                     ); 
-            
+
                     // --- Inspect Bytes as Hex ---
                     let hex_string = buf[..amt].iter()
                         .map(|b| format!("{:02X}", b))
                         .collect::<String>();
                     debug_log!(
-                        "HRCD 4.1 Ready Signal Raw bytes as hex: {}", 
+                        "HRCD 2.2.1 Ready Signal Raw bytes as hex: {}", 
                         hex_string
                     );
-                    
-                    // --- 4.2 Deserialize the ReadySignal ---
+
+                    // --- 2.3 Deserialize the ReadySignal ---
                     let mut ready_signal: ReadySignal = match deserialize_ready_signal(&buf[..amt]) {
                         Ok(ready_signal) => {
-                            println!("HRCD 4.2 Ok(ready_signal) {}: Received ReadySignal: {:?}",
+                            println!("HRCD 2.3 Deserialize Ok(ready_signal) {}: Received ReadySignal: {:?}",
                                 room_sync_input.remote_collaborator_name, ready_signal
                             ); // Print to console
-                            debug_log!("HRCD 4.2 Ok(ready_signal) {}: Received ReadySignal: {:?}",
+                            debug_log!("HRCD 2.3 Deserialize Ok(ready_signal) {}: Received ReadySignal: {:?}",
                                 room_sync_input.remote_collaborator_name, 
                                 ready_signal
                             ); // Log the signal
                             ready_signal
                         },
                         Err(e) => {
-                            debug_log!("HRCD 4.2 Err Receive data Failed to parse ready signal: {}", e);
+                            debug_log!("HRCD 2.3 Deserialize Err Receive data Failed to parse ready signal: {}", e);
                             continue; // Continue to the next iteration of the loop
                         }
                     };
 
-                    // --- 4.3 Inspect & edge cases ---
+                    // --- 2.4 Inspect & edge cases ---
                     // - look for missing required fields e.g. timestamp
                     // - only re(is_echo_send_boolean) can be empty, all other cases must drop packet
                     // - handle edge cases such as valid echo-request...with no queue
@@ -7062,38 +7062,38 @@ fn handle_remote_collaborator_meetingroom_desk(
                             
                         no echo signal, then re = false
                     */
-                    
-                    // Check .rh timestamp
+
+                    // Check .rh hash
                     if ready_signal.rh.is_none() {
-                        debug_log!("HRCD: rh hash field is empty. Drop packet and keep going.");
+                        debug_log!("HRCD 2.4.1: rh hash field is empty. Drop packet and keep going.");
                         continue; // Drop packet: Restart the loop to listen for the next signal
-                    }
-                    
-                    // Check .rt timestamp
-                    if ready_signal.rt.is_none() {
-                        debug_log!("HRCD: rt Timestamp field is empty. Drop packet and keep going.");
-                        continue; // Drop packet: Restart the loop to listen for the next signal
-                    }
-                    
-                    // Check .rst timestamp
-                    if ready_signal.rst.is_none() {
-                        debug_log!("HRCD: rst field is empty. Drop packet and keep going.");
-                        continue; // Drop packet: Restart the loop to listen for the next signal
-                    }
-                    
-                    // Check .rst timestamp
-                    if ready_signal.re.is_none() {
-                        ready_signal.re = Some(false);
-                        debug_log!("HRCD: echo field is empty, so is_send_echo = false");
                     }
 
-                    // --- 4.3.2 Hash-Check for ReadySignal ---
+                    // Check .rt timestamp
+                    if ready_signal.rt.is_none() {
+                        debug_log!("HRCD 2.4.2: rt last-previous-file Timestamp field is empty. Drop packet and keep going.");
+                        continue; // Drop packet: Restart the loop to listen for the next signal
+                    }
+
+                    // Check .rst timestamp
+                    if ready_signal.rst.is_none() {
+                        debug_log!("HRCD 2.4.3: rst ready signal sent-at timestamp field is empty. Drop packet and keep going.");
+                        continue; // Drop packet: Restart the loop to listen for the next signal
+                    }
+
+                    // Check .re is_send_echo
+                    if ready_signal.re.is_none() {
+                        ready_signal.re = Some(false);
+                        debug_log!("HRCD 2.4.4: echo field is empty, so is_send_echo = false");
+                    }
+
+                    // --- 2.5 Hash-Check for ReadySignal ---
                     // Drop packet when fail check
                     if !verify_readysignal_hashes(
                         &ready_signal, 
                         &room_sync_input.remote_collaborator_salt_list,
                     ) {
-                        debug_log!("HRCD: ReadySignal hash verification failed. Discarding signal.");
+                        debug_log!("HRCD 2.5: ReadySignal hash verification failed. Discarding signal.");
                         continue; // Discard the signal and continue listening
                     }
 
@@ -7126,12 +7126,13 @@ fn handle_remote_collaborator_meetingroom_desk(
                     // }
                     
                     
-                    // --- 4.3 Get or Create Send Queue ---
-                    
-                
-                    
+                    // --- 3. Get or Create Send Queue ---
+                    // 3.1 ready_signal_timestamp for send-queue
                     let ready_signal_timestamp = ready_signal.rst;
-                    
+                    debug_log!(
+                        "HRCD 3.1 ready_signal_timestamp for send-queue: ready_signal_timestamp -> {:?}", 
+                        ready_signal_timestamp
+                    );
                     
                     // Get / Make Send-Queue
                     // TODO this maybe should have do_sendqueue_bootstrap as parameter to force new bootstrap
@@ -7147,7 +7148,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                     let this_team_channelname = match get_current_team_channel_name() {
                         Some(name) => name,
                         None => {
-                            debug_log!("HRCD: Error: Could not get current channel name. Skipping send queue creation.");
+                            debug_log!("HRCD 3: Error: Could not get current channel name. Skipping send queue creation.");
                             continue; // Skip to the next iteration of the loop
                         }
                     }; 
