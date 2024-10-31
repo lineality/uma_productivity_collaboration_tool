@@ -466,36 +466,14 @@ fn write_toml_to_file(file_path: &str, toml_string: &str) -> Result<(), ThisProj
     Ok(()) 
 }
 /*
-Seri_Deseri Serialize To End
+Seri_Deseri Serialize To TOml File End
 */
 
 /*
-Seri_Deseri Deserialize From Start
+Seri_Deseri Deserialize From .toml Start
 */
 
-
-// impl From<std::io::Error> for ThisProjectError {
-//     fn from(err: std::io::Error) -> Self {
-//         ThisProjectError::IoError(err)
-//     }
-// }
-
-// impl From<std::num::ParseIntError> for ThisProjectError {
-//     fn from(err: std::num::ParseIntError) -> Self {
-//         ThisProjectError::ParseIntError(err)
-//     }
-// }
-
-// impl fmt::Display for ThisProjectError {
-//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-//         match self {
-//             ThisProjectError::IoError(err) => write!(f, "IO Error: {}", err),
-//             ThisProjectError::TomlVanillaDeserialStrError(err) => write!(f, "TOML Error: {}", err),
-//             ThisProjectError::ParseIntError(err) => write!(f, "Parse Int Error: {}", err),
-//         }
-//     }
-// }
-
+/// Vanilla-Rust File Deserialization
 /// Toml Deserialization: Reads collaborator setup data from TOML files in a specified directory.
 ///
 /// # Requires: 
@@ -525,7 +503,7 @@ Seri_Deseri Deserialize From Start
 ///
 /// # Data Extraction
 ///
-/// The function extracts the following fields from each TOML file:
+/// The function extracts the following fields from one TOML file:
 ///
 /// - `user_name` (String)
 /// - `user_salt_list` (Vec<u128>): Stored as hexadecimal strings in the TOML file.
@@ -543,11 +521,37 @@ Seri_Deseri Deserialize From Start
 /// - `extract_ipv6_addresses`: Parses a string array into `Option<Vec<Ipv6Addr>>`.
 /// - `extract_u64`: Parses a TOML integer into a `u64` value, handling potential errors.
 ///
+/// Reads collaborator setup data from a TOML file for a specific user.
+///
+/// This function reads and parses a TOML file located at 
+/// `project_graph_data/collaborator_files_address_book/{collaborator_name}__collaborator.toml`.
+/// The file is expected to contain data for a single collaborator in a structure that 
+/// can be mapped to the `CollaboratorTomlData` struct.
+///
 /// # Error Handling
 ///
-/// The function returns a `Result` type to handle potential errors during file 
-/// reading, TOML parsing, and data extraction. The `ThisProjectError` enum is used to 
-/// represent different error types.
+/// This function uses a centralized error handling approach. If any error occurs during:
+///
+/// - File reading (e.g., file not found)
+/// - TOML parsing (e.g., invalid TOML syntax)
+/// - Data extraction (e.g., missing required fields, invalid data formats)
+///
+/// The function will immediately return an `Err` containing a `ThisProjectError` that describes the error.
+/// 
+/// This approach simplifies error propagation and allows for early exit on error. 
+/// If any part of the parsing or data extraction process fails, the function will stop 
+/// and return the error without attempting to process the rest of the file.
+///
+/// # Example
+///
+/// ```
+/// let collaborator_data = read_one_collaborator_setup_toml("alice");
+///
+/// match collaborator_data {
+///     Ok(data) => { /* ... process the collaborator data */ },
+///     Err(e) => { /* ... handle the error */ },
+/// }
+/// ```
 ///
 /// # Example TOML File
 ///
@@ -571,177 +575,144 @@ Seri_Deseri Deserialize From Start
 /// 
 /// This was developed for the UMA project, as the naming reflects:
 /// https://github.com/lineality/uma_productivity_collaboration_tool
-fn read_a_collaborator_setup_toml() -> Result<(Vec<CollaboratorTomlData>, Vec<ThisProjectError>), ThisProjectError> {
-    let mut collaborators = Vec::new();
-    let mut errors = Vec::new();
-    let dir_path = Path::new("project_graph_data/collaborator_files_address_book");
+/// 
+/// # Use with:
+/// // Specify the username of the collaborator to read
+/// let username = "alice";
+///
+/// /// Read the collaborator data from the TOML file
+/// match read_one_collaborator_setup_toml(username) {
+///     Ok(collaborator) => {
+///         // Print the collaborator data
+///         println!("Collaborator Data for {}:", username);
+///         println!("{:#?}", collaborator); /// Use {:#?} for pretty-printing
+///     }
+///     Err(e) => {
+///         // Print an error message if there was an error reading or parsing the TOML file
+///         println!("Error reading collaborator data for {}: {}", username, e);
+///     }
+/// }
+fn read_one_collaborator_setup_toml(collaborator_name: &str) -> Result<CollaboratorTomlData, ThisProjectError> {
 
-    for entry in fs::read_dir(dir_path)? {
-        let entry = entry?;
-        let path = entry.path();
+    // 1. Construct File Path
+    let file_path = Path::new("project_graph_data/collaborator_files_address_book")
+        .join(format!("{}__collaborator.toml", collaborator_name));
 
-        if path.is_file() && path.extension().and_then(OsStr::to_str) == Some("toml") {
-            let toml_string = fs::read_to_string(&path)?;
+    // 2. Read TOML File
+    let toml_string = fs::read_to_string(&file_path)?; 
 
-            match toml::from_str::<Value>(&toml_string) {
-                Ok(toml_value) => {
-                    if let Value::Table(table) = toml_value {
-                        // Extract user_name
-                        let user_name = if let Some(Value::String(s)) = table.get("user_name") {
-                            s.clone()
-                        } else {
-                            errors.push(ThisProjectError::TomlVanillaDeserialStrError("Missing user_name".into()));
-                            continue;
-                        };
+    // 3. Parse TOML Data
+    // 3. Parse TOML Data (handle potential toml::de::Error)
+    let toml_value = match toml::from_str::<Value>(&toml_string) {
+        Ok(value) => value,
+        Err(e) => return Err(ThisProjectError::TomlVanillaDeserialStrError(e.to_string())), 
+    };
 
-                        // Extract user_salt_list
-                        let user_salt_list = if let Some(Value::Array(arr)) = table.get("user_salt_list") {
-                            arr.iter()
-                                .map(|val| {
-                                    if let Value::String(s) = val {
-                                        u128::from_str_radix(s.trim_start_matches("0x"), 16)
-                                            .map_err(|e| ThisProjectError::ParseIntError(e))
-                                    } else {
-                                        Err(ThisProjectError::TomlVanillaDeserialStrError("Invalid salt format: Expected string".into()))
-                                    }
-                                })
-                                .collect::<Result<Vec<u128>, ThisProjectError>>()?
-                        } else {
-                            errors.push(ThisProjectError::TomlVanillaDeserialStrError("Missing user_salt_list".into()));
-                            continue;
-                        };
+    // 4. Extract Data from TOML Value (similar to your previous code)
+    if let Value::Table(table) = toml_value {
 
-                        // Extract ipv4_addresses
-                        let ipv4_addresses = extract_ipv4_addresses(&table, "ipv4_addresses", &mut errors)?;
+        // Extract user_name
+        let user_name = if let Some(Value::String(s)) = table.get("user_name") {
+            s.clone()
+        } else {
+            return Err(ThisProjectError::TomlVanillaDeserialStrError("Missing user_name".into()));
+        };
 
-                        // Extract ipv6_addresses
-                        let ipv6_addresses = extract_ipv6_addresses(&table, "ipv6_addresses", &mut errors)?;
-
-                        // Extract gpg_key_public
-                        let gpg_key_public = if let Some(Value::String(s)) = table.get("gpg_key_public") {
-                            s.clone()
-                        } else {
-                            errors.push(ThisProjectError::TomlVanillaDeserialStrError("Missing or invalid gpg_key_public".into()));
-                            continue;
-                        };
-
-                        // Extract sync_interval
-                        let sync_interval = extract_u64(&table, "sync_interval", &mut errors)?;
-
-                        // Extract updated_at_timestamp
-                        let updated_at_timestamp = extract_u64(&table, "updated_at_timestamp", &mut errors)?;
-
-                        // Create CollaboratorTomlData instance
-                        collaborators.push(CollaboratorTomlData {
-                            user_name,
-                            user_salt_list,
-                            ipv4_addresses,
-                            ipv6_addresses,
-                            gpg_key_public,
-                            sync_interval,
-                            updated_at_timestamp,
-                        });
+        // Extract user_salt_list
+        let user_salt_list = if let Some(Value::Array(arr)) = table.get("user_salt_list") {
+            arr.iter()
+                .map(|val| {
+                    if let Value::String(s) = val {
+                        u128::from_str_radix(s.trim_start_matches("0x"), 16)
+                            .map_err(|e| ThisProjectError::ParseIntError(e))
                     } else {
-                        errors.push(ThisProjectError::TomlVanillaDeserialStrError("Invalid TOML structure".into()));
+                        Err(ThisProjectError::TomlVanillaDeserialStrError("Invalid salt format: Expected string".into()))
                     }
-                }
-                Err(e) => {
-                    errors.push(ThisProjectError::TomlVanillaDeserialStrError(e.to_string()));
-                }
-            }
-        }
-    }
+                })
+                .collect::<Result<Vec<u128>, ThisProjectError>>()?
+        } else {
+            return Err(ThisProjectError::TomlVanillaDeserialStrError("Missing user_salt_list".into()));
+        };
 
-    Ok((collaborators, errors))
+        // Extract ipv4_addresses
+        let ipv4_addresses = extract_ipv4_addresses(&table, "ipv4_addresses")?;
+
+        // Extract ipv6_addresses
+        let ipv6_addresses = extract_ipv6_addresses(&table, "ipv6_addresses")?;
+
+        // Extract gpg_key_public
+        let gpg_key_public = if let Some(Value::String(s)) = table.get("gpg_key_public") {
+            s.clone()
+        } else {
+            return Err(ThisProjectError::TomlVanillaDeserialStrError("Missing or invalid gpg_key_public".into()));
+        };
+
+        // Extract sync_interval
+        let sync_interval = extract_u64(&table, "sync_interval")?;
+
+        // Extract updated_at_timestamp
+        let updated_at_timestamp = extract_u64(&table, "updated_at_timestamp")?;
+
+        // 5. Return CollaboratorTomlData 
+        Ok(CollaboratorTomlData {
+            user_name,
+            user_salt_list,
+            ipv4_addresses,
+            ipv6_addresses,
+            gpg_key_public,
+            sync_interval,
+            updated_at_timestamp,
+        })
+    } else {
+        Err(ThisProjectError::TomlVanillaDeserialStrError("Invalid TOML structure: Expected a table".into()))
+    }
 }
 
-// // Helper function to extract and parse IPv4 addresses from a toml::Value::Table
-// fn extract_ipv4_addresses(table: &toml::map::Map<String, Value>, key: &str, errors: &mut Vec<ThisProjectError>) -> Result<Option<Vec<Ipv4Addr>>, ThisProjectError> {
-//     if let Some(Value::Array(arr)) = table.get(key) {
-//         let addresses = arr.iter()
-//             .map(|val| {
-//                 if let Value::String(s) = val {
-//                     s.parse::<Ipv4Addr>()
-//                         .map_err(|e| ThisProjectError::TomlVanillaDeserialStrError(format!("Invalid {} format: {}", key, e)))
-//                 } else {
-//                     Err(ThisProjectError::TomlVanillaDeserialStrError(format!("Invalid {} format: Expected string", key)))
-//                 }
-//             })
-//             .collect::<Result<Vec<Ipv4Addr>, ThisProjectError>>()?;
-//         Ok(Some(addresses))
-//     } else {
-//         Ok(None) 
-//     }
-// }
-// Helper function to extract and parse IPv4 addresses from a toml::Value::Table
-fn extract_ipv4_addresses(
-    table: &toml::map::Map<String, Value>, 
-    key: &str, 
-    errors: &mut Vec<ThisProjectError>
-) -> Result<Option<Vec<Ipv4Addr>>, ThisProjectError> {
+fn extract_ipv4_addresses(table: &toml::map::Map<String, Value>, key: &str) -> Result<Option<Vec<Ipv4Addr>>, ThisProjectError> {
     if let Some(Value::Array(arr)) = table.get(key) {
-        let mut addresses = Vec::new(); // Create an empty vector to store addresses
+        let mut addresses = Vec::new();
         for val in arr {
             if let Value::String(s) = val {
                 match s.parse::<Ipv4Addr>() {
-                    Ok(ip) => addresses.push(ip), // Push successful IP address
-                    Err(e) => errors.push(ThisProjectError::TomlVanillaDeserialStrError(format!("Invalid {} format: {}. Skipping this address.", key, e))),
+                    Ok(ip) => addresses.push(ip),
+                    Err(e) => return Err(ThisProjectError::TomlVanillaDeserialStrError(format!("Invalid {} format: {}. Skipping this address.", key, e))), 
                 }
             } else {
-                errors.push(ThisProjectError::TomlVanillaDeserialStrError(format!("Invalid {} format: Expected string. Skipping this address.", key)));
+                return Err(ThisProjectError::TomlVanillaDeserialStrError(format!("Invalid {} format: Expected string. Skipping this address.", key)));
             }
         }
 
-        if addresses.is_empty() { // If no valid addresses were found
+        if addresses.is_empty() { 
             Ok(None)
         } else {
             Ok(Some(addresses))
         }
     } else {
-        Ok(None) // Return None if the key is not present 
+        Ok(None) 
     }
 }
 
-// // Helper function to extract and parse IPv6 addresses from a toml::Value::Table
-// fn extract_ipv6_addresses(table: &toml::map::Map<String, Value>, key: &str, errors: &mut Vec<ThisProjectError>) -> Result<Option<Vec<Ipv6Addr>>, ThisProjectError> {
-//     if let Some(Value::Array(arr)) = table.get(key) {
-//         let addresses = arr.iter()
-//             .map(|val| {
-//                 if let Value::String(s) = val {
-//                     s.parse::<Ipv6Addr>()
-//                         .map_err(|e| ThisProjectError::TomlVanillaDeserialStrError(format!("Invalid {} format: {}", key, e)))
-//                 } else {
-//                     Err(ThisProjectError::TomlVanillaDeserialStrError(format!("Invalid {} format: Expected string", key)))
-//                 }
-//             })
-//             .collect::<Result<Vec<Ipv6Addr>, ThisProjectError>>()?;
-//         Ok(Some(addresses))
-//     } else {
-//         Ok(None)
-//     }
-// }
-// Helper function to extract and parse IPv6 addresses from a toml::Value::Table
-fn extract_ipv6_addresses(table: &toml::map::Map<String, Value>, key: &str, errors: &mut Vec<ThisProjectError>) -> Result<Option<Vec<Ipv6Addr>>, ThisProjectError> {
+fn extract_ipv6_addresses(table: &toml::map::Map<String, Value>, key: &str) -> Result<Option<Vec<Ipv6Addr>>, ThisProjectError> {
     if let Some(Value::Array(arr)) = table.get(key) {
-        let mut addresses = Vec::new(); // Create an empty vector to store addresses
+        let mut addresses = Vec::new();
         for val in arr {
             if let Value::String(s) = val {
                 match s.parse::<Ipv6Addr>() {
-                    Ok(ip) => addresses.push(ip), // Push successful IP address
-                    Err(e) => errors.push(ThisProjectError::TomlVanillaDeserialStrError(format!("Invalid {} format: {}. Skipping this address.", key, e))),
+                    Ok(ip) => addresses.push(ip),
+                    Err(e) => return Err(ThisProjectError::TomlVanillaDeserialStrError(format!("Invalid {} format: {}. Skipping this address.", key, e))), 
                 }
             } else {
-                errors.push(ThisProjectError::TomlVanillaDeserialStrError(format!("Invalid {} format: Expected string. Skipping this address.", key)));
+                return Err(ThisProjectError::TomlVanillaDeserialStrError(format!("Invalid {} format: Expected string. Skipping this address.", key)));
             }
         }
 
-        if addresses.is_empty() { // If no valid addresses were found
-            Ok(None) 
+        if addresses.is_empty() { 
+            Ok(None)
         } else {
-            Ok(Some(addresses)) 
+            Ok(Some(addresses))
         }
     } else {
-        Ok(None) // Return None if the key is not present
+        Ok(None) 
     }
 }
 
@@ -785,20 +756,19 @@ fn extract_ipv6_addresses(table: &toml::map::Map<String, Value>, key: &str, erro
 /// assert_eq!(my_value.unwrap(), 12345);
 /// assert!(errors.is_empty()); // No errors
 /// ```
-fn extract_u64(table: &toml::map::Map<String, Value>, key: &str, errors: &mut Vec<ThisProjectError>) -> Result<u64, ThisProjectError> {
+// Helper function to extract a u64 from a toml::Value::Table
+fn extract_u64(table: &toml::map::Map<String, Value>, key: &str) -> Result<u64, ThisProjectError> {
     if let Some(Value::Integer(i)) = table.get(key) {
-        // Correct comparison for u64 values:
-        if *i >= 0 && *i <= i64::MAX { // Compare against i64::MAX 
-            Ok(*i as u64) // Safe to cast since it's within i64::MAX
+        if *i >= 0 && *i <= i64::MAX {
+            Ok(*i as u64) 
         } else {
-            errors.push(ThisProjectError::TomlVanillaDeserialStrError(format!("Invalid {}: Out of range for u64", key)));
             Err(ThisProjectError::TomlVanillaDeserialStrError(format!("Invalid {}: Out of range for u64", key)))
         }
     } else {
-        errors.push(ThisProjectError::TomlVanillaDeserialStrError(format!("Missing or invalid {}", key)));
         Err(ThisProjectError::TomlVanillaDeserialStrError(format!("Missing or invalid {}", key)))
     }
 }
+
 
 
 /*
@@ -2329,28 +2299,28 @@ fn add_collaborator_qa(
 
     // Load existing collaborators from files
     // let existing_collaborators = read_a_collaborator_setup_toml().unwrap_or_default();
-    let (existing_collaborators, errors) = read_a_collaborator_setup_toml().unwrap_or_default(); 
+    // let (existing_collaborators, errors) = read_one_collaborator_setup_toml().unwrap_or_default(); 
 
-    // Log any errors encountered while reading collaborator files
-    for error in errors {
-        // HERE!! HERE!! HERE!!
-        // You can use your debug_log macro here or any other logging mechanism
-        debug_log!("Error reading collaborator file: {}", error); 
-        println!("Error reading collaborator file: {}", error); 
-    }
+    // // Log any errors encountered while reading collaborator files
+    // for error in errors {
+    //     // HERE!! HERE!! HERE!!
+    //     // You can use your debug_log macro here or any other logging mechanism
+    //     debug_log!("Error reading collaborator file: {}", error); 
+    //     println!("Error reading collaborator file: {}", error); 
+    // }
     
     // (You should add more validation here - for IPs, GPG keys, port uniqueness, etc.)
 
-    // Check for collisions with existing collaborators (Add more comprehensive checks as needed)
-    if let Some(error_message) = check_collaborator_collisions(
-        &new_collaborator, 
-        &existing_collaborators
-    ) {
-        return Err(io::Error::new(
-            io::ErrorKind::AlreadyExists,
-            error_message, 
-        ));
-    } 
+    // // Check for collisions with existing collaborators (Add more comprehensive checks as needed)
+    // if let Some(error_message) = check_collaborator_collisions(
+    //     &new_collaborator, 
+    //     &existing_collaborators
+    // ) {
+    //     return Err(io::Error::new(
+    //         io::ErrorKind::AlreadyExists,
+    //         error_message, 
+    //     ));
+    // } 
 
     // Persist the new collaborator
     add_collaborator_setup_file(
@@ -4185,6 +4155,8 @@ fn get_addressbook_file_by_username(username: &str) -> Result<CollaboratorTomlDa
     }
 }
 
+
+
 /// Used to make a random hex string
 /// to store the u128 salt for salted pearson hash
 /// in the toml file as hex-string
@@ -4506,12 +4478,12 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
     
 
     
-        // --- Get local user's salt list ---
+        // --- Get remote collaborator's salt list ---
         // let remote_collaborator_salt_list = match get_addressbook_file_by_username(collaborator_name.clone()) {
         let remote_collaborator_salt_list = match get_addressbook_file_by_username(&collaborator_name.clone()) {
             Ok(data) => data.user_salt_list,
             Err(e) => {
-                debug_log!("Error loading local user's salt list: {}", e);
+                debug_log!("Error loading remote_collaborator_salt_list user's salt list: {}", e);
                 return Err(e); 
             }
         }; 
