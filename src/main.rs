@@ -4679,6 +4679,8 @@ fn add_pearson_hash_to_readysignal_struct(
         data_to_hash.extend_from_slice(&rt.to_be_bytes());
         data_to_hash.extend_from_slice(&rst.to_be_bytes()); // Add rst to the hash
         data_to_hash.push(if re { 1 } else { 0 });
+        
+        debug_log!("010101 add_pearson_hash_to_readysignal_struct() data_to_hash {:?}", &data_to_hash);
 
         let mut hashes: Vec<u8> = Vec::new();
         for salt in local_user_salt_list {
@@ -4700,6 +4702,8 @@ fn add_pearson_hash_to_readysignal_struct(
             rh: Some(hashes), 
         })
     } else {
+        debug_log("add_pearson_hash_to_readysignal_struct: none ");
+        
         None 
     }
 }
@@ -5333,12 +5337,12 @@ fn handle_local_owner_desk(
             
             
             // 5. Serialize the ReadySignal
-            let readysignal_data = serialize_ready_signal(
+            let serialized_readysignal_data = serialize_ready_signal(
                 &ready_signal_to_send_from_this_loop
             ).expect("HLOD 5. err Failed to serialize ReadySignal, ready_signal_to_send_from_this_loop"); 
 
             // --- Inspect Serialized Data ---
-            debug_log!("HLOD 5. inspect Serialized Data: {:?}", readysignal_data);
+            debug_log!("HLOD 5. inspect Serialized Data: {:?}", ready_signal_to_send_from_this_loop);
 
             // TODO possibly have some mechanism to try addresses until one works?
             // 6. Send the signal @ 
@@ -5360,7 +5364,7 @@ fn handle_local_owner_desk(
                 debug_log!(
                     "HLOD 6. Attempting to send ReadySignal to {}: {:?}", 
                     target_addr, 
-                    &readysignal_data
+                    &serialized_readysignal_data
                 );
 
                 // // If sending to the first address succeeds, no need to iterate further
@@ -5374,7 +5378,7 @@ fn handle_local_owner_desk(
                 //         );
                 // }
                 // If sending to the first address succeeds, no need to iterate further
-                if send_data(&readysignal_data, target_addr).is_ok() {
+                if send_data(&serialized_readysignal_data, target_addr).is_ok() {
                     debug_log("HLOD 6. Successfully sent ReadySignal to {} (first address)");
                     return Ok(()); // Exit the thread
                 } else {
@@ -7205,25 +7209,75 @@ fn handle_remote_collaborator_meetingroom_desk(
                         port: u16,
                         collaborator_salt_list: &[u128], // Pass the salt list here
                     )
+                                             
+                    # Explaining: 
+                    ```             
+                    if let Some(ref mut queue) = session_send_queue {
+                        while let Some(file_path) = queue.items.pop() {
+                    ```
+                    
+                    That code snippet represents a common pattern in Rust for 
+                    iterating over and processing items in a Vec (vector) while
+                     also potentially modifying the vector itself (in this case, 
+                         by removing elements). Let's break down the logic:
+
+                    if let Some(ref mut queue) = session_send_queue: This is a 
+                    conditional statement that uses pattern matching with if 
+                    let. session_send_queue is an Option<SendQueue>, meaning 
+                    it can either contain a SendQueue or be None.
+
+                    Some(ref mut queue): This part of the pattern attempts
+                     to match the Some variant of the Option. If session_send_queue 
+                     contains a SendQueue, the code inside the if block will 
+                     be executed. The ref mut creates a mutable reference to the
+                      inner SendQueue, allowing you to modify it.
+
+                    If session_send_queue is None, the if block is skipped entirely.
+
+                    while let Some(file_path) = queue.items.pop(): This is a 
+                    while let loop, another form of pattern matching. queue.items 
+                    is a Vec<PathBuf>. pop() removes and returns 
+                    the last element of the vector.
+
+                    Some(file_path): This part of the pattern attempts to match
+                     the Some variant of the Option returned by pop(). 
+                     If queue.items is not empty, pop() will return Some(PathBuf) 
+                     where PathBuf is the removed element. The code inside the 
+                     while loop will be executed, and file_path will be assigned 
+                     the value of the removed PathBuf.
+
+                    Empty Vector: When queue.items becomes empty, pop() will 
+                    return None. This will cause the while let loop to terminate.
+
+                    In Summary:
+
+                    The combined if let and while let structure ensures the following:
+
+                    The code inside the while loop only executes 
+                    if session_send_queue contains a SendQueue (it's not None).
+
+                    The loop iterates over the items in the SendQueue 
+                    from the last element to the first, 
+                    removing each item as it's processed.
                     */
                     // --- 4. Send File: Send One File from Queue ---
                     if let Some(ref mut queue) = session_send_queue {
                         while let Some(file_path) = queue.items.pop() {
                             
-                            // 4.4.1. Get File Send Time
+                            // 4.1. Get File Send Time
                             let intray_send_time = get_current_unix_timestamp(); 
 
-                            // 4.4.2. Read File Contents
+                            // 4.2. Read File Contents
                             let file_contents = fs::read(&file_path)?;
 
-                            // 4.4.3. GPG Encrypt File
+                            // 4.3. GPG Encrypt File
                             // GPG encrypt with my private, with their public
                             let gpg_encrypted_intray_file = encrypt_with_gpg(
                                 &file_contents,
                                 &room_sync_input.remote_collaborator_public_gpg,
                             )?; 
 
-                            // 4.4.4. Calculate Hashes (Using Collaborator's Salts)
+                            // 4.4. Calculate Hashes (Using Collaborator's Salts)
                             // Change the type to hold Vec<u8>
                             let mut sendfile_struct_data_to_hash: Vec<Vec<u8>> = Vec::new();
                             let sendtime_bytes = intray_send_time.to_be_bytes();
@@ -7236,6 +7290,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                                 sendfile_struct_data_to_hash.push(salt_bytes); // Push the owned Vec<u8>
                             }
 
+                            // 4.5. hashing
                             // Convert to &[u8] slices for the hashing function
                             let intray_hash_list = calculate_pearson_hashes(
                                 &sendfile_struct_data_to_hash.iter().map(|v| v.as_slice()).collect::<Vec<&[u8]>>() // Specify type here
@@ -7284,14 +7339,15 @@ fn handle_remote_collaborator_meetingroom_desk(
                             // }
                             // let intray_hash_list = calculate_pearson_hashes_parallel(sendfile_struct_data_to_hash)?;
 
-                            // 4.4.5. Create SendFile Struct 
+                            // 4.6. Create SendFile Struct 
                             let send_file = SendFile {
                                 intray_send_time: intray_send_time,
                                 gpg_encrypted_intray_file: gpg_encrypted_intray_file,
                                 intray_hash_list: intray_hash_list,
                             }; 
                             
-                            // --- 4.4.6. Send file: send UDP to intray ---
+                            // --- 4.7 Send file: send UDP to intray ---
+                            // 4.7.1 Send file
                             let file_send_result = send_toml_file_to_intray(
                                 &send_file, 
                                 src,
@@ -7306,25 +7362,25 @@ fn handle_remote_collaborator_meetingroom_desk(
                             //     &room_sync_input.collaborator_salt_list
                             // );
 
-                            // --- 4.4.7. Handle File Send Result ---
+                            // --- 4.7.2. Handle File Send Result ---
                             // If file send does not produce an error:
                             // 1. update send-queue pop off file path
                             // 2. update file-queue update queue_back_timestamp
                             match file_send_result {
                                 Ok(_) => {
 
-                                    // --- 4.4.7.2 Update Timestamp Log ---
+                                    // --- 4.7.3 Update Timestamp Log ---
                                     if let Ok(timestamp) = get_toml_file_timestamp(&file_path) {
                                         update_collaborator_sendqueue_timestamp_log(
                                             // TODO: Replace with the actual team channel name
                                             "team_channel_name", 
                                             &room_sync_input.remote_collaborator_name,
                                         )?;
-                                        debug_log!("HRCD 4.4.7.2  Updated timestamp log for {}", room_sync_input.remote_collaborator_name);
+                                        debug_log!("HRCD 4.7.3  Updated timestamp log for {}", room_sync_input.remote_collaborator_name);
                                     }
                                 },
                                 Err(e) => {
-                                    debug_log!("HRCD 4.4.7.2  Error sending file: {:?} - {}", file_path, e);
+                                    debug_log!("HRCD 4.7.3  Error sending file: {:?} - {}", file_path, e);
                                     // TODO: Handle file send error (e.g., retry, log, etc.)
                                 }
                             }
@@ -7345,7 +7401,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                 },
                 Err(e) => {
                     // --- 3.7 Handle Other Errors ---
-                    debug_log!("HRCD 3.7 {}: Error receiving data on ready_port: {} ({:?})", 
+                    debug_log!("HRCD #? {}: Error receiving data on ready_port: {} ({:?})", 
                             room_sync_input.remote_collaborator_name, e, e.kind());
                     return Err(ThisProjectError::NetworkError(e.to_string()));
                 }
