@@ -4667,47 +4667,125 @@ fn pearson_hash_base(input_u8_int: &[u8]) -> Result<u8, std::io::Error> {  // Re
 // }
 
 
-/// Add Pearson hashes to ReadySignal struct
-/// Uses: pearson_hash_base(input_u8_int: &[u8])
-/// to an array Vec<u8> of four hashes, from two salts
-fn add_pearson_hash_to_readysignal_struct(
-    signal: &ReadySignal,
-    local_user_salt_list: &[u128], 
-) -> Option<ReadySignal> {
-    if let (Some(rt), Some(rst), Some(re)) = (signal.rt, signal.rst, signal.re) {
-        let mut data_to_hash = Vec::new();
-        data_to_hash.extend_from_slice(&rt.to_be_bytes());
-        data_to_hash.extend_from_slice(&rst.to_be_bytes()); // Add rst to the hash
-        data_to_hash.push(if re { 1 } else { 0 });
-        
-        debug_log!("010101 add_pearson_hash_to_readysignal_struct() data_to_hash {:?}", &data_to_hash);
+// /// refactor hash and hashes to names that DO NOT COLLIDE!!!!
+// /// Add Pearson hashes to ReadySignal struct
+// /// Uses: pearson_hash_base(input_u8_int: &[u8])
+// /// to an array Vec<u8> of four hashes, from two salts
+// fn add_pearson_hash_to_readysignal_struct(
+//     signal: &ReadySignal,
+//     local_user_salt_list: &[u128], 
+// ) -> Option<ReadySignal> {
+    
+//     debug_log!("010101 add_pearson_hash_to_readysignal_struct() signal {:?}", &signal);
 
-        let mut hashes: Vec<u8> = Vec::new();
+    
+//     if let (Some(rt), Some(rst), Some(re)) = (signal.rt, signal.rst, signal.re) {
+//         let mut data_to_hash = Vec::new();
+//         data_to_hash.extend_from_slice(&rt.to_be_bytes());
+//         data_to_hash.extend_from_slice(&rst.to_be_bytes()); // Add rst to the hash
+//         data_to_hash.push(if re { 1 } else { 0 });
+        
+//         debug_log!("010101 add_pearson_hash_to_readysignal_struct() data_to_hash {:?}", &data_to_hash);
+
+//         let mut hashes: Vec<u8> = Vec::new();
+//         for salt in local_user_salt_list {
+//             let mut salted_data = data_to_hash.clone();
+//             salted_data.extend_from_slice(&salt.to_be_bytes());
+//             match pearson_hash_base(&salted_data) {
+                
+//                 Ok(hash) => hashes.push(hash),
+//                 Err(e) => {
+//                     return None;
+//                 }
+//             }
+//         }
+//         debug_log!("010101 hashes {:?}", &hashes);
+
+//         Some(ReadySignal {
+//             rt: Some(rt),
+//             rst: Some(rst),
+//             re: Some(re),
+//             rh: Some(hashes), 
+//         })
+//     } else {
+//         debug_log("add_pearson_hash_to_readysignal_struct: none ");
+        
+//         None 
+//     }
+// }
+
+
+/// Calculates Pearson hashes for a ReadySignal struct.
+///
+/// This function takes a `ReadySignal` and a list of salts (`local_user_salt_list`) as input.
+/// It calculates a Pearson hash for the signal's data combined with each salt in the list.
+/// The resulting hashes are then stored in the `rh` field of a new `ReadySignal` instance.
+///
+/// # Arguments
+///
+/// * `ready_signal`: The `ReadySignal` struct for which to calculate hashes.
+/// * `local_user_salt_list`: A slice of `u128` salt values.
+///
+/// # Returns
+///
+/// * `Option<ReadySignal>`: A new `ReadySignal` instance with the calculated hashes, or `None` if an error occurred during hash calculation or if required fields of the input signal are missing.
+fn add_pearson_hash_to_readysignal_struct(
+    ready_signal: &ReadySignal,
+    local_user_salt_list: &[u128],
+) -> Option<ReadySignal> {
+    debug_log!(
+        "010101 calculate_and_add_pearson_hashes_to_ready_signal(): Input ReadySignal: {:?}",
+        &ready_signal
+    );
+
+    if let (Some(ready_timestamp), Some(ready_send_timestamp), Some(is_echo_send)) =
+        (ready_signal.rt, ready_signal.rst, ready_signal.re)
+    {
+        let mut data_to_hash = Vec::new();
+        data_to_hash.extend_from_slice(&ready_timestamp.to_be_bytes());
+        data_to_hash.extend_from_slice(&ready_send_timestamp.to_be_bytes());
+        data_to_hash.push(if is_echo_send { 1 } else { 0 });
+
+        debug_log!(
+            "010101 calculate_and_add_pearson_hashes_to_ready_signal(): Data to hash: {:?}",
+            &data_to_hash
+        );
+
+        let mut ready_signal_hash_list: Vec<u8> = Vec::new();
         for salt in local_user_salt_list {
             let mut salted_data = data_to_hash.clone();
             salted_data.extend_from_slice(&salt.to_be_bytes());
-            match pearson_hash_base(&salted_data) {
-                Ok(hash) => hashes.push(hash),
+
+            let hash_result = pearson_hash_base(&salted_data);
+            debug_log!(
+                "010101 calculate_and_add_pearson_hashes_to_ready_signal(): Hash Result: {:?}",
+                &hash_result
+            );
+
+            match hash_result {
+                Ok(hash) => ready_signal_hash_list.push(hash),
                 Err(e) => {
                     debug_log!("Error calculating Pearson hash: {}", e);
                     return None;
                 }
             }
         }
+        debug_log!(
+            "010101 calculate_and_add_pearson_hashes_to_ready_signal(): Calculated Hashes: {:?}",
+            &ready_signal_hash_list
+        );
 
         Some(ReadySignal {
-            rt: Some(rt),
-            rst: Some(rst),
-            re: Some(re),
-            rh: Some(hashes), 
+            rt: Some(ready_timestamp),
+            rst: Some(ready_send_timestamp),
+            re: Some(is_echo_send),
+            rh: Some(ready_signal_hash_list),
         })
     } else {
-        debug_log("add_pearson_hash_to_readysignal_struct: none ");
-        
-        None 
+        debug_log!("010101 calculate_and_add_pearson_hashes_to_ready_signal(): Missing fields in ReadySignal. Returning None.");
+        None
     }
 }
-
 
 /// Verifies the Pearson hashes in a ReadySignal against a provided salt list.
 ///
