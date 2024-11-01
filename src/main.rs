@@ -5511,7 +5511,8 @@ fn handle_local_owner_desk(
             ).expect("HLOD 5. err Failed to serialize ReadySignal, ready_signal_to_send_from_this_loop"); 
 
             // --- Inspect Serialized Data ---
-            debug_log!("HLOD 5. inspect Serialized Data: {:?}", ready_signal_to_send_from_this_loop);
+            debug_log!("HLOD 5.1 inspect Serialized Data: {:?}", ready_signal_to_send_from_this_loop);
+            debug_log!("HLOD 5.2 serialized_readysignal_data: {:?}", serialized_readysignal_data);
 
             // TODO possibly have some mechanism to try addresses until one works?
             // 6. Send the signal @ 
@@ -5554,14 +5555,12 @@ fn handle_local_owner_desk(
                     debug_log("HLOD err 6. Failed to send ReadySignal to {} (first address)");
                     return Err(ThisProjectError::NetworkError("Failed to send ReadySignal".to_string())); // Return an error
                 }
-                
 
                 } else {
                     debug_log("HLOD ERROR No IPv6 addresses available for {}");
                     return Err(ThisProjectError::NetworkError("No IPv6 addresses available".to_string())); // Return an error
                 }
 
-        
         // 7. Listen at in-box for file for that event:
         //     Alice waits N-miliseconds. If no reply, end thread.
         // if there is a reply to that event unqiue ID:
@@ -5629,7 +5628,12 @@ fn serialize_ready_signal(this_readysignal: &ReadySignal) -> std::io::Result<Vec
     // Handle re (echo_send) -  use a default value (false) if None:
     let re = this_readysignal.re.unwrap_or(false); // Default to false if None
     bytes.push(if re { 1 } else { 0 }); 
-    
+
+    // Handle rh (hash list) - append if Some:
+    if let Some(rh) = &this_readysignal.rh {
+        bytes.extend_from_slice(rh);
+    }
+ 
     Ok(bytes) 
 }
 
