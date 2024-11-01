@@ -6321,21 +6321,28 @@ fn create_retry_flag(
     Ok(retry_flag_path)
 }
 
+fn get_absolute_team_channel_path(team_channel_name: &str) -> io::Result<PathBuf> {
+    let team_channels_dir = Path::new("project_graph_data/team_channels");
+    let channel_path = team_channels_dir.join(team_channel_name);
 
-/// Gets existing Queue or makes a new one,
+    channel_path.canonicalize() // Get the absolute path
+}
+
+/// Gets existing send-Queue or makes a new one: to send out locally owned files: a queue of paths to those files
 /// if back_of_queue_timestamp != 0 and
 /// if request-time-stamp = send-q back_of_queue_timestamp -> just return timestamp
 /// else: make a new timestamp
 ///  
 /// can Creates a new send queue based on the provided timestamp and collaborator name.
 ///
-/// This function crawls through the team channel directory tree, looking for TOML files owned by the specified collaborator.
-/// It adds file paths to the send queue if their `updated_at_timestamp` is greater than the provided `back_of_queue_timestamp`.
+/// This function crawls through the team channel directory tree, looking for TOML files owned by the specified local_owner_user(collaborator).
+/// So that the local-owner-user can send their owned files to other collaborators.
+/// This function adds file paths to the send queue if the file's `updated_at_timestamp` is greater than the provided `back_of_queue_timestamp`.
 ///
 /// # Arguments
 ///
 /// * `team_channel_name`: The name of the team channel.
-/// * `collaborator_name`: The name of the collaborator.
+/// * `localowneruser_name`: The name of the local-owner-usercollaborator.
 /// * `back_of_queue_timestamp`: The timestamp to use as the starting point for the queue. If 0, all files are added to the queue.
 ///
 /// # Returns
@@ -6343,7 +6350,7 @@ fn create_retry_flag(
 /// * `Result<SendQueue, ThisProjectError>`: A `Result` containing the new `SendQueue` on success, or a `ThisProjectError` on failure.
 fn get_or_create_send_queue(
     team_channel_name: &str,
-    collaborator_name: &str,
+    localowneruser_name: &str,
     mut session_send_queue: SendQueue,
     ready_signal_timestamp: u64,
 ) -> Result<SendQueue, ThisProjectError> {
@@ -6358,7 +6365,9 @@ fn get_or_create_send_queue(
     // let mut back_of_queue_timestamp = session_send_queue.back_of_queue_timestamp.clone();
     debug_log("HRCD->get_or_create_send_queue: start");
     
+    // Note: this will not be true when making a queue, e.g. during first time bootstrapping
     if ready_signal_timestamp == session_send_queue.back_of_queue_timestamp {
+        debug_log("HRCD->get_or_create_send_queue: ready_signal_timestamp == back_of_queue_timestamp");
         return Ok(session_send_queue)
     }
     
@@ -6367,17 +6376,32 @@ fn get_or_create_send_queue(
     //     items: Vec::new(),
     // };
 
-    // Crawl through the team channel directory tree
-    for entry in WalkDir::new(PathBuf::from("project_graph_data").join(team_channel_name)) {
+    // 1. Get the path RESULT
+    let team_channel_path_result = get_absolute_team_channel_path(team_channel_name);
+
+
+    // 2. HANDLE the Result from get_absolute_team_channel_path
+    let team_channel_path = match team_channel_path_result {
+        Ok(path) => path,
+        Err(e) => {
+            debug_log!("Error getting absolute team channel path: {}", e);
+            return Err(e.into());  // Or handle the error differently
+        }
+    };
+
+    debug_log!("HRCD->Starting crawl of directory: {:?}", team_channel_path);
+
+    // 3. Use the unwrapped PathBuf with WalkDir
+    for entry in WalkDir::new(&team_channel_path) { // Note the & for borrowing
         let entry = entry?;
         if entry.file_type().is_file() && entry.path().extension() == Some(OsStr::new("toml")) {
-            debug_log("HRCD->get_or_create_send_queue: file is toml");
+            debug_log!("HRCD->get_or_create_send_queue: file is toml, entry -> {:?}", entry);
             // If a .toml file
             let toml_string = fs::read_to_string(entry.path())?;
             let toml_value: Value = toml::from_str(&toml_string)?;
 
             // If owner = target collaborator
-            if toml_value.get("owner").and_then(Value::as_str) == Some(collaborator_name) {
+            if toml_value.get("owner").and_then(Value::as_str) == Some(localowneruser_name) {
                 debug_log("HRCD->get_or_create_send_queue: file owner == colaborator name");
                 // If updated_at_timestamp exists
                 if let Some(toml_updatedat_timestamp) = toml_value.get("updated_at_timestamp").and_then(Value::as_integer) {
@@ -6400,6 +6424,8 @@ fn get_or_create_send_queue(
     session_send_queue.items.sort_by_key(|path| {
         get_toml_file_timestamp(path).unwrap_or(0) // Handle potential errors in timestamp retrieval
     });
+    
+    debug_log!("HRCD->get_or_create_send_queue: end: Q -> {:?}", session_send_queue);
 
     Ok(session_send_queue)
 }
@@ -7401,7 +7427,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                             input_sendqueue => {
                                 get_or_create_send_queue(
                                     &this_team_channelname, // for team_channel_name
-                                    &room_sync_input.remote_collaborator_name, // for collaborator_name
+                                    &room_sync_input.local_user_name, // local owner user name
                                     input_sendqueue, // for session_send_queue
                                     ready_signal_timestamp, // for ready_signal_timestamp
                                 )?
@@ -7409,7 +7435,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                         };
                     }
                     debug_log!(
-                        "HRCM ->[]<- 3.3 Get / Make session_send_queue {:?}",
+                        "HRCD ->[]<- 3.3 Get / Make session_send_queue {:?}",
                         session_send_queue   
                     );
 
@@ -7498,6 +7524,11 @@ fn handle_remote_collaborator_meetingroom_desk(
                     // --- 4. Send File: Send One File from Queue ---
                     if let ref mut queue = session_send_queue {
                         while let Some(file_path) = queue.items.pop() {
+
+                            debug_log!(
+                                "HRCD 4. Send File: while let Some(file_path) = queue.items.pop()  file_path {:?}",
+                                file_path   
+                            );
                             
                             // 4.1. Get File Send Time
                             let intray_send_time = get_current_unix_timestamp(); 
