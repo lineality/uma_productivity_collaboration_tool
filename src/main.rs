@@ -7328,7 +7328,8 @@ fn handle_remote_collaborator_meetingroom_desk(
                     */
                     
                     // 3.1 ready_signal_timestamp for send-queue
-                    let ready_signal_timestamp = ready_signal.rst;
+                    let ready_signal_timestamp = ready_signal.rst.expect("Missing timestamp in ready signal"); // Unwrap the timestamp outside the match, as it's always required.
+                    
                     debug_log!(
                         "HRCD 3.1 ready_signal_timestamp for send-queue: ready_signal_timestamp -> {:?}", 
                         ready_signal_timestamp
@@ -7340,18 +7341,18 @@ fn handle_remote_collaborator_meetingroom_desk(
                     let current_timestamp = get_current_unix_timestamp();
 
                     // 3.2.1 No Future Dated Requests
-                    if ready_signal_timestamp > Some(current_timestamp + 5) { // Allow for some clock skew (5 seconds)
+                    if ready_signal_timestamp > current_timestamp + 5 { // Allow for some clock skew (5 seconds)
                         debug_log!("HRCD 3.2.1: Received future-dated timestamp. Discarding.");
                         continue;
                     }
                     
                     // 3.2.2 No Requests Older Than ~10 sec
-                    if Some(current_timestamp - 10) > ready_signal_timestamp {
+                    if current_timestamp - 10 > ready_signal_timestamp {
                         debug_log!("HRCD 3.2.2: Received outdated timestamp (older than 10 seconds). Discarding.");
                         continue;
                     }
                     // 3.2.3 only 3 0=timstamp requests per session (count them!)
-                    if ready_signal_timestamp == Some(0) {
+                    if ready_signal_timestamp == 0 {
                         if zero_timestamp_counter >= 3 {
                             debug_log!("HRCD 3.2.3: Too many zero-timestamp requests. Discarding.");
                             continue;
@@ -7367,13 +7368,51 @@ fn handle_remote_collaborator_meetingroom_desk(
                             continue; // Skip to the next iteration of the loop
                         }
                     }; 
-                    
-                    session_send_queue = Some(get_or_create_send_queue(
-                        &this_team_channelname,
-                        &room_sync_input.remote_collaborator_name,
-                        session_send_queue.expect("REASON"),
-                        ready_signal_timestamp.expect("REASON"),
-                    )?);
+
+                    session_send_queue = match session_send_queue {
+                        Some(queue) => {
+                            Some(get_or_create_send_queue(
+                                &this_team_channelname,
+                                &room_sync_input.remote_collaborator_name,
+                                queue,
+                                ready_signal_timestamp, // Use unwrapped timestamp here
+                            )?)
+                        }
+                        None => {
+                            Some(get_or_create_send_queue(
+                                &this_team_channelname,
+                                &room_sync_input.remote_collaborator_name,
+                                SendQueue {
+                                    back_of_queue_timestamp: ready_signal_timestamp, // And here
+                                    items: Vec::new(),
+                                },
+                                ready_signal_timestamp, // And here as well
+                            )?)
+                        }
+                    };
+                    // session_send_queue = match session_send_queue {
+                    //     Some(queue) => {
+                    //         // Update the queue based on the received timestamp if there was a previous queue
+                    //         Some(get_or_create_send_queue(
+                    //             &this_team_channelname,
+                    //             &room_sync_input.remote_collaborator_name,
+                    //             queue, // existing queue
+                    //             ready_signal_timestamp,
+                    //         )?)
+                    //     }
+                    //     None => {
+                    //         // Create a completely fresh queue with the received timestamp 
+                    //         Some(get_or_create_send_queue(
+                    //             &this_team_channelname,
+                    //             &room_sync_input.remote_collaborator_name,
+                    //             SendQueue { // a new SendQueue
+                    //                 back_of_queue_timestamp: ready_signal_timestamp,
+                    //                 items: Vec::new()
+                    //             },
+                    //             ready_signal_timestamp,
+                    //         )?)
+                    //     }
+                    // };
 
                     /*
                     send_toml_file_to_intray(
