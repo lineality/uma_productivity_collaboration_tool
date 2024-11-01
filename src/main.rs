@@ -4617,40 +4617,131 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
 // }
 
 
-/// Calculates the Pearson hash of a given input slice.
-fn pearson_hash_base(input_u8_int: &[u8]) -> Result<u8, std::io::Error> {  // Returns std::io::Error
-    /*
-    use with:
-                match pearson_hash_base(&salted_data) {
-                Ok(hash) => hashes.push(hash), // Push the hash if successful
-                Err(e) => {
-                    // Handle the error from pearson_hash_base
-                    // Optional: log the error and return None:
-                    debug_log!("Error calculating Pearson hash: {}", e);
-                    return None; 
-                }
-            }
-    */
-    // based on: https://en.wikipedia.org/wiki/Pearson_hashing
-    // based on: https://hashing.mojoauth.com/pearson-hashing-in-rust/
-    let mut p_hash_table = [0u8; 256];
-    for p_iter_item in 0..256 {
-        // Explicit pattern matching
-        let u8_value: u8 = (p_iter_item % 256).try_into().map_err(|_| {
-            std::io::Error::new(std::io::ErrorKind::InvalidData, "usize value too large for u8")
-        })?;
-        p_hash_table[p_iter_item] = (p_iter_item as u8).wrapping_sub(u8_value);
+
+
+/// Implementation of the Pearson hashing algorithm
+/// 
+/// This is a non-cryptographic hash function that produces an 8-bit hash value.
+/// It's useful for:
+/// - Hash tables
+/// - Data integrity checks
+/// - Fast execution on 8-bit processors
+/// 
+/// Features:
+/// - Simple implementation
+/// - Fast execution
+/// - No simple class of inputs that produce collisions
+/// - Two strings differing by one character never collide
+/// 
+/// Reference: Pearson, Peter K. (1990). "Fast Hashing of Variable-Length Text Strings"
+
+// Generate a permutation table using a non-linear transformation
+// This is done at compile time using const fn
+const fn generate_pearson_permutation_table() -> [u8; 256] {
+    let mut table = [0u8; 256];
+    let mut i = 0;
+    while i < 256 {
+        // Non-linear transformation: multiply by prime number 167 and add 13
+        // Then mask with 0xFF to keep it within u8 range
+        table[i as usize] = ((i * 167 + 13) & 0xFF) as u8;
+        i += 1;
     }
-    // for p_iter_item in 0..256 {
-    //     p_hash_table[p_iter_item] = (p_iter_item as u8).wrapping_sub(p_iter_item % 256);
-    // }
-    
-    let mut pearson_hash_output: u8 = 0;
-    for p_iter_byte in input_u8_int {
-        pearson_hash_output = p_hash_table[(pearson_hash_output ^ p_iter_byte) as usize];
-    }
-    Ok(pearson_hash_output)
+    table
 }
+
+// The permutation table is computed once at compile time
+const PERMUTATION_TABLE: [u8; 256] = generate_pearson_permutation_table();
+
+/// Computes the Pearson hash of the input bytes
+/// 
+/// # Arguments
+/// 
+/// * `input` - A slice of bytes to hash
+/// 
+/// # Returns
+/// 
+/// * An 8-bit hash value as u8
+/// 
+/// # Example
+/// 
+/// ```
+/// let text = "Hello, World is the first onasei!";
+/// let hash = pearson_hash6(text.as_bytes());
+/// println!("Hash: {}", hash);
+/// ```
+pub fn pearson_hash_base(input: &[u8]) -> Result<u8, std::io::Error> {
+    // Check if input is empty
+    if input.is_empty() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "Input cannot be empty"
+        ));
+    }
+
+    // Initialize hash to 0
+    let mut hash: u8 = 0;
+    
+    // For each byte in the input
+    for &byte in input {
+        // XOR the current byte with the hash, use result as index into permutation table
+        hash = PERMUTATION_TABLE[(hash ^ byte) as usize];
+    }
+    
+    Ok(hash)
+}
+
+
+// /// Calculates the Pearson hash of a given input slice.
+// fn pearson_hash_base(input_u8_int: &[u8]) -> Result<u8, std::io::Error> {  // Returns std::io::Error
+//     /*
+//     use with:
+//                 match pearson_hash_base(&salted_data) {
+//                 Ok(hash) => hashes.push(hash), // Push the hash if successful
+//                 Err(e) => {
+//                     // Handle the error from pearson_hash_base
+//                     // Optional: log the error and return None:
+//                     debug_log!("Error calculating Pearson hash: {}", e);
+//                     return None; 
+//                 }
+//             }
+//     */
+//     // based on: https://en.wikipedia.org/wiki/Pearson_hashing
+//     // based on: https://hashing.mojoauth.com/pearson-hashing-in-rust/
+//     debug_log!(
+//         "pearson_hash_base(): Input data: {:?}",
+//         input_u8_int
+//     );
+    
+    
+//     let mut p_hash_table = [0u8; 256];
+//     for p_iter_item in 0..256 {
+//         // Explicit pattern matching
+//         let u8_value: u8 = (p_iter_item % 256).try_into().map_err(|_| {
+//             std::io::Error::new(std::io::ErrorKind::InvalidData, "usize value too large for u8")
+//         })?;
+//         p_hash_table[p_iter_item] = (p_iter_item as u8).wrapping_sub(u8_value);
+//     }
+//     // for p_iter_item in 0..256 {
+//     //     p_hash_table[p_iter_item] = (p_iter_item as u8).wrapping_sub(p_iter_item % 256);
+//     // }
+    
+//     let mut pearson_hash_output: u8 = 0;
+//     for p_iter_byte in input_u8_int {
+//         pearson_hash_output = p_hash_table[(pearson_hash_output ^ p_iter_byte) as usize];
+
+//         debug_log!(
+//             "pearson_hash_base(): current_byte={:?}, pearson_hash_output={:?}",
+//             p_iter_byte,
+//             pearson_hash_output
+//         );
+//     }
+    
+//     debug_log!(
+//         "pearson_hash_base(): Final pearson_hash_output={:?}",
+//         pearson_hash_output
+//     );
+//     Ok(pearson_hash_output)
+// }
 
 
 // /// person hash of ready signal struct
