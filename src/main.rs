@@ -1,6 +1,6 @@
 /*
 Uma
-2024.09-10
+2024.09-11
 Uma Productivity Collaboration Tools for Project-Alignment 
 https://github.com/lineality/uma_productivity_collaboration_tool
 In memory of Eleanor Th. Vadala 1923-2023: aviator, astronomer, engineer, pioneer, leader, friend. 
@@ -6322,7 +6322,8 @@ fn create_retry_flag(
 }
 
 
-/// Creates a new send queue based on the provided timestamp and collaborator name.
+/// Gets existing Queue or makes a new one, 
+/// can Creates a new send queue based on the provided timestamp and collaborator name.
 ///
 /// This function crawls through the team channel directory tree, looking for TOML files owned by the specified collaborator.
 /// It adds file paths to the send queue if their `updated_at_timestamp` is greater than the provided `back_of_queue_timestamp`.
@@ -6342,23 +6343,19 @@ fn get_or_create_send_queue(
     session_send_queue: SendQueue,
     back_of_queue_timestamp: u64,
 ) -> Result<SendQueue, ThisProjectError> {
+    /*
+    #[derive(Debug, Clone)]
+    struct SendQueue {
+        back_of_queue_timestamp: u64,
+        // echo_send: bool, //
+        items: Vec<PathBuf>,  // ordered list, filepaths
+    }
+    */
     let mut send_queue = SendQueue {
         back_of_queue_timestamp,
         items: Vec::new(),
     };
 
-    // // Safely check when re (echo_send) is false
-    // if !ready_signal.re.unwrap_or(true) { // Default to true if re is None (meaning not an echo)
-    //     // Time Check! 
-    //     if let Some(queue) = &session_send_queue { // Check if session_send_queue is Some
-    //         if ready_signal.rt.unwrap_or(0) < queue.back_of_queue_timestamp {
-
-    //             debug_log("Note: earlier than expected: ready_signal.rt < session_send_queue.back_of_queue_timestamp");
-    //         }
-    //     }
-    // }
-
-    
     // Crawl through the team channel directory tree
     for entry in WalkDir::new(PathBuf::from("project_graph_data").join(team_channel_name)) {
         let entry = entry?;
@@ -6390,6 +6387,9 @@ fn get_or_create_send_queue(
 
     Ok(send_queue)
 }
+
+
+
 
 /// get latest Remote Collaborator file timestamp 
 /// for use by handl local owner desk
@@ -7086,7 +7086,12 @@ fn handle_remote_collaborator_meetingroom_desk(
         )?;
 
         // --- 1.4 Initialize (empty for starting) Send Queue ---
-        let mut session_send_queue: Option<SendQueue> = None;
+        // let mut session_send_queue: Option<SendQueue> = None;
+        // 1.4 Initialize Send Queue (empty, with zero timestamp)
+        let mut session_send_queue = SendQueue {
+            back_of_queue_timestamp: 0,
+            items: Vec::new(),
+        };
 
         // let mut last_debug_log_time = Instant::now();
         // let mut last_debug_log_time = Instant::now();
@@ -7349,18 +7354,18 @@ fn handle_remote_collaborator_meetingroom_desk(
                         debug_log!("HRCD 3.2.2 check: Received outdated timestamp (older than 10 seconds). Discarding.");
                         continue;
                     }
+
                     // 3.2.3 only 3 0=timstamp requests per session (count them!)
                     if ready_signal_timestamp == 0 {
-                        if zero_timestamp_counter >= 3 {
+                        if zero_timestamp_counter >= 5 {
                             debug_log("HRCD 3.2.3 check: Too many zero-timestamp requests. Discarding.");
                             continue;
                         }
                         zero_timestamp_counter += 1;
                     }
 
-                    debug_log("##HRCD## [Done] checks(plaid) 2.4\n");
-                    
-                    
+                    debug_log("##HRCD## [Done] checks(plaid) 3.2.3\n");
+
                     // --- 3.3 Get / Make Send-Queue ---
                     let this_team_channelname = match get_current_team_channel_name() {
                         Some(name) => name,
@@ -7369,29 +7374,24 @@ fn handle_remote_collaborator_meetingroom_desk(
                             continue; // Skip to the next iteration of the loop
                         }
                     }; 
+                    debug_log!("HRCD 3.3 this_team_channelname -> {:?}", this_team_channelname);
 
-                    session_send_queue = match session_send_queue {
-                        Some(queue) => {
-                            Some(get_or_create_send_queue(
-                                &this_team_channelname,
-                                &room_sync_input.remote_collaborator_name,
-                                queue,
-                                ready_signal_timestamp, // Use unwrapped timestamp here
-                            )?)
-                        }
-                        None => {
-                            Some(get_or_create_send_queue(
-                                &this_team_channelname,
-                                &room_sync_input.remote_collaborator_name,
-                                SendQueue {
-                                    back_of_queue_timestamp: ready_signal_timestamp, // And here
-                                    items: Vec::new(),
-                                },
-                                ready_signal_timestamp, // And here as well
-                            )?)
-                        }
-                    };
-
+                    // if not-echo-send: see if you can or need to make a new queue
+                    debug_log!("HRCD 3.3 ?is-echo? ready_signal.re.unwrap_or(false) -> {:?}", ready_signal.re.unwrap_or(false));
+                    
+                    if !ready_signal.re.unwrap_or(false) {
+                        session_send_queue = match session_send_queue {
+                            input_sendqueue => {
+                                get_or_create_send_queue(
+                                    &this_team_channelname, // for team_channel_name
+                                    &room_sync_input.remote_collaborator_name, // for collaborator_name
+                                    input_sendqueue, // for session_send_queue
+                                    ready_signal_timestamp, // Use unwrapped timestamp here
+                                )?
+                            }
+    
+                        };
+                    }
                     debug_log!(
                         "HRCM ->[]<- 3.3 Get / Make session_send_queue {:?}",
                         session_send_queue   
@@ -7480,7 +7480,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                     removing each item as it's processed.
                     */
                     // --- 4. Send File: Send One File from Queue ---
-                    if let Some(ref mut queue) = session_send_queue {
+                    if let ref mut queue = session_send_queue {
                         while let Some(file_path) = queue.items.pop() {
                             
                             // 4.1. Get File Send Time
@@ -7668,7 +7668,7 @@ enum SyncResult {
 fn get_current_team_channel_name() -> Option<String> {
     // get path, derive name from path
     let channel_dir_path_str = read_state_string("current_node_directory_path.txt").ok()?; // read as string first
-    debug_log!("1. Channel directory path (from session state): {}", channel_dir_path_str); 
+    debug_log!("1. Channel directory path (from session state) [in fn get_current_team_channel_name()] channel_dir_path_str -> {:?}", channel_dir_path_str); 
     
     let path = Path::new(&channel_dir_path_str);
     path.file_name()?.to_str().map(String::from) 
