@@ -869,21 +869,6 @@ fn is_port_in_use(port: u16) -> bool {
     }
 }
 
-
-// original for reference: 
-// // 2. Read the 'continue_uma.txt' file 
-// let file_content = match fs::read_to_string(CONTINUE_UMA_PATH) {
-//     Ok(content) => content,
-//     Err(_) => {
-//         println!("Error reading 'continue_uma.txt'. Continuing..."); // Handle the error (e.g., log it) but continue for now
-//         continue; // Skip to the next loop iteration
-//     }
-// };
-// // break loop if continue=0
-// if file_content.trim() == "0" {
-//     debug_log("'continue_uma.txt' is 0. we_love_projects_loop() Exiting loop.");
-//     break; 
-// }
 /// Function for broadcasting to theads to wrapup and end uma session: quit
 fn should_halt_uma() -> bool {
     // 1. Read the 'continue_uma.txt' file
@@ -1073,19 +1058,6 @@ macro_rules! debug_log {
     )
 }
 
-
-// // maybe deprecated
-// #[derive(Debug, Clone, Hash, PartialEq, Eq)]
-// struct LocalOwnerSyncPortsData {
-//     local_user_name: String,
-//     local_ipv6_address: Ipv6Addr,
-//     local_public_gpg: String,
-//     local_sync_interval: u64,
-//     local_ready_port__your_desk_you_send: u16, // locally: 'you' send a signal through your port on your desk
-//     local_intray_port__your_desk_you_listen: u16, // locally: 'you' listen for files sent by the other collaborator
-//     local_gotit_port__your_desk_you_send: u16, // locally: 'you' send a signal through your port on your desk
-// }
-
 // maybe deprecated
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 struct RemoteCollaboratorPortsData {
@@ -1098,7 +1070,7 @@ struct RemoteCollaboratorPortsData {
     remote_gotit_port__their_desk_you_listen: u16, // locally: 'you' listen to their port on 'their' desk
 }
 
-// struct for reading/extracting raw abstract port assignments 
+/// struct for reading/extracting raw abstract port assignments 
 /// from the team_channels/NAME/node.toml
 #[derive(Debug, Deserialize, Serialize, Clone, Hash, PartialEq, Eq)] // Add
 struct AbstractTeamchannelNodeTomlPortsData {
@@ -1174,7 +1146,6 @@ struct ForRemoteCollaboratorDeskThread {
     remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip: u16, // locally: 'you' add files to their port on 'their' desk
     remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip: u16, // locally: 'you' listen to their port on 'their' desk
 }
-
 
 /// for translate_port_assignments() to export as
 /// Get Needed, When Needed
@@ -2009,204 +1980,6 @@ fn check_collaborator_collisions(
     None // No collisions
 }
 
-// /// depreicated
-// /// read_a_collaborator_setup_toml
-// /// e.g. for getting fields from collaborator setup files in roject_graph_data/collaborator_files_address_book
-// // 3. Modified function to read and parse the data
-// fn read_a_collaborator_setup_toml() -> Result<(Vec<CollaboratorTomlData>, Vec<ThisProjectError>), ThisProjectError> {
-//     let mut collaborators = Vec::new();
-//     let mut errors = Vec::new();
-//     let dir_path = Path::new("project_graph_data/collaborator_files_address_book");
-
-//     for entry in fs::read_dir(dir_path)? {
-//         let entry = entry?;
-//         let path = entry.path();
-
-//         if path.is_file() && path.extension().and_then(OsStr::to_str) == Some("toml") {
-//             let toml_string = fs::read_to_string(&path)?;
-
-//             // 4. Deserialize into the raw struct first
-//             match toml::from_str::<RawProtoDataToml>(&toml_string) { 
-//                 Ok(raw_collaborator) => {
-//                     // 5. Convert the raw data into the final struct
-//                     let collaborator = CollaboratorTomlData {
-//                         user_name: raw_collaborator.user_name, 
-//                         ipv4_addresses: raw_collaborator.ipv4_addresses,
-//                         ipv6_addresses: raw_collaborator.ipv6_addresses,
-//                         gpg_key_public: raw_collaborator.gpg_key_public,
-//                         sync_interval: raw_collaborator.sync_interval,
-//                         updated_at_timestamp: raw_collaborator.updated_at_timestamp,
-//                         user_salt_list: raw_collaborator.user_salt_list
-//                             .iter()
-//                             .map(|salt_str| {
-//                                 u128::from_str_radix(salt_str.trim_start_matches("0x"), 16)
-//                                     .map_err(ThisProjectError::from)
-//                             })
-//                             .collect::<Result<Vec<u128>, ThisProjectError>>()?,
-//                     };
-
-//                     collaborators.push(collaborator);
-//                 }
-//                 Err(e) => errors.push(ThisProjectError::from(e)),
-//             }
-//         }
-//     }
-
-//     // Return the parsed collaborators and any errors encountered
-//     if errors.is_empty() {
-//         Ok((collaborators, errors))
-//     } else {
-//         Ok((collaborators, errors))
-//     }
-// }
-
-
-// fn read_a_collaborator_setup_toml() -> Result<(Vec<CollaboratorTomlData>, Vec<ThisProjectError>), ThisProjectError> {
-//     let mut collaborators = Vec::new();
-//     let mut errors = Vec::new();
-//     let dir_path = Path::new("project_graph_data/collaborator_files_address_book");
-
-//     for entry in fs::read_dir(dir_path)? {
-//         let entry = entry?;
-//         let path = entry.path();
-
-//         if path.is_file() && path.extension().and_then(OsStr::to_str) == Some("toml") {
-//             let toml_string = fs::read_to_string(&path)?;
-
-//             // Deserialize the TOML data into a CollaboratorTomlData struct
-//             match toml::from_str::<CollaboratorTomlData>(&toml_string) {
-//                 Ok(mut collaborator) => {
-//                     // Parse the hex salt strings into u128 values
-//                     collaborator.user_salt_list = collaborator.user_salt_list
-//                         .iter()
-//                         .map(|salt_str| {
-//                             u128::from_str_radix(salt_str.trim_start_matches("0x"), 16)
-//                                 .map_err(ThisProjectError::from)
-//                         })
-//                         .collect::<Result<Vec<u128>, ThisProjectError>>()?; 
-
-//                     // The collaborator now has u128 salts, so push it onto the vector
-//                     collaborators.push(collaborator); 
-//                 }
-//                 Err(e) => errors.push(ThisProjectError::from(e)), // Handle deserialization errors
-//             }
-//         }
-//     }
-
-//     // Return the parsed collaborators and any errors encountered
-//     if errors.is_empty() {
-//         Ok((collaborators, errors))
-//     } else {
-//         Ok((collaborators, errors))
-//     }
-// }
-
-// fn read_a_collaborator_setup_toml() -> Result<(Vec<CollaboratorTomlData>, Vec<ThisProjectError>), ThisProjectError> {
-//     let mut collaborators = Vec::new();
-//     let mut errors = Vec::new();
-//     let dir_path = Path::new("project_graph_data/collaborator_files_address_book");
-
-//     for entry in fs::read_dir(dir_path)? {
-//         let entry = entry?;
-//         let path = entry.path();
-
-//         if path.is_file() && path.extension().and_then(OsStr::to_str) == Some("toml") {
-//             let toml_string = fs::read_to_string(&path)?;
-//             match toml::from_str::<CollaboratorTomlData>(&toml_string) {
-//                 Ok(collaborator) => {
-//                     // No need to parse, salts are already u128
-//                     collaborators.push(collaborator); 
-//                 }
-//                 Err(e) => errors.push(ThisProjectError::from(e)),
-//             }
-//         }
-//     }
-
-//     if errors.is_empty() {
-//         Ok((collaborators, errors))
-//     } else {
-//         Ok((collaborators, errors)) 
-//     }
-// }
-
-
-
-// fn read_a_collaborator_setup_toml() -> Result<(Vec<CollaboratorTomlData>, Vec<ThisProjectError>), ThisProjectError> {
-//     let mut collaborators = Vec::new();
-//     let mut errors = Vec::new();
-//     let dir_path = Path::new("project_graph_data/collaborator_files_address_book");
-
-//     for entry in fs::read_dir(dir_path)? {
-//         let entry = entry?;
-//         let path = entry.path();
-
-//         if path.is_file() && path.extension().and_then(OsStr::to_str) == Some("toml") {
-//             let toml_string = fs::read_to_string(&path)?;
-//             match toml::from_str::<CollaboratorTomlData>(&toml_string) {
-//                 Ok(mut collaborator) => {
-//                     // Parse salt strings into u128
-//                     collaborator.user_salt_list = collaborator.user_salt_list
-//                         .iter()
-//                         .map(|salt_str| salt_str.parse::<u128>().map_err(ThisProjectError::from))
-//                         .collect::<Result<Vec<u128>, ThisProjectError>>()?;
-
-//                     collaborators.push(collaborator);
-//                 }
-//                 Err(e) => errors.push(ThisProjectError::from(e)),
-//             }
-//         }
-//     }
-
-//     if errors.is_empty() {
-//         Ok((collaborators, errors))
-//     } else {
-//         Ok((collaborators, errors)) 
-//     }
-// }
-
-
-// fn read_a_collaborator_setup_toml() -> Result<(Vec<CollaboratorTomlData>, Vec<ThisProjectError>), ThisProjectError> {
-//     let mut collaborators = Vec::new();
-//     let mut errors = Vec::new();
-//     let dir_path = Path::new("project_graph_data/collaborator_files_address_book");
-
-//     for entry in fs::read_dir(dir_path)? {
-//         let entry = entry?;
-//         let path = entry.path();
-
-//         if path.is_file() && path.extension().and_then(OsStr::to_str) == Some("toml") {
-//             // match fs::read_to_string(&path) {
-//             //     Ok(toml_string) => {
-//             //         match toml::from_str::<CollaboratorTomlData>(&toml_string) {
-//             //             Ok(collaborator) => collaborators.push(collaborator),
-//             //             Err(e) => errors.push(ThisProjectError::TomlDeserializationError(e)),
-//             //         }
-//             //     }
-//             match toml::from_str::<CollaboratorTomlData>(&toml_string) {
-//                 Ok(mut collaborator) => {
-//                     // Parse salt strings into u128
-//                     collaborator.user_salt_list = collaborator.user_salt_list
-//                         .iter()
-//                         .map(|salt_str| salt_str.parse::<u128>().map_err(ThisProjectError::from))
-//                         .collect::<Result<Vec<u128>, ThisProjectError>>()?; // Handle potential parsing errors
-        
-//                     collaborators.push(collaborator);
-//                 }
-//                 Err(e) => errors.push(ThisProjectError::IoError(e)),
-//             }
-//         }
-//     }
-
-//     if errors.is_empty() {
-//         Ok((collaborators, errors)) // All files parsed successfully
-//     } else {
-//         // Some files failed to parse, return the successfully parsed collaborators and the errors
-//         Ok((collaborators, errors)) 
-//     }
-// }
-
-
-
 fn add_collaborator_qa(
     graph_navigation_instance_state: &GraphNavigationInstanceState
 ) -> Result<(), io::Error> {
@@ -2316,27 +2089,6 @@ fn add_collaborator_qa(
     // let existing_collaborators = read_a_collaborator_setup_toml().unwrap_or_default();
     // let (existing_collaborators, errors) = read_one_collaborator_setup_toml().unwrap_or_default(); 
 
-    // // Log any errors encountered while reading collaborator files
-    // for error in errors {
-    //     // HERE!! HERE!! HERE!!
-    //     // You can use your debug_log macro here or any other logging mechanism
-    //     debug_log!("Error reading collaborator file: {}", error); 
-    //     println!("Error reading collaborator file: {}", error); 
-    // }
-    
-    // (You should add more validation here - for IPs, GPG keys, port uniqueness, etc.)
-
-    // // Check for collisions with existing collaborators (Add more comprehensive checks as needed)
-    // if let Some(error_message) = check_collaborator_collisions(
-    //     &new_collaborator, 
-    //     &existing_collaborators
-    // ) {
-    //     return Err(io::Error::new(
-    //         io::ErrorKind::AlreadyExists,
-    //         error_message, 
-    //     ));
-    // } 
-
     // Persist the new collaborator
     add_collaborator_setup_file(
         new_collaborator.user_name.clone(), 
@@ -2352,15 +2104,11 @@ fn add_collaborator_qa(
     Ok(())
 } 
 
-
 fn check_team_channel_collision(channel_name: &str) -> bool {
      let team_channels_dir = Path::new("project_graph_data/team_channels");
      let channel_path = team_channels_dir.join(channel_name);
      channel_path.exists() 
 }
-
-
-
 
 /// Represents the current state of a user's navigation within the UMA project graph.
 ///
@@ -2390,12 +2138,8 @@ struct GraphNavigationInstanceState {
     home_square_one: bool,
     // app.&App,  // TODO really?
 }
-// TODO: how to load value for active_team_channel when channel is entered
 
-// todo, maybe make boostrap_uma_session_network()
 impl GraphNavigationInstanceState {
-
-
     /// Loads and updates the `GraphNavigationInstanceState` based on the `current_full_file_path`.
     ///
     /// This method is called whenever the user navigates to a new directory within the 
@@ -2684,7 +2428,6 @@ struct CoreNode {
     abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
 }
 
-
 /// update_collaborator_sendqueue_timestamp_log
 /// ### making a new timestamp (maybe good to do each session)
 /// 1. pick a target collaborator
@@ -2873,30 +2616,6 @@ fn load_core_node_from_toml_file(file_path: &Path) -> Result<CoreNode, String> {
     Ok(core_node)
 }
 
-//old 
-// fn load_core_node_from_toml_file(file_path: &Path) -> Result<CoreNode, String> {
-//     // 1. Read File Contents 
-//     let toml_string = match fs::read_to_string(file_path) {
-//         Ok(content) => content,
-//         Err(e) => return Err(format!("Error reading file: {} in load_core_node_from_toml_file", e)),
-//     };
-
-//     // 2. Parse TOML String 
-//     let toml_value = match toml_string.parse::<Value>() {
-//         Ok(value) => value,
-//         Err(e) => return Err(format!("Error parsing TOML in load_core_node_from_toml_file: {}", e)),
-//     };
-
-//     // 3. Deserialize into CoreNode Struct 
-//     let core_node = match toml::from_str::<CoreNode>(&toml_string) {
-//         Ok(node) => node,
-//         Err(e) => return Err(format!("Error deserializing TOML in load_core_node_from_toml_file: {}", e)),
-//     };
-
-//     Ok(core_node)
-// }
-
-
 /*
 /// The name of the node. This is used for display and identification.
 node_name: String,
@@ -2970,8 +2689,6 @@ impl CoreNode {
             abstract_collaborator_port_assignments, 
         }
     }
-
-    
 
     /// Saves the `CoreNode` data to a `node.toml` file.
     ///
@@ -3072,7 +2789,6 @@ pub fn save_toml_to_file<T: Serialize>(data: &T, file_path: &Path) -> Result<(),
     Ok(())
 }
 
-
 #[derive(Debug, Deserialize, Serialize)]
 struct NodeInstMsgBrowserMetadata {
     // every .toml has these four
@@ -3086,14 +2802,8 @@ struct NodeInstMsgBrowserMetadata {
     expiration_period_days: u64,
     max_message_size_char: u64,
     total_max_size_mb: u64,
-
-
 }
 
-// TODO
-/*
-
-*/
 impl NodeInstMsgBrowserMetadata {
     fn new(
         node_name: &str,
@@ -3112,7 +2822,6 @@ impl NodeInstMsgBrowserMetadata {
         }
     }
 }
-
 
 /*
 Note: this might get generalized to fit in with vote an other files
@@ -3164,7 +2873,6 @@ impl InstantMessageFile {
     }
 }
 
-
 /// Creates a new team-channel directory and its associated metadata.
 /// 
 /// This function sets up the basic directory structure and files for a new team channel
@@ -3209,22 +2917,9 @@ fn create_team_channel(team_channel_name: String, owner: String) {
         Vec::new(), // Empty collaborators list for a new channel
         HashMap::new(), // Empty collaborator ports map for a new channel
     );
-    
-    //old
-    // let new_node = CoreNode::new(
-    //     team_channel_name.clone(), // node_name
-    //     team_channel_name.clone(), // description_for_tui
-    //     new_channel_path.clone(),  // directory_path
-    //     5,                // Order number (you might want to manage this)
-    //     NodePriority::Medium, // Priority (you might want to make this configurable)
-    //     owner,   // owner
-    //     HashMap::new(),  // teamchannel_collaborators_with_access, Create an empty HashMap
 
-    // );
     new_node.save_node_to_file().expect("Failed to save initial node data"); 
 }
-
-
 
 fn add_im_message(
     path: &Path,
@@ -3248,8 +2943,7 @@ fn add_im_message(
     } else {
         debug_log(&format!("parent directory  {:?}", &parent_dir)); 
     }
-    
-    
+
     // Read 0.toml to get this instant messager browser room's settings
     let metadata_path = parent_dir.join("0.toml"); // Assuming path is the instant_message_browser directory
     let metadata_string = fs::read_to_string(metadata_path)?;
@@ -3266,26 +2960,6 @@ fn add_im_message(
         text, // text_message: &str,
         signature, // signature: Option<String>,
         graph_navigation_instance_state, // graph_navigation_instance_state: &GraphNavigationInstanceState,  // gets uma.toml data
-        
-        
-        
-        // owner, // owner: owner.to_string(),
-        // graph_navigation_instance_state.current_node_members, // teamchannel_collaborators_with_access: teamchannel_collaborators_with_access,
-        // &node_name, // node_name: node_name.to_string(), , // Store the node name
-        // &filepath_in_node, // filepath_in_node: filepath_in_node.to_string(), , // Store the filepath
-        // text, // text_message: text_message.to_string(),
-        // get_current_unix_timestamp(), // updated_at_timestamp: timestamp, , // utc posix timestamp
-        // get_current_unix_timestamp(), // expires_at: expires_at, , // utc posix timestamp , // TODO!! update this
-        // None, // links: Vec::new(),
-        // signature, // signature,
-
-        
-        // owner, 
-        // &node_name, 
-        // &filepath_in_node, 
-        // text, 
-        // signature, 
-        // &graph_navigation_instance_state
     );
     let toml_data = toml::to_string(&message).map_err(|e| {
         io::Error::new(io::ErrorKind::Other, format!("TOML serialization error: {}", e))
@@ -3293,7 +2967,6 @@ fn add_im_message(
     fs::write(path, toml_data)?;
     Ok(())
 }
-
 
 /// ## State, Initialization & Network
 /// If as a vignette, let's look at a brief walkthrough of Alice starting up Uma as she embarks on a build with Bob. 
@@ -3321,7 +2994,6 @@ fn add_im_message(
 fn initialize_uma_application() -> Result<(), Box<dyn std::error::Error>> {
     // Welcome to Uma Land!!
     debug_log("Staring initialize_uma_application()");
-
 
     // --- 1. CHECK FOR & SETUP uma.toml ---
     let uma_toml_path = Path::new("uma.toml");
@@ -3782,109 +3454,7 @@ fn handle_command(
                 debug_log("Help!");
                 // Display help information
             }
-            
-           // "l" | "log" | "logmode" | "debug" | "debuglog" | "showlog" => {
-           //      debug_log("Starting log mode...ctrl+c to exit");
-           //      print!("Starting log mode...ctrl+c to exit");
 
-           //      // 1. Read log_mode_refresh DIRECTLY from uma.toml (without loading user data).
-           //      let uma_toml_path = Path::new("uma.toml");
-           //      let toml_data = toml::from_str::<toml::Value>(&fs::read_to_string(uma_toml_path)?)
-           //          .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?; // Convert toml::de::Error 
-                
-           //      // Use a default refresh rate if log_mode_refresh is not found or invalid.
-           //      // Use a default refresh rate if log_mode_refresh is not found or invalid.
-           //      // let log_mode_refresh = toml_data
-           //      //     .get("log_mode_refresh")
-           //      //     .and_then(toml::Value::as_float) // Use as_float to get the floating-point value
-           //      //     .map(|v| v as f32) // Convert to f32
-           //      //     .unwrap_or(1.0); // Default refresh rate of 1 second
-           //      let log_mode_refresh = match fs::read_to_string(uma_toml_path) {
-           //          Ok(toml_string) => {
-           //              match toml::from_str::<toml::Value>(&toml_string) {
-           //                  Ok(toml_data) => {
-           //                      toml_data
-           //                          .get("log_mode_refresh")
-           //                          .and_then(toml::Value::as_float)
-           //                          .and_then(|v| {
-           //                              if v >= 0.1 && v <= 10.0 {
-           //                                  Some(v as f32)
-           //                              } else {
-           //                                  None
-           //                              }
-           //                          })
-           //                          .unwrap_or(3.0)
-           //                  }
-           //                  Err(e) => {
-           //                      debug_log!("Error parsing uma.toml: {}", e);
-           //                      3.0 // Default to 3 seconds on parsing error
-           //                  }
-           //              }
-           //          }
-           //          Err(e) => {
-           //              debug_log!("Error log_mode_refresh reading uma.toml: {}", e);
-           //              3.0 // Default to 3 seconds on reading error
-           //          }
-           //      };
-
-           //      debug_log!("log_mode_refresh: {:?}", log_mode_refresh); 
-
-           //  // HERE!! HERE!! 
-           //  // Initializing last_log_file_size here 
-           //  let mut last_log_file_size = fs::metadata("uma.log")
-           //      .map(|metadata| metadata.len())
-           //      .unwrap_or(0); // Get initial size, or 0 if error 
-            
-           //  loop { // Enter the refresh loop
-           //      // 1. Read and display the log contents. 
-                
-           //      // HERE!! HERE!!
-           //      // Check for file size changes before reading
-           //      let current_log_file_size = fs::metadata("uma.log") 
-           //          .map(|metadata| metadata.len())
-           //          .unwrap_or(0); 
-           //      if current_log_file_size != last_log_file_size { 
-           //          match fs::read_to_string("uma.log") {
-           //              Ok(log_contents) => {
-           //                  // print!("{}", log_contents); // Print to console for now
-           //                  print!("\x1B[2J\x1B[1;1H"); // Clear the screen
-           //                  println!("{}", log_contents); 
-           //                  // Update the last_log_file_size after reading
-           //                  last_log_file_size = current_log_file_size; 
-           //              }
-           //              Err(e) => {
-           //                  eprintln!("Failed to read uma.log: {}", e);
-           //              }
-           //          }
-           //      }
-                
-           //      // // 1. Read the log_mode_refresh value from uma.toml.
-           //      // let uma_toml_path = Path::new("uma.toml");
-           //      // let user_metadata = match toml::from_str::<LocalUserUma>(&fs::read_to_string(uma_toml_path)?) {
-           //      //     Ok(metadata) => metadata,
-           //      //     Err(e) => {
-           //      //         debug_log!("Error reading or parsing uma.toml: {}", e);
-           //      //         eprintln!("Error reading or parsing uma.toml: {}", e);
-           //      //         return Ok(false); // Or handle the error differently (e.g., use a default value)
-           //      //     }
-           //      // };
-                    
-
-
-           //          // 2. Sleep for a short duration.
-           //          // thread::sleep(Duration::from_secs(log_mode_refresh)); 
-           //          thread::sleep(Duration::from_secs_f32(log_mode_refresh)); // Use from_secs_f32
-
-           //          // // 3. Check for 'esc' key press to exit.
-           //          // if let Ok(input) = tiny_tui::get_input() {
-           //          //     if input == "esc" {
-           //          //         debug_log("Exiting debug log view.");
-           //          //         break; // Exit the loop
-           //          //     }
-           //          // }
-           //      }
-           //  }
-            
            "l" | "log" | "logmode" | "debug" | "debuglog" | "showlog" => {
             debug_log("Starting log mode...ctrl+c to exit");
 
@@ -4206,7 +3776,6 @@ fn get_addressbook_file_by_username(username: &str) -> Result<CollaboratorTomlDa
     }
 }
 
-
 /// Used to make a random hex string
 /// to store the u128 salt for salted pearson hash
 /// in the toml file as hex-string
@@ -4215,7 +3784,6 @@ fn generate_random_salt() -> String {
     let salt: u128 = rng.gen(); // Generate a random u128
     format!("0x{:X}", salt) // Convert to hexadecimal string with "0x" prefix
 }
-
 
 /// Loads connection data for members of the currently active team channel.
 /// On success, returns a `HashSet` of `MeetingRoomSyncDataset` structs, 
@@ -4526,9 +4094,7 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
             { name = "bob", ready_port = 50004, intray_port = 50005, gotit_port = 50006 },
         ]
         */
-    
 
-    
         // --- Get remote collaborator's salt list ---
         // let remote_collaborator_salt_list = match get_addressbook_file_by_username(collaborator_name.clone()) {
         let remote_collaborator_salt_list = match get_addressbook_file_by_username(&collaborator_name.clone()) {
@@ -4587,38 +4153,6 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
     Ok(sync_config_data_set) 
 }
 
-// // a hello world function for testing
-// fn send_hello_signal(target_addr: SocketAddr) -> Result<(), io::Error> {
-//     match TcpStream::connect(target_addr) {
-//         Ok(mut stream) => {
-//             stream.write_all(b"Hello, UMA!")?;
-//             println!("Sent 'Hello, UMA!' signal to {}", target_addr);
-//             Ok(())
-//         }
-//         Err(e) => {
-//             eprintln!("Failed to send signal to {}: {}", target_addr, e);
-//             Err(e) 
-//         }
-//     }
-// }
-
-// // TODO which struct?
-// // fn is_ip_allowlisted(ip: &IpAddr, sync_config_data_set: &HashSet<RemoteCollaboratorPortsData>) -> bool {
-// fn is_ip_allowlisted(ip: &IpAddr, sync_config_data_set: &HashSet<ForRemoteCollaboratorDeskThread>) -> bool {
-//     sync_config_data_set.iter().any(|sc| match ip {
-//         IpAddr::V4(_) => false, // Currently only handling IPv6 
-//         IpAddr::V6(ip_v6) => *ip_v6 == sc.remote_ipv6_address, 
-//     })
-// }
-
-
-// // Helper function to check if a port is in use by another collaborator
-// fn port_is_used_by_another_collaborator(port: u16, collaborators: &HashSet<RemoteCollaboratorPortsData>) -> bool { 
-// }
-
-
-
-
 /// Implementation of the Pearson hashing algorithm
 /// 
 /// This is a non-cryptographic hash function that produces an 8-bit hash value.
@@ -4634,9 +4168,9 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
 /// - Two strings differing by one character never collide
 /// 
 /// Reference: Pearson, Peter K. (1990). "Fast Hashing of Variable-Length Text Strings"
-
-// Generate a permutation table using a non-linear transformation
-// This is done at compile time using const fn
+///
+/// Generate a permutation table using a non-linear transformation
+/// This is done at compile time using const fn
 const fn generate_pearson_permutation_table() -> [u8; 256] {
     let mut table = [0u8; 256];
     let mut i = 0;
@@ -4689,122 +4223,6 @@ pub fn pearson_hash_base(input: &[u8]) -> Result<u8, std::io::Error> {
     
     Ok(hash)
 }
-
-
-// /// Calculates the Pearson hash of a given input slice.
-// fn pearson_hash_base(input_u8_int: &[u8]) -> Result<u8, std::io::Error> {  // Returns std::io::Error
-//     /*
-//     use with:
-//                 match pearson_hash_base(&salted_data) {
-//                 Ok(hash) => hashes.push(hash), // Push the hash if successful
-//                 Err(e) => {
-//                     // Handle the error from pearson_hash_base
-//                     // Optional: log the error and return None:
-//                     debug_log!("Error calculating Pearson hash: {}", e);
-//                     return None; 
-//                 }
-//             }
-//     */
-//     // based on: https://en.wikipedia.org/wiki/Pearson_hashing
-//     // based on: https://hashing.mojoauth.com/pearson-hashing-in-rust/
-//     debug_log!(
-//         "pearson_hash_base(): Input data: {:?}",
-//         input_u8_int
-//     );
-    
-    
-//     let mut p_hash_table = [0u8; 256];
-//     for p_iter_item in 0..256 {
-//         // Explicit pattern matching
-//         let u8_value: u8 = (p_iter_item % 256).try_into().map_err(|_| {
-//             std::io::Error::new(std::io::ErrorKind::InvalidData, "usize value too large for u8")
-//         })?;
-//         p_hash_table[p_iter_item] = (p_iter_item as u8).wrapping_sub(u8_value);
-//     }
-//     // for p_iter_item in 0..256 {
-//     //     p_hash_table[p_iter_item] = (p_iter_item as u8).wrapping_sub(p_iter_item % 256);
-//     // }
-    
-//     let mut pearson_hash_output: u8 = 0;
-//     for p_iter_byte in input_u8_int {
-//         pearson_hash_output = p_hash_table[(pearson_hash_output ^ p_iter_byte) as usize];
-
-//         debug_log!(
-//             "pearson_hash_base(): current_byte={:?}, pearson_hash_output={:?}",
-//             p_iter_byte,
-//             pearson_hash_output
-//         );
-//     }
-    
-//     debug_log!(
-//         "pearson_hash_base(): Final pearson_hash_output={:?}",
-//         pearson_hash_output
-//     );
-//     Ok(pearson_hash_output)
-// }
-
-
-// /// person hash of ready signal struct
-// /// uses: pearson_hash_base(input_u8_int: &[u8])
-// fn ready_signal_struct_to_pearson_hash(signal: &ReadySignal) -> Option<u8> {
-//     if let (Some(timestamp), Some(echo_send)) = (signal.rt, signal.re) {
-//         let mut data_to_hash = Vec::new();
-//         data_to_hash.extend_from_slice(×tamp.to_be_bytes());
-//         data_to_hash.push(if echo_send { 1 } else { 0 });
-//         Some(pearson_hash_base(&data_to_hash))
-//     } else {
-//         None // Handle the case where rt or re is None
-//     }
-// }
-
-
-// /// refactor hash and hashes to names that DO NOT COLLIDE!!!!
-// /// Add Pearson hashes to ReadySignal struct
-// /// Uses: pearson_hash_base(input_u8_int: &[u8])
-// /// to an array Vec<u8> of four hashes, from two salts
-// fn add_pearson_hash_to_readysignal_struct(
-//     signal: &ReadySignal,
-//     local_user_salt_list: &[u128], 
-// ) -> Option<ReadySignal> {
-    
-//     debug_log!("010101 add_pearson_hash_to_readysignal_struct() signal {:?}", &signal);
-
-    
-//     if let (Some(rt), Some(rst), Some(re)) = (signal.rt, signal.rst, signal.re) {
-//         let mut data_to_hash = Vec::new();
-//         data_to_hash.extend_from_slice(&rt.to_be_bytes());
-//         data_to_hash.extend_from_slice(&rst.to_be_bytes()); // Add rst to the hash
-//         data_to_hash.push(if re { 1 } else { 0 });
-        
-//         debug_log!("010101 add_pearson_hash_to_readysignal_struct() data_to_hash {:?}", &data_to_hash);
-
-//         let mut hashes: Vec<u8> = Vec::new();
-//         for salt in local_user_salt_list {
-//             let mut salted_data = data_to_hash.clone();
-//             salted_data.extend_from_slice(&salt.to_be_bytes());
-//             match pearson_hash_base(&salted_data) {
-                
-//                 Ok(hash) => hashes.push(hash),
-//                 Err(e) => {
-//                     return None;
-//                 }
-//             }
-//         }
-//         debug_log!("010101 hashes {:?}", &hashes);
-
-//         Some(ReadySignal {
-//             rt: Some(rt),
-//             rst: Some(rst),
-//             re: Some(re),
-//             rh: Some(hashes), 
-//         })
-//     } else {
-//         debug_log("add_pearson_hash_to_readysignal_struct: none ");
-        
-//         None 
-//     }
-// }
-
 
 /// Calculates Pearson hashes for a ReadySignal struct.
 ///
@@ -4927,132 +4345,6 @@ fn verify_readysignal_hashes(
     }
 }
 
-/// Add Pearson hashes to ReadySignal struct
-/// Uses: pearson_hash_base(input_u8_int: &[u8])
-/// to an array Vec<u8> of four hashes, from two salts
-/// h1: Option<u8>, // hash with salt1
-/// h2: Option<u8>, // hash with salt2
-/// h3: Option<u8>, // hash with salt3  
-/// h4: Option<u8>, // hash with salt4
-// fn add_pearson_hash_to_readysignal_struct(
-//     signal: &ReadySignal,
-//     local_user_salt_list: &[u128], // Use u8 for salts
-// ) -> Option<ReadySignal> {
-//     if let (
-//         Some(rt),
-//         Some(rst), 
-//         Some(re),
-//         ) = (
-//             signal.rt,
-//             signal.rst, 
-//             signal.re,
-//             ) {
-//         let mut data_to_hash = Vec::new();
-//         data_to_hash.extend_from_slice(&rt.to_be_bytes());
-//         data_to_hash.push(if re { 1 } else { 0 });
-
-//         // Calculate the four hashes (with list of four salts)
-//         // Calculate hashes using each salt
-//         let mut hashes: Vec<u8> = Vec::new();
-//         for salt in local_user_salt_list {
-//             // ... (Your existing code) ...
-
-//             // Handle the Result from pearson_hash_base
-//             match pearson_hash_base(&salted_data) {
-//                 Ok(hash) => hashes.push(hash), // Push the hash if successful
-//                 Err(e) => {
-//                     // Handle the error from pearson_hash_base. 
-//                     // You might want to log the error and return None:
-//                     debug_log!("Error calculating Pearson hash: {}", e);
-//                     return None; 
-//                 }
-//             }
-//         }
-//         // for salt in local_user_salt_list {
-//         //     let mut salted_data = data_to_hash.clone(); // Clone the base data for each salt
-//         //     salted_data.extend_from_slice(&salt.to_be_bytes()); // Append the salt
-//         //     // Convert std::io::Error to ThisProjectError// Calculate and add the hash
-//         //     let hash = pearson_hash_base(data).map_err(ThisProjectError::from)?; 
-//         // }
-
-//         // Create a new ReadySignal with the hashes
-//         Some(ReadySignal {
-//             rt: Some(rt),
-//             rst: Some(rst),
-//             re: Some(re),
-//             rh: Some(hashes), // Store hashes in a Vec<u8>
-//         })
-//     } else {
-//         None // Handle the case where rt or re is None
-//     }
-// }
-
-// fn add_pearson_hash_to_readysignal_struct(
-//     signal: &ReadySignal,
-//     local_user_salt_list: vec<u128>, // Use u8 for salts
-// ) -> Option<ReadySignal> {
-//     if let (
-//         Some(rt),
-//         Some(rst), 
-//         Some(re),
-//         ) = (
-//             signal.rt,
-//             signal.rst, 
-//             signal.re,
-//             ) {
-//         let mut data_to_hash = Vec::new();
-//         data_to_hash.extend_from_slice(×tamp.to_be_bytes());
-//         data_to_hash.push(if echo_send { 1 } else { 0 });
-
-//         // Calculate the four hashes (with list of four salts)
-//         // Calculate hashes using each salt
-//         let mut hashes: Vec<u8> = Vec::new();
-//         for salt in local_user_salt_list {
-//             let mut salted_data = data_to_hash.clone(); // Clone the base data for each salt
-//             salted_data.extend_from_slice(&salt.to_be_bytes()); // Append the salt
-//             hashes.push(pearson_hash_base(&salted_data)); // Calculate and add the hash
-//         }
-
-//         // Create a new ReadySignal with the hashes
-//         Some(ReadySignal {
-//             rt: Some(timestamp),
-//             re: Some(echo_send),
-//             rh: Some(vec![hash1, hash2, hash3, hash4]), // Store hashes in a Vec<u8>
-//         })
-//     } else {
-//         None // Handle the case where rt or re is None
-//     }
-// }
-
-// /// Add Pearson hashes to ReadySignal struct
-// /// Uses: pearson_hash_base(input_u8_int: &[u8])
-// /// to an array Vec<u8> of four hashes, from two salts
-// /// h1: Option<u8>, // hash with salt1
-// /// h2: Option<u8>, // hash with salt2
-// /// h3: Option<u8>, // hash with salt1 + salt2
-// /// h4: Option<u8>, // hash with salt1 - salt2 (abs?)
-// fn add_pearson_hash_to_readysignal_struct(
-//     signal: &ReadySignal,
-//     local_user_salt: u64,
-//     ) -> Option<ReadySignal> {
-//     if let (Some(timestamp), Some(echo_send)) = (signal.rt, signal.re) {
-//         let mut data_to_hash = Vec::new();
-//         data_to_hash.extend_from_slice(×tamp.to_be_bytes());
-//         data_to_hash.push(if echo_send { 1 } else { 0 });
-//         ? data_to_hash. local_user_salt ; //todo
-//         let hash = pearson_hash_base(&data_to_hash);
-
-//         // Create a new ReadySignal with the hash
-//         Some(ReadySignal {
-//             rt: Some(timestamp),
-//             re: Some(echo_send),
-//             rh: Some(format!("{:x}", hash)), // Convert hash to hexadecimal string
-//         })
-//     } else {
-//         None // Handle the case where rt or re is None
-//     }
-// }
-
 fn sync_flag_ok_or_wait(wait_this_many_seconds: u64) {
     // check for quit
     loop {
@@ -5084,7 +4376,6 @@ fn sync_flag_ok_or_wait(wait_this_many_seconds: u64) {
         }
     }
 }
-
 
 /// ### four byte array nearly 30 year timestamp v1
 /// ## posix time scale notes
@@ -5205,15 +4496,6 @@ fn is_prime(n: u8) -> bool {
     }
 }
 
-// fn get_next_sync_request_username(sync_config_data_set: &HashSet<RemoteCollaboratorPortsData>) -> Option<String> {
-//     // Choose a random collaborator from the set:
-//     sync_config_data_set
-//         .iter()
-//         .choose(&mut rand::thread_rng())
-//         .map(|collaborator| collaborator.remote_collaborator_name.clone())
-// }
-
-
 /// sends file as struct items to remote collaborator intray
 /// 1. intray_send_time (for freshness check)
 /// 2. intray_hash_list (for intact-ness and author-ness)
@@ -5251,37 +4533,6 @@ fn send_toml_file_to_intray(
     Ok(())
 }
 
-// /// sends file as struct items to remote collaborator intray
-// /// 1. intray_send_time (for freshness check)
-// /// 2. intray_hash_list (for intact-ness and author-ness)
-// /// 3. gpg_encrypted_file_contents (the content)
-// fn send_toml_file_to_intray(
-//     send_file: &SendFile, 
-//     target_addr: SocketAddr, 
-//     port: u16,
-// ) -> Result<(), ThisProjectError> {
-
-//     // 1. Serialize SendFile (Manually)
-//     let mut serialized_send_file: Vec<u8> = Vec::new();
-    
-//     // Add intray_send_time 
-//     // serialized_send_file.extend_from_slice(&send_file.intray_send_time.to_be_bytes());
-//     serialized_send_file.extend_from_slice(&send_file.intray_send_time.expect("REASON").to_be_bytes());
-    
-//     // Add intray_hash_list 
-//     serialized_send_file.extend_from_slice(&send_file.intray_hash_list);
-
-//     // Add gpg_encrypted_file_contents
-//     serialized_send_file.extend_from_slice(&send_file.gpg_encrypted_file_contents);
-    
-//     // 2. Send Data
-//     let socket = UdpSocket::bind(":::0")?; 
-//     socket.send_to(&serialized_send_file, SocketAddr::new(target_addr.ip(), port))?;
-    
-//     debug_log!("File sent to {}:{}", target_addr.ip(), port); 
-//     Ok(())
-// }
-
 /// Struct for sending file to in-tray (file sync)
 /// Salted-Pearson-Hash-List system for quick verification that packet is intact and sent by owner at timestamp
 #[derive(Serialize, Deserialize, Debug)] // Add Serialize/Deserialize for sending/receiving
@@ -5315,21 +4566,6 @@ struct GotItSignal {
     gh: Option<Vec<u8>>, // N hashes of rt + re
 }
 
-
-// // review use of gpg here
-// /// GotItSignal struct
-// /// Terse names to reduce network traffic, as an esceptional circumstatnce
-// /// Probably does not need a nonce because repeat does nothing...
-// /// less hash?
-// #[derive(Serialize, Deserialize, Debug)]
-// struct GotItSignal {
-//     // gi: Option<u64>, // Unique sync event_id ID get a u64 representation of the ThreadId using the as_u64() // ?
-//     // gg: Option<str>, // gpg_confirm_gotit /// ?
-//     di: Option<u64>, // Unique document ID TODO: maybe only this?
-//     // gn: Option<u16>, // Nonce for GotIt Signal
-//     // maybe gotit_signal_timestamp: u64,
-// }
-
 #[derive(Debug, Clone)] // Add other necessary derives later
 struct SendQueue {
     back_of_queue_timestamp: u64,
@@ -5337,11 +4573,9 @@ struct SendQueue {
     items: Vec<PathBuf>,  // ordered list, filepaths
 }
 
-
 // let timestamp_request_port = // ... port for sending "ready to receive" to collaborator
 // let file_receive_port = // ...  port for receiving files from collaborator 
 // let receipt_confirmation_port = // ... port for sending confirmations to collaborator
-
 
 fn send_data(data: &[u8], target_addr: SocketAddr) -> Result<(), io::Error> { 
     let socket = UdpSocket::bind(":::0")?; 
@@ -5637,112 +4871,6 @@ fn serialize_ready_signal(this_readysignal: &ReadySignal) -> std::io::Result<Vec
     Ok(bytes) 
 }
 
-
-// fn serialize_ready_signal(this_readysignal: &ReadySignal) -> std::io::Result<Vec<u8>> {
-//     /*TODO note: it is still not known how GPG and OTP (one time pads)
-//     will be used exactly, e.g.
-//     gpt the whole signal, or just one field
-//     and or one-time-pad the fields*/
-    
-//     let mut bytes = Vec::new();
-
-//     // Convert String to bytes using as_bytes()
-
-//     bytes.extend_from_slice(this_readysignal.di.as_bytes()); // document ID
-
-//     // bytes.extend_from_slice(&this_readysignal.rt.to_be_bytes()); // ready signal timestamp
-//     bytes.extend_from_slice(&this_readysignal.rt.expect("REASON").to_be_bytes()); // ready signal timestamp
-    
-    
-//     // bytes.push(if this_readysignal.re { 1 } else { 0 }); // ready signal Echo_Flag
-//     bytes.push(if this_readysignal.re.expect("REASON") { 1 } else { 0 }); // ready signal Echo_Flag
-    
-//     Ok(bytes) 
-// }
-
-// /// Vanilla Deserilize json signal
-// fn deserialize_ready_signal(bytes: &[u8]) -> Result<ReadySignal, io::Error> {
-//     // Ensure the byte array has enough data for both fields:
-//     if bytes.len() != std::mem::size_of::<u64>() * 2 { // 2 u64 fields
-//         return Err(Error::new(
-//             ErrorKind::InvalidData, 
-//             "Invalid byte array length for ReadySignal"
-//         ));
-//     }
-
-//     // Extract id:
-//     let id = u64::from_be_bytes(bytes[0..8].try_into().unwrap()); 
-
-//     // Extract timestamp:
-//     let timestamp = u64::from_be_bytes(bytes[8..16].try_into().unwrap()); 
-
-//     // Extract timestamp:
-//     let echo_send = bytes[16] != 0; 
-    
-//     Ok(ReadySignal { id: id.to_string(), timestamp, echo_send })
-
-// }
-/// Vanilla Deserilize json signal
-// fn deserialize_ready_signal(bytes: &[u8]) -> Result<ReadySignal, io::Error> {
-//     debug_log!("DRS input: Entering deserialize_ready_signal() with {} bytes", bytes.len());
-//     debug_log!("DRS input: Raw bytes -> {:?}", bytes);
-//     debug_log!("DRS input: Raw bytes as hex -> {}", bytes.iter().map(|b| format!("{:02X}", b)).collect::<String>());
-
-//     // Ensure the byte array has enough data for both fields:
-//     if bytes.len() != std::mem::size_of::<u64>() * 2 { // 2 u64 fields
-//         debug_log!("DRS: Error: Invalid byte array length for ReadySignal. Expected {}, got {}", std::mem::size_of::<u64>() * 2, bytes.len());
-//         return Err(Error::new(
-//             ErrorKind::InvalidData, 
-//             "Invalid byte array length for ReadySignal"
-//         ));
-//     }
-
-//     // Extract id:
-//     let id_bytes: [u8; 8] = bytes[0..8].try_into().unwrap();
-//     debug_log!("DRS Extract id: id_bytes -> {:?}", id_bytes);
-//     let id = u64::from_be_bytes(id_bytes); 
-//     debug_log!("DRS: id -> {}", id);
-
-//     // Extract timestamp:
-//     let timestamp_bytes: [u8; 8] = bytes[8..16].try_into().unwrap();
-//     debug_log!("DRS Extract timestamp: timestamp_bytes -> {:?}", timestamp_bytes);
-//     let timestamp = u64::from_be_bytes(timestamp_bytes);
-//     debug_log!("DRS Extract timestamp: timestamp -> {}", timestamp);
-
-//     // Extract echo_send:
-//     let echo_send = bytes[16] != 0; 
-//     debug_log!("DRS Extract echo_send: echo_send -> {}", echo_send);
-    
-//     Ok(ReadySignal { id: id.to_string(), timestamp, echo_send })
-// }
-
-
-// fn calculate_pearson_hashes_parallel(
-//     data_sets: Vec<&[u8]>, // A vector of byte slices to hash
-// ) -> Result<Vec<u8>, ThisProjectError> {
-//     let (tx, rx) = mpsc::channel();
-
-//     // Spawn a thread for each hash calculation
-//     for (index, data) in data_sets.clone().into_iter().enumerate() { // Clone data_sets
-
-//         let tx = tx.clone(); 
-//         thread::spawn(move || {
-//             // Clone the data before calculating the hash
-//             let hash = pearson_hash_base(data); // Clone the slice as a Vec<u8>
-
-//             tx.send((index, hash)).unwrap(); 
-//         });
-//     }
-//     // Collect the hashes in the correct order
-//     let mut hashes = vec![0u8; data_sets.len()]; // Initialize with default values
-//     for _ in 0..data_sets.len() {
-//         let (index, hash) = rx.recv().unwrap();
-//         hashes[index] = hash?;
-//     }
-
-//     Ok(hashes)
-// }
-
 /// Calculates Pearson hashes for a vector of byte slices.
 ///
 /// This function iterates through the input `data_sets` and calculates the Pearson hash for each slice,
@@ -5765,33 +4893,6 @@ fn calculate_pearson_hashes(data_sets: &[&[u8]]) -> Result<Vec<u8>, ThisProjectE
     Ok(hashes)
 }
 
-// fn calculate_pearson_hashes_parallel(
-//     data_sets: Vec<&[u8]>, // A vector of byte slices to hash
-// ) -> Result<Vec<u8>, ThisProjectError> {
-//     let (tx, rx) = mpsc::channel();
-
-//     // Spawn a thread for each hash calculation
-//     for (index, data) in data_sets.clone().into_iter().enumerate() {
-
-//         let tx = tx.clone(); // Clone the sender for each thread
-//         thread::spawn(move || {
-//             let hash = pearson_hash_base(data);
-//             tx.send((index, hash)).unwrap(); // Send the hash and its index
-//         });
-//     }
-
-//     // Collect the hashes in the correct order
-//     let mut hashes = vec![0u8; data_sets.len()]; // Initialize with default values
-//     for _ in 0..data_sets.len() {
-//         let (index, hash) = rx.recv().unwrap();
-//         hashes[index] = hash?;
-//     }
-
-//     Ok(hashes)
-// }
-
-
-// // HERE!! HERE!! // HERE!! HERE!!
 /// Vanilla Deserilize json signal
 /// The idea of the salt-hash or salt-checksum
 /// is that it is a faster and more anonymous way
@@ -5829,59 +4930,6 @@ fn deserialize_ready_signal(bytes: &[u8]) -> Result<ReadySignal, io::Error> {
         rh 
     })
 }
-
-// /// Vanilla Deserilize json signal
-// /// The idea of the salt-hash or salt-checksum
-// /// is that it is a faster and more anonymous way
-// /// to target the goals of packet-soundness checking
-// /// and spoof-protection
-// /// while keeping the computer and network load lite
-// /// Do not attempt to use Serde crate with this function!!!
-// fn deserialize_ready_signal(bytes: &[u8]) -> Result<ReadySignal, io::Error> {
-//     debug_log!("DRS: Entering deserialize_ready_signal() with {} bytes", bytes.len());
-//     debug_log!("DRS: Raw bytes: {:?}", bytes);
-//     debug_log!("DRS: Raw bytes as hex: {}", bytes.iter().map(|b| format!("{:02X}", b)).collect::<String>());
-//     /*
-//     #[derive(Serialize, Deserialize, Debug)] // Add Serialize/Deserialize for sending/receiving
-//     struct ReadySignal {
-//         ri: Option<String>, // Unique sync event_id ID get a u64 representation of the ThreadId using the as_u64() method.
-//         rt: Option<u64>, // ready signal timestamp? TODO needed?
-//         re: Option<bool>, // echo_send
-//         rh: Option<str>, // ready signal salted hash of other fields using user_salt from collaborator_file
-//     }
-//     */
-
-//     // Ensure the byte array has enough data for both fields:
-//     if bytes.len() < std::mem::size_of::<u64>() * 2 { // At least 2 u64 fields
-//         debug_log!("DRS: Error: Invalid byte array length for ReadySignal. Expected at least {}, got {}", std::mem::size_of::<u64>() * 2, bytes.len());
-//         return Err(Error::new(
-//             ErrorKind::InvalidData, 
-//             "Invalid byte array length for ReadySignal"
-//         ));
-//     }
-
-//     // Extract timestamp:
-//     let timestamp_bytes: [u8; 8] = bytes[8..16].try_into().unwrap();
-//     debug_log!("DRS: timestamp_bytes: {:?}", timestamp_bytes);
-    
-//     let rt = u64::from_be_bytes(timestamp_bytes);
-//     debug_log!("DRS: ready_signal_timestamp: {}", rt);
-
-//     // Extract echo_send (if present):
-//     let re = if bytes.len() > 16 { bytes[16] != 0 } else { false };
-//     debug_log!("DRS: echo_send: {}", re);
-    
-    
-//     // Deserialize the hash (rh)
-//     let rh = if bytes.len() > 17 { // 16 bytes for timestamps + 1 for echo_send
-//         Some(String::from_utf8_lossy(&bytes[17..]).to_string())
-//     } else {
-//         None
-//     };
-    
-//     // Ok(ReadySignal { id: id.to_string(), ready_signal_timestamp, echo_send })
-//     Ok(ReadySignal { rt: Some(rt), re: Some(re), rh })
-// }
 
 fn serialize_gotit_signal(signal: &GotItSignal) -> std::io::Result<Vec<u8>> {
     let mut bytes = Vec::new();
@@ -5936,61 +4984,6 @@ fn deserialize_gotit_signal(bytes: &[u8]) -> Result<GotItSignal, io::Error> {
     }) 
 }
 
-
-// fn deserialize_gotit_signal(bytes: &[u8]) -> Result<GotItSignal, io::Error> {
-//     // Check if the byte array has the correct length
-//     if bytes.len() != std::mem::size_of::<u64>() {
-//         return Err(io::Error::new(
-//             io::ErrorKind::InvalidData,
-//             "Invalid byte array length for GotItSignal",
-//         ));
-//     }
-
-//     // Extract the document ID
-//     let gst = u64::from_be_bytes(bytes.try_into().unwrap());
-//     let di = u64::from_be_bytes(bytes.try_into().unwrap());
-//     let gh = u64::from_be_bytes(bytes.try_into().unwrap());
-
-//     Ok(GotItSignal { gst: Some(gst), di: Some(di), gh: Some(gh) }) 
-// }
-
-// fn deserialize_gotit_signal(bytes: &[u8]) -> Result<GotItSignal, io::Error> {
-//     // Calculate the expected byte length
-//     let expected_length = std::mem::size_of::<u64>() * 2 + signal.gg.len(); 
-
-//     if bytes.len() != expected_length {
-//         return Err(io::Error::new(
-//             io::ErrorKind::InvalidData,
-//             format!("Invalid byte array length for GotItSignal. Expected {}, got {}", expected_length, bytes.len()),
-//         ));
-//     }
-
-//     // let gi = u64::from_be_bytes(bytes[0..8].try_into().unwrap());
-//     // let gg_length = bytes.len() - std::mem::size_of::<u64>() * 2; // Calculate gg length
-//     // let gg = String::from_utf8_lossy(&bytes[8..8 + gg_length]).to_string();
-//     // let di = u64::from_be_bytes(bytes[8 + gg_length..].try_into().unwrap());
-//     let di = u64::from_be_bytes(bytes[0..8].try_into().unwrap());
-
-//     Ok(GotItSignal { di })
-// }
-
-// fn serialize_gotit_signal(signal: &GotItSignal) -> Vec<u8> {
-//     signal.id.to_be_bytes().to_vec()
-// }
-
-// fn deserialize_gotit_signal(bytes: &[u8]) -> Result<GotItSignal, io::Error> {
-//     if bytes.len() != std::mem::size_of::<u64>() {
-//         return Err(io::Error::new(
-//             io::ErrorKind::InvalidData,
-//             "Invalid byte array length for GotItSignal",
-//         ));
-//     }
-
-//     let id = u64::from_be_bytes(bytes.try_into().unwrap());
-//     Ok(GotItSignal { id })
-// }
-
-
 /// File Deserialization (Receiving):
 /// Receive Bytes: Receive the byte array from the network using socket.recv_from().
 /// Convert to String: Convert the byte array back to a string using String::from_utf8(). This assumes the received bytes are in ASCII encoding.
@@ -6012,261 +5005,6 @@ fn receive_toml_file(socket: &UdpSocket) -> Result<(Value, SocketAddr), ThisProj
 
     Ok((toml_value, src))
 }
-// fn receive_toml_file(socket: &UdpSocket) -> Result<(Value, SocketAddr), std::io::Error> {
-//     let mut buf = [0; 65536]; // Maximum UDP datagram size
-//     let (amt, src) = socket.recv_from(&mut buf)?;
-
-//     // 1. Receive bytes (done in recv_from())
-
-//     // 2. Convert to string
-//     let toml_string = String::from_utf8(buf[..amt].to_vec())
-//         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.utf8_error()))?;
-
-//     // 3. Parse TOML
-//     let toml_value: Value = toml::from_str(&toml_string)?;
-
-//     // 4. Save to file (you'll need to determine the file path)
-//     // ...
-
-//     Ok((toml_value, src))
-// }
-
-// // TODO, uncomment and debug 
-// fn send_file_and_see_next_signal(collaborator: &RemoteCollaboratorPortsData, mut send_queue: SendQueue, event_id: u64, intray_port: u16, gotit_port: u16) {
-//     // // 5. Send Files (One at a Time)
-//     // while let Some(file_to_send) = send_queue.items.pop() { // Assuming items are file paths
-//     //     // 6. Send One Item 
-//     //     match send_file_to_collaborator(collaborator, &file_to_send, intray_port) {
-//     //         Ok(_) => {
-//     //             // 7. Listen for "Got it" or "Ready" on `gotit_port` (with timeout)
-//     //             let listener = match TcpListener::bind(format!("[{}]:{}", collaborator.ipv6, gotit_port)) {
-//     //                 Ok(listener) => listener,
-//     //                 Err(e) => {
-//     //                     debug_log(&format!("Failed to bind to 'Got it' port for {}: {}", collaborator.user_name, e));
-//     //                     return; // Exit the sync event if we can't listen 
-//     //                 }
-//     //             };
-//     //             listener.set_nonblocking(true).expect("Cannot set non-blocking");
-
-//     //             let timeout = Duration::from_secs(5); // Adjust timeout as needed
-//     //             let start_time = std::time::Instant::now();
-
-//     //             loop {
-//     //                 match listener.accept() {
-//     //                     Ok((mut stream, _)) => {
-//     //                         let mut buffer = [0; 1024];
-//     //                         match stream.read(&mut buffer) {
-//     //                             Ok(n) => {
-//     //                                 if n == 0 {
-//     //                                     continue; // Connection closed, try again
-//     //                                 }
-
-//     //                                 // Handle either GotItSignal or ReadySignal (both have the `id` field)
-//     //                                 let signal_result: Result<GotItSignal, serde_json::Error> = serde_json::from_slice(&buffer[..n]);
-
-//     //                                 match signal_result {
-//     //                                     Ok(got_it_signal) => {
-//     //                                         if got_it_signal.id == event_id {
-//     //                                             debug_log(&format!("Got confirmation for file: {} from {}", file_to_send, collaborator.user_name));
-//     //                                             break; // File successfully sent, exit the listening loop 
-//     //                                         }
-//     //                                     },
-//     //                                     Err(_) => { 
-//     //                                         let ready_signal_result: Result<ReadySignal, serde_json::Error> = serde_json::from_slice(&buffer[..n]);
-//     //                                         match ready_signal_result {
-//     //                                             Ok(ready_signal) if ready_signal.id == event_id => {
-//     //                                                 debug_log(&format!("Collaborator {} is ready for the next file", collaborator.user_name));
-//     //                                                 break; // Collaborator is ready, move to the next file
-//     //                                             }
-//     //                                             Ok(_) => {}, // Ignore ready signals with a different event ID
-//     //                                             Err(e) => {
-//     //                                                 debug_log(&format!("Failed to parse signal from {}: {}", collaborator.user_name, e));
-//     //                                             }
-//     //                                         }
-//     //                                     }
-//     //                                 }
-//     //                             }
-//     //                             Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-//     //                                 // No data available yet, check timeout
-//     //                                 if start_time.elapsed() > timeout {
-//     //                                     debug_log(&format!("Timeout waiting for confirmation from {}", collaborator.user_name));
-//     //                                     return; // Exit sync event on timeout
-//     //                                 }
-//     //                                 thread::sleep(Duration::from_millis(100)); // Small delay to avoid busy-waiting 
-//     //                             }
-//     //                             Err(e) => {
-//     //                                 debug_log(&format!("Error reading from 'Got it' port for {}: {}", collaborator.user_name, e));
-//     //                                 return; // Exit on error 
-//     //                             }
-//     //                         } 
-//     //                     }
-//     //                     Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-//     //                         // No incoming connections yet, check timeout
-//     //                         if start_time.elapsed() > timeout {
-//     //                             debug_log(&format!("Timeout waiting for confirmation from {}", collaborator.user_name));
-//     //                             return; // Exit sync event on timeout
-//     //                         }
-//     //                         thread::sleep(Duration::from_millis(100)); // Small delay
-//     //                     }
-//     //                     Err(e) => {
-//     //                         debug_log(&format!("Error accepting connection on 'Got it' port for {}: {}", collaborator.user_name, e));
-//     //                         return; // Exit on error
-//     //                     }
-//     //                 }
-//     //             } // End of listening loop
-//     //         }, 
-//     //         Err(e) => {
-//     //             debug_log(&format!("Failed to send file {} to {}: {}", file_to_send, collaborator.user_name, e));
-//     //         }
-//     //     } 
-//     // } // End of file sending loop
-// }
-
-
-// /*
-// #[derive(Serialize, Deserialize, Debug)] // Add Serialize/Deserialize for sending/receiving
-// struct SendFile {
-//     intray_send_time: Option<u64>, // send-time: generate_terse_timestamp_freshness_proxy(); for replay-attack protection
-//     gpg_encrypted_intray_file: Option<bool>, 
-//     intray_hash_list: Option<Vec<u8>>, // N hashes of intray_this_send_timestamp + gpg_encrypted_intray_file
-// }
-
-// hashes
-
-// if later gpg encrypt file
-
-// */
-// fn send_toml_file_to_intray(
-//     file_path: &PathBuf, 
-//     target_addr: SocketAddr, 
-//     port: u16,
-//     collaborator_salt_list: &[u128], // Pass the salt list here
-// ) -> Result<(), ThisProjectError> {
-
-//     // 1. Get File Send Time
-//     let intray_send_time = get_current_unix_timestamp(); // You can replace this with your terse timestamp function later
-
-//     // 2. Read File Contents
-//     let file_contents = fs::read(file_path)?;
-
-//     // 3. (Future) GPG Encrypt File
-//     // TODO: Implement GPG encryption
-//     let gpg_encrypted_intray_file = false; // Placeholder -  change to true once GPG is implemented
-
-//     // 4. Calculate Hashes (Using Collaborator's Salts)
-//     let mut data_sets: Vec<&[u8]> = Vec::new();
-    
-//     // data_sets.push(&intray_send_time.to_be_bytes());
-//     let binding = intray_send_time.to_be_bytes();
-//     data_sets.push(&binding);
-    
-//     data_sets.push(if gpg_encrypted_intray_file { &[1] } else { &[0] });
-//     data_sets.push(&file_contents);
-//     for salt in collaborator_salt_list {
-//         data_sets.push(&salt.to_be_bytes());
-//     }
-//     let intray_hash_list = calculate_pearson_hashes_parallel(data_sets)?;
-
-//     // 5. Create SendFile Struct 
-//     let send_file = SendFile {
-//         intray_send_time: Some(intray_send_time),
-//         gpg_encrypted_intray_file: Some(gpg_encrypted_intray_file),
-//         intray_hash_list: Some(intray_hash_list),
-//     }; 
-
-//     // 6. Serialize SendFile
-//     // 6. Serialize SendFile (Manually)
-//     let mut serialized_send_file: Vec<u8> = Vec::new();
-    
-//     // Add intray_send_time 
-//     serialized_send_file.extend_from_slice(&send_file.intray_send_time.unwrap_or(0).to_be_bytes());
-    
-//     // Add gpg_encrypted_intray_file flag
-//     serialized_send_file.push(if send_file.gpg_encrypted_intray_file.unwrap_or(false) { 1 } else { 0 });
-    
-//     // Add intray_hash_list (You'll need to serialize the vector of hashes appropriately)
-//     if let Some(hash_list) = &send_file.intray_hash_list {
-//         // Iterate through the hash list and append each hash to serialized_send_file
-//         for hash in hash_list {
-//             serialized_send_file.extend_from_slice(&hash.to_be_bytes());
-//         }
-//     }
-    
-//     // 7. Send Data
-//     let socket = UdpSocket::bind(":::0")?; // Consider binding to a specific interface if needed
-//     socket.send_to(&serialized_send_file, SocketAddr::new(target_addr.ip(), port))?;
-    
-//     debug_log!("File sent to {}:{}", target_addr.ip(), port); 
-//     Ok(())
-// }
-
-
-
-// --- Helper Function to Send File ---
-// fn send_toml_file_to_intray(file_path: &PathBuf, target_addr: SocketAddr, port: u16) -> Result<(), ThisProjectError> {
-//     let socket = UdpSocket::bind(":::0")?;
-//     send_toml_file(&socket, &file_path.to_string_lossy(), SocketAddr::new(target_addr.ip(), port))?;
-//     debug_log!("File sent to {}:{}", target_addr.ip(), port);
-//     Ok(())
-// }
-
-
-// Depricated
-// /// Serialization (Sending):
-// /// Read TOML File: Read the contents of the TOML file into a string using fs::read_to_string().
-// /// Convert to Bytes: Convert the string to a byte array (Vec<u8>) using the as_bytes() method. 
-// /// This assumes the TOML file is already in ASCII encoding.
-// /// Send Bytes: Send the byte array over the network using UDP.
-// fn send_toml_file(socket: &UdpSocket, file_path: &str, target_addr: SocketAddr) -> Result<(), std::io::Error> {
-//     // 1. Read TOML file
-//     let toml_string = fs::read_to_string(file_path)?;
-
-//     // 2. Convert to bytes
-//     let toml_bytes = toml_string.as_bytes();
-
-//     // 3. Send bytes
-//     socket.send_to(toml_bytes, target_addr)?;
-
-//     Ok(())
-// }
-
-// depricated
-// // TODO: which struct?
-// fn send_file_to_collaborator(
-//     collaborator: &RemoteCollaboratorPortsData,
-//     is_echo_request: bool,
-//     ready_timestamp: u64,
-//     file_to_send: &PathBuf, 
-//     tx: Sender<SyncResult>, 
-//     retry_flag_path: PathBuf, 
-// ) -> SyncResult {
-//     /*
-//     TODO
-//     handling file_transfer_successful
-//     */
-//     // preset/reset
-//     let mut file_transfer_successful = false;
-    
-//     // 1. Establish a connection to the collaborator's intray_port
-//     // ... (Implement connection logic)
-
-//     // 2. Send the file data
-//     // ... (Implement file sending logic)
-
-//     // 3. Listen for confirmation on the gotit_port
-//     // ... (Implement confirmation logic)
-
-//     // 4. Handle Success or Failure
-//     if file_transfer_successful && !is_echo_request{
-//         // Remove the retry flag
-//         // ... (Implement flag removal logic)
-//         return SyncResult::Success(ready_timestamp);
-//     } else {
-//         let error = ThisProjectError::NetworkError("File transfer failed".to_string()); 
-//         return SyncResult::Failure(error);
-//     }
-// } 
-
 
 fn get_oldest_retry_timestamp(collaborator_username: &str) -> Result<Option<u64>, io::Error> {
     let retry_flags_dir = Path::new("project_graph_data/sync_state_items")
@@ -6430,9 +5168,6 @@ fn get_or_create_send_queue(
     Ok(session_send_queue)
 }
 
-
-
-
 /// get latest Remote Collaborator file timestamp 
 /// for use by handl local owner desk
 fn get_latest_recieved_from_collaborator_in_teamchannel_file_timestamp(
@@ -6471,573 +5206,6 @@ fn get_latest_recieved_from_collaborator_in_teamchannel_file_timestamp(
     debug_log!("get_last_file_timestamp() -> last_timestamp {:?}", &last_timestamp); 
     Ok(last_timestamp) // Returns 0 if no matching files are found
 }
-
-// fn get_latest_recieved_from_collaborator_in_teamchannel_file_timestamp(
-//     team_channel_name: &str, 
-//     collaborator_name: &str,
-// ) -> Result<u64, ThisProjectError> {
-//     let mut last_timestamp: u64 = 0; // Initialize with 0 (assuming no files are older than the Unix epoch)
-//     debug_log!("get_last_file_timestamp() started"); 
-    
-//     let team_channel_dir = Path::new("project_graph_data/team_channels").join(team_channel_name);
-
-//     // Crawl through the team channel directory
-//     for entry in WalkDir::new(team_channel_dir) {
-//         let entry = entry?;
-//         let path = entry.path();
-
-//         if path.is_file() && path.extension() == Some(OsStr::new("toml")) {
-//             let toml_string = fs::read_to_string(path)?;
-//             let toml_value: Value = toml::from_str(&toml_string)?;
-
-//             // Check if the file is owned by the collaborator
-//             if toml_value.get("owner").and_then(Value::as_str) == Some(collaborator_name) {
-//                 // Get the updated_at_timestamp
-//                 if let Some(timestamp) = toml_value
-//                     .get("updated_at_timestamp")
-//                     .and_then(Value::as_integer)
-//                     .map(|ts| ts as u64) // Convert to u64
-//                 {
-//                     if timestamp > last_timestamp {
-//                         last_timestamp = timestamp;
-//                     }
-//                 }
-//             }
-//         }
-//     }
-
-//     debug_log!("get_last_file_timestamp() -> last_timestamp {:?}", &last_timestamp); 
-//     Ok(last_timestamp)
-// }
-
-
-// /// --- making a fresh send_queue ---
-// /// 1. pick a target_collaborator
-// /// 2. get the back_of_queue_timestamp
-// /// ```path
-// /// sync_data/team_channel/collaborator_name/back_of_queue_timestamp
-// /// ```
-// /// 3. crawl through the files and subdirectories (recursively) in the teamchannel (only the team_channel directory tree, not all of uma) looking at files:
-// /// 4. if a .toml file, 
-// /// 5. if owner=target_collaborator, 
-// /// 6. if updated_at_timestamp exists
-// /// 7. if updated_at_timestamp > back_of_queue_timestamp
-// /// 8. add that filepath to the sene_queue
-// /// - Note: this only has to be done once after getting a first-in-session ready-signal from a collaborator, after that any new file made (e.g. a new message) is added to the queue automatically. Though this can be repeated any time, e.g. in case of error or if requested.
-// fn make_fresh_send_queue(
-//     team_channel_name: &str,
-//     collaborator_name: &str,
-//     back_of_queue_timestamp: u64,
-// ) -> Result<Vec<PathBuf>, ThisProjectError> {
-//     let sync_data_dir = PathBuf::from("sync_data")
-//         .join(team_channel_name)
-//         .join(collaborator_name);
-
-//     // 2. Get back_of_queue_timestamp
-//     // let timestamp_file_path = sync_data_dir.join("back_of_queue_timestamp");
-//     // let back_of_queue_timestamp = fs::read_to_string(timestamp_file_path)?
-//     //     .parse::<u64>()?;
-
-//     let mut send_queue = Vec::new();
-
-//     // 3. Crawl through the team channel directory tree
-//     for entry in WalkDir::new(PathBuf::from("project_graph_data").join(team_channel_name)) {
-//         let entry = entry?;
-//         if entry.file_type().is_file() && entry.path().extension() == Some(OsStr::new("toml")) {
-//             // 4. If a .toml file
-//             let toml_string = fs::read_to_string(entry.path())?;
-//             let toml_value: Value = toml::from_str(&toml_string)?;
-
-//             // 5. If owner = target collaborator
-//             if toml_value.get("owner").and_then(Value::as_str) == Some(collaborator_name) {
-//                 // 6. If updated_at_timestamp exists
-//                 if let Some(timestamp) = toml_value.get("updated_at_timestamp").and_then(Value::as_integer) {
-//                     let timestamp = timestamp as u64;
-
-//                     // 7. If updated_at_timestamp > back_of_queue_timestamp
-//                     if timestamp > back_of_queue_timestamp {
-//                         // 8. Add filepath to send_queue
-//                         send_queue.push(entry.path().to_path_buf());
-//                     }
-//                 }
-//             }
-//         }
-//     }
-
-//     Ok(send_queue)
-// }
-
-
-// // TODO this is using a depricated struct...should this have its own struct? (WHY SO MANY STRUCTS???)
-// fn get_or_create_send_queue(
-//     collaborator_name: &str, // Change the parameter type to &str
-//     received_timestamp: u64,
-// ) -> Result<SendQueue, io::Error> {
-    
-
-//     let mut new_queue = SendQueue {
-//         timestamp: received_timestamp,
-//         echo_send: received_timestamp == 0, // If timestamp is 0, it's an echo_send request
-//         items: Vec::new(),
-//     };
-
-//     // Iterate over owned files, only considering those modified AFTER the received timestamp
-//     let owned_files_dir = Path::new("project_graph_data/owned_files")
-//         .join(collaborator_name); // Use collaborator_name here
-
-//     for entry in WalkDir::new(owned_files_dir)
-//         .into_iter()
-//         .filter_map(|e| e.ok())
-//         .filter(|e| e.file_type().is_file())
-//     {
-//         // let file_timestamp = get_toml_file_timestamp(&entry.path()); 
-//         // if file_timestamp > received_timestamp {
-//         //     new_queue.items.push(entry.path().to_path_buf());
-//         // }
-
-//         // Han dle the Result from get_file_timestamp 
-//         match get_toml_file_timestamp(&entry.path()) {
-//             Ok(file_timestamp) => { 
-//                 if file_timestamp > received_timestamp {
-//                     new_queue.items.push(entry.path().to_path_buf());
-//                 }
-//             }
-//             Err(e) => {
-//                 // Handle the error appropriately. You might want to:
-//                 // - Log the error
-//                 // - Skip this file and continue with the next one
-//                 // - Return an error from get_or_create_send_queue 
-//                 eprintln!("Error getting timestamp for file: {:?} - {}", entry.path(), e);
-//             }
-//         }
-//     }
-
-//     // Sort the files in the queue based on their modification time
-//     new_queue.items.sort_by_key(|path| {
-//         get_toml_file_timestamp(path).unwrap_or(0) // Handle potential errors in timestamp retrieval
-//     });
-
-//     Ok(new_queue)
-// }
-
-
-
-// /// // (ignore echo-send for now design needs improvement)
-// /// handle_remote_collaborator_meetingroom_desk
-// /// overview:
-// /// 1. listen for 'ready' signal
-// /// if a ready signal is recieved
-// /// 2. use the current send queue or if this is the first time make a sendqueue to get the next send-file path
-// /// 3. get and send the file at the send-file path (and hold it's timestamp in reserve)
-// /// 4. if got-it signal is recieved, put the timestamp of the successfuly sent file into the queue as back_of_queue_timestamp
-// /// delete/rewrite:
-// /// ```path
-// /// sync_data/team_channel/collaborator_name/back_of_queue_timestamp
-// /// ```
-// /// and remove the sent-item from the send-queues
-// ///
-// /// For each collaborator's meetingroom desk:
-// /// - ports are specified in team_channel node.toml
-// /// - collaborator IP in NAME__collaborator.toml
-// ///
-// /// Explanation
-// /// Listener Creation: The TcpListener is created and bound to the specified IP address and port.
-// ///
-// /// Non-Blocking Mode: Setting the listener to non-blocking allows the loop to check for the halt signal even if no connection is available.
-// ///
-// /// Halt Signal Check: The should_halt_uma() function (which you need to implement based on your halt signal mechanism) is called at the beginning of each loop iteration. If the halt signal is detected, the loop breaks, and the listener is closed.
-// ///
-// /// Connection Handling:
-// /// Ok((stream, _addr)): If a connection is successfully established, the code inside the Ok branch will execute. Here, you can spawn a new thread to handle the connection and process the received data.
-// ///
-// /// Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock: If the accept() method returns a WouldBlock error, it means no connection is available at the moment. The code sleeps briefly to avoid consuming excessive CPU resources by busy-waiting.
-// ///
-// /// Err(e): This branch handles any other errors that might occur during the connection process. You can log the error, notify the user, or take other appropriate actions depending on the error type.
-// ///
-// /// Key Points
-// /// Non-Blocking Listener: Essential for checking the halt signal without waiting indefinitely for a connection.
-// ///
-// /// Loop Structure: The loop continuously checks for a halt signal and attempts to accept connections.
-// /// start a loop that:
-// ///
-// /// Error Handling:
-// /// 1. Distinguish Between Error Types: Not all errors are equal. Some errors might be transient (e.g., WouldBlock indicating no data is available yet), while others might be fatal (e.g., a socket error).
-// /// 2. Handle Transient Errors: For transient errors, we can simply continue the loop and try to receive data again.
-// /// 3. Handle Fatal Errors: For fatal errors, we should log the error, potentially notify the user, and consider exiting the function or the entire sync process.
-// ///
-// // /// TODO add  "Flow" steps: handle_remote_collaborator_meetingroom_desk()
-// fn old_handle_remote_collaborator_meetingroom_desk(
-//     room_sync_input: &ForRemoteCollaboratorDeskThread,
-// ) -> Result<(), ThisProjectError> {
-//         /*
-//     loop:
-//     // 2. Create listeners for each IP address
-//     for ipv6_address in &own_desk_setup_data.local_user_ipv6_addr_list {
-//         let tx = tx.clone(); // Clone the sender for each thread
-//         let ready_port = own_desk_setup_data.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip;
-
-//         thread::spawn(move || {...
-            
-            
-//     for ipv4_address in &own_desk_setup_data.local_user_ipv6_addr_list {
-//         let tx = tx.clone(); // Clone the sender for each thread
-//         let ready_port = own_desk_setup_data.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip;
-
-//         thread::spawn(move || {...
-//     */
-//     // TODO: why are  intray_port__their_desk_you_send and gotit_port__their_desk_you_listen never used here????
-//     debug_log!(
-//         "\n Started HRCD the handle_remote_collaborator_meetingroom_desk() for->{}", 
-//         room_sync_input.remote_collaborator_name
-//     );
-//     debug_log!(
-//         "room_sync_input -> {:?}", 
-//         room_sync_input
-//     );
-//     // 1. Create UDP socket
-//     // let socket = UdpSocket::bind(format!(
-//     //     "[{}]:{}", 
-//     //     room_sync_input.remote_collaborator_ipv6_addr_list, 
-//     //     room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip));
-//     // 1. Iterate over IPv6 addresses and attempt to bind the socket
-//     let mut socket: Option<UdpSocket> = None;
-//     for ipv6_address in &room_sync_input.remote_collaborator_ipv6_addr_list {
-//         let bind_result = UdpSocket::bind(SocketAddr::new(
-//             IpAddr::V6(*ipv6_address), 
-//             room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip
-//         ));
-
-//         match bind_result {
-//             Ok(sock) => {
-//                 socket = Some(sock);
-//                 debug_log!("HRCD 1. ready Bound UDP socket to [{}]:{}", ipv6_address, room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip);
-//                 break; // Exit the loop if binding is successful
-//             },
-//             Err(e) => {
-//                 debug_log!("HRCD err 1. ready Failed to bind to [{}]:{}: {}", ipv6_address, room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip, e);
-//                 // Continue to the next address
-//             }
-//         }
-//     }
-//     // Print all sync data for the collaborator
-//     debug_log!(
-//         "HRCD 2. ready Print all sync data for the collaborator:room_sync_input {:?}", 
-//         room_sync_input
-//     );
-
-//     // 2. Check if socket binding was successful (simplified)
-//     let socket = socket.ok_or(ThisProjectError::NetworkError("HRCD Failed to bind to any IPv6 address".to_string()))?;
-                    
-//     debug_log!(
-//         "HRCD 2. ready listen at this socket {:?}", 
-//         &socket,
-//     );
-
-    
-//     // ?? Make first blank send_queue here?
-//     let mut session_sendqueue = make_fresh_send_queue(
-//             team_channel_name: &str,
-//             collaborator_name: &str,
-//         );
-    
-//     // 3. Main loop
-//     let mut last_debug_log_time = Instant::now(); // Track the last time we logged a message
-//     loop {
-//         debug_log("HRCD 3. starting Main loop...");
-//         // 3. Check for halt signal
-//         if should_halt_uma() {
-//             debug_log!(
-//                 "HRCD 3. Check for halt signal. Halting handle_remote_collaborator_meetingroom_desk() for {}", 
-//                 room_sync_input.remote_collaborator_name
-//             );
-//             break;
-//         }
-
-//         // 4. Receive data
-//         let mut buf = [0; 1024];
-//         match socket.recv_from(&mut buf) {
-//             Ok((amt, src)) => {
-//                 debug_log!("HRCD 4.Ok((amt, src)) Received {} bytes from {} on ready_port", amt, src);
-
-//                 // --- Inspect Raw Bytes ---
-//                 debug_log!("HRCD 4. Raw bytes received: {:?}", &buf[..amt]); 
-        
-//                 // --- Inspect Bytes as Hex ---
-//                 let hex_string = buf[..amt].iter()
-//                     .map(|b| format!("{:02X}", b))
-//                     .collect::<String>();
-//                 debug_log!("HRCD 4. Raw bytes as hex: {}", hex_string);
-                
-//                 // 5. Deserialize the ReadySignal
-//                 let ready_signal: ReadySignal = match deserialize_ready_signal(&buf[..amt]) {
-//                     Ok(ready_signal) => {
-//                         println!("HRCD 5. Ok(ready_signal) {}: Received ReadySignal: {:?}",
-//                              room_sync_input.remote_collaborator_name, ready_signal
-//                         ); // Print to console
-//                         debug_log!("HRCD 5. Ok(ready_signal) {}: Received ReadySignal: {:?}",
-//                              room_sync_input.remote_collaborator_name, 
-//                              ready_signal
-//                         ); // Log the signal
-//                         ready_signal
-//                     },
-//                     Err(e) => {
-//                         debug_log!("HRCD 5.Err Receive data Failed to parse ready signal: {}", e);
-//                         continue; // Continue to the next iteration of the loop
-//                     }
-//                 };
-
-//                 // ... (You can add logic here to handle the received ReadySignal) ...
-//                 // TODO under construction!!!
-//                 /////////////////////////////
-//                 // Get ready_signal_timestamp from ready_signal
-//                 /////////////////////////////
-//                 if !ready_signal.ready_signal_timestamp{
-//                     let ready_signal_timestamp = 0;
-//                 }
-//                 /////////////////////////////
-//                 // Get / Make Send Queue
-//                 /////////////////////////////
-//                 if !session_sendqueue{
-//                     let mut session_sendqueue = make_fresh_send_queue(
-//                             team_channel_name: &str,
-//                             collaborator_name: &str,
-//                         );
-//                 }
-//                 /////////////////////////////
-//                 // Send one Que Item
-//                 /////////////////////////////
-//                 ???
-
-
-                
-                
-//             },
-//             Err(e) if e.kind() == ErrorKind::WouldBlock => {
-//                 // No data available yet, continue listening
-//                 // Periodically log that we're listening
-//                 if last_debug_log_time.elapsed() >= Duration::from_secs(5) {
-//                     debug_log!("HRCD 4. {}: Listening for ReadySignal on port {}", 
-//                                room_sync_input.remote_collaborator_name, 
-//                                room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip);
-//                     last_debug_log_time = Instant::now();
-//                 }
-//             },
-//             Err(e) => {
-//                 // Handle other errors
-//                 debug_log!("HRCD 4. {}: Error receiving data on ready_port: {} ({:?})", 
-//                            room_sync_input.remote_collaborator_name, e, e.kind());
-//                 // Consider exiting the function or the sync process if it's a fatal error
-//                 return Err(ThisProjectError::NetworkError(e.to_string())); // Example: Return a NetworkError
-//             }
-//         }
-
-     
-//         // NEW NEW NEW CODE HERE HERE HERE adding sendqueue sent file etc.   
-//         // 5. Aim and send file
-
-//         // TODO (ideally put all this into a function...so it can echo_send itself)
-//         // 5. Spawn a thread to send the one sendquequee item
-//         thread::spawn(move || {
-
-//             // 5.1 send_toml thread_id = 
-//             let sync_event_id__for_this_thread = format!("{:?}", thread::current().id()); 
-//             debug_log!(
-//                 "HRCD 2. New sync-event thread id: {:?}; in handle_local_owner_desk()", 
-//                 sync_event_id__for_this_thread
-//             );
-            
-//             // // TODO eventually this should be the id of a thread
-//             // // Generate a unique event ID
-//             // let sync_event_id__for_this_thread: u64 = rand::random(); 
-
-//             // 5. Creates a ReadySignal instance to be the ready signal
-//             let ready_signal_to_send_from_this_loop = ReadySignal {
-//                 id: sync_event_id__for_this_thread,
-//                 timestamp: get_current_unix_timestamp(), 
-//                 echo_send: false,
-//             };
-
-//             // 5. Serialize the ReadySignal
-//             let readysignal_data = serialize_ready_signal(
-//                 &ready_signal_to_send_from_this_loop
-//             ).expect("HRCD 5.2 send_toml err Failed to serialize ReadySignal, ready_signal_to_send_from_this_loop"); 
-
-//             // --- Inspect Serialized Data ---
-//             debug_log!("HRCD 5.2 send_toml inspect Serialized Data: {:?}", readysignal_data);
-
-//             // TODO possibly have some mechanism to try addresses until one works?
-//             // 5.3 send_toml Send the signal @ local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
-//             // TODO figure out way to specify ipv6, 4, prioritizing, trying, etc.
-//             // (in theory...you could try them all?)
-//             // Select the first IPv6 address if available
-//             if let Some(first_ipv6_address) = own_desk_setup_data_clone.local_user_ipv6_addr_list.first() {
-//                 // Copy the IPv6 address
-//                 let ipv6_address_copy = *first_ipv6_address; 
-            
-//                 // Send the signal to the collaborator's ready_port
-//                 let target_addr = SocketAddr::new(
-//                     IpAddr::V6(ipv6_address_copy), // Use the copied address
-//                     own_desk_setup_data_clone.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
-//                 ); 
-
-//                 // Log before sending
-//                 debug_log!(
-//                     "HRCD 5.3 send_toml Attempting to send ReadySignal to {}: {:?}", 
-//                     target_addr, 
-//                     &readysignal_data
-//                 );
-
-//                 // If sending to the first address succeeds, no need to iterate further
-//                 if send_data(&readysignal_data, target_addr).is_ok() {
-//                     debug_log("HHRCD 5.3 send_toml Successfully sent ReadySignal to {} (first address)"//, target_addr
-//                         );
-//                     return; // Exit the thread
-//                 } else {
-//                     debug_log("HRCD 5.3 send_toml ERR Failed to send ReadySignal to {} (first address)"//, target_addr
-//                         );
-//                 }
-//             } else {
-//                 debug_log("HRCD 5.3 send_toml ERROR No IPv6 addresses available for {}"
-//                     // , own_desk_setup_data.local_user_name
-//                     );
-//             }
-        
-        
-        
-        
-        
-//         // NEW NEW NEW CODE HERE HERE HERE adding sendqueue sent file etc.   
-//         // 5. Create got_it UDP socket
-//         // let socket = UdpSocket::bind(format!(
-//         //     "[{}]:{}", 
-//         //     room_sync_input.remote_collaborator_ipv6_addr_list, 
-//         //     room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip));
-//         // 5. Iterate over IPv6 addresses and attempt to bind the socket
-//         let mut socket: Option<UdpSocket> = None;
-//         for ipv6_address in &room_sync_input.remote_collaborator_ipv6_addr_list {
-//             let bind_result = UdpSocket::bind(SocketAddr::new(
-//                 IpAddr::V6(*ipv6_address), 
-//                 room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip
-//             ));
-
-//             match bind_result {
-//                 Ok(sock) => {
-//                     socket = Some(sock);
-//                     debug_log!("HRCD 5. got_it Bound UDP socket to [{}]:{}", ipv6_address, room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip);
-//                     break; // Exit the loop if binding is successful
-//                 },
-//                 Err(e) => {
-//                     debug_log!("HRCD 5. got_it err 1. Failed to bind to [{}]:{}: {}", ipv6_address, room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip, e);
-//                     // Continue to the next address
-//                 }
-//             }
-//         }
-//         // Print all sync data for the collaborator
-//         debug_log!(
-//             "HRCD 5. Print all sync data for the collaborator:room_sync_input {:?}", 
-//             room_sync_input
-//         );
-
-//         // 2. Check if socket binding was successful (simplified)
-//         let socket = socket.ok_or(ThisProjectError::NetworkError("HRCD Failed to bind to any IPv6 address".to_string()))?;
-                        
-//         debug_log!(
-//             "HRCD 5. listen at this socket {:?}", 
-//             &socket,
-//         );
-        
-//         /////////////////////////////
-//         // Listen for 'I got it' GotItSignal
-//         /////////////////////////////
-//         // 4. Receive data
-//         let mut buf = [0; 1024];
-//         match socket.recv_from(&mut buf) {
-//             Ok((amt, src)) => {
-//                 debug_log!("HRCD 4.Ok((amt, src)) Received {} bytes from {} on gotit port", amt, src);
-
-//                 // --- Inspect Raw Bytes ---
-//                 debug_log!("HRCD 4. Raw bytes received: {:?}", &buf[..amt]); 
-        
-//                 // --- Inspect Bytes as Hex ---
-//                 let hex_string = buf[..amt].iter()
-//                     .map(|b| format!("{:02X}", b))
-//                     .collect::<String>();
-//                 debug_log!("HRCD 4. Raw bytes as hex: {}", hex_string);
-                
-//                 // 5. Deserialize the GotItSignal
-//                 let gotit_signal: GotItSignal = match deserialize_gotit_signal(&buf[..amt]) {
-//                     Ok(gotit_signal) => {
-//                         println!("HRCD 5. Ok(gotit_signal) {}: Received GotItSignal: {:?}",
-//                              room_sync_input.remote_collaborator_name, gotit_signal
-//                         ); // Print to console
-//                         debug_log!("HRCD 5. Ok(gotit_signal) {}: Received GotItSignal: {:?}",
-//                              room_sync_input.remote_collaborator_name, 
-//                              gotit_signal
-//                         ); // Log the signal
-//                         gotit_signal
-//                     },
-//                     Err(e) => {
-//                         debug_log!("HRCD 5.Err Receive data Failed to parse ready signal: {}", e);
-//                         continue; // Continue to the next iteration of the loop
-//                     }
-//                 };
-                
-//                 // 
-
-//                 // ... (You can add logic here to handle the received ReadySignal) ...
-//                 // TODO under construction!!!
-//                 /////////////////////////////
-//                 // Get ready_signal_timestamp from ready_signal
-//                 /////////////////////////////
-//                 if !ready_signal.ready_signal_timestamp{
-//                     let ready_signal_timestamp = 0;
-//                 }
-//                 /////////////////////////////
-//                 // Get / Make Send Queue
-//                 /////////////////////////////
-//                 if !session_sendqueue{
-//                     let mut session_sendqueue = make_fresh_send_queue(
-//                             team_channel_name: &str,
-//                             collaborator_name: &str,
-//                         );
-//                 }
-//                 /////////////////////////////
-//                 // Send one Que Item
-//                 /////////////////////////////
-//                 ???
-
-
-                
-                
-//             },
-//             Err(e) if e.kind() == ErrorKind::WouldBlock => {
-//                 // No data available yet, continue listening
-//                 // Periodically log that we're listening
-//                 if last_debug_log_time.elapsed() >= Duration::from_secs(5) {
-//                     debug_log!("HRCD 4. {}: Listening for ReadySignal on port {}", 
-//                                room_sync_input.remote_collaborator_name, 
-//                                room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip);
-//                     last_debug_log_time = Instant::now();
-//                 }
-//             },
-//             Err(e) => {
-//                 // Handle other errors
-//                 debug_log!("HRCD 4. {}: Error receiving data on ready_port: {} ({:?})", 
-//                            room_sync_input.remote_collaborator_name, e, e.kind());
-//                 // Consider exiting the function or the sync process if it's a fatal error
-//                 return Err(ThisProjectError::NetworkError(e.to_string())); // Example: Return a NetworkError
-//             }
-//         }
-        
-
-//         thread::sleep(Duration::from_millis(100)); // Avoid busy-waiting
-//     }
-    
-//     debug_log("ending HRCD");
-//     Ok(())
-// }
-
-
 
 /// handle_remote_collaborator_meetingroom_desk (send files here)
 /// very brief overview:
@@ -7192,11 +5360,9 @@ fn handle_remote_collaborator_meetingroom_desk(
                         // 1.5.4  get document_id from signal
                         let document_id = gotit_signal.di;
                             
-                
                     // 1.5.6 Sleep for a short duration (e.g., 100ms)
                     thread::sleep(Duration::from_millis(100));
-                    
-                    
+
                     },
                     Err(e) => {
                         debug_log!("HRCD 1.5 GotItloop Error receiving data on gotit_port: {}", e);
@@ -7204,10 +5370,8 @@ fn handle_remote_collaborator_meetingroom_desk(
                         // For now, we'll just log the error and continue listening. 
                         continue;
                     }
-                    
                 }
-        }
-        
+            }
         });
 
         // 1.6.1 zero_timestamp_counter = 0 for ready signal send-at timestamps
@@ -7693,15 +5857,11 @@ fn create_udp_socket(ip_addresses: &[Ipv6Addr], port: u16) -> Result<UdpSocket, 
     Err(ThisProjectError::NetworkError("Failed to bind to any IPv6 address".to_string()))
 }
 
-
-
-
 // Result enum for the sync operation, allowing communication between threads
 enum SyncResult {
     Success(u64), // Contains the new timestamp after successful sync
     Failure(ThisProjectError), // Contains an error if sync failed 
 }
-
 
 /// Extracts the channel name from a team channel directory path. 
 /// 
@@ -8146,7 +6306,6 @@ fn initialize_ok_to_start_sync_flag_to_false() {
         .expect("Failed to write to 'ok_to_start_sync_flag.txt' file.");
 }
 
-
 /// signal for continuing or for stoping whole Uma program with all threads
 /// Initializes the UMA continue/halt signal by creating or resetting the 
 /// `continue_uma.txt` file and setting its value to "1" (continue).
@@ -8267,5 +6426,4 @@ fn main() {
         println!("All threads completed. The Uma says fare well and strive.");
         debug_log("All threads completed. The Uma says fare well and strive.");
     }
-    
 }
