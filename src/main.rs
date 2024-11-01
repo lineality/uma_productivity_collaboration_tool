@@ -7294,7 +7294,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                         continue;
                     }
 
-                    debug_log("##HRCD## [Done] checks(plaid) 2.4\n");
+
 
                     // // --- check for edge case: echo without there being a queue item ---      
                     // // Check: Nothing to Echo?
@@ -7326,38 +7326,41 @@ fn handle_remote_collaborator_meetingroom_desk(
                     */
                     
                     // 3.1 ready_signal_timestamp for send-queue
-                    let ready_signal_timestamp = ready_signal.rst.expect("Missing timestamp in ready signal"); // Unwrap the timestamp outside the match, as it's always required.
+                    let ready_signal_timestamp = ready_signal.rst.expect("HRCD 3. Missing timestamp in ready signal"); // Unwrap the timestamp outside the match, as it's always required.
                     
                     debug_log!(
-                        "HRCD 3.1 ready_signal_timestamp for send-queue: ready_signal_timestamp -> {:?}", 
+                        "HRCD 3.1 check ready_signal_timestamp for send-queue: ready_signal_timestamp -> {:?}", 
                         ready_signal_timestamp
                     );
 
                     // --- 3.2 timestamp freshness checks ---
                     let current_timestamp = get_current_unix_timestamp();
                     
-                    debug_log!("3.2 timestamp freshness checks: current_timestamp -> {:?}", current_timestamp);
+                    debug_log!("HRCD 3.2 check timestamp freshness checks: current_timestamp -> {:?}", current_timestamp);
 
                     // 3.2.1 No Future Dated Requests
                     if ready_signal_timestamp > current_timestamp + 5 { // Allow for some clock skew (5 seconds)
-                        debug_log!("HRCD 3.2.1: Received future-dated timestamp. Discarding.");
+                        debug_log!("HRCD 3.2.1 check: Received future-dated timestamp. Discarding.");
                         continue;
                     }
 
                     // 3.2.2 No Requests Older Than ~10 sec
                     if current_timestamp - 10 > ready_signal_timestamp {
-                        debug_log!("HRCD 3.2.2: Received outdated timestamp (older than 10 seconds). Discarding.");
+                        debug_log!("HRCD 3.2.2 check: Received outdated timestamp (older than 10 seconds). Discarding.");
                         continue;
                     }
                     // 3.2.3 only 3 0=timstamp requests per session (count them!)
                     if ready_signal_timestamp == 0 {
                         if zero_timestamp_counter >= 3 {
-                            debug_log("HRCD 3.2.3: Too many zero-timestamp requests. Discarding.");
+                            debug_log("HRCD 3.2.3 check: Too many zero-timestamp requests. Discarding.");
                             continue;
                         }
                         zero_timestamp_counter += 1;
                     }
 
+                    debug_log("##HRCD## [Done] checks(plaid) 2.4\n");
+                    
+                    
                     // --- 3.3 Get / Make Send-Queue ---
                     let this_team_channelname = match get_current_team_channel_name() {
                         Some(name) => name,
