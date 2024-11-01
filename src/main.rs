@@ -6322,7 +6322,11 @@ fn create_retry_flag(
 }
 
 
-/// Gets existing Queue or makes a new one, 
+/// Gets existing Queue or makes a new one,
+/// if back_of_queue_timestamp != 0 and
+/// if request-time-stamp = send-q back_of_queue_timestamp -> just return timestamp
+/// else: make a new timestamp
+///  
 /// can Creates a new send queue based on the provided timestamp and collaborator name.
 ///
 /// This function crawls through the team channel directory tree, looking for TOML files owned by the specified collaborator.
@@ -6340,8 +6344,8 @@ fn create_retry_flag(
 fn get_or_create_send_queue(
     team_channel_name: &str,
     collaborator_name: &str,
-    session_send_queue: SendQueue,
-    back_of_queue_timestamp: u64,
+    mut session_send_queue: SendQueue,
+    ready_signal_timestamp: u64,
 ) -> Result<SendQueue, ThisProjectError> {
     /*
     #[derive(Debug, Clone)]
@@ -6351,29 +6355,41 @@ fn get_or_create_send_queue(
         items: Vec<PathBuf>,  // ordered list, filepaths
     }
     */
-    let mut send_queue = SendQueue {
-        back_of_queue_timestamp,
-        items: Vec::new(),
-    };
+    // let mut back_of_queue_timestamp = session_send_queue.back_of_queue_timestamp.clone();
+    debug_log("HRCD->get_or_create_send_queue: start");
+    
+    if ready_signal_timestamp == session_send_queue.back_of_queue_timestamp {
+        return Ok(session_send_queue)
+    }
+    
+    // let mut send_queue = SendQueue {
+    //     back_of_queue_timestamp,
+    //     items: Vec::new(),
+    // };
 
     // Crawl through the team channel directory tree
     for entry in WalkDir::new(PathBuf::from("project_graph_data").join(team_channel_name)) {
         let entry = entry?;
         if entry.file_type().is_file() && entry.path().extension() == Some(OsStr::new("toml")) {
+            debug_log("HRCD->get_or_create_send_queue: file is toml");
             // If a .toml file
             let toml_string = fs::read_to_string(entry.path())?;
             let toml_value: Value = toml::from_str(&toml_string)?;
 
             // If owner = target collaborator
             if toml_value.get("owner").and_then(Value::as_str) == Some(collaborator_name) {
+                debug_log("HRCD->get_or_create_send_queue: file owner == colaborator name");
                 // If updated_at_timestamp exists
-                if let Some(timestamp) = toml_value.get("updated_at_timestamp").and_then(Value::as_integer) {
-                    let timestamp = timestamp as u64;
+                if let Some(toml_updatedat_timestamp) = toml_value.get("updated_at_timestamp").and_then(Value::as_integer) {
+                    debug_log("HRCD->get_or_create_send_queue: updated_at_timestamp field exists in file");
+                    let toml_updatedat_timestamp = toml_updatedat_timestamp as u64;
 
                     // If updated_at_timestamp > back_of_queue_timestamp (or back_of_queue_timestamp is 0)
-                    if timestamp > back_of_queue_timestamp || back_of_queue_timestamp == 0 {
+                    // if timestamp > back_of_queue_timestamp || back_of_queue_timestamp == 0 {
+                    if toml_updatedat_timestamp > session_send_queue.back_of_queue_timestamp {
+                        debug_log("HRCD->get_or_create_send_queue: timestamp > back_of_queue_timestamp");
                         // Add filepath to send_queue
-                        send_queue.items.push(entry.path().to_path_buf());
+                        session_send_queue.items.push(entry.path().to_path_buf());
                     }
                 }
             }
@@ -6381,11 +6397,11 @@ fn get_or_create_send_queue(
     }
 
     // Sort the files in the queue based on their modification time
-    send_queue.items.sort_by_key(|path| {
+    session_send_queue.items.sort_by_key(|path| {
         get_toml_file_timestamp(path).unwrap_or(0) // Handle potential errors in timestamp retrieval
     });
 
-    Ok(send_queue)
+    Ok(session_send_queue)
 }
 
 
@@ -7380,16 +7396,16 @@ fn handle_remote_collaborator_meetingroom_desk(
                     debug_log!("HRCD 3.3 ?is-echo? ready_signal.re.unwrap_or(false) -> {:?}", ready_signal.re.unwrap_or(false));
                     
                     if !ready_signal.re.unwrap_or(false) {
+                        debug_log("HRCD 3.3 get_or_create_send_queue");
                         session_send_queue = match session_send_queue {
                             input_sendqueue => {
                                 get_or_create_send_queue(
                                     &this_team_channelname, // for team_channel_name
                                     &room_sync_input.remote_collaborator_name, // for collaborator_name
                                     input_sendqueue, // for session_send_queue
-                                    ready_signal_timestamp, // Use unwrapped timestamp here
+                                    ready_signal_timestamp, // for ready_signal_timestamp
                                 )?
                             }
-    
                         };
                     }
                     debug_log!(
