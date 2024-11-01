@@ -7211,9 +7211,9 @@ fn handle_remote_collaborator_meetingroom_desk(
                     // TODO add size check to deserialize function
                     let mut ready_signal: ReadySignal = match deserialize_ready_signal(&buf[..amt]) {
                         Ok(ready_signal) => {
-                            println!("HRCD 2.3 Deserialize Ok(ready_signal) {}: Received ReadySignal: {:?}",
-                                room_sync_input.remote_collaborator_name, ready_signal
-                            ); // Print to console
+                            // println!("HRCD 2.3 Deserialize Ok(ready_signal) {}: Received ReadySignal: {:?}",
+                            //     room_sync_input.remote_collaborator_name, ready_signal
+                            // ); // Print to console
                             debug_log!("HRCD 2.3 Deserialize Ok(ready_signal) {}: Received ReadySignal: {:?}",
                                 room_sync_input.remote_collaborator_name, 
                                 ready_signal
@@ -7242,30 +7242,30 @@ fn handle_remote_collaborator_meetingroom_desk(
                         no echo signal, then re = false
                     */
 
-                    
+                    debug_log("\n##HRCD## starting checks(plaid) 2.4");
                     
                     // Check .rh hash
                     if ready_signal.rh.is_none() {
-                        debug_log!("HRCD 2.4.1 Check: rh hash field is empty. Drop packet and keep going.");
+                        debug_log("HRCD 2.4.1 Check: rh hash field is empty. Drop packet and keep going.");
                         continue; // Drop packet: Restart the loop to listen for the next signal
                     }
 
                     // Check .rt timestamp
                     if ready_signal.rt.is_none() {
-                        debug_log!("HRCD 2.4.2 Check: rt last-previous-file Timestamp field is empty. Drop packet and keep going.");
+                        debug_log("HRCD 2.4.2 Check: rt last-previous-file Timestamp field is empty. Drop packet and keep going.");
                         continue; // Drop packet: Restart the loop to listen for the next signal
                     }
 
                     // Check .rst timestamp
                     if ready_signal.rst.is_none() {
-                        debug_log!("HRCD 2.4.3 Check: rst ready signal sent-at timestamp field is empty. Drop packet and keep going.");
+                        debug_log("HRCD 2.4.3 Check: rst ready signal sent-at timestamp field is empty. Drop packet and keep going.");
                         continue; // Drop packet: Restart the loop to listen for the next signal
                     }
 
                     // Check .re is_send_echo
                     if ready_signal.re.is_none() {
                         ready_signal.re = Some(false);
-                        debug_log!("HRCD 2.4.4 Check: echo field is empty, so is_send_echo = false");
+                        debug_log("HRCD 2.4.4 Check: echo field is empty, so is_send_echo = false");
                     }
 
                     // --- 2.5 Hash-Check for ReadySignal ---
@@ -7274,7 +7274,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                         &ready_signal, 
                         &room_sync_input.remote_collaborator_salt_list,
                     ) {
-                        debug_log!("HRCD 2.5: ReadySignal hash verification failed. Discarding signal.");
+                        debug_log("HRCD 2.5: ReadySignal hash verification failed. Discarding signal.");
                         continue; // Discard the signal and continue listening
                     }
 
@@ -7294,7 +7294,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                         continue;
                     }
 
-
+                    debug_log("##HRCD## [Done] checks(plaid) 2.4\n");
 
                     // // --- check for edge case: echo without there being a queue item ---      
                     // // Check: Nothing to Echo?
@@ -7335,6 +7335,8 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                     // --- 3.2 timestamp freshness checks ---
                     let current_timestamp = get_current_unix_timestamp();
+                    
+                    debug_log!("3.2 timestamp freshness checks: current_timestamp -> {:?}", current_timestamp);
 
                     // 3.2.1 No Future Dated Requests
                     if ready_signal_timestamp > current_timestamp + 5 { // Allow for some clock skew (5 seconds)
