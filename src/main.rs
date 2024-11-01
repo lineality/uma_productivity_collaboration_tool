@@ -7244,30 +7244,28 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                     
                     
-                    
-                    
                     // Check .rh hash
                     if ready_signal.rh.is_none() {
-                        debug_log!("HRCD 2.4.1: rh hash field is empty. Drop packet and keep going.");
+                        debug_log!("HRCD 2.4.1 Check: rh hash field is empty. Drop packet and keep going.");
                         continue; // Drop packet: Restart the loop to listen for the next signal
                     }
 
                     // Check .rt timestamp
                     if ready_signal.rt.is_none() {
-                        debug_log!("HRCD 2.4.2: rt last-previous-file Timestamp field is empty. Drop packet and keep going.");
+                        debug_log!("HRCD 2.4.2 Check: rt last-previous-file Timestamp field is empty. Drop packet and keep going.");
                         continue; // Drop packet: Restart the loop to listen for the next signal
                     }
 
                     // Check .rst timestamp
                     if ready_signal.rst.is_none() {
-                        debug_log!("HRCD 2.4.3: rst ready signal sent-at timestamp field is empty. Drop packet and keep going.");
+                        debug_log!("HRCD 2.4.3 Check: rst ready signal sent-at timestamp field is empty. Drop packet and keep going.");
                         continue; // Drop packet: Restart the loop to listen for the next signal
                     }
 
                     // Check .re is_send_echo
                     if ready_signal.re.is_none() {
                         ready_signal.re = Some(false);
-                        debug_log!("HRCD 2.4.4: echo field is empty, so is_send_echo = false");
+                        debug_log!("HRCD 2.4.4 Check: echo field is empty, so is_send_echo = false");
                     }
 
                     // --- 2.5 Hash-Check for ReadySignal ---
@@ -7287,12 +7285,12 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                     if !ready_signal_hash_vec.is_empty() {
                         if hash_set_session_nonce.contains(&ready_signal_hash_vec) {
-                            debug_log!("HRCD: Duplicate ReadySignal received (hash match). Discarding.");
+                            debug_log!("HRCD 2.6 quasi nonce check: Duplicate ReadySignal received (hash match). Discarding.");
                             continue; // Discard the duplicate signal
                         }
                         hash_set_session_nonce.insert(ready_signal_hash_vec); // Add hash to the set
                     } else {
-                        debug_log!("HRCD: ReadySignal received without hashes. Discarding."); // Or handle differently
+                        debug_log!("HRCD 2.6 quasi nonce check: ReadySignal received without hashes. Discarding."); // Or handle differently
                         continue;
                     }
 
@@ -7334,9 +7332,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                         "HRCD 3.1 ready_signal_timestamp for send-queue: ready_signal_timestamp -> {:?}", 
                         ready_signal_timestamp
                     );
-                    
-                    // TODO add request rules:
-                    
+
                     // --- 3.2 timestamp freshness checks ---
                     let current_timestamp = get_current_unix_timestamp();
 
@@ -7345,7 +7341,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                         debug_log!("HRCD 3.2.1: Received future-dated timestamp. Discarding.");
                         continue;
                     }
-                    
+
                     // 3.2.2 No Requests Older Than ~10 sec
                     if current_timestamp - 10 > ready_signal_timestamp {
                         debug_log!("HRCD 3.2.2: Received outdated timestamp (older than 10 seconds). Discarding.");
@@ -7354,17 +7350,17 @@ fn handle_remote_collaborator_meetingroom_desk(
                     // 3.2.3 only 3 0=timstamp requests per session (count them!)
                     if ready_signal_timestamp == 0 {
                         if zero_timestamp_counter >= 3 {
-                            debug_log!("HRCD 3.2.3: Too many zero-timestamp requests. Discarding.");
+                            debug_log("HRCD 3.2.3: Too many zero-timestamp requests. Discarding.");
                             continue;
                         }
                         zero_timestamp_counter += 1;
                     }
-                    
+
                     // --- 3.3 Get / Make Send-Queue ---
                     let this_team_channelname = match get_current_team_channel_name() {
                         Some(name) => name,
                         None => {
-                            debug_log!("HRCD 3.3: Error: Could not get current channel name. Skipping send queue creation.");
+                            debug_log("HRCD 3.3: Error: Could not get current channel name. Skipping send queue creation.");
                             continue; // Skip to the next iteration of the loop
                         }
                     }; 
@@ -7390,6 +7386,12 @@ fn handle_remote_collaborator_meetingroom_desk(
                             )?)
                         }
                     };
+
+                    debug_log!(
+                        "HRCM ->[]<- 3.3 Get / Make session_send_queue {:?}",
+                        session_send_queue   
+                    );
+
                     // session_send_queue = match session_send_queue {
                     //     Some(queue) => {
                     //         // Update the queue based on the received timestamp if there was a previous queue
