@@ -973,22 +973,22 @@ fn get_ipv6_addresses() -> Result<Option<Vec<Ipv6Addr>>, io::Error> {
     Ok(Some(addresses))
 }
 
-pub fn sign_toml_file(file_path: &Path) -> Result<(), Error> {
-    let output = Command::new("gpg")
-        .arg("--clearsign") 
-        .arg(file_path)
-        .output() 
-        .map_err(|e| Error::new(ErrorKind::Other, format!("Failed to run GPG: {}", e)))?;
+// pub fn sign_toml_file(file_path: &Path) -> Result<(), Error> {
+//     let output = Command::new("gpg")
+//         .arg("--clearsign") 
+//         .arg(file_path)
+//         .output() 
+//         .map_err(|e| Error::new(ErrorKind::Other, format!("Failed to run GPG: {}", e)))?;
 
-    if output.status.success() {
-        fs::write(file_path, output.stdout)?; // Overwrite with the signed content 
-        debug_log!("File {} successfully signed with GPG.", file_path.display()); 
-        Ok(())
-    } else {
-        debug_log!("GPG signing failed: {}", String::from_utf8_lossy(&output.stderr));
-        Err(Error::new(ErrorKind::Other, "GPG signing failed"))
-    }
-}
+//     if output.status.success() {
+//         fs::write(file_path, output.stdout)?; // Overwrite with the signed content 
+//         debug_log!("File {} successfully signed with GPG.", file_path.display()); 
+//         Ok(())
+//     } else {
+//         debug_log!("GPG signing failed: {}", String::from_utf8_lossy(&output.stderr));
+//         Err(Error::new(ErrorKind::Other, "GPG signing failed"))
+//     }
+// }
 
 pub fn verify_toml_signature(file_path: &Path) -> Result<(), Error> {
     let output = Command::new("gpg") 
@@ -2994,61 +2994,170 @@ fn create_team_channel(team_channel_name: String, owner: String) {
 // }
 
 
-/// Use OS gpg clearsign from Rust
-/// # Use with:
-/// // Now clearsign, which will remove the .toml and create .asc:
-/// match clearsign_file(&final_message_path) {
-///     Ok(_) => {
-///         // Clearsigning successful, final_message_path.asc exists. Do nothing, maybe log.
-///         debug_log!("File {:?} successfully clearsigned and original file removed.", final_message_path);
-///     }
-///     Err(e) => {
-///         // Log the error and leave the .toml file untouched:
-///         debug_log!("Clearsigning failed for {:?}: {}", final_message_path, e);
-///
-///         return Err(e); // Or handle differently (e.g. display a warning message)
-///     }
-/// }
-fn clearsign_file_as_file(file_path: &Path) -> Result<(), Error> {
-    let output_path = file_path.with_extension("asc"); // Create the output path with .asc extension
+// /// Use OS gpg clearsign from Rust
+// /// # Use with:
+// /// // Now clearsign, which will remove the .toml and create .asc:
+// /// match clearsign_file(&final_message_path) {
+// ///     Ok(_) => {
+// ///         // Clearsigning successful, final_message_path.asc exists. Do nothing, maybe log.
+// ///         debug_log!("File {:?} successfully clearsigned and original file removed.", final_message_path);
+// ///     }
+// ///     Err(e) => {
+// ///         // Log the error and leave the .toml file untouched:
+// ///         debug_log!("Clearsigning failed for {:?}: {}", final_message_path, e);
+// ///
+// ///         return Err(e); // Or handle differently (e.g. display a warning message)
+// ///     }
+// /// }
+// fn clearsign_file_as_file(file_path: &Path) -> Result<(), Error> {
+//     let output_path = file_path.with_extension("asc"); // Create the output path with .asc extension
 
-    let output = Command::new("gpg")
+//     let output = Command::new("gpg")
+//         .arg("--clearsign")
+//         .arg("--output")
+//         .arg(&output_path) // Specify the output file
+//         .arg(file_path)     // Input file
+//         .output()?;
+
+//     if output.status.success() {
+//         debug_log!("File {:?} successfully clearsigned to {:?}", file_path, output_path);
+//         Ok(())
+//     } else {
+//         let stderr = String::from_utf8_lossy(&output.stderr);
+//         // Attempt to clean up the output file on error
+//         let _ = fs::remove_file(&output_path); // Ignore the result of the removal - it might not exist
+
+//         debug_log!("GPG clearsign failed: {}", stderr);
+//         Err(Error::new(std::io::ErrorKind::Other, format!("GPG clearsign failed: {}", stderr)))
+//     }
+// }
+
+
+// // this may be broken and saves a file which causes bugs
+// // Updated clearsign_file function (returns signed content as bytes)
+// fn gpg_clearsign_file_to_sendbytes(
+//     file_path: &Path
+// ) -> Result<Vec<u8>, Error> {    
+//     let output = Command::new("gpg")
+//         .arg("--clearsign")
+//         .arg(file_path)
+//         .output()?;
+
+//     if output.status.success() {
+//         Ok(output.stdout) // Return the clearsigned content as bytes
+//     } else {
+//         let stderr = String::from_utf8_lossy(&output.stderr);
+//         debug_log!("GPG clearsign failed: {}", stderr);
+//         Err(Error::new(std::io::ErrorKind::Other, "GPG clearsign failed"))
+//     }
+// }
+
+// // this may STILL be broken and saves a file which causes bugs
+// // Updated clearsign_file function (returns signed content as bytes)
+// fn gpg_clearsign_file_to_sendbytes(
+//     file_path: &Path
+// ) -> Result<Vec<u8>, Error> {    
+//     let mut child = Command::new("gpg")
+//         .arg("--clearsign")
+//         // Key change: redirect stdout to a pipe so we capture it, not save to disk
+//         .stdout(Stdio::piped())  
+//         .arg(file_path)
+//         .spawn()?;
+        
+//     let output = child.wait_with_output()?; // Get the output from the pipe
+    
+//     debug_log("Did gpg_clearsign_file_to_sendbytes() just make a file? ");
+
+//     if output.status.success() {
+//         Ok(output.stdout) // Return the clearsigned content as bytes
+//     } else {
+//         let stderr = String::from_utf8_lossy(&output.stderr);
+//         debug_log!("GPG clearsign failed: {}", stderr);
+//         Err(Error::new(std::io::ErrorKind::Other, "GPG clearsign failed"))
+//     }
+// }
+
+// use std::{
+//     fs::{self, File},
+//     io::Write,
+//     path::{Path, PathBuf},
+//     process::Command,
+// };
+
+
+fn gpg_clearsign_file_to_sendbytes(
+    file_path: &Path,
+    // recipient_public_key: &str,
+) -> Result<Vec<u8>, ThisProjectError> {
+    // 1. Create a unique temporary file path in the OS temp directory.
+    let mut temp_dir = std::env::temp_dir();
+    let temp_file_name = format!("uma_temp_{}.toml", get_current_unix_timestamp()); // Or use a UUID for stronger uniqueness
+    temp_dir.push(temp_file_name);
+
+
+    // 2. Copy the original file to the temporary location.
+    fs::copy(file_path, &temp_dir)?;
+
+
+    // 3. Clearsign the temporary file, capturing the output.  Redirect stderr for error handling.
+    let clearsign_output = Command::new("gpg")
         .arg("--clearsign")
         .arg("--output")
-        .arg(&output_path) // Specify the output file
-        .arg(file_path)     // Input file
+        .arg("-") // Redirect to stdout
+        .arg(&temp_dir)
+        .stderr(std::process::Stdio::piped())
         .output()?;
 
-    if output.status.success() {
-        debug_log!("File {:?} successfully clearsigned to {:?}", file_path, output_path);
-        Ok(())
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        // Attempt to clean up the output file on error
-        let _ = fs::remove_file(&output_path); // Ignore the result of the removal - it might not exist
-
-        debug_log!("GPG clearsign failed: {}", stderr);
-        Err(Error::new(std::io::ErrorKind::Other, format!("GPG clearsign failed: {}", stderr)))
+    // Handle potential GPG errors.
+    if !clearsign_output.status.success() {
+        let stderr = String::from_utf8_lossy(&clearsign_output.stderr);
+        return Err(ThisProjectError::GpgError(format!(
+            "GPG clearsign failed: {}",
+            stderr
+        )));
     }
+    let clearsigned_bytes = clearsign_output.stdout;
+
+
+    // // 4. Encrypt the clearsigned bytes using the recipient's public key.
+    // let encrypted_bytes = encrypt_with_gpg(&clearsigned_bytes, recipient_public_key)?;
+
+
+    // 5. Clean up the temporary file.
+    fs::remove_file(&temp_dir)?; // TODO Handle potential errors if you wish
+
+    // 6. Return the encrypted, clearsigned bytes.
+    Ok(clearsigned_bytes)
 }
 
-// Updated clearsign_file function (returns signed content as bytes)
-fn gpg_clearsign_file_to_sendbytes(
-    file_path: &Path
-) -> Result<Vec<u8>, Error> {    
-    let output = Command::new("gpg")
-        .arg("--clearsign")
-        .arg(file_path)
-        .output()?;
+// // // this may STILL be broken and saves a file which causes bugs
+// // // Updated clearsign_file function (returns signed content as bytes)
+// fn gpg_clearsign_file_to_sendbytes(data: &[u8], your_gpg_key: &str) -> Result<Vec<u8>, ThisProjectError> {
+//     let mut child = Command::new("gpg")
+//         .arg("--clearsign")
+//         .arg("--local-user") // Or other appropriate way to set your key.
+//         .arg(your_gpg_key)
+//         .stdin(Stdio::piped()) // Pipe the data to gpg's stdin
+//         .stdout(Stdio::piped()) // Capture gpg's stdout
+//         .stderr(Stdio::piped()) // Capture gpg's stderr for error handling
+//         .spawn()?;
 
-    if output.status.success() {
-        Ok(output.stdout) // Return the clearsigned content as bytes
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        debug_log!("GPG clearsign failed: {}", stderr);
-        Err(Error::new(std::io::ErrorKind::Other, "GPG clearsign failed"))
-    }
-}
+//     // Write the data to gpg's stdin
+//     {
+//         let stdin = child.stdin.as_mut().ok_or(ThisProjectError::GpgError("Failed to open stdin for GPG".to_string()))?;
+//         stdin.write_all(data)?;
+//     }
+
+
+//     let output = child.wait_with_output()?;
+
+//     if output.status.success() {
+//         Ok(output.stdout)
+//     } else {
+//         let stderr = String::from_utf8_lossy(&output.stderr);
+//         Err(ThisProjectError::GpgError(format!("GPG clearsign failed: {}", stderr)))
+//     }
+// }
 
 /// Encrypts the provided data using GPG with the specified recipient's public key.
 ///
