@@ -3033,7 +3033,9 @@ fn clearsign_file_as_file(file_path: &Path) -> Result<(), Error> {
 }
 
 // Updated clearsign_file function (returns signed content as bytes)
-fn gpg_clearsign_file_to_sendbytes(file_path: &Path) -> Result<Vec<u8>, Error> {    
+fn gpg_clearsign_file_to_sendbytes(
+    file_path: &Path
+) -> Result<Vec<u8>, Error> {    
     let output = Command::new("gpg")
         .arg("--clearsign")
         .arg(file_path)
@@ -3048,11 +3050,13 @@ fn gpg_clearsign_file_to_sendbytes(file_path: &Path) -> Result<Vec<u8>, Error> {
     }
 }
 
-
 /// Encrypts the provided data using GPG with the specified recipient's public key.
 ///
 /// Returns the encrypted data as a `Vec<u8>` on success, or a `ThisProjectError` on failure.
-fn gpg_encrypt_to_bytes(data: &[u8], recipient_public_key: &str) -> Result<Vec<u8>, ThisProjectError> {
+fn gpg_encrypt_to_bytes(
+    data: &[u8], 
+    recipient_public_key: &str
+) -> Result<Vec<u8>, ThisProjectError> {
     let output = Command::new("gpg")
         .arg("--encrypt")
         .arg("--recipient")
@@ -3071,7 +3075,6 @@ fn gpg_encrypt_to_bytes(data: &[u8], recipient_public_key: &str) -> Result<Vec<u
     }
 }
 
-
 /// Prepares file contents for secure sending by clearsigning and encrypting them.
 ///
 /// This function reads the contents of the file at the given `file_path`, 
@@ -3088,7 +3091,10 @@ fn gpg_encrypt_to_bytes(data: &[u8], recipient_public_key: &str) -> Result<Vec<u
 ///
 /// * `Ok(Vec<u8>)`: A vector of bytes containing the encrypted, clearsigned file content on success.
 /// * `Err(ThisProjectError)`: An error if file reading, clearsigning, or encryption fails.
-fn wrapper_clearsign_and_gpgencrypt_to_send_bytes(file_path: &Path, recipient_public_key: &str) -> Result<Vec<u8>, ThisProjectError> {
+fn wrapper__path_to_clearsign_to_gpgencrypt_to_send_bytes(
+    file_path: &Path, 
+    recipient_public_key: &str
+) -> Result<Vec<u8>, ThisProjectError> {
 
     // 1. Clearsign the file contents.
     let clearsigned_content = gpg_clearsign_file_to_sendbytes(file_path)?;
@@ -3098,7 +3104,6 @@ fn wrapper_clearsign_and_gpgencrypt_to_send_bytes(file_path: &Path, recipient_pu
 
     Ok(encrypted_content)
 }
-
 
 fn add_im_message(
     message_path: &Path,
@@ -3215,8 +3220,6 @@ fn initialize_uma_application() -> Result<(), Box<dyn std::error::Error>> {
     // Set the owner from the loaded metadata
     let owner = user_metadata.uma_local_owner_user;
 
-
-    
     // ... 2. Load user metadata from the now-existing uma.toml
     let user_metadata = match toml::from_str::<LocalUserUma>(&fs::read_to_string(uma_toml_path)?) {
         Ok(metadata) => {
@@ -5875,16 +5878,13 @@ fn handle_remote_collaborator_meetingroom_desk(
                             // 4.1. Get File Send Time
                             let intray_send_time = get_current_unix_timestamp(); 
 
+                            // Wrapper of bytes to bytes:
                             // 4.2. Read File Contents
-                            let file_contents = fs::read(&file_path)?;
-                            
                             // 4.3.1 GPG Clearsign the File (your key)
-                            
-
                             // 4.3.2 GPG Encrypt File (their public key)
                             // GPG encrypt with my private, with their public
-                            let gpg_encrypted_intray_file = encrypt_with_gpg(
-                                &file_contents,
+                            let file_bytes2send = wrapper__path_to_clearsign_to_gpgencrypt_to_send_bytes(
+                                &file_path,
                                 &room_sync_input.remote_collaborator_public_gpg,
                             )?; 
 
@@ -5893,7 +5893,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                             let mut sendfile_struct_data_to_hash: Vec<Vec<u8>> = Vec::new();
                             let sendtime_bytes = intray_send_time.to_be_bytes();
                             sendfile_struct_data_to_hash.push(sendtime_bytes.to_vec()); // Push a Vec<u8>
-                            sendfile_struct_data_to_hash.push(gpg_encrypted_intray_file.clone()); 
+                            sendfile_struct_data_to_hash.push(file_bytes2send.clone()); 
 
                             for salt in &room_sync_input.local_user_salt_list {
                                 // Create a new Vec<u8> for each salt
@@ -5953,7 +5953,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                             // 4.6. Create SendFile Struct 
                             let send_file = SendFile {
                                 intray_send_time: intray_send_time,
-                                gpg_encrypted_intray_file: gpg_encrypted_intray_file,
+                                gpg_encrypted_intray_file: file_bytes2send,
                                 intray_hash_list: intray_hash_list,
                             }; 
                             
