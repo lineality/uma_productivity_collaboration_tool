@@ -2205,7 +2205,7 @@ impl GraphNavigationInstanceState {
         debug_log(&format!("fn look_read_node_toml() self.current_full_file_path -> {:?}", self.current_full_file_path)); 
 
         let node_toml_path = self.current_full_file_path.join("node.toml");
-        debug_log!("node_toml_path -> {:?}", &node_toml_path);
+        debug_log!("node_toml_path -> {:?}", node_toml_path);
         
         // 2. Check if node.toml exists 
         if node_toml_path.exists() { 
@@ -3324,7 +3324,7 @@ fn add_im_message(
     if parent_dir == Path::new("") {
         debug_log("The path has no parent directory.");
     } else {
-        debug_log(&format!("parent directory  {:?}", &parent_dir)); 
+        debug_log(&format!("parent directory  {:?}", parent_dir)); 
     }
 
     // Read 0.toml to get this instant messager browser room's settings
@@ -4027,7 +4027,7 @@ fn handle_command(
                 // // Update input box title
             "m" | "message" => {
                 debug_log("m selected");
-                debug_log(&format!("app.current_path {:?}", &app.current_path)); 
+                debug_log(&format!("app.current_path {:?}", app.current_path)); 
                 app.input_mode = InputMode::InsertText;
 
                 // TODO Assuming you have a way to get the current node's name:
@@ -4035,7 +4035,10 @@ fn handle_command(
 
                 app.current_path = app.current_path.join("instant_message_browser");
 
-                debug_log(&format!("app.current_path after joining 'instant_message_browser': {:?}", &app.current_path)); 
+                debug_log!(
+                    "app.current_path after joining 'instant_message_browser': {:?}",
+                    app.current_path
+                ); 
                 
                 app.load_im_messages();
             }
@@ -4276,7 +4279,7 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
     
     // Construct the path to node.toml 
     let channel_node_toml_path = channel_dir_path.join("node.toml");
-    debug_log!("1. Channel node.toml path: {:?}", &channel_node_toml_path); 
+    debug_log!("1. Channel node.toml path: {:?}", channel_node_toml_path); 
 
     // B. Print the absolute path of the node.toml file
     match channel_node_toml_path.canonicalize() {
@@ -4294,12 +4297,12 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
             node // ???
         },
         Err(e) => {
-            debug_log!("Error 2. reading channel node.toml: {:?}", &channel_node_toml_path);
+            debug_log!("Error 2. reading channel node.toml: {:?}", channel_node_toml_path);
             debug_log!("Error 2. details: {}", e);
             return Err(MyCustomError::from(io::Error::new(io::ErrorKind::Other, e))); // Convert the error
         }
     };
-    debug_log!("2. teamchannel_nodetoml_data->{:?}", &teamchannel_nodetoml_data);
+    debug_log!("2. teamchannel_nodetoml_data->{:?}", teamchannel_nodetoml_data);
     
     // --- 3. Empty Table for Later ---
     // Create an (empty) lookup-table (hash-set) to put all the meeting-room-data-sets in.
@@ -4321,7 +4324,7 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
             return Err(MyCustomError::from(io::Error::new(io::ErrorKind::Other, e)));
         }
     };
-    debug_log!("4. collaborators_names_array->{:?}", &collaborators_names_array);
+    debug_log!("4. collaborators_names_array->{:?}", collaborators_names_array);
     
     // --- 5. raw-abstract port-assignments ---
     // Get the raw-abstract port-assignments 
@@ -4523,12 +4526,15 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
         // --- 12. add meeting room to set-of-rooms-table ---
         // add this one meeting room data-bundle to the larger set
         sync_config_data_set.insert(meeting_room_sync_data.clone()); 
-        debug_log!("12. Created MeetingRoomSyncDataset: {:?}", &meeting_room_sync_data);
+        debug_log!(
+            "12. Created MeetingRoomSyncDataset: {:?}",
+            meeting_room_sync_data
+        );
             
         
     } // End of collaborator loop
 
-    debug_log!("12,13: sync_config_data_set created: {:?}", &sync_config_data_set);
+    debug_log!("12,13: sync_config_data_set created: {:?}", sync_config_data_set);
     
     // 13. after iterating, return full set of meeting-rooms
     Ok(sync_config_data_set) 
@@ -5584,7 +5590,7 @@ fn get_latest_recieved_from_collaborator_in_teamchannel_file_timestamp(
         }
     }
 
-    debug_log!("get_last_file_timestamp() -> last_timestamp {:?}", &last_timestamp); 
+    debug_log!("get_last_file_timestamp() -> last_timestamp {:?}", last_timestamp); 
     Ok(last_timestamp) // Returns 0 if no matching files are found
 }
 
@@ -5714,7 +5720,11 @@ fn handle_remote_collaborator_meetingroom_desk(
                         debug_log!("HRCD 1.5.2 GotItloop Ok((amt, src)) Received {} bytes from {} on gotit port", amt, src);
         
                         // --- Inspect Raw Bytes ---
-                        debug_log!("HRCD 1.5.2 GotItloop Raw bytes received: {:?}", &buf[..amt]); 
+                        debug_log!(
+                            // this does require &
+                            "HRCD 1.5.2 GotItloop Raw bytes received: {:?}", 
+                            &buf[..amt]
+                        ); 
                 
                         // --- Inspect Bytes as Hex ---
                         let hex_string = buf[..amt].iter()
@@ -6336,7 +6346,10 @@ fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
     let sync_meetingroom_config_datasets = match make_sync_meetingroomconfig_datasets(&uma_local_owner_user) {
         
         Ok(room_config_datasets) => {
-            debug_log!("Successfully generated room_config_datasets: {:?}", &room_config_datasets); 
+            debug_log!(
+                "Successfully generated room_config_datasets: {:?}",
+                room_config_datasets
+            ); 
             room_config_datasets
         },
         Err(e) => {
@@ -6575,7 +6588,10 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                     let item_index = index - 1; // Adjust for 0-based indexing
                     if item_index < app.tui_directory_list.len() {
                         debug_log("main: if item_index < app.tui_directory_list.len()");
-                        debug_log(&format!("main: app.tui_directory_list: {:?}", &app.tui_directory_list));
+                        debug_log!(
+                            "main: app.tui_directory_list: {:?}",
+                            app.tui_directory_list
+                        );
                         
                         ////////////////////////////
                         // Handle channel selection
