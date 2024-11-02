@@ -67,6 +67,7 @@ use std::io::{
     Write,
     // Read,
 };
+use std::process::Stdio;
 use std::error::Error as StdError; 
 use walkdir::WalkDir;
 use std::path::Path;
@@ -259,6 +260,7 @@ pub enum ThisProjectError {
     NetworkError(String),
     WalkDirError(walkdir::Error),
     ParseIntError(ParseIntError),
+    GpgError(String),  // GPG-specific error type
 }
 
 // Implement From<walkdir::Error> for ThisProjectError
@@ -305,6 +307,8 @@ impl std::fmt::Display for ThisProjectError {
             ThisProjectError::NetworkError(ref msg) => write!(f, "Network Error: {}", msg),
             ThisProjectError::WalkDirError(ref err) => write!(f, "WalkDir Error: {}", err), // Add this arm
             ThisProjectError::ParseIntError(ref err) => write!(f, "ParseInt Error: {}", err), // Add this arm
+            ThisProjectError::ParseIntError(ref err) => write!(f, "ParseInt Error: {}", err),
+            ThisProjectError::GpgError(_) => todo!(), // Add this arm
             // ... add formatting for other error types
         }
     }
@@ -1751,31 +1755,31 @@ impl App {
         Ok(())
     }
     
-    
-    // fn handle_insert_text_input(input: &str, app: &mut App, graph_navigation_instance_state: &mut GraphNavigationInstanceState) {
-   fn handle_insert_text_input(&mut self, input: &str) { // Correct function signature
-        debug_log("fn handle_insert_text_input");
-        if input == "^[" { 
-            debug_log("esc toggled");
-            self.input_mode = InputMode::Command; // Access input_mode using self
-        } else if !input.is_empty() {
-            debug_log("!input.is_empty()");
+    //
+   //  // fn handle_insert_text_input(input: &str, app: &mut App, graph_navigation_instance_state: &mut GraphNavigationInstanceState) {
+   // fn handle_insert_text_input(&mut self, input: &str) { // Correct function signature
+   //      debug_log("fn handle_insert_text_input");
+   //      if input == "^[" { 
+   //          debug_log("esc toggled");
+   //          self.input_mode = InputMode::Command; // Access input_mode using self
+   //      } else if !input.is_empty() {
+   //          debug_log("!input.is_empty()");
 
-            let local_owner_user = &self.graph_navigation_instance_state.local_owner_user; // Access using self
-            let message_path = get_next_message_file_path(&self.current_path, local_owner_user); // Access using self
-            debug_log(&format!("Next message path: {:?}", message_path)); // Log the calculated message path
+   //          let local_owner_user = &self.graph_navigation_instance_state.local_owner_user; // Access using self
+   //          let message_path = get_next_message_file_path(&self.current_path, local_owner_user); // Access using self
+   //          debug_log(&format!("Next message path: {:?}", message_path)); // Log the calculated message path
             
-            add_im_message(
-                &message_path,
-                local_owner_user,
-                input.trim(), 
-                None,
-                &self.graph_navigation_instance_state, // Pass using self
-            ).expect("handle_insert_text_input: Failed to add message");
+   //          add_im_message(
+   //              &message_path,
+   //              local_owner_user,
+   //              input.trim(), 
+   //              None,
+   //              &self.graph_navigation_instance_state, // Pass using self
+   //          ).expect("handle_insert_text_input: Failed to add message");
 
-            self.load_im_messages(); // Access using self
-        }
-    }    
+   //          self.load_im_messages(); // Access using self
+   //      }
+   //  }    
 }    
 // end impl App {
 
@@ -2921,16 +2925,190 @@ fn create_team_channel(team_channel_name: String, owner: String) {
     new_node.save_node_to_file().expect("Failed to save initial node data"); 
 }
 
+// // New function to clearsign a file
+// fn clearsign_file(file_path: &Path) -> Result<(), Error> {
+//     let output = Command::new("gpg")
+//         .arg("--clearsign")
+//         .arg(file_path)
+//         .output()?;
+
+//     if output.status.success() {
+//         let signed_content = String::from_utf8(output.stdout).map_err(|e| {
+//             Error::new(
+//                 std::io::ErrorKind::Other,
+//                 format!("Failed to convert GPG output to UTF-8: {}", e),
+//             )
+//         })?;
+//         fs::write(file_path, signed_content)?; // Overwrite the file with the signed content
+//         debug_log!("File {:?} successfully clearsigned.", file_path);
+//         Ok(())
+//     } else {
+//         let stderr = String::from_utf8_lossy(&output.stderr);
+//         debug_log!("GPG clearsign failed: {}", stderr);
+//         Err(Error::new(std::io::ErrorKind::Other, "GPG clearsign failed"))
+//     }
+// }
+
+// // Updated clearsign_file function
+// fn clearsign_file(temp_path: &Path, final_path: &Path) -> Result<(), Error> {
+//     // Remove the .tmp extension for GPG, add it to the output path
+//     let gpg_input_path = temp_path.with_extension(""); // Remove .tmp
+    
+//     // Rename with .asc *after* clearsigning 
+//     let gpg_output_path = final_path.with_extension("asc");
+
+
+
+//     let output = Command::new("gpg")
+//         .arg("--clearsign")
+//         .arg("--output") // Use --output to specify the output file 
+//         .arg(&gpg_output_path) // Pass the final path with .asc to GPG 
+//         .arg(&gpg_input_path)
+//         .output()?;
+
+//     if output.status.success() {
+//         // Move the file to remove .asc
+//         // The file created by gpg has a name like 1__alice.asc
+//         // this part removes the .asc from the gpg clearsigned file
+//         if let Err(e) = fs::rename(&gpg_output_path, final_path) {
+//             debug_log!("Failed to rename clearsigned file: {}", e);
+//             // Consider returning an error or handling it differently 
+//             fs::remove_file(&gpg_output_path)?; // Clean up the .asc file since rename failed
+//             fs::remove_file(temp_path)?;      // Clean up the temp file 
+//             return Err(e);
+//         } else {
+//             fs::remove_file(temp_path)?; // Clean up after successful rename
+//         }
+
+//         debug_log!("File {:?} successfully clearsigned.", final_path);
+//         Ok(())
+//     } else {
+//         let stderr = String::from_utf8_lossy(&output.stderr);
+//         debug_log!("GPG clearsign failed: {}", stderr);
+
+//         // Clean up the temporary and output files on error
+//         fs::remove_file(temp_path)?;
+//         fs::remove_file(gpg_output_path)?;
+//         Err(Error::new(std::io::ErrorKind::Other, format!("GPG clearsign failed: {}", stderr)))
+//     }
+// }
+
+
+/// Use OS gpg clearsign from Rust
+/// # Use with:
+/// // Now clearsign, which will remove the .toml and create .asc:
+/// match clearsign_file(&final_message_path) {
+///     Ok(_) => {
+///         // Clearsigning successful, final_message_path.asc exists. Do nothing, maybe log.
+///         debug_log!("File {:?} successfully clearsigned and original file removed.", final_message_path);
+///     }
+///     Err(e) => {
+///         // Log the error and leave the .toml file untouched:
+///         debug_log!("Clearsigning failed for {:?}: {}", final_message_path, e);
+///
+///         return Err(e); // Or handle differently (e.g. display a warning message)
+///     }
+/// }
+fn clearsign_file_as_file(file_path: &Path) -> Result<(), Error> {
+    let output_path = file_path.with_extension("asc"); // Create the output path with .asc extension
+
+    let output = Command::new("gpg")
+        .arg("--clearsign")
+        .arg("--output")
+        .arg(&output_path) // Specify the output file
+        .arg(file_path)     // Input file
+        .output()?;
+
+    if output.status.success() {
+        debug_log!("File {:?} successfully clearsigned to {:?}", file_path, output_path);
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        // Attempt to clean up the output file on error
+        let _ = fs::remove_file(&output_path); // Ignore the result of the removal - it might not exist
+
+        debug_log!("GPG clearsign failed: {}", stderr);
+        Err(Error::new(std::io::ErrorKind::Other, format!("GPG clearsign failed: {}", stderr)))
+    }
+}
+
+// Updated clearsign_file function (returns signed content as bytes)
+fn gpg_clearsign_file_to_sendbytes(file_path: &Path) -> Result<Vec<u8>, Error> {    
+    let output = Command::new("gpg")
+        .arg("--clearsign")
+        .arg(file_path)
+        .output()?;
+
+    if output.status.success() {
+        Ok(output.stdout) // Return the clearsigned content as bytes
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        debug_log!("GPG clearsign failed: {}", stderr);
+        Err(Error::new(std::io::ErrorKind::Other, "GPG clearsign failed"))
+    }
+}
+
+
+/// Encrypts the provided data using GPG with the specified recipient's public key.
+///
+/// Returns the encrypted data as a `Vec<u8>` on success, or a `ThisProjectError` on failure.
+fn gpg_encrypt_to_bytes(data: &[u8], recipient_public_key: &str) -> Result<Vec<u8>, ThisProjectError> {
+    let output = Command::new("gpg")
+        .arg("--encrypt")
+        .arg("--recipient")
+        .arg(recipient_public_key)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?
+        .wait_with_output()?;
+
+    if output.status.success() {
+        Ok(output.stdout)
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(ThisProjectError::GpgError(format!("GPG encryption failed: {}", stderr)))
+    }
+}
+
+
+/// Prepares file contents for secure sending by clearsigning and encrypting them.
+///
+/// This function reads the contents of the file at the given `file_path`, 
+/// clearsigns the content using GPG to ensure integrity and non-repudiation, 
+/// and then encrypts the clearsigned content using the provided 
+/// `recipient_public_key` for confidentiality.
+///
+/// # Arguments
+///
+/// * `file_path`: The path to the file whose contents should be processed.
+/// * `recipient_public_key`: The recipient's GPG public key used for encryption.
+///
+/// # Returns
+///
+/// * `Ok(Vec<u8>)`: A vector of bytes containing the encrypted, clearsigned file content on success.
+/// * `Err(ThisProjectError)`: An error if file reading, clearsigning, or encryption fails.
+fn wrapper_clearsign_and_gpgencrypt_to_send_bytes(file_path: &Path, recipient_public_key: &str) -> Result<Vec<u8>, ThisProjectError> {
+
+    // 1. Clearsign the file contents.
+    let clearsigned_content = gpg_clearsign_file_to_sendbytes(file_path)?;
+
+    // 2. Encrypt the clearsigned content.
+    let encrypted_content = gpg_encrypt_to_bytes(&clearsigned_content, recipient_public_key)?;
+
+    Ok(encrypted_content)
+}
+
+
 fn add_im_message(
-    path: &Path,
+    message_path: &Path,
     owner: &str,
     text: &str,
     signature: Option<String>,
     graph_navigation_instance_state: &GraphNavigationInstanceState, // Pass local_user_metadata here
 ) -> Result<(), io::Error> {
-    
     // separate name and path
-    let parent_dir = if let Some(parent) = path.parent() {
+    let parent_dir = if let Some(parent) = message_path.parent() {
         parent
     } else {
         Path::new("")
@@ -2964,7 +3142,7 @@ fn add_im_message(
     let toml_data = toml::to_string(&message).map_err(|e| {
         io::Error::new(io::ErrorKind::Other, format!("TOML serialization error: {}", e))
     })?; // Wrap TOML error in io::Error
-    fs::write(path, toml_data)?;
+    fs::write(message_path, toml_data)?;
     Ok(())
 }
 
@@ -5699,15 +5877,18 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                             // 4.2. Read File Contents
                             let file_contents = fs::read(&file_path)?;
+                            
+                            // 4.3.1 GPG Clearsign the File (your key)
+                            
 
-                            // 4.3. GPG Encrypt File
+                            // 4.3.2 GPG Encrypt File (their public key)
                             // GPG encrypt with my private, with their public
                             let gpg_encrypted_intray_file = encrypt_with_gpg(
                                 &file_contents,
                                 &room_sync_input.remote_collaborator_public_gpg,
                             )?; 
 
-                            // 4.4. Calculate Hashes (Using Collaborator's Salts)
+                            // 4.4. Calculate SendFile Struct Hashes (Using Collaborator's Salts)
                             // Change the type to hold Vec<u8>
                             let mut sendfile_struct_data_to_hash: Vec<Vec<u8>> = Vec::new();
                             let sendtime_bytes = intray_send_time.to_be_bytes();
@@ -6245,8 +6426,6 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                 }
             }
 
-            
-            
             InputMode::InsertText => {
                 
                 debug_log("handle_insert_text_input");
@@ -6258,9 +6437,12 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                     debug_log("!input.is_empty()");
 
                     let local_owner_user = &app.graph_navigation_instance_state.local_owner_user; // Access using self
+
+                    // 1. final path name (.toml)
                     let message_path = get_next_message_file_path(&app.current_path, local_owner_user); // Access using self
                     debug_log(&format!("Next message path: {:?}", message_path)); // Log the calculated message path
-                    
+
+                    // 2. make message file
                     add_im_message(
                         &message_path,
                         local_owner_user,
