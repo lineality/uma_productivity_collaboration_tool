@@ -3211,6 +3211,11 @@ fn wrapper__path_to_clearsign_to_gpgencrypt_to_send_bytes(
     // 2. Encrypt the clearsigned content.
     let encrypted_content = gpg_encrypt_to_bytes(&clearsigned_content, recipient_public_key)?;
 
+    debug_log!(
+        "(in HRCD) wrapper__path_to_clearsign_to_gpgencrypt_to_send_bytes  encrypted_content {:?}",
+        &encrypted_content   
+    );
+    
     Ok(encrypted_content)
 }
 
@@ -5998,7 +6003,10 @@ fn handle_remote_collaborator_meetingroom_desk(
                                 &file_path,
                                 &room_sync_input.remote_collaborator_public_gpg,
                             )?; 
-
+                            debug_log(
+                                "HRCD 4.2, 4.3.1, 4.3.2 done gpg wrapper"
+                            );
+                            
                             // 4.4. Calculate SendFile Struct Hashes (Using Collaborator's Salts)
                             // Change the type to hold Vec<u8>
                             let mut sendfile_struct_data_to_hash: Vec<Vec<u8>> = Vec::new();
