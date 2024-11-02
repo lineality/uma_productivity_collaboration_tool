@@ -5576,11 +5576,13 @@ fn handle_remote_collaborator_meetingroom_desk(
         );
 
         // --- 1.3 Create two UDP Sockets for Ready and GotIt Signals ---
+        debug_log("HRCD Making ready_port listening UDP socket...");
         let ready_socket = create_udp_socket(
             &room_sync_input.remote_collaborator_ipv6_addr_list,
             room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip,
         )?;
-        let gotit_socket = create_udp_socket(
+        debug_log("HRCD Making gotit_port listening UDP socket...");
+            let gotit_socket = create_udp_socket(
             &room_sync_input.remote_collaborator_ipv6_addr_list,
             room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip,
         )?;
@@ -6141,10 +6143,10 @@ fn create_udp_socket(ip_addresses: &[Ipv6Addr], port: u16) -> Result<UdpSocket, 
         let bind_result = UdpSocket::bind(SocketAddr::new(IpAddr::V6(*ip_address), port));
         match bind_result {
             Ok(socket) => return Ok(socket),
-            Err(e) => debug_log!("Failed to bind to [{}]:{}: {}", ip_address, port, e),
+            Err(e) => debug_log!("create_udp_socket() Failed to bind to [{}]:{}: {}", ip_address, port, e),
         }
     }
-    Err(ThisProjectError::NetworkError("Failed to bind to any IPv6 address".to_string()))
+    Err(ThisProjectError::NetworkError("create_udp_socket() Failed to bind to any IPv6 address".to_string()))
 }
 
 // Result enum for the sync operation, allowing communication between threads
