@@ -82,6 +82,7 @@ use std::time::{
 use std::fs;
 use std::fs::{
     File,
+    remove_file,
     OpenOptions,
 };
 use toml;
@@ -3087,17 +3088,14 @@ fn create_team_channel(team_channel_name: String, owner: String) {
 
 fn gpg_clearsign_file_to_sendbytes(
     file_path: &Path,
-    // recipient_public_key: &str,
 ) -> Result<Vec<u8>, ThisProjectError> {
     // 1. Create a unique temporary file path in the OS temp directory.
     let mut temp_dir = std::env::temp_dir();
     let temp_file_name = format!("uma_temp_{}.toml", get_current_unix_timestamp()); // Or use a UUID for stronger uniqueness
     temp_dir.push(temp_file_name);
 
-
     // 2. Copy the original file to the temporary location.
     fs::copy(file_path, &temp_dir)?;
-
 
     // 3. Clearsign the temporary file, capturing the output.  Redirect stderr for error handling.
     let clearsign_output = Command::new("gpg")
@@ -3118,15 +3116,15 @@ fn gpg_clearsign_file_to_sendbytes(
     }
     let clearsigned_bytes = clearsign_output.stdout;
 
-
-    // // 4. Encrypt the clearsigned bytes using the recipient's public key.
-    // let encrypted_bytes = encrypt_with_gpg(&clearsigned_bytes, recipient_public_key)?;
-
-
-    // 5. Clean up the temporary file.
+    // 4. Clean up the temporary file.
     fs::remove_file(&temp_dir)?; // TODO Handle potential errors if you wish
 
-    // 6. Return the encrypted, clearsigned bytes.
+    debug_log!(
+        "(inHRCD)gpg_clearsign_file_to_sendbytes clearsigned_bytes {:?}",
+        clearsigned_bytes   
+    );
+
+    // 5. Return the encrypted, clearsigned bytes.
     Ok(clearsigned_bytes)
 }
 
@@ -3161,20 +3159,108 @@ fn gpg_clearsign_file_to_sendbytes(
 
 /// Encrypts the provided data using GPG with the specified recipient's public key.
 ///
-/// Returns the encrypted data as a `Vec<u8>` on success, or a `ThisProjectError` on failure.
-fn gpg_encrypt_to_bytes(
-    data: &[u8], 
-    recipient_public_key: &str
-) -> Result<Vec<u8>, ThisProjectError> {
-    let output = Command::new("gpg")
+// /// Returns the encrypted data as a `Vec<u8>` on success, or a `ThisProjectError` on failure.
+// fn gpg_encrypt_to_bytes(
+//     data: &[u8], 
+//     recipient_public_key: &str
+// ) -> Result<Vec<u8>, ThisProjectError> {
+//     let output = Command::new("gpg")
+//         .arg("--encrypt")
+//         .arg("--recipient")
+//         .arg(recipient_public_key)
+//         .stdin(Stdio::piped())
+//         .stdout(Stdio::piped())
+//         .stderr(Stdio::piped())
+//         .spawn()?
+//         .wait_with_output()?;
+
+//     debug_log!(
+//         "(inHRCD) gpg_encrypt_to_bytes() output {:?}",
+//         output   
+//     );
+    
+//     if output.status.success() {
+//         Ok(output.stdout)
+//     } else {
+//         let stderr = String::from_utf8_lossy(&output.stderr);
+//         Err(ThisProjectError::GpgError(format!("GPG encryption failed: {}", stderr)))
+//     }
+// }
+
+// /// Encrypts the provided data using GPG with the specified recipient's public key.
+// fn gpg_encrypt_to_bytes(data: &[u8], recipient_public_key: &str) -> Result<Vec<u8>, ThisProjectError> {
+//     let mut child = Command::new("gpg")
+//         .arg("--encrypt")
+//         .arg("--recipient")
+//         .arg(recipient_public_key) // Use the key directly 
+//         .stdin(Stdio::piped())
+//         .stdout(Stdio::piped())
+//         .stderr(Stdio::piped())
+//         .spawn()?;
+
+//     // Write the data to stdin
+//     {
+//         let stdin = child.stdin.as_mut().ok_or(ThisProjectError::GpgError("Failed to open stdin for GPG".to_string()))?;
+//         stdin.write_all(data)?;
+//     }
+
+//     let output = child.wait_with_output()?;
+    
+//     debug_log!(
+//         "(inHRCD) gpg_encrypt_to_bytes() output {:?}",
+//         output   
+//     );
+    
+//     if output.status.success() {
+//         Ok(output.stdout)
+//     } else {
+//         let stderr = String::from_utf8_lossy(&output.stderr);
+//         Err(ThisProjectError::GpgError(format!("GPG encryption failed: {}", stderr)))
+//     }
+// }
+
+fn gpg_encrypt_to_bytes(data: &[u8], recipient_public_key: &str) -> Result<Vec<u8>, ThisProjectError> {
+    debug_log!(
+        "(inHRCD) STARTING @-|i|- gpg_encrypt_to_bytes() data {:?}",
+        data   
+    );
+
+    // 1. Create a temporary file for the public key.
+    let mut temp_key_file = std::env::temp_dir();
+    temp_key_file.push("uma_temp_key.asc");
+    let mut file = File::create(&temp_key_file)?;
+    file.write_all(recipient_public_key.as_bytes())?;
+
+    debug_log!("(inHRCD) gpg_encrypt_to_bytes() temp_key_file path {:?}", temp_key_file);
+    
+    // 2. GPG encrypt, reading the recipient key from the temporary file.
+    let mut gpg = Command::new("gpg")
         .arg("--encrypt")
-        .arg("--recipient")
-        .arg(recipient_public_key)
-        .stdin(Stdio::piped())
+        .arg("--recipient-file")
+        .arg(&temp_key_file)
+        .stdin(Stdio::piped())       // Correct usage for stdin
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .spawn()?
-        .wait_with_output()?;
+        .spawn()?;
+
+
+    // Write data to stdin.
+    if let Some(mut stdin) = gpg.stdin.take() {
+        stdin.write_all(data)?;
+    } else {
+        // Consider a better error type...
+        return Err(ThisProjectError::GpgError("Failed to open GPG's stdin".into()));
+    };
+
+    let output = gpg.wait_with_output()?;
+
+    debug_log!(
+        "(inHRCD) gpg_encrypt_to_bytes() output {:?}",
+        output   
+    );
+    
+    // 3. Clean up the temporary key file.
+    remove_file(temp_key_file)?;
 
     if output.status.success() {
         Ok(output.stdout)
@@ -5844,7 +5930,10 @@ fn handle_remote_collaborator_meetingroom_desk(
                     // --- 3.2 timestamp freshness checks ---
                     let current_timestamp = get_current_unix_timestamp();
                     
-                    debug_log!("HRCD 3.2 check timestamp freshness checks: current_timestamp -> {:?}", current_timestamp);
+                    debug_log!(
+                        "HRCD 3.2 check timestamp freshness checks: current_timestamp -> {:?}",
+                        current_timestamp
+                    );
 
                     // 3.2.1 No Future Dated Requests
                     if ready_signal_timestamp > current_timestamp + 5 { // Allow for some clock skew (5 seconds)
@@ -5987,8 +6076,8 @@ fn handle_remote_collaborator_meetingroom_desk(
                         while let Some(file_path) = queue.items.pop() {
 
                             debug_log!(
-                                "HRCD 4. Send File: while let Some(file_path) = queue.items.pop()  file_path {:?}",
-                                file_path   
+                                "HRCD 4. Send File: if/while let Some(file_path) = queue.items.pop()  file_path {:?}",
+                                &file_path   
                             );
                             
                             // 4.1. Get File Send Time
