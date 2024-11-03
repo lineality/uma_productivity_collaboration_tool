@@ -86,6 +86,8 @@ use std::fs::{
     remove_file,
     create_dir_all,
     OpenOptions,
+    read_to_string,
+    write,
 };
 use toml;
 use toml::Value;
@@ -5122,6 +5124,7 @@ fn remove_prefail_flag__for_sendfile(
     directory.push(&team_channel_name);
     directory.push("fail_retry_flags");
     directory.push(remote_collaborator_name);
+    create_dir_all(&directory)?; // Create the directory structure if it doesn't exist
     let file_path = directory.join(&doc_id);
 
     // Remove the file, but it's ok if it doesn't exist:
@@ -5177,6 +5180,460 @@ fn send_data(data: &[u8], target_addr: SocketAddr) -> Result<(), io::Error> {
     Ok(())
 }
 
+
+
+// use std::path::{Path, PathBuf};
+// use std::fs::{read_to_string, write, create_dir_all};
+
+
+// /// Retrieves or initializes the timestamp of the latest received file from a specific collaborator.
+// ///
+// /// This function attempts to read the latest received file timestamp from a file at:
+// /// `sync_data/{team_channel_name}/latest_receivedfile_timestamps/{remote_collaborator_name}/latest_received_file_timestamp`.
+// /// If the file or directory structure doesn't exist, it creates the necessary directories and initializes the timestamp to 0,
+// /// effectively treating it as a bootstrap condition.
+// ///
+// /// # Arguments
+// ///
+// /// * `team_channel_name`: The name of the team channel.
+// /// * `remote_collaborator_name`: The name of the remote collaborator.
+// ///
+// /// # Returns
+// ///
+// /// * `u64`: The latest received file timestamp.  Returns 0 if no timestamp file exists or if there was an error reading it (which
+// ///   is handled internally by initializing a new timestamp file with 0).
+// fn latest_received_file_timestamp_get_or_initialize(
+//     remote_collaborator_name: &str,
+// ) -> u64 {
+    
+//     let team_channel_name = get_current_team_channel_name()
+//         .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
+    
+//     debug_log!("latest_received_file_timestamp_get_or_initialize() called with team_channel_name: {}, remote_collaborator_name: {}", team_channel_name, remote_collaborator_name);
+    
+//     let mut timestamp_file_path = PathBuf::from("sync_data");
+//     timestamp_file_path.push(team_channel_name);
+//     timestamp_file_path.push("latest_receivedfile_timestamps");
+//     timestamp_file_path.push(remote_collaborator_name);
+//     timestamp_file_path.push("latest_received_file_timestamp");
+
+//     // 1. Ensure directory structure exists
+//     if let Some(parent) = timestamp_file_path.parent() {
+//         if let Err(e) = create_dir_all(parent) {
+//             debug_log!("Error creating directory: {}", e); // Log and return
+//             return 0;
+//         }
+//     } else {
+//         debug_log!("Invalid timestamp file path: No parent directory");
+//         return 0;
+//     }
+
+//     // 2. Try to read existing timestamp
+//     match read_to_string(×tamp_file_path) {
+//         Ok(timestamp_str) => {
+//             match timestamp_str.trim().parse() {
+//                 Ok(timestamp) => {
+//                     debug_log!("Timestamp read from file: {}", timestamp);
+//                     return timestamp; 
+//                 }
+//                 Err(e) => {
+//                     debug_log!("Error parsing timestamp from file: {}", e);
+//                     // Fall through to initialize with 0 if parsing fails
+//                 }
+//             }
+//         }
+//         Err(e) if e.kind() == std::io::ErrorKind::NotFound => { 
+//             debug_log!("No timestamp file found. Initializing new file.");
+//             // Initialize with 0 if the file doesn't exist
+//         }
+//         Err(e) => {
+//             debug_log!("Error reading timestamp file: {}", e);
+//             return 0; // Or handle the error as you see fit (e.g., panic)
+//         }
+//     }
+
+//     // 3. Initialize with 0 and create/write file if not found or parsing error
+//     if let Err(e) = write(×tamp_file_path, "0") { // Returns error or ()
+//         debug_log!("Error writing initial timestamp to file: {}", e);
+//     } else {
+//         debug_log!("Initialized timestamp file with 0");
+//     }
+
+//     0 // Return the default
+// }
+
+
+
+
+// /// Retrieves or initializes the timestamp of the latest received file from a specific collaborator.
+// ///
+// /// This function reads the latest received file timestamp from:
+// /// `sync_data/{team_channel_name}/latest_receivedfile_timestamps/{remote_collaborator_name}/latest_received_file_timestamp`.
+// /// If it doesn't exist, it initializes the timestamp to 0 and creates the necessary directories and file.
+// ///
+// /// # Arguments
+// ///
+// /// * `remote_collaborator_name`: The name of the remote collaborator.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<u64, ThisProjectError>`: The timestamp on success, or a `ThisProjectError` on failure.
+// fn latest_received_file_timestamp_get_or_initialize(
+//     remote_collaborator_name: &str,
+// ) -> Result<u64, ThisProjectError> { // Correct return type
+    
+//     let team_channel_name = get_current_team_channel_name()
+//         .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?; // Now correctly uses Result
+
+//     debug_log!("latest_received_file_timestamp_get_or_initialize() called with team_channel_name: {}, remote_collaborator_name: {}", team_channel_name, remote_collaborator_name);
+    
+//     let mut timestamp_file_path = PathBuf::from("sync_data");
+//     timestamp_file_path.push(&team_channel_name); // Borrow team_channel_name
+//     timestamp_file_path.push("latest_receivedfile_timestamps");
+//     timestamp_file_path.push(remote_collaborator_name);
+//     timestamp_file_path.push("latest_received_file_timestamp");
+
+//     // 1. Ensure directory structure exists
+//     if let Some(parent) = timestamp_file_path.parent() {
+//         if let Err(e) = create_dir_all(parent) {
+//             debug_log!("Error creating directory: {}", e); // Log and return
+//             return Ok(0);
+//         }
+//     } else {
+//         debug_log!("Invalid timestamp file path: No parent directory");
+//         return Ok(0);
+//     }
+
+//     // 2. Try to read existing timestamp
+//     match read_to_string(×tamp_file_path) { // Use & for borrowing
+//         Ok(timestamp_str) => {
+//             match timestamp_str.trim().parse() {
+//                 Ok(timestamp) => {
+//                     debug_log!("Timestamp read from file: {}", timestamp);
+//                     return Ok(timestamp); // Return Ok(timestamp)
+//                 }
+//                 Err(e) => {
+//                     debug_log!("Error parsing timestamp from file: {}", e);
+//                     // Fall through to initialize with 0 if parsing fails
+//                 }
+//             }
+//         }
+//         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+//             debug_log!("No timestamp file found. Initializing new file.");
+//         }
+//         Err(e) => {
+//             debug_log!("Error reading timestamp file: {}", e);
+//             return Err(ThisProjectError::IoError(e)); // Correct error return
+//         }
+//     }
+
+//     // 3. Initialize with 0 and create/write file if not found or parsing error
+//     if let Err(e) = write(×tamp_file_path, "0") {
+//         debug_log!("Error writing initial timestamp to file: {}", e);
+//         return Err(ThisProjectError::IoError(e)); // Correct error handling
+//     } else {
+//         debug_log!("Initialized timestamp file with 0");
+//     }
+
+//     Ok(0) // Return Ok(0)
+// }
+
+
+
+// /// Retrieves or initializes the timestamp of the latest received file.
+// /// Creates the necessary directories and file if they don't exist.
+// ///
+// /// # Arguments
+// ///
+// /// * `remote_collaborator_name`: The name of the remote collaborator.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<u64, ThisProjectError>`: The latest received file timestamp on success, or a `ThisProjectError` on failure.
+// fn latest_received_file_timestamp_get_or_initialize(
+//     remote_collaborator_name: &str,
+// ) -> Result<u64, ThisProjectError> {
+//     let team_channel_name = get_current_team_channel_name()
+//         .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
+
+//     let mut timestamp_file_path = PathBuf::from("sync_data");
+//     timestamp_file_path.push(&team_channel_name);
+//     timestamp_file_path.push("latest_receivedfile_timestamps");
+//     timestamp_file_path.push(remote_collaborator_name);
+//     timestamp_file_path.push("latest_received_file_timestamp");
+
+//     // Create directories if they don't exist:
+//     if let Some(parent) = timestamp_file_path.parent() {
+//         create_dir_all(parent)?;
+//     }
+
+//     // Attempt to read the timestamp. If the file doesn't exist or parsing fails, initialize it to 0:
+//     let timestamp: u64 = match std::fs::read_to_string(×tamp_file_path) // Borrow with &
+//         .map_err(|e| ThisProjectError::IoError(e)) // Convert to ThisProjectError if appropriate
+//         .and_then(|s| s.trim().parse().map_err(|e| ThisProjectError::ParseIntError(e)))
+//     {
+//         Ok(ts) => ts,
+//         Err(e) => {
+//             // Could not read. Initialize with 0 and create the file
+//             if let Err(e) = write(×tamp_file_path, "0") { // Must borrow with &
+//                 return Err(ThisProjectError::IoError(e)); // And return error
+//             }
+//             0 // Return default timestamp
+//         }
+//     };
+
+
+//     Ok(timestamp)
+// }
+
+
+// use std::fs::{File, create_dir_all, read_to_string};
+// use std::io::Write;
+// use std::path::PathBuf;
+
+/// Gets the latest received file timestamp for a collaborator in a team channel, using a plain text file.
+///
+/// This function reads the timestamp from a plain text file at:
+/// `sync_data/{team_channel_name}/latest_receivedfile_timestamps/{collaborator_name}/latest_received_file_timestamp.txt`
+/// If the file or directory structure doesn't exist, it creates them and initializes the timestamp to 0.
+///
+/// # Arguments
+///
+/// * `team_channel_name`: The name of the team channel.
+/// * `collaborator_name`: The name of the collaborator.
+///
+/// # Returns
+///
+/// * `Result<u64, ThisProjectError>`:  The latest received timestamp on success, or a `ThisProjectError` if an error occurs.
+fn get_latest_received_file_timestamp_plaintext(
+    collaborator_name: &str,
+    team_channel_name: &str,
+) -> Result<u64, ThisProjectError> {
+    let mut file_path = PathBuf::from("sync_data");
+    file_path.push(team_channel_name);
+    file_path.push("latest_receivedfile_timestamps");
+    file_path.push(collaborator_name);
+    file_path.push("latest_received_file_timestamp.txt");
+
+    
+    
+    
+    // Create directory structure if it doesn't exist
+    if let Some(parent) = file_path.parent() {
+        create_dir_all(parent)?;
+    }
+
+    // Read or initialize the timestamp
+    match read_to_string(&file_path) {
+        Ok(timestamp_str) => {
+            // if let Ok(timestamp) = timestamp_str.trim().parse() {
+            // Parse with error handling
+            match timestamp_str.trim().parse::<u64>() {
+                Ok(timestamp) => Ok(timestamp),
+                Err(e) => {
+                    debug_log!("Error parsing timestamp from file: {}", e);
+                    Err(ThisProjectError::from(e))
+                }
+            }
+        },
+        Err(e) if e.kind() == ErrorKind::NotFound => {
+            // File not found, initialize to 0
+            let mut file = File::create(&file_path)?;
+            file.write_all(b"0")?; // Write zero timestamp
+            Ok(0)
+        }
+        Err(e) => Err(ThisProjectError::IoError(e)), // Other IO errors
+    }
+}
+
+
+/// Sets the latest received file timestamp for a collaborator in a team channel, using a plain text file.
+///
+/// This function writes the `timestamp` to a file at the specified path, creating the directory structure if needed.
+///
+/// # Arguments
+///
+/// * `team_channel_name`: The name of the team channel.
+/// * `collaborator_name`: The name of the collaborator.
+/// * `timestamp`: The timestamp to set.
+///
+/// # Returns
+///
+/// * `Result<(), ThisProjectError>`: `Ok(())` on success, or a `ThisProjectError` if an error occurs.
+fn set_latest_received_file_timestamp_plaintext(
+    team_channel_name: &str,
+    collaborator_name: &str,
+    timestamp: u64,
+) -> Result<(), ThisProjectError> {
+    let mut file_path = PathBuf::from("sync_data");
+    file_path.push(team_channel_name);
+    file_path.push("latest_receivedfile_timestamps");
+    file_path.push(collaborator_name);
+    file_path.push("latest_received_file_timestamp.txt");
+
+    // Create directory structure if it doesn't exist
+    if let Some(parent) = file_path.parent() {
+        create_dir_all(parent)?;
+    }
+
+    // Write the timestamp to the file, overwriting any previous content
+    std::fs::write(file_path, timestamp.to_string())?;
+    Ok(())
+}
+
+
+
+
+/// Sends a ReadySignal to the specified target address.
+///
+/// This function encapsulates the logic for sending a ReadySignal.  It handles
+/// timestamp generation, hash calculation, serialization, and the actual sending
+/// of the signal via UDP.
+///
+/// # Arguments
+///
+/// * `target_addr`: The `SocketAddr` of the recipient.
+/// * `local_user_salt_list`: A slice of `u128` salt values for hash calculation.
+/// * `last_received_timestamp`: The timestamp of the last received file.
+/// * `is_echo_send`:  A boolean indicating whether this is an echo send.
+///
+/// # Returns
+///
+/// * `Result<(), ThisProjectError>`: `Ok(())` if the signal was sent successfully, or a `ThisProjectError`
+///   if an error occurred.
+fn send_ready_signal(
+    local_owner_desk_setup_data_clone: ForLocalOwnerDeskThread, 
+    last_received_timestamp: u64,
+    is_echo_send: bool,
+) -> Result<(), ThisProjectError> {
+
+    // // Create the initial ReadySignal (without hashes)
+    // let proto_ready_signal = ReadySignal {
+    //     rt: Some(last_received_timestamp),
+    //     rst: Some(get_current_unix_timestamp()),
+    //     re: Some(is_echo_send),
+    //     rh: None,
+    // };
+
+    // // Calculate and add hashes
+    // let ready_signal = add_pearson_hash_to_readysignal_struct(
+    //     &proto_ready_signal,
+    //     local_user_salt_list,
+    // )
+    // .ok_or(ThisProjectError::InvalidData("Failed to calculate ReadySignal hashes".into()))?; // Handle potential None
+    
+
+    // let serialized_signal = serialize_ready_signal(&ready_signal)?; // Serialize the ReadySignal
+
+    // debug_log!(
+    //     "Sending ReadySignal to {}: {:?}\n  (is_echo_send: {})",
+    //     target_addr, ready_signal, is_echo_send
+    // );
+
+    // // Bind and Send (using existing send_data function)
+    // let socket = UdpSocket::bind(":::0")?; // Bind to any available port on any interface.
+    // send_data(&serialized_signal, target_addr)?;
+
+
+    // // 4. Creates a ReadySignal instance to be the ready signal (Corrected)
+    // let proto_ready_signal = match get_latest_recieved_from_collaborator_in_teamchannel_file_timestamp(
+    //     // Clone the remote_collaborator_name
+    //     &local_owner_desk_setup_data_clone.remote_collaborator_name.clone() 
+    //     &local_owner_desk_setup_data_clone.local_user_salt_list.clone(), 
+    // ) {
+    //     Ok(latest_received_file_timestamp) => ReadySignal {
+    //         rt: Some(latest_received_file_timestamp), // Correct field name and type
+    //         rst: Some(get_current_unix_timestamp()), 
+    //         re: Some(false), // Correct field name and type
+    //         rh: None, // You'll need to calculate and add the hashes here later
+    //     },
+    //     Err(e) => {
+    //         debug_log!("Error getting last received timestamp: {}", e); 
+    //         // Handle the error here. You might want to:
+    //         return Ok(()); // Exit the thread
+
+    //         // or
+    //         // continue; // Skip to the next iteration of the loop (if this is inside a loop)
+    //         // or 
+    //         // create a ReadySignal with a default timestamp value:
+    //         // ReadySignal {
+    //         //     rt: Some(0), // Default timestamp
+    //         //     rst: Some(get_current_unix_timestamp()),
+    //         //     re: Some(false),
+    //         //     rh: None, 
+    //         // }
+    //     }
+    // };
+    
+    // 4.1 Create the initial ReadySignal (without hashes)
+    let proto_ready_signal = ReadySignal {
+        rt: Some(last_received_timestamp),
+        rst: Some(get_current_unix_timestamp()),
+        re: Some(is_echo_send),
+        rh: None,
+    };
+
+    // 4.2 complete ready signal struct with pearson hash
+    let ready_signal_to_send_from_this_loop = add_pearson_hash_to_readysignal_struct(
+        &proto_ready_signal,
+        // Clone the local_user_salt_list
+        &local_owner_desk_setup_data_clone.local_user_salt_list.clone(), 
+        // local_user_salt_list,
+    ).expect("Failed to add hash to ReadySignal"); 
+    
+    // 5. Serialize the ReadySignal
+    let serialized_readysignal_data = serialize_ready_signal(
+        &ready_signal_to_send_from_this_loop
+    ).expect("HLOD 5. err Failed to serialize ReadySignal, ready_signal_to_send_from_this_loop"); 
+
+    // --- Inspect Serialized Data ---
+    debug_log!("HLOD 5.1 inspect Serialized Data: {:?}", ready_signal_to_send_from_this_loop);
+    debug_log!("HLOD 5.2 serialized_readysignal_data: {:?}", serialized_readysignal_data);
+
+    // TODO possibly have some mechanism to try addresses until one works?
+    // 6. Send the signal @ 
+    //    local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
+    // TODO figure out way to specify ipv6, 4, prioritizing, trying, etc.
+    // (in theory...you could try them all?)
+    // Select the first IPv6 address if available
+    if let Some(first_ipv6_address) = local_owner_desk_setup_data_clone.local_user_ipv6_addr_list.first() {
+        // Copy the IPv6 address
+        let ipv6_address_copy = *first_ipv6_address; 
+    
+        // Send the readysignal_data to the collaborator's ready_port
+        let target_addr = SocketAddr::new(
+            IpAddr::V6(ipv6_address_copy), // Use the copied address
+            local_owner_desk_setup_data_clone.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
+        ); 
+
+        // Log before sending
+        debug_log!(
+            "HLOD 6. Attempting to send ReadySignal to {}: {:?}", 
+            target_addr, 
+            &serialized_readysignal_data
+        );
+
+        // // If sending to the first address succeeds, no need to iterate further
+
+        if send_data(&serialized_readysignal_data, target_addr).is_ok() {
+            debug_log("HLOD 6. Successfully sent ReadySignal to {} (first address)");
+            return Ok(()); // Exit the thread
+        } else {
+            debug_log("HLOD err 6. Failed to send ReadySignal to {} (first address)");
+            return Err(ThisProjectError::NetworkError("Failed to send ReadySignal".to_string())); // Return an error
+        }
+
+        } else {
+            debug_log("HLOD ERROR No IPv6 addresses available for {}");
+            return Err(ThisProjectError::NetworkError("No IPv6 addresses available".to_string())); // Return an error
+        }
+        
+    Ok(())
+}
+
+
+
+
 /// Set up the local owner users in-tray desk
 /// requests to recieve are sent from here
 /// other people's owned docs are recieved here
@@ -5186,7 +5643,7 @@ fn send_data(data: &[u8], target_addr: SocketAddr) -> Result<(), io::Error> {
 ///
 /// echo_send: if any document comes in
 /// automatically send out an echo-type request
-/// to get a next file, in parallel
+/// if you get a file: auto-send an echo-request 
 /// a thread per 'sync-event'
 ///     after entering loop
 ///     Alice follows these steps...
@@ -5196,15 +5653,6 @@ fn send_data(data: &[u8], target_addr: SocketAddr) -> Result<(), io::Error> {
 ///     4. Creates a ReadySignal instance to be the ready signal
 ///     5. Serialize the ReadySignal 
 ///     6. Send the signal @ local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip (exact ip choice pending...)
-///     7. Listen at in-box for file for that event:
-///        Alice waits N-miliseconds. If no reply, end thread.
-///     if there is a reply to that event unqiue ID:
-///     - gpg verify input (if not, kill thread)
-///     - save .toml etc if ok (if not, end thread)
-///     - make another echo-thread (repeat)
-///     - if ok: send 'gotit!!' signal
-///     - update 'last updated' file log (maybe append a timestamp stub file to a dir)
-///     - end thread
 fn handle_local_owner_desk(
     local_owner_desk_setup_data: ForLocalOwnerDeskThread, 
 ) {
@@ -5223,178 +5671,114 @@ fn handle_local_owner_desk(
     - kill thread
     
     */
-    // wait, if only for testing, so thread debug prints do not ~overlap
-    thread::sleep(Duration::from_millis(1000)); // Avoid busy-waiting
-
-    debug_log!("\n Start HLOD handle_local_owner_desk()");
-    // Print all sync data for the desk
-    debug_log!("
-        HLOD handle_local_owner_desk: local_owner_desk_setup_data -> {:?}", 
-        &local_owner_desk_setup_data
-    );
-
-    loop { // 1. start/restart main loop for handle_local_owner_desk()
-        /*
-        - every time you send an echo, add true to echo_stack
-        - next time you non-echo send, wait for X-sec/stack item
-        */
+    loop { // 1. start overall loop to restart whole desk
+        
         // 1.1 check for halt/quit uma signal
         if should_halt_uma() {
             debug_log!("should_halt_uma(), exiting Uma in handle_local_owner_desk()");
             break;
         }
 
-        // Clone the data before moving it into the thread
+        // Clone the data before moving it into a thread
         let local_owner_desk_setup_data_clone = local_owner_desk_setup_data.clone();
+        
+        // --- Get team channel name ---
+        let team_channel_name = match get_current_team_channel_name() {
+            Some(name) => name,
+            None => {
+                debug_log!("Error: Could not get current channel name. Skipping.");
+                continue; // Skip to the next loop iteration
+            }
+        };
+    
+            
+        // wait, if only for testing, so thread debug prints do not ~overlap
+        thread::sleep(Duration::from_millis(1000)); // Avoid busy-waiting
 
-        // TODO (ideally put all this into a function...so it can echo_send itself)
-        // 2. Spawn a thread to send the ReadySignal
+        debug_log!("\n (re)Start HLOD handle_local_owner_desk()");
+        // Print all sync data for the desk
+        debug_log!("
+            HLOD handle_local_owner_desk: local_owner_desk_setup_data -> {:?}", 
+            &local_owner_desk_setup_data
+        );
 
-        thread::spawn(move || -> Result<(), ThisProjectError> { // Change the closure to return a Result
+        /*
+        internal "echo":
+        To avoid a prolonged delay if there is a backlog of files to recieve,
+        but still allow a 3-5 sec pause when there is no backlog, 
+        each file-recept will turn off the echo
+        
+        */
+        // let mut echo_flag = false;
 
-            // 3. thread_id = 
-            let sync_event_id__for_this_thread = format!("{:?}", thread::current().id()); 
-            debug_log!(
-                "HLOD 2. New sync-event thread id: {:?}; in handle_local_owner_desk()", 
-                sync_event_id__for_this_thread
-            );
-
-            // get path, derive name from path
-            let channel_dir_path_str = read_state_string("current_node_directory_path.txt")?; // Now you can use ?
-
-
-            // TODO: rt is the latest date
-            // of a file recieved from the remote collaborator
-            // process likely similar to making send_queue
-            // but only looking for top date
-            // 
-            // // 4. Creates a ReadySignal instance to be the ready signal
-            // let proto_ready_signal = ReadySignal {
-            //     di: sync_event_id__for_this_thread,
-            //     rt: TODO(), // 
-            //     rst: get_latest_recieved_from_collaborator_in_teamchannel_file_timestamp(
-            //         local_owner_desk_setup_data.remote_collaborator_name.clone()
-            //     ), 
-            //     re: Some(false),
-            // };
-            // 4. Creates a ReadySignal instance to be the ready signal (Corrected)
-            // let proto_ready_signal = match get_latest_recieved_from_collaborator_in_teamchannel_file_timestamp(
-            //     &local_owner_desk_setup_data.remote_collaborator_name.clone()
-            // ) {
-
-            // 4. Creates a ReadySignal instance to be the ready signal (Corrected)
-            let proto_ready_signal = match get_latest_recieved_from_collaborator_in_teamchannel_file_timestamp(
-                // Clone the remote_collaborator_name
-                &local_owner_desk_setup_data_clone.remote_collaborator_name.clone() 
-            ) {
-                Ok(latest_received_file_timestamp) => ReadySignal {
-                    rt: Some(latest_received_file_timestamp), // Correct field name and type
-                    rst: Some(get_current_unix_timestamp()), 
-                    re: Some(false), // Correct field name and type
-                    rh: None, // You'll need to calculate and add the hashes here later
-                },
-                Err(e) => {
-                    debug_log!("Error getting last received timestamp: {}", e); 
-                    // Handle the error here. You might want to:
-                    return Ok(()); // Exit the thread
-
-                    // or
-                    // continue; // Skip to the next iteration of the loop (if this is inside a loop)
-                    // or 
-                    // create a ReadySignal with a default timestamp value:
-                    // ReadySignal {
-                    //     rt: Some(0), // Default timestamp
-                    //     rst: Some(get_current_unix_timestamp()),
-                    //     re: Some(false),
-                    //     rh: None, 
-                    // }
+        // Drone Loop in a thread? 
+        // --- 1.5 Spawn a thread to handle "Ready" signals & fail-flag removal ---
+        let ready_thread = thread::spawn(move || {
+            //////////////////////////////////////
+            // Listen for 'I got it' GotItSignal
+            ////////////////////////////////////
+            loop {
+                // 1.1 Wait (and check for exit Uma)
+                if should_halt_uma() {
+                    debug_log!("should_halt_uma(), exiting Uma in handle_local_owner_desk()");
+                    break;
                 }
-            };
+                thread::sleep(Duration::from_millis(1000));
 
-            // 4.2 complete ready signal struct with pearson hash
-            let ready_signal_to_send_from_this_loop = add_pearson_hash_to_readysignal_struct(
-                &proto_ready_signal,
-                // Clone the local_user_salt_list
-                &local_owner_desk_setup_data_clone.local_user_salt_list.clone(), 
-            ).expect("Failed to add hash to ReadySignal"); 
-            
-            // // 4.2 complete ready signal struct with pearson hash
-            // let ready_signal_to_send_from_this_loop = add_pearson_hash_to_readysignal_struct(
-            //     proto_ready_signal,
-            //     local_user_salt,
-            //     );
-            
-                        
-            // // 4.2 complete ready signal struct with pearson hash
-            // // Access the salt from the collaborator data
-            // let ready_signal_to_send_from_this_loop = add_pearson_hash_to_readysignal_struct(
-            //     &proto_ready_signal,
-            //     &local_owner_desk_setup_data.local_user_salt_list.clone(),
-            // ).expect("Failed to add hash to ReadySignal"); // Handle potential None
-            
-            
-            // 5. Serialize the ReadySignal
-            let serialized_readysignal_data = serialize_ready_signal(
-                &ready_signal_to_send_from_this_loop
-            ).expect("HLOD 5. err Failed to serialize ReadySignal, ready_signal_to_send_from_this_loop"); 
+                if should_halt_uma() {
+                    debug_log!("should_halt_uma(), exiting Uma in handle_local_owner_desk()");
+                    break;
+                }
+                thread::sleep(Duration::from_millis(1000));
+                
+                if should_halt_uma() {
+                    debug_log!("should_halt_uma(), exiting Uma in handle_local_owner_desk()");
+                    break;
+                }
+                thread::sleep(Duration::from_millis(1000));
+                
+                if should_halt_uma() {
+                    debug_log!("should_halt_uma(), exiting Uma in handle_local_owner_desk()");
+                    break;
+                }
+                thread::sleep(Duration::from_millis(1000));
+                
+                // 1.2 Refresh Timestamp
+                // Get/Set latest_received_file_timestamp
+                // output  zero and set zero file if no file/path etc.
+                /*
+                @
+                sync_data/{team_channel}/latest_receivedfile_timestamps/bob/latest_received_file_timestamp
+                */
+                // let mut latest_received_file_timestamp = get_latest_received_file_timestamp_plaintext(
+                //     &local_owner_desk_setup_data_clone.remote_collaborator_name,
+                //     &team_channel_name,
+                // );
+                let latest_received_file_timestamp = match get_latest_received_file_timestamp_plaintext(
+                    &team_channel_name, // Correct argument order.
+                    &local_owner_desk_setup_data_clone.remote_collaborator_name,
+                ) {
+                    Ok(ts) => ts, // Correct: Use 'ts' directly.
+                    Err(e) => {
+                        debug_log!("Error getting timestamp: {}. Using 0.", e);
+                        0 // Use a default timestamp (0) if an error occurs.
+                    }
+                };
 
-            // --- Inspect Serialized Data ---
-            debug_log!("HLOD 5.1 inspect Serialized Data: {:?}", ready_signal_to_send_from_this_loop);
-            debug_log!("HLOD 5.2 serialized_readysignal_data: {:?}", serialized_readysignal_data);
-
-            // TODO possibly have some mechanism to try addresses until one works?
-            // 6. Send the signal @ 
-            //    local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
-            // TODO figure out way to specify ipv6, 4, prioritizing, trying, etc.
-            // (in theory...you could try them all?)
-            // Select the first IPv6 address if available
-            if let Some(first_ipv6_address) = local_owner_desk_setup_data_clone.local_user_ipv6_addr_list.first() {
-                // Copy the IPv6 address
-                let ipv6_address_copy = *first_ipv6_address; 
-            
-                // Send the readysignal_data to the collaborator's ready_port
-                let target_addr = SocketAddr::new(
-                    IpAddr::V6(ipv6_address_copy), // Use the copied address
-                    local_owner_desk_setup_data_clone.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
-                ); 
-
-                // Log before sending
-                debug_log!(
-                    "HLOD 6. Attempting to send ReadySignal to {}: {:?}", 
-                    target_addr, 
-                    &serialized_readysignal_data
+                // 1.3 Send Ready Signal (using a function)        
+                send_ready_signal(
+                    local_owner_desk_setup_data_clone.clone(),
+                    latest_received_file_timestamp,
+                    false,
                 );
-
-                // // If sending to the first address succeeds, no need to iterate further
-                // if send_data(&readysignal_data, target_addr).is_ok() {
-                //     debug_log("HLOD 6. Successfully sent ReadySignal to {} (first address)"//, target_addr
-                //         );
-                //     return Ok(()); // Exit the thread
-
-                // } else {
-                //     debug_log("HLOD err 6. Failed to send ReadySignal to {} (first address)"//, target_addr
-                //         );
-                // }
-                // If sending to the first address succeeds, no need to iterate further
-                if send_data(&serialized_readysignal_data, target_addr).is_ok() {
-                    debug_log("HLOD 6. Successfully sent ReadySignal to {} (first address)");
-                    return Ok(()); // Exit the thread
-                } else {
-                    debug_log("HLOD err 6. Failed to send ReadySignal to {} (first address)");
-                    return Err(ThisProjectError::NetworkError("Failed to send ReadySignal".to_string())); // Return an error
-                }
-
-                } else {
-                    debug_log("HLOD ERROR No IPv6 addresses available for {}");
-                    return Err(ThisProjectError::NetworkError("No IPv6 addresses available".to_string())); // Return an error
-                }
                 
+                // ->(loop-repeat)->
                 
-                // get file?
-                
-                // send goit?
+            } // end drone loop (ready-signals)
+        }); // end ready_thread
 
-                
+        
+                    
 
         // 7. Listen at in-box for file for that event:
         //     Alice waits N-miliseconds. If no reply, end thread.
@@ -5406,15 +5790,13 @@ fn handle_local_owner_desk(
         // - update 'last updated' file log (maybe append a timestamp stub file to a dir)
         // - end thread
         
-        }); // End Thread
-        
-        // Pause and Tea
-        thread::sleep(Duration::from_secs(3)); 
-    } // end loop
+
+    
     debug_log!(
         "HLOD Exiting handle_local_owner_desk() for {}", 
         local_owner_desk_setup_data.local_user_name
     ); // Add collaborator name
+}
 }
 
 
@@ -6923,7 +7305,8 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
             InputMode::InsertText => {
                 
                 debug_log("handle_insert_text_input");
-                if input == "esc" { 
+                // if input == "esc" { 
+                if input == "q" {
                     debug_log("esc toggled");
                     app.input_mode = InputMode::Command; // Access input_mode using self
                     app.current_path.pop(); // Go back to the parent directory
@@ -6933,7 +7316,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                     let local_owner_user = &app.graph_navigation_instance_state.local_owner_user; // Access using self
 
                     // 1. final path name (.toml)
-                    let message_path = get_next_message_file_path(&app.current_path, local_owner_user); // Access using self
+                    let message_path = get_next_message_file_path(&app.current_path, local_owner_user); 
                     debug_log(&format!("Next message path: {:?}", message_path)); // Log the calculated message path
 
                     // 2. make message file
