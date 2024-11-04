@@ -445,6 +445,9 @@ fn serialize_collaborator_to_toml(collaborator: &CollaboratorTomlData) -> Result
     // Add ipv6_addresses
     serialize_ip_addresses(&mut toml_string, "ipv6_addresses", &collaborator.ipv6_addresses)?;
 
+    // Add gpg_publickey_id
+    toml_string.push_str(&format!("gpg_publickey_id = \"{}\"\n", collaborator.gpg_publickey_id));
+    
     // Add gpg_key_public
     toml_string.push_str(&format!("gpg_key_public = \"{}\"\n", collaborator.gpg_key_public));
 
@@ -665,6 +668,13 @@ fn read_one_collaborator_setup_toml(collaborator_name: &str) -> Result<Collabora
         // Extract ipv6_addresses
         let ipv6_addresses = extract_ipv6_addresses(&table, "ipv6_addresses")?;
 
+        // Extract gpg_publickey_id
+        let gpg_publickey_id = if let Some(Value::String(s)) = table.get("gpg_publickey_id") {
+            s.clone()
+        } else {
+            return Err(ThisProjectError::TomlVanillaDeserialStrError("Missing or invalid gpg_publickey_id".into()));
+        };        
+        
         // Extract gpg_key_public
         let gpg_key_public = if let Some(Value::String(s)) = table.get("gpg_key_public") {
             s.clone()
@@ -684,6 +694,7 @@ fn read_one_collaborator_setup_toml(collaborator_name: &str) -> Result<Collabora
             user_salt_list,
             ipv4_addresses,
             ipv6_addresses,
+            gpg_publickey_id,
             gpg_key_public,
             sync_interval,
             updated_at_timestamp,
@@ -794,7 +805,43 @@ fn extract_u64(table: &toml::map::Map<String, Value>, key: &str) -> Result<u64, 
     }
 }
 
+/// Extracts the `updated_at_timestamp` from TOML data.
+///
+/// This function takes a byte slice containing TOML data and attempts to extract
+/// the `updated_at_timestamp` field as a `u64`.  It handles the cases where
+/// the field is missing, has an invalid type, or is out of the valid `u64` range.
+///
+/// # Arguments
+///
+/// * `toml_data`: The TOML data as a byte slice.
+///
+/// # Returns
+///
+/// * `Result<u64, ThisProjectError>`: The `updated_at_timestamp` on success, or a
+///    `ThisProjectError` if an error occurs.
+fn extract_updated_at_timestamp(file_content: &[u8]) -> Result<u64, ThisProjectError> {
+    // 1. Convert to String (handle UTF-8 errors).
+    let file_str = std::str::from_utf8(file_content).map_err(|_| {
+        ThisProjectError::InvalidData("Invalid UTF-8 in file content".into())
+    })?;
 
+    // 2. Check for "updated_at_timestamp = " line (TOML-style).
+    for line in file_str.lines() {
+        if line.starts_with("updated_at_timestamp = ") {
+            let value_str = line.trim_start_matches("updated_at_timestamp = ");
+            let timestamp = value_str.parse().map_err(|e: ParseIntError| {
+                ThisProjectError::InvalidData(format!("Invalid timestamp: {}", e))
+            })?;
+            return Ok(timestamp);
+        }
+    }
+
+    // 3. (Optional) If not TOML, try other formats (e.g., JSON).  Add this as needed.
+    // ... (Code to handle other formats, checking for similar timestamp fields) ...
+
+    // 4. If no recognized timestamp format is found.
+    Err(ThisProjectError::InvalidData("Timestamp field not found in any recognized format".into()))
+}
 
 /*
 Seri_Deseri Deserialize From End
@@ -1083,8 +1130,9 @@ macro_rules! debug_log {
 struct RemoteCollaboratorPortsData {
     remote_collaborator_name: String,
     remote_ipv6_address: Ipv6Addr,
+    remote_collaborator_gpg_publickey_id: String,
     remote_public_gpg: String,
-    remote_sync_interval: u64,
+    remote_sync_interval: u64, // depricated? controlled by team-channel? 
     remote_ready_port__their_desk_you_listen: u16, // locally: 'you' listen to their port on 'their' desk
     remote_intray_port__their_desk_you_send: u16, // locally: 'you' add files to their port on 'their' desk
     remote_gotit_port__their_desk_you_listen: u16, // locally: 'you' listen to their port on 'their' desk
@@ -1116,6 +1164,7 @@ struct MeetingRoomSyncDataset {
     local_user_salt_list: Vec<u128>,
     local_user_ipv6_addr_list: Vec<Ipv6Addr>, // list of ip addresses
     local_user_ipv4_addr_list: Vec<Ipv4Addr>, // list of ip addresses
+    local_user_gpg_publickey_id: String,
     local_user_public_gpg: String,
     local_user_sync_interval: u64,
     local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip: u16, // locally: 'you' send a signal through your port on your desk
@@ -1126,6 +1175,7 @@ struct MeetingRoomSyncDataset {
     remote_collaborator_salt_list: Vec<u128>,
     remote_collaborator_ipv6_addr_list: Vec<Ipv6Addr>, // list of ip addresses
     remote_collaborator_ipv4_addr_list: Vec<Ipv4Addr>, // list of ip addresses
+    remote_collaborator_gpg_publickey_id: String,
     remote_collaborator_public_gpg: String,
     remote_collaborator_sync_interval: u64,
     remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip: u16, // locally: 'you' listen to their port on 'their' desk
@@ -1143,6 +1193,7 @@ struct ForLocalOwnerDeskThread {
     remote_collaborator_salt_list: Vec<u128>,
     local_user_ipv6_addr_list: Vec<Ipv6Addr>, // list of ip addresses
     local_user_ipv4_addr_list: Vec<Ipv4Addr>, // list of ip addresses
+    local_user_gpg_publickey_id: String,
     local_user_public_gpg: String,
     local_user_sync_interval: u64,
     local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip: u16, // locally: 'you' send a signal through your port on your desk
@@ -1160,6 +1211,7 @@ struct ForRemoteCollaboratorDeskThread {
     local_user_salt_list: Vec<u128>,
     remote_collaborator_ipv6_addr_list: Vec<Ipv6Addr>, // list of ip addresses
     remote_collaborator_ipv4_addr_list: Vec<Ipv4Addr>, // list of ip addresses
+    remote_collaborator_gpg_publickey_id: String,
     remote_collaborator_public_gpg: String,
     remote_collaborator_sync_interval: u64,
     remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip: u16, // locally: 'you' listen to their port on 'their' desk
@@ -1867,6 +1919,7 @@ struct CollaboratorTomlData {
     user_salt_list: Vec<u128>,
     ipv4_addresses: Option<Vec<Ipv4Addr>>,
     ipv6_addresses: Option<Vec<Ipv6Addr>>,
+    gpg_publickey_id: String,
     gpg_key_public: String,
     sync_interval: u64,
     updated_at_timestamp: u64,
@@ -1880,6 +1933,7 @@ struct RawProtoDataToml {
     user_salt_list: Vec<String>,
     ipv4_addresses: Option<Vec<Ipv4Addr>>,
     ipv6_addresses: Option<Vec<Ipv6Addr>>,
+    gpg_publickey_id: String,
     gpg_key_public: String,
     sync_interval: u64,
     updated_at_timestamp: u64,
@@ -1891,6 +1945,7 @@ impl CollaboratorTomlData {
         user_salt_list: Vec<u128>,
         ipv4_addresses: Option<Vec<Ipv4Addr>>,
         ipv6_addresses: Option<Vec<Ipv6Addr>>,
+        gpg_publickey_id: String,
         gpg_key_public: String, 
         sync_interval: u64,
         updated_at_timestamp: u64,
@@ -1900,6 +1955,7 @@ impl CollaboratorTomlData {
             user_salt_list, 
             ipv4_addresses,
             ipv6_addresses,
+            gpg_publickey_id,
             gpg_key_public,
             sync_interval,
             updated_at_timestamp,
@@ -1914,6 +1970,7 @@ fn add_collaborator_setup_file(
     user_salt_list: Vec<u128>,
     ipv4_addresses: Option<Vec<Ipv4Addr>>,
     ipv6_addresses: Option<Vec<Ipv6Addr>>,
+    gpg_publickey_id: String,
     gpg_key_public: String,
     sync_interval: u64,
     updated_at_timestamp: u64,
@@ -1924,7 +1981,8 @@ fn add_collaborator_setup_file(
         user_name, 
         user_salt_list,
         ipv4_addresses,
-        ipv6_addresses, 
+        ipv6_addresses,
+        gpg_publickey_id,
         gpg_key_public,
         sync_interval,
         updated_at_timestamp,
@@ -2076,7 +2134,12 @@ fn add_collaborator_qa(
         (ipv4_addresses, ipv6_addresses) // Return the manually entered addresses
     };
 
-    println!("Enter the collaborator's public GPG key (public, NOT PRIVATE!!):");
+    println!("Enter the collaborator's public GPG key ID (public, NOT PRIVATE!!):");
+    let mut gpg_publickey_id = String::new();
+    io::stdin().read_line(&mut gpg_publickey_id)?; 
+    let gpg_publickey_id = gpg_publickey_id.trim().to_string();    
+    
+    println!("Enter the collaborator's public GPG key is ascii armored lines (public, NOT PRIVATE!!):");
     let mut gpg_key_public = String::new();
     io::stdin().read_line(&mut gpg_key_public)?; 
     let gpg_key_public = gpg_key_public.trim().to_string();
@@ -2099,9 +2162,10 @@ fn add_collaborator_qa(
         new_username, // for: user_name
         new_usersalt_list, // for: user_salt
         ipv4_addresses, 
-        ipv6_addresses, 
-        gpg_key_public, 
-        sync_interval, 
+        ipv6_addresses,
+        gpg_publickey_id,
+        gpg_key_public,
+        sync_interval,
         get_current_unix_timestamp(), // for: updated_at_timestamp
     ); 
 
@@ -2115,6 +2179,7 @@ fn add_collaborator_qa(
         new_collaborator.user_salt_list.clone(), 
         new_collaborator.ipv4_addresses, 
         new_collaborator.ipv6_addresses,
+        new_collaborator.gpg_publickey_id, 
         new_collaborator.gpg_key_public, 
         new_collaborator.sync_interval,
         new_collaborator.updated_at_timestamp,
@@ -2699,6 +2764,7 @@ impl CoreNode {
             description_for_tui,
             node_unique_id,
             directory_path,
+            // sec_to_next_sync,  // 3-5 seconds per sync is normal, but team can make more or less for traffic/need balance
             order_number,
             priority,
             owner,
@@ -2941,166 +3007,6 @@ fn create_team_channel(team_channel_name: String, owner: String) {
     new_node.save_node_to_file().expect("Failed to save initial node data"); 
 }
 
-// // New function to clearsign a file
-// fn clearsign_file(file_path: &Path) -> Result<(), Error> {
-//     let output = Command::new("gpg")
-//         .arg("--clearsign")
-//         .arg(file_path)
-//         .output()?;
-
-//     if output.status.success() {
-//         let signed_content = String::from_utf8(output.stdout).map_err(|e| {
-//             Error::new(
-//                 std::io::ErrorKind::Other,
-//                 format!("Failed to convert GPG output to UTF-8: {}", e),
-//             )
-//         })?;
-//         fs::write(file_path, signed_content)?; // Overwrite the file with the signed content
-//         debug_log!("File {:?} successfully clearsigned.", file_path);
-//         Ok(())
-//     } else {
-//         let stderr = String::from_utf8_lossy(&output.stderr);
-//         debug_log!("GPG clearsign failed: {}", stderr);
-//         Err(Error::new(std::io::ErrorKind::Other, "GPG clearsign failed"))
-//     }
-// }
-
-// // Updated clearsign_file function
-// fn clearsign_file(temp_path: &Path, final_path: &Path) -> Result<(), Error> {
-//     // Remove the .tmp extension for GPG, add it to the output path
-//     let gpg_input_path = temp_path.with_extension(""); // Remove .tmp
-    
-//     // Rename with .asc *after* clearsigning 
-//     let gpg_output_path = final_path.with_extension("asc");
-
-
-
-//     let output = Command::new("gpg")
-//         .arg("--clearsign")
-//         .arg("--output") // Use --output to specify the output file 
-//         .arg(&gpg_output_path) // Pass the final path with .asc to GPG 
-//         .arg(&gpg_input_path)
-//         .output()?;
-
-//     if output.status.success() {
-//         // Move the file to remove .asc
-//         // The file created by gpg has a name like 1__alice.asc
-//         // this part removes the .asc from the gpg clearsigned file
-//         if let Err(e) = fs::rename(&gpg_output_path, final_path) {
-//             debug_log!("Failed to rename clearsigned file: {}", e);
-//             // Consider returning an error or handling it differently 
-//             fs::remove_file(&gpg_output_path)?; // Clean up the .asc file since rename failed
-//             fs::remove_file(temp_path)?;      // Clean up the temp file 
-//             return Err(e);
-//         } else {
-//             fs::remove_file(temp_path)?; // Clean up after successful rename
-//         }
-
-//         debug_log!("File {:?} successfully clearsigned.", final_path);
-//         Ok(())
-//     } else {
-//         let stderr = String::from_utf8_lossy(&output.stderr);
-//         debug_log!("GPG clearsign failed: {}", stderr);
-
-//         // Clean up the temporary and output files on error
-//         fs::remove_file(temp_path)?;
-//         fs::remove_file(gpg_output_path)?;
-//         Err(Error::new(std::io::ErrorKind::Other, format!("GPG clearsign failed: {}", stderr)))
-//     }
-// }
-
-
-// /// Use OS gpg clearsign from Rust
-// /// # Use with:
-// /// // Now clearsign, which will remove the .toml and create .asc:
-// /// match clearsign_file(&final_message_path) {
-// ///     Ok(_) => {
-// ///         // Clearsigning successful, final_message_path.asc exists. Do nothing, maybe log.
-// ///         debug_log!("File {:?} successfully clearsigned and original file removed.", final_message_path);
-// ///     }
-// ///     Err(e) => {
-// ///         // Log the error and leave the .toml file untouched:
-// ///         debug_log!("Clearsigning failed for {:?}: {}", final_message_path, e);
-// ///
-// ///         return Err(e); // Or handle differently (e.g. display a warning message)
-// ///     }
-// /// }
-// fn clearsign_file_as_file(file_path: &Path) -> Result<(), Error> {
-//     let output_path = file_path.with_extension("asc"); // Create the output path with .asc extension
-
-//     let output = Command::new("gpg")
-//         .arg("--clearsign")
-//         .arg("--output")
-//         .arg(&output_path) // Specify the output file
-//         .arg(file_path)     // Input file
-//         .output()?;
-
-//     if output.status.success() {
-//         debug_log!("File {:?} successfully clearsigned to {:?}", file_path, output_path);
-//         Ok(())
-//     } else {
-//         let stderr = String::from_utf8_lossy(&output.stderr);
-//         // Attempt to clean up the output file on error
-//         let _ = fs::remove_file(&output_path); // Ignore the result of the removal - it might not exist
-
-//         debug_log!("GPG clearsign failed: {}", stderr);
-//         Err(Error::new(std::io::ErrorKind::Other, format!("GPG clearsign failed: {}", stderr)))
-//     }
-// }
-
-
-// // this may be broken and saves a file which causes bugs
-// // Updated clearsign_file function (returns signed content as bytes)
-// fn gpg_clearsign_file_to_sendbytes(
-//     file_path: &Path
-// ) -> Result<Vec<u8>, Error> {    
-//     let output = Command::new("gpg")
-//         .arg("--clearsign")
-//         .arg(file_path)
-//         .output()?;
-
-//     if output.status.success() {
-//         Ok(output.stdout) // Return the clearsigned content as bytes
-//     } else {
-//         let stderr = String::from_utf8_lossy(&output.stderr);
-//         debug_log!("GPG clearsign failed: {}", stderr);
-//         Err(Error::new(std::io::ErrorKind::Other, "GPG clearsign failed"))
-//     }
-// }
-
-// // this may STILL be broken and saves a file which causes bugs
-// // Updated clearsign_file function (returns signed content as bytes)
-// fn gpg_clearsign_file_to_sendbytes(
-//     file_path: &Path
-// ) -> Result<Vec<u8>, Error> {    
-//     let mut child = Command::new("gpg")
-//         .arg("--clearsign")
-//         // Key change: redirect stdout to a pipe so we capture it, not save to disk
-//         .stdout(Stdio::piped())  
-//         .arg(file_path)
-//         .spawn()?;
-        
-//     let output = child.wait_with_output()?; // Get the output from the pipe
-    
-//     debug_log("Did gpg_clearsign_file_to_sendbytes() just make a file? ");
-
-//     if output.status.success() {
-//         Ok(output.stdout) // Return the clearsigned content as bytes
-//     } else {
-//         let stderr = String::from_utf8_lossy(&output.stderr);
-//         debug_log!("GPG clearsign failed: {}", stderr);
-//         Err(Error::new(std::io::ErrorKind::Other, "GPG clearsign failed"))
-//     }
-// }
-
-// use std::{
-//     fs::{self, File},
-//     io::Write,
-//     path::{Path, PathBuf},
-//     process::Command,
-// };
-
-
 fn gpg_clearsign_file_to_sendbytes(
     file_path: &Path,
 ) -> Result<Vec<u8>, ThisProjectError> {
@@ -3142,97 +3048,6 @@ fn gpg_clearsign_file_to_sendbytes(
     // 5. Return the encrypted, clearsigned bytes.
     Ok(clearsigned_bytes)
 }
-
-// // // this may STILL be broken and saves a file which causes bugs
-// // // Updated clearsign_file function (returns signed content as bytes)
-// fn gpg_clearsign_file_to_sendbytes(data: &[u8], your_gpg_key: &str) -> Result<Vec<u8>, ThisProjectError> {
-//     let mut child = Command::new("gpg")
-//         .arg("--clearsign")
-//         .arg("--local-user") // Or other appropriate way to set your key.
-//         .arg(your_gpg_key)
-//         .stdin(Stdio::piped()) // Pipe the data to gpg's stdin
-//         .stdout(Stdio::piped()) // Capture gpg's stdout
-//         .stderr(Stdio::piped()) // Capture gpg's stderr for error handling
-//         .spawn()?;
-
-//     // Write the data to gpg's stdin
-//     {
-//         let stdin = child.stdin.as_mut().ok_or(ThisProjectError::GpgError("Failed to open stdin for GPG".to_string()))?;
-//         stdin.write_all(data)?;
-//     }
-
-
-//     let output = child.wait_with_output()?;
-
-//     if output.status.success() {
-//         Ok(output.stdout)
-//     } else {
-//         let stderr = String::from_utf8_lossy(&output.stderr);
-//         Err(ThisProjectError::GpgError(format!("GPG clearsign failed: {}", stderr)))
-//     }
-// }
-
-/// Encrypts the provided data using GPG with the specified recipient's public key.
-///
-// /// Returns the encrypted data as a `Vec<u8>` on success, or a `ThisProjectError` on failure.
-// fn gpg_encrypt_to_bytes(
-//     data: &[u8], 
-//     recipient_public_key: &str
-// ) -> Result<Vec<u8>, ThisProjectError> {
-//     let output = Command::new("gpg")
-//         .arg("--encrypt")
-//         .arg("--recipient")
-//         .arg(recipient_public_key)
-//         .stdin(Stdio::piped())
-//         .stdout(Stdio::piped())
-//         .stderr(Stdio::piped())
-//         .spawn()?
-//         .wait_with_output()?;
-
-//     debug_log!(
-//         "(inHRCD) gpg_encrypt_to_bytes() output {:?}",
-//         output   
-//     );
-    
-//     if output.status.success() {
-//         Ok(output.stdout)
-//     } else {
-//         let stderr = String::from_utf8_lossy(&output.stderr);
-//         Err(ThisProjectError::GpgError(format!("GPG encryption failed: {}", stderr)))
-//     }
-// }
-
-// /// Encrypts the provided data using GPG with the specified recipient's public key.
-// fn gpg_encrypt_to_bytes(data: &[u8], recipient_public_key: &str) -> Result<Vec<u8>, ThisProjectError> {
-//     let mut child = Command::new("gpg")
-//         .arg("--encrypt")
-//         .arg("--recipient")
-//         .arg(recipient_public_key) // Use the key directly 
-//         .stdin(Stdio::piped())
-//         .stdout(Stdio::piped())
-//         .stderr(Stdio::piped())
-//         .spawn()?;
-
-//     // Write the data to stdin
-//     {
-//         let stdin = child.stdin.as_mut().ok_or(ThisProjectError::GpgError("Failed to open stdin for GPG".to_string()))?;
-//         stdin.write_all(data)?;
-//     }
-
-//     let output = child.wait_with_output()?;
-    
-//     debug_log!(
-//         "(inHRCD) gpg_encrypt_to_bytes() output {:?}",
-//         output   
-//     );
-    
-//     if output.status.success() {
-//         Ok(output.stdout)
-//     } else {
-//         let stderr = String::from_utf8_lossy(&output.stderr);
-//         Err(ThisProjectError::GpgError(format!("GPG encryption failed: {}", stderr)))
-//     }
-// }
 
 fn gpg_encrypt_to_bytes(data: &[u8], recipient_public_key: &str) -> Result<Vec<u8>, ThisProjectError> {
     debug_log!(
@@ -3283,6 +3098,79 @@ fn gpg_encrypt_to_bytes(data: &[u8], recipient_public_key: &str) -> Result<Vec<u
         let stderr = String::from_utf8_lossy(&output.stderr);
         Err(ThisProjectError::GpgError(format!("GPG encryption failed: {}", stderr)))
     }
+}
+
+// use std::process::{Command, Stdio};
+fn gpg_decrypt_from_bytes(data: &[u8], your_gpg_key: &str) -> Result<Vec<u8>, ThisProjectError> {
+    // 1. Create a temporary file for your private key.  DO NOT store private keys in memory.
+    let mut temp_key_file = std::env::temp_dir();
+    temp_key_file.push("uma_temp_privkey.asc"); // A distinct name from the public key file
+    std::fs::write(&temp_key_file, your_gpg_key)?;  // Write your key to the file
+
+    debug_log!("gpg_decrypt_from_bytes() temp_key_file path {:?}", temp_key_file);
+
+    // 2. Create a temporary file to hold the encrypted data.
+    let mut temp_encrypted_file = std::env::temp_dir();
+    temp_encrypted_file.push("uma_temp_encrypted.gpg");
+    std::fs::write(&temp_encrypted_file, data)?;
+
+    debug_log!("gpg_decrypt_from_bytes() temp_encrypted_file path {:?}", temp_encrypted_file);
+    
+    // 3. GPG decrypt, reading from the temporary encrypted data and key files.
+    // Redirect stderr to capture potential GPG errors.
+    let mut gpg = Command::new("gpg")
+        .arg("--decrypt")
+        .arg("--local-user")        
+        .arg("--secret-keyring")  // Specify a private keyring if needed
+        .arg(&temp_key_file)
+        .arg("--output")         // Use --output to redirect decrypted content
+        .arg("-")                // Redirect to stdout
+        .arg(&temp_encrypted_file)
+        .stderr(Stdio::piped()) 
+        .stdout(Stdio::piped())    // Capture stdout
+        .spawn()?;
+
+
+    let output = gpg.wait_with_output()?;
+
+    debug_log!("gpg_decrypt_from_bytes() output {:?}", output);
+
+    // 4. Clean up the temporary files.  Critical for security!
+    std::fs::remove_file(temp_key_file)?;
+    std::fs::remove_file(temp_encrypted_file)?;
+
+    // 5. Handle errors and return decrypted data.
+    if output.status.success() {
+        Ok(output.stdout)
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(ThisProjectError::GpgError(format!("GPG decryption failed: {}", stderr)))
+    }
+}
+
+// use std::io::Error;
+fn extract_clearsign_data(clearsigned_data: &[u8]) -> Result<Vec<u8>, ThisProjectError> {
+    let clearsigned_string = String::from_utf8_lossy(clearsigned_data);
+
+    // 1. Split the clearsigned message into its components (original data and signature).
+    let parts: Vec<&str> = clearsigned_string
+        .split("-----BEGIN PGP SIGNATURE-----")
+        .collect();
+
+    // 2. Handle cases where the signature is missing or malformed.
+    if parts.len() < 2 {
+        return Err(ThisProjectError::GpgError("Invalid clearsigned data format: Missing signature".into()));
+    }
+
+    // 3. Extract and return the data from before the signature.
+    let original_data = parts[0].trim().as_bytes().to_vec(); // Convert to Vec<u8>
+    
+    debug_log!(
+        "extract_clearsign_data original_data: {:?}",
+        original_data   
+    );
+
+    Ok(original_data)
 }
 
 /// Prepares file contents for secure sending by clearsigning and encrypting them.
@@ -3630,7 +3518,13 @@ fn initialize_uma_application() -> Result<(), Box<dyn std::error::Error>> {
         // let ipv6_address: Ipv6Addr = ipv6_address.trim().parse().unwrap(); // Parse into Ipv6Addr
 
         // Prompt the user to enter a GPG key
-        println!("Enter a GPG key:  // Posix? $gpg --list-keys");
+        println!("Enter a gpg_publickey_id:  // Posix? $gpg --list-keys");
+        let mut gpg_publickey_id = String::new();
+        io::stdin().read_line(&mut gpg_publickey_id).unwrap();
+        let gpg_publickey_id = gpg_publickey_id.trim().to_string();
+        
+        // Prompt the user to enter a GPG key
+        println!("Enter an ascii armored public GPG key:  // Posix? $gpg --list-keys");
         let mut gpg_key_public = String::new();
         io::stdin().read_line(&mut gpg_key_public).unwrap();
         let gpg_key_public = gpg_key_public.trim().to_string();
@@ -3675,7 +3569,8 @@ fn initialize_uma_application() -> Result<(), Box<dyn std::error::Error>> {
             username, 
             new_usersalt_list,
             ipv4_addresses, 
-            ipv6_addresses, 
+            ipv6_addresses,
+            gpg_publickey_id,
             gpg_key_public, 
             60,   // Example sync_interval (in seconds)
             get_current_unix_timestamp(),
@@ -4517,6 +4412,7 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
             // local_user_ipv6_addr_list: these_collaboratorfiles_toml_data.ipv6_addresses.expect("REASON"), // Assuming you want to use the first IPv6 address for the local user
             local_user_ipv4_addr_list: these_collaboratorfiles_toml_data.ipv4_addresses.clone().unwrap_or_default(), // Get IPv4 addresses or an empty vector
             // local_user_ipv4_addr_list: these_collaboratorfiles_toml_data.ipv4_addresses.expect("REASON"), // Assuming you want to use the first 
+            local_user_gpg_publickey_id: these_collaboratorfiles_toml_data.gpg_publickey_id.clone(),
             local_user_public_gpg: these_collaboratorfiles_toml_data.gpg_key_public.clone(),
             local_user_sync_interval: these_collaboratorfiles_toml_data.sync_interval,
             
@@ -4530,6 +4426,7 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
             remote_collaborator_ipv4_addr_list: these_collaboratorfiles_toml_data.ipv4_addresses.unwrap_or_default(), // Get IP addresses or empty vector
             // remote_collaborator_ipv6_addr_list: these_collaboratorfiles_toml_data.ipv6_addresses.expect("REASON"), // Get ip addresses or empty vector
             // remote_collaborator_ipv4_addr_list: these_collaboratorfiles_toml_data.ipv4_addresses.expect("REASON"), // Get IP addresses or empty vector
+            remote_collaborator_gpg_publickey_id: these_collaboratorfiles_toml_data.gpg_publickey_id,
             remote_collaborator_public_gpg: these_collaboratorfiles_toml_data.gpg_key_public,
             remote_collaborator_sync_interval: these_collaboratorfiles_toml_data.sync_interval,
             
@@ -4747,6 +4644,109 @@ fn verify_readysignal_hashes(
     }
 }
 
+
+/// Verifies the Pearson hashes in a SendFile struct against a provided salt list.
+/// This function calculates the expected hashes based on the intray_send_time and gpg_encrypted_intray_file fields
+/// of the SendFile and the provided salt_list. It then compares the calculated hashes to the
+/// intray_hash_list field of the SendFile.
+///
+/// # Arguments
+///
+/// * `send_file`: The SendFile to verify.
+/// * `salt_list`: The list of salts to use for hash calculation.
+///
+/// # Returns
+///
+/// * `bool`: true if all hashes match, false otherwise.
+fn verify_intray_sendfile_hashes(send_file: &SendFile, salt_list: &[u128]) -> bool {
+    // 1. Handle Optional Fields
+    let intray_send_time = match send_file.intray_send_time {
+        Some(time) => time,
+        None => {
+            debug_log!("verify_intray_sendfile_hashes(): intray_send_time is None. Returning false.");
+            return false;
+        }
+    };
+
+    let intray_hash_list = match &send_file.intray_hash_list {
+        Some(list) => list,
+        None => {
+            debug_log!("verify_intray_sendfile_hashes(): intray_hash_list is None. Returning false.");
+            return false;
+        }
+    };    
+
+    let gpg_encrypted_intray_file = match &send_file.gpg_encrypted_intray_file {
+        Some(file) => file,
+        None => {
+            debug_log!("verify_intray_sendfile_hashes(): gpg_encrypted_intray_file is None. Returning false.");
+            return false;
+        }
+    };
+
+    // 2. Prepare data for hashing.
+    let mut data_to_hash = Vec::new();
+    data_to_hash.extend_from_slice(&intray_send_time.to_be_bytes());
+    data_to_hash.extend_from_slice(gpg_encrypted_intray_file); // Use the extracted value
+
+    // 3. Hashing and comparison.
+    for (i, salt) in salt_list.iter().enumerate() {
+        let mut salted_data = data_to_hash.clone();
+        salted_data.extend_from_slice(&salt.to_be_bytes());
+
+        match pearson_hash_base(&salted_data) {
+            Ok(calculated_hash) => {
+                if calculated_hash != intray_hash_list[i] {
+                    debug_log!("verify_intray_sendfile_hashes(): Hash mismatch at index {}", i);
+                    return false;
+                }
+            }
+            Err(e) => {
+                debug_log!("verify_intray_sendfile_hashes(): Error calculating Pearson hash: {}", e);
+                return false;
+            }
+        }
+    }
+
+    true // All hashes match
+}
+
+// fn verify_intray_sendfile_hashes(send_file: &SendFile, salt_list: &[u128]) -> bool {
+//     // 1. Handle the case where intray_hash_list is None
+//     let intray_hash_list = match &send_file.intray_hash_list {
+//         Some(list) => list,
+//         None => {
+//             debug_log!("verify_intray_sendfile_hashes(): intray_hash_list is None.  Returning false.");
+//             return false; // Or handle differently, e.g., return an error
+//         }
+//     };
+
+//     let mut data_to_hash = Vec::new();
+//     data_to_hash.extend_from_slice(&send_file.intray_send_time.expect("REASON").to_be_bytes());
+//     data_to_hash.extend_from_slice(&send_file.gpg_encrypted_intray_file);
+
+//     for (i, salt) in salt_list.iter().enumerate() {
+//         let mut salted_data = data_to_hash.clone();
+//         salted_data.extend_from_slice(&salt.to_be_bytes());
+
+//         match pearson_hash_base(&salted_data) {
+//             Ok(calculated_hash) => {
+//                 // 2. Now you can safely index intray_hash_list
+//                 if calculated_hash != intray_hash_list[i] {
+//                     debug_log!("verify_intray_sendfile_hashes(): Hash mismatch at index {}", i);
+//                     return false;
+//                 }
+//             }
+//             Err(e) => {
+//                 debug_log!("verify_intray_sendfile_hashes(): Error calculating Pearson hash: {}", e);
+//                 return false;
+//             }
+//         }
+//     }
+
+//     true // All hashes match
+// }
+
 fn sync_flag_ok_or_wait(wait_this_many_seconds: u64) {
     // check for quit
     loop {
@@ -4907,25 +4907,28 @@ fn send_toml_file_to_intray(
     target_addr: SocketAddr, 
     port: u16,
 ) -> Result<(), ThisProjectError> {
-    debug_log("\n");
-    debug_log("Starting send_toml_file_to_intray");
+    debug_log!("\nStarting send_toml_file_to_intray");
 
     // 1. Serialize SendFile (Manually)
     let mut serialized_send_file: Vec<u8> = Vec::new();
     
     // Add intray_send_time 
-    serialized_send_file.extend_from_slice(&file_struct_to_send.intray_send_time.to_be_bytes());
+    serialized_send_file.extend_from_slice(&file_struct_to_send.intray_send_time.expect("REASON").to_be_bytes());
     
-    // Add intray_hash_list 
-    // Handle the Option and extract the Vec<u8>
-    // if let Some(hash_list) = &file_struct_to_send.intray_hash_list {
-    //     serialized_send_file.extend_from_slice(hash_list);
-    // }
-    // intray_hash_list is not optional:
-    serialized_send_file.extend_from_slice(&file_struct_to_send.intray_hash_list);
+    // Add intray_hash_list (handle Option)
+    if let Some(hash_list) = &file_struct_to_send.intray_hash_list {
+        serialized_send_file.extend_from_slice(hash_list);
+    } else {
+        // Handle the None case. Perhaps return an error or use a default/empty hash list.
+        return Err(ThisProjectError::InvalidData("intray_hash_list is None".into()));
+    }
 
-    // Add gpg_encrypted_file_contents
-    serialized_send_file.extend_from_slice(&file_struct_to_send.gpg_encrypted_intray_file);
+    // Add gpg_encrypted_file_contents (handle Option)
+    if let Some(encrypted_file) = &file_struct_to_send.gpg_encrypted_intray_file {
+        serialized_send_file.extend_from_slice(encrypted_file);
+    } else {
+        return Err(ThisProjectError::InvalidData("gpg_encrypted_intray_file is None".into()));
+    }
     
     // 2. Send Data
     let socket = UdpSocket::bind(":::0")?; 
@@ -4935,13 +4938,46 @@ fn send_toml_file_to_intray(
     Ok(())
 }
 
+// fn send_toml_file_to_intray(
+//     file_struct_to_send: &SendFile, 
+//     target_addr: SocketAddr, 
+//     port: u16,
+// ) -> Result<(), ThisProjectError> {
+//     debug_log("\n");
+//     debug_log("Starting send_toml_file_to_intray");
+
+//     // 1. Serialize SendFile (Manually)
+//     let mut serialized_send_file: Vec<u8> = Vec::new();
+    
+//     // Add intray_send_time 
+//     serialized_send_file.extend_from_slice(&file_struct_to_send.intray_send_time.expect("REASON").to_be_bytes());
+    
+//     // Add intray_hash_list 
+//     // Handle the Option and extract the Vec<u8>
+//     // if let Some(hash_list) = &file_struct_to_send.intray_hash_list {
+//     //     serialized_send_file.extend_from_slice(hash_list);
+//     // }
+//     // intray_hash_list is not optional:
+//     serialized_send_file.extend_from_slice(&file_struct_to_send.intray_hash_list);
+
+//     // Add gpg_encrypted_file_contents
+//     serialized_send_file.extend_from_slice(&file_struct_to_send.gpg_encrypted_intray_file);
+    
+//     // 2. Send Data
+//     let socket = UdpSocket::bind(":::0")?; 
+//     socket.send_to(&serialized_send_file, SocketAddr::new(target_addr.ip(), port))?;
+    
+//     debug_log!("File sent to {}:{}", target_addr.ip(), port); 
+//     Ok(())
+// }
+
 /// Struct for sending file to in-tray (file sync)
 /// Salted-Pearson-Hash-List system for quick verification that packet is intact and sent by owner at timestamp
 #[derive(Serialize, Deserialize, Debug)] // Add Serialize/Deserialize for sending/receiving
 struct SendFile {
-    intray_send_time: u64, // send-time: generate_terse_timestamp_freshness_proxy(); for replay-attack protection
-    gpg_encrypted_intray_file: Vec<u8>, // Holds the GPG-encrypted file contents
-    intray_hash_list: Vec<u8>, // N hashes of intray_this_send_timestamp + gpg_encrypted_intray_file
+    intray_send_time: Option<u64>, // send-time: generate_terse_timestamp_freshness_proxy(); for replay-attack protection
+    gpg_encrypted_intray_file: Option<Vec<u8>>, // Holds the GPG-encrypted file contents
+    intray_hash_list: Option<Vec<u8>>, // N hashes of intray_this_send_timestamp + gpg_encrypted_intray_file
 }
 
 /// ReadySignal struct
@@ -5483,31 +5519,7 @@ fn set_latest_received_file_timestamp_plaintext(
 
 
 
-
-/// Sends a ReadySignal to the specified target address.
-///
-/// This function encapsulates the logic for sending a ReadySignal.  It handles
-/// timestamp generation, hash calculation, serialization, and the actual sending
-/// of the signal via UDP.
-///
-/// # Arguments
-///
-/// * `target_addr`: The `SocketAddr` of the recipient.
-/// * `local_user_salt_list`: A slice of `u128` salt values for hash calculation.
-/// * `last_received_timestamp`: The timestamp of the last received file.
-/// * `is_echo_send`:  A boolean indicating whether this is an echo send.
-///
-/// # Returns
-///
-/// * `Result<(), ThisProjectError>`: `Ok(())` if the signal was sent successfully, or a `ThisProjectError`
-///   if an error occurred.
-fn send_ready_signal(
-    local_owner_desk_setup_data_clone: ForLocalOwnerDeskThread, 
-    last_received_timestamp: u64,
-    is_echo_send: bool,
-) -> Result<(), ThisProjectError> {
-
-    // // Create the initial ReadySignal (without hashes)
+   // // Create the initial ReadySignal (without hashes)
     // let proto_ready_signal = ReadySignal {
     //     rt: Some(last_received_timestamp),
     //     rst: Some(get_current_unix_timestamp()),
@@ -5565,6 +5577,38 @@ fn send_ready_signal(
     //     }
     // };
     
+/// Sends a ReadySignal to the specified target address.
+///
+/// This function encapsulates the logic for sending a ReadySignal.  It handles
+/// timestamp generation, hash calculation, serialization, and the actual sending
+/// of the signal via UDP.
+///
+/// # Arguments
+///
+/// * `target_addr`: The `SocketAddr` of the recipient.
+/// * `local_user_salt_list`: A slice of `u128` salt values for hash calculation.
+/// * `last_received_timestamp`: The timestamp of the last received file.
+/// * `is_echo_send`:  A boolean indicating whether this is an echo send.
+///
+/// # Returns
+///
+/// * `Result<(), ThisProjectError>`: `Ok(())` if the signal was sent successfully, or a `ThisProjectError`
+///   if an error occurred.
+// fn send_ready_signal(
+//     local_user_salt_list: Vec<u128>, 
+//     local_user_ipv6_addr_list: Vec<Ipv6Addr>,
+//     local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip: u16,
+//     last_received_timestamp: u64,
+//     is_echo_send: bool,
+// ) -> Result<(), ThisProjectError> {
+fn send_ready_signal(
+    local_user_salt_list: &[u128], 
+    local_user_ipv6_address: &Ipv6Addr, 
+    local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip: u16,
+    last_received_timestamp: u64,
+    is_echo_send: bool,
+) -> Result<(), ThisProjectError> {
+ 
     // 4.1 Create the initial ReadySignal (without hashes)
     let proto_ready_signal = ReadySignal {
         rt: Some(last_received_timestamp),
@@ -5576,9 +5620,7 @@ fn send_ready_signal(
     // 4.2 complete ready signal struct with pearson hash
     let ready_signal_to_send_from_this_loop = add_pearson_hash_to_readysignal_struct(
         &proto_ready_signal,
-        // Clone the local_user_salt_list
-        &local_owner_desk_setup_data_clone.local_user_salt_list.clone(), 
-        // local_user_salt_list,
+        &local_user_salt_list,
     ).expect("Failed to add hash to ReadySignal"); 
     
     // 5. Serialize the ReadySignal
@@ -5596,37 +5638,37 @@ fn send_ready_signal(
     // TODO figure out way to specify ipv6, 4, prioritizing, trying, etc.
     // (in theory...you could try them all?)
     // Select the first IPv6 address if available
-    if let Some(first_ipv6_address) = local_owner_desk_setup_data_clone.local_user_ipv6_addr_list.first() {
-        // Copy the IPv6 address
-        let ipv6_address_copy = *first_ipv6_address; 
-    
-        // Send the readysignal_data to the collaborator's ready_port
-        let target_addr = SocketAddr::new(
-            IpAddr::V6(ipv6_address_copy), // Use the copied address
-            local_owner_desk_setup_data_clone.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
-        ); 
 
-        // Log before sending
-        debug_log!(
-            "HLOD 6. Attempting to send ReadySignal to {}: {:?}", 
-            target_addr, 
-            &serialized_readysignal_data
-        );
 
-        // // If sending to the first address succeeds, no need to iterate further
 
-        if send_data(&serialized_readysignal_data, target_addr).is_ok() {
-            debug_log("HLOD 6. Successfully sent ReadySignal to {} (first address)");
-            return Ok(()); // Exit the thread
-        } else {
-            debug_log("HLOD err 6. Failed to send ReadySignal to {} (first address)");
-            return Err(ThisProjectError::NetworkError("Failed to send ReadySignal".to_string())); // Return an error
-        }
+    // Send the readysignal_data to the collaborator's ready_port
+    // let target_addr = SocketAddr::new(
+    //     IpAddr::V6(ipv6_address_copy), // Use the copied address
+    //     local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
+    // ); 
+    let target_addr = SocketAddr::new(
+        IpAddr::V6(*local_user_ipv6_address), // Directly use the provided address
+        local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip,
+    );
 
-        } else {
-            debug_log("HLOD ERROR No IPv6 addresses available for {}");
-            return Err(ThisProjectError::NetworkError("No IPv6 addresses available".to_string())); // Return an error
-        }
+    // Log before sending
+    debug_log!(
+        "HLOD 6. Attempting to send ReadySignal to {}: {:?}", 
+        target_addr, 
+        local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
+    );
+
+    // // If sending to the first address succeeds, no need to iterate further
+
+    if send_data(&serialized_readysignal_data, target_addr).is_ok() {
+        debug_log("HLOD 6. Successfully sent ReadySignal to {} (first address)");
+        return Ok(()); // Exit the thread
+    } else {
+        debug_log("HLOD err 6. Failed to send ReadySignal to {} (first address)");
+        return Err(ThisProjectError::NetworkError("Failed to send ReadySignal".to_string())); // Return an error
+    }
+
+
         
     Ok(())
 }
@@ -5655,7 +5697,7 @@ fn send_ready_signal(
 ///     6. Send the signal @ local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip (exact ip choice pending...)
 fn handle_local_owner_desk(
     local_owner_desk_setup_data: ForLocalOwnerDeskThread, 
-) {
+) -> Result<(), ThisProjectError> {
     /*
     TODO:
     I think there is supposed to be a thread per 'sync-event'
@@ -5669,19 +5711,46 @@ fn handle_local_owner_desk(
     - make another echo-thread (repeat)
     - if ok: send 'gotit!!' signal
     - kill thread
-    
     */
-    loop { // 1. start overall loop to restart whole desk
+    
+    // TODO maybe a flag here to exit the function?
+    // let mut exit_hlod = false;
+    
+    // Clone the values
+    let salt_list_1 = local_owner_desk_setup_data.local_user_salt_list.clone();
+    let salt_list_2 = local_owner_desk_setup_data.local_user_salt_list.clone();
+
+    let readyport_1 = local_owner_desk_setup_data.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip.clone();
+    let readyport_2 = local_owner_desk_setup_data.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip.clone();    
+
+    let remote_collaborator_name = local_owner_desk_setup_data.remote_collaborator_name.clone();
+                
+    let ipv6_addr_list = local_owner_desk_setup_data.local_user_ipv6_addr_list.clone();
+
+    // Instead of storing Option<&Ipv6Addr>, store the owned Ipv6Addr
+    let mut ipv6_addr_1: Option<Ipv6Addr> = None;
+    let mut ipv6_addr_2: Option<Ipv6Addr> = None;
+    
+    // Clone the address when extracting it
+    if let Some(addr) = ipv6_addr_list.get(0) {
+        ipv6_addr_1 = Some(*addr); // Dereference and clone the IPv6 address
+        ipv6_addr_2 = Some(*addr);
+    }
         
+    
+     
+        
+    loop { // 1. start overall loop to restart whole desk
+        let remote_collaborator_name_for_thread = remote_collaborator_name.clone();
+        let salt_list_1_drone_clone = salt_list_1.clone();
+
         // 1.1 check for halt/quit uma signal
         if should_halt_uma() {
             debug_log!("should_halt_uma(), exiting Uma in handle_local_owner_desk()");
-            break;
+            break Ok(());
+
         }
 
-        // Clone the data before moving it into a thread
-        let local_owner_desk_setup_data_clone = local_owner_desk_setup_data.clone();
-        
         // --- Get team channel name ---
         let team_channel_name = match get_current_team_channel_name() {
             Some(name) => name,
@@ -5690,8 +5759,7 @@ fn handle_local_owner_desk(
                 continue; // Skip to the next loop iteration
             }
         };
-    
-            
+
         // wait, if only for testing, so thread debug prints do not ~overlap
         thread::sleep(Duration::from_millis(1000)); // Avoid busy-waiting
 
@@ -5707,7 +5775,6 @@ fn handle_local_owner_desk(
         To avoid a prolonged delay if there is a backlog of files to recieve,
         but still allow a 3-5 sec pause when there is no backlog, 
         each file-recept will turn off the echo
-        
         */
         // let mut echo_flag = false;
 
@@ -5719,30 +5786,21 @@ fn handle_local_owner_desk(
             ////////////////////////////////////
             loop {
                 // 1.1 Wait (and check for exit Uma)
+                // TODO 
+                for i in 0..5 {
+                    // break for loop ?
+                    if should_halt_uma() {
+                        debug_log!("should_halt_uma(), exiting Uma in handle_local_owner_desk()");
+                        break;
+                    }
+                    thread::sleep(Duration::from_millis(1000));
+                }
+                // break loop loop?
                 if should_halt_uma() {
                     debug_log!("should_halt_uma(), exiting Uma in handle_local_owner_desk()");
                     break;
                 }
-                thread::sleep(Duration::from_millis(1000));
 
-                if should_halt_uma() {
-                    debug_log!("should_halt_uma(), exiting Uma in handle_local_owner_desk()");
-                    break;
-                }
-                thread::sleep(Duration::from_millis(1000));
-                
-                if should_halt_uma() {
-                    debug_log!("should_halt_uma(), exiting Uma in handle_local_owner_desk()");
-                    break;
-                }
-                thread::sleep(Duration::from_millis(1000));
-                
-                if should_halt_uma() {
-                    debug_log!("should_halt_uma(), exiting Uma in handle_local_owner_desk()");
-                    break;
-                }
-                thread::sleep(Duration::from_millis(1000));
-                
                 // 1.2 Refresh Timestamp
                 // Get/Set latest_received_file_timestamp
                 // output  zero and set zero file if no file/path etc.
@@ -5756,7 +5814,7 @@ fn handle_local_owner_desk(
                 // );
                 let latest_received_file_timestamp = match get_latest_received_file_timestamp_plaintext(
                     &team_channel_name, // Correct argument order.
-                    &local_owner_desk_setup_data_clone.remote_collaborator_name,
+                    &remote_collaborator_name_for_thread,
                 ) {
                     Ok(ts) => ts, // Correct: Use 'ts' directly.
                     Err(e) => {
@@ -5766,31 +5824,307 @@ fn handle_local_owner_desk(
                 };
 
                 // 1.3 Send Ready Signal (using a function)        
-                send_ready_signal(
-                    local_owner_desk_setup_data_clone.clone(),
-                    latest_received_file_timestamp,
-                    false,
-                );
+                if let Some(addr_1) = ipv6_addr_1 {
+                    // Now addr_1 is a &Ipv6Addr, which matches the function signature
+                    send_ready_signal(
+                        &salt_list_1_drone_clone,
+                        &addr_1,
+                        readyport_1,
+                        latest_received_file_timestamp,
+                        false,
+                    );
+                }
+                
                 
                 // ->(loop-repeat)->
                 
             } // end drone loop (ready-signals)
         }); // end ready_thread
 
+        ///////////////////////////
+        // 3. InTrayListerLoop Start
+        /////////////////////////
+        /*
+        7. Listen at in-box for file for that event:
+            Alice waits N-miliseconds. If no reply, end thread.
+        if there is a reply to that event unqiue ID:
+        - gpg verify input (if not, kill thread)
+        - save .toml etc if ok (if not, end thread)
+        - make another echo_send-thread (repeat)
+        - if ok: send 'gotit!!' signal
+        - update 'last updated' file log (maybe append a timestamp stub file to a dir)
+        - end thread
+        */
+
+        // 3.1 hash_set_session_nonce = HashSet::new() as protection against replay attacks Create a HashSet to store received hashes
+        let mut hash_set_session_nonce = HashSet::new();  // Create a HashSet to store received hashes
         
+        // --- 2. Enter In-Try-loop ---
+        // restarts if crashes
+        // enter main loop (to handle in-tray Send-File, gotit signl sending, 'echo' ready-signal sending)
+        loop { // 3.2 In-Try-loop
+
+            // --- 3.3 Check for 'should_halt_uma' Signal ---
+            if should_halt_uma() {
+                debug_log!(
+                    "HLOD-InTray 3.3 main loop Check for halt signal. Halting handle_local_owner_desk() for {}", 
+                    local_owner_desk_setup_data.remote_collaborator_name
+                );
+                break;
+            }
+
+            
+            // --- 3.4 Create UDP intray socket ---
+            debug_log("HRCD Creating intray socket listening UDP...");
+            let intray_socket = create_udp_socket(
+                &local_owner_desk_setup_data.local_user_ipv6_addr_list,
+                local_owner_desk_setup_data.localuser_intray_port__yourdesk_youlisten__bind_yourlocal_ip,
+            )?;
+            debug_log!("HLOD: Intray socket created.");
+
+            // --- 3.5 in-tray Send-File Event ---
+            // "Listener"?
+            // 3.5.1 Receive in-tray Send-File packet
+            let mut buf = [0; 65536]; // Maximum UDP datagram size
+            loop { // In-Tray-Loop
+                // Check for halt signal at the beginning of the loop
+                if should_halt_uma() {
+                    debug_log!("HLOD-InTray: Halt signal received. Exiting.");
+                    break;
+                }
+            
+                match intray_socket.recv_from(&mut buf) {
+                    Ok((amt, src)) => {
+
+                    // Check for exit-signal:
+                    if should_halt_uma() {
+                        debug_log!(
+                            "HLOD-InTray 3.5.2 main loop Check for halt signal. Halting handle_local_owner_desk() for {}", 
+                            local_owner_desk_setup_data.remote_collaborator_name
+                        );
+                        break;
+                    }
+                    
+                    debug_log!(
+                        "HLOD-InTray 3.5.2.1 Ok((amt, src)) ready_port Signal Received {} bytes from {}", 
+                        amt, 
+                        src
+                    );
+
+                    // --- Inspect Raw Bytes ---
+                    debug_log!(
+                        "HLOD-InTray 3.5.2.2 Ready Signal Raw bytes received: {:?}", 
+                        &buf[..amt]
+                    ); 
+
+                    // --- Inspect Bytes as Hex ---
+                    let hex_string = buf[..amt].iter()
+                        .map(|b| format!("{:02X}", b))
+                        .collect::<String>();
+                    debug_log!(
+                        "HLOD-InTray 3.5.2.3 Ready Signal Raw bytes as hex: {}", 
+                        hex_string
+                    );
+
+                    
+                    // --- 3.5.3 Deserialize the SendFile signal ---
+                    // let incoming_intray_file_struct: SendFile = deserialize_intray_send_file_struct(&clearsigned_data)?;  // Deserialize from clearsigned data
+                    
+                    let mut incoming_intray_file_struct: SendFile = match deserialize_intray_send_file_struct(&buf[..amt]) {
+                        Ok(incoming_intray_file_struct) => {
+
+                            debug_log!("HLOD-InTray 2.3 Deserialize Ok(incoming_intray_file_struct) {}: Received SendFile: {:?}",
+                                local_owner_desk_setup_data.remote_collaborator_name, 
+                                incoming_intray_file_struct
+                            ); // Log the signal
+                            incoming_intray_file_struct
+                        },
+                        Err(e) => {
+                            debug_log!("HLOD-InTray 2.3 Deserialize Err Receive data Failed to parse ready signal: {}", e);
+                            continue; // Continue to the next iteration of the loop
+                        }
+                    };
+                    
+                    
+                    debug_log("##HLOD-InTray## starting checks(hound's tooth, they say) 2.4");
+                    
+                    
+                    // --- 3.2 timestamp freshness checks ---
+                    let current_timestamp = get_current_unix_timestamp();
+                    
+                    debug_log!(
+                        "HRCD 2.4.1 check timestamp freshness checks: current_timestamp -> {:?}",
+                        current_timestamp
+                    );
+
+                    // 3.2.1 No Future Dated Requests
+                    if incoming_intray_file_struct.intray_send_time > Some(current_timestamp + 5) { // Allow for some clock skew (5 seconds)
+                        debug_log!("HRCD 2.4.2 check: Received future-dated timestamp. Discarding.");
+                        continue;
+                    }
+
+                    // 3.2.2 No Requests Older Than ~10 sec
+                    if current_timestamp - 10 > incoming_intray_file_struct.intray_send_time.expect("REASON") {
+                        debug_log!("HRCD 2.4.3 check: Received outdated timestamp (older than 10 seconds). Discarding.");
+                        continue;
+                    }
+
+                    // 3.2.3 Check .intray_hash_list hash
+                    if incoming_intray_file_struct.intray_hash_list.is_none() {
+                        debug_log("HRCD 2.4.4 Check: intray_hash_list hash field is empty. Drop packet and keep going.");
+                        continue; // Drop packet: Restart the loop to listen for the next signal
+                    }
+
+                    // 3.2.4 Check .intray_send_time timestamp
+                    if incoming_intray_file_struct.intray_send_time.is_none() {
+                        debug_log("HRCD 2.4.5 Check: intray_send_time ready signal sent-at timestamp field is empty. Drop packet and keep going.");
+                        continue; // Drop packet: Restart the loop to listen for the next signal
+                    }
+
+
+                    // --- 4 Check / Add Hash-Nonce for per-session ready-signals ---
+                    // ...e.g. guarding against the few seconds of expiration-gap
+                    // HRCD 4.1 Hashes
+                    let incoming_intray_file_struct_hash_vec = incoming_intray_file_struct.intray_hash_list.clone().expect("intray_hash_list is none");
+
+                    // 4.2
+                    if !incoming_intray_file_struct_hash_vec.is_empty() {
+                        if hash_set_session_nonce.contains(&incoming_intray_file_struct_hash_vec) {
+                            debug_log!("HRCD 4.2 quasi nonce check: Duplicate SendFile received (hash match). Discarding.");
+                            continue; // Discard the duplicate signal
+                        }
+                        hash_set_session_nonce.insert(incoming_intray_file_struct_hash_vec); // Add hash to the set
+                    } else {
+                        debug_log!("HRCD 4.2 quasi nonce check: SendFile received without hashes. Discarding."); // Or handle differently
+                        continue;
+                    }
+
+                    // --- 5 Hash-Check for SendFile Struct ---
+                    // HLOD 5 Drop packet when fail check
+                    if !verify_intray_sendfile_hashes( // make this function TODO
+                        &incoming_intray_file_struct, 
+                        &local_owner_desk_setup_data.remote_collaborator_salt_list,
+                    ) {
+                        debug_log("HRCD 5: SendFile Struct hash verification failed. Discarding signal.");
+                        continue; // Discard the signal and continue listening
+                    }
+                    
+                    // --- 6. HLOD decypt ---
+                    // 6.1  Handle the Option<Vec<u8>> for gpg_encrypted_intray_file
+                    let still_encrypted_file_blob = match &incoming_intray_file_struct.gpg_encrypted_intray_file {
+                        Some(data) => data,  // Extract the Vec<u8> if Some
+                        None => {
+                            debug_log!("HLOD 6.1: gpg_encrypted_intray_file is None. Skipping.");
+                            continue; // Or handle the None case differently (e.g., return an error)
+                        }
+                    };
+                
+                    // 6.2 *Now* decrypt the data
+                    let decrypted_clearsignfile_data = match gpg_decrypt_from_bytes(
+                        still_encrypted_file_blob, 
+                        &local_owner_desk_setup_data.local_user_gpg_publickey_id
+                    ) { // Pass the extracted data
+                        Ok(data) => data,
+                        Err(e) => {
+                            debug_log!("HLOD 6.2: GPG decryption failed: {}. Skipping.", e);
+                            continue; // Skip to the next packet if decryption fails
+                        }
+                    };
+                
+                    // 6.3 Extract the clearsigned data
+                    let extacted_clearsigned_data = match extract_clearsign_data(&decrypted_clearsignfile_data) {
+                        Ok(data) => data,
+                        Err(e) => {
+                            debug_log!("HLOD 6.3: Clearsign extraction failed: {}. Skipping.", e);
+                            continue;
+                        }
+                    };
+
+                    debug_log!(
+                        "HRCD 6.3 extacted_clearsigned_data -> {:?}",
+                        extacted_clearsigned_data
+                    );
+                    
+                    
+                    
+                    // 7 Save File into Uma Folder Structure
+                    // let received_toml: Value = toml::from_slice(&extacted_clearsigned_data)?;
+                    /*
+                    1. if X then save in A place
+                    2. if Y then save in B place
+                    for a message file, 
+                    filepath_in_node = "/instant_message_browser"
+                    for MVP: just add it the same way you add any message, next available number.
+                    
+                    current_path = project_graph_data/team_channels/{}/instant_message_browser/
+                    
+                    let message_path = get_next_message_file_path(current_path, local_owner_user); 
+
+                    */
+            
+
+                    //////////////
+                    // Echo Base
+                    //////////////
+                    
+                    // // TODO extract 
+                    // let recieved_file_timestamp = ...read updated_at field from .toml (bytes?)
                     
 
-        // 7. Listen at in-box for file for that event:
-        //     Alice waits N-miliseconds. If no reply, end thread.
-        // if there is a reply to that event unqiue ID:
-        // - gpg verify input (if not, kill thread)
-        // - save .toml etc if ok (if not, end thread)
-        // - make another echo_send-thread (repeat)
-        // - if ok: send 'gotit!!' signal
-        // - update 'last updated' file log (maybe append a timestamp stub file to a dir)
-        // - end thread
+                    
+                    // Extract timestamp
+                    let recieved_file_timestamp = match extract_updated_at_timestamp(
+                        &extacted_clearsigned_data
+                    ) {
+                        Ok(timestamp) => timestamp,
+                        Err(e) => {
+                            debug_log!("HLOD-InTray: Error extracting timestamp: {}. Skipping.", e);
+                            continue;
+                        }
+                    };
+                    
+                    // Now you have the recieved_file_timestamp timestamp
+                    println!("Received file updated at: {}", recieved_file_timestamp);
+                    
+                    // 1.3 Send Echo Ready Signal (using a function)        
+                    if let Some(addr_2) = ipv6_addr_2 {
+                        send_ready_signal(
+                            &salt_list_2,
+                            &addr_2,
+                            readyport_2,
+                            recieved_file_timestamp,
+                            false,
+                        );
+                    }
+                
+                // },
+                // Err(_) => todo!() // end Ok((amt, src)) => { // end Ok((amt, src)) => {
+                    
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    // No data available yet.  Don't treat this as an error.
+                    debug_log!("HLOD-InTray: No data available yet...WouldBlock");
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                    continue; // Continue to the next loop iteration
+                }
+                Err(e) => {
+                    // A real error occurred. Log and handle it.
+                    debug_log!("HLOD-InTray: Error receiving data: {}", e);
+                    return Err(ThisProjectError::NetworkError(format!(
+                        "Error receiving data: {}",
+                        e
+                    )));  // Or choose another way to handle this
+                }
+                }
+            } // end match ready_socket.recv_from(&mut buf) {
+        } // end In-Tray-Loop
+        ////////////////////////
+        // InTrayListerLoop End
+        ////////////////////////
         
 
+    // TESTING ONLY wait, if only for testing, so thread debug prints do not ~overlap
+    thread::sleep(Duration::from_millis(15000)); // Avoid busy-waiting
     
     debug_log!(
         "HLOD Exiting handle_local_owner_desk() for {}", 
@@ -5911,6 +6245,78 @@ fn deserialize_ready_signal(bytes: &[u8]) -> Result<ReadySignal, io::Error> {
         rst: Some(rst), // Include rst
         re: Some(re), 
         rh 
+    })
+}
+
+/// Deserializes a byte slice into a SendFile struct.
+///
+/// This function performs the reverse operation of serializing a SendFile struct.
+/// It takes a byte slice as input and extracts the fields to construct a SendFile instance.
+/// It includes error handling for invalid data lengths and returns a Result to indicate success or failure.
+///
+/// # Arguments
+/// * `bytes`: The byte slice containing the serialized SendFile data.
+///
+/// # Returns
+///
+/// * `Result<SendFile, ThisProjectError>`:  A Result containing the deserialized SendFile on success, or a ThisProjectError on failure.
+fn deserialize_intray_send_file_struct(bytes: &[u8]) -> Result<SendFile, ThisProjectError> {
+    // 1. Check Minimum Length
+    let timestamp_len = std::mem::size_of::<u64>();
+    let min_length = timestamp_len; // Minimum length for just the timestamp
+
+    debug_log!(
+        "DISFS Starting deserialize_intray_send_file_struct() bytes {:?}",
+        bytes   
+    );
+    
+    if bytes.len() < min_length {
+        debug_log!("DISFS bytes.len() < min_length -> returning: Err(ThisProjectError::InvalidData(\"Invalid byte array length for SendFile\".into()))");
+        return Err(ThisProjectError::InvalidData("Invalid byte array length for SendFile".into()));
+    }
+
+    debug_log!("DISFS bytes.len() >= min_length");
+    
+    // 2. Extract intray_send_time
+    let intray_send_time = u64::from_be_bytes(bytes[0..timestamp_len].try_into().unwrap());
+
+    // 3. Extract intray_hash_list
+    let hash_list_start = timestamp_len;
+    let hash_list_end = hash_list_start + 4; // Assuming 4 salts (4 * u8 hashes)
+    debug_log!(
+        "DISFS hash_list_start {} hash_list_end {}",
+        hash_list_start, hash_list_end   
+    );
+    
+    // if bytes.len() < hash_list_end {
+    //     debug_log!("DISFS bytes.len() < hash_list_end -> returning: Err(ThisProjectError::InvalidData(\"Invalid byte array length for SendFile intray_hash_list\".into()))");
+    //     return Err(ThisProjectError::InvalidData("Invalid byte array length for SendFile intray_hash_list".into()));
+    // }
+    debug_log!("DISFS bytes.len() >= hash_list_end {:?}", bytes.len() >= hash_list_end );
+    
+    let intray_hash_list = if bytes.len() >= hash_list_end {
+        bytes[hash_list_start..hash_list_end].to_vec() // Extract hashes
+    } else {
+        return Err(ThisProjectError::InvalidData("Invalid byte array length for SendFile".into()));
+    };
+
+    // 4. Extract gpg_encrypted_intray_file
+    let gpg_encrypted_file_start = hash_list_end;
+    let gpg_encrypted_intray_file = if bytes.len() > gpg_encrypted_file_start {
+        debug_log!("DISFS gpg_encrypted_file_start-> {}", gpg_encrypted_file_start);
+        bytes[gpg_encrypted_file_start..].to_vec() // Extract file content
+    } else {
+        Vec::new() // Or handle the case where there's no file content as needed
+    };
+
+
+    // 5. Construct and return the SendFile struct
+    debug_log!("DISFS constructing SendFile struct");
+    
+    Ok(SendFile {
+        intray_send_time: Some(intray_send_time),
+        gpg_encrypted_intray_file: Some(gpg_encrypted_intray_file.clone()),
+        intray_hash_list: Some(gpg_encrypted_intray_file),
     })
 }
 
@@ -6384,6 +6790,10 @@ fn handle_remote_collaborator_meetingroom_desk(
         // 1.6.2 hash_set_session_nonce = HashSet::new() as protection against replay attacks Create a HashSet to store received hashes
         let mut hash_set_session_nonce = HashSet::new();  // Create a HashSet to store received hashes
         
+        
+        
+        
+        
         // --- 2. Enter Main Loop ---
         // enter main loop (to handling signals, sending)
         loop {
@@ -6397,10 +6807,19 @@ fn handle_remote_collaborator_meetingroom_desk(
             }
 
             // --- 2.2. Handle Ready Signal:  ---
+            // "Listener"?
             // 2.2.1 Receive Ready Signal
             let mut buf = [0; 1024]; // TODO size?
-            match ready_socket.recv_from(&mut buf) {
+            match ready_socket.recv_from(&mut buf) {                
                 Ok((amt, src)) => {
+                    if should_halt_uma() {
+                        debug_log!(
+                            "HRCD Halting handle_local_owner_desk() for {}", 
+                            room_sync_input.remote_collaborator_name
+                        );
+                        break;
+                    }      
+
                     debug_log!(
                         "HRCD 2.2.1 Ok((amt, src)) ready_port Signal Received {} bytes from {}", 
                         amt, 
@@ -6819,9 +7238,9 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                             // 4.6. Create SendFile Struct 
                             let send_file = SendFile {
-                                intray_send_time: intray_send_time,
-                                gpg_encrypted_intray_file: file_bytes2send,
-                                intray_hash_list: intray_hash_list,
+                                intray_send_time: Some(intray_send_time),
+                                gpg_encrypted_intray_file: Some(file_bytes2send),
+                                intray_hash_list: Some(intray_hash_list),
                             }; 
                             
                             // --- 4.7 Send file: send UDP to intray ---
@@ -7033,6 +7452,7 @@ fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
             remote_collaborator_salt_list: this_meetingroom_iter.remote_collaborator_salt_list.clone(),
             local_user_ipv6_addr_list: this_meetingroom_iter.local_user_ipv6_addr_list,
             local_user_ipv4_addr_list: this_meetingroom_iter.local_user_ipv4_addr_list,
+            local_user_gpg_publickey_id: this_meetingroom_iter.local_user_gpg_publickey_id.clone(),
             local_user_public_gpg: this_meetingroom_iter.local_user_public_gpg.clone(),
             local_user_sync_interval: this_meetingroom_iter.local_user_sync_interval,
             // ready! (local)
@@ -7049,6 +7469,7 @@ fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
             local_user_salt_list: this_meetingroom_iter.local_user_salt_list.clone(),
             remote_collaborator_ipv6_addr_list: this_meetingroom_iter.remote_collaborator_ipv6_addr_list,
             remote_collaborator_ipv4_addr_list: this_meetingroom_iter.remote_collaborator_ipv4_addr_list,
+            remote_collaborator_gpg_publickey_id: this_meetingroom_iter.remote_collaborator_gpg_publickey_id.clone(),
             remote_collaborator_public_gpg: this_meetingroom_iter.remote_collaborator_public_gpg.clone(),
             remote_collaborator_sync_interval: this_meetingroom_iter.remote_collaborator_sync_interval,
             // ready! (remote)
