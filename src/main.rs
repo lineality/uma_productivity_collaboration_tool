@@ -4645,71 +4645,144 @@ fn verify_readysignal_hashes(
 }
 
 
-/// Verifies the Pearson hashes in a SendFile struct against a provided salt list.
-/// This function calculates the expected hashes based on the intray_send_time and gpg_encrypted_intray_file fields
-/// of the SendFile and the provided salt_list. It then compares the calculated hashes to the
-/// intray_hash_list field of the SendFile.
-///
-/// # Arguments
-///
-/// * `send_file`: The SendFile to verify.
-/// * `salt_list`: The list of salts to use for hash calculation.
-///
-/// # Returns
-///
-/// * `bool`: true if all hashes match, false otherwise.
-fn verify_intray_sendfile_hashes(send_file: &SendFile, salt_list: &[u128]) -> bool {
-    // 1. Handle Optional Fields
-    let intray_send_time = match send_file.intray_send_time {
-        Some(time) => time,
-        None => {
-            debug_log!("verify_intray_sendfile_hashes(): intray_send_time is None. Returning false.");
-            return false;
-        }
-    };
+// /// Verifies the Pearson hashes in a SendFile struct against a provided salt list.
+// /// This function calculates the expected hashes based on the intray_send_time and gpg_encrypted_intray_file fields
+// /// of the SendFile and the provided salt_list. It then compares the calculated hashes to the
+// /// intray_hash_list field of the SendFile.
+// ///
+// /// # Arguments
+// ///
+// /// * `send_file`: The SendFile to verify.
+// /// * `salt_list`: The list of salts to use for hash calculation.
+// ///
+// /// # Returns
+// ///
+// /// * `bool`: true if all hashes match, false otherwise.
+// fn verify_intray_sendfile_hashes(
+//     send_file: &SendFile, 
+//     salt_list: &[u128]
+//     ) -> bool {
+//     // 1. Handle Optional Fields
+//     let intray_send_time = match send_file.intray_send_time {
+//         Some(time) => time,
+//         None => {
+//             debug_log!("verify_intray_sendfile_hashes(): intray_send_time is None. Returning false.");
+//             return false;
+//         }
+//     };
 
-    let intray_hash_list = match &send_file.intray_hash_list {
-        Some(list) => list,
-        None => {
-            debug_log!("verify_intray_sendfile_hashes(): intray_hash_list is None. Returning false.");
-            return false;
-        }
-    };    
+//     let intray_hash_list = match &send_file.intray_hash_list {
+//         Some(list) => list,
+//         None => {
+//             debug_log!("verify_intray_sendfile_hashes(): intray_hash_list is None. Returning false.");
+//             return false;
+//         }
+//     };    
 
-    let gpg_encrypted_intray_file = match &send_file.gpg_encrypted_intray_file {
-        Some(file) => file,
-        None => {
-            debug_log!("verify_intray_sendfile_hashes(): gpg_encrypted_intray_file is None. Returning false.");
-            return false;
-        }
-    };
+//     let gpg_encrypted_intray_file = match &send_file.gpg_encrypted_intray_file {
+//         Some(file) => file,
+//         None => {
+//             debug_log!("verify_intray_sendfile_hashes(): gpg_encrypted_intray_file is None. Returning false.");
+//             return false;
+//         }
+//     };
 
-    // 2. Prepare data for hashing.
-    let mut data_to_hash = Vec::new();
-    data_to_hash.extend_from_slice(&intray_send_time.to_be_bytes());
-    data_to_hash.extend_from_slice(gpg_encrypted_intray_file); // Use the extracted value
+//     // 2. Prepare data for hashing.
+//     let mut data_to_hash = Vec::new();
+//     data_to_hash.extend_from_slice(&intray_send_time.to_be_bytes());
+//     data_to_hash.extend_from_slice(gpg_encrypted_intray_file); // Use the extracted value
 
-    // 3. Hashing and comparison.
-    for (i, salt) in salt_list.iter().enumerate() {
-        let mut salted_data = data_to_hash.clone();
-        salted_data.extend_from_slice(&salt.to_be_bytes());
+//     // 3. Hashing and comparison.
+//     for (i, salt) in salt_list.iter().enumerate() {
+//         let mut salted_data = data_to_hash.clone();
+//         salted_data.extend_from_slice(&salt.to_be_bytes());
 
-        match pearson_hash_base(&salted_data) {
-            Ok(calculated_hash) => {
-                if calculated_hash != intray_hash_list[i] {
-                    debug_log!("verify_intray_sendfile_hashes(): Hash mismatch at index {}", i);
-                    return false;
-                }
-            }
-            Err(e) => {
-                debug_log!("verify_intray_sendfile_hashes(): Error calculating Pearson hash: {}", e);
-                return false;
-            }
-        }
-    }
+//         match pearson_hash_base(&salted_data) {
+//             Ok(calculated_hash) => {
+//                 if calculated_hash != intray_hash_list[i] {
+//                     debug_log!("verify_intray_sendfile_hashes(): Hash mismatch at index {}", i);
+//                     return false;
+//                 }
+//             }
+//             Err(e) => {
+//                 debug_log!("verify_intray_sendfile_hashes(): Error calculating Pearson hash: {}", e);
+//                 return false;
+//             }
+//         }
+//     }
 
-    true // All hashes match
-}
+//     true // All hashes match
+// }
+
+
+
+
+// /// Verifies the Pearson hashes in a SendFile struct against a provided salt list.
+// /// This function calculates the expected hashes based on the intray_send_time and gpg_encrypted_intray_file fields
+// /// of the SendFile and the provided salt_list. It then compares the calculated hashes to the
+// /// intray_hash_list field of the SendFile.
+// ///
+// /// # Arguments
+// ///
+// /// * `send_file`: The SendFile to verify.
+// /// * `salt_list`: The list of salts to use for hash calculation.
+// ///
+// /// # Returns
+// ///
+// /// * `bool`: true if all hashes match, false otherwise.
+// fn verify_intray_sendfile_hashes(send_file: &SendFile, salt_list: &[u128]) -> bool {
+//     // 1. Handle Optional Fields
+//     let intray_send_time = match send_file.intray_send_time {
+//         Some(time) => time,
+//         None => {
+//             debug_log!("verify_intray_sendfile_hashes(): intray_send_time is None. Returning false.");
+//             return false;
+//         }
+//     };
+
+//     let intray_hash_list = match &send_file.intray_hash_list {
+//         Some(list) => list,
+//         None => {
+//             debug_log!("verify_intray_sendfile_hashes(): intray_hash_list is None. Returning false.");
+//             return false;
+//         }
+//     };    
+
+//     let gpg_encrypted_intray_file = match &send_file.gpg_encrypted_intray_file {
+//         Some(file) => file,
+//         None => {
+//             debug_log!("verify_intray_sendfile_hashes(): gpg_encrypted_intray_file is None. Returning false.");
+//             return false;
+//         }
+//     };
+
+//     // 2. Prepare data for hashing.
+//     let mut data_to_hash = Vec::new();
+//     data_to_hash.extend_from_slice(&intray_send_time.to_be_bytes());
+//     data_to_hash.extend_from_slice(gpg_encrypted_intray_file); // Use the extracted value
+
+//     // 3. Hashing and comparison.
+//     for (i, salt) in salt_list.iter().enumerate() {
+//         let mut salted_data = data_to_hash.clone();
+//         salted_data.extend_from_slice(&salt.to_be_bytes());
+
+//         match pearson_hash_base(&salted_data) {
+//             Ok(calculated_hash) => {
+//                 if calculated_hash != intray_hash_list[i] {
+//                     debug_log!("verify_intray_sendfile_hashes(): Hash mismatch at index {}", i);
+//                     return false;
+//                 }
+//             }
+//             Err(e) => {
+//                 debug_log!("verify_intray_sendfile_hashes(): Error calculating Pearson hash: {}", e);
+//                 return false;
+//             }
+//         }
+//     }
+
+//     true // All hashes match
+// }
+
 
 // fn verify_intray_sendfile_hashes(send_file: &SendFile, salt_list: &[u128]) -> bool {
 //     // 1. Handle the case where intray_hash_list is None
@@ -4902,12 +4975,12 @@ fn is_prime(n: u8) -> bool {
 /// 1. intray_send_time (for freshness check)
 /// 2. intray_hash_list (for intact-ness and author-ness)
 /// 3. gpg_encrypted_file_contents (the content)
-fn send_toml_file_to_intray(
+fn send_file_toml_to_rc_intray(
     file_struct_to_send: &SendFile, 
     target_addr: SocketAddr, 
     port: u16,
 ) -> Result<(), ThisProjectError> {
-    debug_log!("\nStarting send_toml_file_to_intray");
+    debug_log!("\nStarting send_file_toml_to_rc_intray");
 
     // 1. Serialize SendFile (Manually)
     let mut serialized_send_file: Vec<u8> = Vec::new();
@@ -4938,13 +5011,13 @@ fn send_toml_file_to_intray(
     Ok(())
 }
 
-// fn send_toml_file_to_intray(
+// fn send_file_toml_to_rc_intray(
 //     file_struct_to_send: &SendFile, 
 //     target_addr: SocketAddr, 
 //     port: u16,
 // ) -> Result<(), ThisProjectError> {
 //     debug_log("\n");
-//     debug_log("Starting send_toml_file_to_intray");
+//     debug_log("Starting send_file_toml_to_rc_intray");
 
 //     // 1. Serialize SendFile (Manually)
 //     let mut serialized_send_file: Vec<u8> = Vec::new();
@@ -5983,15 +6056,36 @@ fn handle_local_owner_desk(
                         continue;
                     }
 
+                    // // --- 5 Hash-Check for SendFile Struct ---
+                    // // HLOD 5 Drop packet when fail check
+                    // if !verify_intray_sendfile_hashes( // make this function TODO
+                    //     &incoming_intray_file_struct, 
+                    //     &local_owner_desk_setup_data.remote_collaborator_salt_list,
+                    // ) {
+                    //     debug_log("HLOD 5: SendFile Struct hash verification failed. Discarding signal.");
+                    //     continue; // Discard the signal and continue listening
+                    // }
+                    
+                    
                     // --- 5 Hash-Check for SendFile Struct ---
                     // HLOD 5 Drop packet when fail check
-                    if !verify_intray_sendfile_hashes( // make this function TODO
-                        &incoming_intray_file_struct, 
+                    match calculate_and_verify_sendfile_hashes(
+                        &incoming_intray_file_struct,
                         &local_owner_desk_setup_data.remote_collaborator_salt_list,
                     ) {
-                        debug_log("HLOD 5: SendFile Struct hash verification failed. Discarding signal.");
-                        continue; // Discard the signal and continue listening
+                        Ok((calculated_hashes, all_hashes_match)) => {
+                            if !all_hashes_match {
+                                debug_log("HLOD 5: SendFile Struct hash verification failed. Discarding signal.");
+                                continue; // Discard the signal and continue listening
+                            }
+                            // If all hashes match, you can use the calculated_hashes for further processing if needed
+                        }
+                        Err(e) => {
+                            debug_log(&format!("Error calculating and verifying SendFile hashes: {}", e));
+                            continue; // Discard the signal and continue listening
+                        }
                     }
+                    
                     
                     // --- 6. HLOD decypt ---
                     // 6.1  Handle the Option<Vec<u8>> for gpg_encrypted_intray_file
@@ -6196,6 +6290,166 @@ fn calculate_pearson_hashes(data_sets: &[&[u8]]) -> Result<Vec<u8>, ThisProjectE
     }
     Ok(hashes)
 }
+
+
+/// Calculates the Pearson hashes for a SendFile based on the provided data and salt list,
+/// and verifies them against the hashes stored in the SendFile struct.
+///
+/// # Arguments
+///
+/// * `send_file`: The SendFile to verify.
+/// * `salt_list`: The list of salts to use for hash calculation.
+///
+/// # Returns
+///
+/// * `Result<(Vec<u128>, bool), String>`: A tuple containing the calculated hashes and a boolean indicating whether they match the stored hashes, or an error string.
+fn calculate_and_verify_sendfile_hashes(
+    send_file: &SendFile,
+    salt_list: &[u128],
+) -> Result<(Vec<u8>, bool), String> {
+    // 1. Handle Optional Fields
+    let intray_send_time = match send_file.intray_send_time {
+        Some(time) => time,
+        None => {
+            return Err("intray_send_time is None".to_string());
+        }
+    };
+
+    let intray_hash_list = match &send_file.intray_hash_list {
+        Some(list) => list,
+        None => {
+            return Err("intray_hash_list is None".to_string());
+        }
+    };
+
+    let gpg_encrypted_intray_file = match &send_file.gpg_encrypted_intray_file {
+        Some(file) => file,
+        None => {
+            return Err("gpg_encrypted_intray_file is None".to_string());
+        }
+    };
+
+    // 2. Prepare data for hashing.
+    let mut data_to_hash = Vec::new();
+    data_to_hash.extend_from_slice(&intray_send_time.to_be_bytes());
+    data_to_hash.extend_from_slice(gpg_encrypted_intray_file);
+
+    // 3. Hashing and comparison.
+    let mut calculated_hashes = Vec::with_capacity(salt_list.len());
+    let mut all_hashes_match = true;
+
+    for (i, salt) in salt_list.iter().enumerate() {
+        let mut salted_data = data_to_hash.clone();
+        salted_data.extend_from_slice(&salt.to_be_bytes());
+
+        match pearson_hash_base(&salted_data) {
+            Ok(calculated_hash) => {
+                let pearsonhash: u8 = calculated_hash
+                    .try_into()
+                    .map_err(|_| "Error converting u8 slice to u128".to_string())?;
+                calculated_hashes.push(pearsonhash);
+
+                if pearsonhash != intray_hash_list[i].into() {
+                    all_hashes_match = false;
+                }
+            }
+            Err(e) => {
+                return Err(format!("Error calculating Pearson hash: {}", e));
+            }
+        }
+    }
+
+    Ok((calculated_hashes, all_hashes_match))
+}
+
+
+// /// Calculates the Pearson hashes for a SendFile based on the provided data and salt list.
+// ///
+// /// # Arguments
+// ///
+// /// * `intray_send_time`: The SendFile's intray_intray_send_time as a u128.
+// /// * `gpg_encrypted_intray_file`: The gpg_encrypted_intray_file bytes.
+// /// * `salt_list`: The list of salts to use for hash calculation.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<Vec<u128>, String>`: A vector of calculated hashes or an error string.
+// fn calculate_sendfile_hashes(
+//     intray_send_time: u128,
+//     gpg_encrypted_intray_file: &[u8],
+//     send_file: &SendFile
+//     salt_list: &[u128],
+// ) -> Result<Vec<u128>, String> {
+//     let mut hashes = Vec::with_capacity(salt_list.len());
+
+//     for salt in salt_list {
+//         let mut data_to_hash = Vec::new();
+//         data_to_hash.extend_from_slice(&intray_send_time.to_be_bytes());
+//         data_to_hash.extend_from_slice(gpg_encrypted_intray_file);
+//         data_to_hash.extend_from_slice(&salt.to_be_bytes());
+
+//         match pearson_hash_base(&data_to_hash) {
+//             Ok(calculated_hash) => {
+//                 // Convert the calculated hash from u8 to u128
+//                 let hash_u128: u128 = calculated_hash
+//                     .try_into()
+//                     .map_err(|_| "Error converting u8 slice to u128")?;
+//                 hashes.push(hash_u128); // Push the correct type
+//             }
+//             Err(e) => {
+//                 return Err(format!("Error calculating Pearson hash: {}", e));
+//             }
+//         }
+//     }
+
+//     Ok(hashes)
+// }
+
+// /// Verifies the Pearson hashes in a SendFile struct against a provided salt list.
+// /// This function uses the `calculate_sendfile_hashes` function to compute the expected hashes
+// /// and then compares them to the existing hashes in the SendFile.
+// ///
+// /// # Arguments
+// ///
+// /// * `send_file`: The SendFile to verify.
+// /// * `salt_list`: The list of salts to use for hash calculation.
+// ///
+// /// # Returns
+// ///
+// /// * `bool`: true if all hashes match, false otherwise.
+// fn verify_intray_sendfile_hashes(send_file: &SendFile, salt_list: &[u128]) -> bool {
+//     // 1. Handle Optional Fields (as before)
+//     // ...
+
+//     // 2. Calculate Expected Hashes
+//     let calculated_hashes = match calculate_sendfile_hashes(
+//         intray_send_time, 
+//         gpg_encrypted_intray_file,
+//         salt_list,
+//     ) {
+//         Ok(hashes) => hashes,
+//         Err(e) => {
+//             debug_log!("verify_intray_sendfile_hashes(): Error calculating hashes: {}", e);
+//             return false;
+//         }
+//     };
+
+//     // 3. Compare Calculated Hashes to Existing Hashes
+//     if calculated_hashes.len() != intray_hash_list.len() {
+//         debug_log!("verify_intray_sendfile_hashes(): Number of hashes mismatch.");
+//         return false;
+//     }
+
+//     for (i, (calculated_hash, existing_hash)) in calculated_hashes.iter().zip(intray_hash_list).enumerate() {
+//         if calculated_hash != existing_hash {
+//             debug_log!("verify_intray_sendfile_hashes(): Hash mismatch at index {}", i);
+//             return false;
+//         }
+//     }
+
+//     true // All hashes match
+// }
+
 
 /// Vanilla Deserilize json signal
 /// The idea of the salt-hash or salt-checksum
@@ -7067,7 +7321,7 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                     
                     /*
-                    send_toml_file_to_intray(
+                    send_file_toml_to_rc_intray(
                         file_path: &PathBuf, 
                         target_addr: SocketAddr, 
                         port: u16,
@@ -7149,34 +7403,59 @@ fn handle_remote_collaborator_meetingroom_desk(
                                 "HRCD 4.2, 4.3.1, 4.3.2 done gpg wrapper"
                             );
                             
-                            // 4.4. Calculate SendFile Struct Hashes (Using Collaborator's Salts)
-                            // Change the type to hold Vec<u8>
-                            let mut sendfile_struct_data_to_hash: Vec<Vec<u8>> = Vec::new();
-                            let sendtime_bytes = intray_send_time.to_be_bytes();
-                            sendfile_struct_data_to_hash.push(sendtime_bytes.to_vec()); // Push a Vec<u8>
-                            sendfile_struct_data_to_hash.push(file_bytes2send.clone()); 
+                            // // 4.4. Calculate SendFile Struct Hashes (Using Collaborator's Salts)
+                            // // Change the type to hold Vec<u8>
+                            // let mut sendfile_struct_data_to_hash: Vec<Vec<u8>> = Vec::new();
+                            // let sendtime_bytes = intray_send_time.to_be_bytes();
+                            // sendfile_struct_data_to_hash.push(sendtime_bytes.to_vec()); // Push a Vec<u8>
+                            // sendfile_struct_data_to_hash.push(file_bytes2send.clone()); 
 
-                            for salt in &room_sync_input.local_user_salt_list {
-                                // Create a new Vec<u8> for each salt
-                                let salt_bytes = salt.to_be_bytes().to_vec(); 
-                                sendfile_struct_data_to_hash.push(salt_bytes); // Push the owned Vec<u8>
+                            // for salt in &room_sync_input.local_user_salt_list {
+                            //     // Create a new Vec<u8> for each salt
+                            //     let salt_bytes = salt.to_be_bytes().to_vec(); 
+                            //     sendfile_struct_data_to_hash.push(salt_bytes); // Push the owned Vec<u8>
+                            // }
+
+                            // // 4.5. hashing
+                            // // Convert to &[u8] slices for the hashing function
+                            // let intray_hash_list = calculate_pearson_hashes(
+                            //     &sendfile_struct_data_to_hash.iter().map(|v| v.as_slice()).collect::<Vec<&[u8]>>() // Specify type here
+                            // )?;
+                            
+                            // debug_log!(
+                            //     "HRCD 4.5 intray_hash_list {:?}",
+                            //     intray_hash_list   
+                            // );
+                                                        // 4.6. Create SendFile Struct 
+                            let send_file = SendFile {
+                                intray_send_time: Some(intray_send_time),
+                                gpg_encrypted_intray_file: Some(file_bytes2send.clone()),
+                                intray_hash_list: None,
+                            }; 
+
+                            // 4.5. hashing HRCD
+                            let mut calculated_hashes = Vec::new();
+                            match calculate_and_verify_sendfile_hashes(
+                                &send_file,
+                                &room_sync_input.local_user_salt_list,
+                            ) {
+                                Ok((hashes, all_hashes_match)) => {
+                                    if !all_hashes_match {
+                                        debug_log("HLOD 5: SendFile Struct hash verification failed. Discarding signal.");
+                                        continue; // Discard the signal and continue listening
+                                    }
+                                    calculated_hashes = hashes;
+                                }
+                                Err(e) => {
+                                    debug_log(&format!("Error calculating and verifying SendFile hashes: {}", e));
+                                    continue; // Discard the signal and continue listening
+                                }
                             }
 
-                            // 4.5. hashing
-                            // Convert to &[u8] slices for the hashing function
-                            let intray_hash_list = calculate_pearson_hashes(
-                                &sendfile_struct_data_to_hash.iter().map(|v| v.as_slice()).collect::<Vec<&[u8]>>() // Specify type here
-                            )?;
-                            
-                            debug_log!(
-                                "HRCD 4.5 intray_hash_list {:?}",
-                                intray_hash_list   
-                            );
-                            
                             
                             // 4.6 set_prefail_flag_via_hash__for_sendfile
                             set_prefail_flag_via_hash__for_sendfile(
-                                &intray_hash_list,
+                                &calculated_hashes,
                                 &room_sync_input.remote_collaborator_name
                                 );
                             
@@ -7224,16 +7503,16 @@ fn handle_remote_collaborator_meetingroom_desk(
                             // let intray_hash_list = calculate_pearson_hashes_parallel(sendfile_struct_data_to_hash)?;
 
                             // 4.6. Create SendFile Struct 
-                            let send_file = SendFile {
+                            let sendfile_final = SendFile {
                                 intray_send_time: Some(intray_send_time),
                                 gpg_encrypted_intray_file: Some(file_bytes2send),
-                                intray_hash_list: Some(intray_hash_list),
+                                intray_hash_list: Some(calculated_hashes),
                             }; 
                             
                             // --- 4.7 Send file: send UDP to intray ---
                             // 4.7.1 Send file
-                            let file_send_result = send_toml_file_to_intray(
-                                &send_file, 
+                            let file_send_result = send_file_toml_to_rc_intray(
+                                &sendfile_final, 
                                 src,
                                 room_sync_input.remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip,
                             );
@@ -7242,7 +7521,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                                 "HRCD 4.7 file_send_result {:?}",
                                 file_send_result   
                             );
-                            // let file_send_result = send_toml_file_to_intray(
+                            // let file_send_result = send_file_toml_to_rc_intray(
                             //     &file_path,
                             //     src,
                             //     room_sync_input.remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip,
