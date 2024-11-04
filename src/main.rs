@@ -6363,6 +6363,14 @@ fn calculate_and_verify_sendfile_hashes(
         all_hashes_match = false;
     }
 
+    debug_log!(
+        "HLOD-InTray calculate_and_verify_sendfile_hashes: salt_list-{:?}, calculated_hashes-{:?}, all_hashes_match-{:?}", 
+        salt_list,
+        calculated_hashes,
+        all_hashes_match
+    ); 
+
+    
     Ok((calculated_hashes, all_hashes_match))
 }
 
