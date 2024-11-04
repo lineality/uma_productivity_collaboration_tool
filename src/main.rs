@@ -5736,10 +5736,7 @@ fn handle_local_owner_desk(
         ipv6_addr_1 = Some(*addr); // Dereference and clone the IPv6 address
         ipv6_addr_2 = Some(*addr);
     }
-        
-    
-     
-        
+
     loop { // 1. start overall loop to restart whole desk
         let remote_collaborator_name_for_thread = remote_collaborator_name.clone();
         let salt_list_1_drone_clone = salt_list_1.clone();
@@ -5797,9 +5794,11 @@ fn handle_local_owner_desk(
                 }
                 // break loop loop?
                 if should_halt_uma() {
-                    debug_log!("should_halt_uma(), exiting Uma in handle_local_owner_desk()");
+                    debug_log!("HLOD should_halt_uma(), exiting Uma in handle_local_owner_desk()");
                     break;
                 }
+                
+                debug_log!("\nHLOD Drone Loop...thanks for coming around! Y'all come back now!\n");
 
                 // 1.2 Refresh Timestamp
                 // Get/Set latest_received_file_timestamp
@@ -5834,31 +5833,16 @@ fn handle_local_owner_desk(
                         false,
                     );
                 }
-                
-                
-                // ->(loop-repeat)->
-                
             } // end drone loop (ready-signals)
         }); // end ready_thread
 
-        ///////////////////////////
+        //////////////////////////////
         // 3. InTrayListerLoop Start
-        /////////////////////////
-        /*
-        7. Listen at in-box for file for that event:
-            Alice waits N-miliseconds. If no reply, end thread.
-        if there is a reply to that event unqiue ID:
-        - gpg verify input (if not, kill thread)
-        - save .toml etc if ok (if not, end thread)
-        - make another echo_send-thread (repeat)
-        - if ok: send 'gotit!!' signal
-        - update 'last updated' file log (maybe append a timestamp stub file to a dir)
-        - end thread
-        */
+        ////////////////////////////
 
         // 3.1 hash_set_session_nonce = HashSet::new() as protection against replay attacks Create a HashSet to store received hashes
         let mut hash_set_session_nonce = HashSet::new();  // Create a HashSet to store received hashes
-        
+
         // --- 2. Enter In-Try-loop ---
         // restarts if crashes
         // enter main loop (to handle in-tray Send-File, gotit signl sending, 'echo' ready-signal sending)
@@ -5873,9 +5857,8 @@ fn handle_local_owner_desk(
                 break;
             }
 
-            
             // --- 3.4 Create UDP intray socket ---
-            debug_log("HRCD Creating intray socket listening UDP...");
+            debug_log("HLOD Creating intray socket listening UDP...");
             let intray_socket = create_udp_socket(
                 &local_owner_desk_setup_data.local_user_ipv6_addr_list,
                 local_owner_desk_setup_data.localuser_intray_port__yourdesk_youlisten__bind_yourlocal_ip,
@@ -5895,7 +5878,12 @@ fn handle_local_owner_desk(
             
                 match intray_socket.recv_from(&mut buf) {
                     Ok((amt, src)) => {
-
+                    debug_log!(
+                        "HLOD-InTray match intray_socket.recv_from(&mut buf) Ok((amt, src)) {:?} {:?}", 
+                        amt,
+                        src
+                    );
+                    
                     // Check for exit-signal:
                     if should_halt_uma() {
                         debug_log!(
@@ -5926,7 +5914,6 @@ fn handle_local_owner_desk(
                         hex_string
                     );
 
-                    
                     // --- 3.5.3 Deserialize the SendFile signal ---
                     // let incoming_intray_file_struct: SendFile = deserialize_intray_send_file_struct(&clearsigned_data)?;  // Deserialize from clearsigned data
                     
@@ -5945,57 +5932,54 @@ fn handle_local_owner_desk(
                         }
                     };
                     
-                    
                     debug_log("##HLOD-InTray## starting checks(hound's tooth, they say) 2.4");
-                    
                     
                     // --- 3.2 timestamp freshness checks ---
                     let current_timestamp = get_current_unix_timestamp();
                     
                     debug_log!(
-                        "HRCD 2.4.1 check timestamp freshness checks: current_timestamp -> {:?}",
+                        "HLOD 2.4.1 check timestamp freshness checks: current_timestamp -> {:?}",
                         current_timestamp
                     );
 
                     // 3.2.1 No Future Dated Requests
                     if incoming_intray_file_struct.intray_send_time > Some(current_timestamp + 5) { // Allow for some clock skew (5 seconds)
-                        debug_log!("HRCD 2.4.2 check: Received future-dated timestamp. Discarding.");
+                        debug_log!("HLOD 2.4.2 check: Received future-dated timestamp. Discarding.");
                         continue;
                     }
 
                     // 3.2.2 No Requests Older Than ~10 sec
                     if current_timestamp - 10 > incoming_intray_file_struct.intray_send_time.expect("REASON") {
-                        debug_log!("HRCD 2.4.3 check: Received outdated timestamp (older than 10 seconds). Discarding.");
+                        debug_log!("HLOD 2.4.3 check: Received outdated timestamp (older than 10 seconds). Discarding.");
                         continue;
                     }
 
                     // 3.2.3 Check .intray_hash_list hash
                     if incoming_intray_file_struct.intray_hash_list.is_none() {
-                        debug_log("HRCD 2.4.4 Check: intray_hash_list hash field is empty. Drop packet and keep going.");
+                        debug_log("HLOD 2.4.4 Check: intray_hash_list hash field is empty. Drop packet and keep going.");
                         continue; // Drop packet: Restart the loop to listen for the next signal
                     }
 
                     // 3.2.4 Check .intray_send_time timestamp
                     if incoming_intray_file_struct.intray_send_time.is_none() {
-                        debug_log("HRCD 2.4.5 Check: intray_send_time ready signal sent-at timestamp field is empty. Drop packet and keep going.");
+                        debug_log("HLOD 2.4.5 Check: intray_send_time ready signal sent-at timestamp field is empty. Drop packet and keep going.");
                         continue; // Drop packet: Restart the loop to listen for the next signal
                     }
 
-
                     // --- 4 Check / Add Hash-Nonce for per-session ready-signals ---
                     // ...e.g. guarding against the few seconds of expiration-gap
-                    // HRCD 4.1 Hashes
+                    // HLOD 4.1 Hashes
                     let incoming_intray_file_struct_hash_vec = incoming_intray_file_struct.intray_hash_list.clone().expect("intray_hash_list is none");
 
                     // 4.2
                     if !incoming_intray_file_struct_hash_vec.is_empty() {
                         if hash_set_session_nonce.contains(&incoming_intray_file_struct_hash_vec) {
-                            debug_log!("HRCD 4.2 quasi nonce check: Duplicate SendFile received (hash match). Discarding.");
+                            debug_log!("HLOD 4.2 quasi nonce check: Duplicate SendFile received (hash match). Discarding.");
                             continue; // Discard the duplicate signal
                         }
                         hash_set_session_nonce.insert(incoming_intray_file_struct_hash_vec); // Add hash to the set
                     } else {
-                        debug_log!("HRCD 4.2 quasi nonce check: SendFile received without hashes. Discarding."); // Or handle differently
+                        debug_log!("HLOD 4.2 quasi nonce check: SendFile received without hashes. Discarding."); // Or handle differently
                         continue;
                     }
 
@@ -6005,7 +5989,7 @@ fn handle_local_owner_desk(
                         &incoming_intray_file_struct, 
                         &local_owner_desk_setup_data.remote_collaborator_salt_list,
                     ) {
-                        debug_log("HRCD 5: SendFile Struct hash verification failed. Discarding signal.");
+                        debug_log("HLOD 5: SendFile Struct hash verification failed. Discarding signal.");
                         continue; // Discard the signal and continue listening
                     }
                     
@@ -6018,7 +6002,11 @@ fn handle_local_owner_desk(
                             continue; // Or handle the None case differently (e.g., return an error)
                         }
                     };
-                
+                    debug_log!(
+                        "HRCD 6.1 still_encrypted_file_blob -> {:?}",
+                        still_encrypted_file_blob
+                    );
+                    
                     // 6.2 *Now* decrypt the data
                     let decrypted_clearsignfile_data = match gpg_decrypt_from_bytes(
                         still_encrypted_file_blob, 
@@ -6030,7 +6018,11 @@ fn handle_local_owner_desk(
                             continue; // Skip to the next packet if decryption fails
                         }
                     };
-                
+                    debug_log!(
+                        "HRCD 6.2 decrypt the data decrypted_clearsignfile_data -> {:?}",
+                        decrypted_clearsignfile_data
+                    );
+
                     // 6.3 Extract the clearsigned data
                     let extacted_clearsigned_data = match extract_clearsign_data(&decrypted_clearsignfile_data) {
                         Ok(data) => data,
@@ -6039,13 +6031,10 @@ fn handle_local_owner_desk(
                             continue;
                         }
                     };
-
                     debug_log!(
                         "HRCD 6.3 extacted_clearsigned_data -> {:?}",
                         extacted_clearsigned_data
                     );
-                    
-                    
                     
                     // 7 Save File into Uma Folder Structure
                     // let received_toml: Value = toml::from_slice(&extacted_clearsigned_data)?;
@@ -6059,7 +6048,6 @@ fn handle_local_owner_desk(
                     current_path = project_graph_data/team_channels/{}/instant_message_browser/
                     
                     let message_path = get_next_message_file_path(current_path, local_owner_user); 
-
                     */
             
 
@@ -6069,9 +6057,7 @@ fn handle_local_owner_desk(
                     
                     // // TODO extract 
                     // let recieved_file_timestamp = ...read updated_at field from .toml (bytes?)
-                    
 
-                    
                     // Extract timestamp
                     let recieved_file_timestamp = match extract_updated_at_timestamp(
                         &extacted_clearsigned_data
@@ -6084,7 +6070,8 @@ fn handle_local_owner_desk(
                     };
                     
                     // Now you have the recieved_file_timestamp timestamp
-                    println!("Received file updated at: {}", recieved_file_timestamp);
+                    debug_log!("Received file updated at: {}", recieved_file_timestamp);
+                    // println!("Received file updated at: {}", recieved_file_timestamp);
                     
                     // 1.3 Send Echo Ready Signal (using a function)        
                     if let Some(addr_2) = ipv6_addr_2 {
