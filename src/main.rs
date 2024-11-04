@@ -6291,9 +6291,8 @@ fn calculate_pearson_hashes(data_sets: &[&[u8]]) -> Result<Vec<u8>, ThisProjectE
     Ok(hashes)
 }
 
-
 /// Calculates the Pearson hashes for a SendFile based on the provided data and salt list,
-/// and verifies them against the hashes stored in the SendFile struct.
+/// and verifies them against the hashes stored in the SendFile struct, if any.
 ///
 /// # Arguments
 ///
@@ -6302,7 +6301,7 @@ fn calculate_pearson_hashes(data_sets: &[&[u8]]) -> Result<Vec<u8>, ThisProjectE
 ///
 /// # Returns
 ///
-/// * `Result<(Vec<u128>, bool), String>`: A tuple containing the calculated hashes and a boolean indicating whether they match the stored hashes, or an error string.
+/// * `Result<(Vec<u8>, bool), String>`: A tuple containing the calculated hashes and a boolean indicating whether they match the stored hashes (if any), or an error string.
 fn calculate_and_verify_sendfile_hashes(
     send_file: &SendFile,
     salt_list: &[u128],
@@ -6312,13 +6311,6 @@ fn calculate_and_verify_sendfile_hashes(
         Some(time) => time,
         None => {
             return Err("intray_send_time is None".to_string());
-        }
-    };
-
-    let intray_hash_list = match &send_file.intray_hash_list {
-        Some(list) => list,
-        None => {
-            return Err("intray_hash_list is None".to_string());
         }
     };
 
@@ -6338,7 +6330,7 @@ fn calculate_and_verify_sendfile_hashes(
     let mut calculated_hashes = Vec::with_capacity(salt_list.len());
     let mut all_hashes_match = true;
 
-    for (i, salt) in salt_list.iter().enumerate() {
+    for salt in salt_list {
         let mut salted_data = data_to_hash.clone();
         salted_data.extend_from_slice(&salt.to_be_bytes());
 
@@ -6346,12 +6338,8 @@ fn calculate_and_verify_sendfile_hashes(
             Ok(calculated_hash) => {
                 let pearsonhash: u8 = calculated_hash
                     .try_into()
-                    .map_err(|_| "Error converting u8 slice to u128".to_string())?;
+                    .map_err(|_| "Error converting u8 slice to u8".to_string())?;
                 calculated_hashes.push(pearsonhash);
-
-                if pearsonhash != intray_hash_list[i].into() {
-                    all_hashes_match = false;
-                }
             }
             Err(e) => {
                 return Err(format!("Error calculating Pearson hash: {}", e));
@@ -6359,8 +6347,88 @@ fn calculate_and_verify_sendfile_hashes(
         }
     }
 
+    // Compare calculated hashes with stored hashes, if any.
+    if let Some(intray_hash_list) = &send_file.intray_hash_list {
+        if calculated_hashes.len() != intray_hash_list.len() {
+            all_hashes_match = false;
+        } else {
+            for (i, &hash) in intray_hash_list.iter().enumerate() {
+                if calculated_hashes[i] != hash.into() {
+                    all_hashes_match = false;
+                    break;
+                }
+            }
+        }
+    } else {
+        all_hashes_match = false;
+    }
+
     Ok((calculated_hashes, all_hashes_match))
 }
+
+
+// /// Calculates the Pearson hashes for a SendFile based on the provided data and salt list,
+// /// and verifies them against the hashes stored in the SendFile struct.
+// ///
+// /// # Arguments
+// ///
+// /// * `send_file`: The SendFile to verify.
+// /// * `salt_list`: The list of salts to use for hash calculation.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<(Vec<u128>, bool), String>`: A tuple containing the calculated hashes and a boolean indicating whether they match the stored hashes, or an error string.
+// fn calculate_and_verify_sendfile_hashes(
+//     send_file: &SendFile,
+//     salt_list: &[u128],
+// ) -> Result<(Vec<u8>, bool), String> {
+//     // 1. Handle Optional Fields
+//     let intray_send_time = match send_file.intray_send_time {
+//         Some(time) => time,
+//         None => {
+//             return Err("intray_send_time is None".to_string());
+//         }
+//     };
+
+//     let gpg_encrypted_intray_file = match &send_file.gpg_encrypted_intray_file {
+//         Some(file) => file,
+//         None => {
+//             return Err("gpg_encrypted_intray_file is None".to_string());
+//         }
+//     };
+
+//     // 2. Prepare data for hashing.
+//     let mut data_to_hash = Vec::new();
+//     data_to_hash.extend_from_slice(&intray_send_time.to_be_bytes());
+//     data_to_hash.extend_from_slice(gpg_encrypted_intray_file);
+
+//     // 3. Hashing and comparison.
+//     let mut calculated_hashes = Vec::with_capacity(salt_list.len());
+//     let mut all_hashes_match = true;
+
+//     for (i, salt) in salt_list.iter().enumerate() {
+//         let mut salted_data = data_to_hash.clone();
+//         salted_data.extend_from_slice(&salt.to_be_bytes());
+
+//         match pearson_hash_base(&salted_data) {
+//             Ok(calculated_hash) => {
+//                 let pearsonhash: u8 = calculated_hash
+//                     .try_into()
+//                     .map_err(|_| "Error converting u8 slice to u128".to_string())?;
+//                 calculated_hashes.push(pearsonhash);
+
+//                 if pearsonhash != intray_hash_list[i].into() {
+//                     all_hashes_match = false;
+//                 }
+//             }
+//             Err(e) => {
+//                 return Err(format!("Error calculating Pearson hash: {}", e));
+//             }
+//         }
+//     }
+
+//     Ok((calculated_hashes, all_hashes_match))
+// }
 
 
 // /// Calculates the Pearson hashes for a SendFile based on the provided data and salt list.
