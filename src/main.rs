@@ -3205,30 +3205,117 @@ fn gpg_decrypt_from_bytes(data: &[u8], your_gpg_key: &str) -> Result<Vec<u8>, Th
     }
 }
 
-// use std::io::Error;
+// // use std::io::Error;
+// fn extract_clearsign_data(clearsigned_data: &[u8]) -> Result<Vec<u8>, ThisProjectError> {
+//     let clearsigned_string = String::from_utf8_lossy(clearsigned_data);
+
+//     // 1. Split the clearsigned message into its components (original data and signature).
+//     let parts: Vec<&str> = clearsigned_string
+//         .split("-----BEGIN PGP SIGNATURE-----")
+//         .collect();
+
+//     // 2. Handle cases where the signature is missing or malformed.
+//     if parts.len() < 2 {
+//         return Err(ThisProjectError::GpgError("Invalid clearsigned data format: Missing signature".into()));
+//     }
+
+//     // 3. Extract and return the data from before the signature.
+//     let original_data = parts[0].trim().as_bytes().to_vec(); // Convert to Vec<u8>
+    
+//     debug_log!(
+//         "extract_clearsign_data original_data: {:?}",
+//         original_data   
+//     );
+
+//     Ok(original_data)
+// }
+
+// fn extract_clearsign_data(clearsigned_data: &[u8]) -> Result<Vec<u8>, ThisProjectError> {
+//     let clearsigned_string = String::from_utf8_lossy(clearsigned_data);
+
+//     // Split at the beginning of the signature
+//     let parts: Vec<&str> = clearsigned_string
+//         .split("-----BEGIN PGP SIGNATURE-----")
+//         .collect();
+
+//     if parts.len() < 2 {
+//         return Err(ThisProjectError::GpgError("Invalid clearsigned data: Missing signature".into()));
+//     }
+
+//     // Extract the message part (before the signature)
+//     let message_part = parts[0];
+
+//     // Find the first non-whitespace character
+//     let start_index = message_part
+//         .find(|c: char| !c.is_whitespace())
+//         .unwrap_or(0); // Default to 0 if no non-whitespace is found
+
+//     // Extract the actual message content
+//     let message_content = &message_part[start_index..];
+//     // and Trim leading and trailing whitespace from the extracted message:
+//     let trimmed_message = message_content.trim();
+
+
+//     Ok(trimmed_message.as_bytes().to_vec())
+// }
+
 fn extract_clearsign_data(clearsigned_data: &[u8]) -> Result<Vec<u8>, ThisProjectError> {
     let clearsigned_string = String::from_utf8_lossy(clearsigned_data);
 
-    // 1. Split the clearsigned message into its components (original data and signature).
+    // Split at the beginning of the signature
     let parts: Vec<&str> = clearsigned_string
         .split("-----BEGIN PGP SIGNATURE-----")
         .collect();
 
-    // 2. Handle cases where the signature is missing or malformed.
     if parts.len() < 2 {
-        return Err(ThisProjectError::GpgError("Invalid clearsigned data format: Missing signature".into()));
+        return Err(ThisProjectError::GpgError("Invalid clearsigned data: Missing signature".into()));
     }
 
-    // 3. Extract and return the data from before the signature.
-    let original_data = parts[0].trim().as_bytes().to_vec(); // Convert to Vec<u8>
-    
-    debug_log!(
-        "extract_clearsign_data original_data: {:?}",
-        original_data   
-    );
+    // Extract the message part (before the signature)
+    let message_part = parts[0];
 
-    Ok(original_data)
+    // Split into lines and remove the first 3 lines
+    let message_lines: Vec<&str> = message_part
+        .lines()
+        .skip(3)
+        .collect();
+
+    // Join the remaining lines
+    let message_content = message_lines.join("\n");
+
+    Ok(message_content.as_bytes().to_vec())
 }
+
+// fn extract_clearsign_data(clearsigned_data: &[u8]) -> Result<Vec<u8>, ThisProjectError> {
+//     let clearsigned_string = String::from_utf8_lossy(clearsigned_data);
+
+//     // Split at the beginning of the signature
+//     let parts: Vec<&str> = clearsigned_string
+//         .split("-----BEGIN PGP SIGNATURE-----")
+//         .collect();
+
+//     if parts.len() < 2 {
+//         return Err(ThisProjectError::GpgError("Invalid clearsigned data: Missing signature".into()));
+//     }
+
+//     // Extract the message part (before the signature)
+//     let message_part = parts[0];
+
+//     // Split the message part by lines and skip the PGP header lines
+//     let message_lines: Vec<&str> = message_part
+//         .lines()
+//         .skip_while(|line| 
+//             line.starts_with("-----BEGIN PGP SIGNED MESSAGE-----") || 
+//             line.starts_with("Hash:") || 
+//             line.trim().is_empty()
+//         )
+//         .collect();
+
+//     // Join the remaining lines
+//     let message_content = message_lines.join("\n");
+
+//     Ok(message_content.as_bytes().to_vec())
+// }
 
 /// Prepares file contents for secure sending by clearsigning and encrypting them.
 ///
