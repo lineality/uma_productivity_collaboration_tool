@@ -3100,106 +3100,63 @@ fn gpg_encrypt_to_bytes(data: &[u8], recipient_public_key: &str) -> Result<Vec<u
     }
 }
 
-// // use std::process::{Command, Stdio};
-// fn gpg_decrypt_from_bytes(data: &[u8], your_gpg_key: &str) -> Result<Vec<u8>, ThisProjectError> {
-//     debug_log("gpg_decrypt_from_bytes()-1. Start! ");
-    
-//     // 1. Create a temporary file for your private key.  DO NOT store private keys in memory.
-//     let mut temp_key_file = std::env::temp_dir();
-//     temp_key_file.push("uma_temp_privkey.asc"); // A distinct name from the public key file
-//     std::fs::write(&temp_key_file, your_gpg_key)?;  // Write your key to the file
-
-//     debug_log!("gpg_decrypt_from_bytes()-2. temp_key_file path {:?}", temp_key_file);
-
-//     // 2. Create a temporary file to hold the encrypted data.
-//     let mut temp_encrypted_file = std::env::temp_dir();
-//     temp_encrypted_file.push("uma_temp_encrypted.gpg");
-//     std::fs::write(&temp_encrypted_file, data)?;
-
-//     debug_log!("gpg_decrypt_from_bytes()-3. temp_encrypted_file path {:?}", temp_encrypted_file);
-    
-//     // 3. GPG decrypt, reading from the temporary encrypted data and key files.
-//     // Redirect stderr to capture potential GPG errors.
-//     let mut gpg = Command::new("gpg")
-//         .arg("--decrypt")
-//         .arg("--local-user")        
-//         .arg("--secret-keyring")  // Specify a private keyring if needed
-//         .arg(&temp_key_file)
-//         .arg("--output")         // Use --output to redirect decrypted content
-//         .arg("-")                // Redirect to stdout
-//         .arg(&temp_encrypted_file)
-//         .stderr(Stdio::piped()) 
-//         .stdout(Stdio::piped())    // Capture stdout
-//         .spawn()?;
-
-
-//     let output = gpg.wait_with_output()?;
-
-//     debug_log!("gpg_decrypt_from_bytes()-4. output {:?}", output);
-
-//     // 4. Clean up the temporary files.  Critical for security!
-//     std::fs::remove_file(temp_key_file)?;
-//     std::fs::remove_file(temp_encrypted_file)?;
-
-//     // 5. Handle errors and return decrypted data.
-//     if output.status.success() {
-//         Ok(output.stdout)
-//     } else {
-//         let stderr = String::from_utf8_lossy(&output.stderr);
-//         Err(ThisProjectError::GpgError(format!("GPG decryption failed, gpg_decrypt_from_bytes()-4.  {}", stderr)))
-//     }
-// }
-
-// use std::process::{Command, Stdio};
-// use std::io::Write;  // Import the Write trait
-// use std::fs;
-// use std::fs::File;
-
-// ... (Your ThisProjectError enum definition)
-
-// // TODO needs docstring
-// fn gpg_decrypt_from_bytes(data: &[u8], your_gpg_key: &str) -> Result<Vec<u8>, ThisProjectError> {
-//     debug_log("gpg_decrypt_from_bytes()-1. Start! ");
-//     // 1. Create temporary files
-//     let mut temp_key_file = std::env::temp_dir();
-//     temp_key_file.push("uma_temp_privkey.asc");
-//     fs::write(&temp_key_file, your_gpg_key)?;
-
-//     let mut temp_encrypted_file = std::env::temp_dir();
-//     temp_encrypted_file.push("uma_temp_encrypted.gpg");
-//     fs::write(&temp_encrypted_file, data)?;
-
-//     // 2. Run GPG decryption
-//     let mut child = Command::new("gpg")
-//         .arg("--decrypt")
-//         .arg("--secret-keyring")  // Only if needed
-//         .arg("--local-user") // Consider if needed
-//         .arg(your_gpg_key) // Private key ID or path to key file
-//         .arg("-") // Read encrypted data from stdin
-//         .stdin(Stdio::piped())       
-//         .stdout(Stdio::piped())
-//         .stderr(Stdio::piped())       
-//         .spawn()?;
-    
-//     // Write the encrypted data to the child process's standard input
-//     child.stdin.as_mut().unwrap().write_all(data)?;
-    
-//     let output = child.wait_with_output()?;
-
-//     debug_log!("gpg_decrypt_from_bytes()-4. output {:?}", output);    
-    
-//     // 3. Remove temporary files (important for security)
-//     fs::remove_file(temp_key_file)?;
-//     fs::remove_file(temp_encrypted_file)?;
-
-//     // 4. Handle output and errors
-//     if output.status.success() {
-//         Ok(output.stdout)
-//     } else {
-//         let stderr = String::from_utf8_lossy(&output.stderr);
-//         Err(ThisProjectError::GpgError(format!("GPG decryption failed: {}", stderr)))
-//     }
-// }
+/// Decrypts GPG-encrypted data from a byte slice using a provided GPG private key.
+///
+/// # Purpose
+/// This function takes encrypted data as bytes and a GPG private key, and attempts to decrypt 
+/// the data using the GPG command-line tool. It handles the decryption process by creating 
+/// temporary files and using GPG in a non-interactive, batch mode.
+///
+/// # Security Considerations
+/// - Temporary files are created and immediately deleted after use
+/// - Uses batch mode to prevent interactive prompts
+/// - Minimizes potential security risks associated with key handling
+///
+/// # Arguments
+/// * `data` - A byte slice containing the encrypted data to be decrypted
+/// * `your_gpg_key` - A string containing the GPG private key used for decryption
+///
+/// # Returns
+/// * `Ok(Vec<u8>)` - The decrypted data as a vector of bytes if decryption is successful
+/// * `Err(ThisProjectError)` - An error if decryption fails, with details about the failure
+///
+/// # Errors
+/// This function can return errors in several scenarios:
+/// - Invalid or incorrect GPG key
+/// - Corrupted encrypted data
+/// - GPG command-line tool not installed or accessible
+/// - Insufficient permissions
+/// - Temporary file creation or deletion failures
+///
+/// # Example
+/// ```rust
+/// let encrypted_data: &[u8] = // ... some encrypted bytes
+/// let private_key: &str = // ... GPG private key
+/// match gpg_decrypt_from_bytes(encrypted_data, private_key) {
+///     Ok(decrypted_data) => {
+///         // Use decrypted data
+///         println!("Decryption successful!");
+///     },
+///     Err(e) => {
+///         // Handle decryption error
+///         eprintln!("Decryption failed: {:?}", e);
+///     }
+/// }
+/// ```
+///
+/// # Notes
+/// - Requires GPG to be installed on the system
+/// - Temporary files are created in the system's temporary directory
+/// - The function uses non-interactive GPG mode to prevent hanging on prompts
+///
+/// # Performance
+/// - Creates temporary files for key and encrypted data
+/// - Spawns a GPG subprocess for decryption
+/// - Recommended for moderate-sized encrypted data
+///
+/// # Thread Safety
+/// - Not guaranteed to be thread-safe due to temporary file creation
+/// - Should be used with caution in multi-threaded contexts
 fn gpg_decrypt_from_bytes(data: &[u8], your_gpg_key: &str) -> Result<Vec<u8>, ThisProjectError> {
     debug_log("gpg_decrypt_from_bytes()-1. Start! ");
 
@@ -6427,7 +6384,47 @@ fn handle_local_owner_desk(
                     
                     let message_path = get_next_message_file_path(current_path, local_owner_user); 
                     */
-            
+                    // 7.1 1. Identifying Instant Message Files
+                    let file_str = std::str::from_utf8(&extacted_clearsigned_data).map_err(|_| {
+                        ThisProjectError::InvalidData("Invalid UTF-8 in file content".into())
+                    })?;
+                    
+                    if !file_str.contains("filepath_in_node = \"/instant_message_browser\"") {
+                        debug_log!("HLOD-InTray: Not an instant message file. Skipping.");
+                        continue;
+                    }
+
+                    debug_log!(
+                        "HLOD 7.1 found message file, file_str -> {:?}",
+                        file_str
+                    );
+                    
+                    // 7.2 
+                    // 2. Generating File Path
+                    let team_channel_name = get_current_team_channel_name()
+                        .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
+                    let mut current_path = PathBuf::from("project_graph_data/team_channels");
+                    current_path.push(&team_channel_name);
+                    current_path.push("instant_message_browser");
+                    
+                    let message_path = get_next_message_file_path(
+                        &current_path, 
+                        &local_owner_desk_setup_data.local_user_name // Use local user's name
+                    );
+
+                    debug_log!(
+                        "HLOD 7.2 got-made message_path -> {:?}",
+                        message_path
+                    );
+                    
+                    // 3. Saving the File
+                    if let Err(e) = fs::write(&message_path, &extacted_clearsigned_data) {
+                        debug_log!("HLOD-InTray: Failed to write message file: {:?}", e);
+                        // Consider returning an error here instead of continuing the loop
+                        return Err(ThisProjectError::from(e));
+                    }
+
+                    debug_log!("7.3 HLOD-InTray: Instant message file saved to: {:?}", message_path);
 
                     //////////////
                     // Echo Base
