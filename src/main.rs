@@ -6573,7 +6573,7 @@ fn handle_local_owner_desk(
         
 
     // TESTING ONLY wait, if only for testing, so thread debug prints do not ~overlap
-    thread::sleep(Duration::from_millis(15000)); // Avoid busy-waiting
+    thread::sleep(Duration::from_millis(100)); // Avoid busy-waiting
     
     debug_log!(
         "HLOD Exiting handle_local_owner_desk() for {}", 
