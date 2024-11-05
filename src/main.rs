@@ -4120,11 +4120,11 @@ fn extract_last_section(current_path: &PathBuf) -> Option<String> {
 }
 
 // Helper function to determine the next available message file path (e.g., 1.toml, 2.toml, etc.)
-fn get_next_message_file_path(current_path: &Path, local_owner_user: &str) -> PathBuf {
+fn get_next_message_file_path(current_path: &Path, selected_user_collaborator: &str) -> PathBuf {
     let mut i = 1;
     loop {
         
-        let file_path = current_path.join(format!("{}__{}.toml", i, local_owner_user));
+        let file_path = current_path.join(format!("{}__{}.toml", i, selected_user_collaborator));
         if !file_path.exists() {
             return file_path;
         }
@@ -6496,7 +6496,7 @@ fn handle_local_owner_desk(
                     
                     let message_path = get_next_message_file_path(
                         &current_path, 
-                        &local_owner_desk_setup_data.local_user_name // Use local user's name
+                        &local_owner_desk_setup_data.remote_collaborator_name // Use local user's name
                     );
 
                     debug_log!(
@@ -7477,6 +7477,9 @@ fn handle_remote_collaborator_meetingroom_desk(
             ////////////////////////////////////
 
             loop {
+                debug_log(
+                    "HRCD Got it loop starting."
+                ); 
                 // 1.5.1 Check for halt-uma signal
                 if should_halt_uma() {
                     debug_log!("HRCD 1.5.1 GotItloop Got It loop: Halt signal received. Exiting. in handle_remote_collaborator_meetingroom_desk");
@@ -7522,6 +7525,10 @@ fn handle_remote_collaborator_meetingroom_desk(
         
                         // 1.5.4  get document_id from signal
                         let document_id = gotit_signal.di;
+                        
+                        debug_log(
+                            "HRCD: Done event of got-it listener."
+                        ); 
                             
                         // 1.5.5 check and remove filestubs with name==document_id
                         /*
@@ -7538,8 +7545,8 @@ fn handle_remote_collaborator_meetingroom_desk(
                         */
 
                             
-                    // 1.5.6 Sleep for a short duration (e.g., 100ms)
-                    thread::sleep(Duration::from_millis(100));
+                    // // 1.5.6 Sleep for a short duration (e.g., 100ms)
+                    // thread::sleep(Duration::from_millis(1000));
 
                     },
                     Err(e) => {
@@ -7565,6 +7572,9 @@ fn handle_remote_collaborator_meetingroom_desk(
         // --- 2. Enter Main Loop ---
         // enter main loop (to handling signals, sending)
         loop {
+            debug_log(
+                "HRCD  2.: Starting, restarting Main loop"
+            ); 
             // --- 2.1 Check for 'should_halt_uma' Signal ---
             if should_halt_uma() {
                 debug_log!(
@@ -8076,10 +8086,6 @@ fn handle_remote_collaborator_meetingroom_desk(
                                                 )?;
                                                 debug_log!("HRCD 4.7.3  Updated timestamp log for {}", room_sync_input.remote_collaborator_name);
                                             }
-                                                    
-                                            
-                                            
-                                            
                                         }
                                         Err(e) => {
                                             debug_log!("Error sending data: {}", e);
