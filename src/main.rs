@@ -3100,53 +3100,104 @@ fn gpg_encrypt_to_bytes(data: &[u8], recipient_public_key: &str) -> Result<Vec<u
     }
 }
 
+// // use std::process::{Command, Stdio};
+// fn gpg_decrypt_from_bytes(data: &[u8], your_gpg_key: &str) -> Result<Vec<u8>, ThisProjectError> {
+//     debug_log("gpg_decrypt_from_bytes()-1. Start! ");
+    
+//     // 1. Create a temporary file for your private key.  DO NOT store private keys in memory.
+//     let mut temp_key_file = std::env::temp_dir();
+//     temp_key_file.push("uma_temp_privkey.asc"); // A distinct name from the public key file
+//     std::fs::write(&temp_key_file, your_gpg_key)?;  // Write your key to the file
+
+//     debug_log!("gpg_decrypt_from_bytes()-2. temp_key_file path {:?}", temp_key_file);
+
+//     // 2. Create a temporary file to hold the encrypted data.
+//     let mut temp_encrypted_file = std::env::temp_dir();
+//     temp_encrypted_file.push("uma_temp_encrypted.gpg");
+//     std::fs::write(&temp_encrypted_file, data)?;
+
+//     debug_log!("gpg_decrypt_from_bytes()-3. temp_encrypted_file path {:?}", temp_encrypted_file);
+    
+//     // 3. GPG decrypt, reading from the temporary encrypted data and key files.
+//     // Redirect stderr to capture potential GPG errors.
+//     let mut gpg = Command::new("gpg")
+//         .arg("--decrypt")
+//         .arg("--local-user")        
+//         .arg("--secret-keyring")  // Specify a private keyring if needed
+//         .arg(&temp_key_file)
+//         .arg("--output")         // Use --output to redirect decrypted content
+//         .arg("-")                // Redirect to stdout
+//         .arg(&temp_encrypted_file)
+//         .stderr(Stdio::piped()) 
+//         .stdout(Stdio::piped())    // Capture stdout
+//         .spawn()?;
+
+
+//     let output = gpg.wait_with_output()?;
+
+//     debug_log!("gpg_decrypt_from_bytes()-4. output {:?}", output);
+
+//     // 4. Clean up the temporary files.  Critical for security!
+//     std::fs::remove_file(temp_key_file)?;
+//     std::fs::remove_file(temp_encrypted_file)?;
+
+//     // 5. Handle errors and return decrypted data.
+//     if output.status.success() {
+//         Ok(output.stdout)
+//     } else {
+//         let stderr = String::from_utf8_lossy(&output.stderr);
+//         Err(ThisProjectError::GpgError(format!("GPG decryption failed, gpg_decrypt_from_bytes()-4.  {}", stderr)))
+//     }
+// }
+
 // use std::process::{Command, Stdio};
+// use std::io::Write;  // Import the Write trait
+// use std::fs;
+// use std::fs::File;
+
+// ... (Your ThisProjectError enum definition)
+
+// TODO needs docstring
 fn gpg_decrypt_from_bytes(data: &[u8], your_gpg_key: &str) -> Result<Vec<u8>, ThisProjectError> {
     debug_log("gpg_decrypt_from_bytes()-1. Start! ");
-    
-    // 1. Create a temporary file for your private key.  DO NOT store private keys in memory.
+    // 1. Create temporary files
     let mut temp_key_file = std::env::temp_dir();
-    temp_key_file.push("uma_temp_privkey.asc"); // A distinct name from the public key file
-    std::fs::write(&temp_key_file, your_gpg_key)?;  // Write your key to the file
+    temp_key_file.push("uma_temp_privkey.asc");
+    fs::write(&temp_key_file, your_gpg_key)?;
 
-    debug_log!("gpg_decrypt_from_bytes()-2. temp_key_file path {:?}", temp_key_file);
-
-    // 2. Create a temporary file to hold the encrypted data.
     let mut temp_encrypted_file = std::env::temp_dir();
     temp_encrypted_file.push("uma_temp_encrypted.gpg");
-    std::fs::write(&temp_encrypted_file, data)?;
+    fs::write(&temp_encrypted_file, data)?;
 
-    debug_log!("gpg_decrypt_from_bytes()-3. temp_encrypted_file path {:?}", temp_encrypted_file);
-    
-    // 3. GPG decrypt, reading from the temporary encrypted data and key files.
-    // Redirect stderr to capture potential GPG errors.
-    let mut gpg = Command::new("gpg")
+    // 2. Run GPG decryption
+    let mut child = Command::new("gpg")
         .arg("--decrypt")
-        .arg("--local-user")        
-        .arg("--secret-keyring")  // Specify a private keyring if needed
-        .arg(&temp_key_file)
-        .arg("--output")         // Use --output to redirect decrypted content
-        .arg("-")                // Redirect to stdout
-        .arg(&temp_encrypted_file)
-        .stderr(Stdio::piped()) 
-        .stdout(Stdio::piped())    // Capture stdout
+        .arg("--secret-keyring")  // Only if needed
+        .arg("--local-user") // Consider if needed
+        .arg(your_gpg_key) // Private key ID or path to key file
+        .arg("-") // Read encrypted data from stdin
+        .stdin(Stdio::piped())       
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())       
         .spawn()?;
+    
+    // Write the encrypted data to the child process's standard input
+    child.stdin.as_mut().unwrap().write_all(data)?;
+    
+    let output = child.wait_with_output()?;
 
+    debug_log!("gpg_decrypt_from_bytes()-4. output {:?}", output);    
+    
+    // 3. Remove temporary files (important for security)
+    fs::remove_file(temp_key_file)?;
+    fs::remove_file(temp_encrypted_file)?;
 
-    let output = gpg.wait_with_output()?;
-
-    debug_log!("gpg_decrypt_from_bytes()-4. output {:?}", output);
-
-    // 4. Clean up the temporary files.  Critical for security!
-    std::fs::remove_file(temp_key_file)?;
-    std::fs::remove_file(temp_encrypted_file)?;
-
-    // 5. Handle errors and return decrypted data.
+    // 4. Handle output and errors
     if output.status.success() {
         Ok(output.stdout)
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(ThisProjectError::GpgError(format!("GPG decryption failed, gpg_decrypt_from_bytes()-4.  {}", stderr)))
+        Err(ThisProjectError::GpgError(format!("GPG decryption failed: {}", stderr)))
     }
 }
 
