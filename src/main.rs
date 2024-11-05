@@ -3157,9 +3157,52 @@ fn gpg_encrypt_to_bytes(data: &[u8], recipient_public_key: &str) -> Result<Vec<u
 
 // ... (Your ThisProjectError enum definition)
 
-// TODO needs docstring
+// // TODO needs docstring
+// fn gpg_decrypt_from_bytes(data: &[u8], your_gpg_key: &str) -> Result<Vec<u8>, ThisProjectError> {
+//     debug_log("gpg_decrypt_from_bytes()-1. Start! ");
+//     // 1. Create temporary files
+//     let mut temp_key_file = std::env::temp_dir();
+//     temp_key_file.push("uma_temp_privkey.asc");
+//     fs::write(&temp_key_file, your_gpg_key)?;
+
+//     let mut temp_encrypted_file = std::env::temp_dir();
+//     temp_encrypted_file.push("uma_temp_encrypted.gpg");
+//     fs::write(&temp_encrypted_file, data)?;
+
+//     // 2. Run GPG decryption
+//     let mut child = Command::new("gpg")
+//         .arg("--decrypt")
+//         .arg("--secret-keyring")  // Only if needed
+//         .arg("--local-user") // Consider if needed
+//         .arg(your_gpg_key) // Private key ID or path to key file
+//         .arg("-") // Read encrypted data from stdin
+//         .stdin(Stdio::piped())       
+//         .stdout(Stdio::piped())
+//         .stderr(Stdio::piped())       
+//         .spawn()?;
+    
+//     // Write the encrypted data to the child process's standard input
+//     child.stdin.as_mut().unwrap().write_all(data)?;
+    
+//     let output = child.wait_with_output()?;
+
+//     debug_log!("gpg_decrypt_from_bytes()-4. output {:?}", output);    
+    
+//     // 3. Remove temporary files (important for security)
+//     fs::remove_file(temp_key_file)?;
+//     fs::remove_file(temp_encrypted_file)?;
+
+//     // 4. Handle output and errors
+//     if output.status.success() {
+//         Ok(output.stdout)
+//     } else {
+//         let stderr = String::from_utf8_lossy(&output.stderr);
+//         Err(ThisProjectError::GpgError(format!("GPG decryption failed: {}", stderr)))
+//     }
+// }
 fn gpg_decrypt_from_bytes(data: &[u8], your_gpg_key: &str) -> Result<Vec<u8>, ThisProjectError> {
     debug_log("gpg_decrypt_from_bytes()-1. Start! ");
+
     // 1. Create temporary files
     let mut temp_key_file = std::env::temp_dir();
     temp_key_file.push("uma_temp_privkey.asc");
@@ -3172,17 +3215,21 @@ fn gpg_decrypt_from_bytes(data: &[u8], your_gpg_key: &str) -> Result<Vec<u8>, Th
     // 2. Run GPG decryption
     let mut child = Command::new("gpg")
         .arg("--decrypt")
-        .arg("--secret-keyring")  // Only if needed
-        .arg("--local-user") // Consider if needed
-        .arg(your_gpg_key) // Private key ID or path to key file
-        .arg("-") // Read encrypted data from stdin
+        .arg("--batch")  // Non-interactive mode
+        .arg("--yes")    // Assume yes to prompts
+        .arg("--quiet")  // Minimal output
+        .arg("--no-tty") // No terminal interaction
+        .arg("-") // Read from stdin
         .stdin(Stdio::piped())       
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())       
         .spawn()?;
     
     // Write the encrypted data to the child process's standard input
-    child.stdin.as_mut().unwrap().write_all(data)?;
+    if let Some(stdin) = child.stdin.as_mut() {
+        stdin.write_all(data)?;
+        stdin.flush()?;
+    }
     
     let output = child.wait_with_output()?;
 
