@@ -3102,19 +3102,21 @@ fn gpg_encrypt_to_bytes(data: &[u8], recipient_public_key: &str) -> Result<Vec<u
 
 // use std::process::{Command, Stdio};
 fn gpg_decrypt_from_bytes(data: &[u8], your_gpg_key: &str) -> Result<Vec<u8>, ThisProjectError> {
+    debug_log("gpg_decrypt_from_bytes()-1. Start! ");
+    
     // 1. Create a temporary file for your private key.  DO NOT store private keys in memory.
     let mut temp_key_file = std::env::temp_dir();
     temp_key_file.push("uma_temp_privkey.asc"); // A distinct name from the public key file
     std::fs::write(&temp_key_file, your_gpg_key)?;  // Write your key to the file
 
-    debug_log!("gpg_decrypt_from_bytes() temp_key_file path {:?}", temp_key_file);
+    debug_log!("gpg_decrypt_from_bytes()-2. temp_key_file path {:?}", temp_key_file);
 
     // 2. Create a temporary file to hold the encrypted data.
     let mut temp_encrypted_file = std::env::temp_dir();
     temp_encrypted_file.push("uma_temp_encrypted.gpg");
     std::fs::write(&temp_encrypted_file, data)?;
 
-    debug_log!("gpg_decrypt_from_bytes() temp_encrypted_file path {:?}", temp_encrypted_file);
+    debug_log!("gpg_decrypt_from_bytes()-3. temp_encrypted_file path {:?}", temp_encrypted_file);
     
     // 3. GPG decrypt, reading from the temporary encrypted data and key files.
     // Redirect stderr to capture potential GPG errors.
@@ -3133,7 +3135,7 @@ fn gpg_decrypt_from_bytes(data: &[u8], your_gpg_key: &str) -> Result<Vec<u8>, Th
 
     let output = gpg.wait_with_output()?;
 
-    debug_log!("gpg_decrypt_from_bytes() output {:?}", output);
+    debug_log!("gpg_decrypt_from_bytes()-4. output {:?}", output);
 
     // 4. Clean up the temporary files.  Critical for security!
     std::fs::remove_file(temp_key_file)?;
@@ -3144,7 +3146,7 @@ fn gpg_decrypt_from_bytes(data: &[u8], your_gpg_key: &str) -> Result<Vec<u8>, Th
         Ok(output.stdout)
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(ThisProjectError::GpgError(format!("GPG decryption failed: {}", stderr)))
+        Err(ThisProjectError::GpgError(format!("GPG decryption failed, gpg_decrypt_from_bytes()-4.  {}", stderr)))
     }
 }
 
@@ -5842,16 +5844,16 @@ fn send_ready_signal(
     let ready_signal_to_send_from_this_loop = add_pearson_hash_to_readysignal_struct(
         &proto_ready_signal,
         &local_user_salt_list,
-    ).expect("Failed to add hash to ReadySignal"); 
+    ).expect("send_ready_signal() Failed to add hash to ReadySignal"); 
     
     // 5. Serialize the ReadySignal
     let serialized_readysignal_data = serialize_ready_signal(
         &ready_signal_to_send_from_this_loop
-    ).expect("HLOD 5. err Failed to serialize ReadySignal, ready_signal_to_send_from_this_loop"); 
+    ).expect("inHLOD send_ready_signal() err Failed to serialize ReadySignal, ready_signal_to_send_from_this_loop"); 
 
     // --- Inspect Serialized Data ---
-    debug_log!("HLOD 5.1 inspect Serialized Data: {:?}", ready_signal_to_send_from_this_loop);
-    debug_log!("HLOD 5.2 serialized_readysignal_data: {:?}", serialized_readysignal_data);
+    debug_log!("inHLOD send_ready_signal() inspect Serialized Data: {:?}", ready_signal_to_send_from_this_loop);
+    debug_log!("inHLOD send_ready_signal() serialized_readysignal_data: {:?}", serialized_readysignal_data);
 
     // TODO possibly have some mechanism to try addresses until one works?
     // 6. Send the signal @ 
@@ -5874,7 +5876,7 @@ fn send_ready_signal(
 
     // Log before sending
     debug_log!(
-        "HLOD 6. Attempting to send ReadySignal to {}: {:?}", 
+        "inHLOD send_ready_signal() Attempting to send ReadySignal to {}: {:?}", 
         target_addr, 
         local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
     );
@@ -5882,10 +5884,10 @@ fn send_ready_signal(
     // // If sending to the first address succeeds, no need to iterate further
 
     if send_data(&serialized_readysignal_data, target_addr).is_ok() {
-        debug_log("HLOD 6. Successfully sent ReadySignal to {} (first address)");
+        debug_log("inHLOD send_ready_signal() 6. Successfully sent ReadySignal to {} (first address)");
         return Ok(()); // Exit the thread
     } else {
-        debug_log("HLOD err 6. Failed to send ReadySignal to {} (first address)");
+        debug_log("inHLOD send_ready_signal() err 6. Failed to send ReadySignal to {} (first address)");
         return Err(ThisProjectError::NetworkError("Failed to send ReadySignal".to_string())); // Return an error
     }
 
@@ -6215,8 +6217,8 @@ fn handle_local_owner_desk(
                     // }
                     
                     
-                    // --- 5 Hash-Check for SendFile Struct ---
-                    // HLOD 5 Drop packet when fail check
+                    // --- 5.0 Hash-Check for SendFile Struct ---
+                    // HLOD 5.0 Drop packet when fail check
                     // Check the hash of the incoming file against the provided list of salts
                     if !hash_checker_for_sendfile_struct(
                         &local_owner_desk_setup_data.remote_collaborator_salt_list, // Use remote collaborator's salts
@@ -6225,9 +6227,11 @@ fn handle_local_owner_desk(
                         incoming_intray_file_struct.intray_hash_list.as_deref().expect("Missing hash list")  //Safe unwrap, checked earlier
                     
                     ) {
-                        debug_log!("HLOD 5: SendFile Struct hash verification failed. Discarding signal.");
+                        debug_log!("failed HLOD 5.0: SendFile Struct hash verification failed. Discarding signal.");
                         continue; // Discard the signal and continue listening
                     }
+                    
+                    debug_log!("Passed HLOD 5.0: SendFile Struct hash verified.");
 
                     // // replace this block
                     // match calculate_and_verify_sendfile_hashes(
@@ -6279,7 +6283,7 @@ fn handle_local_owner_desk(
                         }
                     };
                     debug_log!(
-                        "HRCD 6.1 still_encrypted_file_blob -> {:?}",
+                        "HLOD 6.1 still_encrypted_file_blob -> {:?}",
                         still_encrypted_file_blob
                     );
                     
@@ -6295,7 +6299,7 @@ fn handle_local_owner_desk(
                         }
                     };
                     debug_log!(
-                        "HRCD 6.2 decrypt the data decrypted_clearsignfile_data -> {:?}",
+                        "HLOD 6.2 decrypt the data decrypted_clearsignfile_data -> {:?}",
                         decrypted_clearsignfile_data
                     );
 
@@ -6308,7 +6312,7 @@ fn handle_local_owner_desk(
                         }
                     };
                     debug_log!(
-                        "HRCD 6.3 extacted_clearsigned_data -> {:?}",
+                        "HLOD 6.3 extacted_clearsigned_data -> {:?}",
                         extacted_clearsigned_data
                     );
                     
