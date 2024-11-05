@@ -3259,33 +3259,6 @@ fn gpg_decrypt_from_bytes(data: &[u8], your_gpg_key: &str) -> Result<Vec<u8>, Th
 //     Ok(trimmed_message.as_bytes().to_vec())
 // }
 
-fn extract_clearsign_data(clearsigned_data: &[u8]) -> Result<Vec<u8>, ThisProjectError> {
-    let clearsigned_string = String::from_utf8_lossy(clearsigned_data);
-
-    // Split at the beginning of the signature
-    let parts: Vec<&str> = clearsigned_string
-        .split("-----BEGIN PGP SIGNATURE-----")
-        .collect();
-
-    if parts.len() < 2 {
-        return Err(ThisProjectError::GpgError("Invalid clearsigned data: Missing signature".into()));
-    }
-
-    // Extract the message part (before the signature)
-    let message_part = parts[0];
-
-    // Split into lines and remove the first 3 lines
-    let message_lines: Vec<&str> = message_part
-        .lines()
-        .skip(3)
-        .collect();
-
-    // Join the remaining lines
-    let message_content = message_lines.join("\n");
-
-    Ok(message_content.as_bytes().to_vec())
-}
-
 // fn extract_clearsign_data(clearsigned_data: &[u8]) -> Result<Vec<u8>, ThisProjectError> {
 //     let clearsigned_string = String::from_utf8_lossy(clearsigned_data);
 
@@ -3301,14 +3274,10 @@ fn extract_clearsign_data(clearsigned_data: &[u8]) -> Result<Vec<u8>, ThisProjec
 //     // Extract the message part (before the signature)
 //     let message_part = parts[0];
 
-//     // Split the message part by lines and skip the PGP header lines
+//     // Split into lines and remove the first 3 lines
 //     let message_lines: Vec<&str> = message_part
 //         .lines()
-//         .skip_while(|line| 
-//             line.starts_with("-----BEGIN PGP SIGNED MESSAGE-----") || 
-//             line.starts_with("Hash:") || 
-//             line.trim().is_empty()
-//         )
+//         .skip(3)
 //         .collect();
 
 //     // Join the remaining lines
@@ -3316,6 +3285,37 @@ fn extract_clearsign_data(clearsigned_data: &[u8]) -> Result<Vec<u8>, ThisProjec
 
 //     Ok(message_content.as_bytes().to_vec())
 // }
+
+fn extract_clearsign_data(clearsigned_data: &[u8]) -> Result<Vec<u8>, ThisProjectError> {
+    let clearsigned_string = String::from_utf8_lossy(clearsigned_data);
+
+    // Split at the beginning of the signature
+    let parts: Vec<&str> = clearsigned_string
+        .split("-----BEGIN PGP SIGNATURE-----")
+        .collect();
+
+    if parts.len() < 2 {
+        return Err(ThisProjectError::GpgError("Invalid clearsigned data: Missing signature".into()));
+    }
+
+    // Extract the message part (before the signature)
+    let message_part = parts[0];
+
+    // Split the message part by lines and skip the PGP header lines
+    let message_lines: Vec<&str> = message_part
+        .lines()
+        .skip_while(|line| 
+            line.starts_with("-----BEGIN PGP SIGNED MESSAGE-----") || 
+            line.starts_with("Hash:") || 
+            line.trim().is_empty()
+        )
+        .collect();
+
+    // Join the remaining lines
+    let message_content = message_lines.join("\n");
+
+    Ok(message_content.as_bytes().to_vec())
+}
 
 /// Prepares file contents for secure sending by clearsigning and encrypting them.
 ///
