@@ -4971,45 +4971,127 @@ fn is_prime(n: u8) -> bool {
     }
 }
 
-/// sends file as struct items to remote collaborator intray
-/// 1. intray_send_time (for freshness check)
-/// 2. intray_hash_list (for intact-ness and author-ness)
-/// 3. gpg_encrypted_file_contents (the content)
-fn send_file_toml_to_rc_intray(
-    file_struct_to_send: &SendFile, 
-    target_addr: SocketAddr, 
-    port: u16,
-) -> Result<(), ThisProjectError> {
-    debug_log!("\nStarting send_file_toml_to_rc_intray");
 
-    // 1. Serialize SendFile (Manually)
-    let mut serialized_send_file: Vec<u8> = Vec::new();
-    
-    // Add intray_send_time 
-    serialized_send_file.extend_from_slice(&file_struct_to_send.intray_send_time.expect("REASON").to_be_bytes());
-    
-    // Add intray_hash_list (handle Option)
-    if let Some(hash_list) = &file_struct_to_send.intray_hash_list {
-        serialized_send_file.extend_from_slice(hash_list);
-    } else {
-        // Handle the None case. Perhaps return an error or use a default/empty hash list.
-        return Err(ThisProjectError::InvalidData("intray_hash_list is None".into()));
-    }
 
-    // Add gpg_encrypted_file_contents (handle Option)
-    if let Some(encrypted_file) = &file_struct_to_send.gpg_encrypted_intray_file {
-        serialized_send_file.extend_from_slice(encrypted_file);
-    } else {
-        return Err(ThisProjectError::InvalidData("gpg_encrypted_intray_file is None".into()));
-    }
-    
-    // 2. Send Data
-    let socket = UdpSocket::bind(":::0")?; 
-    socket.send_to(&serialized_send_file, SocketAddr::new(target_addr.ip(), port))?;
-    
-    debug_log!("File sent to {}:{}", target_addr.ip(), port); 
+// /// Serializes a `SendFile` struct into a byte vector.
+// ///
+// /// # Arguments
+// /// * `send_file`: The `SendFile` instance to serialize.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<Vec<u8>, ThisProjectError>`:  The serialized `SendFile` data as a `Vec<u8>` on success, or a
+// ///   `ThisProjectError` if serialization fails.
+// fn serialize_send_file(send_file: &SendFile) -> Result<Vec<u8>, ThisProjectError> {
+//     let mut serialized_data: Vec<u8> = Vec::new();
+
+//     // Add intray_send_time
+//     serialized_data.extend_from_slice(&send_file.intray_send_time.ok_or(ThisProjectError::InvalidData("Missing intray_send_time".into()))?.to_be_bytes());
+
+//     // Add intray_hash_list (handle Option)
+//     if let Some(hash_list) = &send_file.intray_hash_list {
+//         serialized_data.extend_from_slice(hash_list);
+//     } else {
+//         // Handle the None case. Perhaps return an error or use a default/empty hash list.
+//         return Err(ThisProjectError::InvalidData("intray_hash_list is None".into()));
+//     }
+
+//     // Add gpg_encrypted_file_contents (handle Option)
+//     if let Some(encrypted_file) = &send_file.gpg_encrypted_intray_file {
+//         serialized_data.extend_from_slice(encrypted_file);
+//     } else {
+//         return Err(ThisProjectError::InvalidData("gpg_encrypted_intray_file is None".into()));
+//     }
+
+//     Ok(serialized_data)
+// }
+
+
+/// Sends a byte slice over UDP to the specified address and port.
+///
+/// # Arguments
+///
+/// * `data`: The byte slice to send.
+/// * `target_addr`: The target IP address.
+/// * `port`: The target port.
+///
+/// # Returns
+///
+/// * `Result<(), ThisProjectError>`:  `Ok(())` if sending was successful, or a `ThisProjectError` if an error occurred.
+fn send_data_via_udp(data: &[u8], target_addr: SocketAddr, port: u16) -> Result<(), ThisProjectError> {
+    let socket = UdpSocket::bind(":::0")?; // Bind to any available port
+    socket.send_to(data, SocketAddr::new(target_addr.ip(), port))?;
+    debug_log!("Data sent to {}:{}", target_addr.ip(), port);
     Ok(())
 }
+
+/// Sends a `SendFile` struct to a remote collaborator's intray.
+/// Now this function *only* handles sending; serialization is done elsewhere. 
+///
+/// # Arguments
+///
+/// * `send_file`: The `SendFile` struct to send.
+/// * `target_addr`: The target IP address.
+/// * `port`: The target port. 
+///
+/// # Returns
+///
+/// * `Result<(), ThisProjectError>`: `Ok(())` if the file was sent successfully, `Err(ThisProjectError)` otherwise.
+fn sendfile_UDP_to_intray(
+    send_file: &SendFile,
+    target_addr: SocketAddr,
+    port: u16,
+) -> Result<(), ThisProjectError> {
+    // 1. Serialize the SendFile struct.
+    let serialized_data = serialize_send_file(send_file)?;
+
+    // 2. Send the serialized data using UDP.
+    send_data_via_udp(&serialized_data, target_addr, port)?;
+
+    Ok(())
+}
+
+
+// /// this horribly named mismash function is a catastrophe
+// /// sends file as struct items to remote collaborator intray
+// /// 1. intray_send_time (for freshness check)
+// /// 2. intray_hash_list (for intact-ness and author-ness)
+// /// 3. gpg_encrypted_file_contents (the content)
+// fn send_file_toml_to_rc_intray(
+//     file_struct_to_send: &SendFile, 
+//     target_addr: SocketAddr, 
+//     port: u16,
+// ) -> Result<(), ThisProjectError> {
+//     debug_log!("\nStarting send_file_toml_to_rc_intray");
+
+//     // 1. Serialize SendFile (Manually)
+//     let mut serialized_send_file: Vec<u8> = Vec::new();
+    
+//     // Add intray_send_time 
+//     serialized_send_file.extend_from_slice(&file_struct_to_send.intray_send_time.expect("REASON").to_be_bytes());
+    
+//     // Add intray_hash_list (handle Option)
+//     if let Some(hash_list) = &file_struct_to_send.intray_hash_list {
+//         serialized_send_file.extend_from_slice(hash_list);
+//     } else {
+//         // Handle the None case. Perhaps return an error or use a default/empty hash list.
+//         return Err(ThisProjectError::InvalidData("intray_hash_list is None".into()));
+//     }
+
+//     // Add gpg_encrypted_file_contents (handle Option)
+//     if let Some(encrypted_file) = &file_struct_to_send.gpg_encrypted_intray_file {
+//         serialized_send_file.extend_from_slice(encrypted_file);
+//     } else {
+//         return Err(ThisProjectError::InvalidData("gpg_encrypted_intray_file is None".into()));
+//     }
+    
+//     // 2. Send Data
+//     let socket = UdpSocket::bind(":::0")?; 
+//     socket.send_to(&serialized_send_file, SocketAddr::new(target_addr.ip(), port))?;
+    
+//     debug_log!("File sent to {}:{}", target_addr.ip(), port); 
+//     Ok(())
+// }
 
 // fn send_file_toml_to_rc_intray(
 //     file_struct_to_send: &SendFile, 
@@ -6269,6 +6351,10 @@ fn serialize_ready_signal(this_readysignal: &ReadySignal) -> std::io::Result<Vec
     Ok(bytes) 
 }
 
+
+
+
+
 /// Calculates Pearson hashes for a vector of byte slices.
 ///
 /// This function iterates through the input `data_sets` and calculates the Pearson hash for each slice,
@@ -6594,48 +6680,112 @@ fn deserialize_intray_send_file_struct(bytes: &[u8]) -> Result<SendFile, ThisPro
 
     debug_log!("DISFS bytes.len() >= min_length");
     
-    // 2. Extract intray_send_time
+
+    // 2. Extract intray_send_time (as before)
     let intray_send_time = u64::from_be_bytes(bytes[0..timestamp_len].try_into().unwrap());
 
-    // 3. Extract intray_hash_list
+    // 3. Extract intray_hash_list  (Corrected)
     let hash_list_start = timestamp_len;
-    let hash_list_end = hash_list_start + 4; // Assuming 4 salts (4 * u8 hashes)
-    debug_log!(
-        "DISFS hash_list_start {} hash_list_end {}",
-        hash_list_start, hash_list_end   
-    );
-    
-    // if bytes.len() < hash_list_end {
-    //     debug_log!("DISFS bytes.len() < hash_list_end -> returning: Err(ThisProjectError::InvalidData(\"Invalid byte array length for SendFile intray_hash_list\".into()))");
-    //     return Err(ThisProjectError::InvalidData("Invalid byte array length for SendFile intray_hash_list".into()));
-    // }
-    debug_log!("DISFS bytes.len() >= hash_list_end {:?}", bytes.len() >= hash_list_end );
-    
+    let hash_list_end = hash_list_start + 4; // 4 u8 hashes = 4 bytes
+
     let intray_hash_list = if bytes.len() >= hash_list_end {
-        bytes[hash_list_start..hash_list_end].to_vec() // Extract hashes
+        Some(bytes[hash_list_start..hash_list_end].to_vec()) // Extract and wrap in Some()
     } else {
-        return Err(ThisProjectError::InvalidData("Invalid byte array length for SendFile".into()));
+        None // No hash list present (handle as you see fit)
     };
 
-    // 4. Extract gpg_encrypted_intray_file
+    // 4. Extract gpg_encrypted_intray_file (Corrected)
     let gpg_encrypted_file_start = hash_list_end;
     let gpg_encrypted_intray_file = if bytes.len() > gpg_encrypted_file_start {
-        debug_log!("DISFS gpg_encrypted_file_start-> {}", gpg_encrypted_file_start);
-        bytes[gpg_encrypted_file_start..].to_vec() // Extract file content
+        Some(bytes[gpg_encrypted_file_start..].to_vec()) // Extract and wrap in Some()
     } else {
-        Vec::new() // Or handle the case where there's no file content as needed
+        None // Or handle the empty case appropriately
     };
 
-
-    // 5. Construct and return the SendFile struct
-    debug_log!("DISFS constructing SendFile struct");
-    
+    // ... [Construction of SendFile as before, but use Some() wrappers]
     Ok(SendFile {
         intray_send_time: Some(intray_send_time),
-        gpg_encrypted_intray_file: Some(gpg_encrypted_intray_file.clone()),
-        intray_hash_list: Some(gpg_encrypted_intray_file),
+        gpg_encrypted_intray_file, // No need for clone, the value is already owned
+        intray_hash_list,  // Use the corrected Option<Vec<u8>>
     })
 }
+
+/// Serializes a `SendFile` struct into a byte vector.
+///
+/// # Arguments
+/// * `send_file`: The `SendFile` instance to serialize.
+///
+/// # Returns
+///
+/// * `Result<Vec<u8>, ThisProjectError>`:  The serialized `SendFile` data as a `Vec<u8>` on success, or a
+///   `ThisProjectError` if serialization fails.
+fn serialize_send_file(send_file: &SendFile) -> Result<Vec<u8>, ThisProjectError> {
+    let mut serialized_data: Vec<u8> = Vec::new();
+
+    // Add intray_send_time
+    serialized_data.extend_from_slice(&send_file.intray_send_time.ok_or(ThisProjectError::InvalidData("Missing intray_send_time".into()))?.to_be_bytes());
+
+    // Add intray_hash_list (handle Option)
+    if let Some(hash_list) = &send_file.intray_hash_list {
+        serialized_data.extend_from_slice(hash_list);
+    } else {
+        // Handle the None case. Perhaps return an error or use a default/empty hash list.
+        return Err(ThisProjectError::InvalidData("intray_hash_list is None".into()));
+    }
+
+    // Add gpg_encrypted_file_contents (handle Option)
+    if let Some(encrypted_file) = &send_file.gpg_encrypted_intray_file {
+        serialized_data.extend_from_slice(encrypted_file);
+    } else {
+        return Err(ThisProjectError::InvalidData("gpg_encrypted_intray_file is None".into()));
+    }
+
+    Ok(serialized_data)
+}
+
+
+//     // 2. Extract intray_send_time
+//     let intray_send_time = u64::from_be_bytes(bytes[0..timestamp_len].try_into().unwrap());
+
+//     // 3. Extract intray_hash_list
+//     let hash_list_start = timestamp_len;
+//     let hash_list_end = hash_list_start + 4; // Assuming 4 salts (4 * u8 hashes)
+//     debug_log!(
+//         "DISFS hash_list_start {} hash_list_end {}",
+//         hash_list_start, hash_list_end   
+//     );
+    
+//     // if bytes.len() < hash_list_end {
+//     //     debug_log!("DISFS bytes.len() < hash_list_end -> returning: Err(ThisProjectError::InvalidData(\"Invalid byte array length for SendFile intray_hash_list\".into()))");
+//     //     return Err(ThisProjectError::InvalidData("Invalid byte array length for SendFile intray_hash_list".into()));
+//     // }
+//     debug_log!("DISFS bytes.len() >= hash_list_end {:?}", bytes.len() >= hash_list_end );
+    
+//     let intray_hash_list = if bytes.len() >= hash_list_end {
+//         bytes[hash_list_start..hash_list_end].to_vec() // Extract hashes
+//     } else {
+//         return Err(ThisProjectError::InvalidData("Invalid byte array length for SendFile".into()));
+//     };
+
+//     // 4. Extract gpg_encrypted_intray_file
+//     let gpg_encrypted_file_start = hash_list_end;
+//     let gpg_encrypted_intray_file = if bytes.len() > gpg_encrypted_file_start {
+//         debug_log!("DISFS gpg_encrypted_file_start-> {}", gpg_encrypted_file_start);
+//         bytes[gpg_encrypted_file_start..].to_vec() // Extract file content
+//     } else {
+//         Vec::new() // Or handle the case where there's no file content as needed
+//     };
+
+
+//     // 5. Construct and return the SendFile struct
+//     debug_log!("DISFS constructing SendFile struct");
+    
+//     Ok(SendFile {
+//         intray_send_time: Some(intray_send_time),
+//         gpg_encrypted_intray_file: Some(gpg_encrypted_intray_file.clone()),
+//         intray_hash_list: Some(gpg_encrypted_intray_file),
+//     })
+// }
 
 fn serialize_gotit_signal(signal: &GotItSignal) -> std::io::Result<Vec<u8>> {
     let mut bytes = Vec::new();
@@ -7528,104 +7678,58 @@ fn handle_remote_collaborator_meetingroom_desk(
                                 }
                             }
 
-                            
                             // 4.6 set_prefail_flag_via_hash__for_sendfile
                             set_prefail_flag_via_hash__for_sendfile(
                                 &calculated_hashes,
                                 &room_sync_input.remote_collaborator_name
                                 );
-                            
-                            // // Convert to &[u8] slices for the hashing function
-                            // let intray_hash_list = calculate_pearson_hashes(
-                            //     sendfile_struct_data_to_hash.iter().map(|v| v.as_slice()).collect()
-                            // )?;
 
-                            // let mut sendfile_struct_data_to_hash: Vec<&[u8]> = Vec::new();
-                            // let sendtime_bytes = intray_send_time.to_be_bytes();
-                            // sendfile_struct_data_to_hash.push(&sendtime_bytes);
-                            // sendfile_struct_data_to_hash.push(&gpg_encrypted_intray_file);
-
-
-                            // for salt in &room_sync_input.local_user_salt_list {
-                            //     // Create a new Vec<u8> for each salt
-                            //     let salt_bytes = salt.to_be_bytes().to_vec(); 
-                            //     sendfile_struct_data_to_hash.push(salt_bytes.as_slice()); // Push a slice
-                            // }
-
-                            // let intray_hash_list = calculate_pearson_hashes_parallel(sendfile_struct_data_to_hash)?;
-
-                            // // Declare salt_bytes outside the loop, initializing with an empty array
-                            // let salt_bytes: [u8; 16] = [0; 16]; // 16 bytes for u128
-
-                            // for salt in &room_sync_input.local_user_salt_list {
-                            //     salt_bytes.copy_from_slice(&salt.to_be_bytes()); // Copy into the existing array
-                            //     sendfile_struct_data_to_hash.push(&salt_bytes);
-                            // }
-
-                            // let intray_hash_list = calculate_pearson_hashes_parallel(sendfile_struct_data_to_hash)?;
-
-                            // for salt in &room_sync_input.local_user_salt_list {
-                            //     let salt_bytes = salt.to_be_bytes(); // Create a longer-lived value
-                            //     sendfile_struct_data_to_hash.push(&salt_bytes);
-                            // }
-                            // let intray_hash_list = calculate_pearson_hashes_parallel(sendfile_struct_data_to_hash)?;
-                            // let mut sendfile_struct_data_to_hash: Vec<&[u8]> = Vec::new();
-                            // let sendtime_bytes = intray_send_time.to_be_bytes();
-                            // sendfile_struct_data_to_hash.push(&sendtime_bytes);
-                            // sendfile_struct_data_to_hash.push(&gpg_encrypted_intray_file);
-                            // for salt in &room_sync_input.local_user_salt_list {
-                            //     sendfile_struct_data_to_hash.push(&salt.to_be_bytes());
-                            // }
-                            // let intray_hash_list = calculate_pearson_hashes_parallel(sendfile_struct_data_to_hash)?;
-
-                            // 4.6. Create SendFile Struct 
-                            let sendfile_final = SendFile {
+                            // 4.6.2 Create SendFile Struct 
+                            let sendfile_struct_final = SendFile {
                                 intray_send_time: Some(intray_send_time),
                                 gpg_encrypted_intray_file: Some(file_bytes2send),
                                 intray_hash_list: Some(calculated_hashes),
                             }; 
                             
-                            // --- 4.7 Send file: send UDP to intray ---
-                            // 4.7.1 Send file
-                            let file_send_result = send_file_toml_to_rc_intray(
-                                &sendfile_final, 
-                                src,
-                                room_sync_input.remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip,
-                            );
+                            let serialized_file_struct_to_send = serialize_send_file(&sendfile_struct_final);
                             
-                            debug_log!(
-                                "HRCD 4.7 file_send_result {:?}",
-                                file_send_result   
-                            );
-                            // let file_send_result = send_file_toml_to_rc_intray(
-                            //     &file_path,
-                            //     src,
-                            //     room_sync_input.remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip,
-                            //     &room_sync_input.collaborator_salt_list
-                            // );
+                            // --- 4.7 Send serializd-file: send UDP to intray ---
+                            // 4.7.1 Send file
 
-                            // --- 4.7.2. Handle File Send Result ---
-                            // If file send does not produce an error:
-                            // 1. update send-queue pop off file path
-                            // 2. update file-queue update queue_back_timestamp
-                            match file_send_result {
-                                Ok(_) => {
-
-                                    // --- 4.7.3 Update Timestamp Log ---
-                                    if let Ok(timestamp) = get_toml_file_timestamp(&file_path) {
-                                        update_collaborator_sendqueue_timestamp_log(
-                                            // TODO: Replace with the actual team channel name
-                                            "team_channel_name", 
-                                            &room_sync_input.remote_collaborator_name,
-                                        )?;
-                                        debug_log!("HRCD 4.7.3  Updated timestamp log for {}", room_sync_input.remote_collaborator_name);
+                            // 4.7 Send serializd-file Send if serialization was successful (handle Result)
+                            match serialized_file_struct_to_send {
+                                Ok(extracted_serialized_data) => {  // Serialization OK
+                                    match send_data_via_udp(&extracted_serialized_data, src, room_sync_input.remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip) {
+                                        Ok(_) => {
+                                            debug_log!("File sent successfully");
+                                            // ... (Handle successful send, e.g., update timestamp log)
+                                            
+                                            // --- 4.7.3 Update Timestamp Log ---
+                                            if let Ok(timestamp) = get_toml_file_timestamp(&file_path) {
+                                                update_collaborator_sendqueue_timestamp_log(
+                                                    // TODO: Replace with the actual team channel name
+                                                    "team_channel_name", 
+                                                    &room_sync_input.remote_collaborator_name,
+                                                )?;
+                                                debug_log!("HRCD 4.7.3  Updated timestamp log for {}", room_sync_input.remote_collaborator_name);
+                                            }
+                                                    
+                                            
+                                            
+                                            
+                                        }
+                                        Err(e) => {
+                                            debug_log!("Error sending data: {}", e);
+                                            // Handle the send error (e.g., log, retry, etc.)
+                                        }
                                     }
-                                },
-                                Err(e) => {
-                                    debug_log!("HRCD 4.7.3  Error sending file: {:?} - {}", file_path, e);
-                                    // TODO: Handle file send error (e.g., retry, log, etc.)
+                                }
+                                Err(e) => { // Serialization error
+                                    debug_log!("Serialization error: {}", e);
+                                    // Handle the serialization error (e.g., log, skip file)
                                 }
                             }
+
 
                         } // end of while
                     } // end of 4.4: if let Some(ref mut queue) = session_send_queue {
