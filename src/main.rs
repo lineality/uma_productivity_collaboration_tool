@@ -2207,6 +2207,7 @@ fn check_team_channel_collision(channel_name: &str) -> bool {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 struct GraphNavigationInstanceState {
     local_owner_user: String, // Store the local user data here
+    // local_owner_hash_list: Vec<u8>,
     active_team_channel: String,  // TODO new
     default_im_messages_expiration_days: u64,
     default_task_nodes_expiration_days: u64,
@@ -3351,6 +3352,16 @@ fn wrapper__path_to_clearsign_to_gpgencrypt_to_send_bytes(
     
     Ok(encrypted_content)
 }
+
+/// string-mod: remove_non_alphanumeric
+/// takes a string slice (&str) as input and returns a new String that 
+/// contains only the ASCII alphanumeric characters from the input string. 
+/// The original string is not modified. 
+///
+fn remove_non_alphanumeric(s: &str) -> String {
+    s.chars().filter(|c| c.is_ascii_alphanumeric()).collect()
+}
+
 
 fn add_im_message(
     message_path: &Path,
@@ -4739,6 +4750,91 @@ fn add_pearson_hash_to_readysignal_struct(
     }
 }
 
+/// Retrieves the salt list for a collaborator from their TOML configuration file.
+///
+/// This function reads the collaborator's TOML file located at
+/// `project_graph_data/collaborator_files_address_book/{collaborator_name}__collaborator.toml`,
+/// parses the TOML data, and extracts the `user_salt_list`.  It handles potential errors during file
+/// reading, TOML parsing, and data extraction.
+///
+/// # Arguments
+///
+/// * `collaborator_name`: The name of the collaborator.
+///
+/// # Returns
+///
+/// * `Result<Vec<u128>, ThisProjectError>`:  A `Result` containing the collaborator's salt list (`Vec<u128>`) on success, or a `ThisProjectError` if any error occurs.
+///
+/// use with:let remote_collaborator_salt_list = get_saltlist_for_collaborator(NAME)?; 
+///
+fn get_saltlist_for_collaborator(collaborator_name: &str) -> Result<Vec<u128>, ThisProjectError> {
+    // 1. Construct File Path (using PathBuf)
+    let file_path = Path::new("project_graph_data/collaborator_files_address_book")
+        .join(format!("{}__collaborator.toml", collaborator_name));
+
+    // 2. Read File (handling potential errors)
+    let toml_string = std::fs::read_to_string(&file_path)?;
+
+    // 3. Parse TOML
+    let toml_value: Value = toml::from_str(&toml_string)?;
+
+    // 4. Extract Salt List (handling missing/invalid data)
+    let salt_list_result: Result<Vec<u128>, ThisProjectError> = match toml_value.get("user_salt_list") {
+        Some(Value::Array(arr)) => {
+            arr.iter()
+                .map(|val| { // Iterate each item in the array
+                    if let Value::String(hex_string) = val {
+                        u128::from_str_radix(hex_string.trim_start_matches("0x"), 16)
+                            .map_err(|_| ThisProjectError::InvalidData(format!("Invalid salt format in file for: {}", collaborator_name))) // clearer error message
+                    } else {
+                        Err(ThisProjectError::InvalidData(format!("Invalid salt format in file for: {}", collaborator_name))) // clearer error message
+                    }
+                }).collect() // Collect results
+        },
+        _ => Err(ThisProjectError::InvalidData(format!("Missing or invalid 'user_salt_list' in collaborator file for: {}", collaborator_name))), // Handle missing field or type mismatch
+    };
+    salt_list_result // Return the salt list Result
+}
+
+
+
+// /// Calculates a list of Pearson hashes for a given input string using a provided salt list.
+// ///
+// /// This function takes an input string, converts it to bytes, and calculates a Pearson hash for the
+// /// byte representation combined with each salt in the provided salt list. The resulting hashes are
+// /// returned as a `Vec<u8>`.
+// ///
+// /// # Arguments
+// ///
+// /// * `input_string`: The string to hash.
+// /// * `salt_list`: A slice of `u128` salt values.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<Vec<u8>, ThisProjectError>`: A `Result` containing the list of calculated Pearson hashes on success,
+// ///   or a `ThisProjectError` if an error occurs during hash calculation.
+// fn calculate_pearson_hashlist_for_string(
+//     input_string: &str,
+//     salt_list: &[u128],
+// ) -> Result<Vec<u8>, ThisProjectError> {
+//     let input_bytes = input_string.as_bytes();
+//     let mut hash_list = Vec::new();
+
+//     for salt in salt_list {
+//         let mut salted_data = Vec::new();
+//         salted_data.extend_from_slice(input_bytes);
+//         salted_data.extend_from_slice(&salt.to_be_bytes());
+
+//         let hash = pearson_hash_base(&salted_data)?;
+//         hash_list.push(hash);
+//     }
+
+//     Ok(hash_list)
+// }
+
+
+
+
 /// Verifies the Pearson hashes in a ReadySignal against a provided salt list.
 ///
 /// This function calculates the expected hashes based on the `rt`, `rst`, and `re` fields of the `ReadySignal`
@@ -5332,6 +5428,7 @@ struct SendQueue {
 /// let hex_string = hash_array_to_hex_string(&hash_array);
 /// assert_eq!(hex_string, "123456789abcdef0");
 /// ```
+/// TODO Does this need error handling?
 fn docid__hash_array_to_hex_string(hash_array: &[u8]) -> String {
     hash_array
         .iter()
@@ -5339,8 +5436,88 @@ fn docid__hash_array_to_hex_string(hash_array: &[u8]) -> String {
         .collect::<String>()
 }
 
+/// Parses a hexadecimal string into a vector of bytes.
+///
+/// This function takes a hexadecimal string as input and converts it into a `Vec<u8>`.
+/// It handles both uppercase and lowercase hexadecimal characters and returns an error
+/// if the input string contains invalid characters or has an odd length.
+///
+/// # Arguments
+///
+/// * `hex_string`: The hexadecimal string to parse.
+///
+/// # Returns
+///
+/// * `Result<Vec<u8>, ThisProjectError>`: A `Result` containing the vector of bytes on success,
+///   or a `ThisProjectError` if parsing fails.
+fn hex_string_to_bytes(hex_string: &str) -> Result<Vec<u8>, ThisProjectError> {
+    // Check for valid length (must be even)
+    if hex_string.len() % 2 != 0 {
+        return Err(ThisProjectError::InvalidData(
+            "Invalid hex string: Odd length".into(),
+        ));
+    }
+
+    let mut bytes = Vec::with_capacity(hex_string.len() / 2);
+    for i in (0..hex_string.len()).step_by(2) {
+        let byte_str = &hex_string[i..i + 2];
+        let byte = u8::from_str_radix(byte_str, 16).map_err(|_| {
+            ThisProjectError::InvalidData("Invalid hex string: Invalid characters".into())
+        })?;
+        bytes.push(byte);
+    }
+    Ok(bytes)
+}
 
 
+/// Adds a file path to the send queue for a specific collaborator in a team channel.
+///
+/// This function creates a new file containing the file path to be sent. The file is placed in a directory structure under `sync_data`,
+/// specifically `sync_data/{team_channel_name}/sendqueue_updates/FILENAME.txt
+/// The timestamp is used to ensure unique filenames and can be used for ordering or managing updates.
+///
+/// # Arguments
+///
+/// * `team_channel_name`: The name of the team channel.
+/// * `collaborator_name`: The name of the collaborator.
+/// * `file_path`: The path to the file to be added to the queue.
+///
+/// # Returns
+///
+/// * `Result<(), ThisProjectError>`: `Ok(())` on success, or a `ThisProjectError` if an error occurs.
+fn save_path_for_send_queue(
+    team_channel_name: &str,
+    file_path: &PathBuf, // Take PathBuf directly
+) -> Result<(), ThisProjectError> {
+
+    debug_log!(
+        "save_path_for_send_queue: team: {:?}, path: {:?}",
+        team_channel_name,
+        file_path,
+    );
+
+    // 1. Convert hashes to hex string
+    // remove_non_alphanumeric
+    let filename_for_updateflag = remove_non_alphanumeric(&file_path.to_string_lossy().to_string());    
+
+    // 2. Construct Directory Path (using PathBuf)
+    let mut queue_dir = PathBuf::from("sync_data");
+    queue_dir.push(team_channel_name);
+    queue_dir.push("sendqueue_updates");
+
+    // 3. Create Directory (if needed)
+    create_dir_all(&queue_dir)?;
+
+    // 4. Construct File Path (within directory, with filename_for_updateflag)
+    let queue_file = queue_dir.join(format!("{}.txt", filename_for_updateflag));
+
+    // 5. Write Filepath to Queue File (convert PathBuf to String, handle potential errors)
+    let file_path_string = file_path.to_string_lossy().to_string();
+    write(queue_file, file_path_string)?;
+
+    debug_log!("File path added to send queue: {:?}", file_path);
+    Ok(())
+}
 
 // /// Saves data to a file with a filename derived from a hash array.
 // ///
@@ -8538,6 +8715,8 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                 }
             }
 
+            
+            
             InputMode::InsertText => {
                 
                 debug_log("handle_insert_text_input");
@@ -8554,7 +8733,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                     // 1. final path name (.toml)
                     let message_path = get_next_message_file_path(&app.current_path, local_owner_user); 
                     debug_log(&format!("Next message path: {:?}", message_path)); // Log the calculated message path
-
+                    
                     // 2. make message file
                     add_im_message(
                         &message_path,
@@ -8563,6 +8742,18 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                         None,
                         &app.graph_navigation_instance_state, // Pass using self
                     ).expect("handle_insert_text_input: Failed to add message");
+
+                    // let mut this_team_channelname = "XYZ";
+                    
+                    let this_team_channelname = match get_current_team_channel_name() {
+                        Some(name) => name,
+                        None => "XYZ".to_string(),
+                    }; 
+                    // save_path_for_send_queue
+                    save_path_for_send_queue(
+                        &this_team_channelname,
+                        &message_path, // Take PathBuf directly
+                    );
 
                     app.load_im_messages(); // Access using self
                 }
