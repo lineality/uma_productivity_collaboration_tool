@@ -1078,7 +1078,7 @@ fn debug_log(message: &str) {
 /// read timestamps from .toml files, like you were born to do just that...on Mars!!
 fn get_toml_file_timestamp(file_path: &Path) -> Result<u64, ThisProjectError> {
     debug_log!(
-        "(inHRCD4.7) Starting get_toml_file_timestamp, file_path -> {:?}",
+        "Starting get_toml_file_timestamp, file_path -> {:?}",
         file_path   
     );
 
@@ -1097,7 +1097,7 @@ fn get_toml_file_timestamp(file_path: &Path) -> Result<u64, ThisProjectError> {
         })?;
 
     debug_log!(
-        "(inHRCD4.7) [Done] get_toml_file_timestamp, timestamp -> {:?}",
+        "[Done] get_toml_file_timestamp, timestamp -> {:?}",
         timestamp   
     );
     
@@ -7056,7 +7056,9 @@ fn get_or_create_send_queue(
             }
         }
     }
-
+    
+    debug_log("get_or_create_send_queue calling, get_toml_file_timestamp(), Hello?");
+    
     // Sort the files in the queue based on their modification time
     session_send_queue.items.sort_by_key(|path| {
         get_toml_file_timestamp(path).unwrap_or(0) // Handle potential errors in timestamp retrieval
@@ -7291,9 +7293,9 @@ fn handle_remote_collaborator_meetingroom_desk(
                         ```
                         
                         remove_prefail_flag__for_sendfile(
-    hash_array: &[u8],
-    directory: &Path,
-)
+                            hash_array: &[u8],
+                            directory: &Path,
+                        )
                         */
 
                             
@@ -7342,6 +7344,12 @@ fn handle_remote_collaborator_meetingroom_desk(
             let mut buf = [0; 1024]; // TODO size?
             match ready_socket.recv_from(&mut buf) {                
                 Ok((amt, src)) => {
+                    debug_log!(
+                        "HRCD 2.2.1 Ok((amt, src)) ready_port Signal Received {} bytes from {}", 
+                        amt, 
+                        src
+                    );
+                    
                     if should_halt_uma() {
                         debug_log!(
                             "HRCD Halting handle_local_owner_desk() for {}", 
@@ -7358,13 +7366,8 @@ fn handle_remote_collaborator_meetingroom_desk(
                         }
                 
                         rc_set_as_active = true;
+                        debug_log("HRCD rc_set_as_active = true")
                     }
-
-                    debug_log!(
-                        "HRCD 2.2.1 Ok((amt, src)) ready_port Signal Received {} bytes from {}", 
-                        amt, 
-                        src
-                    );
 
                     // --- Inspect Raw Bytes ---
                     debug_log!(
@@ -7834,6 +7837,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                                             // ... (Handle successful send, e.g., update timestamp log)
                                             
                                             // --- 4.7.3 Update Timestamp Log ---
+                                            debug_log("HRCD calling calling get_toml_file_timestamp(), yes...");
                                             if let Ok(timestamp) = get_toml_file_timestamp(&file_path) {
                                                 update_collaborator_sendqueue_timestamp_log(
                                                     // TODO: Replace with the actual team channel name
@@ -7858,6 +7862,7 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                         } // end of while
                     } // end of 4.4: if let Some(ref mut queue) = session_send_queue {
+                    debug_log!("\nHRCD: end of inner match.\n");    
                 }, // end of the Ok inside the match: Ok((amt, src)) => {
                 Err(e) if e.kind() == ErrorKind::WouldBlock => {
                     // // --- 3.6 No Ready Signal, Log Periodically ---
@@ -7880,9 +7885,9 @@ fn handle_remote_collaborator_meetingroom_desk(
             // thread::sleep(Duration::from_millis(100));
             } // 6091 match ready_socket.recv_from(&mut buf) { 
         } // 6091... match ready_socket.recv_from(&mut buf) {
-    } // 6091 match ready_socket.recv_from(&mut buf) {
-    // nothing closes the main loop
-    debug_log!("ending HRCD");
+        debug_log!("\nHRCD: bottom of main loop.\n");
+    } // nothing closes the main loop
+    debug_log!("\nending HRCD\n");
     Ok(())
 }
 
