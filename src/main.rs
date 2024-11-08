@@ -1104,13 +1104,6 @@ fn get_toml_file_timestamp(file_path: &Path) -> Result<u64, ThisProjectError> {
     Ok(timestamp)
 }
 
-
-// fn get_local_owner_field(field_name: String,)
-
-
-
-
-
 // alpha testing
 #[macro_export] 
 macro_rules! debug_log {
@@ -4137,17 +4130,53 @@ fn extract_last_section(current_path: &PathBuf) -> Option<String> {
     current_path.file_name().and_then(|os_str| os_str.to_str().map(|s| s.to_string()))
 }
 
-// Helper function to determine the next available message file path (e.g., 1.toml, 2.toml, etc.)
-fn get_next_message_file_path(current_path: &Path, selected_user_collaborator: &str) -> PathBuf {
-    let mut i = 1;
-    loop {
-        
-        let file_path = current_path.join(format!("{}__{}.toml", i, selected_user_collaborator));
-        if !file_path.exists() {
-            return file_path;
+/// Determines the next available message file path.
+///
+/// Finds the highest existing message number in the given directory,
+/// *ignoring usernames*, and returns a `PathBuf` for the next available file,
+/// formatted as `{next_number}__{username}.toml`.
+///
+/// Handles empty directories and non-message files by starting from 1.
+///
+/// # Arguments
+///
+/// * `current_path`: The directory containing message files.
+/// * `username`: The username for the *new* file.
+///
+/// # Returns
+///
+/// * `PathBuf`: Path to the next available message file.
+fn get_next_message_file_path(current_path: &Path, username: &str) -> PathBuf {
+    let mut max_number = 0;
+
+    debug_log!(
+        "get_next_message_file_path(): Starting. current_path: {:?}, username: {}",
+        current_path, username
+    );
+
+
+    if let Ok(entries) = fs::read_dir(current_path) {
+        for entry in entries.flatten() {
+            if let Some(file_name) = entry.file_name().to_str() {
+                if let Some((number_str, _rest)) = file_name.split_once("__") { // Ignore the rest of the filename
+                    if let Ok(number) = number_str.parse::<u32>() {
+                        max_number = max_number.max(number);
+                    }
+                }
+            }
         }
-        i += 1;
     }
+
+    let next_number = max_number + 1;
+    let file_name = format!("{}__{}.toml", next_number, username);
+    let file_path = current_path.join(file_name);
+
+
+    debug_log!(
+        "get_next_message_file_path(): Returning file_path: {:?}",
+        file_path
+    );    
+    file_path
 }
 
 /// Loads collaborator data from a TOML file based on the username.
@@ -5082,7 +5111,7 @@ impl SendQueue {
     /// # Arguments
     ///
     /// * `path`: The `PathBuf` to add to the queue.
-    fn add_to_front(&mut self, path: PathBuf) {
+    fn add_to_front_of_sendq(&mut self, path: PathBuf) {
         self.items.insert(0, path);
     }
 }
@@ -5370,33 +5399,6 @@ fn save_updateflag_path_for_sendqueue(
 // ///
 // /// # Example
 // ///
-// fn set_prefail_flag_via_hash__for_sendfile(
-//     hash_array: &[u8],
-//     remote_collarator_name: &String,
-// ) -> Result<(), ThisProjectError> {
-//     let file_name = docid__hash_array_to_hex_string(hash_array);
-
-
-//     // get team channel from single source of truth
-//     let team_channel_name = get_current_team_channel_name();
-    
-//     // as path
-//     // if not exist, make it
-//     directory = format..."sync_data/team_channel/fail_flags/{}/DOC-ID", remote_collarator_name, file_name;
-    
-//     let file_path = directory.join(file_name);
-    
-//     // Check for and create the directory
-//     if let Some(parent_dir) = directory.parent() {
-//         std::fs::create_dir_all(parent_dir)?;
-//     } else {
-//         return Err(ThisProjectError::GpgError("Invalid directory path, no parent".into()))
-//     }
-
-//     let mut file = File::create(file_path)?;
-//     file.write_all()?;
-//     Ok(())
-// }
 
 
 fn hash_sendfile_struct_fields(
@@ -5466,119 +5468,242 @@ fn hash_checker_for_sendfile_struct(
 }
 
 
-/// Saves a "pre-fail" flag file (an empty file used as a marker).
+// /// Saves a "pre-fail" flag file (an empty file used as a marker).
+// ///
+// /// This function creates an empty file within the `sync_data` directory to serve as a "pre-fail"
+// /// flag.  The file's name is derived from the provided `hash_array`, and its presence indicates
+// /// that a file send attempt is in progress (and assumed to have failed unless explicitly cleared).
+// /// The directory structure is as follows:  `sync_data/{team_channel_name}/fail_retry_flags/{remote_collaborator_name}/{doc_id}`
+// ///
+// /// # Arguments
+// ///
+// /// * `hash_array`: A slice of `u8` values used to generate the filename (doc_id).
+// /// * `remote_collaborator_name`: The name of the remote collaborator associated with the flag.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<(), ThisProjectError>`:  `Ok(())` if the flag file is successfully created, or a `ThisProjectError`
+// ///   if an error occurs (e.g., during file creation or directory creation).
+// ///
+// fn set_prefail_flag_rt_timestamp__for_sendfile(
+//     rt_timestamp: u64,
+//     remote_collaborator_name: &str,
+// ) -> Result<(), ThisProjectError> {
+//     // let doc_id = docid__hash_array_to_hex_string(hash_array);
+    
+//     let team_channel_name = get_current_team_channel_name()
+//         .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
+
+//     let mut file_path = PathBuf::from("sync_data"); // Use PathBuf not format!()
+//     file_path.push(&team_channel_name);
+//     file_path.push("fail_retry_flags");
+//     file_path.push(remote_collaborator_name);
+//     create_dir_all(&file_path)?; // Create the directory structure if it doesn't exist
+    
+//     // TODO string of u64
+//     let string_of_rt = rt_timestamp.to_string();
+    
+//     file_path.push(string_of_rt);
+//     File::create(file_path)?; // Create the empty file as a flag
+//     Ok(())
+// }
+
+/// Sets a "pre-fail" flag file using the ReadySignal timestamp (.rt).
 ///
-/// This function creates an empty file within the `sync_data` directory to serve as a "pre-fail"
-/// flag.  The file's name is derived from the provided `hash_array`, and its presence indicates
-/// that a file send attempt is in progress (and assumed to have failed unless explicitly cleared).
-/// The directory structure is as follows:  `sync_data/{team_channel_name}/fail_retry_flags/{remote_collaborator_name}/{doc_id}`
+/// Creates an empty file as a flag in the `sync_data` directory. The file's
+/// name is the ReadySignal's .rt timestamp as a string. Its presence indicates a file
+/// send attempt is in progress (and assumed failed unless removed).  Directory
+/// structure: `sync_data/{team_channel_name}/fail_retry_flags/{remote_collaborator_name}/{rt_timestamp}`.
 ///
 /// # Arguments
 ///
-/// * `hash_array`: A slice of `u8` values used to generate the filename (doc_id).
-/// * `remote_collaborator_name`: The name of the remote collaborator associated with the flag.
+/// * `rt_timestamp`: The .rt timestamp from the ReadySignal.
+/// * `remote_collaborator_name`: Remote collaborator's name.
 ///
 /// # Returns
 ///
-/// * `Result<(), ThisProjectError>`:  `Ok(())` if the flag file is successfully created, or a `ThisProjectError`
-///   if an error occurs (e.g., during file creation or directory creation).
-///
-fn set_prefail_flag_via_hash__for_sendfile(
-    hash_array: &[u8],
+/// * `Result<(), ThisProjectError>`: `Ok(())` on success, or a `ThisProjectError`
+///   on failure.
+fn set_prefail_flag_rt_timestamp__for_sendfile(
+    rt_timestamp: u64,
     remote_collaborator_name: &str,
 ) -> Result<(), ThisProjectError> {
-    let doc_id = docid__hash_array_to_hex_string(hash_array);
-
     let team_channel_name = get_current_team_channel_name()
         .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
 
-    let mut directory = PathBuf::from("sync_data"); // Use PathBuf not format!()
-    directory.push(&team_channel_name);
-    directory.push("fail_retry_flags");
-    directory.push(remote_collaborator_name);
-    create_dir_all(&directory)?; // Create the directory structure if it doesn't exist
-
-    let file_path = directory.join(&doc_id);  // Use doc_id directly
-    File::create(file_path)?; // Create the empty file as a flag
-    Ok(())
-}
-
-
-/// Removes a "pre-fail" flag file, indicating successful file transfer.
-///
-/// This function removes the flag file previously created by `set_prefail_flag_via_hash__for_sendfile`.
-/// The file's absence signals that the associated file transfer has completed successfully.
-///
-/// # Arguments
-///
-/// * `hash_array`: A slice of `u8` values used to generate the filename (doc_id).
-/// * `remote_collaborator_name`: The name of the remote collaborator associated with the flag.
-///
-/// # Returns
-///
-/// * `Result<(), ThisProjectError>`: `Ok(())` if the file is successfully removed or if it doesn't exist (which
-///   is a valid state), or a `ThisProjectError` if another error occurs during file removal.
-///
-fn remove_prefail_flag__for_sendfile(
-    hash_array: &[u8],
-    remote_collaborator_name: &str,
-) -> Result<(), ThisProjectError> {
-
-    let doc_id = docid__hash_array_to_hex_string(hash_array);
-
-
-    let team_channel_name = get_current_team_channel_name()
-        .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?; // Handle error
-
-    // Use PathBuf and push components, this is clear, safe and cross-platform
     let mut directory = PathBuf::from("sync_data");
     directory.push(&team_channel_name);
     directory.push("fail_retry_flags");
     directory.push(remote_collaborator_name);
-    create_dir_all(&directory)?; // Create the directory structure if it doesn't exist
-    let file_path = directory.join(&doc_id);
+    
+    // 1. Create directory with error handling
+    match fs::create_dir_all(&directory) {
+        Ok(_) => debug_log!("set_prefail_flag_rt_timestamp__for_sendfile(): Directory created successfully: {:?}", directory),
+        Err(e) => {
+            debug_log!("set_prefail_flag_rt_timestamp__for_sendfile(): Error creating directory: {}", e);
+            return Err(ThisProjectError::IoError(e));
+        }
+    };
+    
 
-    // Remove the file, but it's ok if it doesn't exist:
-    match remove_file(file_path) {
-        Ok(_) => Ok(()),
-        Err(e) if e.kind() == ErrorKind::NotFound => Ok(()), // OK if file not found
-        Err(e) => Err(ThisProjectError::IoError(e)),
-    }
+    let flag_file_path = directory.join(rt_timestamp.to_string());
+
+    // 2. Create file with error handling
+    match File::create(&flag_file_path) { // Use & for path
+        Ok(_) => debug_log!("set_prefail_flag_rt_timestamp__for_sendfile():  Flag file created: {:?}", flag_file_path), // Use :? not !
+        Err(e) => {
+            debug_log!("set_prefail_flag_rt_timestamp__for_sendfile(): Error creating flag file: {}", e);
+            return Err(ThisProjectError::IoError(e));
+        }
+    };
+    
+    Ok(())
 }
 
-// /// Removes a file in the specified directory with a name based on a hash.
-// ///
-// /// # Arguments
-// ///
-// /// * `hash_array`: A slice of `u8` values used to generate the filename.
-// /// * `directory`: The path to the directory containing the file to be removed.
-// ///
-// /// # Returns
-// ///
-// /// * `Result<(), ThisProjectError>`: `Ok(())` if the file is successfully removed or if it doesn't exist,
-// ///   or a `ThisProjectError` if an error occurs during file removal.
-// fn remove_prefail_flag__for_sendfile(
-//     hash_array: &[u8],
-//     remote_collarator_name: &String,
-// ) -> Result<(), ThisProjectError> {
-//     let hex_string = docid__hash_array_to_hex_string(hash_array); // Use the helper function
-    
-//     // get team channel from single source of truth
-//     let team_channel_name = get_current_team_channel_name();
-    
-//     // as path
-//     // if not exist, make it
-//     directory = format..."sync_data/team_channel/fail_flags/{}/DOC-ID", remote_collarator_name, file_name;
-    
-//     let file_path = directory.join(hex_string);
+/// Retrieves the oldest send file pre-fail flag timestamp or zero if no flags exist.
+///
+/// This function iterates through the fail_retry_flags directory for the given
+/// team channel and remote collaborator, finds the oldest timestamp among the
+/// flag files (which are named with the .rt timestamp), and returns it. If no
+/// flags are found, it returns 0.
+///
+/// # Arguments
+///
+/// * `remote_collaborator_name`: The name of the remote collaborator.
+///
+/// # Returns
+///
+/// * `Result<u64, ThisProjectError>`: The oldest timestamp (or 0) on success, or
+///   a `ThisProjectError` on failure.
+fn get_oldest_sendfile_prefailflag_rt_timestamp_or_zero(
+    remote_collaborator_name: &str,
+) -> Result<u64, ThisProjectError> {
+    let mut oldest_timestamp: u64 = 0;
 
-//     match remove_file(file_path) {
-//         Ok(_) => Ok(()), // File removed successfully
-//         Err(e) if e.kind() == ErrorKind::NotFound => Ok(()), // File not found, but that's OK
-//         Err(e) => Err(ThisProjectError::IoError(e)), // Other error during file removal
-//     }
+    let team_channel_name = get_current_team_channel_name()
+        .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
+
+    let directory = PathBuf::from("sync_data")
+        .join(&team_channel_name)
+        .join("fail_retry_flags")
+        .join(remote_collaborator_name);
+
+
+    if !directory.exists() { // Handle directory existance
+        debug_log!("get_oldest_sendfile_prefailflag_rt_timestamp_or_zero(): Directory not found. Returning 0.");
+        return Ok(0);
+    }    
+
+    // Correct iteration:
+    for entry in fs::read_dir(&directory)? { // Note the &
+        let entry = entry?;
+        let path = entry.path();
+
+        if path.is_file() {
+            let file_name = path.file_name().unwrap().to_str().unwrap(); // Handle unwrap result!
+
+            // Parse timestamp from filename, with error handling
+            match file_name.parse::<u64>() {
+                Ok(timestamp) => {
+                    if oldest_timestamp == 0 || timestamp < oldest_timestamp {
+                        oldest_timestamp = timestamp;
+                    }
+                }
+                Err(e) => {
+                    debug_log!(
+                        "get_oldest_sendfile_prefailflag_rt_timestamp_or_zero(): Error parsing timestamp from filename {}: {}",
+                        file_name,
+                        e
+                    );
+                    // Handle parsing error as you see fit, e.g., continue, log and return error, etc.
+                    continue; // Skip to next file
+                }
+            }
+        }
+    }
+
+    Ok(oldest_timestamp)
+}
+
+
+// /// This function removes all sendfile fail flags
+// /// for a team channel, for a remote collaborator
+// ///
+// /// iterate throuhg directory
+// /// keep oldest timestamp found
+// /// return u64 timestamp
+// fn get_oldest_sendfile_prefailflag_rt_timestamp_or_zero(
+//     remote_collaborator_name: &str,
+// ) -> u64, ThisProjectError> {
+    
+//     let mut oldest_item_or_zero: u64 = 0;
+    
+//     let team_channel_name = get_current_team_channel_name()
+//         .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
+
+//     let mut directory = PathBuf::from("sync_data"); // Use PathBuf not format!()
+//     directory.push(&team_channel_name);
+//     directory.push("fail_retry_flags");
+//     directory.push(remote_collaborator_name);
+//     create_dir_all(&directory)?; // Create the directory structure if it doesn't exist
+    
+//     // TODO
+//     // iterate through stub-file names
+//     // convert to u64
+//     // if older than non-zero 
+//     // then oldest_item_or_zero current item
+    
+//     oldest_item_or_zero
 // }
 
+
+/// Removes all pre-fail flag files for a remote collaborator.
+///
+/// This function removes all files within the fail_retry_flags directory for the
+/// given team channel and remote collaborator. The directory structure is as
+/// follows:  `sync_data/{team_channel_name}/fail_retry_flags/{remote_collaborator_name}/`.
+///
+/// # Arguments
+///
+/// * `remote_collaborator_name`: The name of the remote collaborator.
+///
+/// # Returns
+///
+/// * `Result<(), ThisProjectError>`: `Ok(())` if all files were removed
+///   successfully (or if the directory doesn't exist), or a
+///   `ThisProjectError` if an error occurs during directory access or file
+///   removal.
+fn remove_prefail_flags__for_sendfile(
+    remote_collaborator_name: &str,
+) -> Result<(), ThisProjectError> {
+    let team_channel_name = get_current_team_channel_name()
+        .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
+
+    let directory = PathBuf::from("sync_data")
+        .join(&team_channel_name)
+        .join("fail_retry_flags")
+        .join(remote_collaborator_name);
+
+    if !directory.exists() { // Check for existance
+        return Ok(()); // Or log a message: debug_log!("Directory not found: {:?}", directory);
+    }
+
+    for entry in fs::read_dir(&directory)? {  // Iterate through directory contents
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_file() { // Only remove files
+            match fs::remove_file(&path) { // Use remove_file, not remove_dir_all
+                Ok(_) => debug_log!("Removed flag file: {:?}", path),
+                Err(e) => {
+                    debug_log!("Error removing flag file: {:?} - {}", path, e);
+                    // Either continue or return the error if you want to stop on the first error.
+                    return Err(ThisProjectError::IoError(e)); 
+                }
+            }
+        }
+    }
+    Ok(())
+}
 
 
 // let timestamp_request_port = // ... port for sending "ready to receive" to collaborator
@@ -5590,217 +5715,6 @@ fn send_data(data: &[u8], target_addr: SocketAddr) -> Result<(), io::Error> {
     socket.send_to(data, target_addr)?;
     Ok(())
 }
-
-
-
-// use std::path::{Path, PathBuf};
-// use std::fs::{read_to_string, write, create_dir_all};
-
-
-// /// Retrieves or initializes the timestamp of the latest received file from a specific collaborator.
-// ///
-// /// This function attempts to read the latest received file timestamp from a file at:
-// /// `sync_data/{team_channel_name}/latest_receivedfile_timestamps/{remote_collaborator_name}/latest_received_file_timestamp`.
-// /// If the file or directory structure doesn't exist, it creates the necessary directories and initializes the timestamp to 0,
-// /// effectively treating it as a bootstrap condition.
-// ///
-// /// # Arguments
-// ///
-// /// * `team_channel_name`: The name of the team channel.
-// /// * `remote_collaborator_name`: The name of the remote collaborator.
-// ///
-// /// # Returns
-// ///
-// /// * `u64`: The latest received file timestamp.  Returns 0 if no timestamp file exists or if there was an error reading it (which
-// ///   is handled internally by initializing a new timestamp file with 0).
-// fn latest_received_file_timestamp_get_or_initialize(
-//     remote_collaborator_name: &str,
-// ) -> u64 {
-    
-//     let team_channel_name = get_current_team_channel_name()
-//         .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
-    
-//     debug_log!("latest_received_file_timestamp_get_or_initialize() called with team_channel_name: {}, remote_collaborator_name: {}", team_channel_name, remote_collaborator_name);
-    
-//     let mut timestamp_file_path = PathBuf::from("sync_data");
-//     timestamp_file_path.push(team_channel_name);
-//     timestamp_file_path.push("latest_receivedfile_timestamps");
-//     timestamp_file_path.push(remote_collaborator_name);
-//     timestamp_file_path.push("latest_received_file_timestamp");
-
-//     // 1. Ensure directory structure exists
-//     if let Some(parent) = timestamp_file_path.parent() {
-//         if let Err(e) = create_dir_all(parent) {
-//             debug_log!("Error creating directory: {}", e); // Log and return
-//             return 0;
-//         }
-//     } else {
-//         debug_log!("Invalid timestamp file path: No parent directory");
-//         return 0;
-//     }
-
-//     // 2. Try to read existing timestamp
-//     match read_to_string(×tamp_file_path) {
-//         Ok(timestamp_str) => {
-//             match timestamp_str.trim().parse() {
-//                 Ok(timestamp) => {
-//                     debug_log!("Timestamp read from file: {}", timestamp);
-//                     return timestamp; 
-//                 }
-//                 Err(e) => {
-//                     debug_log!("Error parsing timestamp from file: {}", e);
-//                     // Fall through to initialize with 0 if parsing fails
-//                 }
-//             }
-//         }
-//         Err(e) if e.kind() == std::io::ErrorKind::NotFound => { 
-//             debug_log!("No timestamp file found. Initializing new file.");
-//             // Initialize with 0 if the file doesn't exist
-//         }
-//         Err(e) => {
-//             debug_log!("Error reading timestamp file: {}", e);
-//             return 0; // Or handle the error as you see fit (e.g., panic)
-//         }
-//     }
-
-//     // 3. Initialize with 0 and create/write file if not found or parsing error
-//     if let Err(e) = write(×tamp_file_path, "0") { // Returns error or ()
-//         debug_log!("Error writing initial timestamp to file: {}", e);
-//     } else {
-//         debug_log!("Initialized timestamp file with 0");
-//     }
-
-//     0 // Return the default
-// }
-
-
-
-
-// /// Retrieves or initializes the timestamp of the latest received file from a specific collaborator.
-// ///
-// /// This function reads the latest received file timestamp from:
-// /// `sync_data/{team_channel_name}/latest_receivedfile_timestamps/{remote_collaborator_name}/latest_received_file_timestamp`.
-// /// If it doesn't exist, it initializes the timestamp to 0 and creates the necessary directories and file.
-// ///
-// /// # Arguments
-// ///
-// /// * `remote_collaborator_name`: The name of the remote collaborator.
-// ///
-// /// # Returns
-// ///
-// /// * `Result<u64, ThisProjectError>`: The timestamp on success, or a `ThisProjectError` on failure.
-// fn latest_received_file_timestamp_get_or_initialize(
-//     remote_collaborator_name: &str,
-// ) -> Result<u64, ThisProjectError> { // Correct return type
-    
-//     let team_channel_name = get_current_team_channel_name()
-//         .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?; // Now correctly uses Result
-
-//     debug_log!("latest_received_file_timestamp_get_or_initialize() called with team_channel_name: {}, remote_collaborator_name: {}", team_channel_name, remote_collaborator_name);
-    
-//     let mut timestamp_file_path = PathBuf::from("sync_data");
-//     timestamp_file_path.push(&team_channel_name); // Borrow team_channel_name
-//     timestamp_file_path.push("latest_receivedfile_timestamps");
-//     timestamp_file_path.push(remote_collaborator_name);
-//     timestamp_file_path.push("latest_received_file_timestamp");
-
-//     // 1. Ensure directory structure exists
-//     if let Some(parent) = timestamp_file_path.parent() {
-//         if let Err(e) = create_dir_all(parent) {
-//             debug_log!("Error creating directory: {}", e); // Log and return
-//             return Ok(0);
-//         }
-//     } else {
-//         debug_log!("Invalid timestamp file path: No parent directory");
-//         return Ok(0);
-//     }
-
-//     // 2. Try to read existing timestamp
-//     match read_to_string(×tamp_file_path) { // Use & for borrowing
-//         Ok(timestamp_str) => {
-//             match timestamp_str.trim().parse() {
-//                 Ok(timestamp) => {
-//                     debug_log!("Timestamp read from file: {}", timestamp);
-//                     return Ok(timestamp); // Return Ok(timestamp)
-//                 }
-//                 Err(e) => {
-//                     debug_log!("Error parsing timestamp from file: {}", e);
-//                     // Fall through to initialize with 0 if parsing fails
-//                 }
-//             }
-//         }
-//         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-//             debug_log!("No timestamp file found. Initializing new file.");
-//         }
-//         Err(e) => {
-//             debug_log!("Error reading timestamp file: {}", e);
-//             return Err(ThisProjectError::IoError(e)); // Correct error return
-//         }
-//     }
-
-//     // 3. Initialize with 0 and create/write file if not found or parsing error
-//     if let Err(e) = write(×tamp_file_path, "0") {
-//         debug_log!("Error writing initial timestamp to file: {}", e);
-//         return Err(ThisProjectError::IoError(e)); // Correct error handling
-//     } else {
-//         debug_log!("Initialized timestamp file with 0");
-//     }
-
-//     Ok(0) // Return Ok(0)
-// }
-
-
-
-// /// Retrieves or initializes the timestamp of the latest received file.
-// /// Creates the necessary directories and file if they don't exist.
-// ///
-// /// # Arguments
-// ///
-// /// * `remote_collaborator_name`: The name of the remote collaborator.
-// ///
-// /// # Returns
-// ///
-// /// * `Result<u64, ThisProjectError>`: The latest received file timestamp on success, or a `ThisProjectError` on failure.
-// fn latest_received_file_timestamp_get_or_initialize(
-//     remote_collaborator_name: &str,
-// ) -> Result<u64, ThisProjectError> {
-//     let team_channel_name = get_current_team_channel_name()
-//         .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
-
-//     let mut timestamp_file_path = PathBuf::from("sync_data");
-//     timestamp_file_path.push(&team_channel_name);
-//     timestamp_file_path.push("latest_receivedfile_timestamps");
-//     timestamp_file_path.push(remote_collaborator_name);
-//     timestamp_file_path.push("latest_received_file_timestamp");
-
-//     // Create directories if they don't exist:
-//     if let Some(parent) = timestamp_file_path.parent() {
-//         create_dir_all(parent)?;
-//     }
-
-//     // Attempt to read the timestamp. If the file doesn't exist or parsing fails, initialize it to 0:
-//     let timestamp: u64 = match std::fs::read_to_string(×tamp_file_path) // Borrow with &
-//         .map_err(|e| ThisProjectError::IoError(e)) // Convert to ThisProjectError if appropriate
-//         .and_then(|s| s.trim().parse().map_err(|e| ThisProjectError::ParseIntError(e)))
-//     {
-//         Ok(ts) => ts,
-//         Err(e) => {
-//             // Could not read. Initialize with 0 and create the file
-//             if let Err(e) = write(×tamp_file_path, "0") { // Must borrow with &
-//                 return Err(ThisProjectError::IoError(e)); // And return error
-//             }
-//             0 // Return default timestamp
-//         }
-//     };
-
-
-//     Ok(timestamp)
-// }
-
-
-// use std::fs::{File, create_dir_all, read_to_string};
-// use std::io::Write;
-// use std::path::PathBuf;
 
 /// Gets the latest received file timestamp for a collaborator in a team channel, using a plain text file.
 ///
@@ -7015,7 +6929,10 @@ fn get_or_create_send_queue(
     }
     */
     // let mut back_of_queue_timestamp = session_send_queue.back_of_queue_timestamp.clone();
-    debug_log("HRCD->get_or_create_send_queue: start");
+    debug_log!(
+        "HRCD->get_or_create_send_queue(): start;  ready_signal_timestamp -> {:?}",
+        ready_signal_timestamp   
+    );
     
     // Get update flag paths
     let newpath_list = match get_sendq_update_flag_paths(
@@ -7031,7 +6948,7 @@ fn get_or_create_send_queue(
 
     // Add new paths to the front of the queue
     for this_iter_newpath in newpath_list {
-        session_send_queue.add_to_front(this_iter_newpath); // Use the new method
+        session_send_queue.add_to_front_of_sendq(this_iter_newpath); // Use the new method
     }
     
     // Note: this will not be true when making a queue, e.g. during first time bootstrapping
@@ -7370,6 +7287,9 @@ fn handle_remote_collaborator_meetingroom_desk(
                 break;
             }
 
+            // set before the loop
+            let mut reset_sendq_flag: bool = false;
+            
             // --- 2.2. Handle Ready Signal:  ---
             // "Listener"?
             // 2.2.1 Receive Ready Signal
@@ -7572,15 +7492,57 @@ fn handle_remote_collaborator_meetingroom_desk(
                     debug_log("##HRCD## [Done] checks(plaid) 3.2.3\n");
                     
                     // 3.2.4 look for fail-flags:
-                    if !ready_signal.re.unwrap_or(false) {
-                        // TODO ... things to do with fail flags?
-                        // maybe by default reset the queue
-                        let mut session_send_queue = SendQueue {
-                            back_of_queue_timestamp: 0,
-                            items: Vec::new(),
-                        };
-                    };
+                    
+                    // if echo or default to false
+                    
+                    ////////////////////////////////
+                    // Set back_of_queue_timestamp
+                    //////////////////////////////
 
+                    match get_oldest_sendfile_prefailflag_rt_timestamp_or_zero(&room_sync_input.remote_collaborator_name) {
+                        Ok(oldest_prefail_flag_rt_timestamp) => {
+                            // 2. Now you can compare:
+                            if oldest_prefail_flag_rt_timestamp != 0 {
+                                // 3. Reset the send queue:
+                                session_send_queue = SendQueue {
+                                    back_of_queue_timestamp: oldest_prefail_flag_rt_timestamp,
+                                    items: Vec::new(),
+                                };
+                                reset_sendq_flag = true;
+                                debug_log!("HRCD Resetting send queue using timestamp from flag: {}", oldest_prefail_flag_rt_timestamp);
+                            } else {
+                                debug_log!("HRCD No retry flags found. Using ReadySignal timestamp.");
+                                // Handle the case where no pre-fail flags were found. Perhaps use the timestamp from the ready signal?
+                                session_send_queue.back_of_queue_timestamp = ready_signal.rt.expect("REASON"); // Example
+
+                            }
+                        }
+                        Err(e) => {
+                            // 4. Handle the error:
+                            debug_log!("HRCD Error getting oldest retry timestamp: {}", e);
+                            // Decide how to handle the error. You might:
+                            // - continue; // Skip to the next iteration
+                            // - return Err(e); // Or wrap the error: return Err(ThisProjectError::from(e));
+                            // - use a default timestamp: back_of_queue_timestamp = 0;
+                            continue; // Skip for now
+                        }
+                    }
+
+                    // let oldest_prefail_flag_rt_timestamp = get_oldest_sendfile_prefailflag_rt_timestamp_or_zero(
+                    //     &room_sync_input.remote_collaborator_name
+                    // );
+                    
+                    // // If there are fail flags, use that time, otherwise use ReadySignal .rt time:
+                    // if oldest_prefail_flag_rt_timestamp != 0 {
+                        
+                    //     // prep to reset a new SendQueue
+                    //     session_send_queue = SendQueue {
+                    //         back_of_queue_timestamp: oldest_prefail_flag_rt_timestamp,
+                    //         items: Vec::new(),
+                    //     }; 
+                    //     reset_sendq_flag = true;
+                    // }; 
+                    
                     // --- 3.3 Get / Make Send-Queue ---
                     let this_team_channelname = match get_current_team_channel_name() {
                         Some(name) => name,
@@ -7591,10 +7553,10 @@ fn handle_remote_collaborator_meetingroom_desk(
                     }; 
                     debug_log!("HRCD 3.3 this_team_channelname -> {:?}", this_team_channelname);
 
-                    // if not-echo-send: see if you can or need to make a new queue
+                    //  if echo==true: skip remaking queue
+                    // note: as long as send is not parallel, explicit echo here may be depricated
                     debug_log!("HRCD 3.3 ?is-echo? ready_signal.re.unwrap_or(false) -> {:?}", ready_signal.re.unwrap_or(false));
-                    
-                    if !ready_signal.re.unwrap_or(false) {
+                    if !ready_signal.re.unwrap_or(true) {
                         debug_log("HRCD 3.3 get_or_create_send_queue");
                         session_send_queue = match session_send_queue {
                             input_sendqueue => {
@@ -7606,47 +7568,15 @@ fn handle_remote_collaborator_meetingroom_desk(
                                 )?
                             }
                         };
+                        
+                        // reset flag
+                        reset_sendq_flag = false;
+                        
                     }
                     debug_log!(
                         "HRCD ->[]<- 3.3 Get / Make session_send_queue {:?}",
                         session_send_queue   
                     );
-
-                    // session_send_queue = match session_send_queue {
-                    //     Some(queue) => {
-                    //         // Update the queue based on the received timestamp if there was a previous queue
-                    //         Some(get_or_create_send_queue(
-                    //             &this_team_channelname,
-                    //             &room_sync_input.remote_collaborator_name,
-                    //             queue, // existing queue
-                    //             ready_signal_timestamp,
-                    //         )?)
-                    //     }
-                    //     None => {
-                    //         // Create a completely fresh queue with the received timestamp 
-                    //         Some(get_or_create_send_queue(
-                    //             &this_team_channelname,
-                    //             &room_sync_input.remote_collaborator_name,
-                    //             SendQueue { // a new SendQueue
-                    //                 back_of_queue_timestamp: ready_signal_timestamp,
-                    //                 items: Vec::new()
-                    //             },
-                    //             ready_signal_timestamp,
-                    //         )?)
-                    //     }
-                    // };
-
-                    
-                    // --- 4. Send File: Send One File from Queue ---
-                    // Prset file-send-failed flag
-                    // 4.1 preset file_send failed flags file-name == document_id
-                    /*
-                    Save To:
-                    ```path
-                    sync_data/team_channel/fail_flags/NAME-of-COLLABORATOR/DOC-ID
-                    ```
-                    */
-
 
                     /*
                     send_file_toml_to_rc_intray(
@@ -7732,50 +7662,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                                 "HRCD 4.2, 4.3.1, 4.3.2 done gpg wrapper"
                             );
                             
-                            // // 4.4. Calculate SendFile Struct Hashes (Using Collaborator's Salts)
-                            // // Change the type to hold Vec<u8>
-                            // let mut sendfile_struct_data_to_hash: Vec<Vec<u8>> = Vec::new();
-                            // let sendtime_bytes = intray_send_time.to_be_bytes();
-                            // sendfile_struct_data_to_hash.push(sendtime_bytes.to_vec()); // Push a Vec<u8>
-                            // sendfile_struct_data_to_hash.push(file_bytes2send.clone()); 
-
-                            // for salt in &room_sync_input.local_user_salt_list {
-                            //     // Create a new Vec<u8> for each salt
-                            //     let salt_bytes = salt.to_be_bytes().to_vec(); 
-                            //     sendfile_struct_data_to_hash.push(salt_bytes); // Push the owned Vec<u8>
-                            // }
-
-                            // // 4.5. hashing
-                            // // Convert to &[u8] slices for the hashing function
-                            // let intray_hash_list = calculate_pearson_hashes(
-                            //     &sendfile_struct_data_to_hash.iter().map(|v| v.as_slice()).collect::<Vec<&[u8]>>() // Specify type here
-                            // )?;
-                            
-                            
-                            // let calculated_hrcd_sendfile_hashes = hash_sendfile_struct_fields(
-                            //     &room_sync_input.local_user_salt_list,
-                            //     intray_send_time,
-                            //     &file_bytes2send.clone(), // Use a slice for efficiency
-                            // ); 
-                            
-                            
-                            // // debug_log!(
-                            // //     "HRCD 4.5 intray_hash_list {:?}",
-                            // //     intray_hash_list   
-                            // // );
-                            // // 4.6. Create SendFile Struct 
-                            // let sendfile_struct = SendFile {
-                            //     intray_send_time: Some(intray_send_time),
-                            //     gpg_encrypted_intray_file: Some(file_bytes2send.clone()),
-                            //     intray_hash_list: Some(calculated_hrcd_sendfile_hashes?),
-                            // }; 
-                            
-                            // // 4.6 set_prefail_flag_via_hash__for_sendfile
-                            // set_prefail_flag_via_hash__for_sendfile(
-                            //     &calculated_hrcd_sendfile_hashes,
-                            //     &room_sync_input.remote_collaborator_name
-                            //     );
-
+                            // // 4.5. Calculate SendFile Struct Hashes (Using Collaborator's Salts)
                             // 4.5 calculate hashes: HRCD
                             let calculated_hrcd_sendfile_hashes = hash_sendfile_struct_fields(
                                 &room_sync_input.local_user_salt_list,
@@ -7809,46 +7696,35 @@ fn handle_remote_collaborator_meetingroom_desk(
                                 sendfile_struct   
                             );
                             
-                            // 4.7 set_prefail_flag_via_hash__for_sendfile
-                            if let Err(e) = set_prefail_flag_via_hash__for_sendfile(
-                                &calculated_hashes, // Use the unwrapped hashes
-                                &room_sync_input.remote_collaborator_name
-                            ) {
-                                debug_log!("HRCD 4.7 Error setting pre-fail flag: {}", e);
-                                continue; // Handle error as you see fit
-                            };
-                            // // 4.5. hashing HRCD
-                            // let mut calculated_hashes = Vec::new();
-                            // match calculate_and_verify_sendfile_hashes(
-                            //     &send_file,
-                            //     &room_sync_input.local_user_salt_list,
+                            
+                            // // 4.7 set_prefail_flag_rt_timestamp__for_sendfile
+                            // if let Err(e) = set_prefail_flag_rt_timestamp__for_sendfile(
+                            //     &ready_signal.rt, // .rt timestamp
+                            //     &room_sync_input.remote_collaborator_name
                             // ) {
-                            //     Ok((hashes, all_hashes_match)) => {
-                            //         if !all_hashes_match {
-                            //             debug_log("HLOD 5: SendFile Struct hash verification failed. Discarding signal.");
-                            //             continue; // Discard the signal and continue listening
-                            //         }
-                            //         calculated_hashes = hashes;
-                            //     }
-                            //     Err(e) => {
-                            //         debug_log(&format!("Error calculating and verifying SendFile hashes: {}", e));
-                            //         continue; // Discard the signal and continue listening
-                            //     }
-                            // }
-
-                            // debug_log!(
-                            //     "HRCD 4.5. hashing HRCD calculated_hashes {:?}",
-                            //     calculated_hashes   
-                            // );
+                            //     debug_log!("HRCD 4.7 Error setting pre-fail flag: {}", e);
+                            //     continue; // Handle error as you see fit
+                            // };
                             
-                            
+                            // 4.7 set_prefail_flag_rt_timestamp__for_sendfile
+                            match &ready_signal.rt { // Handle the Option
+                                Some(rt_timestamp) => {
+                                    if let Err(e) = set_prefail_flag_rt_timestamp__for_sendfile(
+                                        *rt_timestamp, // Dereference to get the u64 value
+                                        &room_sync_input.remote_collaborator_name,
+                                    ) {
+                                        debug_log!("HRCD 4.7 Error setting pre-fail flag: {}", e);
+                                        continue; // Handle error as you see fit
+                                    }
+                                    debug_log!("HRCD 4.7 prefail flag set using timestamp {:?}", rt_timestamp);
 
-                            // // 4.6.2 Create sendfile_struct_final
-                            // let sendfile_struct_final = SendFile {
-                            //     intray_send_time: Some(intray_send_time),
-                            //     gpg_encrypted_intray_file: Some(file_bytes2send),
-                            //     intray_hash_list: Some(calculated_hashes),
-                            // }; 
+                                }
+                                None => {
+                                    debug_log!("HRCD 4.7:  ready_signal.rt is None. Cannot set pre-fail flag.");
+                                    // Handle the None case appropriately (e.g., log a message, continue, or return an error).
+                                    continue;
+                                }
+                            }
                             
                             debug_log!(
                                 "HRCD 4.6-7 Create sendfile_struct {:?}",
