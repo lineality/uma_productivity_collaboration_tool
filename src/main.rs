@@ -4622,10 +4622,10 @@ fn add_pearson_hash_to_readysignal_struct(
     ready_signal: &ReadySignal,
     local_user_salt_list: &[u128],
 ) -> Option<ReadySignal> {
-    debug_log!(
-        "010101 calculate_and_add_pearson_hashes_to_ready_signal(): Input ReadySignal: {:?}",
-        &ready_signal
-    );
+    // debug_log!(
+    //     "010101 calculate_and_add_pearson_hashes_to_ready_signal(): Input ReadySignal: {:?}",
+    //     &ready_signal
+    // );
 
     if let (Some(ready_timestamp), Some(ready_send_timestamp), Some(is_echo_send)) =
         (ready_signal.rt, ready_signal.rst, ready_signal.re)
@@ -4635,10 +4635,10 @@ fn add_pearson_hash_to_readysignal_struct(
         data_to_hash.extend_from_slice(&ready_send_timestamp.to_be_bytes());
         data_to_hash.push(if is_echo_send { 1 } else { 0 });
 
-        debug_log!(
-            "010101 calculate_and_add_pearson_hashes_to_ready_signal(): Data to hash: {:?}",
-            &data_to_hash
-        );
+        // debug_log!(
+        //     "010101 calculate_and_add_pearson_hashes_to_ready_signal(): Data to hash: {:?}",
+        //     &data_to_hash
+        // );
 
         let mut ready_signal_hash_list: Vec<u8> = Vec::new();
         for salt in local_user_salt_list {
@@ -4646,10 +4646,10 @@ fn add_pearson_hash_to_readysignal_struct(
             salted_data.extend_from_slice(&salt.to_be_bytes());
 
             let hash_result = pearson_hash_base(&salted_data);
-            debug_log!(
-                "010101 calculate_and_add_pearson_hashes_to_ready_signal(): Hash Result: {:?}",
-                &hash_result
-            );
+            // debug_log!(
+            //     "010101 calculate_and_add_pearson_hashes_to_ready_signal(): Hash Result: {:?}",
+            //     &hash_result
+            // );
 
             match hash_result {
                 Ok(hash) => ready_signal_hash_list.push(hash),
@@ -6141,7 +6141,7 @@ fn handle_local_owner_desk(
                     break;
                 }
                 
-                debug_log!("\nHLOD Drone Loop...thanks for coming around! Y'all come back now!\n");
+                debug_log!("\nHLOD Drone Loop Start...thanks for coming around!");
 
                 // 1.2 Refresh Timestamp
                 // Get/Set latest_received_file_timestamp
@@ -6176,6 +6176,7 @@ fn handle_local_owner_desk(
                         false,
                     );
                 }
+                debug_log!("\n");
             } // end drone loop (ready-signals)
         }); // end ready_thread
 
@@ -7231,6 +7232,16 @@ fn handle_remote_collaborator_meetingroom_desk(
                 let mut buf = [0; 1024];
                 match gotit_socket.recv_from(&mut buf) {
                     Ok((amt, src)) => {
+                        
+                        // Check for exit-signal:
+                        if should_halt_uma() {
+                            debug_log(
+                                "HRCD 1.5.2 should_halt_uma() Halting handle_remote_collaborator_meetingroom_desk",
+                            );
+                            break;
+                        }
+                            
+                        
                         debug_log!("HRCD 1.5.2 GotItloop Ok((amt, src)) Received {} bytes from {} on gotit port", amt, src);
         
                         // --- Inspect Raw Bytes ---
@@ -7324,9 +7335,6 @@ fn handle_remote_collaborator_meetingroom_desk(
                 );
                 break;
             }
-
-
-
 
             // --- 2.2. Handle Ready Signal:  ---
             // "Listener"?
@@ -7459,8 +7467,6 @@ fn handle_remote_collaborator_meetingroom_desk(
                         debug_log!("HRCD 2.6 quasi nonce check: ReadySignal received without hashes. Discarding."); // Or handle differently
                         continue;
                     }
-
-
 
                     // // --- check for edge case: echo without there being a queue item ---      
                     // // Check: Nothing to Echo?
@@ -7606,11 +7612,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                     ```
                     */
 
-                    
-                    
-                    
 
-                    
                     /*
                     send_file_toml_to_rc_intray(
                         file_path: &PathBuf, 
