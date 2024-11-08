@@ -2551,9 +2551,9 @@ fn update_collaborator_sendqueue_timestamp_log(
                 if let Some(timestamp) = toml_value.get("updated_at_timestamp").and_then(Value::as_integer) {
                     let timestamp = timestamp as u64;
 
-                    // 7. Write stub file
-                    let stub_file_path = sync_data_dir.join(timestamp.to_string());
-                    fs::File::create(stub_file_path)?;
+                    // // 7. Write stub file
+                    // let stub_file_path = sync_data_dir.join(timestamp.to_string());
+                    // fs::File::create(stub_file_path)?;
 
                     // 8. Update back_of_queue_timestamp
                     if timestamp > back_of_queue_timestamp {
@@ -7868,15 +7868,16 @@ fn handle_remote_collaborator_meetingroom_desk(
                                             debug_log!("HRCD 4.7 File sent successfully");
                                             // ... (Handle successful send, e.g., update timestamp log)
                                             
-                                            // --- 4.7.3 Update Timestamp Log ---
+                                            // --- 4.7.3 Get Timestamp ---
+                                            //  Timestamp Log is depricated (most likely)
                                             debug_log("HRCD calling calling get_toml_file_timestamp(), yes...");
                                             if let Ok(timestamp) = get_toml_file_timestamp(&file_path) {
-                                                update_collaborator_sendqueue_timestamp_log(
-                                                    // TODO: Replace with the actual team channel name
-                                                    &this_team_channelname, 
-                                                    &room_sync_input.remote_collaborator_name,
-                                                )?;
-                                                debug_log!("HRCD 4.7.3  Updated timestamp log for {}", room_sync_input.remote_collaborator_name);
+                                            //     update_collaborator_sendqueue_timestamp_log(
+                                            //         // TODO: Replace with the actual team channel name
+                                            //         &this_team_channelname, 
+                                            //         &room_sync_input.remote_collaborator_name,
+                                            //     )?;
+                                                // debug_log!("HRCD 4.7.3  Updated timestamp log for {}", room_sync_input.remote_collaborator_name);
                                             }
                                         }
                                         Err(e) => {
