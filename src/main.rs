@@ -88,6 +88,8 @@ use std::fs::{
     OpenOptions,
     read_to_string,
     write,
+    remove_dir_all,
+    read_dir,
 };
 use toml;
 use toml::Value;
@@ -1231,7 +1233,6 @@ struct RoleBasedLocalPortSet {
     remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip: u16, // locally: 'you' listen to their port on 'their' desk
 }
 
-
 fn translate_port_assignments(
     local_user_name: &str,
     remote_collaborator_name: &str,
@@ -1240,10 +1241,10 @@ fn translate_port_assignments(
     debug_log!("tpa: Entering translate_port_assignments() function");
 
     // 1. Construct the key for the meeting room based on user names
-    let meeting_room_key = get_meeting_room_key(local_user_name, remote_collaborator_name);
+    let meeting_room_key = get_meeting_room_lookup_fieldkey(local_user_name, remote_collaborator_name);
     debug_log!("tpa 1. Meeting room key: {}", meeting_room_key);
 
-    // 2. Get the port assignment vector for this meeting room
+    // 2. Get the port assignment array for this meeting room
     let meeting_room_ports = abstract_collaborator_port_assignments
         .get(&meeting_room_key)
         .ok_or_else(|| MyCustomError::from(io::Error::new(
@@ -1330,11 +1331,10 @@ fn encrypt_with_gpg(data: &[u8], recipient_public_key: &str) -> Result<Vec<u8>, 
     }
 }
 
-
 // // Helper function for translate_port_assignments
 // // to construct the meeting room key
 // Helper function to construct the meeting room key
-fn get_meeting_room_key(user1: &str, user2: &str) -> String {
+fn get_meeting_room_lookup_fieldkey(user1: &str, user2: &str) -> String {
     let mut names = vec![user1, user2];
     names.sort(); // Ensure consistent key regardless of user order
     format!("{}_{}", names[0], names[1])
@@ -1531,14 +1531,6 @@ pub fn read_state_string(file_name: &str) -> Result<String, std::io::Error> {
     fs::read_to_string(file_path)
 }
 
-// // ALPHA VERSION
-// // Function to read a TOML file and deserialize it into a Value
-// pub fn read_state_items_tomls(file_name: &str) -> Result<Value, MyCustomError> {
-//     let file_path = Path::new("project_graph_data/session_state_items").join(file_name);
-//     let toml_string = fs::read_to_string(file_path)?; // Now `?` converts to MyCustomError
-//     toml::from_str(&toml_string).map_err(MyCustomError::from)  // Convert TomlDeserializationError
-// } 
-
 // ALPHA VERSION
 // Function to validate a simple string 
 /*
@@ -1549,7 +1541,6 @@ Purpose: You can define validation rules based on the specific session state ite
 pub fn validate_state_string(value: &str) -> bool {
     !value.is_empty()
 }
-
 
 // Compression Algorithm Enum
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
@@ -1651,9 +1642,7 @@ impl App {
         debug_log("end app fn handle_tui_action()");
         Ok(()) // Return Ok if no errors
     }
-    
-            
-    
+
     fn get_focused_channel_path(&self) -> Option<PathBuf> {
         let channel_name = self.tui_file_list.get(self.tui_focus)?;
         Some(self.current_path.join(channel_name))
@@ -1667,8 +1656,7 @@ impl App {
         // Reset the TUI focus to the beginning of the message list
         self.tui_focus = 0;     
     } 
-        
-    
+
     fn load_im_messages(&mut self) {
         debug_log("load_im_messages called"); 
         debug_log(&format!("self.current_path  {:?}", self.current_path));
@@ -1822,32 +1810,7 @@ impl App {
     
         Ok(())
     }
-    
-    //
-   //  // fn handle_insert_text_input(input: &str, app: &mut App, graph_navigation_instance_state: &mut GraphNavigationInstanceState) {
-   // fn handle_insert_text_input(&mut self, input: &str) { // Correct function signature
-   //      debug_log("fn handle_insert_text_input");
-   //      if input == "^[" { 
-   //          debug_log("esc toggled");
-   //          self.input_mode = InputMode::Command; // Access input_mode using self
-   //      } else if !input.is_empty() {
-   //          debug_log("!input.is_empty()");
 
-   //          let local_owner_user = &self.graph_navigation_instance_state.local_owner_user; // Access using self
-   //          let message_path = get_next_message_file_path(&self.current_path, local_owner_user); // Access using self
-   //          debug_log(&format!("Next message path: {:?}", message_path)); // Log the calculated message path
-            
-   //          add_im_message(
-   //              &message_path,
-   //              local_owner_user,
-   //              input.trim(), 
-   //              None,
-   //              &self.graph_navigation_instance_state, // Pass using self
-   //          ).expect("handle_insert_text_input: Failed to add message");
-
-   //          self.load_im_messages(); // Access using self
-   //      }
-   //  }    
 }    
 // end impl App {
 
@@ -1924,7 +1887,6 @@ struct CollaboratorTomlData {
     sync_interval: u64,
     updated_at_timestamp: u64,
 }
-
 
 /// for an intermediate step in converting data types
 #[derive(Debug, Deserialize, serde::Serialize, Clone)]
@@ -3510,12 +3472,25 @@ fn initialize_uma_application() -> Result<(), Box<dyn std::error::Error>> {
     }
 
 
-    // Check if the sycn_data directory exists
+    // Check if the sync_data directory exists,
+    // and recursively erase all old files.
+    // This is 'session' state for sync which must
+    // be new each start-up session.
+    // Make a fresh session sync directory
+    // note: each 'local instance' should be specific
+    // to the location of the uma executable file
+    // more than one user may be running on a given computer
     let sync_data_directory = Path::new("sync_data");
-    if !sync_data_directory.exists() {
-        // If the directory does not exist, create it
-        fs::create_dir_all(sync_data_directory).expect("Failed to create sync_data directory");
+    if sync_data_directory.exists() {
+        // If the directory exists, remove it recursively
+        if let Err(e) = remove_dir_all(sync_data_directory) {
+            // Handle the error appropriately, e.g., log it and continue, or return an error if you want to stop initialization
+            debug_log!("Error removing sync_data directory: {}", e);
+            // Or: return Err(e.into()); // Or handle the error differently
+        }
     }
+    // Create the directory fresh for the new session.
+    fs::create_dir_all(sync_data_directory).expect("Failed to create sync_data directory");
     
     /////////////////////
     // Log Housekeeping
@@ -4143,52 +4118,6 @@ fn get_next_message_file_path(current_path: &Path, selected_user_collaborator: &
     }
 }
 
-
-
-// /// Loads collaborator data from a TOML file based on the username.
-// ///
-// /// This function constructs the path to the collaborator's TOML file
-// /// in the `project_graph_data/collaborator_files_address_book` directory, reads the file contents,
-// /// deserializes the TOML data into a `Collaborator` struct, and returns the result.
-// /// 
-// /// # Arguments 
-// ///
-// /// * `username` - The username of the collaborator whose data needs to be loaded.
-// ///
-// /// # Errors
-// /// 
-// /// This function returns a `Result<Collaborator, MyCustomError>` to handle potential errors:
-// ///  - `MyCustomError::IoError`: If the collaborator file is not found or if there is an error reading the file.
-// ///  - `MyCustomError::TomlDeserializationError`: If there is an error parsing the TOML data.
-// ///
-// /// # Example 
-// ///
-// /// ```
-// /// let collaborator = get_addressbook_file_by_username("alice").unwrap(); // Assuming alice's data exists
-// /// println!("Collaborator: {:?}", collaborator); 
-// /// ```
-// fn get_addressbook_file_by_username(username: &str) -> Result<CollaboratorTomlData, MyCustomError> {
-//     debug_log!("Starting get_addressbook_file_by_username(username),  for -> '{}'", username);
-//     let toml_file_path = Path::new("project_graph_data/collaborator_files_address_book")
-//         .join(format!("{}__collaborator.toml", username));
-
-//     if toml_file_path.exists() {
-//         let toml_string = fs::read_to_string(&toml_file_path)?;
-//         let loaded_collaborator: CollaboratorTomlData = toml::from_str(&toml_string)
-//             .map_err(|e| MyCustomError::TomlDeserializationError(e))?;
-//         debug_log!("in get_addressbook_file_by_username(), ??Collaborator file found ok: {:?}", &toml_file_path);
-//         Ok(loaded_collaborator)
-//     } else {
-//         debug_log!("in get_addressbook_file_by_username(), ??Collaborator file not found: {:?}", toml_file_path);
-//         debug_log!("??Collaborator file not found for '{}'", username);
-
-//         Err(MyCustomError::IoError(io::Error::new(
-//             io::ErrorKind::NotFound,
-//             format!("??Collaborator file not found: {:?}", toml_file_path),
-//         )))
-//     }
-// }
-
 /// Loads collaborator data from a TOML file based on the username.
 ///
 /// This function uses `read_one_collaborator_setup_toml` to deserialize the collaborator data.
@@ -4472,8 +4401,6 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
             &these_collaboratorfiles_toml_data
         );
 
-
-
         // --- 9. extract data or drop collaborator from list ---
         // TODO addresses plural?
         /*
@@ -4597,7 +4524,6 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
             "12. Created MeetingRoomSyncDataset: {:?}",
             meeting_room_sync_data
         );
-            
         
     } // End of collaborator loop
 
@@ -4797,40 +4723,40 @@ fn get_saltlist_for_collaborator(collaborator_name: &str) -> Result<Vec<u128>, T
 }
 
 
+// TODO useful sometime, if not now
+/// Calculates a list of Pearson hashes for a given input string using a provided salt list.
+///
+/// This function takes an input string, converts it to bytes, and calculates a Pearson hash for the
+/// byte representation combined with each salt in the provided salt list. The resulting hashes are
+/// returned as a `Vec<u8>`.
+///
+/// # Arguments
+///
+/// * `input_string`: The string to hash.
+/// * `salt_list`: A slice of `u128` salt values.
+///
+/// # Returns
+///
+/// * `Result<Vec<u8>, ThisProjectError>`: A `Result` containing the list of calculated Pearson hashes on success,
+///   or a `ThisProjectError` if an error occurs during hash calculation.
+fn calculate_pearson_hashlist_for_string(
+    input_string: &str,
+    salt_list: &[u128],
+) -> Result<Vec<u8>, ThisProjectError> {
+    let input_bytes = input_string.as_bytes();
+    let mut hash_list = Vec::new();
 
-// /// Calculates a list of Pearson hashes for a given input string using a provided salt list.
-// ///
-// /// This function takes an input string, converts it to bytes, and calculates a Pearson hash for the
-// /// byte representation combined with each salt in the provided salt list. The resulting hashes are
-// /// returned as a `Vec<u8>`.
-// ///
-// /// # Arguments
-// ///
-// /// * `input_string`: The string to hash.
-// /// * `salt_list`: A slice of `u128` salt values.
-// ///
-// /// # Returns
-// ///
-// /// * `Result<Vec<u8>, ThisProjectError>`: A `Result` containing the list of calculated Pearson hashes on success,
-// ///   or a `ThisProjectError` if an error occurs during hash calculation.
-// fn calculate_pearson_hashlist_for_string(
-//     input_string: &str,
-//     salt_list: &[u128],
-// ) -> Result<Vec<u8>, ThisProjectError> {
-//     let input_bytes = input_string.as_bytes();
-//     let mut hash_list = Vec::new();
+    for salt in salt_list {
+        let mut salted_data = Vec::new();
+        salted_data.extend_from_slice(input_bytes);
+        salted_data.extend_from_slice(&salt.to_be_bytes());
 
-//     for salt in salt_list {
-//         let mut salted_data = Vec::new();
-//         salted_data.extend_from_slice(input_bytes);
-//         salted_data.extend_from_slice(&salt.to_be_bytes());
+        let hash = pearson_hash_base(&salted_data)?;
+        hash_list.push(hash);
+    }
 
-//         let hash = pearson_hash_base(&salted_data)?;
-//         hash_list.push(hash);
-//     }
-
-//     Ok(hash_list)
-// }
+    Ok(hash_list)
+}
 
 
 
@@ -4883,182 +4809,6 @@ fn verify_readysignal_hashes(
         false 
     }
 }
-
-
-// /// Verifies the Pearson hashes in a SendFile struct against a provided salt list.
-// /// This function calculates the expected hashes based on the intray_send_time and gpg_encrypted_intray_file fields
-// /// of the SendFile and the provided salt_list. It then compares the calculated hashes to the
-// /// intray_hash_list field of the SendFile.
-// ///
-// /// # Arguments
-// ///
-// /// * `send_file`: The SendFile to verify.
-// /// * `salt_list`: The list of salts to use for hash calculation.
-// ///
-// /// # Returns
-// ///
-// /// * `bool`: true if all hashes match, false otherwise.
-// fn verify_intray_sendfile_hashes(
-//     send_file: &SendFile, 
-//     salt_list: &[u128]
-//     ) -> bool {
-//     // 1. Handle Optional Fields
-//     let intray_send_time = match send_file.intray_send_time {
-//         Some(time) => time,
-//         None => {
-//             debug_log!("verify_intray_sendfile_hashes(): intray_send_time is None. Returning false.");
-//             return false;
-//         }
-//     };
-
-//     let intray_hash_list = match &send_file.intray_hash_list {
-//         Some(list) => list,
-//         None => {
-//             debug_log!("verify_intray_sendfile_hashes(): intray_hash_list is None. Returning false.");
-//             return false;
-//         }
-//     };    
-
-//     let gpg_encrypted_intray_file = match &send_file.gpg_encrypted_intray_file {
-//         Some(file) => file,
-//         None => {
-//             debug_log!("verify_intray_sendfile_hashes(): gpg_encrypted_intray_file is None. Returning false.");
-//             return false;
-//         }
-//     };
-
-//     // 2. Prepare data for hashing.
-//     let mut data_to_hash = Vec::new();
-//     data_to_hash.extend_from_slice(&intray_send_time.to_be_bytes());
-//     data_to_hash.extend_from_slice(gpg_encrypted_intray_file); // Use the extracted value
-
-//     // 3. Hashing and comparison.
-//     for (i, salt) in salt_list.iter().enumerate() {
-//         let mut salted_data = data_to_hash.clone();
-//         salted_data.extend_from_slice(&salt.to_be_bytes());
-
-//         match pearson_hash_base(&salted_data) {
-//             Ok(calculated_hash) => {
-//                 if calculated_hash != intray_hash_list[i] {
-//                     debug_log!("verify_intray_sendfile_hashes(): Hash mismatch at index {}", i);
-//                     return false;
-//                 }
-//             }
-//             Err(e) => {
-//                 debug_log!("verify_intray_sendfile_hashes(): Error calculating Pearson hash: {}", e);
-//                 return false;
-//             }
-//         }
-//     }
-
-//     true // All hashes match
-// }
-
-
-
-
-// /// Verifies the Pearson hashes in a SendFile struct against a provided salt list.
-// /// This function calculates the expected hashes based on the intray_send_time and gpg_encrypted_intray_file fields
-// /// of the SendFile and the provided salt_list. It then compares the calculated hashes to the
-// /// intray_hash_list field of the SendFile.
-// ///
-// /// # Arguments
-// ///
-// /// * `send_file`: The SendFile to verify.
-// /// * `salt_list`: The list of salts to use for hash calculation.
-// ///
-// /// # Returns
-// ///
-// /// * `bool`: true if all hashes match, false otherwise.
-// fn verify_intray_sendfile_hashes(send_file: &SendFile, salt_list: &[u128]) -> bool {
-//     // 1. Handle Optional Fields
-//     let intray_send_time = match send_file.intray_send_time {
-//         Some(time) => time,
-//         None => {
-//             debug_log!("verify_intray_sendfile_hashes(): intray_send_time is None. Returning false.");
-//             return false;
-//         }
-//     };
-
-//     let intray_hash_list = match &send_file.intray_hash_list {
-//         Some(list) => list,
-//         None => {
-//             debug_log!("verify_intray_sendfile_hashes(): intray_hash_list is None. Returning false.");
-//             return false;
-//         }
-//     };    
-
-//     let gpg_encrypted_intray_file = match &send_file.gpg_encrypted_intray_file {
-//         Some(file) => file,
-//         None => {
-//             debug_log!("verify_intray_sendfile_hashes(): gpg_encrypted_intray_file is None. Returning false.");
-//             return false;
-//         }
-//     };
-
-//     // 2. Prepare data for hashing.
-//     let mut data_to_hash = Vec::new();
-//     data_to_hash.extend_from_slice(&intray_send_time.to_be_bytes());
-//     data_to_hash.extend_from_slice(gpg_encrypted_intray_file); // Use the extracted value
-
-//     // 3. Hashing and comparison.
-//     for (i, salt) in salt_list.iter().enumerate() {
-//         let mut salted_data = data_to_hash.clone();
-//         salted_data.extend_from_slice(&salt.to_be_bytes());
-
-//         match pearson_hash_base(&salted_data) {
-//             Ok(calculated_hash) => {
-//                 if calculated_hash != intray_hash_list[i] {
-//                     debug_log!("verify_intray_sendfile_hashes(): Hash mismatch at index {}", i);
-//                     return false;
-//                 }
-//             }
-//             Err(e) => {
-//                 debug_log!("verify_intray_sendfile_hashes(): Error calculating Pearson hash: {}", e);
-//                 return false;
-//             }
-//         }
-//     }
-
-//     true // All hashes match
-// }
-
-
-// fn verify_intray_sendfile_hashes(send_file: &SendFile, salt_list: &[u128]) -> bool {
-//     // 1. Handle the case where intray_hash_list is None
-//     let intray_hash_list = match &send_file.intray_hash_list {
-//         Some(list) => list,
-//         None => {
-//             debug_log!("verify_intray_sendfile_hashes(): intray_hash_list is None.  Returning false.");
-//             return false; // Or handle differently, e.g., return an error
-//         }
-//     };
-
-//     let mut data_to_hash = Vec::new();
-//     data_to_hash.extend_from_slice(&send_file.intray_send_time.expect("REASON").to_be_bytes());
-//     data_to_hash.extend_from_slice(&send_file.gpg_encrypted_intray_file);
-
-//     for (i, salt) in salt_list.iter().enumerate() {
-//         let mut salted_data = data_to_hash.clone();
-//         salted_data.extend_from_slice(&salt.to_be_bytes());
-
-//         match pearson_hash_base(&salted_data) {
-//             Ok(calculated_hash) => {
-//                 // 2. Now you can safely index intray_hash_list
-//                 if calculated_hash != intray_hash_list[i] {
-//                     debug_log!("verify_intray_sendfile_hashes(): Hash mismatch at index {}", i);
-//                     return false;
-//                 }
-//             }
-//             Err(e) => {
-//                 debug_log!("verify_intray_sendfile_hashes(): Error calculating Pearson hash: {}", e);
-//                 return false;
-//             }
-//         }
-//     }
-
-//     true // All hashes match
-// }
 
 fn sync_flag_ok_or_wait(wait_this_many_seconds: u64) {
     // check for quit
@@ -5211,42 +4961,6 @@ fn is_prime(n: u8) -> bool {
     }
 }
 
-
-
-// /// Serializes a `SendFile` struct into a byte vector.
-// ///
-// /// # Arguments
-// /// * `send_file`: The `SendFile` instance to serialize.
-// ///
-// /// # Returns
-// ///
-// /// * `Result<Vec<u8>, ThisProjectError>`:  The serialized `SendFile` data as a `Vec<u8>` on success, or a
-// ///   `ThisProjectError` if serialization fails.
-// fn serialize_send_file(send_file: &SendFile) -> Result<Vec<u8>, ThisProjectError> {
-//     let mut serialized_data: Vec<u8> = Vec::new();
-
-//     // Add intray_send_time
-//     serialized_data.extend_from_slice(&send_file.intray_send_time.ok_or(ThisProjectError::InvalidData("Missing intray_send_time".into()))?.to_be_bytes());
-
-//     // Add intray_hash_list (handle Option)
-//     if let Some(hash_list) = &send_file.intray_hash_list {
-//         serialized_data.extend_from_slice(hash_list);
-//     } else {
-//         // Handle the None case. Perhaps return an error or use a default/empty hash list.
-//         return Err(ThisProjectError::InvalidData("intray_hash_list is None".into()));
-//     }
-
-//     // Add gpg_encrypted_file_contents (handle Option)
-//     if let Some(encrypted_file) = &send_file.gpg_encrypted_intray_file {
-//         serialized_data.extend_from_slice(encrypted_file);
-//     } else {
-//         return Err(ThisProjectError::InvalidData("gpg_encrypted_intray_file is None".into()));
-//     }
-
-//     Ok(serialized_data)
-// }
-
-
 /// Sends a byte slice over UDP to the specified address and port.
 ///
 /// # Arguments
@@ -5291,81 +5005,6 @@ fn sendfile_UDP_to_intray(
     Ok(())
 }
 
-
-// /// this horribly named mismash function is a catastrophe
-// /// sends file as struct items to remote collaborator intray
-// /// 1. intray_send_time (for freshness check)
-// /// 2. intray_hash_list (for intact-ness and author-ness)
-// /// 3. gpg_encrypted_file_contents (the content)
-// fn send_file_toml_to_rc_intray(
-//     file_struct_to_send: &SendFile, 
-//     target_addr: SocketAddr, 
-//     port: u16,
-// ) -> Result<(), ThisProjectError> {
-//     debug_log!("\nStarting send_file_toml_to_rc_intray");
-
-//     // 1. Serialize SendFile (Manually)
-//     let mut serialized_send_file: Vec<u8> = Vec::new();
-    
-//     // Add intray_send_time 
-//     serialized_send_file.extend_from_slice(&file_struct_to_send.intray_send_time.expect("REASON").to_be_bytes());
-    
-//     // Add intray_hash_list (handle Option)
-//     if let Some(hash_list) = &file_struct_to_send.intray_hash_list {
-//         serialized_send_file.extend_from_slice(hash_list);
-//     } else {
-//         // Handle the None case. Perhaps return an error or use a default/empty hash list.
-//         return Err(ThisProjectError::InvalidData("intray_hash_list is None".into()));
-//     }
-
-//     // Add gpg_encrypted_file_contents (handle Option)
-//     if let Some(encrypted_file) = &file_struct_to_send.gpg_encrypted_intray_file {
-//         serialized_send_file.extend_from_slice(encrypted_file);
-//     } else {
-//         return Err(ThisProjectError::InvalidData("gpg_encrypted_intray_file is None".into()));
-//     }
-    
-//     // 2. Send Data
-//     let socket = UdpSocket::bind(":::0")?; 
-//     socket.send_to(&serialized_send_file, SocketAddr::new(target_addr.ip(), port))?;
-    
-//     debug_log!("File sent to {}:{}", target_addr.ip(), port); 
-//     Ok(())
-// }
-
-// fn send_file_toml_to_rc_intray(
-//     file_struct_to_send: &SendFile, 
-//     target_addr: SocketAddr, 
-//     port: u16,
-// ) -> Result<(), ThisProjectError> {
-//     debug_log("\n");
-//     debug_log("Starting send_file_toml_to_rc_intray");
-
-//     // 1. Serialize SendFile (Manually)
-//     let mut serialized_send_file: Vec<u8> = Vec::new();
-    
-//     // Add intray_send_time 
-//     serialized_send_file.extend_from_slice(&file_struct_to_send.intray_send_time.expect("REASON").to_be_bytes());
-    
-//     // Add intray_hash_list 
-//     // Handle the Option and extract the Vec<u8>
-//     // if let Some(hash_list) = &file_struct_to_send.intray_hash_list {
-//     //     serialized_send_file.extend_from_slice(hash_list);
-//     // }
-//     // intray_hash_list is not optional:
-//     serialized_send_file.extend_from_slice(&file_struct_to_send.intray_hash_list);
-
-//     // Add gpg_encrypted_file_contents
-//     serialized_send_file.extend_from_slice(&file_struct_to_send.gpg_encrypted_intray_file);
-    
-//     // 2. Send Data
-//     let socket = UdpSocket::bind(":::0")?; 
-//     socket.send_to(&serialized_send_file, SocketAddr::new(target_addr.ip(), port))?;
-    
-//     debug_log!("File sent to {}:{}", target_addr.ip(), port); 
-//     Ok(())
-// }
-
 /// Struct for sending file to in-tray (file sync)
 /// Salted-Pearson-Hash-List system for quick verification that packet is intact and sent by owner at timestamp
 #[derive(Serialize, Deserialize, Debug)] // Add Serialize/Deserialize for sending/receiving
@@ -5405,8 +5044,93 @@ struct SendQueue {
     // echo_send: bool, //
     items: Vec<PathBuf>,  // ordered list, filepaths
 }
+impl SendQueue {
+    /// Adds a `PathBuf` to the *front* of the `items` vector in the `SendQueue`.
+    ///
+    /// # Arguments
+    ///
+    /// * `path`: The `PathBuf` to add to the queue.
+    fn add_to_front(&mut self, path: PathBuf) {
+        self.items.insert(0, path);
+    }
+}
+
+/// Retrieves the paths of all send queue update flags for a given collaborator in a team channel.
+///
+/// This function reads the contents of the directory `sync_data/{team_channel_name}/sendqueue_updates/{collaborator_name}`
+/// and returns a vector of `PathBuf` representing the paths to the update flag files.  It also deletes the flag files
+/// after reading their contents, ensuring that flags are processed only once.
+///
+/// # Arguments
+///
+/// * `team_channel_name`: The name of the team channel.
+/// * `collaborator_name`: The name of the collaborator.
+///
+/// # Returns
+///
+/// * `Result<Vec<PathBuf>, ThisProjectError>`:  A vector of paths to update flag files on success, or a `ThisProjectError` if an error occurs.
+fn get_sendq_update_flag_paths(
+    team_channel_name: &str,
+    collaborator_name: &str,
+) -> Result<Vec<PathBuf>, ThisProjectError> {
+    // 1. Construct Directory Path (using PathBuf)
+    let mut queue_dir = PathBuf::from("sync_data");
+    queue_dir.push(team_channel_name);
+    queue_dir.push("sendqueue_updates");
+    queue_dir.push(collaborator_name);
+
+    let mut path_list: Vec<PathBuf> = Vec::new(); // Initialize path_list
+
+    // 2. Read Directory and Collect Paths
+    match read_dir(&queue_dir) {
+        Ok(entries) => {
+            for entry_result in entries {
+                match entry_result {
+                    Ok(entry) => {
+                        let path = entry.path();
+                        if path.is_file() {
+                            // Read the file path from the queue file and delete.
+                            let queue_file_path_str = match std::fs::read_to_string(&path) {
+                                Ok(s) => s,
+                                Err(e) => {
+                                    debug_log!("Error reading queue file: {}", e);
+                                    // Handle error appropriately, e.g., continue to the next file or return an error
+                                    continue; // Skip this file and continue
+                                }
+                            };
+                            let queue_file_path = PathBuf::from(queue_file_path_str);
+
+                            debug_log!("HRCD: Removing update flag file: {:?}", path);
+                            if let Err(e) = remove_file(&path) {
+                                debug_log!("Error removing update flag file: {:?} - {}", path, e);
+                                // Continue processing other files even if removal fails.
+                                continue; // or choose to handle error
+                            }
+
+                            // Add the file path from *inside* the queue file to the path_list
+                            path_list.push(queue_file_path);
+
+                        }
+                    },
+                    Err(e) => {
+                        debug_log!("Error reading directory entry: {}", e);
+                        // Handle error as you see fit
+                        return Err(ThisProjectError::IoError(e));
+                    }
+                }
+            }
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => { 
+            // No queue files, return empty list
+            debug_log!("get_sendq_update_flag_paths(): Send queue directory not found. Returning empty list.");            
+            return Ok(Vec::new());
+        }
+        Err(e) => return Err(ThisProjectError::IoError(e)),
+    };
 
 
+    Ok(path_list)
+}
 
 /// Converts a vector of u8 hash values into a hexadecimal string representation.
 ///
@@ -5469,8 +5193,69 @@ fn hex_string_to_bytes(hex_string: &str) -> Result<Vec<u8>, ThisProjectError> {
     Ok(bytes)
 }
 
+/// Gets a list of active collaborators by reading stub file names in the sync_data directory.
+///
+/// This function reads the names of files (which are the collaborator names)
+/// within the directory:  `sync_data/{team_channel_name}/is_active/`. Each file represents an active collaborator.
+/// The function handles directory reading errors and filters out entries that are not files.
+///
+/// # Arguments
+///
+/// * None
+///
+/// # Returns
+///
+/// * `Result<Vec<String>, ThisProjectError>`:  A `Result` containing a vector of active collaborator names (`Vec<String>`) on success,
+///   or a `ThisProjectError` if an error occurs (e.g., during directory reading).
+fn get_active_collaborator_names() -> Result<Vec<String>, ThisProjectError> {
+    // 1. Get the team channel name
+    let team_channel_name = match get_current_team_channel_name() {
+        Some(name) => name,
+        None => {
+            debug_log!("Error: Could not get current channel name in get_active_collaborator_names. Skipping.");
+            return Err(ThisProjectError::InvalidData("Could not get team channel name".into()));
+        },
+    };
 
-/// Adds a file path to the send queue for a specific collaborator in a team channel.
+    // 2. Construct Path to "is_active" directory
+    let is_active_dir = Path::new("sync_data")
+        .join(&team_channel_name)
+        .join("is_active");
+
+    // 3. Create Vector to Hold Names
+    let mut active_collaborators: Vec<String> = Vec::new(); // Initialize an empty vector
+
+    // 4. Read Directory and Collect Names
+    match read_dir(&is_active_dir) { // returns Result<ReadDir> so we match on it
+        Ok(entries) => {
+            // Handle potential errors inside the loop, so not all are lost in case of one error.
+            for entry in entries {
+                // Handle DirEntry Result
+                match entry {
+                    Ok(entry) => {
+                        // Is it a file?
+                        if entry.path().is_file() {
+                            // Extract file_name as String
+                            let file_name = entry.file_name(); // returns OsString which cannot be string-matched
+                            let collaborator_name = file_name.to_string_lossy().into_owned();  // so convert to owned String
+                            active_collaborators.push(collaborator_name);
+                        }
+                    },
+                    Err(err) => {
+                        debug_log!("Error reading entry: {}", err);
+                        // Handle error appropriately.
+                        // You might choose to skip the bad entry, log and return an error, or continue
+                        // return Err(...); // Example, if you want to stop on first error
+                    },
+                }
+            }
+            Ok(active_collaborators) // Return vector of names on success
+        }
+        Err(err) => Err(ThisProjectError::IoError(err)), // Return error if directory read fails
+    }
+}
+
+/// Adds a file path to the send queue for all active collaborators in a team channel.
 ///
 /// This function creates a new file containing the file path to be sent. The file is placed in a directory structure under `sync_data`,
 /// specifically `sync_data/{team_channel_name}/sendqueue_updates/FILENAME.txt
@@ -5485,36 +5270,52 @@ fn hex_string_to_bytes(hex_string: &str) -> Result<Vec<u8>, ThisProjectError> {
 /// # Returns
 ///
 /// * `Result<(), ThisProjectError>`: `Ok(())` on success, or a `ThisProjectError` if an error occurs.
-fn save_path_for_send_queue(
+fn save_updateflag_path_for_sendqueue(
     team_channel_name: &str,
     file_path: &PathBuf, // Take PathBuf directly
 ) -> Result<(), ThisProjectError> {
 
     debug_log!(
-        "save_path_for_send_queue: team: {:?}, path: {:?}",
+        "save_updateflag_path_for_sendqueue: team: {:?}, path: {:?}",
         team_channel_name,
         file_path,
     );
-
+    
+    // Get active collaborator names
+    let active_collaborators = match get_active_collaborator_names() {
+        Ok(names) => names,
+        Err(e) => {
+            debug_log!("Error getting active collaborators: {}", e);
+            return Err(e); // Or handle error differently
+        }
+    };
+    
     // 1. Convert hashes to hex string
     // remove_non_alphanumeric
     let filename_for_updateflag = remove_non_alphanumeric(&file_path.to_string_lossy().to_string());    
 
-    // 2. Construct Directory Path (using PathBuf)
-    let mut queue_dir = PathBuf::from("sync_data");
-    queue_dir.push(team_channel_name);
-    queue_dir.push("sendqueue_updates");
+    // Use the active_collaborators list to determine which queue updates to save
+    for this_iter_collaborator_name in active_collaborators {
+        // Construct the update flag path for this specific collaborator
+        // and save the update flag
 
-    // 3. Create Directory (if needed)
-    create_dir_all(&queue_dir)?;
+        // 2. Construct Directory Path (using PathBuf)
+        let mut queue_dir = PathBuf::from("sync_data");
+        queue_dir.push(team_channel_name);
+        queue_dir.push("sendqueue_updates");
+        queue_dir.push(this_iter_collaborator_name);
 
-    // 4. Construct File Path (within directory, with filename_for_updateflag)
-    let queue_file = queue_dir.join(format!("{}.txt", filename_for_updateflag));
-
-    // 5. Write Filepath to Queue File (convert PathBuf to String, handle potential errors)
-    let file_path_string = file_path.to_string_lossy().to_string();
-    write(queue_file, file_path_string)?;
-
+        // 3. Create Directory (if needed)
+        create_dir_all(&queue_dir)?;
+    
+        // 4. Construct File Path (within directory, with filename_for_updateflag)
+        let queue_file = queue_dir.join(format!("{}.txt", filename_for_updateflag));
+    
+        // 5. Write Filepath to Queue File (convert PathBuf to String, handle potential errors)
+        let file_path_string = file_path.to_string_lossy().to_string();
+        write(queue_file, file_path_string)?;
+    }
+    
     debug_log!("File path added to send queue: {:?}", file_path);
     Ok(())
 }
@@ -6814,10 +6615,6 @@ fn serialize_ready_signal(this_readysignal: &ReadySignal) -> std::io::Result<Vec
     Ok(bytes) 
 }
 
-
-
-
-
 /// Calculates Pearson hashes for a vector of byte slices.
 ///
 /// This function iterates through the input `data_sets` and calculates the Pearson hash for each slice,
@@ -6839,257 +6636,6 @@ fn calculate_pearson_hashes(data_sets: &[&[u8]]) -> Result<Vec<u8>, ThisProjectE
     }
     Ok(hashes)
 }
-
-// /// Calculates the Pearson hashes for a SendFile based on the provided data and salt list,
-// /// and verifies them against the hashes stored in the SendFile struct, if any.
-// ///
-// /// # Arguments
-// ///
-// /// * `send_file`: The SendFile to verify.
-// /// * `salt_list`: The list of salts to use for hash calculation.
-// ///
-// /// # Returns
-// ///
-// /// * `Result<(Vec<u8>, bool), String>`: A tuple containing the calculated hashes and a boolean indicating whether they match the stored hashes (if any), or an error string.
-// fn calculate_and_verify_sendfile_hashes(
-//     send_file: &SendFile,
-//     salt_list: &[u128],
-// ) -> Result<(Vec<u8>, bool), String> {
-// //     THIS IS WRONG AND NEEDS TO CHANGE!!!!
-// // Plan A:
-// // - make one send-file-hash function: hash_sendfile_struct_fields()
-// // - make a send file hash checker hash_checker_for_sendfile_struct() function that calls on the first function to do the checking, 
-// // note: the checker should
-// // 1. fail by default (NOT PASS!!!!!!!!)
-// // 2. first check hash length
-// // 3. then check one salt hash at a time and compare
-// // As soon as anything fails, return: false
-// // return false by default if anything goes wrong (no panic, no stop 'server' etc.)
-
-//       // 1. Handle Optional Fields
-//     let intray_send_time = match send_file.intray_send_time {
-//         Some(time) => time,
-//         None => {
-//             return Err("intray_send_time is None".to_string());
-//         }
-//     };
-
-//     let gpg_encrypted_intray_file = match &send_file.gpg_encrypted_intray_file {
-//         Some(file) => file,
-//         None => {
-//             return Err("gpg_encrypted_intray_file is None".to_string());
-//         }
-//     };
-
-//     // 2. Prepare data for hashing.
-//     let mut data_to_hash = Vec::new();
-//     data_to_hash.extend_from_slice(&intray_send_time.to_be_bytes());
-//     data_to_hash.extend_from_slice(gpg_encrypted_intray_file);
-
-//     // 3. Hashing and comparison.
-//     let mut calculated_hashes = Vec::with_capacity(salt_list.len());
-//     let mut all_hashes_match = true;
-
-//     for salt in salt_list {
-//         let mut salted_data = data_to_hash.clone();
-//         salted_data.extend_from_slice(&salt.to_be_bytes());
-
-//         match pearson_hash_base(&salted_data) {
-//             Ok(calculated_hash) => {
-//                 let pearsonhash: u8 = calculated_hash
-//                     .try_into()
-//                     .map_err(|_| "Error converting u8 slice to u8".to_string())?;
-//                 calculated_hashes.push(pearsonhash);
-//             }
-//             Err(e) => {
-//                 return Err(format!("Error calculating Pearson hash: {}", e));
-//             }
-//         }
-//     }
-//     debug_log!(
-//         "calculate_and_verify_sendfile_hashes: intray_send_time-{:?}, send_file.intray_hash_list-{:?}", 
-//         intray_send_time,
-//         &send_file.intray_hash_list,
-//     ); 
-//     // Compare calculated hashes with stored hashes, if any.
-//     if let Some(intray_hash_list) = &send_file.intray_hash_list {
-//         if calculated_hashes.len() != intray_hash_list.len() {
-//             all_hashes_match = false;
-//         } else {
-//             for (i, &hash) in intray_hash_list.iter().enumerate() {
-//                 if calculated_hashes[i] != hash.into() {
-//                     all_hashes_match = false;
-//                     break;
-//                 }
-//             }
-//         }
-//     } else {
-//         all_hashes_match = false;
-//     }
-
-//     debug_log!(
-//         "calculate_and_verify_sendfile_hashes: salt_list-{:?}, calculated_hashes-{:?}, all_hashes_match-{:?}", 
-//         salt_list,
-//         calculated_hashes,
-//         all_hashes_match
-//     ); 
-
-    
-//     Ok((calculated_hashes, all_hashes_match))
-// }
-
-
-// /// Calculates the Pearson hashes for a SendFile based on the provided data and salt list,
-// /// and verifies them against the hashes stored in the SendFile struct.
-// ///
-// /// # Arguments
-// ///
-// /// * `send_file`: The SendFile to verify.
-// /// * `salt_list`: The list of salts to use for hash calculation.
-// ///
-// /// # Returns
-// ///
-// /// * `Result<(Vec<u128>, bool), String>`: A tuple containing the calculated hashes and a boolean indicating whether they match the stored hashes, or an error string.
-// fn calculate_and_verify_sendfile_hashes(
-//     send_file: &SendFile,
-//     salt_list: &[u128],
-// ) -> Result<(Vec<u8>, bool), String> {
-//     // 1. Handle Optional Fields
-//     let intray_send_time = match send_file.intray_send_time {
-//         Some(time) => time,
-//         None => {
-//             return Err("intray_send_time is None".to_string());
-//         }
-//     };
-
-//     let gpg_encrypted_intray_file = match &send_file.gpg_encrypted_intray_file {
-//         Some(file) => file,
-//         None => {
-//             return Err("gpg_encrypted_intray_file is None".to_string());
-//         }
-//     };
-
-//     // 2. Prepare data for hashing.
-//     let mut data_to_hash = Vec::new();
-//     data_to_hash.extend_from_slice(&intray_send_time.to_be_bytes());
-//     data_to_hash.extend_from_slice(gpg_encrypted_intray_file);
-
-//     // 3. Hashing and comparison.
-//     let mut calculated_hashes = Vec::with_capacity(salt_list.len());
-//     let mut all_hashes_match = true;
-
-//     for (i, salt) in salt_list.iter().enumerate() {
-//         let mut salted_data = data_to_hash.clone();
-//         salted_data.extend_from_slice(&salt.to_be_bytes());
-
-//         match pearson_hash_base(&salted_data) {
-//             Ok(calculated_hash) => {
-//                 let pearsonhash: u8 = calculated_hash
-//                     .try_into()
-//                     .map_err(|_| "Error converting u8 slice to u128".to_string())?;
-//                 calculated_hashes.push(pearsonhash);
-
-//                 if pearsonhash != intray_hash_list[i].into() {
-//                     all_hashes_match = false;
-//                 }
-//             }
-//             Err(e) => {
-//                 return Err(format!("Error calculating Pearson hash: {}", e));
-//             }
-//         }
-//     }
-
-//     Ok((calculated_hashes, all_hashes_match))
-// }
-
-
-// /// Calculates the Pearson hashes for a SendFile based on the provided data and salt list.
-// ///
-// /// # Arguments
-// ///
-// /// * `intray_send_time`: The SendFile's intray_intray_send_time as a u128.
-// /// * `gpg_encrypted_intray_file`: The gpg_encrypted_intray_file bytes.
-// /// * `salt_list`: The list of salts to use for hash calculation.
-// ///
-// /// # Returns
-// ///
-// /// * `Result<Vec<u128>, String>`: A vector of calculated hashes or an error string.
-// fn calculate_sendfile_hashes(
-//     intray_send_time: u128,
-//     gpg_encrypted_intray_file: &[u8],
-//     send_file: &SendFile
-//     salt_list: &[u128],
-// ) -> Result<Vec<u128>, String> {
-//     let mut hashes = Vec::with_capacity(salt_list.len());
-
-//     for salt in salt_list {
-//         let mut data_to_hash = Vec::new();
-//         data_to_hash.extend_from_slice(&intray_send_time.to_be_bytes());
-//         data_to_hash.extend_from_slice(gpg_encrypted_intray_file);
-//         data_to_hash.extend_from_slice(&salt.to_be_bytes());
-
-//         match pearson_hash_base(&data_to_hash) {
-//             Ok(calculated_hash) => {
-//                 // Convert the calculated hash from u8 to u128
-//                 let hash_u128: u128 = calculated_hash
-//                     .try_into()
-//                     .map_err(|_| "Error converting u8 slice to u128")?;
-//                 hashes.push(hash_u128); // Push the correct type
-//             }
-//             Err(e) => {
-//                 return Err(format!("Error calculating Pearson hash: {}", e));
-//             }
-//         }
-//     }
-
-//     Ok(hashes)
-// }
-
-// /// Verifies the Pearson hashes in a SendFile struct against a provided salt list.
-// /// This function uses the `calculate_sendfile_hashes` function to compute the expected hashes
-// /// and then compares them to the existing hashes in the SendFile.
-// ///
-// /// # Arguments
-// ///
-// /// * `send_file`: The SendFile to verify.
-// /// * `salt_list`: The list of salts to use for hash calculation.
-// ///
-// /// # Returns
-// ///
-// /// * `bool`: true if all hashes match, false otherwise.
-// fn verify_intray_sendfile_hashes(send_file: &SendFile, salt_list: &[u128]) -> bool {
-//     // 1. Handle Optional Fields (as before)
-//     // ...
-
-//     // 2. Calculate Expected Hashes
-//     let calculated_hashes = match calculate_sendfile_hashes(
-//         intray_send_time, 
-//         gpg_encrypted_intray_file,
-//         salt_list,
-//     ) {
-//         Ok(hashes) => hashes,
-//         Err(e) => {
-//             debug_log!("verify_intray_sendfile_hashes(): Error calculating hashes: {}", e);
-//             return false;
-//         }
-//     };
-
-//     // 3. Compare Calculated Hashes to Existing Hashes
-//     if calculated_hashes.len() != intray_hash_list.len() {
-//         debug_log!("verify_intray_sendfile_hashes(): Number of hashes mismatch.");
-//         return false;
-//     }
-
-//     for (i, (calculated_hash, existing_hash)) in calculated_hashes.iter().zip(intray_hash_list).enumerate() {
-//         if calculated_hash != existing_hash {
-//             debug_log!("verify_intray_sendfile_hashes(): Hash mismatch at index {}", i);
-//             return false;
-//         }
-//     }
-
-//     true // All hashes match
-// }
-
 
 /// Vanilla Deserilize json signal
 /// The idea of the salt-hash or salt-checksum
@@ -7400,6 +6946,7 @@ fn get_absolute_team_channel_path(team_channel_name: &str) -> io::Result<PathBuf
     channel_path.canonicalize() // Get the absolute path
 }
 
+
 /// Gets existing send-Queue or makes a new one: to send out locally owned files: a queue of paths to those files
 /// if back_of_queue_timestamp != 0 and
 /// if request-time-stamp = send-q back_of_queue_timestamp -> just return timestamp
@@ -7436,6 +6983,23 @@ fn get_or_create_send_queue(
     */
     // let mut back_of_queue_timestamp = session_send_queue.back_of_queue_timestamp.clone();
     debug_log("HRCD->get_or_create_send_queue: start");
+    
+    // Get update flag paths
+    let newpath_list = match get_sendq_update_flag_paths(
+        team_channel_name, // No & needed now
+        localowneruser_name, // Correct collaborator name
+    ) {
+        Ok(paths) => paths,
+        Err(e) => {
+            debug_log!("Error getting update flag paths: {}", e);
+            return Err(e); // Or handle as needed
+        }
+    };
+
+    // Add new paths to the front of the queue
+    for this_iter_newpath in newpath_list {
+        session_send_queue.add_to_front(this_iter_newpath); // Use the new method
+    }
     
     // Note: this will not be true when making a queue, e.g. during first time bootstrapping
     if ready_signal_timestamp == session_send_queue.back_of_queue_timestamp {
@@ -7743,7 +7307,7 @@ fn handle_remote_collaborator_meetingroom_desk(
         let mut hash_set_session_nonce = HashSet::new();  // Create a HashSet to store received hashes
         
         
-        
+        let mut rc_set_as_active = false;
         
         
         // --- 2. Enter Main Loop ---
@@ -7761,6 +7325,9 @@ fn handle_remote_collaborator_meetingroom_desk(
                 break;
             }
 
+
+
+
             // --- 2.2. Handle Ready Signal:  ---
             // "Listener"?
             // 2.2.1 Receive Ready Signal
@@ -7773,7 +7340,17 @@ fn handle_remote_collaborator_meetingroom_desk(
                             room_sync_input.remote_collaborator_name
                         );
                         break;
-                    }      
+                    }
+
+                    if !rc_set_as_active {
+                        if let Err(e) = set_as_active(&room_sync_input.remote_collaborator_name) {
+                            debug_log!("Error setting collaborator as active: {}", e);
+                            // Handle the error appropriately (e.g., continue or return)
+                            continue; // Example: skip to the next iteration
+                        }
+                
+                        rc_set_as_active = true;
+                    }
 
                     debug_log!(
                         "HRCD 2.2.1 Ok((amt, src)) ready_port Signal Received {} bytes from {}", 
@@ -8715,8 +8292,6 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                 }
             }
 
-            
-            
             InputMode::InsertText => {
                 
                 debug_log("handle_insert_text_input");
@@ -8742,15 +8317,13 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                         None,
                         &app.graph_navigation_instance_state, // Pass using self
                     ).expect("handle_insert_text_input: Failed to add message");
-
-                    // let mut this_team_channelname = "XYZ";
                     
                     let this_team_channelname = match get_current_team_channel_name() {
                         Some(name) => name,
                         None => "XYZ".to_string(),
                     }; 
-                    // save_path_for_send_queue
-                    save_path_for_send_queue(
+                    // save_updateflag_path_for_sendqueue
+                    save_updateflag_path_for_sendqueue(
                         &this_team_channelname,
                         &message_path, // Take PathBuf directly
                     );
@@ -8791,6 +8364,61 @@ fn initialize_ok_to_start_sync_flag_to_false() {
     file.write_all(b"0")
         .expect("Failed to write to 'ok_to_start_sync_flag.txt' file.");
 }
+
+/// Sets a collaborator as "active" by creating a stub file in the sync_data directory.
+///
+/// This function creates an empty file (a "stub" file) in the directory:
+/// `sync_data/{team_channel_name}/is_active/{collaborator_name}`. The presence of this file marks the collaborator as active
+/// in the current session for the specified team channel.  The function handles directory creation and any potential errors during
+/// file creation.
+///
+/// This flag signals to other threads and parts of uma that 
+/// this (remote collaborator) user is acive.
+///
+/// # Arguments
+///
+/// * `collaborator_name`: The name of the collaborator to set as active.
+///
+/// # Returns
+///
+/// * `Result<(), ThisProjectError>`: `Ok(())` if the stub file was successfully created, or a `ThisProjectError` if an error occurred.
+///
+/// uses:
+/// use std::fs::{create_dir_all, File};
+/// use std::path::PathBuf;
+fn set_as_active(collaborator_name: &str) -> Result<(), ThisProjectError> {
+    // 1. Get team channel name (replace with your actual implementation)
+    let team_channel_name = match get_current_team_channel_name() {
+        Some(name) => name,
+        None => {
+            debug_log!("Error: Could not get current channel name. Skipping set_as_active.");
+            return Err(ThisProjectError::InvalidData("Could not get team channel name".into()));
+        },
+    };
+
+    // 2. Construct the directory path using PathBuf
+    let mut directory_path = PathBuf::from("sync_data");
+    directory_path.push(&team_channel_name);
+    directory_path.push("is_active");
+    directory_path.push(collaborator_name);
+
+    // 3. Create the directory if it doesn't exist
+    create_dir_all(directory_path.parent().unwrap())?;
+
+    // 4. Create the stub file
+    // The mere existence of the file (even empty) acts as the flag
+    match File::create(&directory_path) {
+        Ok(_) => {
+            debug_log!("Collaborator '{}' set as active in channel '{}'.", collaborator_name, team_channel_name);
+            Ok(())
+        },
+        Err(e) => {
+            debug_log!("Error setting collaborator '{}' as active: {}", collaborator_name, e);
+            Err(ThisProjectError::IoError(e))
+        },
+    }
+}
+
 
 /// signal for continuing or for stoping whole Uma program with all threads
 /// Initializes the UMA continue/halt signal by creating or resetting the 
