@@ -2510,8 +2510,35 @@ fn update_collaborator_sendqueue_timestamp_log(
 
     let mut back_of_queue_timestamp = 0;
 
+    // // 1. Read team channel name using correct function
+    // let this_teamchannel_name = match get_current_team_channel_name() { 
+    //     Some(name) => name,
+    //     None => {
+    //         debug_log!("Error: Could not get current channel name in update_collaborator_sendqueue_timestamp_log(). Returning early. Skipping."); // Add log
+    //         return Err(ThisProjectError::InvalidData("Could not get team channel name".into())); // Return Error not Ok(0)
+    //     }
+    // }; 
+    // debug_log!(
+    //     "update_collaborator_sendqueue_timestamp_log(): team_channel_name ->{}", 
+    //     this_teamchannel_name
+    // );    
+
+    // let sync_data_dir = PathBuf::from("sync_data")
+    //     .join(&this_teamchannel_name)  // Use the read name
+    //     .join(collaborator_name);
+    
+    // // Handle directory creation result:
+    // if let Err(e) = fs::create_dir_all(&sync_data_dir) { 
+    //     debug_log!("Error creating directories: {}", e);
+    //     return Err(e.into()); // Return the error
+    // };
+
+    let mut back_of_queue_timestamp = 0;
+    let team_channel_path = PathBuf::from("project_graph_data").join(team_channel_name);  // Use the read name
+    
+    
     // 3. Crawl through the team channel directory tree
-    for entry in WalkDir::new(PathBuf::from("project_graph_data").join(team_channel_name)) {
+    for entry in WalkDir::new(team_channel_path) {
         let entry = entry?;
         if entry.file_type().is_file() && entry.path().extension() == Some(OsStr::new("toml")) {
             // 4. If a .toml file
@@ -2540,6 +2567,11 @@ fn update_collaborator_sendqueue_timestamp_log(
     // 9. Write back_of_queue_timestamp
     let timestamp_file_path = sync_data_dir.join("back_of_queue_timestamp");
     fs::write(timestamp_file_path, back_of_queue_timestamp.to_string())?;
+    
+    debug_log!(
+        "End of update_collaborator_sendqueue_timestamp_log, back_of_queue_timestamp -> {:?}",
+        back_of_queue_timestamp   
+    );
 
     Ok(back_of_queue_timestamp)
 }
@@ -7841,7 +7873,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                                             if let Ok(timestamp) = get_toml_file_timestamp(&file_path) {
                                                 update_collaborator_sendqueue_timestamp_log(
                                                     // TODO: Replace with the actual team channel name
-                                                    "team_channel_name", 
+                                                    &this_team_channelname, 
                                                     &room_sync_input.remote_collaborator_name,
                                                 )?;
                                                 debug_log!("HRCD 4.7.3  Updated timestamp log for {}", room_sync_input.remote_collaborator_name);
@@ -7858,6 +7890,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                                     // Handle the serialization error (e.g., log, skip file)
                                 }
                             }
+                            debug_log!("\nHRCD: bottom of listener. (maybe)\n");
 
 
                         } // end of while
@@ -7874,6 +7907,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                     //                room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip);
                     //     last_debug_log_time = Instant::now();
                     // }
+                    debug_log!("HRCD Err(e) if e.kind() == ErrorKind::WouldBlock =>"); 
                 },
                 Err(e) => {
                     // --- 3.7 Handle Other Errors ---
@@ -7881,12 +7915,11 @@ fn handle_remote_collaborator_meetingroom_desk(
                             room_sync_input.remote_collaborator_name, e, e.kind());
                     return Err(ThisProjectError::NetworkError(e.to_string()));
                 }
-                // }
             // thread::sleep(Duration::from_millis(100));
-            } // 6091 match ready_socket.recv_from(&mut buf) { 
-        } // 6091... match ready_socket.recv_from(&mut buf) {
+            } // match ready_socket.recv_from(&mut buf) { 
+        } // closes main loop
         debug_log!("\nHRCD: bottom of main loop.\n");
-    } // nothing closes the main loop
+    } 
     debug_log!("\nending HRCD\n");
     Ok(())
 }
