@@ -6153,7 +6153,7 @@ fn handle_local_owner_desk(
         ) {
             Ok(temp_extractor) => temp_extractor, 
             Err(e) => {
-                debug_log!("Error getting timestamp: {}. Using 0.", e);
+                debug_log!("HLOD Error getting timestamp: {}. Using 0.", e);
                 0 // Use a default timestamp (0) if an error occurs.
             }
         };
@@ -6207,7 +6207,7 @@ fn handle_local_owner_desk(
                 ) {
                     Ok(temp_extractor) => temp_extractor, 
                     Err(e) => {
-                        debug_log!("Error getting timestamp: {}. Using 0.", e);
+                        debug_log!("HLOD GotItSignal Error getting timestamp: {}. Using 0.", e);
                         0 // Use a default timestamp (0) if an error occurs.
                     }
                 };
@@ -7823,6 +7823,8 @@ fn handle_remote_collaborator_meetingroom_desk(
                             //     debug_log!("HRCD 4.7 Error setting pre-fail flag: {}", e);
                             //     continue; // Handle error as you see fit
                             // };
+                            
+                            debug_log!("HRCD 4.7 ready_signal.rt {:?}", ready_signal.rt);
                             
                             // 4.7 set_prefail_flag_rt_timestamp__for_sendfile
                             match &ready_signal.rt { // Handle the Option
