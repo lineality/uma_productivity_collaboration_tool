@@ -5730,7 +5730,7 @@ fn send_data(data: &[u8], target_addr: SocketAddr) -> Result<(), io::Error> {
 /// # Returns
 ///
 /// * `Result<u64, ThisProjectError>`:  The latest received timestamp on success, or a `ThisProjectError` if an error occurs.
-fn get_latest_received_file_timestamp_plaintext(
+fn get_latest_received_file_timestamp_plaintextstatefile(
     collaborator_name: &str,
     team_channel_name: &str,
 ) -> Result<u64, ThisProjectError> {
@@ -5740,9 +5740,6 @@ fn get_latest_received_file_timestamp_plaintext(
     file_path.push(collaborator_name);
     file_path.push("latest_received_file_timestamp.txt");
 
-    
-    
-    
     // Create directory structure if it doesn't exist
     if let Some(parent) = file_path.parent() {
         create_dir_all(parent)?;
@@ -5762,6 +5759,10 @@ fn get_latest_received_file_timestamp_plaintext(
             }
         },
         Err(e) if e.kind() == ErrorKind::NotFound => {
+            debug_log!(
+                "Error getting timestamp: {}. Using0 get_latest_received_file_timestamp_plaintextstatefile",
+                e,
+            );
             // File not found, initialize to 0
             let mut file = File::create(&file_path)?;
             file.write_all(b"0")?; // Write zero timestamp
@@ -5771,6 +5772,80 @@ fn get_latest_received_file_timestamp_plaintext(
     }
 }
 
+// ... other code and imports
+
+/// Gets the latest received file's `updated_at_timestamp` for a collaborator.
+///
+/// Crawls the team channel directory, finds TOML files owned by the collaborator,
+/// extracts their `updated_at_timestamp`, and returns the latest one.  Returns 0 if no such files are found.
+///
+/// # Arguments
+///
+/// * `team_channel_name`: The team channel name.
+/// * `collaborator_name`: The collaborator's name.
+///
+/// # Returns
+///
+/// * `Result<u64, ThisProjectError>`: The latest `updated_at_timestamp` or an error.
+fn actual_latest_received_file_timestamp(
+    team_channel_name: &str,
+    collaborator_name: &str,
+) -> Result<u64, ThisProjectError> {
+    let mut latest_timestamp = 0;
+    let team_channel_path = PathBuf::from("project_graph_data/team_channels").join(team_channel_name);
+
+    debug_log!(
+        "get_latest_received_file_timestamp_plaintextstatefile(): Starting. team_channel_path: {:?}, collaborator_name: {}",
+        team_channel_path, collaborator_name
+    );
+
+
+    // 1. Crawl the team channel directory:
+    for entry in walkdir::WalkDir::new(team_channel_path) { // Use walkdir to traverse subdirectories
+        let entry = entry?;
+        let path = entry.path();
+
+        // 2. Check for TOML files:
+        if path.is_file() && path.extension().map_or(false, |ext| ext == "toml") {
+            debug_log!("get_latest_received_file_timestamp_plaintextstatefile(): Found TOML file: {:?}", path);
+
+            // 3. Read and parse the TOML file:
+            match fs::read_to_string(path).and_then(|content| Ok(toml::from_str::<Value>(&content))) {
+                Ok(toml_data) => {
+                    debug_log!("get_latest_received_file_timestamp_plaintextstatefile(): Successfully parsed TOML file.");
+
+                    // 4. Check file ownership:
+                    if toml_data.clone()?.get("owner").and_then(Value::as_str) == Some(collaborator_name) {
+                        debug_log!("get_latest_received_file_timestamp_plaintextstatefile(): File owned by collaborator.");
+
+                        // 5. Extract and update latest_timestamp:
+                        if let Some(timestamp) = toml_data?
+                            .get("updated_at_timestamp")
+                            .and_then(Value::as_integer)
+                            .map(|ts| ts as u64)
+                        {
+                            debug_log!("get_latest_received_file_timestamp_plaintextstatefile(): Found updated_at_timestamp: {}", timestamp);
+
+                            latest_timestamp = latest_timestamp.max(timestamp); // Keep the latest
+                        } else {
+                            debug_log!("get_latest_received_file_timestamp_plaintextstatefile(): 'updated_at_timestamp' field not found or invalid in TOML file: {:?}", path);
+                        }
+                    }
+                }
+                Err(e) => {
+                    debug_log!("get_latest_received_file_timestamp_plaintextstatefile(): Error reading or parsing TOML file: {:?} - {}", path, e);
+                    // Handle error as needed (e.g., log and continue, or return an error)
+                    // return Err(ThisProjectError::from(e)); //Example: Return the error.
+                    continue; // Or continue to the next file.
+                }
+            }
+        }
+    }
+
+    debug_log!("get_latest_received_file_timestamp_plaintextstatefile(): Returning latest timestamp: {}", latest_timestamp);
+
+    Ok(latest_timestamp)
+}
 
 /// Sets the latest received file timestamp for a collaborator in a team channel, using a plain text file.
 ///
@@ -6064,7 +6139,21 @@ fn handle_local_owner_desk(
         */
         // let mut echo_flag = false;
 
-        // Drone Loop in a thread? 
+        // Drone Loop in a thread? TODO
+        
+        /*
+        Balancing Accuracy and efficiency:
+        the first time in a session the drone loop will use the full search
+        to find the most recent file timestamp,
+        but thereafter 
+        the value is saved in a quasi-state or state.
+        
+        
+        
+        */
+        let mut drone_readysend_thread_is_bootstrapped: bool = false;
+        
+        
         // --- 1.5 Spawn a thread to handle "Ready" signals & fail-flag removal ---
         let ready_thread = thread::spawn(move || {
             //////////////////////////////////////
@@ -6096,20 +6185,41 @@ fn handle_local_owner_desk(
                 @
                 sync_data/{team_channel}/latest_receivedfile_timestamps/bob/latest_received_file_timestamp
                 */
-                // let mut latest_received_file_timestamp = get_latest_received_file_timestamp_plaintext(
+                // let mut latest_received_file_timestamp = get_latest_received_file_timestamp_plaintextstatefile(
                 //     &local_owner_desk_setup_data_clone.remote_collaborator_name,
                 //     &team_channel_name,
                 // );
-                let latest_received_file_timestamp = match get_latest_received_file_timestamp_plaintext(
-                    &team_channel_name, // Correct argument order.
-                    &remote_collaborator_name_for_thread,
-                ) {
-                    Ok(ts) => ts, // Correct: Use 'ts' directly.
-                    Err(e) => {
-                        debug_log!("Error getting timestamp: {}. Using 0.", e);
-                        0 // Use a default timestamp (0) if an error occurs.
-                    }
-                };
+                
+                let mut latest_received_file_timestamp: u64 = 0;
+                
+                if drone_readysend_thread_is_bootstrapped {
+                    let latest_received_file_timestamp = match get_latest_received_file_timestamp_plaintextstatefile(
+                        &team_channel_name, // Correct argument order.
+                        &remote_collaborator_name_for_thread,
+                    ) {
+                        Ok(temp_extractor) => temp_extractor, 
+                        Err(e) => {
+                            debug_log!("Error getting timestamp: {}. Using 0.", e);
+                            0 // Use a default timestamp (0) if an error occurs.
+                        }
+                    };
+                    drone_readysend_thread_is_bootstrapped = true;
+                } else {
+                    latest_received_file_timestamp = match actual_latest_received_file_timestamp(
+                        &team_channel_name, // Correct argument order.
+                        &remote_collaborator_name_for_thread,
+                    ) {
+                        Ok(temp_extractor) => temp_extractor, 
+                        Err(e) => {
+                            debug_log!("Error getting timestamp: {}. Using 0.", e);
+                            0 // Use a default timestamp (0) if an error occurs.
+                        }
+                    };
+                    debug_log!(
+                        "echo: latest_received_file_timestamp -> {:?}",
+                        latest_received_file_timestamp,
+                    );
+                }
 
                 // 1.3 Send Ready Signal (using a function)        
                 if let Some(addr_1) = ipv6_addr_1 {
@@ -6438,9 +6548,17 @@ fn handle_local_owner_desk(
 
                     debug_log!("7.3 HLOD-InTray: Instant message file saved to: {:?}", message_path);
 
-                    //////////////
-                    // Echo Base
-                    //////////////
+                      /////////////
+                     // Echo Base
+                    /////////////
+                    /*
+                    After a file is recieved and saved
+                    a miniature ReadySignal is sent out
+                    using the timestamp of the 'current file' as the latest file
+                    and saving that in state
+                    so that the drone-loop (above) sending ready signals will also know
+                    there is a new latest-date
+                    */
                     
                     // // TODO extract 
                     // let recieved_file_timestamp = ...read updated_at field from .toml (bytes?)
@@ -6455,6 +6573,13 @@ fn handle_local_owner_desk(
                             continue;
                         }
                     };
+                    
+                    // update state: latest recieved timestamp
+                    set_latest_received_file_timestamp_plaintext(
+                        &team_channel_name, // for team_channel_name
+                        &local_owner_desk_setup_data.remote_collaborator_name, // for collaborator_name
+                        recieved_file_timestamp, // for timestamp
+                    );
                     
                     // Now you have the recieved_file_timestamp timestamp
                     debug_log!("Received file updated at: {}", recieved_file_timestamp);
