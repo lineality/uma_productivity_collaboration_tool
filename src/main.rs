@@ -181,20 +181,20 @@ fn get_local_ip_addresses() -> Result<Vec<IpAddr>, std::io::Error> {
 }
 
 
-fn find_valid_local_owner_ip_address(ipv6_addresses: &[Ipv6Addr]) -> Option<Ipv6Addr> {
+fn find_valid_local_owner_ip_address(ipv6_list_addresses: &[Ipv6Addr]) -> Option<Ipv6Addr> {
     debug_log!("find_valid_local_owner_ip_address(): Starting. Checking IPv6 addresses...");
 
-    for &ipv6_address in ipv6_addresses {
-        debug_log!("find_valid_local_owner_ip_address(): Testing address: {}", ipv6_address);
+    for &this_iter_ipv6address in ipv6_list_addresses {
+        debug_log!("find_valid_local_owner_ip_address(): Testing address: {}", this_iter_ipv6address);
 
         // 1. Basic Validation:  (Optional) You can add more sophisticated validation checks here, e.g., using regular expressions to match valid IPv6 formats.
-        if ipv6_address.is_unspecified() || ipv6_address.is_loopback() {
+        if this_iter_ipv6address.is_unspecified() || this_iter_ipv6address.is_loopback() {
             debug_log!("find_valid_local_owner_ip_address():   Skipping unspecified or loopback address.");
             continue; // Skip unspecified and loopback addresses
         }
 
         // 2. Reachability Test (UDP Echo)
-        if let Ok(socket) = UdpSocket::bind(SocketAddr::new(IpAddr::V6(ipv6_address), 0)) { // Bind to a random free port on this IP
+        if let Ok(socket) = UdpSocket::bind(SocketAddr::new(IpAddr::V6(this_iter_ipv6address), 0)) { // Bind to a random free port on this IP
             socket.set_read_timeout(Some(Duration::from_secs(1))).unwrap();  // 1 second timeout
 
             let test_data = b"UMA IP test";  // Some test data
@@ -204,9 +204,9 @@ fn find_valid_local_owner_ip_address(ipv6_addresses: &[Ipv6Addr]) -> Option<Ipv6
                 let mut buf = [0u8; 1024];
                 if let Ok((_amt, _src)) = socket.recv_from(&mut buf) {
                     //  Valid and reachable IPv6 address found
-                    debug_log!("find_valid_local_owner_ip_address():   Valid and reachable IPv6 address found: {}", ipv6_address);
+                    debug_log!("find_valid_local_owner_ip_address():   Valid and reachable IPv6 address found: {}", this_iter_ipv6address);
 
-                    return Some(ipv6_address); // Return the first valid and reachable IPv6 address found
+                    return Some(this_iter_ipv6address); // Return the first valid and reachable IPv6 address found
                 }
             }
         }
@@ -6468,12 +6468,24 @@ fn handle_local_owner_desk(
     let mut ipv6_addr_1: Option<Ipv6Addr> = None;
     let mut ipv6_addr_2: Option<Ipv6Addr> = None;
     
-    // Clone the address when extracting it
-    if let Some(addr) = ipv6_addr_list.get(0) {
-        ipv6_addr_1 = Some(*addr); // Dereference and clone the IPv6 address
-        ipv6_addr_2 = Some(*addr);
-    }
+    // // Clone the address when extracting it
+    // if let Some(addr) = ipv6_addr_list.get(0) {
+    //     ipv6_addr_1 = Some(*addr); // Dereference and clone the IPv6 address
+    //     ipv6_addr_2 = Some(*addr);
+    // }
+    // 1. Use find_valid_local_owner_ip_address to get a valid address or an error.
+    // let local_user_ipv6_address = find_valid_local_owner_ip_address(
+    //     &local_owner_desk_setup_data.local_user_ipv6_addr_list,
+    // )?; // The ? will return the error if any
+    
+    let local_user_ipv6_address = find_valid_local_owner_ip_address(&local_owner_desk_setup_data.local_user_ipv6_addr_list)
+        .ok_or(ThisProjectError::NetworkError("No valid local IPv6 address found".to_string()))?;
 
+    // Instead of cloning the first address, use the result of the selector:
+    ipv6_addr_1 = Some(local_user_ipv6_address); // No need to clone or dereference as the variable now directly holds the Ipv6Addr
+    ipv6_addr_2 = ipv6_addr_1.clone(); // Clone the selected address for ipv6_addr_2 if needed
+    
+    
     loop { // 1. start overall loop to restart whole desk
         let remote_collaborator_name_for_thread = remote_collaborator_name.clone();
         let salt_list_1_drone_clone = salt_list_1.clone();
@@ -8355,16 +8367,58 @@ fn handle_remote_collaborator_meetingroom_desk(
     Ok(())
 }
 
-// --- Helper Function to Create UDP Socket ---
+// // --- Helper Function to Create UDP Socket ---
+// fn create_udp_socket(ip_addresses: &[Ipv6Addr], port: u16) -> Result<UdpSocket, ThisProjectError> {
+//     for ip_address in ip_addresses {
+//         let bind_result = UdpSocket::bind(SocketAddr::new(IpAddr::V6(*ip_address), port));
+//         match bind_result {
+//             Ok(socket) => return Ok(socket),
+//             Err(e) => debug_log!("create_udp_socket() Failed to bind to [{}]:{}: {}", ip_address, port, e),
+//         }
+//     }
+//     Err(ThisProjectError::NetworkError("create_udp_socket() Failed to bind to any IPv6 address".to_string()))
+// }
+
+/// Creates a UDP socket bound to the first valid and bindable IPv6 address in the provided list.
+///
+/// This function iterates through the `ip_addresses` slice and attempts to bind a UDP socket to each address on the given `port`.
+/// It returns the first successfully created `UdpSocket`, or an error if binding fails for all provided addresses.
+///
+/// # Arguments
+///
+/// * `ip_addresses`: A slice of `Ipv6Addr` representing the IPv6 addresses to try.
+/// * `port`: The port number to bind the socket to.
+///
+/// # Returns
+///
+/// * `Result<UdpSocket, ThisProjectError>`:  A `Result` containing the created `UdpSocket` on success,
+///    or a `ThisProjectError::NetworkError` if binding fails for all addresses.
+///
+/// uses: use std::net::{IpAddr, Ipv6Addr, SocketAddr, UdpSocket};
 fn create_udp_socket(ip_addresses: &[Ipv6Addr], port: u16) -> Result<UdpSocket, ThisProjectError> {
-    for ip_address in ip_addresses {
-        let bind_result = UdpSocket::bind(SocketAddr::new(IpAddr::V6(*ip_address), port));
-        match bind_result {
-            Ok(socket) => return Ok(socket),
-            Err(e) => debug_log!("create_udp_socket() Failed to bind to [{}]:{}: {}", ip_address, port, e),
+    for &ip_address in ip_addresses {  // Iterate through provided IPv6 addresses
+        let socket_addr = SocketAddr::new(IpAddr::V6(ip_address), port); // Create a SocketAddr
+        debug_log!("create_udp_socket(): Attempting to bind to {:?}", socket_addr);
+
+        match UdpSocket::bind(socket_addr) {
+            Ok(socket) => {
+                debug_log!("create_udp_socket(): Successfully bound to {:?}", socket_addr);                
+                return Ok(socket); // Return the socket on successful bind: first come, first served
+            }
+            Err(e) => {
+                debug_log!(
+                    "create_udp_socket(): Failed to bind to {:?}: {}",
+                    socket_addr, e
+                ); // Log binding errors
+                // Continue to the next address if binding fails: keep trying
+            }
         }
     }
-    Err(ThisProjectError::NetworkError("create_udp_socket() Failed to bind to any IPv6 address".to_string()))
+
+    // Return an error if no address could be bound
+    Err(ThisProjectError::NetworkError(
+        "Failed to bind to any IPv6 address".to_string(),
+    ))
 }
 
 // Result enum for the sync operation, allowing communication between threads
