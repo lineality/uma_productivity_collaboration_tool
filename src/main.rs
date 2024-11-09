@@ -180,6 +180,44 @@ fn get_local_ip_addresses() -> Result<Vec<IpAddr>, std::io::Error> {
     Ok(addresses)
 }
 
+
+fn find_valid_local_owner_ip_address(ipv6_addresses: &[Ipv6Addr]) -> Option<Ipv6Addr> {
+    debug_log!("find_valid_local_owner_ip_address(): Starting. Checking IPv6 addresses...");
+
+    for &ipv6_address in ipv6_addresses {
+        debug_log!("find_valid_local_owner_ip_address(): Testing address: {}", ipv6_address);
+
+        // 1. Basic Validation:  (Optional) You can add more sophisticated validation checks here, e.g., using regular expressions to match valid IPv6 formats.
+        if ipv6_address.is_unspecified() || ipv6_address.is_loopback() {
+            debug_log!("find_valid_local_owner_ip_address():   Skipping unspecified or loopback address.");
+            continue; // Skip unspecified and loopback addresses
+        }
+
+        // 2. Reachability Test (UDP Echo)
+        if let Ok(socket) = UdpSocket::bind(SocketAddr::new(IpAddr::V6(ipv6_address), 0)) { // Bind to a random free port on this IP
+            socket.set_read_timeout(Some(Duration::from_secs(1))).unwrap();  // 1 second timeout
+
+            let test_data = b"UMA IP test";  // Some test data
+            let echo_server_addr = SocketAddr::new(IpAddr::V6(Ipv6Addr::LOCALHOST), 7); // Some arbitrary echo server address (adjust if needed)
+
+            if let Ok(_) = socket.send_to(test_data, echo_server_addr) { // Use a separate echo server address
+                let mut buf = [0u8; 1024];
+                if let Ok((_amt, _src)) = socket.recv_from(&mut buf) {
+                    //  Valid and reachable IPv6 address found
+                    debug_log!("find_valid_local_owner_ip_address():   Valid and reachable IPv6 address found: {}", ipv6_address);
+
+                    return Some(ipv6_address); // Return the first valid and reachable IPv6 address found
+                }
+            }
+        }
+    }
+
+    debug_log!("find_valid_local_owner_ip_address(): No valid and reachable IPv6 address found.");    
+    None // No valid and reachable IPv6 address found
+}
+
+
+
 enum IpAddrKind { V4, V6 }
 
 pub enum SyncError {
@@ -4231,7 +4269,7 @@ fn generate_random_salt() -> String {
 /// As a headline this makes an ip-whitelist or ip-allowlist but the overall process is bigger.
 /// This should include 'yourself' so all connection data are there, so you know your ports
 ///
-/// Note: this likely should also include the collabortor's last-recieved-timestamp (and the previous one)
+/// Note: this likely should also include the collabortor's last-received-timestamp (and the previous one)
 /// this will also need a bootstrap where at first...there is no last timestamp.
 ///
 /// Note: making the allow_lists requires information from more than one source:
@@ -5087,17 +5125,239 @@ struct ReadySignal {
     rh: Option<Vec<u8>>, // N hashes of rt + re
 }
 
-// review use of gpg here
+// /// Proto Safety Layer for processing GotItSignal data
+// /// 
+// #[derive(Serialize, Deserialize, Debug)]
+// struct PrototGotitSignal {
+//     gst: Option<u64>, // send-time: generate_terse_timestamp_freshness_proxy(); for replay-attack protection
+//     di: Option<u64>, // the 'id' is updated_at file timestamp (because context= filesync timeline ID)
+//     gh: Option<Vec<u8>>, // N hashes of rt + re
+// }
+
+// /// maybe, draft
+// enum GotitEnum {
+    
+// }
+
+// // review use of gpg here
+// /// GotItSignal struct
+// /// Terse names to reduce network traffic, as an esceptional circumstatnce
+// /// Probably does not need a nonce because repeat does nothing...
+// /// less hash?
+// #[derive(Serialize, Deserialize, Debug)]
+// struct GotItSignal {
+//     gst: u64, // send-time: generate_terse_timestamp_freshness_proxy(); for replay-attack protection
+//     di: u64, // the 'id' is updated_at file timestamp (because context= filesync timeline ID)
+//     gh: Vec<u8>, // N hashes of rt + re
+// }
+
+
+// Define enums for each field you want to validate
+#[derive(Debug, PartialEq)]
+enum Timestamp {
+    Valid(u64),
+    Invalid,
+}
+
+#[derive(Debug, PartialEq)]
+enum DocumentId {
+    Valid(u64),
+    Invalid,
+}
+
+// Proto struct with Option<T> for initial deserialization
+#[derive(Debug)]
+struct PrototGotitSignal {
+    gst: Option<Timestamp>,
+    di: Option<DocumentId>,
+    gh: Option<Vec<u8>>,
+}
+
 /// GotItSignal struct
 /// Terse names to reduce network traffic, as an esceptional circumstatnce
 /// Probably does not need a nonce because repeat does nothing...
-/// less hash?
-#[derive(Serialize, Deserialize, Debug)]
+///
+/// Final struct with validated data
+/// use proto-struct PrototGotitSignal for loading possibly corrupted data
+#[derive(Debug)]
 struct GotItSignal {
-    gst: Option<u64>, // send-time: generate_terse_timestamp_freshness_proxy(); for replay-attack protection
-    di: Option<u64>, // Unique document ID TODO: maybe only this?
-    gh: Option<Vec<u8>>, // N hashes of rt + re
+    gst: u64,
+    di: u64,
+    gh: Vec<u8>,
 }
+
+// Converts a byte slice to a u64, handling potential errors.
+fn bytes_to_u64(bytes: &[u8]) -> Result<u64, Error> {
+    if bytes.len() != 8 {
+        return Err(Error::new(ErrorKind::InvalidData, "Invalid byte length for u64"));
+    }
+    Ok(u64::from_be_bytes(bytes.try_into().unwrap()))
+}
+
+/// Calculates Pearson hash list for a GotItSignal.
+/// Hashes the `gst` (send time), `di` (document ID/received timestamp), and salts.
+///
+/// # Arguments
+///
+/// * `gst`: The `gst` timestamp.
+/// * `di`: The `di` timestamp (received file's timestamp).
+/// * `local_user_salt_list`:  The list of salts for hashing.
+///
+/// # Returns
+///
+/// * `Result<Vec<u8>, ThisProjectError>`: The calculated hash list or an error.
+fn calculate_gotitsignal_hashlist(
+    timestamp_for_gst: u64,
+    timestamp_for_di: u64,
+    local_user_salt_list: &[u128],
+) -> Result<Vec<u8>, ThisProjectError> {
+
+    let mut data_to_hash = Vec::new();
+    data_to_hash.extend_from_slice(&timestamp_for_gst.to_be_bytes());
+    data_to_hash.extend_from_slice(&timestamp_for_di.to_be_bytes());
+
+    debug_log!(
+        "calculate_gotitsignal_hashlist(): Data to hash: {:?}",
+        &data_to_hash
+    );
+
+    let mut gotit_signal_hash_list: Vec<u8> = Vec::new();
+    for salt in local_user_salt_list {
+        let mut salted_data = data_to_hash.clone();
+        salted_data.extend_from_slice(&salt.to_be_bytes());
+
+        match pearson_hash_base(&salted_data) {
+            Ok(hash) => gotit_signal_hash_list.push(hash),
+            Err(e) => {
+                return Err(ThisProjectError::IoError(e));  // Return the error
+            }
+        }
+    }
+    debug_log!(
+        "calculate_gotitsignal_hashlist(): Calculated Hashes: {:?}",
+        &gotit_signal_hash_list
+    );
+
+    Ok(gotit_signal_hash_list)
+}
+
+// // rough draft
+// fn calculate_gotitsignal_hashlist(
+//     rt_timestamp_for_di:,
+//     local_user_salt_list,
+// ) -> Result<Vec<u8>, Error> {
+    
+//     timestamp_for_gst = get_current_unix_timestamp();
+    
+//     let mut data_to_hash = Vec::new();
+//     data_to_hash.extend_from_slice(&timestamp_for_gst.to_be_bytes());
+//     data_to_hash.extend_from_slice(&rt_timestamp_for_di.to_be_bytes());
+//     data_to_hash.push(if is_echo_send { 1 } else { 0 }); // ?
+
+//     debug_log!(
+//         "101010 calculate_gotitsignal_hashlist(): Data to hash: {:?}",
+//         &data_to_hash
+//     );
+
+//     let mut gotit_signal_hash_list: Vec<u8> = Vec::new();
+//     for salt in local_user_salt_list {
+//         let mut salted_data = data_to_hash.clone();
+//         salted_data.extend_from_slice(&salt.to_be_bytes());
+
+//         let hash_result = pearson_hash_base(&salted_data);
+//         debug_log!(
+//             "101010 calculate_gotitsignal_hashlist(): Hash Result: {:?}",
+//             &hash_result
+//         );
+
+//         match hash_result {
+//             Ok(hash) => gotit_signal_hash_list.push(hash),
+//             Err(e) => {
+//                 debug_log!("Error calculating Pearson hash: {}", e);
+//                 return None;
+//             }
+//         }
+//     }
+//     debug_log!(
+//         "101010 calculate_gotitsignal_hashlist(): Calculated Hashes: {:?}",
+//         &gotit_signal_hash_list
+//     );
+
+//     Ok(gotit_signal_hash_list)
+// }
+
+
+/// Deserializes a byte slice into a `PrototGotitSignal`, manually handling the byte extraction.
+///
+/// Arguments:
+///     bytes: The byte slice containing the serialized data.
+///
+/// Returns:
+///     Result<PrototGotitSignal, Error>: A `Result` containing the `PrototGotitSignal` on success, or an `Error` if deserialization fails.
+fn deserialize_proto_gotit_signal(bytes: &[u8]) -> Result<PrototGotitSignal, Error> {
+
+    // Calculate expected lengths (assuming a u64 for both timestamp and ID)
+    let timestamp_len = std::mem::size_of::<u64>();
+    let id_len = std::mem::size_of::<u64>();
+    let expected_min_length = timestamp_len + id_len; // Minimum length for timestamp and ID
+
+    // Check if the byte array has enough data for at least the timestamp and document ID
+    if bytes.len() < expected_min_length {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            "Invalid byte array length for PrototGotitSignal: too short",
+        ));
+    }
+
+    // Extract timestamp
+    let gst_bytes = &bytes[0..timestamp_len];
+    let gst = match bytes_to_u64(gst_bytes) {
+        Ok(ts) => Some(Timestamp::Valid(ts)),
+        Err(_) => Some(Timestamp::Invalid),  // Or handle differently
+    };
+
+    // Extract document ID
+    let di_bytes = &bytes[timestamp_len..expected_min_length];
+    let di = match bytes_to_u64(di_bytes) {
+        Ok(id) => Some(DocumentId::Valid(id)),
+        Err(_) => Some(DocumentId::Invalid),
+    };
+
+    // Extract hash list (if any)
+    let gh = if bytes.len() > expected_min_length {
+        Some(bytes[expected_min_length..].to_vec())
+    } else {
+        None
+    };
+
+    Ok(PrototGotitSignal { gst, di, gh })
+}
+
+
+fn validate_and_convert_gotit_signal(proto_signal: PrototGotitSignal) -> Result<GotItSignal, String> {
+    let gst = match proto_signal.gst {
+        Some(Timestamp::Valid(ts)) => ts,
+        _ => return Err("Invalid or missing gst".into()),
+    };
+
+    let di = match proto_signal.di {
+        Some(DocumentId::Valid(id)) => id,
+        _ => return Err("Invalid or missing di".into()),
+    };
+
+    // Default to an empty vector if the hash list is missing
+    let gh = proto_signal.gh.unwrap_or_default();
+
+    Ok(GotItSignal { gst, di, gh })
+}
+
+fn process_incoming_gotit_signal_bytes(bytes: &[u8]) -> Result<GotItSignal, String> {
+    let proto_signal = deserialize_proto_gotit_signal(bytes)
+        .map_err(|e| format!("Deserialization failed: {}", e))?; // Handle deserialization error
+
+    validate_and_convert_gotit_signal(proto_signal)
+}
+
 
 #[derive(Debug, Clone)] // Add other necessary derives later
 struct SendQueue {
@@ -5719,7 +5979,7 @@ fn send_data(data: &[u8], target_addr: SocketAddr) -> Result<(), io::Error> {
 /// Gets the latest received file timestamp for a collaborator in a team channel, using a plain text file.
 ///
 /// This function reads the timestamp from a plain text file at:
-/// `sync_data/{team_channel_name}/latest_receivedfile_timestamps/{collaborator_name}/latest_received_file_timestamp.txt`
+/// `sync_data/{team_channel_name}/latest_receivedfile_timestamps/{collaborator_name}/latest_receivedfromme_file_timestamp.txt`
 /// If the file or directory structure doesn't exist, it creates them and initializes the timestamp to 0.
 ///
 /// # Arguments
@@ -5730,7 +5990,15 @@ fn send_data(data: &[u8], target_addr: SocketAddr) -> Result<(), io::Error> {
 /// # Returns
 ///
 /// * `Result<u64, ThisProjectError>`:  The latest received timestamp on success, or a `ThisProjectError` if an error occurs.
-fn get_latest_received_file_timestamp_plaintextstatefile(
+///
+/// This is one of those values and functions that can be confusing
+/// because both you and your remote collaborator have quasi-mirror-image sync systems
+/// with reversed roles. Both of you are making 'latest_recieved' timestamps
+/// and both of you are using your and their 'latest_recieved' timestamps,
+/// which are simultanously 'the same' abstract value but very different local-context-role-specific values
+///
+/// the complimentary function is: get_latest_received_from_collaborator_in_teamchannel_file_timestamp()
+fn get_latestreceivedfromme_file_timestamp_plaintextstatefile(
     collaborator_name: &str,
     team_channel_name: &str,
 ) -> Result<u64, ThisProjectError> {
@@ -5738,7 +6006,7 @@ fn get_latest_received_file_timestamp_plaintextstatefile(
     file_path.push(team_channel_name);
     file_path.push("latest_receivedfile_timestamps");
     file_path.push(collaborator_name);
-    file_path.push("latest_received_file_timestamp.txt");
+    file_path.push("latest_receivedfromme_file_timestamp.txt");
 
     // Create directory structure if it doesn't exist
     if let Some(parent) = file_path.parent() {
@@ -5760,7 +6028,7 @@ fn get_latest_received_file_timestamp_plaintextstatefile(
         },
         Err(e) if e.kind() == ErrorKind::NotFound => {
             debug_log!(
-                "Error getting timestamp: {}. Using0 get_latest_received_file_timestamp_plaintextstatefile",
+                "Error getting timestamp: {}. Using0 get_latestreceivedfromme_file_timestamp_plaintextstatefile",
                 e,
             );
             // File not found, initialize to 0
@@ -5785,7 +6053,7 @@ fn get_latest_received_file_timestamp_plaintextstatefile(
 /// # Returns
 ///
 /// * `Result<u64, ThisProjectError>`: The latest `updated_at_timestamp` or an error.
-fn actual_latest_received_file_timestamp(
+fn actual_latest_received_from_rc_file_timestamp(
     team_channel_name: &str,
     collaborator_name: &str,
 ) -> Result<u64, ThisProjectError> {
@@ -5793,7 +6061,7 @@ fn actual_latest_received_file_timestamp(
     let team_channel_path = PathBuf::from("project_graph_data/team_channels").join(team_channel_name);
 
     debug_log!(
-        "get_latest_received_file_timestamp_plaintextstatefile(): Starting. team_channel_path: {:?}, collaborator_name: {}",
+        "get_latestreceivedfromme_file_timestamp_plaintextstatefile(): Starting. team_channel_path: {:?}, collaborator_name: {}",
         team_channel_path, collaborator_name
     );
 
@@ -5805,16 +6073,16 @@ fn actual_latest_received_file_timestamp(
 
         // 2. Check for TOML files:
         if path.is_file() && path.extension().map_or(false, |ext| ext == "toml") {
-            debug_log!("get_latest_received_file_timestamp_plaintextstatefile(): Found TOML file: {:?}", path);
+            debug_log!("get_latestreceivedfromme_file_timestamp_plaintextstatefile(): Found TOML file: {:?}", path);
 
             // 3. Read and parse the TOML file:
             match fs::read_to_string(path).and_then(|content| Ok(toml::from_str::<Value>(&content))) {
                 Ok(toml_data) => {
-                    debug_log!("get_latest_received_file_timestamp_plaintextstatefile(): Successfully parsed TOML file.");
+                    debug_log!("get_latestreceivedfromme_file_timestamp_plaintextstatefile(): Successfully parsed TOML file.");
 
                     // 4. Check file ownership:
                     if toml_data.clone()?.get("owner").and_then(Value::as_str) == Some(collaborator_name) {
-                        debug_log!("get_latest_received_file_timestamp_plaintextstatefile(): File owned by collaborator.");
+                        debug_log!("get_latestreceivedfromme_file_timestamp_plaintextstatefile(): File owned by collaborator.");
 
                         // 5. Extract and update latest_timestamp:
                         if let Some(timestamp) = toml_data?
@@ -5822,16 +6090,16 @@ fn actual_latest_received_file_timestamp(
                             .and_then(Value::as_integer)
                             .map(|ts| ts as u64)
                         {
-                            debug_log!("get_latest_received_file_timestamp_plaintextstatefile(): Found updated_at_timestamp: {}", timestamp);
+                            debug_log!("get_latestreceivedfromme_file_timestamp_plaintextstatefile(): Found updated_at_timestamp: {}", timestamp);
 
                             latest_timestamp = latest_timestamp.max(timestamp); // Keep the latest
                         } else {
-                            debug_log!("get_latest_received_file_timestamp_plaintextstatefile(): 'updated_at_timestamp' field not found or invalid in TOML file: {:?}", path);
+                            debug_log!("get_latestreceivedfromme_file_timestamp_plaintextstatefile(): 'updated_at_timestamp' field not found or invalid in TOML file: {:?}", path);
                         }
                     }
                 }
                 Err(e) => {
-                    debug_log!("get_latest_received_file_timestamp_plaintextstatefile(): Error reading or parsing TOML file: {:?} - {}", path, e);
+                    debug_log!("get_latestreceivedfromme_file_timestamp_plaintextstatefile(): Error reading or parsing TOML file: {:?} - {}", path, e);
                     // Handle error as needed (e.g., log and continue, or return an error)
                     // return Err(ThisProjectError::from(e)); //Example: Return the error.
                     continue; // Or continue to the next file.
@@ -5840,7 +6108,7 @@ fn actual_latest_received_file_timestamp(
         }
     }
 
-    debug_log!("get_latest_received_file_timestamp_plaintextstatefile(): Returning latest timestamp: {}", latest_timestamp);
+    debug_log!("get_latestreceivedfromme_file_timestamp_plaintextstatefile(): Returning latest timestamp: {}", latest_timestamp);
 
     Ok(latest_timestamp)
 }
@@ -5858,7 +6126,7 @@ fn actual_latest_received_file_timestamp(
 /// # Returns
 ///
 /// * `Result<(), ThisProjectError>`: `Ok(())` on success, or a `ThisProjectError` if an error occurs.
-fn set_latest_received_file_timestamp_plaintext(
+fn set_latest_received_from_rc_file_timestamp_plaintext(
     team_channel_name: &str,
     collaborator_name: &str,
     timestamp: u64,
@@ -5867,7 +6135,7 @@ fn set_latest_received_file_timestamp_plaintext(
     file_path.push(team_channel_name);
     file_path.push("latest_receivedfile_timestamps");
     file_path.push(collaborator_name);
-    file_path.push("latest_received_file_timestamp.txt");
+    file_path.push("latest_receivedfromme_file_timestamp.txt");
 
     // Create directory structure if it doesn't exist
     if let Some(parent) = file_path.parent() {
@@ -5910,13 +6178,13 @@ fn set_latest_received_file_timestamp_plaintext(
 
 
     // // 4. Creates a ReadySignal instance to be the ready signal (Corrected)
-    // let proto_ready_signal = match get_latest_recieved_from_collaborator_in_teamchannel_file_timestamp(
+    // let proto_ready_signal = match get_latest_received_from_collaborator_in_teamchannel_file_timestamp(
     //     // Clone the remote_collaborator_name
     //     &local_owner_desk_setup_data_clone.remote_collaborator_name.clone() 
     //     &local_owner_desk_setup_data_clone.local_user_salt_list.clone(), 
     // ) {
-    //     Ok(latest_received_file_timestamp) => ReadySignal {
-    //         rt: Some(latest_received_file_timestamp), // Correct field name and type
+    //     Ok(latest_receivedfromme_file_timestamp) => ReadySignal {
+    //         rt: Some(latest_receivedfromme_file_timestamp), // Correct field name and type
     //         rst: Some(get_current_unix_timestamp()), 
     //         re: Some(false), // Correct field name and type
     //         rh: None, // You'll need to calculate and add the hashes here later
@@ -6035,12 +6303,89 @@ fn send_ready_signal(
     Ok(())
 }
 
+// draft based on 'send ready signal' function
+/// Sends a Gotit to the specified target address.
+fn send_gotit_signal(
+    local_user_salt_list: &[u128], 
+    local_user_ipv6_address: &Ipv6Addr, 
+    local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip: u16,
+    received_file_updatedat_timestamp: u64,
+) -> Result<(), ThisProjectError> {
+    /*
+    struct GotItSignal {
+        gst: Option<u64>, // send-time: 
+            generate_terse_timestamp_freshness_proxy(); for replay-attack protection
+        di: Option<u64>, // the 'id' is updated_at file timestamp 
+            (because context= filesync timeline ID)
+        gh: Option<Vec<u8>>, // N hashes of rt + re
+    */
+    
+    let timestamp_for_gst = get_current_unix_timestamp();
+    
+    // Make hashes of gotit_signal fields:
+    let gh_hashes = calculate_gotitsignal_hashlist(
+        timestamp_for_gst, 
+        received_file_updatedat_timestamp, // as di
+        local_user_salt_list,
+    );
+    
+    // Create the GotItSignal struct:
+    let gotit_struct = GotItSignal {
+        gst: timestamp_for_gst,
+        di: received_file_updatedat_timestamp,
+        gh: gh_hashes?, // Include calculated hashes
+    };
+    
+    // 5. Serialize the ReadySignal
+    let serialized_gotitsignal_data = serialize_gotit_signal(
+        &gotit_struct
+    ).expect("inHLOD send_gotit_signal() err Failed to serialize ReadySignal, gotit_signal_to_send_from_this_loop"); 
+
+    // --- Inspect Serialized Data ---
+    debug_log!("inHLOD send_gotit_signal() serialized_gotitsignal_data: {:?}", serialized_gotitsignal_data);
+
+    // TODO likely later needed to have some mechanism to try addresses until one works?
+    // 6. Send the signal @ 
+    //    local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip
+    // TODO figure out way to specify ipv6, 4, prioritizing, trying, etc.
+    // (in theory...you could try them all?)
+    // Select the first IPv6 address if available
+
+    // Send the gotitsignal_data to the collaborator's gotit_port
+    // let target_addr = SocketAddr::new(
+    //     IpAddr::V6(ipv6_address_copy), // Use the copied address
+    //     local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip
+    // ); 
+    let target_addr = SocketAddr::new(
+        IpAddr::V6(*local_user_ipv6_address), // Directly use the provided address
+        local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip,
+    );
+
+    // Log before sending
+    debug_log!(
+        "inHLOD send_gotit_signal() Attempting to send ReadySignal to {}: {:?}", 
+        target_addr, 
+        local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip
+    );
+
+    // // If sending to the first address succeeds, no need to iterate further
+
+    if send_data(&serialized_gotitsignal_data, target_addr).is_ok() {
+        debug_log("inHLOD send_gotit_signal() 6. Successfully sent ReadySignal to {} (first address)");
+        return Ok(()); // Exit the thread
+    } else {
+        debug_log("inHLOD send_gotit_signal() err 6. Failed to send ReadySignal to {} (first address)");
+        return Err(ThisProjectError::NetworkError("Failed to send ReadySignal".to_string())); // Return an error
+    }
+
+    Ok(())
+}
 
 
 
 /// Set up the local owner users in-tray desk
 /// requests to recieve are sent from here
-/// other people's owned docs are recieved here
+/// other people's owned docs are received here
 /// gpg confirmed
 /// save .toml (handle the type: content, node, etc.)
 /// and 'gotit' signal sent out from here
@@ -6078,13 +6423,43 @@ fn handle_local_owner_desk(
     // TODO maybe a flag here to exit the function?
     // let mut exit_hlod = false;
     
+    // find a valid local owner ip address
+    // e.g. to pass a single ip to later functions
+    // set empty and fill later or exit
+    let local_user_ipv6_address: Option<Ipv6Addr> = find_valid_local_owner_ip_address(
+        &local_owner_desk_setup_data.local_user_ipv6_addr_list,
+        );
+
+    let local_user_ipv6_address = local_user_ipv6_address.ok_or(
+        ThisProjectError::NetworkError("No valid local IPv6 address found".to_string()),
+    )?;
+    // // set empty and fill later or exit
+    // let mut local_user_ipv6_address: Ipv6Addr;
+    
+    // let option_localuseripv6address = find_valid_local_owner_ip_address(
+    //     &local_owner_desk_setup_data.local_user_ipv6_addr_list,
+    // );
+    
+    // if let Some(option_fill) = option_localuseripv6address {
+    //     // Use the valid IPv6 address
+    //     local_user_ipv6_address = option_fill;
+
+    // } else {
+    //     // Handle the case where no valid IPv6 address was found
+    //     return Err(ThisProjectError::NetworkError("No valid local IPv6 address found".to_string()));  // Or another appropriate error
+        
+    //     // TODO: maybe signal uma to hault
+    // }
+    
+    
     // Clone the values
     let salt_list_1 = local_owner_desk_setup_data.local_user_salt_list.clone();
     let salt_list_2 = local_owner_desk_setup_data.local_user_salt_list.clone();
 
     let readyport_1 = local_owner_desk_setup_data.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip.clone();
     let readyport_2 = local_owner_desk_setup_data.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip.clone();    
-
+    let localowner_gotit_port = local_owner_desk_setup_data.local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip.clone();
+    
     let remote_collaborator_name = local_owner_desk_setup_data.remote_collaborator_name.clone();
                 
     let ipv6_addr_list = local_owner_desk_setup_data.local_user_ipv6_addr_list.clone();
@@ -6147,7 +6522,7 @@ fn handle_local_owner_desk(
         the value is saved in a quasi-state or state.
         */
 
-        let mut latest_received_file_timestamp = match actual_latest_received_file_timestamp(
+        let mut latest_received_from_rc_file_timestamp = match actual_latest_received_from_rc_file_timestamp(
             &team_channel_name, // Correct argument order.
             &remote_collaborator_name_for_thread,
         ) {
@@ -6158,25 +6533,24 @@ fn handle_local_owner_desk(
             }
         };
         debug_log!(
-            "echo: latest_received_file_timestamp -> {:?}",
-            latest_received_file_timestamp,
+            "echo: latest_received_from_rc_file_timestamp -> {:?}",
+            latest_received_from_rc_file_timestamp,
         );
 
-        // update state: latest recieved timestamp
-        set_latest_received_file_timestamp_plaintext(
+        // update state: latest received timestamp
+        set_latest_received_from_rc_file_timestamp_plaintext(
             &team_channel_name, // for team_channel_name
             &local_owner_desk_setup_data.remote_collaborator_name, // for collaborator_name
-            latest_received_file_timestamp, // for timestamp
+            latest_received_from_rc_file_timestamp, // for timestamp
         );
         
-        // --- 1.5 Spawn a thread to handle "Ready" signals & fail-flag removal ---
+        // --- 1.5 Drone Loop to Send ReadySignals ---
         let ready_thread = thread::spawn(move || {
-            //////////////////////////////////////
-            // Listen for 'I got it' GotItSignal
             ////////////////////////////////////
+            // Drone Loop to Send ReadySignals  (hlod)
+            //////////////////////////////////
             loop {
-                // 1.1 Wait (and check for exit Uma)
-                // TODO 
+                // 1.1 Wait (and check for exit Uma)  this waits and checks N times: for i in 0..N {
                 for i in 0..5 {
                     // break for loop ?
                     if should_halt_uma() {
@@ -6194,14 +6568,14 @@ fn handle_local_owner_desk(
                 debug_log!("\nHLOD Drone Loop Start...thanks for coming around!");
 
                 // 1.2 Refresh Timestamp
-                // Get/Set latest_received_file_timestamp
+                // Get/Set latest_receivedfromme_file_timestamp
                 // output  zero and set zero file if no file/path etc.
                 /*
                 @
-                sync_data/{team_channel}/latest_receivedfile_timestamps/bob/latest_received_file_timestamp
+                sync_data/{team_channel}/latest_receivedfile_timestamps/bob/latest_receivedfromme_file_timestamp
                 */
 
-                latest_received_file_timestamp = match get_latest_received_file_timestamp_plaintextstatefile(
+                latest_received_from_rc_file_timestamp = match get_latestreceivedfromme_file_timestamp_plaintextstatefile(
                     &team_channel_name, // Correct argument order.
                     &remote_collaborator_name_for_thread,
                 ) {
@@ -6214,12 +6588,11 @@ fn handle_local_owner_desk(
 
                 // 1.3 Send Ready Signal (using a function)        
                 if let Some(addr_1) = ipv6_addr_1 {
-                    // Now addr_1 is a &Ipv6Addr, which matches the function signature
                     send_ready_signal(
                         &salt_list_1_drone_clone,
                         &addr_1,
                         readyport_1,
-                        latest_received_file_timestamp,
+                        latest_received_from_rc_file_timestamp,
                         false,
                     );
                 }
@@ -6543,19 +6916,16 @@ fn handle_local_owner_desk(
                      // Echo Base
                     /////////////
                     /*
-                    After a file is recieved and saved
+                    After a file is received and saved
                     a miniature ReadySignal is sent out
                     using the timestamp of the 'current file' as the latest file
                     and saving that in state
                     so that the drone-loop (above) sending ready signals will also know
                     there is a new latest-date
                     */
-                    
-                    // // TODO extract 
-                    // let recieved_file_timestamp = ...read updated_at field from .toml (bytes?)
 
                     // Extract timestamp
-                    let recieved_file_timestamp = match extract_updated_at_timestamp(
+                    let received_file_updatedat_timestamp = match extract_updated_at_timestamp(
                         &extacted_clearsigned_data
                     ) {
                         Ok(temp_extraction_timestamp) => temp_extraction_timestamp,
@@ -6567,24 +6937,42 @@ fn handle_local_owner_desk(
                     
                     
                     
-                    // update state: latest recieved timestamp
-                    set_latest_received_file_timestamp_plaintext(
+                    // update state: latest received timestamp
+                    set_latest_received_from_rc_file_timestamp_plaintext(
                         &team_channel_name, // for team_channel_name
                         &local_owner_desk_setup_data.remote_collaborator_name, // for collaborator_name
-                        recieved_file_timestamp, // for timestamp
+                        received_file_updatedat_timestamp, // for timestamp
                     );
                     
-                    // Now you have the recieved_file_timestamp timestamp
-                    debug_log!("Received file was updated_at: {}", recieved_file_timestamp);
-                    // println!("Received file updated at: {}", recieved_file_timestamp);
+                    // Now you have the received_file_updatedat_timestamp timestamp
+                    debug_log!("Received file was updated_at: {}", received_file_updatedat_timestamp);
+                    // println!("Received file updated at: {}", received_file_updatedat_timestamp);
                     
-                    // 1.3 Send Echo Ready Signal (using a function)        
+                    // 1.4 Send Echo Ready Signal (using a function)
+                    /*
+                    struct GotItSignal {
+                        gst: Option<u64>, // send-time: 
+                            generate_terse_timestamp_freshness_proxy(); for replay-attack protection
+                        di: Option<u64>, // the 'id' is updated_at file timestamp 
+                            (because context= filesync timeline ID)
+                        gh: Option<Vec<u8>>, // N hashes of rt + re
+                    */
+                    if let Some(addr_2) = ipv6_addr_2 {
+                        send_gotit_signal(
+                            &local_owner_desk_setup_data.local_user_salt_list,
+                            &local_user_ipv6_address,
+                            localowner_gotit_port,
+                            received_file_updatedat_timestamp, // as di
+                        );
+                    }
+
+                    // 1.4 Send Echo Ready Signal (using a function)        
                     if let Some(addr_2) = ipv6_addr_2 {
                         send_ready_signal(
                             &salt_list_2,
                             &addr_2,
                             readyport_2,
-                            recieved_file_timestamp,
+                            received_file_updatedat_timestamp,
                             false,
                         );
                     }
@@ -6876,58 +7264,69 @@ fn serialize_send_file(send_file: &SendFile) -> Result<Vec<u8>, ThisProjectError
 //     })
 // }
 
+// // maybe depricated
+// fn serialize_option_gotit_signal(signal: &GotItSignal) -> std::io::Result<Vec<u8>> {
+//     let mut bytes = Vec::new();
+
+//     // bytes.extend_from_slice(&signal.gst.to_be_bytes());
+//     bytes.extend_from_slice(&signal.gst.expect("REASON").to_be_bytes());
+//     bytes.extend_from_slice(&signal.di.expect("REASON").to_be_bytes()); 
+//     // bytes.extend_from_slice(signal.gh.as_bytes());
+//     // Handle the gh Option
+//     if let Some(hash_list) = &signal.gh { 
+//         // If gh is Some, extend the bytes vector with the hash_list
+//         bytes.extend_from_slice(hash_list);
+//     } else {
+//         // Handle the None case (e.g., add a placeholder or return an error)
+//         // bytes.extend_from_slice(&[0u8; 32]); // Example: Add a 32-byte placeholder
+//     }
+
+//     Ok(bytes)
+// }
+
 fn serialize_gotit_signal(signal: &GotItSignal) -> std::io::Result<Vec<u8>> {
     let mut bytes = Vec::new();
 
-    // bytes.extend_from_slice(&signal.gst.to_be_bytes());
-    bytes.extend_from_slice(&signal.gst.expect("REASON").to_be_bytes());
-    bytes.extend_from_slice(&signal.di.expect("REASON").to_be_bytes()); 
-    // bytes.extend_from_slice(signal.gh.as_bytes());
-    // Handle the gh Option
-    if let Some(hash_list) = &signal.gh { 
-        // If gh is Some, extend the bytes vector with the hash_list
-        bytes.extend_from_slice(hash_list);
-    } else {
-        // Handle the None case (e.g., add a placeholder or return an error)
-        // bytes.extend_from_slice(&[0u8; 32]); // Example: Add a 32-byte placeholder
-    }
+    bytes.extend_from_slice(&signal.gst.to_be_bytes()); // gst is now u64, no expect needed
+    bytes.extend_from_slice(&signal.di.to_be_bytes());  // di is now u64, no expect needed
+    bytes.extend_from_slice(&signal.gh);             // gh is now Vec<u8>, no Option
 
     Ok(bytes)
 }
 
-fn deserialize_gotit_signal(bytes: &[u8]) -> Result<GotItSignal, io::Error> {
-    // Calculate expected lengths (assuming a u64 for both timestamp and ID)
-    let timestamp_len = std::mem::size_of::<u64>();
-    let id_len = std::mem::size_of::<u64>();
-    let expected_min_length = timestamp_len + id_len; // Minimum length for timestamp and ID
+// fn deserialize_gotit_signal(bytes: &[u8]) -> Result<GotItSignal, io::Error> {
+//     // Calculate expected lengths (assuming a u64 for both timestamp and ID)
+//     let timestamp_len = std::mem::size_of::<u64>();
+//     let id_len = std::mem::size_of::<u64>();
+//     let expected_min_length = timestamp_len + id_len; // Minimum length for timestamp and ID
 
-    // Check if the byte array has enough data for at least the timestamp and document ID
-    if bytes.len() < expected_min_length {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "Invalid byte array length for GotItSignal: too short",
-        ));
-    }
+//     // Check if the byte array has enough data for at least the timestamp and document ID
+//     if bytes.len() < expected_min_length {
+//         return Err(io::Error::new(
+//             io::ErrorKind::InvalidData,
+//             "Invalid byte array length for GotItSignal: too short",
+//         ));
+//     }
 
-    // Extract the timestamp
-    let gst = u64::from_be_bytes(bytes[0..timestamp_len].try_into().unwrap());
+//     // Extract the timestamp
+//     let gst = u64::from_be_bytes(bytes[0..timestamp_len].try_into().unwrap());
 
-    // Extract the document ID
-    let di = u64::from_be_bytes(bytes[timestamp_len..expected_min_length].try_into().unwrap());
+//     // Extract the document ID
+//     let di = u64::from_be_bytes(bytes[timestamp_len..expected_min_length].try_into().unwrap());
 
-    // Extract the hash list (if present)
-    let gh = if bytes.len() > expected_min_length {
-        Some(bytes[expected_min_length..].to_vec()) // Take the remaining bytes as the hash list
-    } else {
-        None // No hash list present
-    };
+//     // Extract the hash list (if present)
+//     let gh = if bytes.len() > expected_min_length {
+//         Some(bytes[expected_min_length..].to_vec()) // Take the remaining bytes as the hash list
+//     } else {
+//         None // No hash list present
+//     };
 
-    Ok(GotItSignal { 
-        gst: Some(gst), 
-        di: Some(di), 
-        gh: gh, 
-    }) 
-}
+//     Ok(GotItSignal { 
+//         gst: Some(gst), 
+//         di: Some(di), 
+//         gh: gh.expect("REASON"), 
+//     }) 
+// }
 
 /// File Deserialization (Receiving):
 /// Receive Bytes: Receive the byte array from the network using socket.recv_from().
@@ -7036,7 +7435,7 @@ fn get_or_create_send_queue(
     team_channel_name: &str,
     localowneruser_name: &str,
     mut session_send_queue: SendQueue,
-    ready_signal_timestamp: u64,
+    ready_signal_rt_timestamp: u64,
 ) -> Result<SendQueue, ThisProjectError> {
     /*
     #[derive(Debug, Clone)]
@@ -7048,8 +7447,8 @@ fn get_or_create_send_queue(
     */
     // let mut back_of_queue_timestamp = session_send_queue.back_of_queue_timestamp.clone();
     debug_log!(
-        "HRCD->get_or_create_send_queue(): start;  ready_signal_timestamp -> {:?}",
-        ready_signal_timestamp   
+        "HRCD->get_or_create_send_queue(): start;  ready_signal_rt_timestamp -> {:?}",
+        ready_signal_rt_timestamp   
     );
     
     // Get update flag paths
@@ -7070,10 +7469,17 @@ fn get_or_create_send_queue(
     }
     
     // Note: this will not be true when making a queue, e.g. during first time bootstrapping
-    if ready_signal_timestamp == session_send_queue.back_of_queue_timestamp {
-        debug_log("HRCD->get_or_create_send_queue: ready_signal_timestamp == back_of_queue_timestamp");
+    // TODO WRONG, when the sendqueue was made is NOT the mode recent sent file
+    // got-it loop should be setting a timestamp_of_latest_received_file_that_i_sent
+    // timestamp, read that
+    if ready_signal_rt_timestamp == session_send_queue.back_of_queue_timestamp {
+        debug_log("HRCD->get_or_create_send_queue: ready_signal_rt_timestamp == back_of_queue_timestamp");
         return Ok(session_send_queue)
     }
+    
+    // set the back_of_queue_timestamp to be sent .rt time
+    
+    
     
     // let mut send_queue = SendQueue {
     //     back_of_queue_timestamp,
@@ -7084,7 +7490,7 @@ fn get_or_create_send_queue(
     let team_channel_path_result = get_absolute_team_channel_path(team_channel_name);
 
 
-    // 2. HANDLE the Result from get_absolute_team_channel_path
+    // 2. HANDLE the Result from get_absolute_team_channel_path()
     let team_channel_path = match team_channel_path_result {
         Ok(path) => path,
         Err(e) => {
@@ -7095,7 +7501,15 @@ fn get_or_create_send_queue(
 
     debug_log!("HRCD->Starting crawl of directory: {:?}", team_channel_path);
 
-    // 3. Use the unwrapped PathBuf with WalkDir
+    // 3. Only when a new send-queue is needed, get the paths of files
+    // for only files that are owned by you
+    // for only files in the current team_channel
+    // for only files dated after (younger than) the .rt ready_signal_rt_timestamp
+    // which is not the time the ready-signal was sent, but is 
+    // the updated_at timestamp
+    // of the last received-by-them sent-by-you file.
+    //
+    // ...Use the unwrapped PathBuf with WalkDir
     for entry in WalkDir::new(&team_channel_path) { // Note the & for borrowing
         let entry = entry?;
         if entry.file_type().is_file() && entry.path().extension() == Some(OsStr::new("toml")) {
@@ -7126,19 +7540,38 @@ fn get_or_create_send_queue(
     
     debug_log("get_or_create_send_queue calling, get_toml_file_timestamp(), Hello?");
     
+
+    
     // Sort the files in the queue based on their modification time
     session_send_queue.items.sort_by_key(|path| {
         get_toml_file_timestamp(path).unwrap_or(0) // Handle potential errors in timestamp retrieval
     });
     
+    // TODO(remove this later) extra Inspection here:
+    debug_log("|| Extra Insepction || get_or_create_send_queue: end: Q");
+    debug_log!(
+        "HRCD->get_or_create_send_queue(): start;  ready_signal_rt_timestamp -> {:?}",
+        ready_signal_rt_timestamp   
+    );
     debug_log!("HRCD->get_or_create_send_queue: end: Q -> {:?}", session_send_queue);
+    // 1.5.6 Sleep for a duration (e.g., 100ms)
+    thread::sleep(Duration::from_millis(100000));
 
     Ok(session_send_queue)
 }
 
 /// get latest Remote Collaborator file timestamp 
 /// for use by handl local owner desk
-fn get_latest_recieved_from_collaborator_in_teamchannel_file_timestamp(
+/// 
+///
+/// This is one of those values and functions that can be confusing
+/// because both you and your remote collaborate have quasi-mirror-image sync systems
+/// with reversed roles. Both of you are making 'latest_recieved' timestamps
+/// and both of you are using your and their 'latest_recieved' timestamps,
+/// which are simultanously 'the same' abstract value but very different local-context-role-specific values
+///
+/// the complimentary function is: get_latestreceivedfromme_file_timestamp_plaintextstatefile()
+fn get_latest_received_from_collaborator_in_teamchannel_file_timestamp(
     collaborator_name: &str,
 ) -> Result<u64, ThisProjectError> {
     let mut last_timestamp: u64 = 0; // Initialize with 0 (for bootstrap when no files exist)
@@ -7229,7 +7662,7 @@ fn handle_remote_collaborator_meetingroom_desk(
     if each thread can listen for a got-it and remove the flag
     
     or maybe there is an always running got it listener that removes
-    fail flags for any got-it recieved
+    fail flags for any got-it received
     */
     loop { // 1. start overall loop to restart whole desk
         // --- 1. overall loop to restard handler in case of failure ---
@@ -7241,9 +7674,7 @@ fn handle_remote_collaborator_meetingroom_desk(
             );
             break;
         }
-    
-        
-        
+
         debug_log!(
             "\n Started HRCD the handle_remote_collaborator_meetingroom_desk() for->{}", 
             room_sync_input.remote_collaborator_name
@@ -7254,12 +7685,12 @@ fn handle_remote_collaborator_meetingroom_desk(
         );
 
         // --- 1.3 Create two UDP Sockets for Ready and GotIt Signals ---
-        debug_log("HRCD Making ready_port listening UDP socket...");
+        debug_log("HRCD 1.3 Making ready_port listening UDP socket...");
         let ready_socket = create_udp_socket(
             &room_sync_input.remote_collaborator_ipv6_addr_list,
             room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip,
         )?;
-        debug_log("HRCD Making gotit_port listening UDP socket...");
+        debug_log("HRCD 1.3 Making gotit_port listening UDP socket...");
             let gotit_socket = create_udp_socket(
             &room_sync_input.remote_collaborator_ipv6_addr_list,
             room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip,
@@ -7281,7 +7712,7 @@ fn handle_remote_collaborator_meetingroom_desk(
         */
 
 
-        // --- 1.5 Spawn a thread to handle "Got It" signals & fail-flag removal ---
+        // --- 1.5 Spawn a thread to handle recieving GotItSignal(s) and SendFile prefail-flag removal ---
         let gotit_thread = thread::spawn(move || {
             //////////////////////////////////////
             // Listen for 'I got it' GotItSignal
@@ -7330,7 +7761,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                         // let remote_collaborator_name = room_sync_input.remote_collaborator_name.clone(); 
                         
                         // 1.5.3 Deserialize the GotItSignal
-                        let gotit_signal: GotItSignal = match deserialize_gotit_signal(&buf[..amt]) {
+                        let gotit_signal: GotItSignal = match process_incoming_gotit_signal_bytes(&buf[..amt]) {
                             Ok(gotit_signal) => {
                                 debug_log!("HRCD 1.5.3 GotItloop Ok(gotit_signal) : Received GotItSignal: {:?}",
                                     // remote_collaborator_name, 
@@ -7364,9 +7795,12 @@ fn handle_remote_collaborator_meetingroom_desk(
                             directory: &Path,
                         )
                         */
+                        
+                        // 1.5.6 update ~timestamp_of_latest_received_file_that_i_sent
+                        
 
                             
-                    // // 1.5.6 Sleep for a short duration (e.g., 100ms)
+                    // // 1.5.7 Sleep for a short duration (e.g., 100ms)
                     // thread::sleep(Duration::from_millis(1000));
 
                     },
@@ -7378,7 +7812,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                     }
                 }
             }
-        });
+        }); // End of GotIt Loooooop
 
         // 1.6.1 zero_timestamp_counter = 0 for ready signal send-at timestamps
         let mut zero_timestamp_counter = 0;
@@ -8048,7 +8482,10 @@ fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
     for this_meetingroom_iter in sync_meetingroom_config_datasets { 
         // Extract data from this_meetingroom_iter
         // and place each pile in a nice baggy for each desk.
-        debug_log!("Setting up connection with {}", this_meetingroom_iter.remote_collaborator_name);
+        debug_log!(
+            "Configuring Connection: Setting up proverbial meetingroom and desk for/with: {}", 
+            this_meetingroom_iter.remote_collaborator_name,
+        );
         
         // Create sub-structs
         let data_baggy_for_owner_desk = ForLocalOwnerDeskThread { 
