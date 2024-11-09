@@ -5772,8 +5772,6 @@ fn get_latest_received_file_timestamp_plaintextstatefile(
     }
 }
 
-// ... other code and imports
-
 /// Gets the latest received file's `updated_at_timestamp` for a collaborator.
 ///
 /// Crawls the team channel directory, finds TOML files owned by the collaborator,
@@ -6147,12 +6145,29 @@ fn handle_local_owner_desk(
         to find the most recent file timestamp,
         but thereafter 
         the value is saved in a quasi-state or state.
-        
-        
-        
         */
-        let mut drone_readysend_thread_is_bootstrapped: bool = false;
-        
+
+        let mut latest_received_file_timestamp = match actual_latest_received_file_timestamp(
+            &team_channel_name, // Correct argument order.
+            &remote_collaborator_name_for_thread,
+        ) {
+            Ok(temp_extractor) => temp_extractor, 
+            Err(e) => {
+                debug_log!("Error getting timestamp: {}. Using 0.", e);
+                0 // Use a default timestamp (0) if an error occurs.
+            }
+        };
+        debug_log!(
+            "echo: latest_received_file_timestamp -> {:?}",
+            latest_received_file_timestamp,
+        );
+
+        // update state: latest recieved timestamp
+        set_latest_received_file_timestamp_plaintext(
+            &team_channel_name, // for team_channel_name
+            &local_owner_desk_setup_data.remote_collaborator_name, // for collaborator_name
+            latest_received_file_timestamp, // for timestamp
+        );
         
         // --- 1.5 Spawn a thread to handle "Ready" signals & fail-flag removal ---
         let ready_thread = thread::spawn(move || {
@@ -6185,41 +6200,17 @@ fn handle_local_owner_desk(
                 @
                 sync_data/{team_channel}/latest_receivedfile_timestamps/bob/latest_received_file_timestamp
                 */
-                // let mut latest_received_file_timestamp = get_latest_received_file_timestamp_plaintextstatefile(
-                //     &local_owner_desk_setup_data_clone.remote_collaborator_name,
-                //     &team_channel_name,
-                // );
-                
-                let mut latest_received_file_timestamp: u64 = 0;
-                
-                if drone_readysend_thread_is_bootstrapped {
-                    let latest_received_file_timestamp = match get_latest_received_file_timestamp_plaintextstatefile(
-                        &team_channel_name, // Correct argument order.
-                        &remote_collaborator_name_for_thread,
-                    ) {
-                        Ok(temp_extractor) => temp_extractor, 
-                        Err(e) => {
-                            debug_log!("Error getting timestamp: {}. Using 0.", e);
-                            0 // Use a default timestamp (0) if an error occurs.
-                        }
-                    };
-                    drone_readysend_thread_is_bootstrapped = true;
-                } else {
-                    latest_received_file_timestamp = match actual_latest_received_file_timestamp(
-                        &team_channel_name, // Correct argument order.
-                        &remote_collaborator_name_for_thread,
-                    ) {
-                        Ok(temp_extractor) => temp_extractor, 
-                        Err(e) => {
-                            debug_log!("Error getting timestamp: {}. Using 0.", e);
-                            0 // Use a default timestamp (0) if an error occurs.
-                        }
-                    };
-                    debug_log!(
-                        "echo: latest_received_file_timestamp -> {:?}",
-                        latest_received_file_timestamp,
-                    );
-                }
+
+                latest_received_file_timestamp = match get_latest_received_file_timestamp_plaintextstatefile(
+                    &team_channel_name, // Correct argument order.
+                    &remote_collaborator_name_for_thread,
+                ) {
+                    Ok(temp_extractor) => temp_extractor, 
+                    Err(e) => {
+                        debug_log!("Error getting timestamp: {}. Using 0.", e);
+                        0 // Use a default timestamp (0) if an error occurs.
+                    }
+                };
 
                 // 1.3 Send Ready Signal (using a function)        
                 if let Some(addr_1) = ipv6_addr_1 {
@@ -6567,12 +6558,14 @@ fn handle_local_owner_desk(
                     let recieved_file_timestamp = match extract_updated_at_timestamp(
                         &extacted_clearsigned_data
                     ) {
-                        Ok(timestamp) => timestamp,
+                        Ok(temp_extraction_timestamp) => temp_extraction_timestamp,
                         Err(e) => {
                             debug_log!("HLOD-InTray: Error extracting timestamp: {}. Skipping.", e);
                             continue;
                         }
                     };
+                    
+                    
                     
                     // update state: latest recieved timestamp
                     set_latest_received_file_timestamp_plaintext(
@@ -6582,7 +6575,7 @@ fn handle_local_owner_desk(
                     );
                     
                     // Now you have the recieved_file_timestamp timestamp
-                    debug_log!("Received file updated at: {}", recieved_file_timestamp);
+                    debug_log!("Received file was updated_at: {}", recieved_file_timestamp);
                     // println!("Received file updated at: {}", recieved_file_timestamp);
                     
                     // 1.3 Send Echo Ready Signal (using a function)        
