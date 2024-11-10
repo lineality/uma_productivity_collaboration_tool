@@ -180,41 +180,442 @@ fn get_local_ip_addresses() -> Result<Vec<IpAddr>, std::io::Error> {
     Ok(addresses)
 }
 
+/*
+TODO:
+in the nearterm and long term
+there needs to be a way of selecting and coordinating about working ip addresses
+e.g. once an address works, the number of that address in the shared list may be 
+transmitted in the ReadySignal to say which ip is being used (e.g. when 
+    there are several possible 'campuses' that might be used)
+    
+The primary task is testing what local IP for the local owner user out of the list
+in their file works (and which listen item that is).
 
-fn find_valid_local_owner_ip_address(ipv6_list_addresses: &[Ipv6Addr]) -> Option<Ipv6Addr> {
-    debug_log!("find_valid_local_owner_ip_address(): Starting. Checking IPv6 addresses...");
+another later task may be using a intranet mode.
+*/
+fn find_valid_local_owner_ip_address(ipv6_addresses: &[Ipv6Addr]) -> Option<Ipv6Addr> {
+    for &address in ipv6_addresses {
+        if !address.is_loopback() && !address.is_unspecified() {
+            let test_port = 55555; // Or some other test port
 
-    for &this_iter_ipv6address in ipv6_list_addresses {
-        debug_log!("find_valid_local_owner_ip_address(): Testing address: {}", this_iter_ipv6address);
+            if let Ok(_) = UdpSocket::bind(SocketAddr::new(IpAddr::V6(address), test_port)) {
+                return Some(address); // Found a bindable address
+            } else {
+                // Log the error, and try the next address
+                debug_log!("find_valid_local_owner_ip_address: Error fail Could not bind to {}:{}. Trying next address...", address, test_port);
 
-        // 1. Basic Validation:  (Optional) You can add more sophisticated validation checks here, e.g., using regular expressions to match valid IPv6 formats.
-        if this_iter_ipv6address.is_unspecified() || this_iter_ipv6address.is_loopback() {
-            debug_log!("find_valid_local_owner_ip_address():   Skipping unspecified or loopback address.");
-            continue; // Skip unspecified and loopback addresses
-        }
-
-        // 2. Reachability Test (UDP Echo)
-        if let Ok(socket) = UdpSocket::bind(SocketAddr::new(IpAddr::V6(this_iter_ipv6address), 0)) { // Bind to a random free port on this IP
-            socket.set_read_timeout(Some(Duration::from_secs(1))).unwrap();  // 1 second timeout
-
-            let test_data = b"UMA IP test";  // Some test data
-            let echo_server_addr = SocketAddr::new(IpAddr::V6(Ipv6Addr::LOCALHOST), 7); // Some arbitrary echo server address (adjust if needed)
-
-            if let Ok(_) = socket.send_to(test_data, echo_server_addr) { // Use a separate echo server address
-                let mut buf = [0u8; 1024];
-                if let Ok((_amt, _src)) = socket.recv_from(&mut buf) {
-                    //  Valid and reachable IPv6 address found
-                    debug_log!("find_valid_local_owner_ip_address():   Valid and reachable IPv6 address found: {}", this_iter_ipv6address);
-
-                    return Some(this_iter_ipv6address); // Return the first valid and reachable IPv6 address found
-                }
             }
         }
     }
-
-    debug_log!("find_valid_local_owner_ip_address(): No valid and reachable IPv6 address found.");    
-    None // No valid and reachable IPv6 address found
+    None // No valid address found
 }
+
+/// Loads the local user's IPv4 and IPv6 addresses from their collaborator TOML file.
+///
+/// This function reads the collaborator file for the given `owner` and extracts the
+/// `ipv4_addresses` and `ipv6_addresses` fields. It handles missing fields by returning empty vectors.
+///
+/// # Arguments
+///
+/// * `owner`: The username of the local user.
+///
+/// # Returns
+///
+/// * `Result<(Vec<String>, Vec<String>), ThisProjectError>`: A tuple containing the IPv4 and IPv6 address lists as strings, or a `ThisProjectError` if an error occurs.
+fn load_local_iplists_as_stringtype(owner: &str) -> Result<(Vec<String>, Vec<String>), ThisProjectError> {
+    let toml_path = format!("project_graph_data/collaborator_files_address_book/{}__collaborator.toml", owner);
+    let toml_string = std::fs::read_to_string(toml_path)?;
+    let toml_value: toml::Value = toml::from_str(&toml_string)?;
+
+    // Extract IPv4 addresses (handling missing/invalid data):
+    let ipv4_addresses: Vec<String> = match toml_value.get("ipv4_addresses") {
+        Some(toml::Value::Array(arr)) => arr
+            .iter()
+            .filter_map(|val| val.as_str().map(|s| s.to_string()))
+            .collect(),
+        _ => Vec::new(), // Return empty if no IP list found.
+    };
+
+    // Extract IPv6 addresses:
+    let ipv6_addresses: Vec<String> = match toml_value.get("ipv6_addresses") {
+        Some(toml::Value::Array(arr)) => arr
+            .iter()
+            .filter_map(|val| val.as_str().map(|s| s.to_string()))
+            .collect(),
+        _ => Vec::new(), // Return empty on error.
+    };
+
+    Ok((ipv4_addresses, ipv6_addresses))
+}
+
+/// Loads the local user's IPv4 and IPv6 addresses from their collaborator TOML file.
+///
+/// This function reads the collaborator file for the given `owner` and extracts the
+/// `ipv4_addresses` and `ipv6_addresses` fields. It handles missing fields by returning empty vectors.
+///
+/// # Arguments
+///
+/// * `owner`: The username of the local user.
+///
+/// # Returns
+///
+/// * `Result<(Vec<Ipv4Addr>, Vec<Ipv6Addr>), ThisProjectError>`: A tuple containing the IPv4 and IPv6 address lists, or a `ThisProjectError` if an error occurs.
+fn load_local_ip_lists(owner: &str) -> Result<(Vec<Ipv4Addr>, Vec<Ipv6Addr>), ThisProjectError> {
+    let toml_path = format!("project_graph_data/collaborator_files_address_book/{}__collaborator.toml", owner);
+    let toml_string = std::fs::read_to_string(toml_path)?;
+    let toml_value: toml::Value = toml::from_str(&toml_string)?;
+
+    // Extract IPv4 addresses (handling missing/invalid data):
+    let ipv4_addresses: Vec<Ipv4Addr> = match toml_value.get("ipv4_addresses") {
+        Some(toml::Value::Array(arr)) => arr
+            .iter()
+            .filter_map(|val| val.as_str().and_then(|s| s.parse::<Ipv4Addr>().ok()))
+            .collect(),
+        _ => Vec::new(), // Return empty if no IP list found.
+    };
+
+    // Extract IPv6 addresses:
+    let ipv6_addresses: Vec<Ipv6Addr> = match toml_value.get("ipv6_addresses") {
+        Some(toml::Value::Array(arr)) => arr
+            .iter()
+            .filter_map(|val| val.as_str().and_then(|s| s.parse::<Ipv6Addr>().ok()))
+            .collect(),
+        _ => Vec::new(), // Return empty on error.
+    };
+
+    Ok((ipv4_addresses, ipv6_addresses))
+}
+
+fn get_ip_by_index(index: usize, ipv4_list: &[Ipv4Addr], ipv6_list: &[Ipv6Addr]) -> Option<std::net::IpAddr> {
+    if index < ipv4_list.len() {
+        Some(std::net::IpAddr::V4(ipv4_list[index]))
+    } else if index < ipv4_list.len() + ipv6_list.len() {
+        Some(std::net::IpAddr::V6(ipv6_list[index - ipv4_list.len()]))
+    } else {
+        None
+    }
+}
+
+/// Saves the combined network option index to a file.
+/// @ /sync_data/network_option_index.txt
+/// This function saves the given `combined_index` to "sync_data/{team_channel_name}/network_option_index.txt".
+/// It creates the necessary directories if they don't exist and handles file I/O errors.
+///
+/// # Arguments
+///
+/// * `combined_index`: The combined network option index.
+/// * `team_channel_name`: The name of the team channel.
+///
+/// # Returns
+///
+/// * `Result<(), ThisProjectError>`:  `Ok(())` on success, or an error if an I/O operation fails.
+fn save_network_option_index_statefile(
+    combined_index: usize,
+) -> Result<(), ThisProjectError> {
+    let mut file_path = PathBuf::from("sync_data");
+    file_path.push("network_option_index.txt");
+
+    if let Some(parent_dir) = file_path.parent() {
+        create_dir_all(parent_dir)?;
+    }
+
+    let mut file = File::create(&file_path)?;
+    write!(file, "{}", combined_index)?;
+    Ok(())
+}
+
+
+/// Finds the combined index of an IP address in the concatenated IPv4 and IPv6 lists.
+///
+/// This function efficiently searches for the given `ip_address` within the combined `ipv4_list` and `ipv6_list`.
+/// It returns a combined index representing both the IP address type and its position:
+///  - If the IP is found in `ipv4_list`, its index is returned directly.
+///  - If the IP is found in `ipv6_list`, its index + ipv4_list.len() is returned.
+///  - If the IP is not found in either list, `None` is returned.
+///
+/// # Arguments
+///
+/// * `ipv4_list`: The list of IPv4 addresses as strings.
+/// * `ipv6_list`: The list of IPv6 addresses as strings.
+/// * `ip_address`: The IP address to search for as a string.
+///
+/// # Returns
+///
+/// * `Option<usize>`:  The combined index, or `None` if the IP address is not found.
+fn find_ip_index(
+    ipv4_list: &[String],
+    ipv6_list: &[String],
+    ip_address: &str
+) -> Option<usize> {
+    if ip_address.contains(':') {
+        // Assume it's an IPv6 address
+        ipv6_list.iter().position(|ip| ip == ip_address).map(|index| index + ipv4_list.len())
+    } else {
+        // Assume it's an IPv4 address
+        ipv4_list.iter().position(|ip| ip == ip_address)
+    }
+}
+
+
+// /// Finds the combined index of an IP address in the concatenated IPv4 and IPv6 lists.
+// ///
+// /// This function efficiently searches for the given `ip_address` within the combined `ipv4_list` and `ipv6_list`.
+// /// It returns a combined index representing both the IP address type and its position:
+// ///  - If the IP is found in `ipv4_list`, its index is returned directly.
+// ///  - If the IP is found in `ipv6_list`, its index + ipv4_list.len() is returned.
+// ///  - If the IP is not found in either list, `None` is returned.
+// ///
+// /// # Arguments
+// ///
+// /// * `ipv4_list`: The list of IPv4 addresses as strings.
+// /// * `ipv6_list`: The list of IPv6 addresses as strings.
+// /// * `ip_address`: The IP address to search for as a string.
+// ///
+// /// # Returns
+// ///
+// /// * `Option<usize>`:  The combined index, or `None` if the IP address is not found.
+// fn find_ip_index(
+//     ipv4_list: &[String],
+//     ipv6_list: &[String],
+//     ip_address: &str
+// ) -> Option<usize> {
+//     if ip_address.contains(':') {
+//         // Assume it's an IPv6 address
+//         ipv6_list.iter().position(|ip| ip == ip_address).map(|index| index + ipv4_list.len())
+//     } else {
+//         // Assume it's an IPv4 address
+//         ipv4_list.iter().position(|ip| ip == ip_address)
+//     }
+// }
+
+
+
+// /// Finds the combined index of an IP address in the concatenated IPv4 and IPv6 lists.
+// ///
+// /// This function efficiently searches for the given `ip_address` within the combined `ipv4_list` and `ipv6_list`.
+// /// It returns a combined index representing both the IP address type and its position:
+// ///  - If the IP is found in `ipv4_list`, its index is returned directly.
+// ///  - If the IP is found in `ipv6_list`, its index + ipv4_list.len() is returned.
+// ///  - If the IP is not found in either list, `None` is returned.
+// ///
+// /// # Arguments
+// ///
+// /// * `ipv4_list`: The list of IPv4 addresses.
+// /// * `ipv6_list`: The list of IPv6 addresses.
+// /// * `ip_address`: The IP address to search for.
+// ///
+// /// # Returns
+// ///
+// /// * `Option<usize>`:  The combined index, or `None` if the IP address is not found.
+// fn find_ip_index(
+//     ipv4_list: &[Ipv4Addr],
+//     ipv6_list: &[Ipv6Addr],
+//     ip_address: &Ipv6Addr
+// ) -> Option<usize> {
+//     let ip_address_str = ip_address.to_string();
+//     if let IpAddr::V4(ipv4_addr) = ip_address {
+//         ipv4_list.iter().position(|&ip| ip == *ipv4_addr)
+//     } else if let IpAddr::V6(ipv6_addr) = ip_address {
+//         ipv6_list.iter().position(|&ip| ip == *ipv6_addr).map(|index| index + ipv4_list.len())
+//     } else {
+//         None  // Or handle other IP address types as needed.
+//     }
+// }
+
+
+
+// /// Finds the combined index of an IP address in the concatenated IPv4 and IPv6 lists.
+// ///
+// /// This function efficiently searches for the given `ip_address` within the combined `ipv4_list` and `ipv6_list`.
+// /// It returns a combined index representing both the IP address type and its position:
+// ///  - If the IP is found in `ipv4_list`, its index is returned directly.
+// ///  - If the IP is found in `ipv6_list`, its index + ipv4_list.len() is returned.
+// ///  - If the IP is not found in either list, `None` is returned.
+// ///
+// /// # Arguments
+// ///
+// /// * `ipv4_list`: The list of IPv4 addresses as strings.
+// /// * `ipv6_list`: The list of IPv6 addresses as strings.
+// /// * `ip_address`: The IP address to search for as a string.
+// ///
+// /// # Returns
+// ///
+// /// * `Option<usize>`:  The combined index, or `None` if the IP address is not found.
+// fn find_ip_index(
+//     ipv4_list: &[String],
+//     ipv6_list: &[String],
+//     ip_address: &str
+// ) -> Option<usize> {
+//     if ip_address.contains(':') {
+//         // Assume it's an IPv6 address
+//         ipv6_list.iter().position(|ip| ip == ip_address).map(|index| index + ipv4_list.len())
+//     } else {
+//         // Assume it's an IPv4 address
+//         ipv4_list.iter().position(|ip| ip == ip_address)
+//     }
+// }
+
+
+
+// /// returns the index of the input
+// fn find_ip_index(
+//     ipv4_list: &[String],
+//     ipv6_list: &[String],
+//     ip_address: &str
+// ) -> Option<usize> {
+//     if let Ok(ipv4_addr) = ip_address.parse::<Ipv4Addr>() {
+//         ipv4_list.iter().position(|ip| ip == &ipv4_addr.to_string())
+//     } else if let Ok(ipv6_addr) = ip_address.parse::<Ipv6Addr>() {
+//         ipv6_list.iter().position(|ip| ip == &ipv6_addr.to_string()).map(|index| index + ipv4_list.len())
+//     } else {
+//         None
+//     }
+// }
+
+
+
+
+// /// Finds the combined index of an IP address in the concatenated IPv4 and IPv6 lists.
+// ///
+// /// This function efficiently searches for the given `ip_address` within the combined `ipv4_list` and `ipv6_list`.
+// /// It returns a combined index representing both the IP address type and its position:
+// ///  - If the IP is found in `ipv4_list`, its index is returned directly.
+// ///  - If the IP is found in `ipv6_list`, its index + ipv4_list.len() is returned.
+// ///  - If the IP is not found in either list, `None` is returned.
+// ///
+// /// # Arguments
+// ///
+// /// * `ipv4_list`: The list of IPv4 addresses.
+// /// * `ipv6_list`: The list of IPv6 addresses.
+// /// * `ip_address`: The IP address to search for.
+// ///
+// /// # Returns
+// ///
+// /// * `Option<usize>`:  The combined index, or `None` if the IP address is not found.
+// fn find_ip_index(
+//     ipv4_list: &[Ipv4Addr], 
+//     ipv6_list: &[Ipv6Addr], 
+//     ip_address: &IpAddr
+// ) -> Option<usize> {
+//     if let IpAddr::V4(ipv4_addr) = ip_address {
+//         ipv4_list.iter().position(|&ip| ip == *ipv4_addr)
+//     } else if let IpAddr::V6(ipv6_addr) = ip_address {
+//         ipv6_list.iter().position(|&ip| ip == *ipv6_addr).map(|index| index + ipv4_list.len()) // Add ipv4_list length for ipv6 indices
+//     } else {
+//         None  // Or handle other IP address types as needed.
+//     }
+// }
+
+
+// /// Gets the IP address from the combined IPv4/IPv6 list based on the combined index.
+// ///
+// /// # Arguments
+// ///
+// /// * `ipv4_list`: The list of IPv4 addresses.
+// /// * `ipv6_list`: The list of IPv6 addresses.
+// /// * `combined_index`: The combined index obtained from `find_ip_index`.
+// ///
+// /// # Returns
+// ///
+// /// * `Option<IpAddr>`: The IP address at the given index, or `None` if the index is out of bounds.
+// fn get_ip_from_combined_index(ipv4_list: &[Ipv4Addr], ipv6_list: &[Ipv6Addr], combined_index: usize) -> Option<IpAddr> {
+//     if combined_index < ipv4_list.len() {
+//         ipv4_list.get(combined_index).map(|&ip| IpAddr::V4(ip)) // Return IPv4 address
+//     } else {
+//         let ipv6_index = combined_index - ipv4_list.len();
+//         ipv6_list.get(ipv6_index).map(|&ip| IpAddr::V6(ip))   // Return IPv6 address
+//     }
+// }
+
+
+
+/// Saves the local user's selected IP index to a file.
+///
+/// This function saves the given `index` to a text file named "ip_index.txt" within the
+/// "sync_data/{team_channel_name}" directory. It creates the directory if it doesn't exist and handles
+/// potential file I/O errors.
+///
+/// # Arguments
+///
+/// * `index`: The IP index to save.
+/// * `team_channel_name`: The name of the team channel (used for directory organization).
+///
+/// # Returns
+///
+/// * `Result<(), ThisProjectError>`: `Ok(())` if the index was saved successfully, or a `ThisProjectError`
+///   if an error occurred.
+fn write_sync_state_ip_availability_data(
+    network_index: usize,
+    network_type: String,
+) -> Result<(), ThisProjectError> {
+    // 1. Construct Path:
+    let mut file_path = PathBuf::from("sync_data");
+    file_path.push("network_index.txt");
+
+    // 2. Create Directory (if doesn't exist):
+    if let Some(parent_dir) = file_path.parent() {
+        create_dir_all(parent_dir)?;
+    }
+
+    // 3. Write to file:
+    let mut file = File::create(&file_path)?;
+    write!(file, "{}", network_index)?; // Write the index directly to the file.
+
+    
+    // 4. Construct Path:
+    let mut file_path = PathBuf::from("sync_data");
+    file_path.push("network_type.txt");
+
+    // 5. Create Directory (if doesn't exist):
+    if let Some(parent_dir) = file_path.parent() {
+        create_dir_all(parent_dir)?;
+    }
+
+    // 6. Write to file:
+    let mut file = File::create(&file_path)?;
+    write!(file, "{}", network_type)?; // Write the index directly to the file.
+
+    Ok(())
+}
+
+/// Reads the local user's selected IP index from a file.
+///
+/// This function attempts to read the IP index from "sync_data/{team_channel_name}/ip_index.txt".
+/// If the file exists and contains a valid integer, it returns the index.  If the file doesn't exist,
+/// it returns Ok(None).  Other errors (e.g., invalid file content) result in an Err.
+///
+/// # Arguments
+///
+/// * `team_channel_name`: The name of the team channel (used for directory organization).
+///
+/// # Returns
+///
+/// * `Result<Option<usize>, ThisProjectError>`: `Ok(Some(index))` if the index was read successfully, `Ok(None)`
+///    if the file doesn't exist, or `Err(ThisProjectError)` if an error occurred (e.g., parsing error).
+fn read_sync_state_ip_availability_data() -> Result<Option<usize>, ThisProjectError> {
+    // 1. Construct Path
+    let mut file_path = PathBuf::from("sync_data");
+    file_path.push("ip_index.txt");
+
+    // 2. Attempt to read file.
+    match read_to_string(&file_path) {
+        Ok(contents) => {
+            // 3. Parse contents, handle parse errors:
+            match contents.trim().parse::<usize>() {
+                Ok(index) => Ok(Some(index)),
+                Err(e) => Err(ThisProjectError::ParseIntError(e)),
+            }
+        },
+
+        // 4. Return Ok(None) if file not found:
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+
+        // 5. Handle other errors (return the original IO error if one occurred):
+        Err(e) => Err(ThisProjectError::IoError(e)),
+
+    }
+}
+
 
 
 
@@ -3457,6 +3858,9 @@ fn add_im_message(
 /// - uma_network needs the ip (ipv6, ipv4, etc.) for each collaborator, which comes from that collaborator-owned toml (and probably that collaborator's public gpg key)
 ///
 /// Note: If Alice returns to home, all this 'state' is deleted and Uma returns to home-square-one as if she restarted the program. (In fact...it might even be easiest to literally restart to make that process clean.)
+/// 
+/// ip availability is also read and recorded in sync-state stored
+/// as a combined-index that included type data (hopefully works with other signal types too)
 fn initialize_uma_application() -> Result<(), Box<dyn std::error::Error>> {
     // Welcome to Uma Land!!
     debug_log("Staring initialize_uma_application()");
@@ -3776,6 +4180,39 @@ fn initialize_uma_application() -> Result<(), Box<dyn std::error::Error>> {
         println!("User added successfully!");
     }
 
+    // --- IP Validity Check and Flag Setting ---
+    let (ipv4_list, ipv6_list) = load_local_ip_lists(&user_metadata.uma_local_owner_user)?;
+    let (str_ipv4list, str_ipv6list) = load_local_iplists_as_stringtype(&user_metadata.uma_local_owner_user)?;
+    
+    // currently only using ipv6
+    let local_user_ipv6_address = find_valid_local_owner_ip_address(
+        &ipv6_list
+    )
+        .ok_or(ThisProjectError::NetworkError("No valid local IPv6 address found".to_string()))?;
+
+    // // Instead of cloning the first address, use the result of the selector:
+    // ipv6_addr_1 = Some(local_user_ipv6_address); // No need to clone or dereference as the variable now directly holds the Ipv6Addr
+    // ipv6_addr_2 = ipv6_addr_1.clone(); // Clone the selected address for ipv6_addr_2 if needed
+
+    // get index of valid IP v6
+    let ip_index = find_ip_index(
+        &str_ipv4list,
+        &str_ipv6list,
+        &local_user_ipv6_address.to_string(), // as ip_address
+    );
+
+    debug_log!(
+        "Found IP/index <{:?} {:?}>", 
+        local_user_ipv6_address, 
+        ip_index
+    );
+
+    // set ipv6 state-file
+    // path: sync_data/ip.toml
+    write_sync_state_ip_availability_data(
+        ip_index.expect("REASON"),
+        "ipv6".to_string(),
+    );
 
     Ok(())
 }
@@ -6462,30 +6899,90 @@ fn handle_local_owner_desk(
     
     let remote_collaborator_name = local_owner_desk_setup_data.remote_collaborator_name.clone();
                 
-    let ipv6_addr_list = local_owner_desk_setup_data.local_user_ipv6_addr_list.clone();
-
     // Instead of storing Option<&Ipv6Addr>, store the owned Ipv6Addr
     let mut ipv6_addr_1: Option<Ipv6Addr> = None;
     let mut ipv6_addr_2: Option<Ipv6Addr> = None;
     
-    // // Clone the address when extracting it
-    // if let Some(addr) = ipv6_addr_list.get(0) {
-    //     ipv6_addr_1 = Some(*addr); // Dereference and clone the IPv6 address
-    //     ipv6_addr_2 = Some(*addr);
-    // }
-    // 1. Use find_valid_local_owner_ip_address to get a valid address or an error.
-    // let local_user_ipv6_address = find_valid_local_owner_ip_address(
-    //     &local_owner_desk_setup_data.local_user_ipv6_addr_list,
-    // )?; // The ? will return the error if any
     
+    /*
+    Works but moving to new more future-proofed system
+    */
+    let ipv6_addr_list = local_owner_desk_setup_data.local_user_ipv6_addr_list.clone();
+
+    // Clone the address when extracting it
+    if let Some(addr) = ipv6_addr_list.get(0) {
+        ipv6_addr_1 = Some(*addr); // Dereference and clone the IPv6 address
+        ipv6_addr_2 = Some(*addr);
+    }
+
+    // 1. Use find_valid_local_owner_ip_address to get a valid address or an error.    
     let local_user_ipv6_address = find_valid_local_owner_ip_address(&local_owner_desk_setup_data.local_user_ipv6_addr_list)
         .ok_or(ThisProjectError::NetworkError("No valid local IPv6 address found".to_string()))?;
+        
+    
+    // let option_ipindexint = read_sync_state_ip_availability_data();
+    
+    // let ip_index_int = match option_ipindexint {
+    //     Ok(Some(Ok(ip_index))) => {
+    //         match get_ip_by_index(
+    //             ip_index,
+    //             &local_owner_desk_setup_data.local_user_ipv4_addr_list,
+    //             &local_owner_desk_setup_data.local_user_ipv6_addr_list,
+    //         ) {
+    //             Some(ip_addr) => ip_addr,
+    //             None => {
+    //                 // Handle the error case here
+    //                 // Return a default value
+    //                 std::net::IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0))
+    //             }
+    //         }
+    //     }
+    //     _ => {
+    //         // Handle the error case here
+    //         // Return a default value
+    //         std::net::IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0))
+    //     }
+    // };
+        
+        
+    
+    // //
+    // let local_user_ipv6_address = get_ip_by_index(
+    //     ip_index_int, // as int_index
+    //     &local_owner_desk_setup_data.local_user_ipv4_addr_list, // for ipv4_list, 
+    //     &local_owner_desk_setup_data.local_user_ipv6_addr_list, // for ipv6_list, 
+    // );
+    
+    
+    
+    
+    
+    // starting with ipv4 len and ipv6 len, see which list the ip is in,
+    // and return the list item
+    // challenge: the type of the output: ipv4 and ipv6 are not the same type
 
     // Instead of cloning the first address, use the result of the selector:
     ipv6_addr_1 = Some(local_user_ipv6_address); // No need to clone or dereference as the variable now directly holds the Ipv6Addr
     ipv6_addr_2 = ipv6_addr_1.clone(); // Clone the selected address for ipv6_addr_2 if needed
-    
-    
+
+    // // get index of valid IP v6
+    // let ip_index = find_ip_index(
+    //     &local_owner_desk_setup_data.local_user_ipv6_addr_list, // as ip_list
+    //     &local_user_ipv6_address, // as ip_address
+    // );
+
+    // debug_log!(
+    //     "Found IP/index <{:?} {:?}>", 
+    //     local_user_ipv6_address, 
+    //     ip_index
+    // );
+
+    // // set ipv6 state-file
+    // // path: sync_data/ip.toml
+    // write_sync_state_ip_availability_data(
+    //     ip_index.expect("REASON"),
+    // );
+
     loop { // 1. start overall loop to restart whole desk
         let remote_collaborator_name_for_thread = remote_collaborator_name.clone();
         let salt_list_1_drone_clone = salt_list_1.clone();
