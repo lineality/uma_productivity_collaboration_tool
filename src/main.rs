@@ -1,6 +1,8 @@
 /*
 Uma
 2024.09-11
+RUST_BACKTRACE=full cargo run
+
 Uma Productivity Collaboration Tools for Project-Alignment 
 https://github.com/lineality/uma_productivity_collaboration_tool
 In memory of Eleanor Th. Vadala 1923-2023: aviator, astronomer, engineer, pioneer, leader, friend. 
@@ -58,6 +60,7 @@ pub mod tiny_tui {
 
 // Set debug flag (future: add time stamp with 24 check)
 const DEBUG_FLAG: bool = true;
+const MAX_NETWORK_TYPE_LENGTH: usize = 1024; // Example: 1KB limit
 
 // use std::sync::mpsc;
 use std::io;
@@ -138,6 +141,170 @@ const CONTINUE_UMA_PATH: &str = "project_graph_data/session_state_items/continue
 const HARD_RESTART_FLAG_PATH: &str = "project_graph_data/session_state_items/yes_hard_restart_flag.txt";
 const SYNC_START_OK_FLAG_PATH: &str = "project_graph_data/session_state_items/ok_to_start_sync_flag.txt";
 
+
+
+pub enum SyncError {
+    ConnectionError(std::io::Error),
+    ChecksumMismatch,
+    Timeout,
+    FileReadError(std::io::Error),
+    FileWriteError(std::io::Error),
+    // ... other potential errors ...
+}
+
+// #[derive(Debug, Deserialize, Serialize, Clone)]
+// struct CollaboratorPairPorts {
+//     collaborator_ports: Vec<ReadTeamchannelCollaboratorPortsToml>,
+// }
+
+#[derive(Debug)]
+enum MyCustomError {
+    IoError(std::io::Error),
+    TomlDeserializationError(toml::de::Error),
+    InvalidData(String),
+    PortCollision(String), 
+    // ... other variants as needed ...
+}
+
+// Implement PartialEq manually:
+impl PartialEq for MyCustomError {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (MyCustomError::IoError(ref e1), MyCustomError::IoError(ref e2)) => {
+                e1.kind() == e2.kind() // Compare the ErrorKind
+                // Or you can use:
+                // e1.to_string() == e2.to_string() 
+            },
+            (MyCustomError::TomlDeserializationError(e1), MyCustomError::TomlDeserializationError(e2)) => e1 == e2, 
+            // Add other arms for your variants as needed
+            _ => false, // Different variants are never equal
+        }
+    }
+}
+
+// Implement the std::error::Error trait
+impl StdError for MyCustomError {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+        match *self {
+            MyCustomError::IoError(ref err) => Some(err),
+            MyCustomError::TomlDeserializationError(ref err) => Some(err),
+            _ => None, // No underlying source for these variants
+        }
+    }
+}
+
+impl std::fmt::Display for MyCustomError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            MyCustomError::IoError(err) => write!(f, "IO Error: {}", err),
+            // MyCustomError::TomlDeserializationError(err) => write!(f, "TOML Error: {}", err),
+            MyCustomError::TomlDeserializationError(err) => write!(f, "TOML Error: {}", err),
+            // &MyCustomError::InvalidData(_) => todo!(),
+            &MyCustomError::InvalidData(_) => todo!(),
+            &MyCustomError::PortCollision(_) => todo!(),
+        }
+    }
+}
+
+// Implement the From trait for easy conversion from io::Error and toml::de::Error:
+impl From<io::Error> for MyCustomError {
+    fn from(error: io::Error) -> Self {
+        MyCustomError::IoError(error)
+    }
+}
+
+impl From<toml::de::Error> for MyCustomError {
+    fn from(error: toml::de::Error) -> Self {
+        MyCustomError::TomlDeserializationError(error)
+    }
+}
+
+#[derive(Debug)]
+pub enum ThisProjectError {
+    IoError(std::io::Error),
+    TomlDeserializationError(toml::de::Error), // May be depricated along with serde-crate
+    TomlVanillaDeserialStrError(String), // use without serede crate (good)
+    InvalidData(String),
+    PortCollision(String), 
+    NetworkError(String),
+    WalkDirError(walkdir::Error),
+    ParseIntError(ParseIntError),
+    GpgError(String),  // GPG-specific error type
+}
+
+// Implement From<walkdir::Error> for ThisProjectError
+impl From<walkdir::Error> for ThisProjectError {
+    fn from(err: walkdir::Error) -> Self {
+        ThisProjectError::WalkDirError(err)
+    }
+}
+
+// Implement From<ParseIntError> for ThisProjectError
+impl From<ParseIntError> for ThisProjectError {
+    fn from(err: ParseIntError) -> Self {
+        ThisProjectError::ParseIntError(err)
+    }
+}
+
+// Implement From<toml::de::Error> for ThisProjectError
+impl From<toml::de::Error> for ThisProjectError {
+    fn from(err: toml::de::Error) -> Self {
+        ThisProjectError::TomlDeserializationError(err)
+    }
+}
+
+// Implement the std::error::Error trait for ThisProjectError
+impl std::error::Error for ThisProjectError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match *self {
+            ThisProjectError::IoError(ref err) => Some(err),
+            ThisProjectError::TomlDeserializationError(ref err) => Some(err),
+            _ => None, 
+        }
+    }
+}
+
+// Implement the Display trait for ThisProjectError for easy printing 
+impl std::fmt::Display for ThisProjectError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match *self {
+            ThisProjectError::IoError(ref err) => write!(f, "IO Error: {}", err),
+            ThisProjectError::TomlDeserializationError(ref err) => write!(f, "TOML TomlDeserializationError  Error: {}", err),
+            ThisProjectError::TomlVanillaDeserialStrError(ref err) => write!(f, "TomlVanillaDeserialStrError TOML Error: {}", err),
+            ThisProjectError::InvalidData(ref msg) => write!(f, "Invalid Data: {}", msg),
+            ThisProjectError::PortCollision(ref msg) => write!(f, "Port Collision: {}", msg),
+            ThisProjectError::NetworkError(ref msg) => write!(f, "Network Error: {}", msg),
+            ThisProjectError::WalkDirError(ref err) => write!(f, "WalkDir Error: {}", err), // Add this arm
+            ThisProjectError::ParseIntError(ref err) => write!(f, "ParseInt Error: {}", err), // Add this arm
+            ThisProjectError::ParseIntError(ref err) => write!(f, "ParseInt Error: {}", err),
+            ThisProjectError::GpgError(_) => todo!(), // Add this arm
+            // ... add formatting for other error types
+        }
+    }
+}
+
+// Implement From<ThisProjectError> for MyCustomError
+impl From<ThisProjectError> for MyCustomError {
+    fn from(error: ThisProjectError) -> Self {
+        match error {
+            ThisProjectError::IoError(e) => MyCustomError::IoError(e),
+            ThisProjectError::TomlDeserializationError(e) => MyCustomError::TomlDeserializationError(e),
+            ThisProjectError::InvalidData(msg) => MyCustomError::InvalidData(msg),
+            ThisProjectError::PortCollision(msg) => MyCustomError::PortCollision(msg),
+            // ... add other conversions for your variants ...
+            _ => MyCustomError::InvalidData("Unknown error".to_string()), // Default case
+        }
+    }
+}
+
+
+// Implement the From trait to easily convert from other error types into ThisProjectError
+impl From<io::Error> for ThisProjectError {
+    fn from(err: io::Error) -> ThisProjectError {
+        ThisProjectError::IoError(err)
+    }
+}
+
 /// utility: Gets a list of all IPv4 and IPv6 addresses associated with the current system's network interfaces.
 ///
 /// Returns:
@@ -180,35 +347,269 @@ fn get_local_ip_addresses() -> Result<Vec<IpAddr>, std::io::Error> {
     Ok(addresses)
 }
 
-/*
-TODO:
-in the nearterm and long term
-there needs to be a way of selecting and coordinating about working ip addresses
-e.g. once an address works, the number of that address in the shared list may be 
-transmitted in the ReadySignal to say which ip is being used (e.g. when 
-    there are several possible 'campuses' that might be used)
+// /*
+// TODO:
+// in the nearterm and long term
+// there needs to be a way of selecting and coordinating about working ip addresses
+// e.g. once an address works, the number of that address in the shared list may be 
+// transmitted in the ReadySignal to say which ip is being used (e.g. when 
+//     there are several possible 'campuses' that might be used)
     
-The primary task is testing what local IP for the local owner user out of the list
-in their file works (and which listen item that is).
+// The primary task is testing what local IP for the local owner user out of the list
+// in their file works (and which listen item that is).
 
-another later task may be using a intranet mode.
-*/
-fn find_valid_local_owner_ip_address(ipv6_addresses: &[Ipv6Addr]) -> Option<Ipv6Addr> {
+// another later task may be using a intranet mode.
+// */
+// fn find_valid_local_owner_ipv6_address(ipv6_addresses: &[Ipv6Addr]) -> Option<Ipv6Addr> {
+//     for &address in ipv6_addresses {
+//         if !address.is_loopback() && !address.is_unspecified() {
+//             let test_port = 55555; // Or some other test port
+//             if let Ok(_) = UdpSocket::bind(SocketAddr::new(IpAddr::V6(address), test_port)) {
+//                 return Some(address); // Found a bindable address
+//             } else {
+//                 // Log the error, and try the next address
+//                 debug_log!("find_valid_local_owner_ip_address: Error fail Could not bind to {}:{}. Trying next address...", address, test_port);
+
+//             }
+//         }
+//     }
+//     None // No valid address found
+// }
+
+
+// fn find_valid_local_owner_ipv4_address(ipv4_addresses: &[Ipv4Addr]) -> Option<Ipv4Addr> {
+//     for &address in ipv4_addresses {
+//         if !address.is_loopback() && !address.is_unspecified() {
+//             let test_port = 55555; // Or some other test port
+//             if let Ok(_) = UdpSocket::bind(SocketAddr::new(IpAddr::V4(address), test_port)) {
+//                 return Some(address); // Found a bindable address
+//             } else {
+//                 // Log the error, and try the next address
+//                 debug_log!("find_valid_local_owner_ip_address: Error fail Could not bind to {}:{}. Trying next address...", address, test_port);
+
+//             }
+//         }
+//     }
+//     None // No valid address found
+// }
+
+/// Get Band: Network config data
+/// The function is called during initialization bootstrapping
+/// so there are few pre-existing values to put in,
+/// this function must bootstrap itself.
+/// Note: this is before any team_channel has been entered
+/// 
+/// Get Band: Network config data
+/// Returns the first valid IP address and its type ("ipv6" or "ipv4") found for the local user, 
+/// along with its index in the respective list.
+///
+/// This function is called during initialization bootstrapping to determine a valid network configuration
+/// before any team channel is entered. It reads the local user's IP address lists from their collaborator
+/// TOML file and attempts to bind a UDP socket to each address to verify its validity.
+///
+/// Args:
+///     uma_local_owner_user: The username of the local UMA user.
+///
+/// Returns:
+///     (String, usize): A tuple containing the network type ("ipv6" or "ipv4") and the index of the valid IP address. 
+///     Returns ("none", 0) if no valid IP address is found.
+fn get_band__find_valid_network_index_and_type(
+    uma_local_owner_user: &str,
+) -> (
+    String, 
+    usize,
+    Ipv4Addr,
+    Ipv6Addr,
+    ) {
+    /*
+    General Steps
+    1. get name of local owner
+        paremeter
+    2. get local owner file (or fields)
+    "/project_graph_data/collaborator_files_address_book/{}__collaborator.toml", uma_local_owner_user
+    3. look for valid ipv6
+        find_valid_local_owner_ipv6_address
+    4. (if not found) look for valid ivp4
+        find_valid_local_owner_ipv4_address
+    5. (pending) look for other network band types e.g. CB radio, optical, audio, etc.
+    6. return (network_type, network_index) tuple (e.g. ('ipv6', 0)
+    */
+    const EMPTY_IPV_4: Ipv4Addr = Ipv4Addr::new(127, 0, 0, 1); // == = 127.0.0.1
+    // const EMPTY_IPV_6: Ipv6Addr = Ipv6Addr::from_u128(0); // == ::1
+    const EMPTY_IPV_6: Ipv6Addr = Ipv6Addr::UNSPECIFIED; // Correct way to represent an unspecified IPv6 address
+
+    
+    // // 2. Load IP lists from the collaborator file
+    // let (ipv4_addresses, ipv6_addresses) = match load_local_ip_lists(uma_local_owner_user) {
+    //     Ok(lists) => lists,
+    //     Err(e) => {
+    //         debug_log!("Error loading IP lists: {}", e);
+    //         return ("none".to_string(), 0); // Or handle error differently
+    //     }
+    // };
+
+    // let (ipv4_addresses_string, ipv6_addresses_string) = match load_local_iplists_as_stringtype(uma_local_owner_user) {
+    //     Ok(lists) => lists,
+    //     Err(e) => {
+    //         debug_log!("Error loading IP lists as strings: {}", e);
+    //         return ("none".to_string(), 0); // Or handle error differently
+    //     }
+    // };
+    // 2. Load IP lists from the collaborator file
+    let (ipv4_addresses, ipv6_addresses) = match load_local_ip_lists(uma_local_owner_user) {
+        Ok(lists) => lists,
+        Err(e) => {
+            debug_log!("Error loading IP lists: {}", e);
+            // Return "none" with default IP addresses
+            return ("none".to_string(), 0, Ipv4Addr::UNSPECIFIED, Ipv6Addr::UNSPECIFIED); 
+        }
+    };
+
+    let (ipv4_addresses_string, ipv6_addresses_string) = match load_local_iplists_as_stringtype(uma_local_owner_user) {
+        Ok(lists) => lists,
+        Err(e) => {
+            debug_log!("Error loading IP lists as strings: {}", e);
+            // Return "none" with default IP addresses
+            return ("none".to_string(), 0, Ipv4Addr::UNSPECIFIED, Ipv6Addr::UNSPECIFIED); 
+        }
+    };
+
+    // 3. Try IPv6 addresses first
+    if let Some(valid_ipv6) = find_valid_local_owner_ipv6_address(&ipv6_addresses) {
+        // Get index
+        debug_log!("Found valid ipv6 address: {:?}", valid_ipv6);
+        
+        if let Some(index) = find_ip_index(
+            &ipv4_addresses_string,
+            &ipv6_addresses_string,
+            &valid_ipv6.to_string()
+        ) {
+            return ("ipv6".to_string(), index, EMPTY_IPV_4, valid_ipv6);
+        } else {
+            debug_log!("Valid IPv6 address not found in the list.");
+        }
+    }
+
+    // 4. If no valid IPv6, try IPv4
+    if let Some(valid_ipv4) = find_valid_local_owner_ipv4_address(&ipv4_addresses) {
+        if let Some(index) = find_ip_index(
+            &ipv4_addresses_string,
+            &ipv6_addresses_string,
+            &valid_ipv4.to_string()
+        ) {
+            return ("ipv4".to_string(), index, valid_ipv4, EMPTY_IPV_6);
+        } else {
+            debug_log!("Valid IPv4 address not found in the list.");
+        }
+    }
+
+    // 5. No valid IP found
+    debug_log!("No valid IPv4 or IPv6 address found.");
+    ("none".to_string(), 0, EMPTY_IPV_4, EMPTY_IPV_6) // Return a default value
+}
+
+
+/// Attempts to bind a UDP socket to each address in the provided list.
+/// 
+/// This function iterates through the `ip_addresses` slice. For each address, it attempts to bind a UDP
+/// socket to the address on a designated test port (55555). If successful, the function immediately
+/// returns the bindable address. If binding fails for all addresses in the list, the function returns `None`.
+///
+/// This function is used during initialization to determine a valid local IP address that UMA can use
+/// for communication.
+///
+/// Args:
+///     ip_addresses (&[Ipv6Addr]): A slice of IPv6 addresses to test.
+///
+/// Returns:
+///     Option<Ipv6Addr>: The first IPv6 address in the list to which a UDP socket can be successfully bound, or `None` if no address is bindable.
+///
+fn find_valid_local_owner_ipv6_address(ipv6_addresses: &[Ipv6Addr]) -> Option<Ipv6Addr> {
     for &address in ipv6_addresses {
-        if !address.is_loopback() && !address.is_unspecified() {
-            let test_port = 55555; // Or some other test port
-
-            if let Ok(_) = UdpSocket::bind(SocketAddr::new(IpAddr::V6(address), test_port)) {
-                return Some(address); // Found a bindable address
+        if !address.is_loopback() && !address.is_unspecified() { // Use short-circuit &&
+            let test_port = 55555;
+            let socket_addr = SocketAddr::new(IpAddr::V6(address), test_port);
+            if UdpSocket::bind(socket_addr).is_ok() { // Simplified check
+                return Some(address);
             } else {
-                // Log the error, and try the next address
-                debug_log!("find_valid_local_owner_ip_address: Error fail Could not bind to {}:{}. Trying next address...", address, test_port);
-
+                debug_log!("Could not bind to {:?}. Trying next address...", socket_addr);
             }
         }
     }
-    None // No valid address found
+    None
 }
+
+// Analogous function for IPv4
+fn find_valid_local_owner_ipv4_address(ipv4_addresses: &[Ipv4Addr]) -> Option<Ipv4Addr> {
+    // ... (Implementation is analogous to the IPv6 version)
+    for &address in ipv4_addresses {
+        if !address.is_loopback() && !address.is_unspecified() {
+            let test_port = 55555;
+            let socket_addr = SocketAddr::new(IpAddr::V4(address), test_port);
+            if UdpSocket::bind(socket_addr).is_ok() {
+                return Some(address);
+            } else {
+                debug_log!("Could not bind to {:?}. Trying next address...", socket_addr);
+            }
+        }
+    }
+    None
+}
+
+// fn get_band__find_valid_network_index_and_type(
+//     uma_local_owner_user: String,
+//     ) -> (String, String) {
+//     /*
+//     1. get name of local owner
+//         paremeter
+//     2. get local owner file (or fields)
+//     "/project_graph_data/collaborator_files_address_book/{}__collaborator.toml", uma_local_owner_user
+//     3. look for valid ipv6
+//         find_valid_local_owner_ipv6_address
+//     4. (if not found) look for valid ivp4
+//         find_valid_local_owner_ipv4_address
+//     5. (pending) look for other
+//     6. return (network_type, network_index) tuple (e.g. ('ipv6', 0)
+//     */
+    
+//     // 1. get name of local owner
+    
+//     // 2. get local owner file (or fields) "/project_graph_data/collaborator_files_address_book/{}__collaborator.toml", uma_loca
+    
+//     // 3. look for valid ipv6
+//     for &address in ipv6_addresses {
+//         if !address.is_loopback() && !address.is_unspecified() {
+//             let test_port = 55555; // Or some other test port
+
+//             if let Ok(_) = UdpSocket::bind(SocketAddr::new(IpAddr::V6(address), test_port)) {
+//                 return Some(address); // Found a bindable address
+//             } else {
+//                 // Log the error, and try the next address
+//                 debug_log!("find_valid_local_owner_ip_address: Error fail Could not bind to {}:{}. Trying next address...", address, test_port);
+
+//             }
+//         }
+//     }
+    
+    
+//     // 4. (if not found) look for valid ivp4
+//     for &address in ipv4_addresses {
+//         if !address.is_loopback() && !address.is_unspecified() {
+//             let test_port = 55555; // Or some other test port
+
+//             if let Ok(_) = UdpSocket::bind(SocketAddr::new(IpAddr::V4(address), test_port)) {
+//                 return Some(address); // Found a bindable address
+//             } else {
+//                 // Log the error, and try the next address
+//                 debug_log!("find_valid_local_owner_ip_address: Error fail Could not bind to {}:{}. Trying next address...", address, test_port);
+
+//             }
+//         }
+//     }
+
+//     None // No valid address found
+// }
+
 
 /// Loads the local user's IPv4 and IPv6 addresses from their collaborator TOML file.
 ///
@@ -529,259 +930,155 @@ fn find_ip_index(
 
 
 
-/// Saves the local user's selected IP index to a file.
-///
-/// This function saves the given `index` to a text file named "ip_index.txt" within the
-/// "sync_data/{team_channel_name}" directory. It creates the directory if it doesn't exist and handles
-/// potential file I/O errors.
-///
-/// # Arguments
-///
-/// * `index`: The IP index to save.
-/// * `team_channel_name`: The name of the team channel (used for directory organization).
-///
-/// # Returns
-///
-/// * `Result<(), ThisProjectError>`: `Ok(())` if the index was saved successfully, or a `ThisProjectError`
-///   if an error occurred.
-fn write_sync_state_ip_availability_data(
-    network_index: usize,
+/// Saves the local user's network band config data
+/// to sync_data text files
+/// 
+fn write_band__save_network_band__type_index(
     network_type: String,
+    network_index: usize,
+    this_ipv4: Ipv4Addr,
+    this_ipv6: Ipv6Addr,
 ) -> Result<(), ThisProjectError> {
+
     // 1. Construct Path:
-    let mut file_path = PathBuf::from("sync_data");
-    file_path.push("network_index.txt");
+    let mut base_path = PathBuf::from("sync_data");
 
-    // 2. Create Directory (if doesn't exist):
-    if let Some(parent_dir) = file_path.parent() {
-        create_dir_all(parent_dir)?;
-    }
+    // 2. Create Directory (if doesn't exist)
+    create_dir_all(&base_path)?;
 
-    // 3. Write to file:
-    let mut file = File::create(&file_path)?;
-    write!(file, "{}", network_index)?; // Write the index directly to the file.
+    // 3. Construct Absolute File Paths
+    let type_path = base_path.join("network_type.txt");
+    let index_path = base_path.join("network_index.txt");
+    let ipv4_path = base_path.join("ipv4.txt");
+    let ipv6_path = base_path.join("ipv6.txt");
 
+    // 4. Write to Files (handling potential errors):
+    let mut type_file = File::create(&type_path)?; // Note the & for borrowing
+    writeln!(type_file, "{}", network_type)?;
+
+    let mut index_file = File::create(&index_path)?;
+    writeln!(index_file, "{}", network_index)?;
+
+     // 4. Write to Files (handling potential errors):
+     // TODO this is not working, it is writing "sync_data/ipv6.txt" as the file text
+     // the path to the file should not be the file content...
+    let mut ip4_file = File::create(&ipv4_path)?; // Note the & for borrowing
+    writeln!(ip4_file, "{}", this_ipv4.to_string())?;  // Write IP string
+
+    let mut ip6_file = File::create(&ipv6_path)?;
+    writeln!(ip6_file, "{}", this_ipv6.to_string())?;  // Write IP string
     
-    // 4. Construct Path:
-    let mut file_path = PathBuf::from("sync_data");
-    file_path.push("network_type.txt");
-
-    // 5. Create Directory (if doesn't exist):
-    if let Some(parent_dir) = file_path.parent() {
-        create_dir_all(parent_dir)?;
-    }
-
-    // 6. Write to file:
-    let mut file = File::create(&file_path)?;
-    write!(file, "{}", network_type)?; // Write the index directly to the file.
-
     Ok(())
 }
 
-/// Reads the local user's selected IP index from a file.
-///
-/// This function attempts to read the IP index from "sync_data/{team_channel_name}/ip_index.txt".
-/// If the file exists and contains a valid integer, it returns the index.  If the file doesn't exist,
-/// it returns Ok(None).  Other errors (e.g., invalid file content) result in an Err.
-///
-/// # Arguments
-///
-/// * `team_channel_name`: The name of the team channel (used for directory organization).
-///
-/// # Returns
-///
-/// * `Result<Option<usize>, ThisProjectError>`: `Ok(Some(index))` if the index was read successfully, `Ok(None)`
-///    if the file doesn't exist, or `Err(ThisProjectError)` if an error occurred (e.g., parsing error).
-fn read_sync_state_ip_availability_data() -> Result<Option<usize>, ThisProjectError> {
-    // 1. Construct Path
-    let mut file_path = PathBuf::from("sync_data");
-    file_path.push("ip_index.txt");
+// fn write_band__save_network_band__type_index(
+//     network_type: String,
+//     network_index: usize,
+// ) -> Result<(), ThisProjectError> {
+//     // 1. Construct Path:
+//     let mut file_path = PathBuf::from("sync_data");
+//     file_path.push("network_index.txt");
 
-    // 2. Attempt to read file.
-    match read_to_string(&file_path) {
-        Ok(contents) => {
-            // 3. Parse contents, handle parse errors:
-            match contents.trim().parse::<usize>() {
-                Ok(index) => Ok(Some(index)),
-                Err(e) => Err(ThisProjectError::ParseIntError(e)),
-            }
-        },
+//     // 2. Create Directory (if doesn't exist):
+//     if let Some(parent_dir) = file_path.parent() {
+//         create_dir_all(parent_dir)?;
+//     }
 
-        // 4. Return Ok(None) if file not found:
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+//     // 3. Write to file:
+//     let mut file = File::create(&file_path)?;
+//     write!(file, "{}", network_index)?; // Write the index directly to the file.
 
-        // 5. Handle other errors (return the original IO error if one occurred):
-        Err(e) => Err(ThisProjectError::IoError(e)),
+    
+//     // 4. Construct Path:
+//     let mut file_path = PathBuf::from("sync_data");
+//     file_path.push("network_type.txt");
 
-    }
+//     // 5. Create Directory (if doesn't exist):
+//     if let Some(parent_dir) = file_path.parent() {
+//         create_dir_all(parent_dir)?;
+//     }
+
+//     // 6. Write to file:
+//     let mut file = File::create(&file_path)?;
+//     write!(file, "{}", network_type)?; // Write the index directly to the file.
+
+//     Ok(())
+// }
+
+// /// Reads the local user's selected IP index from a file.
+// ///
+// /// This function attempts to read...
+// fn read_band__network_config_type_index_specs() -> Result<Option<usize>, ThisProjectError> {
+//     // 1. Construct Path
+//     let mut file_path = PathBuf::from("sync_data");
+//     file_path.push("ip_index.txt");
+
+//     // 2. Attempt to read file.
+//     match read_to_string(&file_path) {
+//         Ok(contents) => {
+//             // 3. Parse contents, handle parse errors:
+//             match contents.trim().parse::<usize>() {
+//                 Ok(index) => Ok(Some(index)),
+//                 Err(e) => Err(ThisProjectError::ParseIntError(e)),
+//             }
+//         },
+
+//         // 4. Return Ok(None) if file not found:
+//         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+
+//         // 5. Handle other errors (return the original IO error if one occurred):
+//         Err(e) => Err(ThisProjectError::IoError(e)),
+
+//     }
+// }
+
+/// Reads the local user's network band configuration data from files in the sync_data directory.
+/// Uses absolute paths and handles file I/O and parsing errors.
+///
+/// Returns:
+///     Result<(String, usize, Ipv4Addr, Ipv6Addr), ThisProjectError>: A tuple containing the network type, index, IPv4 address, and IPv6 address on success, or a ThisProjectError on failure.
+fn read_band__network_config_type_index_specs() -> Result<(String, u8, Ipv4Addr, Ipv6Addr), ThisProjectError> {
+    // 1. Construct Absolute Paths (get current absolute working directory)
+    let mut base_path = std::env::current_dir()?; // Start with absolute current directory. Handle potential errors.
+    base_path.push("sync_data");
+    let type_path = base_path.join("network_type.txt");
+    let index_path = base_path.join("network_index.txt");
+    let ipv4_path = base_path.join("ipv4.txt");
+    let ipv6_path = base_path.join("ipv6.txt");
+
+    // 2. Read Values From Files
+    let network_type_result = read_to_string(&type_path);
+    let network_index_result = read_to_string(&index_path);
+    let ipv4_result = read_to_string(&ipv4_path);
+    let ipv6_result = read_to_string(&ipv6_path);
+
+    // 3. Handle File Reading Errors: Return early if *any* file read fails
+    let network_type = network_type_result?.trim().to_string();
+    let network_index_str = network_index_result?.trim().to_string();
+    let ipv4_str = ipv4_result?.trim().to_string();
+    let ipv6_str = ipv6_result?.trim().to_string();
+
+
+    // 4. Parse network_index (usize), Handling Errors
+    let network_index: u8 = network_index_str
+        .parse()
+        .map_err(|e| ThisProjectError::InvalidData(format!("Invalid network index: {}", e)))?;
+
+
+    // 5. Parse IPv4 and IPv6, Handling Errors
+    let ipv4: Ipv4Addr = ipv4_str
+        .parse()
+        .map_err(|e| ThisProjectError::InvalidData(format!("Invalid IPv4 address: {}", e)))?;
+    let ipv6: Ipv6Addr = ipv6_str
+        .parse()
+        .map_err(|e| ThisProjectError::InvalidData(format!("Invalid IPv6 address: {}", e)))?;
+
+
+    Ok((network_type, network_index, ipv4, ipv6))
 }
-
-
 
 
 enum IpAddrKind { V4, V6 }
-
-pub enum SyncError {
-    ConnectionError(std::io::Error),
-    ChecksumMismatch,
-    Timeout,
-    FileReadError(std::io::Error),
-    FileWriteError(std::io::Error),
-    // ... other potential errors ...
-}
-
-// #[derive(Debug, Deserialize, Serialize, Clone)]
-// struct CollaboratorPairPorts {
-//     collaborator_ports: Vec<ReadTeamchannelCollaboratorPortsToml>,
-// }
-
-#[derive(Debug)]
-enum MyCustomError {
-    IoError(std::io::Error),
-    TomlDeserializationError(toml::de::Error),
-    InvalidData(String),
-    PortCollision(String), 
-    // ... other variants as needed ...
-}
-
-// Implement PartialEq manually:
-impl PartialEq for MyCustomError {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (MyCustomError::IoError(ref e1), MyCustomError::IoError(ref e2)) => {
-                e1.kind() == e2.kind() // Compare the ErrorKind
-                // Or you can use:
-                // e1.to_string() == e2.to_string() 
-            },
-            (MyCustomError::TomlDeserializationError(e1), MyCustomError::TomlDeserializationError(e2)) => e1 == e2, 
-            // Add other arms for your variants as needed
-            _ => false, // Different variants are never equal
-        }
-    }
-}
-
-// Implement the std::error::Error trait
-impl StdError for MyCustomError {
-    fn source(&self) -> Option<&(dyn StdError + 'static)> {
-        match *self {
-            MyCustomError::IoError(ref err) => Some(err),
-            MyCustomError::TomlDeserializationError(ref err) => Some(err),
-            _ => None, // No underlying source for these variants
-        }
-    }
-}
-
-impl std::fmt::Display for MyCustomError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            MyCustomError::IoError(err) => write!(f, "IO Error: {}", err),
-            // MyCustomError::TomlDeserializationError(err) => write!(f, "TOML Error: {}", err),
-            MyCustomError::TomlDeserializationError(err) => write!(f, "TOML Error: {}", err),
-            // &MyCustomError::InvalidData(_) => todo!(),
-            &MyCustomError::InvalidData(_) => todo!(),
-            &MyCustomError::PortCollision(_) => todo!(),
-        }
-    }
-}
-
-// Implement the From trait for easy conversion from io::Error and toml::de::Error:
-impl From<io::Error> for MyCustomError {
-    fn from(error: io::Error) -> Self {
-        MyCustomError::IoError(error)
-    }
-}
-
-impl From<toml::de::Error> for MyCustomError {
-    fn from(error: toml::de::Error) -> Self {
-        MyCustomError::TomlDeserializationError(error)
-    }
-}
-
-#[derive(Debug)]
-pub enum ThisProjectError {
-    IoError(std::io::Error),
-    TomlDeserializationError(toml::de::Error), // May be depricated along with serde-crate
-    TomlVanillaDeserialStrError(String), // use without serede crate (good)
-    InvalidData(String),
-    PortCollision(String), 
-    NetworkError(String),
-    WalkDirError(walkdir::Error),
-    ParseIntError(ParseIntError),
-    GpgError(String),  // GPG-specific error type
-}
-
-// Implement From<walkdir::Error> for ThisProjectError
-impl From<walkdir::Error> for ThisProjectError {
-    fn from(err: walkdir::Error) -> Self {
-        ThisProjectError::WalkDirError(err)
-    }
-}
-
-// Implement From<ParseIntError> for ThisProjectError
-impl From<ParseIntError> for ThisProjectError {
-    fn from(err: ParseIntError) -> Self {
-        ThisProjectError::ParseIntError(err)
-    }
-}
-
-// Implement From<toml::de::Error> for ThisProjectError
-impl From<toml::de::Error> for ThisProjectError {
-    fn from(err: toml::de::Error) -> Self {
-        ThisProjectError::TomlDeserializationError(err)
-    }
-}
-
-// Implement the std::error::Error trait for ThisProjectError
-impl std::error::Error for ThisProjectError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match *self {
-            ThisProjectError::IoError(ref err) => Some(err),
-            ThisProjectError::TomlDeserializationError(ref err) => Some(err),
-            _ => None, 
-        }
-    }
-}
-
-// Implement the Display trait for ThisProjectError for easy printing 
-impl std::fmt::Display for ThisProjectError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match *self {
-            ThisProjectError::IoError(ref err) => write!(f, "IO Error: {}", err),
-            ThisProjectError::TomlDeserializationError(ref err) => write!(f, "TOML TomlDeserializationError  Error: {}", err),
-            ThisProjectError::TomlVanillaDeserialStrError(ref err) => write!(f, "TomlVanillaDeserialStrError TOML Error: {}", err),
-            ThisProjectError::InvalidData(ref msg) => write!(f, "Invalid Data: {}", msg),
-            ThisProjectError::PortCollision(ref msg) => write!(f, "Port Collision: {}", msg),
-            ThisProjectError::NetworkError(ref msg) => write!(f, "Network Error: {}", msg),
-            ThisProjectError::WalkDirError(ref err) => write!(f, "WalkDir Error: {}", err), // Add this arm
-            ThisProjectError::ParseIntError(ref err) => write!(f, "ParseInt Error: {}", err), // Add this arm
-            ThisProjectError::ParseIntError(ref err) => write!(f, "ParseInt Error: {}", err),
-            ThisProjectError::GpgError(_) => todo!(), // Add this arm
-            // ... add formatting for other error types
-        }
-    }
-}
-
-// Implement From<ThisProjectError> for MyCustomError
-impl From<ThisProjectError> for MyCustomError {
-    fn from(error: ThisProjectError) -> Self {
-        match error {
-            ThisProjectError::IoError(e) => MyCustomError::IoError(e),
-            ThisProjectError::TomlDeserializationError(e) => MyCustomError::TomlDeserializationError(e),
-            ThisProjectError::InvalidData(msg) => MyCustomError::InvalidData(msg),
-            ThisProjectError::PortCollision(msg) => MyCustomError::PortCollision(msg),
-            // ... add other conversions for your variants ...
-            _ => MyCustomError::InvalidData("Unknown error".to_string()), // Default case
-        }
-    }
-}
-
-
-// Implement the From trait to easily convert from other error types into ThisProjectError
-impl From<io::Error> for ThisProjectError {
-    fn from(err: io::Error) -> ThisProjectError {
-        ThisProjectError::IoError(err)
-    }
-}
 
 // impl From<toml::de::Error> for ThisProjectError {
 //     fn from(err: toml::de::Error) -> ThisProjectError {
@@ -3904,8 +4201,8 @@ fn initialize_uma_application() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    // Set the owner from the loaded metadata
-    let owner = user_metadata.uma_local_owner_user;
+    // Set the uma_local_owner_user from the loaded metadata
+    let uma_local_owner_user = user_metadata.uma_local_owner_user;
 
     // ... 2. Load user metadata from the now-existing uma.toml
     let user_metadata = match toml::from_str::<LocalUserUma>(&fs::read_to_string(uma_toml_path)?) {
@@ -4060,7 +4357,7 @@ fn initialize_uma_application() -> Result<(), Box<dyn std::error::Error>> {
     // // Get the owner from somewhere (e.g., user input or instance metadata)
     // let owner = "initial_owner".to_string(); // Replace with actual owner
 
-    create_team_channel(team_channel_name, owner);
+    create_team_channel(team_channel_name, uma_local_owner_user.clone());
     }
     
 
@@ -4180,38 +4477,51 @@ fn initialize_uma_application() -> Result<(), Box<dyn std::error::Error>> {
         println!("User added successfully!");
     }
 
-    // --- IP Validity Check and Flag Setting ---
-    let (ipv4_list, ipv6_list) = load_local_ip_lists(&user_metadata.uma_local_owner_user)?;
-    let (str_ipv4list, str_ipv6list) = load_local_iplists_as_stringtype(&user_metadata.uma_local_owner_user)?;
+    ////////////////////////////////////////////////////////////////////////// 
+    // --- Band: Network Band Finder: IP Validity Check and Flag Setting ---
+    /////////////////////////////////////////////////////////////////////////  
     
-    // currently only using ipv6
-    let local_user_ipv6_address = find_valid_local_owner_ip_address(
-        &ipv6_list
-    )
-        .ok_or(ThisProjectError::NetworkError("No valid local IPv6 address found".to_string()))?;
+    // let (ipv4_list, ipv6_list) = load_local_ip_lists(&user_metadata.uma_local_owner_user)?;
+    // let (str_ipv4list, str_ipv6list) = load_local_iplists_as_stringtype(&user_metadata.uma_local_owner_user)?;
+    
+    // // currently only using ipv6
+    // let local_user_ipv6_address = find_valid_local_owner_ip_address(
+    //     &ipv6_list
+    // )
+    //     .ok_or(ThisProjectError::NetworkError("No valid local IPv6 address found".to_string()))?;
 
-    // // Instead of cloning the first address, use the result of the selector:
-    // ipv6_addr_1 = Some(local_user_ipv6_address); // No need to clone or dereference as the variable now directly holds the Ipv6Addr
-    // ipv6_addr_2 = ipv6_addr_1.clone(); // Clone the selected address for ipv6_addr_2 if needed
+    // // // Instead of cloning the first address, use the result of the selector:
+    // // ipv6_addr_1 = Some(local_user_ipv6_address); // No need to clone or dereference as the variable now directly holds the Ipv6Addr
+    // // ipv6_addr_2 = ipv6_addr_1.clone(); // Clone the selected address for ipv6_addr_2 if needed
 
-    // get index of valid IP v6
-    let ip_index = find_ip_index(
-        &str_ipv4list,
-        &str_ipv6list,
-        &local_user_ipv6_address.to_string(), // as ip_address
-    );
+    // // get index of valid IP v6
+    // let ip_index = find_ip_index(
+    //     &str_ipv4list,
+    //     &str_ipv6list,
+    //     &local_user_ipv6_address.to_string(), // as ip_address
+    // );
 
-    debug_log!(
-        "Found IP/index <{:?} {:?}>", 
-        local_user_ipv6_address, 
-        ip_index
-    );
+    // debug_log!(
+    //     "Found IP/index <{:?} {:?}>", 
+    //     local_user_ipv6_address, 
+    //     ip_index
+    // );
+
+    
+    let (
+        network_type, 
+        network_index,
+        this_ipv4,
+        this_ipv6,
+    ) = get_band__find_valid_network_index_and_type(&uma_local_owner_user);
 
     // set ipv6 state-file
     // path: sync_data/ip.toml
-    write_sync_state_ip_availability_data(
-        ip_index.expect("REASON"),
-        "ipv6".to_string(),
+    write_band__save_network_band__type_index(
+        network_type,
+        network_index,
+        this_ipv4,
+        this_ipv6,
     );
 
     Ok(())
@@ -5140,77 +5450,77 @@ pub fn pearson_hash_base(input: &[u8]) -> Result<u8, std::io::Error> {
     Ok(hash)
 }
 
-/// Calculates Pearson hashes for a ReadySignal struct.
-///
-/// This function takes a `ReadySignal` and a list of salts (`local_user_salt_list`) as input.
-/// It calculates a Pearson hash for the signal's data combined with each salt in the list.
-/// The resulting hashes are then stored in the `rh` field of a new `ReadySignal` instance.
-///
-/// # Arguments
-///
-/// * `ready_signal`: The `ReadySignal` struct for which to calculate hashes.
-/// * `local_user_salt_list`: A slice of `u128` salt values.
-///
-/// # Returns
-///
-/// * `Option<ReadySignal>`: A new `ReadySignal` instance with the calculated hashes, or `None` if an error occurred during hash calculation or if required fields of the input signal are missing.
-fn add_pearson_hash_to_readysignal_struct(
-    ready_signal: &ReadySignal,
-    local_user_salt_list: &[u128],
-) -> Option<ReadySignal> {
-    // debug_log!(
-    //     "010101 calculate_and_add_pearson_hashes_to_ready_signal(): Input ReadySignal: {:?}",
-    //     &ready_signal
-    // );
+// /// Calculates Pearson hashes for a ReadySignal struct.
+// ///
+// /// This function takes a `ReadySignal` and a list of salts (`local_user_salt_list`) as input.
+// /// It calculates a Pearson hash for the signal's data combined with each salt in the list.
+// /// The resulting hashes are then stored in the `rh` field of a new `ReadySignal` instance.
+// ///
+// /// # Arguments
+// ///
+// /// * `ready_signal`: The `ReadySignal` struct for which to calculate hashes.
+// /// * `local_user_salt_list`: A slice of `u128` salt values.
+// ///
+// /// # Returns
+// ///
+// /// * `Option<ReadySignal>`: A new `ReadySignal` instance with the calculated hashes, or `None` if an error occurred during hash calculation or if required fields of the input signal are missing.
+// fn add_pearson_hash_to_readysignal_struct(
+//     ready_signal: &ReadySignal,
+//     local_user_salt_list: &[u128],
+// ) -> Option<ReadySignal> {
+//     // debug_log!(
+//     //     "010101 calculate_and_add_pearson_hashes_to_ready_signal(): Input ReadySignal: {:?}",
+//     //     &ready_signal
+//     // );
 
-    if let (Some(ready_timestamp), Some(ready_send_timestamp), Some(is_echo_send)) =
-        (ready_signal.rt, ready_signal.rst, ready_signal.re)
-    {
-        let mut data_to_hash = Vec::new();
-        data_to_hash.extend_from_slice(&ready_timestamp.to_be_bytes());
-        data_to_hash.extend_from_slice(&ready_send_timestamp.to_be_bytes());
-        data_to_hash.push(if is_echo_send { 1 } else { 0 });
+//     if let (Some(ready_timestamp), Some(ready_send_timestamp), Some(is_echo_send)) =
+//         (ready_signal.rt, ready_signal.rst, ready_signal.re)
+//     {
+//         let mut data_to_hash = Vec::new();
+//         data_to_hash.extend_from_slice(&ready_timestamp.to_be_bytes());
+//         data_to_hash.extend_from_slice(&ready_send_timestamp.to_be_bytes());
+//         data_to_hash.push(if is_echo_send { 1 } else { 0 });
 
-        // debug_log!(
-        //     "010101 calculate_and_add_pearson_hashes_to_ready_signal(): Data to hash: {:?}",
-        //     &data_to_hash
-        // );
+//         // debug_log!(
+//         //     "010101 calculate_and_add_pearson_hashes_to_ready_signal(): Data to hash: {:?}",
+//         //     &data_to_hash
+//         // );
 
-        let mut ready_signal_hash_list: Vec<u8> = Vec::new();
-        for salt in local_user_salt_list {
-            let mut salted_data = data_to_hash.clone();
-            salted_data.extend_from_slice(&salt.to_be_bytes());
+//         let mut ready_signal_hash_list: Vec<u8> = Vec::new();
+//         for salt in local_user_salt_list {
+//             let mut salted_data = data_to_hash.clone();
+//             salted_data.extend_from_slice(&salt.to_be_bytes());
 
-            let hash_result = pearson_hash_base(&salted_data);
-            // debug_log!(
-            //     "010101 calculate_and_add_pearson_hashes_to_ready_signal(): Hash Result: {:?}",
-            //     &hash_result
-            // );
+//             let hash_result = pearson_hash_base(&salted_data);
+//             // debug_log!(
+//             //     "010101 calculate_and_add_pearson_hashes_to_ready_signal(): Hash Result: {:?}",
+//             //     &hash_result
+//             // );
 
-            match hash_result {
-                Ok(hash) => ready_signal_hash_list.push(hash),
-                Err(e) => {
-                    debug_log!("Error calculating Pearson hash: {}", e);
-                    return None;
-                }
-            }
-        }
-        debug_log!(
-            "010101 calculate_and_add_pearson_hashes_to_ready_signal(): Calculated Hashes: {:?}",
-            &ready_signal_hash_list
-        );
+//             match hash_result {
+//                 Ok(hash) => ready_signal_hash_list.push(hash),
+//                 Err(e) => {
+//                     debug_log!("Error calculating Pearson hash: {}", e);
+//                     return None;
+//                 }
+//             }
+//         }
+//         debug_log!(
+//             "010101 calculate_and_add_pearson_hashes_to_ready_signal(): Calculated Hashes: {:?}",
+//             &ready_signal_hash_list
+//         );
 
-        Some(ReadySignal {
-            rt: Some(ready_timestamp),
-            rst: Some(ready_send_timestamp),
-            re: Some(is_echo_send),
-            rh: Some(ready_signal_hash_list),
-        })
-    } else {
-        debug_log!("010101 calculate_and_add_pearson_hashes_to_ready_signal(): Missing fields in ReadySignal. Returning None.");
-        None
-    }
-}
+//         Some(ReadySignal {
+//             rt: Some(ready_timestamp),
+//             rst: Some(ready_send_timestamp),
+//             b: Some(is_echo_send),
+//             rh: Some(ready_signal_hash_list),
+//         })
+//     } else {
+//         debug_log!("010101 calculate_and_add_pearson_hashes_to_ready_signal(): Missing fields in ReadySignal. Returning None.");
+//         None
+//     }
+// }
 
 /// Retrieves the salt list for a collaborator from their TOML configuration file.
 ///
@@ -5310,41 +5620,97 @@ fn calculate_pearson_hashlist_for_string(
 /// # Returns
 ///
 /// * `bool`: `true` if all hashes match, `false` otherwise.
+/// Verifies the Pearson hashes in a ReadySignal against a provided salt list.
+///
+/// This function calculates the expected hashes based on the `rt`, `rst`, and `re` fields of the `ReadySignal`
+/// and the provided `salt_list`. It then compares the calculated hashes to the `rh` field of the `ReadySignal`.
+///
+/// # Arguments
+///
+/// * `ready_signal`: The ReadySignal to verify.
+/// * `salt_list`: The list of salts to use for hash calculation.
+///
+/// # Returns
+///
+/// * `bool`: `true` if all hashes match, `false` otherwise.
+///
+/// In this version of the function, the match expression for the 
+/// pearson_hash_base call returns false by default in the case 
+/// of an error. Additionally, the function checks if the index i 
+/// is within the bounds of the rh field before accessing it. If 
+/// the index is out-of-bounds, the function returns false.
+///
+/// By returning false by default in the case of any errors, the 
+/// function ensures that the caller can easily determine whether 
+/// the hashes are valid or not.
 fn verify_readysignal_hashes(
-    ready_signal: &ReadySignal, 
+    ready_signal: &ReadySignal,
     salt_list: &[u128]
 ) -> bool {
-    if let (Some(rt), Some(rst), Some(re), Some(rh)) = 
-        (ready_signal.rt, ready_signal.rst, ready_signal.re, &ready_signal.rh) 
-    {
-        let mut data_to_hash = Vec::new();
-        data_to_hash.extend_from_slice(&rt.to_be_bytes());
-        data_to_hash.extend_from_slice(&rst.to_be_bytes()); 
-        data_to_hash.push(if re { 1 } else { 0 });
+    let mut data_to_hash = Vec::new();
+    data_to_hash.extend_from_slice(&ready_signal.rt.to_be_bytes());
+    data_to_hash.extend_from_slice(&ready_signal.rst.to_be_bytes());
+    data_to_hash.extend_from_slice(&ready_signal.b.to_be_bytes());
 
-        for (i, salt) in salt_list.iter().enumerate() {
-            let mut salted_data = data_to_hash.clone();
-            salted_data.extend_from_slice(&salt.to_be_bytes());
-            match pearson_hash_base(&salted_data) {
-                Ok(calculated_hash) => {
-                    if calculated_hash != rh[i] { // Compare with the received hash
-                        return false; // Hash mismatch
-                    }
-                }
-                Err(e) => {
-                    debug_log!("Error calculating Pearson hash: {}", e);
-                    return false; // Error during hash calculation
-                }
+    for (i, salt) in salt_list.iter().enumerate() {
+        let mut salted_data = data_to_hash.clone();
+        salted_data.extend_from_slice(&salt.to_be_bytes());
+        let calculated_hash = match pearson_hash_base(&salted_data) {
+            Ok(hash) => hash,
+            Err(e) => {
+                debug_log!("Error calculating Pearson hash: {}", e);
+                return false; // Error during hash calculation
             }
+        };
+
+        if i >= ready_signal.rh.len() {
+            debug_log!("Out-of-bounds index error when accessing rh field");
+            return false; // Out-of-bounds index error
         }
 
-        // All hashes match
-        true 
-    } else {
-        // Missing fields in ReadySignal, consider this a failure 
-        false 
+        if calculated_hash != ready_signal.rh[i] { // Compare with the received hash
+            return false; // Hash mismatch
+        }
     }
+
+    // All hashes match
+    true
 }
+
+
+
+// fn verify_readysignal_hashes(
+//     ready_signal: &ReadySignal, 
+//     salt_list: &[u128]
+// ) -> bool {
+
+//     let mut data_to_hash = Vec::new();
+//     data_to_hash.extend_from_slice(&ready_signal.rt.to_be_bytes());
+//     data_to_hash.extend_from_slice(&ready_signal.rst.to_be_bytes()); 
+//     data_to_hash.extend_from_slice(&ready_signal.b.to_be_bytes()); 
+
+//     for (i, salt) in salt_list.iter().enumerate() {
+//         let mut salted_data = data_to_hash.clone();
+//         salted_data.extend_from_slice(&salt.to_be_bytes());
+//         match pearson_hash_base(&salted_data) {
+//             Ok(calculated_hash) => {
+//                 if calculated_hash != rh[i] { // Compare with the received hash
+//                     return false; // Hash mismatch
+//                 }
+//             }
+//             Err(e) => {
+//                 debug_log!("Error calculating Pearson hash: {}", e);
+//                 return false; // Error during hash calculation
+//             }
+//         }
+        
+//     // compare to hash in struct
+//     if calculated_hash != ready_signal.rh[i] { // Compare with the received hash
+//         return false; // Hash mismatch
+//     }
+//     // All hashes match
+//     true
+// }
 
 fn sync_flag_ok_or_wait(wait_this_many_seconds: u64) {
     // check for quit
@@ -5550,16 +5916,85 @@ struct SendFile {
     intray_hash_list: Option<Vec<u8>>, // N hashes of intray_this_send_timestamp + gpg_encrypted_intray_file
 }
 
+
+// #[derive(Serialize, Deserialize, Debug)] // Add Serialize/Deserialize for sending/receiving
+// struct ProtoReadysignal {
+//     rt: Option<u64>, // ready signal timestamp: last file obtained timestamp
+//     rst: Option<u64>, // send-time: generate_terse_timestamp_freshness_proxy(); for replay-attack protection
+//     nt: Option<String>, // Network Type (e.g. ipv6 vs. ipv4)
+//     ni: Option<u8>, // Network Index (e.g. which ipv6 in the list)
+//     rh: Option<Vec<u8>>, // N hashes of rt + re
+// }
+
+
 /// ReadySignal struct
 /// - Contents are 'Option<T>' so that assembly and inspection can occur in steps.
 /// - Terse names to reduce network traffic, as an exceptional circumstance
 /// - Ready-signals are the most commonly sent and most disposable
 #[derive(Serialize, Deserialize, Debug)] // Add Serialize/Deserialize for sending/receiving
 struct ReadySignal {
-    rt: Option<u64>, // ready signal timestamp: last file obtained timestamp
-    rst: Option<u64>, // send-time: generate_terse_timestamp_freshness_proxy(); for replay-attack protection
-    re: Option<bool>, // echo_send
-    rh: Option<Vec<u8>>, // N hashes of rt + re
+    rt: u64, // ready signal timestamp: last file obtained timestamp
+    rst: u64, // send-time: generate_terse_timestamp_freshness_proxy(); for replay-attack protection
+    b: u8, // Network Index (e.g. which ipv6 in the list)
+    rh: Vec<u8>, // N hashes of rt + re
+}
+
+
+
+/// Serializes a ReadySignal into a byte vector
+/// Does NOT use serde.
+fn serialize_ready_signal(ready_signal: &ReadySignal) -> Result<Vec<u8>, ThisProjectError> {
+    let mut bytes = Vec::new();
+
+    // Add timestamps (rt and rst)
+    bytes.extend_from_slice(&ready_signal.rt.to_be_bytes());
+    bytes.extend_from_slice(&ready_signal.rst.to_be_bytes());
+
+    // Add Network band byte as u8 bytes
+    bytes.extend_from_slice(&ready_signal.b.to_be_bytes());
+
+    // Add hash list
+    bytes.extend_from_slice(&ready_signal.rh);
+
+    Ok(bytes)
+}
+
+/// Calculates Pearson hashes for a ReadySignal's fields. Hashes `rt`, `rst`, `nt`, `ni`, and salts.
+///
+/// Args:
+///     rt: The `rt` timestamp.
+///     rst: The `rst` timestamp.
+///     nt: The network type string.
+///     ni: The network index.
+///     local_user_salt_list: The list of salts for hashing.
+///
+/// Returns:
+///     Result<Vec<u8>, ThisProjectError>: The calculated hash list, or an error if hashing fails.
+fn calculate_ready_signal_hashes(
+    rt: u64,
+    rst: u64,
+    nt: &str,
+    ni: u8,
+    local_user_salt_list: &[u128],
+) -> Result<Vec<u8>, ThisProjectError> {
+    let mut data_to_hash = Vec::new();
+    data_to_hash.extend_from_slice(&rt.to_be_bytes());
+    data_to_hash.extend_from_slice(&rst.to_be_bytes());
+    data_to_hash.extend_from_slice(nt.as_bytes());
+    data_to_hash.extend_from_slice(&ni.to_be_bytes());
+
+    let mut ready_signal_hash_list: Vec<u8> = Vec::new();
+    for salt in local_user_salt_list {
+        let mut salted_data = data_to_hash.clone();
+        salted_data.extend_from_slice(&salt.to_be_bytes());
+
+        match pearson_hash_base(&salted_data) {
+            Ok(hash) => ready_signal_hash_list.push(hash),
+            Err(e) => return Err(ThisProjectError::IoError(e)), // Directly return the error
+        }
+    }
+
+    Ok(ready_signal_hash_list)
 }
 
 // /// Proto Safety Layer for processing GotItSignal data
@@ -6465,7 +6900,7 @@ fn get_latestreceivedfromme_file_timestamp_plaintextstatefile(
         },
         Err(e) if e.kind() == ErrorKind::NotFound => {
             debug_log!(
-                "Error getting timestamp: {}. Using0 get_latestreceivedfromme_file_timestamp_plaintextstatefile",
+                "Error: glrfftptsf() getting timestamp: e'{}'e. Using0 inside get_latestreceivedfromme_file_timestamp_plaintextstatefile()",
                 e,
             );
             // File not found, initialize to 0
@@ -6498,7 +6933,7 @@ fn actual_latest_received_from_rc_file_timestamp(
     let team_channel_path = PathBuf::from("project_graph_data/team_channels").join(team_channel_name);
 
     debug_log!(
-        "get_latestreceivedfromme_file_timestamp_plaintextstatefile(): Starting. team_channel_path: {:?}, collaborator_name: {}",
+        "get_latestreceivedfromme_file_timestamp_plaintextstatefile(): Starting GLRFRCFT team_channel_path: {:?}, collaborator_name: {}",
         team_channel_path, collaborator_name
     );
 
@@ -6510,16 +6945,16 @@ fn actual_latest_received_from_rc_file_timestamp(
 
         // 2. Check for TOML files:
         if path.is_file() && path.extension().map_or(false, |ext| ext == "toml") {
-            debug_log!("get_latestreceivedfromme_file_timestamp_plaintextstatefile(): Found TOML file: {:?}", path);
+            debug_log!("GLRFRCFT(): Found TOML file: {:?}", path);
 
             // 3. Read and parse the TOML file:
             match fs::read_to_string(path).and_then(|content| Ok(toml::from_str::<Value>(&content))) {
                 Ok(toml_data) => {
-                    debug_log!("get_latestreceivedfromme_file_timestamp_plaintextstatefile(): Successfully parsed TOML file.");
+                    debug_log!("GLRFRCFT(): Successfully parsed TOML file.");
 
                     // 4. Check file ownership:
                     if toml_data.clone()?.get("owner").and_then(Value::as_str) == Some(collaborator_name) {
-                        debug_log!("get_latestreceivedfromme_file_timestamp_plaintextstatefile(): File owned by collaborator.");
+                        debug_log!("GLRFRCFT(): File owned by collaborator.");
 
                         // 5. Extract and update latest_timestamp:
                         if let Some(timestamp) = toml_data?
@@ -6527,16 +6962,16 @@ fn actual_latest_received_from_rc_file_timestamp(
                             .and_then(Value::as_integer)
                             .map(|ts| ts as u64)
                         {
-                            debug_log!("get_latestreceivedfromme_file_timestamp_plaintextstatefile(): Found updated_at_timestamp: {}", timestamp);
+                            debug_log!("GLRFRCFT(): Found updated_at_timestamp: {}", timestamp);
 
                             latest_timestamp = latest_timestamp.max(timestamp); // Keep the latest
                         } else {
-                            debug_log!("get_latestreceivedfromme_file_timestamp_plaintextstatefile(): 'updated_at_timestamp' field not found or invalid in TOML file: {:?}", path);
+                            debug_log!("GLRFRCFT(): 'updated_at_timestamp' field not found or invalid in TOML file: {:?}", path);
                         }
                     }
                 }
                 Err(e) => {
-                    debug_log!("get_latestreceivedfromme_file_timestamp_plaintextstatefile(): Error reading or parsing TOML file: {:?} - {}", path, e);
+                    debug_log!("GLRFRCFT(): Error reading or parsing TOML file: {:?} - {}", path, e);
                     // Handle error as needed (e.g., log and continue, or return an error)
                     // return Err(ThisProjectError::from(e)); //Example: Return the error.
                     continue; // Or continue to the next file.
@@ -6545,7 +6980,7 @@ fn actual_latest_received_from_rc_file_timestamp(
         }
     }
 
-    debug_log!("get_latestreceivedfromme_file_timestamp_plaintextstatefile(): Returning latest timestamp: {}", latest_timestamp);
+    debug_log!("GLRFRCFT(): End Returning latest timestamp: {}", latest_timestamp);
 
     Ok(latest_timestamp)
 }
@@ -6643,100 +7078,309 @@ fn set_latest_received_from_rc_file_timestamp_plaintext(
     //         // }
     //     }
     // };
-    
-/// Sends a ReadySignal to the specified target address.
-///
-/// This function encapsulates the logic for sending a ReadySignal.  It handles
-/// timestamp generation, hash calculation, serialization, and the actual sending
-/// of the signal via UDP.
-///
-/// # Arguments
-///
-/// * `target_addr`: The `SocketAddr` of the recipient.
-/// * `local_user_salt_list`: A slice of `u128` salt values for hash calculation.
-/// * `last_received_timestamp`: The timestamp of the last received file.
-/// * `is_echo_send`:  A boolean indicating whether this is an echo send.
-///
-/// # Returns
-///
-/// * `Result<(), ThisProjectError>`: `Ok(())` if the signal was sent successfully, or a `ThisProjectError`
-///   if an error occurred.
+
+
+// /// Sends a ReadySignal to the specified target address.
+// ///
+// /// This function encapsulates the logic for sending a ReadySignal.  It handles
+// /// timestamp generation, hash calculation, serialization, and the actual sending
+// /// of the signal via UDP.
+// /// uses band_network_type to select what ipaddress to use
+// ///
+// /// # Arguments
+// ///
+// /// * local_user_salt_list: &[u128], 
+// /// * local_user_ipv4_address: &Ipv4Addr, 
+// /// * local_user_ipv6_address: &Ipv6Addr, 
+// /// * local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip: u16,
+// /// * last_received_timestamp: u64, // for rst
+// /// * network_type: String, // for nt
+// /// * network_index: u8, // for ni
+// ///
+// /// # Returns
+// /// ?
 // fn send_ready_signal(
-//     local_user_salt_list: Vec<u128>, 
-//     local_user_ipv6_addr_list: Vec<Ipv6Addr>,
+//     local_user_salt_list: &[u128], 
+//     local_user_ipv4_address: &Ipv4Addr, 
+//     local_user_ipv6_address: &Ipv6Addr, 
 //     local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip: u16,
-//     last_received_timestamp: u64,
-//     is_echo_send: bool,
+//     last_received_timestamp: u64, // for rst
+//     network_type: String, // for nt
+//     network_index: u8, // for ni
 // ) -> Result<(), ThisProjectError> {
-fn send_ready_signal(
-    local_user_salt_list: &[u128], 
-    local_user_ipv6_address: &Ipv6Addr, 
-    local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip: u16,
-    last_received_timestamp: u64,
-    is_echo_send: bool,
-) -> Result<(), ThisProjectError> {
- 
-    // 4.1 Create the initial ReadySignal (without hashes)
-    let proto_ready_signal = ReadySignal {
-        rt: Some(last_received_timestamp),
-        rst: Some(get_current_unix_timestamp()),
-        re: Some(is_echo_send),
-        rh: None,
-    };
-
-    // 4.2 complete ready signal struct with pearson hash
-    let ready_signal_to_send_from_this_loop = add_pearson_hash_to_readysignal_struct(
-        &proto_ready_signal,
-        &local_user_salt_list,
-    ).expect("send_ready_signal() Failed to add hash to ReadySignal"); 
+//     /*
+//     taget address depends on the nt/ni netowrk band info:
+//     if nt = ipv6
+//     else if nt = ipv4
     
-    // 5. Serialize the ReadySignal
-    let serialized_readysignal_data = serialize_ready_signal(
-        &ready_signal_to_send_from_this_loop
-    ).expect("inHLOD send_ready_signal() err Failed to serialize ReadySignal, ready_signal_to_send_from_this_loop"); 
+//     */
+//     let for_rst = get_current_unix_timestamp();
+    
+//     // calculate_ready_signal_hashes
+//     let hash_list = calculate_ready_signal_hashes(
+//         last_received_timestamp, // rt: u64,
+//         for_rst, // rst: u64,
+//         network_type, // nt: &str,
+//         network_index, // ni: u8,
+//         local_user_salt_list, // local_user_salt_list: &[u128],
+//     );
+    
+//     // 4.1 Create the initial ReadySignal (without hashes)
+//     let ready_signal_struct = ReadySignal {
+//         rt: last_received_timestamp,
+//         rst: for_rst,
+//         b: 
+//         // nt: network_type,
+//         // ni: network_index,
+//         rh: hash_list,
+//     };
+    
+//     // 5. Serialize the ReadySignal
+//     let serialized_readysignal_data = serialize_ready_signal(
+//         &ready_signal_struct
+//     ).expect("inHLOD send_ready_signal() err Failed to serialize ReadySignal, ready_signal_struct"); 
 
-    // --- Inspect Serialized Data ---
-    debug_log!("inHLOD send_ready_signal() inspect Serialized Data: {:?}", ready_signal_to_send_from_this_loop);
-    debug_log!("inHLOD send_ready_signal() serialized_readysignal_data: {:?}", serialized_readysignal_data);
+//     // --- Inspect Serialized Data ---
+//     debug_log!("inHLOD send_ready_signal() inspect Serialized Data: {:?}", ready_signal_struct);
+//     debug_log!("inHLOD send_ready_signal() serialized_readysignal_data: {:?}", serialized_readysignal_data);
 
-    // TODO possibly have some mechanism to try addresses until one works?
-    // 6. Send the signal @ 
-    //    local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
-    // TODO figure out way to specify ipv6, 4, prioritizing, trying, etc.
-    // (in theory...you could try them all?)
-    // Select the first IPv6 address if available
+//     // 6. Send the signal based on network_type:
+//     // uses band_network_type to select what ipaddress to use
+//     /*
+//     if network_type == "ipv6"
+//     if network_type == "ipv4"
+//     other (future: CB radio)
+//     else
+//     */
+    
+//     //    local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
+//     // TODO figure out way to specify ipv6, 4, prioritizing, trying, etc.
+//     // (in theory...you could try them all?)
+//     // Select the first IPv6 address if available
 
 
 
-    // Send the readysignal_data to the collaborator's ready_port
-    // let target_addr = SocketAddr::new(
-    //     IpAddr::V6(ipv6_address_copy), // Use the copied address
-    //     local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
-    // ); 
-    let target_addr = SocketAddr::new(
-        IpAddr::V6(*local_user_ipv6_address), // Directly use the provided address
-        local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip,
-    );
+//     // Send the readysignal_data to the collaborator's ready_port
+//     // let target_addr = SocketAddr::new(
+//     //     IpAddr::V6(ipv6_address_copy), // Use the copied address
+//     //     local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
+//     // ); 
+//     // let target_addr = SocketAddr::new(
+//     //     IpAddr::V6(*local_user_ipv6_address), // Directly use the provided address
+//     //     local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip,
+//     // );
 
-    // Log before sending
-    debug_log!(
-        "inHLOD send_ready_signal() Attempting to send ReadySignal to {}: {:?}", 
-        target_addr, 
-        local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
-    );
+//     // Log before sending
+//     debug_log!(
+//         "inHLOD send_ready_signal() Attempting to send ReadySignal to {}: {:?}", 
+//         target_addr, 
+//         local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
+//     );
 
-    // // If sending to the first address succeeds, no need to iterate further
+//     // // If sending to the first address succeeds, no need to iterate further
 
-    if send_data(&serialized_readysignal_data, target_addr).is_ok() {
-        debug_log("inHLOD send_ready_signal() 6. Successfully sent ReadySignal to {} (first address)");
-        return Ok(()); // Exit the thread
-    } else {
-        debug_log("inHLOD send_ready_signal() err 6. Failed to send ReadySignal to {} (first address)");
-        return Err(ThisProjectError::NetworkError("Failed to send ReadySignal".to_string())); // Return an error
+//     // if send_data(&serialized_readysignal_data, target_addr).is_ok() {
+//     //     debug_log("inHLOD send_ready_signal() 6. Successfully sent ReadySignal to {} (first address)");
+//     //     return Ok(()); // Exit the thread
+//     // } else {
+//     //     debug_log("inHLOD send_ready_signal() err 6. Failed to send ReadySignal to {} (first address)");
+//     //     return Err(ThisProjectError::NetworkError("Failed to send ReadySignal".to_string())); // Return an error
+//     // }
+//     Ok(())
+// }
+
+
+#[derive(Debug)]
+enum CompressionError {
+    InvalidNetworkType,
+    NetworkIndexOutOfRange,
+}
+
+
+
+
+/// compress type and index band info into one byte
+/// 100's place is 0 for "ipv4" or 1 for "ipv6"
+/// 0-99 in ones and tens place are the index u8 value
+///
+/// error handling: if network_type is not "ipv4" or "ipv6", panic!
+fn compress_band_data_byte(
+    network_type: &str,
+    network_index: u8,
+) -> Result<u8, CompressionError> {
+    let mut band_byte: u8 = 0;
+
+    // 1. make hundred's digit
+    match network_type {
+        "ipv4" => band_byte |= 0,
+        "ipv6" => band_byte |= 1 << 7,
+        _ => return Err(CompressionError::InvalidNetworkType),
+    }
+
+    // 2. make 0-99 index number
+    if network_index > 99 {
+        return Err(CompressionError::NetworkIndexOutOfRange);
+    }
+    band_byte |= network_index;
+
+    // 3. make byte
+    // 4. return byte
+    Ok(band_byte)
+}
+
+/// decompress type and index band info from one byte
+/// 100's place is 0 for "ipv4" or 1 for "ipv6"
+/// 0-99 in ones and tens place are the index u8 value
+///
+/// Note: it is possible for this to output a network index
+/// that does not exist
+///
+/// Since all possible byte values are accounted for, 
+/// the function will not error for any input.
+fn decompress_banddata_byte(
+        band_byte: u8,
+    ) -> (String, u8) {
+        let network_type = if band_byte & (1 << 7) != 0 {
+            "ipv6".to_string()
+        } else {
+            "ipv4".to_string()
+        };
+
+        // 2. get 0-99 index number
+        let network_index = band_byte & 0b01111111;
+
+        // 4. return  (network_type, network_index)
+        (network_type, network_index)
     }
 
 
+// /// compress type and index band info into one byte
+// /// 100's place is 0 for "ipv4" or 1 for "ipv6"
+// /// 0-99 in ones and tens place are the index u8 value
+// ///
+// /// error handling?
+// fn compress_band_data_byte(
+//         network_type: String,
+//         network_index: u8,
+//     ) -> u8 {
         
+//         let mut band_byte: u8;
+        
+//         // 1. make hundred's digit
+        
+//         // 2. make 0-99 index number
+    
+//         // 3. make byte
+        
+//         // 4. return byte
+//         band_byte
+//     }
+
+
+// /// decompress type and index band info from one byte
+// /// 100's place is 0 for "ipv4" or 1 for "ipv6"
+// /// 0-99 in ones and tens place are the index u8 value
+// ///
+// /// error handling?
+// fn decompress_banddata_byte(
+//         band_byte: u8,
+//     ) -> (String, u8) {
+        
+//         let mut band_byte: u8;
+        
+//         // 1. get hundred's digit
+        
+//         // set network_type
+        
+//         // 2. get 0-99 index number
+        
+//         // set network_index
+        
+//         // 4. return  (network_type, network_index)
+//         (network_type, network_index)
+//     }
+
+/// Sends a ReadySignal to the specified target address, selecting the IP address based on the network type.
+///
+/// Handles hash calculation, serialization, and sending the signal via UDP.
+///
+/// Args:
+///     local_user_salt_list: A slice of `u128` salt values for hash calculation.
+///     local_user_ipv4_address: The local user's IPv4 address.
+///     local_user_ipv6_address: The local user's IPv6 address.
+///     target_port: The target port on the remote machine.
+///     last_received_timestamp: The timestamp of the last received file.
+///     network_type: A string slice representing the network type ("ipv6" or "ipv4").
+///     network_index: The index of the valid IP address in the local user's IP list (included in ReadySignal, but not used for IP selection).
+///
+/// Returns:
+///     Result<(), ThisProjectError>: `Ok(())` on success, or a `ThisProjectError` if an error occurred.
+fn send_ready_signal(
+    local_user_salt_list: &[u128],
+    local_user_ipv4_address: &Ipv4Addr,
+    local_user_ipv6_address: &Ipv6Addr,
+    target_port: u16,
+    last_received_timestamp: u64,
+    network_type: &str,
+    network_index: u8,
+) -> Result<(), ThisProjectError> {
+    debug_log!("send_ready_signal: Starting...");
+
+    // 1. Calculate hashes
+    let current_timestamp = get_current_unix_timestamp();
+    let hashes_result = calculate_ready_signal_hashes(
+        last_received_timestamp,
+        current_timestamp,
+        network_type,
+        network_index,
+        local_user_salt_list,
+    );
+    let hashes = match hashes_result {
+        Ok(h) => h,
+        Err(e) => return Err(e),
+    };
+
+    // let b_band_data = compress_band_data_byte(
+    //     network_type,
+    //     network_index,
+    // );
+
+    let b_band_data = match compress_band_data_byte(network_type, network_index) {
+        Ok(data) => data,
+        Err(e) => {
+            // Handle the error here. You could print an error message, return from the function,
+            // or do something else depending on your specific needs.
+            eprintln!("Error compressing band data: {:?}", e);
+            return Ok(());
+        }
+    };
+
+    // 2. Create ReadySignal 
+    let ready_signal = ReadySignal {
+        rt: last_received_timestamp,
+        rst: current_timestamp,
+        b: b_band_data,
+        rh: hashes,
+    };
+    debug_log!("send_ready_signal: ReadySignal created: {:?}", ready_signal);
+
+    // 3. Serialize
+    let serialized_signal = serialize_ready_signal(&ready_signal)?;
+    debug_log!("send_ready_signal: ReadySignal serialized.");
+
+    // 4. Determine target IP based on network_type:
+    let ip_addr = match network_type {
+        "ipv6" => IpAddr::V6(*local_user_ipv6_address),
+        "ipv4" => IpAddr::V4(*local_user_ipv4_address),
+        _ => return Err(ThisProjectError::NetworkError("Invalid network type".into())),
+    };
+    let target_addr = SocketAddr::new(ip_addr, target_port);
+
+    // 5. Send the signal
+    debug_log!("send_ready_signal: Sending ReadySignal to: {:?}", target_addr);
+    send_data(&serialized_signal, target_addr)?;
+    debug_log!("send_ready_signal: ReadySignal sent successfully.");
+
     Ok(())
 }
 
@@ -6744,7 +7388,9 @@ fn send_ready_signal(
 /// Sends a Gotit to the specified target address.
 fn send_gotit_signal(
     local_user_salt_list: &[u128], 
-    local_user_ipv6_address: &Ipv6Addr, 
+    local_user_ipv4_address: &Ipv4Addr,
+    local_user_ipv6_address: &Ipv6Addr,
+    network_type: &str,  // Add network type
     local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip: u16,
     received_file_updatedat_timestamp: u64,
 ) -> Result<(), ThisProjectError> {
@@ -6781,20 +7427,15 @@ fn send_gotit_signal(
     // --- Inspect Serialized Data ---
     debug_log!("inHLOD send_gotit_signal() serialized_gotitsignal_data: {:?}", serialized_gotitsignal_data);
 
-    // TODO likely later needed to have some mechanism to try addresses until one works?
-    // 6. Send the signal @ 
-    //    local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip
-    // TODO figure out way to specify ipv6, 4, prioritizing, trying, etc.
-    // (in theory...you could try them all?)
-    // Select the first IPv6 address if available
+    // Determine target IP based on network_type
+    let detected_lou_ip_addr = match network_type {
+        "ipv6" => IpAddr::V6(*local_user_ipv6_address),
+        "ipv4" => IpAddr::V4(*local_user_ipv4_address),
+        _ => return Err(ThisProjectError::NetworkError("Invalid network type in send_gotit_signal".into())),
+    };
 
-    // Send the gotitsignal_data to the collaborator's gotit_port
-    // let target_addr = SocketAddr::new(
-    //     IpAddr::V6(ipv6_address_copy), // Use the copied address
-    //     local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip
-    // ); 
     let target_addr = SocketAddr::new(
-        IpAddr::V6(*local_user_ipv6_address), // Directly use the provided address
+        detected_lou_ip_addr,
         local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip,
     );
 
@@ -6863,13 +7504,13 @@ fn handle_local_owner_desk(
     // find a valid local owner ip address
     // e.g. to pass a single ip to later functions
     // set empty and fill later or exit
-    let local_user_ipv6_address: Option<Ipv6Addr> = find_valid_local_owner_ip_address(
-        &local_owner_desk_setup_data.local_user_ipv6_addr_list,
-        );
+    // let local_user_ipv6_address: Option<Ipv6Addr> = find_valid_local_owner_ip_address(
+    //     &local_owner_desk_setup_data.local_user_ipv6_addr_list,
+    //     );
 
-    let local_user_ipv6_address = local_user_ipv6_address.ok_or(
-        ThisProjectError::NetworkError("No valid local IPv6 address found".to_string()),
-    )?;
+    // let local_user_ipv6_address = local_user_ipv6_address.ok_or(
+    //     ThisProjectError::NetworkError("No valid local IPv6 address found".to_string()),
+    // )?;
     // // set empty and fill later or exit
     // let mut local_user_ipv6_address: Ipv6Addr;
     
@@ -6900,24 +7541,70 @@ fn handle_local_owner_desk(
     let remote_collaborator_name = local_owner_desk_setup_data.remote_collaborator_name.clone();
                 
     // Instead of storing Option<&Ipv6Addr>, store the owned Ipv6Addr
-    let mut ipv6_addr_1: Option<Ipv6Addr> = None;
-    let mut ipv6_addr_2: Option<Ipv6Addr> = None;
+    // let local_user_ipv6_address_2 = local_user_ipv6_address.clone();
     
     
     /*
     Works but moving to new more future-proofed system
     */
-    let ipv6_addr_list = local_owner_desk_setup_data.local_user_ipv6_addr_list.clone();
+    
+    // let ipv6_addr_list = local_owner_desk_setup_data.local_user_ipv6_addr_list.clone();
 
-    // Clone the address when extracting it
-    if let Some(addr) = ipv6_addr_list.get(0) {
-        ipv6_addr_1 = Some(*addr); // Dereference and clone the IPv6 address
-        ipv6_addr_2 = Some(*addr);
-    }
+    // // Clone the address when extracting it
+    // if let Some(addr) = ipv6_addr_list.get(0) {
+    //     ipv6_addr_1 = Some(*addr); // Dereference and clone the IPv6 address
+    //     ipv6_addr_2 = Some(*addr);
+    // }
+    
+    /////////////////////////////////////////
+    // Band: Load Network Band Configuration
+    /////////////////////////////////////////
+    /*
+    Load from sync state files:
+    - network_type
+    - network_index
+    - this_ipv4
+    - this_ipv6
+    
+    nt/ni (typd/index) will be used for making and sending ReadySignal structs
+    network Type + ipv6/ipv4 will be used to listen for files
+    
+    */
+    
+    
+    
+    // Load band configuration data
+    let (
+        band_network_type, 
+        band_network_index, 
+        band_local_user_ipv4_address, 
+        band_local_user_ipv6_address,
+    ) = match read_band__network_config_type_index_specs() {
+        Ok(data) => data,
+        Err(e) => {
+            // Handle the error (e.g., log and return or use default values)
+            debug_log!("Error reading band configuration: error -> e'{}'e ", e);
+            return Err(e); // Or handle differently
+        }
+    };
+    // TODO maybe need to copy a clone of band into
+    
+    
 
-    // 1. Use find_valid_local_owner_ip_address to get a valid address or an error.    
-    let local_user_ipv6_address = find_valid_local_owner_ip_address(&local_owner_desk_setup_data.local_user_ipv6_addr_list)
-        .ok_or(ThisProjectError::NetworkError("No valid local IPv6 address found".to_string()))?;
+    
+    // let (
+    //     network_type,
+    //     network_index,
+    //     this_ipv4,
+    //     this_ipv6,
+    //     ) = read_band__network_config_type_index_specs();
+    
+    
+    // // 1. Use find_valid_local_owner_ip_address to get a valid address or an error.    
+    // let local_user_ipv6_address = find_valid_local_owner_ipv6_address(
+    //     &local_owner_desk_setup_data.local_user_ipv6_addr_list
+    // )
+    //     .ok_or(ThisProjectError::NetworkError("No valid local IPv6 address found".to_string()))?;
         
     
     // let option_ipindexint = read_sync_state_ip_availability_data();
@@ -6961,9 +7648,7 @@ fn handle_local_owner_desk(
     // and return the list item
     // challenge: the type of the output: ipv4 and ipv6 are not the same type
 
-    // Instead of cloning the first address, use the result of the selector:
-    ipv6_addr_1 = Some(local_user_ipv6_address); // No need to clone or dereference as the variable now directly holds the Ipv6Addr
-    ipv6_addr_2 = ipv6_addr_1.clone(); // Clone the selected address for ipv6_addr_2 if needed
+
 
     // // get index of valid IP v6
     // let ip_index = find_ip_index(
@@ -6979,11 +7664,13 @@ fn handle_local_owner_desk(
 
     // // set ipv6 state-file
     // // path: sync_data/ip.toml
-    // write_sync_state_ip_availability_data(
+    // write_band__save_network_band__type_index(
     //     ip_index.expect("REASON"),
     // );
 
     loop { // 1. start overall loop to restart whole desk
+        
+        
         let remote_collaborator_name_for_thread = remote_collaborator_name.clone();
         let salt_list_1_drone_clone = salt_list_1.clone();
 
@@ -7037,7 +7724,7 @@ fn handle_local_owner_desk(
         ) {
             Ok(temp_extractor) => temp_extractor, 
             Err(e) => {
-                debug_log!("HLOD Error getting timestamp: {}. Using 0.", e);
+                debug_log!("HLOD Error getting timestamp via actual_latest_received_from_rc_file_timestamp: e'{}'e. Using 0.", e);
                 0 // Use a default timestamp (0) if an error occurs.
             }
         };
@@ -7053,11 +7740,16 @@ fn handle_local_owner_desk(
             latest_received_from_rc_file_timestamp, // for timestamp
         );
         
+        // clone to avoid closure issues:
+        let band_network_type_clone = band_network_type.clone();
+        let salty_the_clone_list = local_owner_desk_setup_data.local_user_salt_list.clone();
+        
         // --- 1.5 Drone Loop to Send ReadySignals ---
         let ready_thread = thread::spawn(move || {
             ////////////////////////////////////
             // Drone Loop to Send ReadySignals  (hlod)
             //////////////////////////////////
+
             loop {
                 // 1.1 Wait (and check for exit Uma)  this waits and checks N times: for i in 0..N {
                 for i in 0..5 {
@@ -7090,21 +7782,38 @@ fn handle_local_owner_desk(
                 ) {
                     Ok(temp_extractor) => temp_extractor, 
                     Err(e) => {
-                        debug_log!("HLOD GotItSignal Error getting timestamp: {}. Using 0.", e);
+                        debug_log!("HLOD GotItSignal Error getting timestamp via get_latestreceivedfromme_file_timestamp_plaintextstatefile: e'{}'e. Using 0.", e);
                         0 // Use a default timestamp (0) if an error occurs.
                     }
                 };
 
-                // 1.3 Send Ready Signal (using a function)        
-                if let Some(addr_1) = ipv6_addr_1 {
-                    send_ready_signal(
-                        &salt_list_1_drone_clone,
-                        &addr_1,
-                        readyport_1,
-                        latest_received_from_rc_file_timestamp,
-                        false,
-                    );
-                }
+
+                
+                // 1.3 Send Ready Signal (using a function)
+                send_ready_signal(
+                    &salty_the_clone_list, // local_user_salt_list: &[u128], 
+                    &band_local_user_ipv4_address, // local_user_ipv4_address: &Ipv4Addr, 
+                    &band_local_user_ipv6_address, // local_user_ipv6_address: &Ipv6Addr, 
+                    local_owner_desk_setup_data.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip,
+                    latest_received_from_rc_file_timestamp, // last_received_timestamp: u64, // for rst
+                    &band_network_type_clone, // network_type: String, // for nt
+                    band_network_index, //network_index: u8, // for ni
+                );
+                                    
+                // if let Some(addr_1) = ipv6_addr_1 {
+                //     send_ready_signal(
+                //         &salt_list_1_drone_clone,
+                //         &addr_1,
+                //         readyport_1,
+                //         latest_received_from_rc_file_timestamp,
+                //         false,
+                //     );
+                // }
+                
+                
+                
+                
+                
                 debug_log!("\n");
             } // end drone loop (ready-signals)
         }); // end ready_thread
@@ -7131,12 +7840,28 @@ fn handle_local_owner_desk(
             }
 
             // --- 3.4 Create UDP intray socket ---
+            /*
+            band_network_type, 
+            band_local_user_ipv4_address, 
+            band_local_user_ipv6_address,
+            */
             debug_log("HLOD Creating intray socket listening UDP...");
-            let intray_socket = create_udp_socket(
-                &local_owner_desk_setup_data.local_user_ipv6_addr_list,
+            let intray_socket = create_local_udp_socket(
+                &band_network_type, 
+                &band_local_user_ipv4_address, 
+                &band_local_user_ipv6_address,
                 local_owner_desk_setup_data.localuser_intray_port__yourdesk_youlisten__bind_yourlocal_ip,
             )?;
-            debug_log!("HLOD: Intray socket created.");
+            debug_log!("HLOD: Intray socket created.");            
+            
+            
+            
+            // debug_log("HLOD Creating intray socket listening UDP...");
+            // let intray_socket = create_rc_udp_socket(
+            //     &local_owner_desk_setup_data.local_user_ipv6_addr_list,
+            //     local_owner_desk_setup_data.localuser_intray_port__yourdesk_youlisten__bind_yourlocal_ip,
+            // )?;
+            // debug_log!("HLOD: Intray socket created.");
 
             // --- 3.5 in-tray Send-File Event ---
             // "Listener"?
@@ -7466,25 +8191,37 @@ fn handle_local_owner_desk(
                             (because context= filesync timeline ID)
                         gh: Option<Vec<u8>>, // N hashes of rt + re
                     */
-                    if let Some(addr_2) = ipv6_addr_2 {
-                        send_gotit_signal(
-                            &local_owner_desk_setup_data.local_user_salt_list,
-                            &local_user_ipv6_address,
-                            localowner_gotit_port,
-                            received_file_updatedat_timestamp, // as di
-                        );
-                    }
 
-                    // 1.4 Send Echo Ready Signal (using a function)        
-                    if let Some(addr_2) = ipv6_addr_2 {
-                        send_ready_signal(
-                            &salt_list_2,
-                            &addr_2,
-                            readyport_2,
-                            received_file_updatedat_timestamp,
-                            false,
-                        );
-                    }
+                    send_gotit_signal(
+                        &local_owner_desk_setup_data.local_user_salt_list,
+                        &band_local_user_ipv4_address, // local_user_ipv4_address: &Ipv4Addr, 
+                        &band_local_user_ipv6_address, // local_user_ipv6_address: &Ipv6Addr, 
+                        &band_network_type, // network_type: String, // for nt
+                        localowner_gotit_port,
+                        received_file_updatedat_timestamp, // as di
+                    );
+
+
+                    // 1.4 Send Echo Ready Signal (using a function)
+    
+                    send_ready_signal(
+                        &local_owner_desk_setup_data.local_user_salt_list, // local_user_salt_list: &[u128], 
+                        &band_local_user_ipv4_address, // local_user_ipv4_address: &Ipv4Addr, 
+                        &band_local_user_ipv6_address, // local_user_ipv6_address: &Ipv6Addr, 
+                        local_owner_desk_setup_data.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip,
+                        latest_received_from_rc_file_timestamp, // last_received_timestamp: u64, // for rst
+                        &band_network_type, // network_type: String, // for nt
+                        band_network_index, //network_index: u8, // for ni
+                    )?;
+                    // if let Some(addr_2) = ipv6_addr_2 {
+                    //     send_ready_signal(
+                    //         &salt_list_2,
+                    //         &addr_2,
+                    //         readyport_2,
+                    //         received_file_updatedat_timestamp,
+                    //         false,
+                    //     );
+                    // }
                 
                 // },
                 // Err(_) => todo!() // end Ok((amt, src)) => { // end Ok((amt, src)) => {
@@ -7542,40 +8279,40 @@ fn handle_local_owner_desk(
 /// Send the data:
 /// socket.send_to(&data, "[::1]:34254")?; /// Replace with your target address and port
 /// Ok(())
-fn serialize_ready_signal(this_readysignal: &ReadySignal) -> std::io::Result<Vec<u8>> {
-    let mut bytes = Vec::new();
+// fn serialize_ready_signal(this_readysignal: &ReadySignal) -> std::io::Result<Vec<u8>> {
+//     let mut bytes = Vec::new();
 
-    // Handle rt (timestamp) -  return an error if None:
-    if let Some(rt) = this_readysignal.rt {
-        bytes.extend_from_slice(&rt.to_be_bytes()); 
-    } else {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData, 
-            "Missing timestamp (rt) in ReadySignal",
-        )); 
-    }
+//     // Handle rt (timestamp) -  return an error if None:
+//     if let Some(rt) = this_readysignal.rt {
+//         bytes.extend_from_slice(&rt.to_be_bytes()); 
+//     } else {
+//         return Err(io::Error::new(
+//             io::ErrorKind::InvalidData, 
+//             "Missing timestamp (rt) in ReadySignal",
+//         )); 
+//     }
 
-    // Handle rst (send timestamp) - return an error if None: 
-    if let Some(rst) = this_readysignal.rst {
-        bytes.extend_from_slice(&rst.to_be_bytes()); 
-    } else {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData, 
-            "Missing send timestamp (rst) in ReadySignal",
-        )); 
-    }
+//     // Handle rst (send timestamp) - return an error if None: 
+//     if let Some(rst) = this_readysignal.rst {
+//         bytes.extend_from_slice(&rst.to_be_bytes()); 
+//     } else {
+//         return Err(io::Error::new(
+//             io::ErrorKind::InvalidData, 
+//             "Missing send timestamp (rst) in ReadySignal",
+//         )); 
+//     }
 
-    // Handle re (echo_send) -  use a default value (false) if None:
-    let re = this_readysignal.re.unwrap_or(false); // Default to false if None
-    bytes.push(if re { 1 } else { 0 }); 
+//     // Handle re (echo_send) -  use a default value (false) if None:
+//     let re = this_readysignal.re.unwrap_or(false); // Default to false if None
+//     bytes.push(if re { 1 } else { 0 }); 
 
-    // Handle rh (hash list) - append if Some:
-    if let Some(rh) = &this_readysignal.rh {
-        bytes.extend_from_slice(rh);
-    }
+//     // Handle rh (hash list) - append if Some:
+//     if let Some(rh) = &this_readysignal.rh {
+//         bytes.extend_from_slice(rh);
+//     }
  
-    Ok(bytes) 
-}
+//     Ok(bytes) 
+// }
 
 /// Calculates Pearson hashes for a vector of byte slices.
 ///
@@ -7605,37 +8342,89 @@ fn calculate_pearson_hashes(data_sets: &[&[u8]]) -> Result<Vec<u8>, ThisProjectE
 /// to target the goals of packet-soundness checking
 /// and spoof-protection
 /// while keeping the computer and network load lite
+///
+///  "Data length" refers to verifying that the received byte slice 
+/// has enough bytes to successfully extract all the fields of the 
+/// ReadySignal struct. If the byte slice is too short,
+///  attempting to access elements outside its bounds will lead to a "panic".
+///
 /// Do not attempt to use Serde crate with this function!!!
-fn deserialize_ready_signal(bytes: &[u8]) -> Result<ReadySignal, io::Error> {
-    // ... [Your existing code for logging and length checking] ...
+fn deserialize_ready_signal(bytes: &[u8], salt_list: &[u128]) -> Result<ReadySignal, ThisProjectError> {
+    // 1. Calculate the expected minimum length, *including* the hash list.
+    let timestamp_len = size_of::<u64>();
+    let index_len = size_of::<usize>();
+    let hash_len = salt_list.len();  // Length of the hash list (number of salts)
+    let min_length = timestamp_len * 2 + 1 + index_len + 1 + hash_len; // rt, rst, nt, ni, rh
 
-    // Extract timestamp (rt):
-    let rt = u64::from_be_bytes(bytes[0..8].try_into().unwrap());
-    debug_log!("DRS: ready_signal_timestamp: {}", rt);
+    // 2. Full Length Check
+    if bytes.len() != min_length {  // Note: Now a strict equality check
+        return Err(ThisProjectError::InvalidData(format!("Invalid byte array length for ReadySignal. Expected: {}, Received: {}", min_length, bytes.len())));
+    }
 
-    // Extract send timestamp (rst):
-    let rst = u64::from_be_bytes(bytes[8..16].try_into().unwrap());
-    debug_log!("DRS: ready_signal_send_timestamp: {}", rst);
-
-    // Extract echo_send (re):
-    let re = if bytes.len() > 16 { bytes[16] != 0 } else { false };
-    debug_log!("DRS: echo_send: {}", re);
+    // 3. Extract rt (receive timestamp)
+    let rt = u64::from_be_bytes(bytes[0..timestamp_len].try_into().map_err(|_| ThisProjectError::InvalidData("Failed to convert rst bytes to u64".into()))?);
     
-    // Extract hashes (rh):
-    let rh = if bytes.len() > 17 { 
-        Some(bytes[17..].to_vec()) 
-    } else {
-        None
-    };
     
-    // Correct the return statement to include rst:
-    Ok(ReadySignal { 
-        rt: Some(rt), 
-        rst: Some(rst), // Include rst
-        re: Some(re), 
-        rh 
-    })
+    // 4. Extract rst (send timestamp)
+    let rst_start = timestamp_len;
+    let rst_end = rst_start + timestamp_len;
+    if bytes.len() < rst_end {
+        return Err(ThisProjectError::InvalidData("Data too short for rst".into()));
+    }
+    let rst_bytes = &bytes[rst_start..rst_end];
+    let rst = u64::from_be_bytes(rst_bytes.try_into().map_err(|_| ThisProjectError::InvalidData("Failed to convert rst bytes to u64".into()))?);
+
+
+    // 6. Extract b (network index) -- u8
+    let b_start = rst_start + timestamp_len;
+    if bytes.len() <= b_start {  // Check length *before* access
+        return Err(ThisProjectError::InvalidData("Data too short for b".into()));
+    }
+    let b = bytes[b_start];  // Directly access as u8
+    
+    // 7. Extract rh (hash list) – Length Check
+    let rh_start = b_start + 1;  // one byte for b
+    let rh_end = rh_start + hash_len;
+    if bytes.len() < rh_end {
+        return Err(ThisProjectError::InvalidData("Data too short for rh".into()));
+    }
+    let rh = bytes[rh_start..rh_end].to_vec();
+    
+    Ok(ReadySignal { rt, rst, b, rh })
 }
+
+
+
+// fn deserialize_ready_signal(bytes: &[u8]) -> Result<ReadySignal, io::Error> {
+//     // ... [Your existing code for logging and length checking] ...
+
+//     // Extract timestamp (rt):
+//     let rt = u64::from_be_bytes(bytes[0..8].try_into().unwrap());
+//     debug_log!("DRS: ready_signal_timestamp: {}", rt);
+
+//     // Extract send timestamp (rst):
+//     let rst = u64::from_be_bytes(bytes[8..16].try_into().unwrap());
+//     debug_log!("DRS: ready_signal_send_timestamp: {}", rst);
+
+//     // Extract echo_send (re):
+//     let re = if bytes.len() > 16 { bytes[16] != 0 } else { false };
+//     debug_log!("DRS: echo_send: {}", re);
+    
+//     // Extract hashes (rh):
+//     let rh = if bytes.len() > 17 { 
+//         Some(bytes[17..].to_vec()) 
+//     } else {
+//         None
+//     };
+    
+//     // Correct the return statement to include rst:
+//     Ok(ReadySignal { 
+//         rt: Some(rt), 
+//         rst: Some(rst), // Include rst
+//         re: Some(re), 
+//         rh 
+//     })
+// }
 
 /// Deserializes a byte slice into a SendFile struct.
 ///
@@ -8117,6 +8906,347 @@ fn get_latest_received_from_collaborator_in_teamchannel_file_timestamp(
     Ok(last_timestamp) // Returns 0 if no matching files are found
 }
 
+
+// /// listener loop that listens until it gets a quit signal or a legit ReadySignal
+// /// Listens for a ReadySignal on multiple IP addresses and returns the sender's IP and network type.
+// ///
+// /// This function attempts to bind to each IPv6 and then IPv4 address associated with the local machine and listens for a ReadySignal
+// /// on the specified port for a limited time. It returns the IP address and network type ("ipv4" or "ipv6") of the first received valid signal.
+// ///
+// /// # Arguments
+// ///
+// /// * `room_sync_input`: A reference to the `ForRemoteCollaboratorDeskThread` struct containing collaborator data.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<(SocketAddr, String), ThisProjectError>`:  A tuple containing the sender's `SocketAddr` and network type on success,
+// ///    or a `ThisProjectError` if no valid ReadySignal is received within the timeout or if an error occurs.
+// ///
+// /// note: should check for quit-uma signal between tries (if not faster)
+// // fn get_rc_ip_and_network_type(
+// fn get_rc_ready_and_gotit_socketaddres(
+//     room_sync_input: &ForRemoteCollaboratorDeskThread,
+// ) -> Result<(SocketAddr, SocketAddr), ThisProjectError> {
+//     // 1. Set timeout duration.
+//     let timeout_duration = Duration::from_secs(15); // 15-second timeout
+    
+//     // 2. Create a buffer to receive data.
+//     let mut buf = [0; 1024]; // Adjust buffer size as needed
+
+//     loop {
+//         // Check for Uma halt signal
+//         if should_halt_uma() {
+//             return Err(ThisProjectError::NetworkError("Uma halt signal received".into()));
+//         }
+    
+//         // 3. Try IPv6 addresses first.
+//         if let Some(ipv6_addr) = room_sync_input.remote_collaborator_ipv6_addr_list.first() {
+//             debug_log!("Trying to get RC Band data from IPv6: {}", ipv6_addr);
+//             let socket_addr = SocketAddr::new(IpAddr::V6(*ipv6_addr), room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip); // Use the port from room_sync_input
+//             let socket_result = UdpSocket::bind(socket_addr);
+            
+//             match socket_result {
+//                 Ok(socket) => {
+//                     // set_socket_timeout()
+//                 socket.set_read_timeout(Some(timeout_duration))?;                
+//                 debug_log!("HRCD get_rc_ip_and_network_type(): Socket created, start listening.");
+
+//                 return match recv_ready_signal_with_timeout(&socket, &mut buf, &room_sync_input.remote_collaborator_salt_list) { // Pass the buffer and salts
+//                         Ok(Some(src_addr)) => Ok((src_addr, "ipv6".to_string())), // Return IP and network type
+//                         Ok(None) => {
+//                             debug_log!("HRCD get_rc_ip_and_network_type(): Timeout or no valid ready signal on ipv6: {:?}", ipv6_addr);                
+
+//                         Err(ThisProjectError::NetworkError("Timeout or no valid ready signal on ipv6".into()))
+
+//                         }, // Handle timeout
+//                         Err(e) => {
+//                             debug_log!("HRCD get_rc_ip_and_network_type(): Error receiving ready signal on ipv6: {:?}, err -> {}", ipv6_addr, e);                
+
+//                         Err(e)  // Handle error
+//                     },
+//                 };
+
+//                 },
+//                 Err(e) => {
+//                     debug_log!("HRCD get_rc_ip_and_network_type(): Failed to bind to ipv6 address {:?}: {}", socket_addr, e);
+//                     // You can handle errors for individual addresses here, 
+//                     // for example by logging or by trying a different port.
+//                     // For now, continue to the IPv4 section if IPv6 binding fails.
+//                 },
+//             }
+//         }
+
+//         // 4. If no valid IPv6, try IPv4
+//         if let Some(ipv4_addr) = room_sync_input.remote_collaborator_ipv4_addr_list.first() {
+//             debug_log!("HRCD get_rc_ip_and_network_type(): Trying IPv4: {}", ipv4_addr);
+
+//             let socket_addr = SocketAddr::new(IpAddr::V4(*ipv4_addr), room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip);
+//             let socket_result = UdpSocket::bind(socket_addr);
+//             match socket_result {
+//                 Ok(socket) => {
+//                     socket.set_read_timeout(Some(timeout_duration))?;
+
+//                     return match recv_ready_signal_with_timeout(&socket, &mut buf, &room_sync_input.remote_collaborator_salt_list) { // Pass buffer and salts
+//                         Ok(Some(src_addr)) => Ok((src_addr, "ipv4".to_string())), // Correctly return "ipv4" as a string
+//                         Ok(None) => {
+//                             debug_log!("HRCD get_rc_ip_and_network_type(): Timeout or no valid ready signal on ipv4: {:?}", ipv4_addr);
+//                         Err(ThisProjectError::NetworkError("Timeout or no valid ready signal on ipv4".into())) // Or handle timeout error differently
+
+//                         },
+//                         Err(e) => {
+//                             debug_log!("HRCD get_rc_ip_and_network_type(): Error receiving ready signal on ipv4: {:?}, err -> {}", ipv4_addr, e);
+
+//                         Err(e) // Or handle recv error differently
+//                     },
+//                 };
+//                 },
+//                 Err(e) => {
+//                     debug_log!("HRCD get_rc_ip_and_network_type(): Failed to bind to ipv4 address {:?}: {}", socket_addr, e);
+//                 }
+//             }
+//         }
+//     }
+
+//     // Return an error if no valid IP address is found (both ipv6 and ipv4)
+//     Err(ThisProjectError::NetworkError("No valid IP address found for remote collaborator".into()))
+// }
+
+
+
+/// Retrieves SocketAddrs for the remote collaborator's ready and "got it" ports.
+///
+/// Iterates through the ipv6 and ipv4 addresses, listening for a ReadySignal. Returns SocketAddrs
+/// for the ready and "got it" ports on the first valid IP. Directly uses UdpSocket::bind for
+/// improved simplicity and efficiency. Does One Thing Well.
+///
+/// # Arguments
+///
+/// * `room_sync_input`: The collaborator's connection data.
+///
+/// # Returns
+///
+/// * `Result<(SocketAddr, SocketAddr), ThisProjectError>`: Tuple of SocketAddrs (ready, gotit), or an error.
+fn get_rc_ready_gotit_socketaddrses(
+    room_sync_input: &ForRemoteCollaboratorDeskThread,
+) -> Result<(SocketAddr, SocketAddr), ThisProjectError> { // function name corrected
+    let timeout_duration = Duration::from_secs(15);
+    let mut buf = [0; 1024];
+
+
+    for ipv6_addr in &room_sync_input.remote_collaborator_ipv6_addr_list {
+        let ready_socket_addr = SocketAddr::new(IpAddr::V6(*ipv6_addr), room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip);
+        
+        match UdpSocket::bind(ready_socket_addr) { // Directly bind the socket here.  HERE!! HERE!!
+            Ok(socket) => {
+                socket.set_read_timeout(Some(timeout_duration))?;
+                debug_log!("Listening on {:?} for ReadySignal", ready_socket_addr); // HERE!! HERE!! corrected debug_log name
+                
+                if recv_ready_signal_with_timeout(&socket, &mut buf, &room_sync_input.local_user_salt_list).is_ok() { // Add salts for hash verification. // HERE!! HERE!! add salt arg
+                    let gotit_socket_addr = SocketAddr::new(IpAddr::V6(*ipv6_addr), room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip); // Create correct gotit SocketAddr
+                    return Ok((ready_socket_addr, gotit_socket_addr));
+                }
+
+
+            }
+            Err(e) => {
+                debug_log!("Failed to bind to {:?}: {}", ready_socket_addr, e); // Log binding errors
+            }
+        }
+    }
+
+
+    for ipv4_addr in &room_sync_input.remote_collaborator_ipv4_addr_list { // ipv4 handling here
+        let ready_socket_addr = SocketAddr::new(IpAddr::V4(*ipv4_addr), room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip); // No change here.
+        match UdpSocket::bind(ready_socket_addr) { // HERE!! HERE!! Directly use UdpSocket::bind().
+
+            Ok(socket) => {
+                socket.set_read_timeout(Some(timeout_duration))?;
+                debug_log!("Listening on {:?} for ReadySignal", ready_socket_addr); // Log listening address
+
+                if recv_ready_signal_with_timeout(&socket, &mut buf, &room_sync_input.local_user_salt_list).is_ok() {  // Salts used here for verification, changed to local_user_salt_list. // HERE!! HERE!! add salt arg
+
+                    let gotit_socket_addr = SocketAddr::new(IpAddr::V4(*ipv4_addr), room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip);
+                    return Ok((ready_socket_addr, gotit_socket_addr));  //  Use ipv4 gotit port
+                }
+
+            }
+            Err(e) => {
+                debug_log!("Failed to bind to {:?}: {}", ready_socket_addr, e);
+                // Consider logging and handling errors with more specificity. 
+                // You may or may not want to halt Uma when no network band connections are found. 
+            }
+        }
+    }
+    Err(ThisProjectError::NetworkError("No valid ReadySignal received".into()))
+}
+
+// /// Retrieves SocketAddrs for the remote collaborator's ready and "got it" ports based on the first valid IP address found.
+// ///
+// /// Iterates through the remote collaborator's IPv6 and IPv4 addresses, attempting to receive a ReadySignal on each.
+// /// Returns SocketAddrs for both the ready and "got it" ports using the first valid IP
+// ///
+// /// # Arguments
+// ///
+// /// * `room_sync_input`: The remote collaborator's connection data.
+// ///
+// /// # Returns (ready_socket_addr, gotit_socket_addr)
+// ///
+// /// * `Result<(SocketAddr, SocketAddr), ThisProjectError>`: Tuple of SocketAddrs (ready, gotit), or an error if no valid IP is found.
+// fn get_rc_ready_gotit_socketaddrses(
+//     room_sync_input: &ForRemoteCollaboratorDeskThread,
+// ) -> Result<(SocketAddr, SocketAddr), ThisProjectError> {
+
+//     let timeout_duration = Duration::from_secs(15);
+//     let mut buf = [0; 1024];
+
+
+//     // Search for first valid ipv6, if there is one
+//     for ipv6_addr in &room_sync_input.remote_collaborator_ipv6_addr_list {
+//         let ready_socket_addr = SocketAddr::new(IpAddr::V6(*ipv6_addr), room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip);
+
+//         /*
+//             maybe should use:
+//             UdpSocket::bind(socket_addr).map_err(|e| {
+//         ThisProjectError::NetworkError(format!("Failed to bind to {} address: {}", band_network_type, e))
+//     })
+//         */
+//         if let Ok(socket) = no_such_redundant_abstacttion(ready_socket_addr) {  // Simplified using create_local_udp_socket
+//             socket.set_read_timeout(Some(timeout_duration))?;
+//             debug_log!("Listening on {:?} for ReadySignal ipv6_addr", ready_socket_addr);
+
+            
+//             if recv_ready_signal_with_timeout(&socket, &mut buf, &room_sync_input.local_user_salt_list).is_ok() {  // Assuming you'll add salt verification
+//                 let gotit_socket_addr = SocketAddr::new(IpAddr::V6(*ipv6_addr), room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip); // Create gotit SocketAddr here, correctly
+//                 return Ok((ready_socket_addr, gotit_socket_addr));
+//             }
+//         }
+//     }
+
+
+//     // Search for first valid ipv4, if there is one
+//     for ipv4_addr in &room_sync_input.remote_collaborator_ipv4_addr_list { // Iterate over ipv4 addresses if there was no ipv6 ReadySignal
+//         let ready_socket_addr = SocketAddr::new(IpAddr::V4(*ipv4_addr), room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip); // No change needed
+
+//         /*
+//             maybe should use:
+//             UdpSocket::bind(socket_addr).map_err(|e| {
+//         ThisProjectError::NetworkError(format!("Failed to bind to {} address: {}", band_network_type, e))
+//     })
+//         */
+//         if let Ok(socket) = no_such_redundant_abstacttion(ready_socket_addr) { // Create and bind, using new version
+//             socket.set_read_timeout(Some(timeout_duration))?;
+//             debug_log!("Listening on {:?} for ReadySignal ipv4_addr", ready_socket_addr);
+
+
+//             if recv_ready_signal_with_timeout(&socket, &mut buf, &room_sync_input.local_user_salt_list).is_ok() { // Check with salts
+//                 debug_log!("Received ReadySignal from IPv4: {}", ipv4_addr);
+
+//                 // Correct gotit port
+//                 let gotit_socket_addr = SocketAddr::new(IpAddr::V4(*ipv4_addr), room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip);
+//                 return Ok((ready_socket_addr, gotit_socket_addr));  // Return correct ipv4 SocketAddr here.
+//             }
+//         }
+//     }
+
+//     Err(ThisProjectError::NetworkError(
+//         "No valid ReadySignal received".into(),
+//     ))
+// }
+
+
+/// Receives a ReadySignal with a timeout, handling potential errors and timeouts.
+///
+/// # Arguments
+///
+/// * `socket`: The UDP socket to receive data on.
+/// * `buf`: A mutable buffer to store the received data.
+/// * `salt_list`: The salt list for hash verification.
+///
+/// # Returns
+///
+/// * `Result<Option<SocketAddr>, ThisProjectError>`:
+///     - `Ok(Some(src_addr))`: If a valid ReadySignal is received within the timeout, returns the sender's address.
+///     - `Ok(None)`: If the timeout expires without receiving a valid ReadySignal.
+///     - `Err(ThisProjectError)`: If an error occurs during receiving or if the received data is invalid.
+fn recv_ready_signal_with_timeout(
+    socket: &UdpSocket, 
+    buf: &mut [u8], 
+    salt_list: &[u128],
+) -> Result<Option<SocketAddr>, ThisProjectError> {
+    debug_log!("recv_ready_signal_with_timeout(): Starting...");
+
+    match socket.recv_from(buf) {  // Receive data on the socket.
+        Ok((amt, src)) => { // If data is received:
+
+            debug_log!("recv_ready_signal_with_timeout(): Received {} bytes from {}", amt, src);
+
+            // 1. Deserialize the ReadySignal.
+            let ready_signal = deserialize_ready_signal(&buf[..amt], &salt_list)?;  // Note the use of &salt_list
+
+            // 2. Verify the ReadySignal's timestamp.
+            //     (Add your timestamp verification logic here)
+
+            // 3. If the ReadySignal is valid, return the source address.
+            Ok(Some(src)) 
+        },
+        Err(e) if e.kind() == ErrorKind::WouldBlock => { // If WouldBlock, timeout:
+            debug_log!("recv_ready_signal_with_timeout(): Timeout. No data received within the timeout period.");            
+            Ok(None)  // Indicate timeout with Ok(None) (do NOT return an error).
+        },
+        Err(e) => { // Other errors
+            debug_log!("recv_ready_signal_with_timeout():  Error receiving data: {}", e);
+            Err(ThisProjectError::NetworkError(e.to_string()))
+        },
+    }
+
+}
+
+
+/// TODO: What on earth is this thing???
+///
+/// Gets the latest `updated_at_timestamp` from the current team channel's files.
+///
+/// This function crawls through the current team channel's directory and retrieves
+/// the most recent `updated_at_timestamp` from the TOML files it finds.
+///
+/// # Returns
+///
+/// `Result<u64, ThisProjectError>`:  The latest timestamp, or an error if the directory read fails, a TOML file cannot be parsed, or the updated_at_timestamp is invalid.
+fn get_latest_timestamp_from_team_channel_dir() -> Result<u64, ThisProjectError> {
+    let mut latest_timestamp = 0u64; // Initialize to zero
+    
+    let channel_dir_path_str = match read_state_string("current_node_directory_path.txt") {
+        Ok(s) => s,
+        Err(e) => {
+            debug_log!("Error reading channel directory path: {}", e);
+            return Err(e.into()); // Or handle error differently
+        }
+    };
+
+
+    //  Crawl through the team channel directory
+    for entry in WalkDir::new(channel_dir_path_str) {
+        let entry = entry?; // Check for WalkDir errors
+        let path = entry.path();
+        if path.is_file() && path.extension() == Some(OsStr::new("toml")) { 
+            match get_toml_file_timestamp(path) {
+                Ok(timestamp) => { 
+                    if timestamp > latest_timestamp {
+                        latest_timestamp = timestamp;
+                    }
+                },
+                Err(e) => {
+                    debug_log!("Error reading or parsing TOML file: {:?} - {}", path, e);
+                    // Handle the error as you see fit. Perhaps continue or return the error.
+                    continue; // Skip to the next file
+                },
+            };
+        }
+    }
+    Ok(latest_timestamp)
+}
+
+
 /// handle_remote_collaborator_meetingroom_desk (send files here)
 /// very brief overview:
 /// 1. listen for got-it signals and remove fail-flags (yes, their 'last' 3rd step is actually done first)
@@ -8158,20 +9288,6 @@ fn handle_remote_collaborator_meetingroom_desk(
 
         thread::spawn(move || {...
             
-            
-    future: idea for GPG signed signal
-    sender uses your gpg to sign the timestamp
-    if you confirm that, then go ahead with that IP and request. 
-    this may be equivilent to clearsigning the read signal with less baggage
-    
-    note: same can be done with gotit signal
-    
-    Echosend may pre-fail all the send-events (making a fail-flag file)
-    then calling a loop to call an eqcho-send function for each echo-event
-    if each thread can listen for a got-it and remove the flag
-    
-    or maybe there is an always running got it listener that removes
-    fail flags for any got-it received
     */
     loop { // 1. start overall loop to restart whole desk
         // --- 1. overall loop to restard handler in case of failure ---
@@ -8192,18 +9308,40 @@ fn handle_remote_collaborator_meetingroom_desk(
             "room_sync_input -> {:?}", 
             room_sync_input
         );
+        
+        // TODO new function to (maybe)
+        // trial and error iterate search
+        // the possible Remote COllaborator IP space
+        // listening for a ready-signal
+        // 1.2 Get Remote Collaborator's IP and Network Type
+        
 
-        // --- 1.3 Create two UDP Sockets for Ready and GotIt Signals ---
+        let (ready_socket_addr, gotit_socket_addr) =
+            match get_rc_ready_gotit_socketaddrses(room_sync_input) {
+                Ok(addrs) => addrs,
+                Err(e) => {
+                    debug_log!("HRCD: Error getting SocketAddrs: {}", e);
+                    return Err(e);
+                }
+            };
+        
+        
+        // let (detected_rc_ip_string, detected_net_type) = match get_rc_ip_and_network_type(room_sync_input) {
+        //     Ok((detected_rc_ip_string, detected_net_type)) => (detected_rc_ip_string, detected_net_type),
+        //     Err(e) => {
+        //         debug_log!("HRCD: Failed to get remote collaborator IP: {}", e);
+        //         return Err(e); // Or handle the error differently
+        //     }
+        // };
+        
+        // logig
+
+        // --- 1.3 Create two UDP Sockets for Ready and GotIt Signals ---`
         debug_log("HRCD 1.3 Making ready_port listening UDP socket...");
-        let ready_socket = create_udp_socket(
-            &room_sync_input.remote_collaborator_ipv6_addr_list,
-            room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip,
-        )?;
+        let ready_socket = create_rc_udp_socket(ready_socket_addr)?;
+        
         debug_log("HRCD 1.3 Making gotit_port listening UDP socket...");
-            let gotit_socket = create_udp_socket(
-            &room_sync_input.remote_collaborator_ipv6_addr_list,
-            room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip,
-        )?;
+        let gotit_socket = create_rc_udp_socket(gotit_socket_addr)?;
 
         // --- 1.4 Initialize (empty for starting) Send Queue ---
         // let mut session_send_queue: Option<SendQueue> = None;
@@ -8213,15 +9351,7 @@ fn handle_remote_collaborator_meetingroom_desk(
             items: Vec::new(),
         };
 
-        // let mut last_debug_log_time = Instant::now();
-        // let mut last_debug_log_time = Instant::now();
-        /*
-        I don't think this makes sense here,
-        shouldn't this be file-timestamps?
-        */
-
-
-        // --- 1.5 Spawn a thread to handle recieving GotItSignal(s) and SendFile prefail-flag removal ---
+        // --- HRCD 1.5 Spawn a thread to handle recieving GotItSignal(s) and SendFile prefail-flag removal ---
         let gotit_thread = thread::spawn(move || {
             //////////////////////////////////////
             // Listen for 'I got it' GotItSignal
@@ -8249,8 +9379,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                             );
                             break;
                         }
-                            
-                        
+
                         debug_log!("HRCD 1.5.2 GotItloop Ok((amt, src)) Received {} bytes from {} on gotit port", amt, src);
         
                         // --- Inspect Raw Bytes ---
@@ -8399,7 +9528,7 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                     // --- 2.3 Deserialize the ReadySignal ---
                     // TODO add size check to deserialize function
-                    let mut ready_signal: ReadySignal = match deserialize_ready_signal(&buf[..amt]) {
+                    let mut ready_signal: ReadySignal = match deserialize_ready_signal(&buf[..amt], &room_sync_input.remote_collaborator_salt_list) {
                         Ok(ready_signal) => {
                             // println!("HRCD 2.3 Deserialize Ok(ready_signal) {}: Received ReadySignal: {:?}",
                             //     room_sync_input.remote_collaborator_name, ready_signal
@@ -8434,29 +9563,29 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                     debug_log("\n##HRCD## starting checks(plaid) 2.4");
                     
-                    // Check .rh hash
-                    if ready_signal.rh.is_none() {
-                        debug_log("HRCD 2.4.1 Check: rh hash field is empty. Drop packet and keep going.");
-                        continue; // Drop packet: Restart the loop to listen for the next signal
-                    }
+                    // // Check .rh hash
+                    // if ready_signal.rh.is_none() {
+                    //     debug_log("HRCD 2.4.1 Check: rh hash field is empty. Drop packet and keep going.");
+                    //     continue; // Drop packet: Restart the loop to listen for the next signal
+                    // }
 
-                    // Check .rt timestamp
-                    if ready_signal.rt.is_none() {
-                        debug_log("HRCD 2.4.2 Check: rt last-previous-file Timestamp field is empty. Drop packet and keep going.");
-                        continue; // Drop packet: Restart the loop to listen for the next signal
-                    }
+                    // // Check .rt timestamp
+                    // if ready_signal.rt.is_none() {
+                    //     debug_log("HRCD 2.4.2 Check: rt last-previous-file Timestamp field is empty. Drop packet and keep going.");
+                    //     continue; // Drop packet: Restart the loop to listen for the next signal
+                    // }
 
-                    // Check .rst timestamp
-                    if ready_signal.rst.is_none() {
-                        debug_log("HRCD 2.4.3 Check: rst ready signal sent-at timestamp field is empty. Drop packet and keep going.");
-                        continue; // Drop packet: Restart the loop to listen for the next signal
-                    }
+                    // // Check .rst timestamp
+                    // if ready_signal.rst.is_none() {
+                    //     debug_log("HRCD 2.4.3 Check: rst ready signal sent-at timestamp field is empty. Drop packet and keep going.");
+                    //     continue; // Drop packet: Restart the loop to listen for the next signal
+                    // }
 
-                    // Check .re is_send_echo
-                    if ready_signal.re.is_none() {
-                        ready_signal.re = Some(false);
-                        debug_log("HRCD 2.4.4 Check: echo field is empty, so is_send_echo = false");
-                    }
+                    // // Check .re is_send_echo
+                    // if ready_signal.re.is_none() {
+                    //     ready_signal.re = Some(false);
+                    //     debug_log("HRCD 2.4.4 Check: echo field is empty, so is_send_echo = false");
+                    // }
 
                     // --- 2.5 Hash-Check for ReadySignal ---
                     // Drop packet when fail check
@@ -8471,7 +9600,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                     // --- 2.6 Check / Add Hash-Nonce for per-session ready-signals ---
                     // ...e.g. guarding against the few seconds of expiration-gap
                     // After you deserialize the ReadySignal and before the other checks:
-                    let ready_signal_hash_vec = ready_signal.rh.clone().expect("rh is none");
+                    let ready_signal_hash_vec = ready_signal.rh.clone();
 
                     if !ready_signal_hash_vec.is_empty() {
                         if hash_set_session_nonce.contains(&ready_signal_hash_vec) {
@@ -8514,7 +9643,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                     */
                     
                     // 3.1 ready_signal_timestamp for send-queue
-                    let ready_signal_timestamp = ready_signal.rst.expect("HRCD 3. Missing timestamp in ready signal"); // Unwrap the timestamp outside the match, as it's always required.
+                    let ready_signal_timestamp = ready_signal.rst; // Unwrap the timestamp outside the match, as it's always required.
                     
                     debug_log!(
                         "HRCD 3.1 check ready_signal_timestamp for send-queue: ready_signal_timestamp -> {:?}", 
@@ -8554,7 +9683,8 @@ fn handle_remote_collaborator_meetingroom_desk(
                     
                     // 3.2.4 look for fail-flags:
                     
-                    // if echo or default to false
+                    // TODO get Network Band
+                    
                     
                     ////////////////////////////////
                     // Set back_of_queue_timestamp
@@ -8574,7 +9704,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                             } else {
                                 debug_log!("HRCD No retry flags found. Using ReadySignal timestamp.");
                                 // Handle the case where no pre-fail flags were found. Perhaps use the timestamp from the ready signal?
-                                session_send_queue.back_of_queue_timestamp = ready_signal.rt.expect("REASON"); // Example
+                                session_send_queue.back_of_queue_timestamp = ready_signal.rt
 
                             }
                         }
@@ -8614,26 +9744,26 @@ fn handle_remote_collaborator_meetingroom_desk(
                     }; 
                     debug_log!("HRCD 3.3 this_team_channelname -> {:?}", this_team_channelname);
 
-                    //  if echo==true: skip remaking queue
-                    // note: as long as send is not parallel, explicit echo here may be depricated
-                    debug_log!("HRCD 3.3 ?is-echo? ready_signal.re.unwrap_or(false) -> {:?}", ready_signal.re.unwrap_or(false));
-                    if !ready_signal.re.unwrap_or(true) {
-                        debug_log("HRCD 3.3 get_or_create_send_queue");
-                        session_send_queue = match session_send_queue {
-                            input_sendqueue => {
-                                get_or_create_send_queue(
-                                    &this_team_channelname, // for team_channel_name
-                                    &room_sync_input.local_user_name, // local owner user name
-                                    input_sendqueue, // for session_send_queue
-                                    ready_signal_timestamp, // for ready_signal_timestamp
-                                )?
-                            }
-                        };
+                    // //  if echo==true: skip remaking queue
+                    // // note: as long as send is not parallel, explicit echo here may be depricated
+                    // debug_log!("HRCD 3.3 ?is-echo? ready_signal.re.unwrap_or(false) -> {:?}", ready_signal.re.unwrap_or(false));
+                    // if !ready_signal.re.unwrap_or(true) {
+                    //     debug_log("HRCD 3.3 get_or_create_send_queue");
+                    //     session_send_queue = match session_send_queue {
+                    //         input_sendqueue => {
+                    //             get_or_create_send_queue(
+                    //                 &this_team_channelname, // for team_channel_name
+                    //                 &room_sync_input.local_user_name, // local owner user name
+                    //                 input_sendqueue, // for session_send_queue
+                    //                 ready_signal_timestamp, // for ready_signal_timestamp
+                    //             )?
+                    //         }
+                    //     };
                         
-                        // reset flag
-                        reset_sendq_flag = false;
+                    //     // reset flag
+                    //     reset_sendq_flag = false;
                         
-                    }
+                    // }
                     debug_log!(
                         "HRCD ->[]<- 3.3 Get / Make session_send_queue {:?}",
                         session_send_queue   
@@ -8770,24 +9900,37 @@ fn handle_remote_collaborator_meetingroom_desk(
                             debug_log!("HRCD 4.7 ready_signal.rt {:?}", ready_signal.rt);
                             
                             // 4.7 set_prefail_flag_rt_timestamp__for_sendfile
-                            match &ready_signal.rt { // Handle the Option
-                                Some(rt_timestamp) => {
-                                    if let Err(e) = set_prefail_flag_rt_timestamp__for_sendfile(
-                                        *rt_timestamp, // Dereference to get the u64 value
-                                        &room_sync_input.remote_collaborator_name,
-                                    ) {
-                                        debug_log!("HRCD 4.7 Error setting pre-fail flag: {}", e);
-                                        continue; // Handle error as you see fit
-                                    }
-                                    debug_log!("HRCD 4.7 prefail flag set using timestamp {:?}", rt_timestamp);
 
-                                }
-                                None => {
-                                    debug_log!("HRCD 4.7:  ready_signal.rt is None. Cannot set pre-fail flag.");
-                                    // Handle the None case appropriately (e.g., log a message, continue, or return an error).
-                                    continue;
-                                }
+                            if let Err(e) = set_prefail_flag_rt_timestamp__for_sendfile(
+                                ready_signal.rt,
+                                &room_sync_input.remote_collaborator_name,
+                            ) {
+                                debug_log!("HRCD 4.7 Error setting pre-fail flag: {}", e);
+                                continue; // Handle error as you see fit
                             }
+                            debug_log!("HRCD 4.7 prefail flag set using timestamp {:?}", &ready_signal.rt);
+
+                    
+                    
+                            
+                            // match &ready_signal.rt { // Handle the Option
+                            //     Some(rt_timestamp) => {
+                            //         if let Err(e) = set_prefail_flag_rt_timestamp__for_sendfile(
+                            //             *rt_timestamp, // Dereference to get the u64 value
+                            //             &room_sync_input.remote_collaborator_name,
+                            //         ) {
+                            //             debug_log!("HRCD 4.7 Error setting pre-fail flag: {}", e);
+                            //             continue; // Handle error as you see fit
+                            //         }
+                            //         debug_log!("HRCD 4.7 prefail flag set using timestamp {:?}", rt_timestamp);
+
+                            //     }
+                            //     None => {
+                            //         debug_log!("HRCD 4.7:  ready_signal.rt is None. Cannot set pre-fail flag.");
+                            //         // Handle the None case appropriately (e.g., log a message, continue, or return an error).
+                            //         continue;
+                            //     }
+                            // }
                             
                             debug_log!(
                                 "HRCD 4.6-7 Create sendfile_struct {:?}",
@@ -8802,7 +9945,11 @@ fn handle_remote_collaborator_meetingroom_desk(
                             // 4.7 Send serializd-file Send if serialization was successful (handle Result)
                             match serialized_file_struct_to_send {
                                 Ok(extracted_serialized_data) => {  // Serialization OK
-                                    match send_data_via_udp(&extracted_serialized_data, src, room_sync_input.remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip) {
+                                    match send_data_via_udp(
+                                        &extracted_serialized_data, 
+                                        src, 
+                                        room_sync_input.remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip,
+                                        ) {
                                         Ok(_) => {
                                             debug_log!("HRCD 4.7 File sent successfully");
                                             // ... (Handle successful send, e.g., update timestamp log)
@@ -8864,59 +10011,143 @@ fn handle_remote_collaborator_meetingroom_desk(
     Ok(())
 }
 
-// // --- Helper Function to Create UDP Socket ---
-// fn create_udp_socket(ip_addresses: &[Ipv6Addr], port: u16) -> Result<UdpSocket, ThisProjectError> {
-//     for ip_address in ip_addresses {
-//         let bind_result = UdpSocket::bind(SocketAddr::new(IpAddr::V6(*ip_address), port));
-//         match bind_result {
-//             Ok(socket) => return Ok(socket),
-//             Err(e) => debug_log!("create_udp_socket() Failed to bind to [{}]:{}: {}", ip_address, port, e),
-//         }
-//     }
-//     Err(ThisProjectError::NetworkError("create_udp_socket() Failed to bind to any IPv6 address".to_string()))
-// }
 
-/// Creates a UDP socket bound to the first valid and bindable IPv6 address in the provided list.
+
+/// Creates a UDP socket bound to the specified address and port.
 ///
-/// This function iterates through the `ip_addresses` slice and attempts to bind a UDP socket to each address on the given `port`.
-/// It returns the first successfully created `UdpSocket`, or an error if binding fails for all provided addresses.
+/// Simplifies socket creation by taking a SocketAddr directly.
+/// Does one thing well.
 ///
 /// # Arguments
 ///
-/// * `ip_addresses`: A slice of `Ipv6Addr` representing the IPv6 addresses to try.
-/// * `port`: The port number to bind the socket to.
+/// * `socket_addr`: The address and port to bind to.
 ///
 /// # Returns
 ///
-/// * `Result<UdpSocket, ThisProjectError>`:  A `Result` containing the created `UdpSocket` on success,
-///    or a `ThisProjectError::NetworkError` if binding fails for all addresses.
-///
-/// uses: use std::net::{IpAddr, Ipv6Addr, SocketAddr, UdpSocket};
-fn create_udp_socket(ip_addresses: &[Ipv6Addr], port: u16) -> Result<UdpSocket, ThisProjectError> {
-    for &ip_address in ip_addresses {  // Iterate through provided IPv6 addresses
-        let socket_addr = SocketAddr::new(IpAddr::V6(ip_address), port); // Create a SocketAddr
-        debug_log!("create_udp_socket(): Attempting to bind to {:?}", socket_addr);
-
-        match UdpSocket::bind(socket_addr) {
-            Ok(socket) => {
-                debug_log!("create_udp_socket(): Successfully bound to {:?}", socket_addr);                
-                return Ok(socket); // Return the socket on successful bind: first come, first served
-            }
-            Err(e) => {
-                debug_log!(
-                    "create_udp_socket(): Failed to bind to {:?}: {}",
-                    socket_addr, e
-                ); // Log binding errors
-                // Continue to the next address if binding fails: keep trying
-            }
-        }
-    }
-
-    // Return an error if no address could be bound
-    Err(ThisProjectError::NetworkError(
-        "Failed to bind to any IPv6 address".to_string(),
-    ))
+/// * `Result<UdpSocket, ThisProjectError>`: The bound socket or an error if binding fails.
+fn create_rc_udp_socket(socket_addr: SocketAddr) -> Result<UdpSocket, ThisProjectError> { // HERE!! HERE!! simplified parameters
+    UdpSocket::bind(socket_addr).map_err(|e| {
+        ThisProjectError::NetworkError(format!("Failed to bind to UDP socket: {}", e))
+    })
 }
+
+
+// /// Creates a UDP socket bound to the specified IP address and port.
+// ///
+// /// This function handles both IPv4 and IPv6 addresses based on the provided `net_type`.
+// ///
+// /// # Arguments
+// ///
+// /// * `net_type`: A string indicating the network type ("ipv4" or "ipv6").
+// /// * `ip_address_string`: The IP address as a string.
+// /// * `port`: The port number.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<UdpSocket, ThisProjectError>`: The created socket, or an error if the IP address is invalid, binding fails, or an unsupported network type is provided.
+// fn create_rc_udp_socket(
+//     net_type: &str,  // Borrow the string slice
+//     ip_address_struct: SocketAddr, // uses SocketAddr directly
+//     port: u16,
+// ) -> Result<UdpSocket, ThisProjectError> {
+//     match net_type {
+//         "ipv6" => {
+//             // let ip_address: Ipv6Addr = ip_address_string.parse().map_err(|_| {
+//             //     ThisProjectError::NetworkError("Invalid IPv6 address".into())
+//             // })?;
+//             let socket_addr = SocketAddr::new(IpAddr::V6(ip_address_struct), port);
+//             UdpSocket::bind(socket_addr).map_err(|e| {
+//                 ThisProjectError::NetworkError(format!("Failed to bind to IPv6 address: {}", e))
+//             })
+//         }
+//         "ipv4" => {
+//             // let ip_address: Ipv4Addr = ip_address_string.parse().map_err(|_| {
+//             //     ThisProjectError::NetworkError("Invalid IPv4 address".into())
+//             // })?;
+//             let socket_addr = SocketAddr::new(IpAddr::V4(ip_address_struct), port);
+//             UdpSocket::bind(socket_addr).map_err(|e| {
+//                 ThisProjectError::NetworkError(format!("Failed to bind to IPv4 address: {}", e))
+//             })
+//         }
+//         _ => Err(ThisProjectError::NetworkError("Unsupported network type".into())),
+//     }
+// }
+
+
+
+/// Creates a UDP socket bound to a locally chosen IP address and port based on the network band configuration.
+///
+/// This function uses the provided `band_network_type`, `band_local_user_ipv4_address`, and `band_local_user_ipv6_address`
+/// to determine the appropriate IP address to bind to. 
+/// if type says ivp6 or ipv4, this function then attempts to bind 
+/// a UDP socket to that ip address and the specified port.
+///
+/// # Arguments
+///
+/// * `band_network_type`: A string slice indicating the network type ("ipv4" or "ipv6").
+/// * `band_local_user_ipv4_address`: The local user's IPv4 address (used if `band_network_type` is "ipv4").
+/// * `band_local_user_ipv6_address`: The local user's IPv6 address (used if `band_network_type` is "ipv6").
+/// * `port`: The port number.
+///
+/// # Returns
+///
+/// * `Result<UdpSocket, ThisProjectError>`:  The created and bound UDP socket on success, or a `ThisProjectError` on failure (invalid IP, binding error, unsupported network type).
+fn create_local_udp_socket(
+    band_network_type: &str,  
+    band_local_user_ipv4_address: &Ipv4Addr,
+    band_local_user_ipv6_address: &Ipv6Addr,
+    port: u16,
+) -> Result<UdpSocket, ThisProjectError> {
+    let socket_addr = match band_network_type {
+        "ipv6" => SocketAddr::new(IpAddr::V6(*band_local_user_ipv6_address), port),
+        "ipv4" => SocketAddr::new(IpAddr::V4(*band_local_user_ipv4_address), port),
+        _ => return Err(ThisProjectError::NetworkError("Unsupported network type".into())),
+    };
+
+    UdpSocket::bind(socket_addr).map_err(|e| {
+        ThisProjectError::NetworkError(format!("Failed to bind to {} address: {}", band_network_type, e))
+    })
+}
+
+// /// Creates a UDP socket bound to the specified IP address and port.
+// ///
+// /// This function handles both IPv4 and IPv6 addresses based on the provided `net_type`.
+// ///
+// /// # Arguments
+// ///
+// ///
+// /// # Returns
+// ///
+// /// * `Result<UdpSocket, ThisProjectError>`: The created socket, or an error if the IP address is invalid, binding fails, or an unsupported network type is provided.
+// fn create_local_udp_socket(
+//     band_network_type: &str,  // Borrow the string slice
+//     band_local_user_ipv4_address: &Ipv4Addr,, 
+//     band_local_user_ipv6_address: &Ipv6Addr,,
+//     ip_address_struct: SocketAddr, // uses SocketAddr directly
+//     port: u16,
+// ) -> Result<UdpSocket, ThisProjectError> {
+//     match net_type {
+//         "ipv6" => {
+//             // let ip_address: Ipv6Addr = ip_address_string.parse().map_err(|_| {
+//             //     ThisProjectError::NetworkError("Invalid IPv6 address".into())
+//             // })?;
+//             let socket_addr = SocketAddr::new(IpAddr::V6(ip_address_struct), port);
+//             UdpSocket::bind(socket_addr).map_err(|e| {
+//                 ThisProjectError::NetworkError(format!("Failed to bind to IPv6 address: {}", e))
+//             })
+//         }
+//         "ipv4" => {
+//             // let ip_address: Ipv4Addr = ip_address_string.parse().map_err(|_| {
+//             //     ThisProjectError::NetworkError("Invalid IPv4 address".into())
+//             // })?;
+//             let socket_addr = SocketAddr::new(IpAddr::V4(ip_address_struct), port);
+//             UdpSocket::bind(socket_addr).map_err(|e| {
+//                 ThisProjectError::NetworkError(format!("Failed to bind to IPv4 address: {}", e))
+//             })
+//         }
+//         _ => Err(ThisProjectError::NetworkError("Unsupported network type".into())),
+//     }
+// }
 
 // Result enum for the sync operation, allowing communication between threads
 enum SyncResult {
