@@ -9025,60 +9025,186 @@ fn get_latest_received_from_collaborator_in_teamchannel_file_timestamp(
 ///
 /// # Returns
 ///
-/// * `Result<(SocketAddr, SocketAddr), ThisProjectError>`: Tuple of SocketAddrs (ready, gotit), or an error.
+/// * `Result<(SocketAddr, SocketAddr), ThisProjectError>`: 
+/// Tuple of SocketAddrs (ready, gotit), or an error.
+///
+
 fn get_rc_ready_gotit_socketaddrses(
     room_sync_input: &ForRemoteCollaboratorDeskThread,
-) -> Result<(SocketAddr, SocketAddr), ThisProjectError> { // function name corrected
+) -> Result<(SocketAddr, SocketAddr), ThisProjectError> {
     let timeout_duration = Duration::from_secs(15);
     let mut buf = [0; 1024];
 
-
     for ipv6_addr in &room_sync_input.remote_collaborator_ipv6_addr_list {
         let ready_socket_addr = SocketAddr::new(IpAddr::V6(*ipv6_addr), room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip);
-        
-        match UdpSocket::bind(ready_socket_addr) { // Directly bind the socket here.  HERE!! HERE!!
+
+        match UdpSocket::bind(ready_socket_addr) {
             Ok(socket) => {
                 socket.set_read_timeout(Some(timeout_duration))?;
-                debug_log!("Listening on {:?} for ReadySignal", ready_socket_addr); // HERE!! HERE!! corrected debug_log name
-                
-                if recv_ready_signal_with_timeout(&socket, &mut buf, &room_sync_input.local_user_salt_list).is_ok() { // Add salts for hash verification. // HERE!! HERE!! add salt arg
-                    let gotit_socket_addr = SocketAddr::new(IpAddr::V6(*ipv6_addr), room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip); // Create correct gotit SocketAddr
-                    return Ok((ready_socket_addr, gotit_socket_addr));
-                }
+                debug_log!("Listening on {:?} for ReadySignal (IPv6)", ready_socket_addr);
 
+                // --- START OF CHANGE ---
+                match recv_ready_signal_with_timeout(&socket, &mut buf, &room_sync_input.local_user_salt_list) {
+                    Ok(Some((src_addr, ready_signal))) => {  // Return ready_signal
+                        // Verify Hashes
+                        if verify_readysignal_hashes(&ready_signal, &room_sync_input.local_user_salt_list) { // Verify hashes HERE!
+                            let gotit_socket_addr = SocketAddr::new(IpAddr::V6(*ipv6_addr), room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip);
+                            return Ok((ready_socket_addr, gotit_socket_addr));
+                        } else {
+                            debug_log!("ReadySignal hash verification failed. Discarding.");
+                            continue; // Try next address or network type.
+                        }
+                    }
+                    Ok(None) => {
+                        debug_log!("Timeout or no valid ReadySignal received on {:?}. Trying next address...", ready_socket_addr);
+                        continue;
+                    },
+                    Err(e) => return Err(e),
+                }
+                // --- END OF CHANGE ---
 
             }
             Err(e) => {
-                debug_log!("Failed to bind to {:?}: {}", ready_socket_addr, e); // Log binding errors
+                debug_log!("Failed to bind to {:?} (IPv6): {}", ready_socket_addr, e);
             }
         }
     }
 
 
-    for ipv4_addr in &room_sync_input.remote_collaborator_ipv4_addr_list { // ipv4 handling here
-        let ready_socket_addr = SocketAddr::new(IpAddr::V4(*ipv4_addr), room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip); // No change here.
-        match UdpSocket::bind(ready_socket_addr) { // HERE!! HERE!! Directly use UdpSocket::bind().
-
+    for ipv4_addr in &room_sync_input.remote_collaborator_ipv4_addr_list {
+        let ready_socket_addr = SocketAddr::new(IpAddr::V4(*ipv4_addr), room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip);
+        match UdpSocket::bind(ready_socket_addr) {
             Ok(socket) => {
                 socket.set_read_timeout(Some(timeout_duration))?;
-                debug_log!("Listening on {:?} for ReadySignal", ready_socket_addr); // Log listening address
+                debug_log!("Listening on {:?} for ReadySignal (IPv4)", ready_socket_addr);
 
-                if recv_ready_signal_with_timeout(&socket, &mut buf, &room_sync_input.local_user_salt_list).is_ok() {  // Salts used here for verification, changed to local_user_salt_list. // HERE!! HERE!! add salt arg
+                // --- START OF CHANGE ---
+                match recv_ready_signal_with_timeout(&socket, &mut buf, &room_sync_input.local_user_salt_list) {
+                    Ok(Some((src_addr, ready_signal))) => {
+                        if verify_readysignal_hashes(&ready_signal, &room_sync_input.local_user_salt_list) { // Verify here as well!
+                            let gotit_socket_addr = SocketAddr::new(IpAddr::V4(*ipv4_addr), room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip);
+                            return Ok((ready_socket_addr, gotit_socket_addr));
+                        } else {
+                            debug_log!("ReadySignal hash verification failed. Discarding.");
+                            continue;
+                        }
+                    }
+                    Ok(None) => {
+                        debug_log!("Timeout or no valid ReadySignal received on {:?}. Trying next address...", ready_socket_addr);
+                        continue;
+                    }
+                    Err(e) => return Err(e),
 
-                    let gotit_socket_addr = SocketAddr::new(IpAddr::V4(*ipv4_addr), room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip);
-                    return Ok((ready_socket_addr, gotit_socket_addr));  //  Use ipv4 gotit port
                 }
+                // --- END OF CHANGE ---
 
             }
             Err(e) => {
-                debug_log!("Failed to bind to {:?}: {}", ready_socket_addr, e);
-                // Consider logging and handling errors with more specificity. 
-                // You may or may not want to halt Uma when no network band connections are found. 
+                debug_log!("Failed to bind to {:?} (IPv4): {}", ready_socket_addr, e);
             }
         }
     }
+
     Err(ThisProjectError::NetworkError("No valid ReadySignal received".into()))
 }
+
+
+// /// Receives a ReadySignal with a timeout, handling potential errors and timeouts.  Now returns the deserialized ReadySignal on success.
+// ///
+// /// # Arguments
+// ///
+// /// * `socket`: The UDP socket to receive data on.
+// /// * `buf`: A mutable buffer to store the received data.
+// /// * `salt_list`: The salt list for hash verification.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<Option<(SocketAddr, ReadySignal)>, ThisProjectError>`:  A tuple containing the sender's `SocketAddr` and `ReadySignal` on success,
+// ///     or a `ThisProjectError` if no valid ReadySignal is received within the timeout or if an error occurs.
+// fn recv_ready_signal_with_timeout(
+//     socket: &UdpSocket, 
+//     buf: &mut [u8], 
+//     salt_list: &[u128],
+// ) -> Result<Option<(SocketAddr, ReadySignal)>, ThisProjectError> { // Changed return type
+//     debug_log!("recv_ready_signal_with_timeout(): Starting...");
+
+//     match socket.recv_from(buf) {
+//         Ok((amt, src)) => {
+//             debug_log!("recv_ready_signal_with_timeout(): Received {} bytes from {}", amt, src);
+
+//             match deserialize_ready_signal(&buf[..amt], &salt_list) { // Deserialize here
+//                 Ok(ready_signal) => Ok(Some((src, ready_signal))), // Return the source address AND ReadySignal
+//                 Err(e) => {
+//                     debug_log!("recv_ready_signal_with_timeout(): Failed to deserialize ReadySignal: {}", e);
+//                     Err(e)
+//                 }
+//             }
+
+//         },
+//         Err(e) if e.kind() == ErrorKind::WouldBlock => Ok(None), // Timeout
+//         Err(e) => Err(ThisProjectError::NetworkError(e.to_string())),
+//     }
+// }
+
+
+
+
+
+
+
+// fn get_rc_ready_gotit_socketaddrses(
+//     room_sync_input: &ForRemoteCollaboratorDeskThread,
+// ) -> Result<(SocketAddr, SocketAddr), ThisProjectError> { // function name corrected
+//     let timeout_duration = Duration::from_secs(15);
+//     let mut buf = [0; 1024];
+
+
+//     for ipv6_addr in &room_sync_input.remote_collaborator_ipv6_addr_list {
+//         let ready_socket_addr = SocketAddr::new(IpAddr::V6(*ipv6_addr), room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip);
+        
+//         match UdpSocket::bind(ready_socket_addr) { // Directly bind the socket here.  HERE!! HERE!!
+//             Ok(socket) => {
+//                 socket.set_read_timeout(Some(timeout_duration))?;
+//                 debug_log!("Listening on {:?} for ReadySignal", ready_socket_addr); // HERE!! HERE!! corrected debug_log name
+                
+//                 if recv_ready_signal_with_timeout(&socket, &mut buf, &room_sync_input.local_user_salt_list).is_ok() { // Add salts for hash verification. // HERE!! HERE!! add salt arg
+//                     let gotit_socket_addr = SocketAddr::new(IpAddr::V6(*ipv6_addr), room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip); // Create correct gotit SocketAddr
+//                     return Ok((ready_socket_addr, gotit_socket_addr));
+//                 }
+
+
+//             }
+//             Err(e) => {
+//                 debug_log!("Failed to bind to {:?}: {}", ready_socket_addr, e); // Log binding errors
+//             }
+//         }
+//     }
+
+
+//     for ipv4_addr in &room_sync_input.remote_collaborator_ipv4_addr_list { // ipv4 handling here
+//         let ready_socket_addr = SocketAddr::new(IpAddr::V4(*ipv4_addr), room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip); // No change here.
+//         match UdpSocket::bind(ready_socket_addr) { // HERE!! HERE!! Directly use UdpSocket::bind().
+
+//             Ok(socket) => {
+//                 socket.set_read_timeout(Some(timeout_duration))?;
+//                 debug_log!("Listening on {:?} for ReadySignal", ready_socket_addr); // Log listening address
+
+//                 if recv_ready_signal_with_timeout(&socket, &mut buf, &room_sync_input.local_user_salt_list).is_ok() {  // Salts used here for verification, changed to local_user_salt_list. // HERE!! HERE!! add salt arg
+
+//                     let gotit_socket_addr = SocketAddr::new(IpAddr::V4(*ipv4_addr), room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip);
+//                     return Ok((ready_socket_addr, gotit_socket_addr));  //  Use ipv4 gotit port
+//                 }
+
+//             }
+//             Err(e) => {
+//                 debug_log!("Failed to bind to {:?}: {}", ready_socket_addr, e);
+//                 // Consider logging and handling errors with more specificity. 
+//                 // You may or may not want to halt Uma when no network band connections are found. 
+//             }
+//         }
+//     }
+//     Err(ThisProjectError::NetworkError("No valid ReadySignal received".into()))
+// }
 
 // /// Retrieves SocketAddrs for the remote collaborator's ready and "got it" ports based on the first valid IP address found.
 // ///
@@ -9154,7 +9280,10 @@ fn get_rc_ready_gotit_socketaddrses(
 // }
 
 
-/// Receives a ReadySignal with a timeout, handling potential errors and timeouts.
+/// Receives a ReadySignal with a timeout, performing hash and timestamp verification.
+/// Goal purpose and scope: screening valid packets to verify a live-ip
+///
+/// This function now includes both hash verification and timestamp freshness checks.
 ///
 /// # Arguments
 ///
@@ -9164,42 +9293,108 @@ fn get_rc_ready_gotit_socketaddrses(
 ///
 /// # Returns
 ///
-/// * `Result<Option<SocketAddr>, ThisProjectError>`:
-///     - `Ok(Some(src_addr))`: If a valid ReadySignal is received within the timeout, returns the sender's address.
-///     - `Ok(None)`: If the timeout expires without receiving a valid ReadySignal.
-///     - `Err(ThisProjectError)`: If an error occurs during receiving or if the received data is invalid.
-fn recv_ready_signal_with_timeout(
+/// * `Result<Option<SocketAddr>, ThisProjectError>`: The sender's `SocketAddr` on success, an error, or `Ok(None)` on timeout.
+fn recv_ready_signal_with_timeout( // Hash and timestamp checks moved HERE!
     socket: &UdpSocket, 
     buf: &mut [u8], 
     salt_list: &[u128],
-) -> Result<Option<SocketAddr>, ThisProjectError> {
+) -> Result<Option<(SocketAddr, ReadySignal)>, ThisProjectError> { // Changed to return the signal
     debug_log!("recv_ready_signal_with_timeout(): Starting...");
 
-    match socket.recv_from(buf) {  // Receive data on the socket.
-        Ok((amt, src)) => { // If data is received:
+    let timeout_duration = Duration::from_secs(15);
+    
+    socket.set_read_timeout(Some(timeout_duration))?; 
 
+    match socket.recv_from(buf) {
+        Ok((amt, src)) => {
             debug_log!("recv_ready_signal_with_timeout(): Received {} bytes from {}", amt, src);
 
-            // 1. Deserialize the ReadySignal.
-            let ready_signal = deserialize_ready_signal(&buf[..amt], &salt_list)?;  // Note the use of &salt_list
+            // 1. Deserialize
+            let ready_signal = match deserialize_ready_signal(&buf[..amt], salt_list) { // Deserialize first.  Use the passed-in salt_list
+                Ok(signal) => signal,
+                Err(e) => {
+                    debug_log!("recv_ready_signal_with_timeout():  Failed to deserialize ReadySignal: {}", e);
+                    return Err(e);  // Or continue to listen for the next signal
+                },
+            };
 
-            // 2. Verify the ReadySignal's timestamp.
-            //     (Add your timestamp verification logic here)
+            // 2. Hash Verification: PERFORM HASH CHECK HERE!
+            if !verify_readysignal_hashes(&ready_signal, salt_list) { // Hash verification alongside timestamp check
+                debug_log!("recv_ready_signal_with_timeout(): ReadySignal hash verification failed. Discarding.");
+                return Ok(None); // Or continue to listen, but return nothing.
+            };
+            debug_log!("recv_ready_signal_with_timeout(): ReadySignal hashes verified.");
 
-            // 3. If the ReadySignal is valid, return the source address.
-            Ok(Some(src)) 
+            // 3. Timestamp Freshness Check: PERFORM TIMESTAMP CHECK HERE!
+            let current_timestamp = get_current_unix_timestamp();
+            if ready_signal.rst > current_timestamp + 5 || current_timestamp - 10 > ready_signal.rst {  // Freshness check, combined
+                debug_log!("recv_ready_signal_with_timeout(): Received outdated or future-dated ReadySignal.  Discarding.");
+                return Ok(None); // Indicate invalid signal without returning an Error.
+            };
+            debug_log!("recv_ready_signal_with_timeout():  ReadySignal timestamp verified.");
+
+            // 4. Return the source address and ReadySignal if all checks pass.
+            Ok(Some((src, ready_signal))) // Include ReadySignal
         },
-        Err(e) if e.kind() == ErrorKind::WouldBlock => { // If WouldBlock, timeout:
-            debug_log!("recv_ready_signal_with_timeout(): Timeout. No data received within the timeout period.");            
-            Ok(None)  // Indicate timeout with Ok(None) (do NOT return an error).
-        },
-        Err(e) => { // Other errors
-            debug_log!("recv_ready_signal_with_timeout():  Error receiving data: {}", e);
+
+        Err(e) if e.kind() == ErrorKind::WouldBlock => {
+            debug_log!("recv_ready_signal_with_timeout(): Timeout");
+            Ok(None) // Correct handling of timeout, not returning an error!
+        }
+        Err(e) => {
+            debug_log!("recv_ready_signal_with_timeout(): Error receiving data: {}", e);
             Err(ThisProjectError::NetworkError(e.to_string()))
         },
     }
-
 }
+
+
+// /// Receives a ReadySignal with a timeout, handling potential errors and timeouts.
+// ///
+// /// # Arguments
+// ///
+// /// * `socket`: The UDP socket to receive data on.
+// /// * `buf`: A mutable buffer to store the received data.
+// /// * `salt_list`: The salt list for hash verification.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<Option<SocketAddr>, ThisProjectError>`:
+// ///     - `Ok(Some(src_addr))`: If a valid ReadySignal is received within the timeout, returns the sender's address.
+// ///     - `Ok(None)`: If the timeout expires without receiving a valid ReadySignal.
+// ///     - `Err(ThisProjectError)`: If an error occurs during receiving or if the received data is invalid.
+// fn recv_ready_signal_with_timeout(
+//     socket: &UdpSocket, 
+//     buf: &mut [u8], 
+//     salt_list: &[u128],
+// ) -> Result<Option<SocketAddr>, ThisProjectError> {
+//     debug_log!("recv_ready_signal_with_timeout(): Starting...");
+
+//     match socket.recv_from(buf) {  // Receive data on the socket.
+//         Ok((amt, src)) => { // If data is received:
+
+//             debug_log!("recv_ready_signal_with_timeout(): Received {} bytes from {}", amt, src);
+
+//             // 1. Deserialize the ReadySignal.
+//             let ready_signal = deserialize_ready_signal(&buf[..amt], &salt_list)?;  // Note the use of &salt_list
+
+//             // 2. Verify the ReadySignal's timestamp.
+//             //     (Add your timestamp verification logic here)
+
+//             // 3. If the ReadySignal is valid, return the source address.
+//             Ok(Some(src)) 
+//         },
+//         Err(e) if e.kind() == ErrorKind::WouldBlock => { // If WouldBlock, timeout:
+//             debug_log!("recv_ready_signal_with_timeout(): Timeout. No data received within the timeout period.");            
+//             Ok(None)  // Indicate timeout with Ok(None) (do NOT return an error).
+//         },
+//         Err(e) => { // Other errors
+//             debug_log!("recv_ready_signal_with_timeout():  Error receiving data: {}", e);
+//             Err(ThisProjectError::NetworkError(e.to_string()))
+//         },
+//     }
+
+// }
 
 
 /// TODO: What on earth is this thing???
@@ -9305,7 +9500,7 @@ fn handle_remote_collaborator_meetingroom_desk(
             room_sync_input.remote_collaborator_name
         );
         debug_log!(
-            "room_sync_input -> {:?}", 
+            "HRCD room_sync_input -> {:?}", 
             room_sync_input
         );
         
@@ -9325,6 +9520,12 @@ fn handle_remote_collaborator_meetingroom_desk(
                 }
             };
         
+        debug_log!(
+            "HRCD get_rc_ready_gotit_socketaddrses: RC -> {:?} || ready_socket_addr -> {:?} || gotit_socket_addr -> {:?}", 
+            room_sync_input.remote_collaborator_name,
+            ready_socket_addr,
+            gotit_socket_addr
+        );
         
         // let (detected_rc_ip_string, detected_net_type) = match get_rc_ip_and_network_type(room_sync_input) {
         //     Ok((detected_rc_ip_string, detected_net_type)) => (detected_rc_ip_string, detected_net_type),
@@ -10756,17 +10957,13 @@ An Appropriately Svelt Mainland:
 /// and just as reliable in this context.
 ///
 /// This also allows the user to manually set the halt signal.
-fn main() {
+fn main() {    
+    initialize_continue_uma_signal(); // set boolean flag for loops to hault
+    initialize_hard_restart_signal(); // set boolean flag for uma restart
 
-    // set boolean flag for loops to know when to hault
-    initialize_continue_uma_signal();     
+    loop { // Main loop: let it fail, and try again
 
-    // set boolean flag for uma to know when to restart
-    initialize_hard_restart_signal();
-
-    loop {
-        // 3. Check for halt signal
-        if should_not_hard_restart() {
+        if should_not_hard_restart() { // Check for restart
             debug_log(
                 "Halting handle_remote_collaborator_meetingroom_desk()"
             );
@@ -10778,7 +10975,7 @@ fn main() {
         if let Err(e) = initialize_uma_application() { 
                 eprintln!("Initialization failed: {}", e);
                 // Potentially add more error-specific handling here
-                std::process::exit(1); // Exit with a non-zero code to indicate an error
+                std::process::exit(1); // Exit with non-zero code: indicate error
             }
 
         // Thread 1: Executes the thread1_loop function
@@ -10789,10 +10986,12 @@ fn main() {
         let you_love_the_sync_team_office = thread::spawn(move || {
             you_love_the_sync_team_office();
         });
-        // Keep the main thread alive
+        
+        // Keep the main thread alive?
         we_love_projects_loop.join().unwrap();
         you_love_the_sync_team_office.join().unwrap();
 
+        // End
         println!("All threads completed. The Uma says fare well and strive.");
         debug_log("All threads completed. The Uma says fare well and strive.");
     }
