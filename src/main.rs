@@ -7657,60 +7657,204 @@ enum CompressionError {
 
 
 
-/// compress type and index band info into one byte
-/// 100's place is 0 for "ipv4" or 1 for "ipv6"
-/// 0-99 in ones and tens place are the index u8 value
+// /// compress type and index band info into one byte
+// /// 100's place is 0 for "ipv4" or 1 for "ipv6"
+// /// 0-99 in ones and tens place are the index u8 value
+// ///
+// /// error handling: if network_type is not "ipv4" or "ipv6", panic!
+// fn compress_band_data_byte(
+//     network_type: &str,
+//     network_index: u8,
+// ) -> Result<u8, CompressionError> {
+//     let mut band_byte: u8 = 0;
+
+//     // 1. make hundred's digit
+//     match network_type {
+//         "ipv4" => band_byte |= 0,
+//         "ipv6" => band_byte |= 1 << 7,
+//         _ => return Err(CompressionError::InvalidNetworkType),
+//     }
+
+//     // 2. make 0-99 index number
+//     if network_index > 99 {
+//         return Err(CompressionError::NetworkIndexOutOfRange);
+//     }
+//     band_byte |= network_index;
+
+//     // Look
+//     debug_log!("decompress_banddata_byte(), band_byte[{:?}]: (network_type, network_index) ({:?}, {:?})",
+//         band_byte,
+//         network_type,
+//         network_index
+//     );
+    
+//     // 3. make byte
+//     // 4. return byte
+//     Ok(band_byte)
+// }
+
+// /// decompress type and index band info from one byte
+// /// 100's place is 0 for "ipv4" or 1 for "ipv6"
+// /// 0-99 in ones and tens place are the index u8 value
+// ///
+// /// Note: it is possible for this to output a network index
+// /// that does not exist
+// ///
+// /// Since all possible byte values are accounted for, 
+// /// the function will not error for any input.
+// fn decompress_banddata_byte(
+//         band_byte: u8,
+//     ) -> (String, u8) {
+//         let network_type = if band_byte & (1 << 7) != 0 {
+//             "ipv6".to_string()
+//         } else {
+//             "ipv4".to_string()
+//         };
+
+//         // 2. get 0-99 index number
+//         let network_index = band_byte & 0b01111111;
+
+//         // Look
+//         debug_log!("decompress_banddata_byte(), band_byte[{:?}]: (network_type, network_index) ({:?}, {:?})",
+//             band_byte,
+//             network_type,
+//             network_index
+//         );
+        
+//         // 4. return  (network_type, network_index)
+//         (network_type, network_index)
+//     }
+
+/// Compresses network type and index into a single u8, strictly using 3 digits.
+/// Hundreds digit: 0 for IPv4, 1 for IPv6.
+/// Remaining digits (0-99): Network index.
 ///
-/// error handling: if network_type is not "ipv4" or "ipv6", panic!
+/// # Arguments
+///
+/// * `network_type`: "ipv4" or "ipv6".
+/// * `network_index`: The network index (0-99).
+///
+/// # Returns
+///
+/// * `Result<u8, CompressionError>`: The compressed byte (0-199), or an error if input is invalid.
 fn compress_band_data_byte(
     network_type: &str,
     network_index: u8,
 ) -> Result<u8, CompressionError> {
-    let mut band_byte: u8 = 0;
 
-    // 1. make hundred's digit
-    match network_type {
-        "ipv4" => band_byte |= 0,
-        "ipv6" => band_byte |= 1 << 7,
-        _ => return Err(CompressionError::InvalidNetworkType),
-    }
-
-    // 2. make 0-99 index number
     if network_index > 99 {
         return Err(CompressionError::NetworkIndexOutOfRange);
     }
-    band_byte |= network_index;
 
-    // 3. make byte
-    // 4. return byte
+    let hundreds_digit = match network_type {
+        "ipv4" => 0,
+        "ipv6" => 1,
+        _ => return Err(CompressionError::InvalidNetworkType),
+    };
+
+    let band_byte = (hundreds_digit * 100) + network_index; // Combine using decimal places, not bitwise
+
+    debug_log!("compress_band_data_byte(), band_byte: {}, (network_type, network_index) ({}, {})", band_byte, network_type, network_index);
     Ok(band_byte)
 }
 
-/// decompress type and index band info from one byte
-/// 100's place is 0 for "ipv4" or 1 for "ipv6"
-/// 0-99 in ones and tens place are the index u8 value
-///
-/// Note: it is possible for this to output a network index
-/// that does not exist
-///
-/// Since all possible byte values are accounted for, 
-/// the function will not error for any input.
-fn decompress_banddata_byte(
-        band_byte: u8,
-    ) -> (String, u8) {
-        let network_type = if band_byte & (1 << 7) != 0 {
-            "ipv6".to_string()
-        } else {
-            "ipv4".to_string()
-        };
 
-        // 2. get 0-99 index number
-        let network_index = band_byte & 0b01111111;
 
-        // 4. return  (network_type, network_index)
-        (network_type, network_index)
+#[derive(Debug)]
+enum DecompressionError {
+    InvalidBandByte,
+    InvalidIndex,
+}
+
+// Implement Display for DecompressionError to improve debug output:
+impl std::fmt::Display for DecompressionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DecompressionError::InvalidBandByte => write!(f, "Invalid band byte value (must be 0-199)"),
+            DecompressionError::InvalidIndex => write!(f, "Invalid network index (must be 0-99)"),
+        }
+    }
+}
+// Implement Error for DecompressionError for compatibility:
+impl std::error::Error for DecompressionError {}
+
+
+
+/// Decompresses network type and index from a u8 byte.
+///
+/// Hundreds digit: 0 for IPv4, 1 for IPv6.
+/// Remaining digits (0-99):  Network index.
+/// Returns an error for invalid input.  Handles errors explicitly with Result.
+///
+/// # Arguments
+///
+/// * `band_byte`: The compressed byte.
+///
+/// # Returns
+///
+/// * `Result<(String, u8), DecompressionError>`:  The network type and index, or a DecompressionError.
+fn decompress_banddata_byte(band_byte: u8) -> Result<(String, u8), DecompressionError> {
+    if band_byte >= 200 {
+        debug_log!("decompress_banddata_byte(): Invalid band_byte: {} (must be 0-199).", band_byte);
+        return Err(DecompressionError::InvalidBandByte);
     }
 
+    let hundreds_digit = band_byte / 100;
+    let network_index = band_byte % 100;
+
+    if network_index > 99 { // Strict check as per the specification.
+        debug_log!("decompress_banddata_byte(): Invalid index: {} (must be from 0-99).", network_index);
+        return Err(DecompressionError::InvalidIndex); // Specific error for easier handling
+    }
+
+    let network_type = if hundreds_digit == 1 {
+        "ipv6".to_string()
+    } else {
+        "ipv4".to_string()
+    };
+
+    debug_log!("decompress_banddata_byte(), band_byte: {}: (network_type, network_index) ({}, {})", band_byte, network_type, network_index);
+    Ok((network_type, network_index)) // Valid data: return Ok(data)
+}
+
+// /// Decompresses network type and index from a u8, using only 3 digits (0-199).
+// /// Hundreds digit: 0 for IPv4, 1 for IPv6.
+// /// Remaining digits:  Network index.
+// /// Returns None for invalid indices (>= 100), improving safety and consistency with spec.
+// ///
+// /// # Arguments
+// /// * `band_byte`:  The compressed byte.
+// ///
+// /// # Returns
+// ///
+// /// * `Option<(String, u8)>`: The network type and index (if index is from 0-99) or None if the index part is invalid (>= 100).
+
+// fn decompress_banddata_byte(band_byte: u8) -> Option<(String, u8)> {
+//     if band_byte >= 200 { //Invalid input:  outside of 3-digit range 0-199.
+//         debug_log!("decompress_banddata_byte(): Invalid band_byte: {} (must be 0-199).", band_byte);
+//         return None; 
+//     }
+
+//     let hundreds_digit = band_byte / 100; // Integer division to get hundreds place
+//     let network_index = band_byte % 100;  // Modulo to get remaining two digits
+
+
+//     if network_index >= 100 {  // Check now after extracting both digits, enforcing strict adherence to specification.
+//         debug_log!("decompress_banddata_byte(): Invalid index: {} (must be from 0-99).", network_index);
+//         return None;  // Return None, do not return values that are not within original specifications.  
+//     }    
+    
+
+//     let network_type = if hundreds_digit == 1 {
+//         "ipv6".to_string()
+//     } else {
+//         "ipv4".to_string()
+//     };
+
+
+//     debug_log!("decompress_banddata_byte(), band_byte: {}: (network_type, network_index) ({}, {})", band_byte, network_type, network_index);
+//     Some((network_type, network_index)) // Valid index: Wrap the tuple with Some() to return an Option
+// }
 
 // /// compress type and index band info into one byte
 // /// 100's place is 0 for "ipv4" or 1 for "ipv6"
@@ -9797,7 +9941,18 @@ fn get_rc_band_ready_gotit_socketaddrses_hrcd(
                 }
                 
                 // --- 5.3.2 Extract and Save Remote Band Information ---
-                let (rc_network_type, rc_network_index) = decompress_banddata_byte(ready_signal.b);
+                // let (rc_network_type, rc_network_index) = decompress_banddata_byte(ready_signal.b);
+                let (rc_network_type, rc_network_index) = { // Create a new inner scope here
+                    let band_result = decompress_banddata_byte(ready_signal.b);
+                
+                    match band_result {
+                        Ok((tempnetworktype, tempnetworkindex)) => (tempnetworktype, tempnetworkindex), // Assign values.
+                        Err(e) => {
+                            debug_log!("Error decompressing band data: {}. Skipping.", e);
+                            continue;  // Skip to next iteration if an error occurs during decompression.
+                        }
+                    }
+                }; 
                 
                 // --- Select IP for "got it" signal ---
                 let rc_ip = match get_ip_from_index_and_type(
