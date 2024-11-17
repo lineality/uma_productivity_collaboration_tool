@@ -6418,6 +6418,7 @@ fn serialize_ready_signal(ready_signal: &ReadySignal) -> Result<Vec<u8>, ThisPro
     Ok(bytes)
 }
 
+// TODO max size check?
 /// Calculates Pearson hashes for a ReadySignal's fields. Hashes `rt`, `rst`, `nt`, `ni`, and salts.
 ///
 /// Args:
@@ -6432,15 +6433,13 @@ fn serialize_ready_signal(ready_signal: &ReadySignal) -> Result<Vec<u8>, ThisPro
 fn calculate_ready_signal_hashes(
     rt: u64,
     rst: u64,
-    nt: &str,
-    ni: u8,
+    band: u8,
     local_user_salt_list: &[u128],
 ) -> Result<Vec<u8>, ThisProjectError> {
     let mut data_to_hash = Vec::new();
     data_to_hash.extend_from_slice(&rt.to_be_bytes());
     data_to_hash.extend_from_slice(&rst.to_be_bytes());
-    data_to_hash.extend_from_slice(nt.as_bytes());
-    data_to_hash.extend_from_slice(&ni.to_be_bytes());
+    data_to_hash.extend_from_slice(&band.to_be_bytes());
 
     let mut ready_signal_hash_list: Vec<u8> = Vec::new();
     for salt in local_user_salt_list {
@@ -7886,20 +7885,6 @@ fn send_ready_signal(
 ) -> Result<(), ThisProjectError> {
     debug_log!("send_ready_signal(), Starting...");
 
-    // 1. Calculate hashes
-    let current_timestamp = get_current_unix_timestamp();
-    let hashes_result = calculate_ready_signal_hashes(
-        last_received_timestamp,
-        current_timestamp,
-        local_user_network_type,
-        local_user_network_index,
-        local_user_salt_list,
-    );
-    let hashes = match hashes_result {
-        Ok(h) => h,
-        Err(e) => return Err(e),
-    };
-
     // for ready_signal.b
     let b_band_data = match compress_band_data_byte(
         local_user_network_type, 
@@ -7913,6 +7898,21 @@ fn send_ready_signal(
             return Ok(());
         }
     };
+    
+    // 1. Calculate hashes
+    let current_timestamp = get_current_unix_timestamp();
+    let hashes_result = calculate_ready_signal_hashes(
+        last_received_timestamp,
+        current_timestamp,
+        b_band_data,
+        local_user_salt_list,
+    );
+    let hashes = match hashes_result {
+        Ok(h) => h,
+        Err(e) => return Err(e),
+    };
+
+
 
     // 2. Create ReadySignal 
     let ready_signal = ReadySignal {
