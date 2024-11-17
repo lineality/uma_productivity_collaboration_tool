@@ -6110,17 +6110,24 @@ fn verify_readysignal_hashes(
         let calculated_hash = match pearson_hash_base(&salted_data) {
             Ok(hash) => hash,
             Err(e) => {
-                debug_log!("Error calculating Pearson hash: {}", e);
+                debug_log!("verify_readysignal_hashes(), Error calculating Pearson hash: {}", e);
                 return false; // Error during hash calculation
             }
         };
 
         if i >= ready_signal.rh.len() {
-            debug_log!("Out-of-bounds index error when accessing rh field");
+            debug_log!("verify_readysignal_hashes(),  Out-of-bounds index error when accessing rh field");
             return false; // Out-of-bounds index error
         }
 
+        // comparing each index to each index: fail-checking step-wise
         if calculated_hash != ready_signal.rh[i] { // Compare with the received hash
+            debug_log!(
+                "failed in verify_readysignal_hashes(), hash != hash: ready_signal.rh->{:?} != calculated_hash->{:?}, all ready_signal.rh->{:?}", 
+                ready_signal.rh[i],
+                calculated_hash,
+                ready_signal.rh,
+            );
             return false; // Hash mismatch
         }
     }
@@ -9727,8 +9734,6 @@ fn get_latest_received_from_collaborator_in_teamchannel_file_timestamp(
 /// * `Result<(SocketAddr, SocketAddr), ThisProjectError>`: 
 /// Tuple of SocketAddrs (ready, gotit), or an error.
 ///
-// ... other imports and functions ...
-
 fn get_rc_band_ready_gotit_socketaddrses_hrcd(
     room_sync_input: &ForRemoteCollaboratorDeskThread,
 ) -> Result<(SocketAddr, SocketAddr), ThisProjectError> {
@@ -9748,7 +9753,7 @@ fn get_rc_band_ready_gotit_socketaddrses_hrcd(
     let local_ip = match local_network_type.as_str() {
         "ipv6" => IpAddr::V6(local_ipv6),
         "ipv4" => IpAddr::V4(local_ipv4),
-        _ => return Err(ThisProjectError::NetworkError("Invalid local network type".into())),
+        _ => return Err(ThisProjectError::NetworkError("get_rc_band_..._hrcd Invalid local network type".into())),
     };
 
 
@@ -9766,7 +9771,7 @@ fn get_rc_band_ready_gotit_socketaddrses_hrcd(
     loop { // Main listening loop
         // 5.1 Check for UMA shutdown
         if should_halt_uma() {
-            return Err(ThisProjectError::NetworkError("UMA halt signal received during band handshake".into()));
+            return Err(ThisProjectError::NetworkError("get_rc_band_..._hrcd UMA halt signal received during band handshake".into()));
         }
         
         debug_log!("get_rc_band_ready_gotit_socketaddrses_hrcd: Listening for ReadySignal on: {:?}", ready_socket_addr);
@@ -9775,17 +9780,19 @@ fn get_rc_band_ready_gotit_socketaddrses_hrcd(
         socket.set_read_timeout(Some(timeout_duration))?;
 
         // 5.3 Receive and Process
-        match recv_ready_signal_with_timeout(&socket, &mut buf, &room_sync_input.local_user_salt_list) {
+        match recv_ready_signal_with_timeout(&socket, &mut buf, &room_sync_input.remote_collaborator_salt_list) {
             Ok(Some((_, ready_signal))) => {
 
+                // Note: this Hash Verification  is already performed inside recv_ready_signal_with_timeout()
                 // 5.3.1 Hash and Timestamp Verification (Perform checks *inside* the Ok case)
-                if !verify_readysignal_hashes(&ready_signal, &room_sync_input.remote_collaborator_salt_list) {
-                    debug_log!("ReadySignal hash verification failed. Discarding and continuing to listen.");
-                    continue; // Continue to listen for a valid signal
-                }
+                // if !verify_readysignal_hashes(&ready_signal, &room_sync_input.remote_collaborator_salt_list) {
+                //     debug_log!("get_rc_band_..._hrcd ReadySignal hash verification failed. Discarding and continuing to listen.");
+                //     continue; // Continue to listen for a valid signal
+                // }
+                
                 let current_timestamp = get_current_unix_timestamp();
                 if ready_signal.rst > current_timestamp + 5 || current_timestamp - 10 > ready_signal.rst {
-                    debug_log!("Received outdated or future-dated ReadySignal. Discarding and continuing to listen.");
+                    debug_log!("get_rc_band_..._hrcd Received outdated or future-dated ReadySignal. Discarding and continuing to listen.");
                     continue; // Continue listening
                 }
                 
@@ -9801,7 +9808,7 @@ fn get_rc_band_ready_gotit_socketaddrses_hrcd(
                 ) {
                     Some(ip) => ip,
                     None => {
-                        debug_log!("Failed to get remote collaborator IP address from received network index and type. Continuing to listen.");
+                        debug_log!("get_rc_band_..._hrcd Failed to get remote collaborator IP address from received network index and type. Continuing to listen.");
                         continue; // Continue listening for valid signal
                     }
                 };
@@ -9823,7 +9830,7 @@ fn get_rc_band_ready_gotit_socketaddrses_hrcd(
             }
             Ok(None) => {
                 // 5.5 Handle timeout (Ok(None) from recv_ready_signal_with_timeout) - Just continue listening
-                debug_log!("Timeout waiting for ReadySignal. Continuing to listen.");
+                debug_log!("get_rc_band_..._hrcd Timeout waiting for ReadySignal. Continuing to listen.");
                 continue; // Continue listening. The loop handles the timeout. No explicit error.
             },
             Err(e) => {
@@ -10166,7 +10173,7 @@ fn get_ip_from_index_and_type(
 fn recv_ready_signal_with_timeout( // Hash and timestamp checks moved HERE!
     socket: &UdpSocket, 
     buf: &mut [u8], 
-    salt_list: &[u128],
+    senders_salt_list: &[u128],
 ) -> Result<Option<(SocketAddr, ReadySignal)>, ThisProjectError> { // Changed to return the signal
     debug_log!("recv_ready_signal_with_timeout(): Starting...");
 
@@ -10179,7 +10186,7 @@ fn recv_ready_signal_with_timeout( // Hash and timestamp checks moved HERE!
             debug_log!("recv_ready_signal_with_timeout(): Received {} bytes from {}", amt, src);
 
             // 1. Deserialize
-            let ready_signal = match deserialize_ready_signal(&buf[..amt], salt_list) { // Deserialize first.  Use the passed-in salt_list
+            let ready_signal = match deserialize_ready_signal(&buf[..amt], senders_salt_list) { // Deserialize first.  Use the passed-in senders_salt_list
                 Ok(signal) => signal,
                 Err(e) => {
                     debug_log!("recv_ready_signal_with_timeout():  Failed to deserialize ReadySignal: {}", e);
@@ -10188,7 +10195,7 @@ fn recv_ready_signal_with_timeout( // Hash and timestamp checks moved HERE!
             };
 
             // 2. Hash Verification: PERFORM HASH CHECK HERE!
-            if !verify_readysignal_hashes(&ready_signal, salt_list) { // Hash verification alongside timestamp check
+            if !verify_readysignal_hashes(&ready_signal, senders_salt_list) { // Hash verification alongside timestamp check
                 debug_log!("recv_ready_signal_with_timeout(): ReadySignal hash verification failed. Discarding.");
                 return Ok(None); // Or continue to listen, but return nothing.
             };
