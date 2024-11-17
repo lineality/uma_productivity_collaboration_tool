@@ -971,6 +971,104 @@ fn write_band__save_network_band__type_index(
     Ok(())
 }
 
+
+
+
+
+// /// Saves the local user's network band config data
+// /// to sync_data text files
+// /// 
+// fn write_band__save_network_band__type_index(
+//     remote_collaborator_name: String,
+//     team_channel_name: String,
+//     network_type: String,
+//     network_index: u8,
+//     this_ipv4: Ipv4Addr,
+//     this_ipv6: Ipv6Addr,
+// ) -> Result<(), ThisProjectError> {
+
+//     // 1. Construct Path:
+//     let mut base_path = PathBuf::from("sync_data");
+
+//     // 2. Create Directory (if doesn't exist)
+//     create_dir_all(&base_path)?;
+
+//     // 3. Construct Absolute File Paths
+//     let type_path = base_path.join("network_type.txt");
+//     let index_path = base_path.join("network_index.txt");
+//     let ipv4_path = base_path.join("ipv4.txt");
+//     let ipv6_path = base_path.join("ipv6.txt");
+
+//     // 4. Write to Files (handling potential errors):
+//     let mut type_file = File::create(&type_path)?; // Note the & for borrowing
+//     writeln!(type_file, "{}", network_type)?;
+
+//     let mut index_file = File::create(&index_path)?;
+//     writeln!(index_file, "{}", network_index)?;
+
+//      // 4. Write to Files (handling potential errors):
+//      // TODO this is not working, it is writing "sync_data/ipv6.txt" as the file text
+//      // the path to the file should not be the file content...
+//     let mut ip4_file = File::create(&ipv4_path)?; // Note the & for borrowing
+//     writeln!(ip4_file, "{}", this_ipv4.to_string())?;  // Write IP string
+
+//     let mut ip6_file = File::create(&ipv6_path)?;
+//     writeln!(ip6_file, "{}", this_ipv6.to_string())?;  // Write IP string
+    
+//     Ok(())
+// }
+
+
+/// Saves the local user's network band config data
+/// to sync_data text files
+/// 
+fn write_save_rc_band_network_type_index(
+    remote_collaborator_name: String,
+    team_channel_name: String,
+    network_type: String,
+    network_index: u8,
+    this_ipv4: Ipv4Addr,
+    this_ipv6: Ipv6Addr,
+) -> Result<(), ThisProjectError> {
+
+    // 1. Construct Path:
+    let mut base_path = PathBuf::from("sync_data");
+    base_path.push(team_channel_name);
+    base_path.push("network_band");
+    base_path.push(remote_collaborator_name);
+
+    // Create directory structure if it doesn't exist
+    if let Some(parent) = base_path.parent() {
+        create_dir_all(parent)?;
+    }
+
+    // 3. Construct Absolute File Paths
+    let type_path = base_path.join("network_type.txt");
+    let index_path = base_path.join("network_index.txt");
+    let ipv4_path = base_path.join("ipv4.txt");
+    let ipv6_path = base_path.join("ipv6.txt");
+
+    // 4. Write to Files (handling potential errors):
+    let mut type_file = File::create(&type_path)?; // Note the & for borrowing
+    writeln!(type_file, "{}", network_type)?;
+
+    let mut index_file = File::create(&index_path)?;
+    writeln!(index_file, "{}", network_index)?;
+
+     // 4. Write to Files (handling potential errors):
+     // TODO this is not working, it is writing "sync_data/ipv6.txt" as the file text
+     // the path to the file should not be the file content...
+    let mut ip4_file = File::create(&ipv4_path)?; // Note the & for borrowing
+    writeln!(ip4_file, "{}", this_ipv4.to_string())?;  // Write IP string
+
+    let mut ip6_file = File::create(&ipv6_path)?;
+    writeln!(ip6_file, "{}", this_ipv6.to_string())?;  // Write IP string
+    
+    Ok(())
+}
+
+
+
 // fn write_band__save_network_band__type_index(
 //     network_type: String,
 //     network_index: usize,
@@ -7573,7 +7671,7 @@ fn handle_local_owner_desk(
     
     
     
-    // Load band configuration data
+    // Load local owner band configuration data
     let (
         band_network_type, 
         band_network_index, 
@@ -9013,8 +9111,112 @@ fn get_latest_received_from_collaborator_in_teamchannel_file_timestamp(
 
 
 
+// /// Retrieves SocketAddrs for the remote collaborator's ready and "got it" ports.
+// ///
+// /// Continually, as when a remote collaborator may be never or belatedly online:
+// /// Iterates through the ipv6 and ipv4 addresses, listening for a ReadySignal. Returns SocketAddrs
+// /// for the ready and "got it" ports on the first valid IP. Directly uses UdpSocket::bind for
+// /// improved simplicity and efficiency. Does One Thing Well.
+// ///
+// /// # Arguments
+// ///
+// /// * `room_sync_input`: The collaborator's connection data.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<(SocketAddr, SocketAddr), ThisProjectError>`: 
+// /// Tuple of SocketAddrs (ready, gotit), or an error.
+// ///
+// fn get_rc_band_ready_gotit_socketaddrses_hrcd(
+//     room_sync_input: &ForRemoteCollaboratorDeskThread,
+// ) -> Result<(SocketAddr, SocketAddr), ThisProjectError> {
+//     let timeout_duration = Duration::from_secs(15);
+//     let mut buf = [0; 1024];
+
+    
+    
+//     for ipv6_addr in &room_sync_input.remote_collaborator_ipv6_addr_list {
+//         let ready_socket_addr = SocketAddr::new(IpAddr::V6(*ipv6_addr), room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip);
+
+        
+        
+        
+//         match UdpSocket::bind(ready_socket_addr) {
+//             Ok(socket) => {
+//                 socket.set_read_timeout(Some(timeout_duration))?;
+//                 debug_log!("Listening on {:?} for ReadySignal (IPv6)", ready_socket_addr);
+
+//                 /*
+//                 fn recv_ready_signal_with_timeout( // Hash and timestamp checks moved HERE!
+//                     socket: &UdpSocket, 
+//                     buf: &mut [u8], 
+//                     salt_list: &[u128],
+//                 */
+//                 match recv_ready_signal_with_timeout(&socket, &mut buf, &room_sync_input.local_user_salt_list) {
+//                     Ok(Some((src_addr, ready_signal))) => {  // Return ready_signal
+//                         // Verify Hashes
+//                         if verify_readysignal_hashes(&ready_signal, &room_sync_input.local_user_salt_list) { // Verify hashes HERE!
+//                             let gotit_socket_addr = SocketAddr::new(IpAddr::V6(*ipv6_addr), room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip);
+//                             return Ok((ready_socket_addr, gotit_socket_addr));
+//                         } else {
+//                             debug_log!("ReadySignal hash verification failed. Discarding.");
+//                             continue; // Try next address or network type.
+//                         }
+//                     }
+//                     Ok(None) => {
+//                         debug_log!("Timeout or no valid ReadySignal received on {:?}. Trying next address...", ready_socket_addr);
+//                         continue;
+//                     },
+//                     Err(e) => return Err(e),
+//                 }
+//             }
+//             Err(e) => {
+//                 debug_log!("Failed to bind to {:?} (IPv6): {}", ready_socket_addr, e);
+//             }
+//         }
+//     }
+
+
+//     for ipv4_addr in &room_sync_input.remote_collaborator_ipv4_addr_list {
+//         let ready_socket_addr = SocketAddr::new(IpAddr::V4(*ipv4_addr), room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip);
+//         match UdpSocket::bind(ready_socket_addr) {
+//             Ok(socket) => {
+//                 socket.set_read_timeout(Some(timeout_duration))?;
+//                 debug_log!("Listening on {:?} for ReadySignal (IPv4)", ready_socket_addr);
+
+//                 match recv_ready_signal_with_timeout(&socket, &mut buf, &room_sync_input.local_user_salt_list) {
+//                     Ok(Some((src_addr, ready_signal))) => {
+//                         if verify_readysignal_hashes(&ready_signal, &room_sync_input.local_user_salt_list) { // Verify here as well!
+//                             let gotit_socket_addr = SocketAddr::new(IpAddr::V4(*ipv4_addr), room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip);
+//                             return Ok((ready_socket_addr, gotit_socket_addr));
+//                         } else {
+//                             debug_log!("ReadySignal hash verification failed. Discarding.");
+//                             continue;
+//                         }
+//                     }
+//                     Ok(None) => {
+//                         debug_log!("Timeout or no valid ReadySignal received on {:?}. Trying next address...", ready_socket_addr);
+//                         continue;
+//                     }
+//                     Err(e) => return Err(e),
+
+//                 }
+//             }
+//             Err(e) => {
+//                 debug_log!("Failed to bind to {:?} (IPv4): {}", ready_socket_addr, e);
+//             }
+//         }
+//     }
+
+//     Err(ThisProjectError::NetworkError("No valid ReadySignal received".into()))
+// }
+
+
+/// Waits and checks indefintely until either a legitimate ready signal or exit uma
 /// Retrieves SocketAddrs for the remote collaborator's ready and "got it" ports.
+/// and saves remote collaborator IP band info
 ///
+/// Continually, as when a remote collaborator may be never or belatedly online:
 /// Iterates through the ipv6 and ipv4 addresses, listening for a ReadySignal. Returns SocketAddrs
 /// for the ready and "got it" ports on the first valid IP. Directly uses UdpSocket::bind for
 /// improved simplicity and efficiency. Does One Thing Well.
@@ -9028,85 +9230,255 @@ fn get_latest_received_from_collaborator_in_teamchannel_file_timestamp(
 /// * `Result<(SocketAddr, SocketAddr), ThisProjectError>`: 
 /// Tuple of SocketAddrs (ready, gotit), or an error.
 ///
+// ... other imports and functions ...
 
-fn get_rc_ready_gotit_socketaddrses(
+fn get_rc_band_ready_gotit_socketaddrses_hrcd(
     room_sync_input: &ForRemoteCollaboratorDeskThread,
 ) -> Result<(SocketAddr, SocketAddr), ThisProjectError> {
     let timeout_duration = Duration::from_secs(15);
     let mut buf = [0; 1024];
 
-    for ipv6_addr in &room_sync_input.remote_collaborator_ipv6_addr_list {
-        let ready_socket_addr = SocketAddr::new(IpAddr::V6(*ipv6_addr), room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip);
+    // --- 1. Load Local Band Information (as before) ---
+    let (
+        local_network_type,
+        _, // local_network_index is not used here
+        local_ipv4,
+        local_ipv6,
+    ) = read_band__network_config_type_index_specs()?;
 
-        match UdpSocket::bind(ready_socket_addr) {
-            Ok(socket) => {
-                socket.set_read_timeout(Some(timeout_duration))?;
-                debug_log!("Listening on {:?} for ReadySignal (IPv6)", ready_socket_addr);
 
-                // --- START OF CHANGE ---
-                match recv_ready_signal_with_timeout(&socket, &mut buf, &room_sync_input.local_user_salt_list) {
-                    Ok(Some((src_addr, ready_signal))) => {  // Return ready_signal
-                        // Verify Hashes
-                        if verify_readysignal_hashes(&ready_signal, &room_sync_input.local_user_salt_list) { // Verify hashes HERE!
-                            let gotit_socket_addr = SocketAddr::new(IpAddr::V6(*ipv6_addr), room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip);
-                            return Ok((ready_socket_addr, gotit_socket_addr));
-                        } else {
-                            debug_log!("ReadySignal hash verification failed. Discarding.");
-                            continue; // Try next address or network type.
-                        }
-                    }
-                    Ok(None) => {
-                        debug_log!("Timeout or no valid ReadySignal received on {:?}. Trying next address...", ready_socket_addr);
-                        continue;
-                    },
-                    Err(e) => return Err(e),
+    // --- 2. Determine Local IP Address (as before) ---
+    let local_ip = match local_network_type.as_str() {
+        "ipv6" => IpAddr::V6(local_ipv6),
+        "ipv4" => IpAddr::V4(local_ipv4),
+        _ => return Err(ThisProjectError::NetworkError("Invalid local network type".into())),
+    };
+
+
+    // 3. Create SocketAddr for Listening (as before)
+    let ready_socket_addr = SocketAddr::new(
+        local_ip,
+        room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip,
+    );
+    
+
+    // --- 4. Bind Socket (outside the loop) ---
+    let socket = create_rc_udp_socket(ready_socket_addr)?;
+    
+    // --- 5. Enter Loop to Continuously Listen ---
+    loop { // Main listening loop
+        // 5.1 Check for UMA shutdown
+        if should_halt_uma() {
+            return Err(ThisProjectError::NetworkError("UMA halt signal received during band handshake".into()));
+        }
+        
+        debug_log!("get_rc_band_ready_gotit_socketaddrses_hrcd: Listening for ReadySignal on: {:?}", ready_socket_addr);
+
+        // 5.2 Set Timeout (inside loop, in case it's reset by recv)
+        socket.set_read_timeout(Some(timeout_duration))?;
+
+        // 5.3 Receive and Process
+        match recv_ready_signal_with_timeout(&socket, &mut buf, &room_sync_input.local_user_salt_list) {
+            Ok(Some((_, ready_signal))) => {
+
+                // 5.3.1 Hash and Timestamp Verification (Perform checks *inside* the Ok case)
+                if !verify_readysignal_hashes(&ready_signal, &room_sync_input.remote_collaborator_salt_list) {
+                    debug_log!("ReadySignal hash verification failed. Discarding and continuing to listen.");
+                    continue; // Continue to listen for a valid signal
                 }
-                // --- END OF CHANGE ---
+                let current_timestamp = get_current_unix_timestamp();
+                if ready_signal.rst > current_timestamp + 5 || current_timestamp - 10 > ready_signal.rst {
+                    debug_log!("Received outdated or future-dated ReadySignal. Discarding and continuing to listen.");
+                    continue; // Continue listening
+                }
+                
+                // --- 5.3.2 Extract and Save Remote Band Information ---
+                let (rc_network_type, rc_network_index) = decompress_banddata_byte(ready_signal.b);
+                
+                // --- Select IP for "got it" signal ---
+                let rc_ip = match get_ip_from_index_and_type(
+                    &room_sync_input.remote_collaborator_ipv4_addr_list, 
+                    &room_sync_input.remote_collaborator_ipv6_addr_list, 
+                    &rc_network_type, 
+                    rc_network_index,
+                ) {
+                    Some(ip) => ip,
+                    None => {
+                        debug_log!("Failed to get remote collaborator IP address from received network index and type. Continuing to listen.");
+                        continue; // Continue listening for valid signal
+                    }
+                };
+                let gotit_socket_addr = SocketAddr::new(rc_ip, room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip);  // Correct port from room_sync_input
 
+                // --- Write/Save Received Band Data ---
+                let this_team_channel_name = read_state_string("active_team_channel.txt")?;
+                write_save_rc_band_network_type_index(
+                    room_sync_input.remote_collaborator_name.clone(),
+                    this_team_channel_name,
+                    rc_network_type,
+                    rc_network_index,
+                    local_ipv4,
+                    local_ipv6,
+                )?;
+
+                // --- 5.4 Return Socket Addresses (Valid Signal Received) ---
+                return Ok((ready_socket_addr, gotit_socket_addr)); // Return SocketAddrs on success
             }
+            Ok(None) => {
+                // 5.5 Handle timeout (Ok(None) from recv_ready_signal_with_timeout) - Just continue listening
+                debug_log!("Timeout waiting for ReadySignal. Continuing to listen.");
+                continue; // Continue listening. The loop handles the timeout. No explicit error.
+            },
             Err(e) => {
-                debug_log!("Failed to bind to {:?} (IPv6): {}", ready_socket_addr, e);
+                debug_log!("get_rc_band_ready_gotit_socketaddrses_hrcd: Error receiving ReadySignal: {}", e);                
+                return Err(e); // Return any other errors
             }
         }
-    }
-
-
-    for ipv4_addr in &room_sync_input.remote_collaborator_ipv4_addr_list {
-        let ready_socket_addr = SocketAddr::new(IpAddr::V4(*ipv4_addr), room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip);
-        match UdpSocket::bind(ready_socket_addr) {
-            Ok(socket) => {
-                socket.set_read_timeout(Some(timeout_duration))?;
-                debug_log!("Listening on {:?} for ReadySignal (IPv4)", ready_socket_addr);
-
-                // --- START OF CHANGE ---
-                match recv_ready_signal_with_timeout(&socket, &mut buf, &room_sync_input.local_user_salt_list) {
-                    Ok(Some((src_addr, ready_signal))) => {
-                        if verify_readysignal_hashes(&ready_signal, &room_sync_input.local_user_salt_list) { // Verify here as well!
-                            let gotit_socket_addr = SocketAddr::new(IpAddr::V4(*ipv4_addr), room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip);
-                            return Ok((ready_socket_addr, gotit_socket_addr));
-                        } else {
-                            debug_log!("ReadySignal hash verification failed. Discarding.");
-                            continue;
-                        }
-                    }
-                    Ok(None) => {
-                        debug_log!("Timeout or no valid ReadySignal received on {:?}. Trying next address...", ready_socket_addr);
-                        continue;
-                    }
-                    Err(e) => return Err(e),
-
-                }
-                // --- END OF CHANGE ---
-
-            }
-            Err(e) => {
-                debug_log!("Failed to bind to {:?} (IPv4): {}", ready_socket_addr, e);
-            }
-        }
-    }
-
-    Err(ThisProjectError::NetworkError("No valid ReadySignal received".into()))
+    } // End of main listening loop
 }
+
+
+
+// fn get_rc_band_ready_gotit_socketaddrses_hrcd(
+//     room_sync_input: &ForRemoteCollaboratorDeskThread,
+// ) -> Result<(SocketAddr, SocketAddr), ThisProjectError> {
+//     let timeout_duration = Duration::from_secs(15);
+//     let mut buf = [0; 1024];
+
+//     // --- 1. Load Local Band Information ---
+//     let (
+//         local_network_type,
+//         local_network_index,
+//         local_ipv4,
+//         local_ipv6,
+//     ) = read_band__network_config_type_index_specs()?;
+
+
+//     // --- 2. Determine Local IP Address based on Local Band Information ---
+//     // Select appropriate IP based on loaded local network type. No iteration on remote IPs.
+//     let local_ip = match local_network_type.as_str() {
+//         "ipv6" => IpAddr::V6(local_ipv6),
+//         "ipv4" => IpAddr::V4(local_ipv4),
+//         _ => return Err(ThisProjectError::NetworkError("Invalid local network type".into())),
+//     };
+
+//     // 3. Create SocketAddr for Listening (using local IP and ready port)
+//     let ready_socket_addr = SocketAddr::new(
+//         local_ip,
+//         room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip,
+//     );
+    
+//     debug_log!("get_rc_band_ready_gotit_socketaddrses_hrcd: Binding to local address: {:?}", ready_socket_addr);
+
+
+//     // --- 4. Bind and Listen for ReadySignal ---
+//     let socket = create_rc_udp_socket(ready_socket_addr)?; // Directly create socket
+//     socket.set_read_timeout(Some(timeout_duration))?;
+
+
+//     // --- 5. Receive with Timeout and Perform Checks ---
+//     match recv_ready_signal_with_timeout(&socket, &mut buf, &room_sync_input.local_user_salt_list) {
+//         Ok(Some((_, ready_signal))) => {
+            
+            
+//             // --- 2.5 Hash-Check for ReadySignal ---
+//             // Drop packet when fail check
+//             if !verify_readysignal_hashes(
+//                 &ready_signal, 
+//                 &room_sync_input.remote_collaborator_salt_list,
+//             ) {
+//                 debug_log("HRCD 2.5: ReadySignal hash verification failed. Discarding signal.");
+//                 continue; // Discard the signal and continue listening
+//             }
+    
+    
+//             // 3.2.1 No Future Dated Requests
+//             if ready_signal_timestamp > current_timestamp + 5 { // Allow for some clock skew (5 seconds)
+//                 debug_log!("HRCD 3.2.1 check: Received future-dated timestamp. Discarding.");
+//                 continue;
+//             }
+
+//             // 3.2.2 No Requests Older Than ~10 sec
+//             if current_timestamp - 10 > ready_signal_timestamp {
+//                 debug_log!("HRCD 3.2.2 check: Received outdated timestamp (older than 10 seconds). Discarding.");
+//                 continue;
+//             }
+    
+
+//             // Extract remote collaborator's band data from ReadySignal
+//             let (rc_network_type, rc_network_index) = decompress_banddata_byte(ready_signal.b);
+
+
+//             // Select IP for "got it" signal based on RECEIVED rc_network_type and rc_network_index
+//             let rc_ip = match get_ip_from_index_and_type(
+//                 &room_sync_input.remote_collaborator_ipv4_addr_list, 
+//                 &room_sync_input.remote_collaborator_ipv6_addr_list, 
+//                 &rc_network_type, 
+//                 rc_network_index
+//             ) {
+//                 Some(ip) => ip,
+//                 None => return Err(ThisProjectError::NetworkError(
+//                     "Failed to get IP from received index and type".into(),
+//                 )),
+//             };
+            
+            
+//             let gotit_socket_addr = SocketAddr::new(rc_ip, room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip);  // Use correct port from room_sync_input
+//             debug_log!("get_rc_band_ready_gotit_socketaddrses_hrcd: Creating gotit SocketAddr with address {:?} and port {:?}", gotit_socket_addr.ip(), gotit_socket_addr.port());
+
+
+//             // Save received band data
+//             let this_team_channel_name = read_state_string("active_team_channel.txt")?;
+//             write_save_rc_band_network_type_index(
+//                 room_sync_input.remote_collaborator_name.clone(),
+//                 this_team_channel_name, // Use value read from state
+//                 rc_network_type,
+//                 rc_network_index,
+//                 local_ipv4,  // use local data
+//                 local_ipv6, // use local data
+//             )?;
+            
+            
+//             // // 5. Done: Exit Loop and Return Socket Addresses ---
+//             return Ok((ready_socket_addr, gotit_socket_addr));
+//         }
+//         Ok(None) => {
+//             // --- Handle timeout (or invalid ReadySignal) ---
+//             return Err(ThisProjectError::NetworkError("No valid ReadySignal received within timeout".into()));
+//         }
+//         Err(e) => return Err(e), // Handle other errors
+//     }
+// }
+
+
+/// Gets the IP address from combined IPv4/IPv6 lists based on index and type.
+///
+/// # Arguments
+///
+/// * `ipv4_list`: A slice of IPv4 addresses.
+/// * `ipv6_list`: A slice of IPv6 addresses.
+/// * `network_type`: The network type string.
+/// * `network_index`: The index into the appropriate list.
+///
+/// # Returns
+///
+/// * `Option<IpAddr>`: The `IpAddr` at the given index and type, or `None` if the index is out of bounds or the network type is invalid.
+fn get_ip_from_index_and_type(
+    ipv4_list: &[Ipv4Addr], 
+    ipv6_list: &[Ipv6Addr], 
+    network_type: &str, 
+    network_index: u8
+) -> Option<IpAddr> {
+    match network_type {
+        "ipv4" => ipv4_list.get(network_index as usize).map(|&ip| IpAddr::V4(ip)),
+        "ipv6" => ipv6_list.get(network_index as usize).map(|&ip| IpAddr::V6(ip)),
+        _ => None, // Or handle an invalid network type in another way
+    }
+}
+
+
+
+// ... other functions ...
 
 
 // /// Receives a ReadySignal with a timeout, handling potential errors and timeouts.  Now returns the deserialized ReadySignal on success.
@@ -9152,7 +9524,7 @@ fn get_rc_ready_gotit_socketaddrses(
 
 
 
-// fn get_rc_ready_gotit_socketaddrses(
+// fn get_rc_band_ready_gotit_socketaddrses_hrcd(
 //     room_sync_input: &ForRemoteCollaboratorDeskThread,
 // ) -> Result<(SocketAddr, SocketAddr), ThisProjectError> { // function name corrected
 //     let timeout_duration = Duration::from_secs(15);
@@ -9218,7 +9590,7 @@ fn get_rc_ready_gotit_socketaddrses(
 // /// # Returns (ready_socket_addr, gotit_socket_addr)
 // ///
 // /// * `Result<(SocketAddr, SocketAddr), ThisProjectError>`: Tuple of SocketAddrs (ready, gotit), or an error if no valid IP is found.
-// fn get_rc_ready_gotit_socketaddrses(
+// fn get_rc_band_ready_gotit_socketaddrses_hrcd(
 //     room_sync_input: &ForRemoteCollaboratorDeskThread,
 // ) -> Result<(SocketAddr, SocketAddr), ThisProjectError> {
 
@@ -9441,6 +9813,159 @@ fn get_latest_timestamp_from_team_channel_dir() -> Result<u64, ThisProjectError>
     Ok(latest_timestamp)
 }
 
+// // a loop in this? or is listener already enough?
+// // error type?
+// // setting up ready_socket
+// // how to call this?
+// //  fn decompress_banddata_byte() to get ip? (or use src?)
+// //
+// /// FIrst Bootstrap Ready-Signal Listening Loop for HRCD-rc-intray desk
+// /// returns: remote collaborator's (band_type string, band_ip string)
+// fn hrcd_udp_handshake(
+//     room_sync_input: &ForRemoteCollaboratorDeskThread
+//     ) -> Result<(String, String), ThisProjectError> {
+//     /*
+//     1. Get your local network-band info
+//     2. Make a socket-address
+//     3. listen for ready signal (that you can verify as legitimate)
+//     4. record the remote collaborator's ip data
+//     5. Done: exit loop, exit function
+//     */
+        
+//     // Load local owner band configuration data
+//     let (
+//         band_network_type, 
+//         band_network_index, 
+//         band_local_user_ipv4_address, 
+//         band_local_user_ipv6_address,
+//     ) = match read_band__network_config_type_index_specs() {
+//         Ok(data) => data,
+//         Err(e) => {
+//             // Handle the error (e.g., log and return or use default values)
+//             debug_log!("Error reading band configuration: error -> e'{}'e ", e);
+//             return Err(e); // Or handle differently
+//         }
+//     };
+
+//     // 4. Determine target IP based on network_type:
+//     let ip_addr = match band_network_type.to_string() {
+//         "ipv6" => IpAddr::V6(*band_local_user_ipv4_address),
+//         "ipv4" => IpAddr::V4(*band_local_user_ipv6_address),
+//         _ => return Err(ThisProjectError::NetworkError("Invalid network type".into())),
+//     };
+//     let target_addr = SocketAddr::new(ip_addr, room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip); 
+    
+    
+//     let ready_socket = UdpSocket::bind(target_addr).map_err(|e| {
+//         ThisProjectError::NetworkError(format!("Failed to bind to UDP socket: {}", e))
+//     });
+    
+//     // 2.2.1 Receive Ready Signal
+//     let mut buf = [0; 1024]; // TODO size?
+//     match ready_socket.recv_from(&mut buf) {                
+//         Ok((amt, src)) => {
+//             debug_log!(
+//                 "hrcd_udp_handshake 2.2.1 Ok((amt, src)) ready_port Signal Received {} bytes from {}", 
+//                 amt, 
+//                 src
+//             );
+            
+//             if should_halt_uma() {
+//                 debug_log!(
+//                     "hrcd_udp_handshake Halting handle_local_owner_desk() for {}", 
+//                     room_sync_input.remote_collaborator_name
+//                 );
+//                 break;
+//             }
+
+//             // --- Inspect Raw Bytes ---
+//             debug_log!(
+//                 "hrcd_udp_handshake 2.2.1 Ready Signal Raw bytes received: {:?}", 
+//                 &buf[..amt]
+//             ); 
+
+//             // --- Inspect Bytes as Hex ---
+//             let hex_string = buf[..amt].iter()
+//                 .map(|b| format!("{:02X}", b))
+//                 .collect::<String>();
+//             debug_log!(
+//                 "hrcd_udp_handshake 2.2.1 Ready Signal Raw bytes as hex: {}", 
+//                 hex_string
+//             );
+
+//             // --- 2.3 Deserialize the ReadySignal ---
+//             // TODO add size check to deserialize function
+//             let mut ready_signal: ReadySignal = match deserialize_ready_signal(&buf[..amt], &room_sync_input.remote_collaborator_salt_list) {
+//                 Ok(ready_signal) => {
+//                     // println!("hrcd_udp_handshake 2.3 Deserialize Ok(ready_signal) {}: Received ReadySignal: {:?}",
+//                     //     room_sync_input.remote_collaborator_name, ready_signal
+//                     // ); // Print to console
+//                     debug_log!("hrcd_udp_handshake 2.3 Deserialize Ok(ready_signal) {}: Received ReadySignal: {:?}",
+//                         room_sync_input.remote_collaborator_name, 
+//                         ready_signal
+//                     ); // Log the signal
+//                     ready_signal
+//                 },
+//                 Err(e) => {
+//                     debug_log!("hrcd_udp_handshake 2.3 Deserialize Err Receive data Failed to parse ready signal: {}", e);
+//                     continue; // Continue to the next iteration of the loop
+//                 }
+//             };
+
+//             // --- 2.4 Inspect & edge cases ---
+//             debug_log("\n#hrcd_udp_handshake# starting checks(plaid) 2.4");
+            
+//             // --- 2.5 Hash-Check for ReadySignal ---
+//             // Drop packet when fail check
+//             if !verify_readysignal_hashes(
+//                 &ready_signal, 
+//                 &room_sync_input.remote_collaborator_salt_list,
+//             ) {
+//                 debug_log("hrcd_udp_handshake 2.5: ReadySignal hash verification failed. Discarding signal.");
+//                 continue; // Discard the signal and continue listening
+//             }
+
+//             // --- 3.2 timestamp freshness checks ---
+//             let current_timestamp = get_current_unix_timestamp();
+            
+//             debug_log!(
+//                 "hrcd_udp_handshake 3.2 check timestamp freshness checks: current_timestamp -> {:?}",
+//                 current_timestamp
+//             );
+//             let ready_signal_timestamp = ready_signal.rst; // Unwrap the timestamp outside the match, as it's always required.
+//             // 3.2.1 No Future Dated Requests
+//             if ready_signal_timestamp > current_timestamp + 5 { // Allow for some clock skew (5 seconds)
+//                 debug_log!("hrcd_udp_handshake 3.2.1 check: Received future-dated timestamp. Discarding.");
+//                 continue;
+//             }
+
+//             // 3.2.2 No Requests Older Than ~10 sec
+//             if current_timestamp - 10 > ready_signal_timestamp {
+//                 debug_log!("hrcd_udp_handshake 3.2.2 check: Received outdated timestamp (older than 10 seconds). Discarding.");
+//                 continue;
+//             }
+
+//             debug_log("##hrcd_udp_handshake## [Done] checks(plaid) 3.2.3\n");
+    
+//             /////////////////////////////////////////
+//             // Save remote-collaborator IP settings
+//             /////////////////////////////////////////
+//             /*
+            
+//             */
+//             write_save_rc_band_network_type_index(
+//                 remote_collaborator_name: String,
+//                 team_channel_name: String,
+//                 network_type: String,
+//                 network_index: u8,
+//                 this_ipv4: Ipv4Addr,
+//                 this_ipv6: Ipv6Addr,
+//             )
+            
+            
+//         }
+//     }
+// }
 
 /// handle_remote_collaborator_meetingroom_desk (send files here)
 /// very brief overview:
@@ -9463,25 +9988,7 @@ fn handle_remote_collaborator_meetingroom_desk(
     room_sync_input: &ForRemoteCollaboratorDeskThread,
 ) -> Result<(), ThisProjectError> {
     /*
-    future: this should listen at all allowlisted ips for that remote collaborator
-    to identify the correct ip for this session.
-    e.g. a first setup just to listen to pick the IP
-    then enter the real loop and listen for
-    
-    loop:
-    // 2. Create listeners for each IP address
-    for ipv6_address in &own_desk_setup_data.local_user_ipv6_addr_list {
-        let tx = tx.clone(); // Clone the sender for each thread
-        let ready_port = own_desk_setup_data.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip;
 
-        thread::spawn(move || {...
-            
-            
-    for ipv4_address in &own_desk_setup_data.local_user_ipv6_addr_list {
-        let tx = tx.clone(); // Clone the sender for each thread
-        let ready_port = own_desk_setup_data.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip;
-
-        thread::spawn(move || {...
             
     */
     loop { // 1. start overall loop to restart whole desk
@@ -9504,15 +10011,14 @@ fn handle_remote_collaborator_meetingroom_desk(
             room_sync_input
         );
         
-        // TODO new function to (maybe)
-        // trial and error iterate search
-        // the possible Remote COllaborator IP space
-        // listening for a ready-signal
+        /////////////
+        // Bootstrap
+        /////////////
         // 1.2 Get Remote Collaborator's IP and Network Type
-        
+        debug_log("HRCD starting search for Remote Collaborator's IP");
 
         let (ready_socket_addr, gotit_socket_addr) =
-            match get_rc_ready_gotit_socketaddrses(room_sync_input) {
+            match get_rc_band_ready_gotit_socketaddrses_hrcd(room_sync_input) {
                 Ok(addrs) => addrs,
                 Err(e) => {
                     debug_log!("HRCD: Error getting SocketAddrs: {}", e);
@@ -9521,21 +10027,19 @@ fn handle_remote_collaborator_meetingroom_desk(
             };
         
         debug_log!(
-            "HRCD get_rc_ready_gotit_socketaddrses: RC -> {:?} || ready_socket_addr -> {:?} || gotit_socket_addr -> {:?}", 
+            "HRCD get_rc_band_ready_gotit_socketaddrses_hrcd: RC -> {:?} || ready_socket_addr -> {:?} || gotit_socket_addr -> {:?}", 
             room_sync_input.remote_collaborator_name,
             ready_socket_addr,
             gotit_socket_addr
         );
         
-        // let (detected_rc_ip_string, detected_net_type) = match get_rc_ip_and_network_type(room_sync_input) {
-        //     Ok((detected_rc_ip_string, detected_net_type)) => (detected_rc_ip_string, detected_net_type),
-        //     Err(e) => {
-        //         debug_log!("HRCD: Failed to get remote collaborator IP: {}", e);
-        //         return Err(e); // Or handle the error differently
-        //     }
-        // };
         
-        // logig
+        
+
+        // 1. UPD Handshake
+        // hrcd_udp_handshake(&room_sync_input);
+        
+        
 
         // --- 1.3 Create two UDP Sockets for Ready and GotIt Signals ---`
         debug_log("HRCD 1.3 Making ready_port listening UDP socket...");
@@ -10226,7 +10730,7 @@ fn handle_remote_collaborator_meetingroom_desk(
 /// # Returns
 ///
 /// * `Result<UdpSocket, ThisProjectError>`: The bound socket or an error if binding fails.
-fn create_rc_udp_socket(socket_addr: SocketAddr) -> Result<UdpSocket, ThisProjectError> { // HERE!! HERE!! simplified parameters
+fn create_rc_udp_socket(socket_addr: SocketAddr) -> Result<UdpSocket, ThisProjectError> { 
     UdpSocket::bind(socket_addr).map_err(|e| {
         ThisProjectError::NetworkError(format!("Failed to bind to UDP socket: {}", e))
     })
