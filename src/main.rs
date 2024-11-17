@@ -7877,7 +7877,7 @@ fn send_ready_signal(
     local_user_network_type: &str, // LOU needed for .b section
     local_user_network_index: u8,  // LOU needed for .b section
 ) -> Result<(), ThisProjectError> {
-    debug_log!("send_ready_signal: Starting...");
+    debug_log!("send_ready_signal(), Starting...");
 
     // 1. Calculate hashes
     let current_timestamp = get_current_unix_timestamp();
@@ -7902,7 +7902,7 @@ fn send_ready_signal(
         Err(e) => {
             // Handle the error here. You could print an error message, return from the function,
             // or do something else depending on your specific needs.
-            eprintln!("Error compressing band data: {:?}", e);
+            eprintln!("send_ready_signal() Error compressing band data: {:?}", e);
             return Ok(());
         }
     };
@@ -7914,11 +7914,11 @@ fn send_ready_signal(
         b: b_band_data,
         rh: hashes,
     };
-    debug_log!("send_ready_signal: ReadySignal created: {:?}", ready_signal);
+    debug_log!("send_ready_signal(): ReadySignal created: {:?}", ready_signal);
 
     // 3. Serialize
     let serialized_signal = serialize_ready_signal(&ready_signal)?;
-    debug_log!("send_ready_signal: ReadySignal serialized.");
+    debug_log!("send_ready_signal(): ReadySignal serialized.");
 
     // 4. Determine target IP based on network_type:
     let send_readysignal_ip_addr = match rc_network_type_string {
@@ -7930,15 +7930,15 @@ fn send_ready_signal(
             let ipv4_addr: Ipv4Addr = rc_ip_addr_string.parse().map_err(|_| ThisProjectError::NetworkError("Invalid IPv4 address".into()))?; // Corrected: .parse()
             IpAddr::V4(ipv4_addr)
         },
-        _ => return Err(ThisProjectError::NetworkError("Invalid network type".into())),
+        _ => return Err(ThisProjectError::NetworkError("send_ready_signal() error Invalid network type".into())),
     };
     
     let target_addr = SocketAddr::new(send_readysignal_ip_addr, target_port);
 
     // 5. Send the signal
-    debug_log!("send_ready_signal: Sending ReadySignal to: {:?}", target_addr);
+    debug_log!("send_ready_signal(): Sending ReadySignal to: {:?}", target_addr);
     send_data(&serialized_signal, target_addr)?;
-    debug_log!("send_ready_signal: ReadySignal sent successfully.");
+    debug_log!("send_ready_signal(): ReadySignal sent successfully.");
 
     Ok(())
 }
@@ -8166,7 +8166,10 @@ fn handle_local_owner_desk(
         &band_local_user_ipv4_address, //: &Ipv4Addr,
         &band_local_user_ipv6_address, //: &Ipv6Addr,
         band_local_network_index, //: u8,
-    ) else { todo!() };
+    ) else { 
+        // TODO, handled another way?
+        return Err(ThisProjectError::NetworkError("Handshake failed".into())); 
+        };
 
 
     
