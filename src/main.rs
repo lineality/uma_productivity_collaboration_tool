@@ -1069,6 +1069,62 @@ fn write_save_rc_band_network_type_index(
 
 
 
+/// Reads the remote collaborator's band data (network type, index, IP address). -> (network_type, network_index, rc_ip)
+///
+/// This function reads the remote collaborator's network band information, which was previously
+/// saved by the `write_save_rc_band_network_type_index` function. The data is read from files
+/// within the following directory structure:
+/// sync_data/{team_channel_name}/network_band/{remote_collaborator_name}/
+///
+/// It returns a tuple containing the remote collaborator's network type (e.g., "ipv4" or "ipv6"),
+/// network index (as a u8), and IP address (as an IpAddr).
+///
+/// # Arguments
+///
+/// * `remote_collaborator_name`: The remote collaborator's username.
+/// * `team_channel_name`: The name of the active team channel.
+///
+/// # Returns
+///
+/// * `Result<(String, u8, IpAddr), ThisProjectError>`: A tuple containing the network type,
+///   network index, and IP address on success, or a `ThisProjectError` if reading or parsing fails.
+fn read_rc_band_network_type_index(
+    remote_collaborator_name: &str,
+    team_channel_name: &str,
+) -> Result<(String, u8, IpAddr), ThisProjectError> {
+    // 1. Construct Path
+    let mut base_path = PathBuf::from("sync_data");
+    base_path.push(team_channel_name);
+    base_path.push("network_band");
+    base_path.push(remote_collaborator_name);
+
+
+    // 2. Read Network Type and Index (with error handling)
+    let network_type = fs::read_to_string(base_path.join("network_type.txt"))?;
+
+    // Improved error handling for parsing network index:
+    let network_index: u8 = fs::read_to_string(base_path.join("network_index.txt"))?
+        .trim()
+        .parse()
+        .map_err(|e| ThisProjectError::ParseIntError(e))?; // Correct error type
+
+
+    // 3. Load IP addresses from collaborator file. HLOD uses these to select the correct IP.
+    let (ipv4_addresses, ipv6_addresses) = load_local_ip_lists(remote_collaborator_name)?;
+
+    // 4. Determine RC's IP Address Based on Network Type and Index
+    let rc_ip = get_ip_from_index_and_type(
+        &ipv4_addresses, 
+        &ipv6_addresses, 
+        &network_type, 
+        network_index,
+    ).ok_or(ThisProjectError::NetworkError("Failed to get IP from received index and type".into()))?; // Return error if no IP found
+
+
+    Ok((network_type, network_index, rc_ip))
+}
+
+
 // fn write_band__save_network_band__type_index(
 //     network_type: String,
 //     network_index: usize,
