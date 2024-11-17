@@ -8940,14 +8940,20 @@ fn calculate_pearson_hashes(data_sets: &[&[u8]]) -> Result<Vec<u8>, ThisProjectE
 /// Do not attempt to use Serde crate with this function!!!
 fn deserialize_ready_signal(bytes: &[u8], salt_list: &[u128]) -> Result<ReadySignal, ThisProjectError> {
     // 1. Calculate the expected minimum length, *including* the hash list.
-    let timestamp_len = size_of::<u64>();
-    let index_len = size_of::<usize>();
-    let hash_len = salt_list.len();  // Length of the hash list (number of salts)
-    let min_length = timestamp_len * 2 + 1 + index_len + 1 + hash_len; // rt, rst, nt, ni, rh
+    /*
+    rt: u64, // ready signal timestamp: last file obtained timestamp
+    rst: u64, // send-time: generate_terse_timestamp_freshness_proxy(); for replay-attack protection
+    b: u8, // Network Index (e.g. which ipv6 in the list)
+    rh: Vec<u8>, // N hashes of rt + re
+    */
+    let timestamp_len = std::mem::size_of::<u64>();         // Length of a u64 (8 bytes)
+    let band_index_len = std::mem::size_of::<u8>();           // Length of the band index (1 byte)
+    let hash_list_len = salt_list.len() * std::mem::size_of::<u8>(); // Length of the hash list (4 bytes in current design: 4 salts * 1 byte/hash)
+    let expected_len = timestamp_len * 2 + band_index_len + hash_list_len; // Total expected length
 
     // 2. Full Length Check
-    if bytes.len() != min_length {  // Note: Now a strict equality check
-        return Err(ThisProjectError::InvalidData(format!("Invalid byte array length for ReadySignal. Expected: {}, Received: {}", min_length, bytes.len())));
+    if bytes.len() != expected_len {  // Note: Now a strict equality check
+        return Err(ThisProjectError::InvalidData(format!("Invalid byte array length for ReadySignal. Expected: {}, Received: {}", expected_len, bytes.len())));
     }
 
     // 3. Extract rt (receive timestamp)
@@ -8973,7 +8979,7 @@ fn deserialize_ready_signal(bytes: &[u8], salt_list: &[u128]) -> Result<ReadySig
     
     // 7. Extract rh (hash list) – Length Check
     let rh_start = b_start + 1;  // one byte for b
-    let rh_end = rh_start + hash_len;
+    let rh_end = rh_start + hash_list_len;
     if bytes.len() < rh_end {
         return Err(ThisProjectError::InvalidData("Data too short for rh".into()));
     }
