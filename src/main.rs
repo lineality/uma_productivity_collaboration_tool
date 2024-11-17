@@ -1068,6 +1068,227 @@ fn write_save_rc_band_network_type_index(
 }
 
 
+// // fn hlod_udp_handshake( // Pass setup data by reference
+// fn hlod_udp_handshake(
+//     local_owner_desk_setup_data: &ForLocalOwnerDeskThread,
+//     band_network_type: &str, // type of IP being used
+//     band_local_user_ipv4_address: &Ipv4Addr, 
+//     band_local_user_ipv6_address: &Ipv6Addr, 
+//     band_network_index: usize,       // for ni  (the local user's chosen IP index from get_band__find_valid_network_index_and_type)
+// ) -> Result<(SocketAddr, String), ThisProjectError> {
+//     // 1. Create target SocketAddr for the *local* machine for receiving
+//     // ... [Create target addresses from setup data] ...
+//     // You'll need to extract the remote ready port from local_owner_desk_setup_data:
+//     let remote_ready_port = local_owner_desk_setup_data.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip; // Correct ready port from the setup data. This port was likely used for sending but for the formal protocol of how signals are processed, 'my desk' listens at that port.
+
+
+//     // --- Select IP Address and create SocketAddr for Listening (Corrected) ---
+//     let listen_ip_addr = match band_network_type {
+//         "ipv6" => IpAddr::V6(*band_local_user_ipv6_address),  // band_local_user_ipv6_address now a parameter
+//         "ipv4" => IpAddr::V4(*band_local_user_ipv4_address), // band_local_user_ipv4_address now a parameter
+//         _ => return Err(ThisProjectError::NetworkError("Invalid network type in hlod_udp_handshake".into())),
+//     };
+    
+//     let local_listen_addr = SocketAddr::new(listen_ip_addr, remote_ready_port); 
+
+//     // ... existing salt handling code ...
+    
+
+//     loop { // 2. loop until satisfied
+//         if should_halt_uma() { // 1. check for halt-uma
+//             return Err(ThisProjectError::NetworkError("UMA halt signal received".into())); // or log the exit?
+//         }
+
+//         // Get Team Channel Name
+//         let team_channel_name = get_current_team_channel_name()
+//             .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
+
+
+//         // --- 2. check for received ready-signal (Corrected) ---
+//         if let Ok((rc_network_type, _, rc_ip)) = read_rc_band_network_type_index(  // Attempt to read remote band info. 
+//             &local_owner_desk_setup_data.remote_collaborator_name,  // Access using setup data
+//             &team_channel_name,  // Correct team channel name retrieval, pass string not Path
+//         ) {  // If successful, use values.
+//             // Combine rc_ip with port from ReadySignal (or appropriate port):
+//             let rc_socket_addr = SocketAddr::new(rc_ip, remote_ready_port); // Correct port usage
+
+//             debug_log!("hlod_udp_handshake():  Ready signal information found in sync_data for {}.  rc_network_type: {}, rc_ip: {:?}, rc_socket_addr: {:?}", 
+//                 local_owner_desk_setup_data.remote_collaborator_name, 
+//                 rc_network_type, 
+//                 rc_ip,
+//                 rc_socket_addr, 
+//             ); 
+
+//             return Ok((rc_socket_addr, rc_network_type));  // Return, breaking loop, breaking function.
+
+//         } else {
+//             debug_log!("hlod_udp_handshake(): Ready signal information NOT found in sync_data for {}.  Proceeding to send ReadySignal.", 
+//                  local_owner_desk_setup_data.remote_collaborator_name
+//             ); 
+//         }
+
+//         // --- 3. sending a ready signal iterating --- 
+//         let (rc_ipv4_list, rc_ipv6_list) = (
+//             local_owner_desk_setup_data.remote_collaborator_ipv4_addr_list.clone(), 
+//             local_owner_desk_setup_data.remote_collaborator_ipv6_addr_list.clone()
+//         );
+//         debug_log!("HRCD hlod_udp_handshake 3 ipv4/ipv6 {:?} {:?}", rc_ipv4_list, rc_ipv6_list);
+
+
+//         match network_type_hlod.as_str() { // Match on network_type from local band information, iterate remote addresses. // HERE!! HERE!! corrected network type logic
+//             "ipv6" => {
+//                 for ipv6_addr in &rc_ipv6_list { // Correct IP address handling:
+//                     let target_addr = SocketAddr::new(IpAddr::V6(*ipv6_addr), remote_ready_port); // Correct remote port
+//                     debug_log!("hlod_udp_handshake(): Sending ReadySignal to: {:?},  band_network_type -> {:?}, band_network_index -> {:?}, latest_file_timestamp -> {:?}", target_addr, network_type_hlod, network_index_hlod, timestamp_for_rt);
+//                     send_ready_signal(
+//                         local_user_salt_list, // Correct salt list
+//                         &ipv4_addr_hlod, // Local IPv4. No longer part of iteration.
+//                         &ipv6_addr_hlod, // Local IPv6. No longer part of iteration.
+//                         target_addr.port(),        // Correct port
+//                         timestamp_for_rt,        // last_received_timestamp from correct function
+//                         &network_type_hlod,     //  rc_network_type after handshake.  Use local network type here.
+//                         network_index_hlod as u8,   //  band_network_index // Correctly passes band index, convert usize to u8 for the function
+//                     )?;
+//                     debug_log!("Ready signal sent successfully to {:?}", target_addr);
+//                 }
+//             },
+//             "ipv4" => { // Iterate and Send to each ipv4
+//                 for ipv4_addr in &rc_ipv4_list {
+//                     let target_addr = SocketAddr::new(IpAddr::V4(*ipv4_addr), remote_ready_port);
+//                     debug_log!("hlod_udp_handshake(): Sending ReadySignal to: {:?}, network_type -> {:?}, network_index -> {:?}, latest_file_timestamp -> {:?}", target_addr, network_type_hlod, network_index_hlod, timestamp_for_rt);
+//                     send_ready_signal(
+//                         local_user_salt_list, // Pass salt list directly.
+//                         &ipv4_addr_hlod,  // Local IPv4. No longer iterating on local ips.
+//                         &ipv6_addr_hlod,  // Local IPv6. No longer iterating on local ips.
+//                         target_addr.port(),      // Use target address's port directly
+//                         timestamp_for_rt,     // timestamp_for_rt// Correctly uses latest timestamp
+//                         &network_type_hlod,     // rc_network_type after handshake, and use network_type_hlod now.
+//                         network_index_hlod as u8, // Correct index handling
+//                     )?;
+//                     debug_log!("Ready signal sent successfully to {:?}", target_addr); // Log after sending, inside the Ok(_) case.
+//                 }
+//             }
+//             _ => { // invalid type, what now? exit handshake, restart handler? or return and halt UMA?
+//                 debug_log!("Invalid network type selected."); 
+//                 return Err(ThisProjectError::NetworkError("Invalid network type selected".into())); // Or loop back and retry the handshake.
+
+//             }
+//         } // End of network type handling
+        
+//         // 2.5 Wait 15 seconds (Corrected Placement): 
+//         // std::thread::sleep(Duration::from_secs(15)); // Sleep outside the sending loop
+//         std::thread::sleep(Duration::from_secs(3));
+//     } // Loop ends here (will exit after returning from inside)
+// }
+
+
+fn hlod_udp_handshake(
+    local_owner_desk_setup_data: &ForLocalOwnerDeskThread,
+    band_network_type: &str,
+    band_local_user_ipv4_address: &Ipv4Addr,
+    band_local_user_ipv6_address: &Ipv6Addr,
+    band_network_index: u8,
+) -> Result<(SocketAddr, String), ThisProjectError> {
+    // --- 1. Extract Data from Setup Data (Corrected) ---
+    let (rc_ipv4_list, rc_ipv6_list) = (
+        local_owner_desk_setup_data.remote_collaborator_ipv4_addr_list.clone(),
+        local_owner_desk_setup_data.remote_collaborator_ipv6_addr_list.clone(),
+    );
+    let remote_ready_port = local_owner_desk_setup_data.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip;
+    let local_user_salt_list = &local_owner_desk_setup_data.local_user_salt_list;  // Make sure to bring this into scope
+
+    // --- Select IP Address and Create SocketAddr for Local Listening ---
+    let listen_ip_addr = match band_network_type {
+        "ipv6" => IpAddr::V6(*band_local_user_ipv6_address),
+        "ipv4" => IpAddr::V4(*band_local_user_ipv4_address),
+        _ => return Err(ThisProjectError::NetworkError("Invalid network type in hlod_udp_handshake".into())),
+    };
+
+    let local_listen_addr = SocketAddr::new(listen_ip_addr, remote_ready_port);
+
+    // --- Prepare ReadySignal ---
+    let timestamp_for_rt = match get_latest_received_from_collaborator_in_teamchannel_file_timestamp(
+        &local_owner_desk_setup_data.remote_collaborator_name,
+    ) {
+        Ok(timestamp) => timestamp,
+        Err(e) => {
+            debug_log!("hlod_udp_handshake(): Error getting timestamp: {}", e);
+            0
+        }
+    };
+
+    // Correct cloning of needed data (into correct scope)
+    let network_type_hlod = band_network_type.to_string(); // corrected name
+    let ipv4_addr_hlod = *band_local_user_ipv4_address;  // corrected name
+    let ipv6_addr_hlod = *band_local_user_ipv6_address; // corrected name
+    let network_index_hlod = band_network_index as u8;  // corrected name
+
+
+    loop { // Main loop starts here
+        // 1. Check for Halt Signal and Team Channel Name (as before)
+        // ...
+
+        // --- 2. Check for Received Ready Signal (Corrected Logic) ---
+        // ... (Existing code for checking sync_data)
+        // Make sure `team_channel_name` is in scope here
+
+
+        // --- 3. Send Ready Signal (Corrected Iteration and Arguments) ---
+        // ... [Iterate remote IP addresses *only* if no ReadySignal received]
+
+        match network_type_hlod.as_str() { 
+            "ipv6" => {
+                for ipv6_addr in &rc_ipv6_list {
+                    // Create `target_addr` inside the loop
+                    let target_addr = SocketAddr::new(IpAddr::V6(*ipv6_addr), remote_ready_port);
+                    // debug_log!("hlod_udp_handshake(): Sending ReadySignal to: {:?},  band_network_type -> {:?}, band_network_index -> {:?}, latest_file_timestamp -> {:?}", target_addr, network_type_hlod, network_index_hlod, timestamp_for_rt); // Use the correct timestamp variable
+
+
+                    debug_log!("hlod_udp_handshake(): Sending ReadySignal to: {:?}, network_type -> {:?}, network_index -> {:?}, latest_file_timestamp -> {:?}", target_addr, network_type_hlod, network_index_hlod, timestamp_for_rt);
+                    // Use send_ready_signal()
+                    if send_ready_signal( // Correct arguments. Use target_addr's port
+                        local_user_salt_list, 
+                        &ipv4_addr_hlod, 
+                        &ipv6_addr_hlod, 
+                        target_addr.port(),  // Use target_addr's port
+                        timestamp_for_rt,    //  Use correct timestamp
+                        &network_type_hlod,   
+                        network_index_hlod,   // Correct type
+                    ).is_ok() {
+                        debug_log!("Ready signal sent successfully to {:?}", target_addr); 
+                    };
+                    
+                }
+            },
+
+            "ipv4" => { // Iterate IPv4 addresses and send ready signals.
+                for ipv4_addr in &rc_ipv4_list {
+                    // Create `target_addr` here, using the ipv4_addr
+                    let target_addr = SocketAddr::new(IpAddr::V4(*ipv4_addr), remote_ready_port);
+                    debug_log!("hlod_udp_handshake(): Sending ReadySignal to: {:?}, network_type -> {:?}, network_index -> {:?}, timestamp -> {:?}", target_addr, network_type_hlod, network_index_hlod, timestamp_for_rt); // Corrected debug_log
+
+                    send_ready_signal(  // Pass the correct port number to the send_ready_signal function
+                        local_user_salt_list, 
+                        &ipv4_addr_hlod,  // Local IPv4. Not part of the iteration now
+                        &ipv6_addr_hlod,  // Local IPv6. Not part of the iteration now.
+                        target_addr.port(),        //  Use correct target address's port
+                        timestamp_for_rt, // Correct timestamp
+                        &network_type_hlod,       // network_type_hlod  // Corrected network type handling
+                        network_index_hlod,   // Correct index handling.
+                    )?;
+                    debug_log!("Ready signal sent successfully to {:?}", target_addr);
+                }
+            }
+            _ => {
+                debug_log!("Invalid network type selected.");
+                return Err(ThisProjectError::NetworkError("Invalid network type selected".into()));  // or exit UMA?
+
+            }
+        }
+
+        std::thread::sleep(Duration::from_secs(3));
+    } // loop end
+}
 
 /// Reads the remote collaborator's band data (network type, index, IP address). -> (network_type, network_index, rc_ip)
 ///
@@ -2078,6 +2299,8 @@ struct ForLocalOwnerDeskThread {
     remote_collaborator_salt_list: Vec<u128>,
     local_user_ipv6_addr_list: Vec<Ipv6Addr>, // list of ip addresses
     local_user_ipv4_addr_list: Vec<Ipv4Addr>, // list of ip addresses
+    remote_collaborator_ipv6_addr_list: Vec<Ipv6Addr>, // list of ip addresses
+    remote_collaborator_ipv4_addr_list: Vec<Ipv4Addr>, // list of ip addresses
     local_user_gpg_publickey_id: String,
     local_user_public_gpg: String,
     local_user_sync_interval: u64,
@@ -2096,6 +2319,8 @@ struct ForRemoteCollaboratorDeskThread {
     local_user_salt_list: Vec<u128>,
     remote_collaborator_ipv6_addr_list: Vec<Ipv6Addr>, // list of ip addresses
     remote_collaborator_ipv4_addr_list: Vec<Ipv4Addr>, // list of ip addresses
+    local_user_ipv6_addr_list: Vec<Ipv6Addr>, // list of ip addresses
+    local_user_ipv4_addr_list: Vec<Ipv4Addr>, // list of ip addresses
     remote_collaborator_gpg_publickey_id: String,
     remote_collaborator_public_gpg: String,
     remote_collaborator_sync_interval: u64,
@@ -7743,7 +7968,16 @@ fn handle_local_owner_desk(
     };
     // TODO maybe need to copy a clone of band into
     
-    
+    /////////////
+    // Bootstrap
+    /////////////
+    hlod_udp_handshake(
+    &local_owner_desk_setup_data, //: &ForLocalOwnerDeskThread,
+    &band_network_type, //: &str,
+    &band_local_user_ipv4_address, //: &Ipv4Addr,
+    &band_local_user_ipv6_address, //: &Ipv6Addr,
+    band_network_index, //: u8,
+);
 
     
     // let (
@@ -11036,8 +11270,10 @@ fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
             remote_collaborator_name: this_meetingroom_iter.remote_collaborator_name.clone(),
             local_user_salt_list: this_meetingroom_iter.local_user_salt_list.clone(),
             remote_collaborator_salt_list: this_meetingroom_iter.remote_collaborator_salt_list.clone(),
-            local_user_ipv6_addr_list: this_meetingroom_iter.local_user_ipv6_addr_list,
-            local_user_ipv4_addr_list: this_meetingroom_iter.local_user_ipv4_addr_list,
+            local_user_ipv6_addr_list: this_meetingroom_iter.local_user_ipv6_addr_list.clone(),
+            local_user_ipv4_addr_list: this_meetingroom_iter.local_user_ipv4_addr_list.clone(),
+            remote_collaborator_ipv6_addr_list: this_meetingroom_iter.remote_collaborator_ipv6_addr_list.clone(),
+            remote_collaborator_ipv4_addr_list: this_meetingroom_iter.remote_collaborator_ipv4_addr_list.clone(),
             local_user_gpg_publickey_id: this_meetingroom_iter.local_user_gpg_publickey_id.clone(),
             local_user_public_gpg: this_meetingroom_iter.local_user_public_gpg.clone(),
             local_user_sync_interval: this_meetingroom_iter.local_user_sync_interval,
@@ -11055,6 +11291,8 @@ fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
             local_user_salt_list: this_meetingroom_iter.local_user_salt_list.clone(),
             remote_collaborator_ipv6_addr_list: this_meetingroom_iter.remote_collaborator_ipv6_addr_list,
             remote_collaborator_ipv4_addr_list: this_meetingroom_iter.remote_collaborator_ipv4_addr_list,
+            local_user_ipv6_addr_list: this_meetingroom_iter.local_user_ipv6_addr_list,
+            local_user_ipv4_addr_list: this_meetingroom_iter.local_user_ipv4_addr_list,
             remote_collaborator_gpg_publickey_id: this_meetingroom_iter.remote_collaborator_gpg_publickey_id.clone(),
             remote_collaborator_public_gpg: this_meetingroom_iter.remote_collaborator_public_gpg.clone(),
             remote_collaborator_sync_interval: this_meetingroom_iter.remote_collaborator_sync_interval,
@@ -11476,7 +11714,6 @@ fn initialize_hard_restart_signal() {
         .expect("Failed to write to 'yes_hard_restart_flag.txt' file.");
 }
 
-
 /// set signal to stop whole Uma program with all threads
 fn quit_set_continue_uma_to_false() { 
     if fs::remove_file(CONTINUE_UMA_PATH).is_ok() {
@@ -11502,7 +11739,6 @@ fn no_restart_set_hard_reset_flag_to_false() {
     file.write_all(b"0")
         .expect("Failed to write to 'yes_hard_restart_flag.txt' file.");
 }
-
 
 /*
 An Appropriately Svelt Mainland:
