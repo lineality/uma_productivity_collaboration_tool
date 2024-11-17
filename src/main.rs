@@ -498,7 +498,7 @@ fn get_band__find_valid_network_index_and_type(
         // Get index
         debug_log!("Found valid ipv6 address: {:?}", valid_ipv6);
         
-        if let Some(index) = find_ip_index(
+        if let Some(index) = find_index_byof_ip(
             &ipv4_addresses_string,
             &ipv6_addresses_string,
             &valid_ipv6.to_string()
@@ -511,7 +511,7 @@ fn get_band__find_valid_network_index_and_type(
 
     // 4. If no valid IPv6, then try IPv4
     if let Some(valid_ipv4) = find_valid_local_owner_ipv4_address(&ipv4_addresses) {
-        if let Some(index) = find_ip_index(
+        if let Some(index) = find_index_byof_ip(
             &ipv4_addresses_string,
             &ipv6_addresses_string,
             &valid_ipv4.to_string()
@@ -706,7 +706,8 @@ fn load_local_ip_lists(owner: &str) -> Result<(Vec<Ipv4Addr>, Vec<Ipv6Addr>), Th
     Ok((ipv4_addresses, ipv6_addresses))
 }
 
-// index is u8
+
+/// This converts between the u8 sent by uma over network and usize that Rust uses for array-indices.
 fn get_ip_by_index(
     index: u8,
     ipv4_list: &[Ipv4Addr],
@@ -767,6 +768,7 @@ fn save_network_option_index_statefile(
 
 
 /// Finds the combined index of an IP address in the concatenated IPv4 and IPv6 lists.
+/// This converts between the u8 sent by uma over network and usize that Rust uses for array-indices.
 ///
 /// This function efficiently searches for the given `ip_address` within the combined `ipv4_list` and `ipv6_list`.
 /// It returns a combined index representing both the IP address type and its position:
@@ -783,7 +785,7 @@ fn save_network_option_index_statefile(
 /// # Returns
 ///
 /// * `Option<u8>`:  The combined index, or `None` if the IP address is not found.
-fn find_ip_index(
+fn find_index_byof_ip(
     ipv4_list: &[String],
     ipv6_list: &[String],
     ip_address: &str,
@@ -801,7 +803,7 @@ fn find_ip_index(
 }
 
 
-// fn find_ip_index(
+// fn find_index_byof_ip(
 //     ipv4_list: &[String],
 //     ipv6_list: &[String],
 //     ip_address: &str
@@ -833,7 +835,7 @@ fn find_ip_index(
 // /// # Returns
 // ///
 // /// * `Option<usize>`:  The combined index, or `None` if the IP address is not found.
-// fn find_ip_index(
+// fn find_index_byof_ip(
 //     ipv4_list: &[String],
 //     ipv6_list: &[String],
 //     ip_address: &str
@@ -866,7 +868,7 @@ fn find_ip_index(
 // /// # Returns
 // ///
 // /// * `Option<usize>`:  The combined index, or `None` if the IP address is not found.
-// fn find_ip_index(
+// fn find_index_byof_ip(
 //     ipv4_list: &[Ipv4Addr],
 //     ipv6_list: &[Ipv6Addr],
 //     ip_address: &Ipv6Addr
@@ -900,7 +902,7 @@ fn find_ip_index(
 // /// # Returns
 // ///
 // /// * `Option<usize>`:  The combined index, or `None` if the IP address is not found.
-// fn find_ip_index(
+// fn find_index_byof_ip(
 //     ipv4_list: &[String],
 //     ipv6_list: &[String],
 //     ip_address: &str
@@ -917,7 +919,7 @@ fn find_ip_index(
 
 
 // /// returns the index of the input
-// fn find_ip_index(
+// fn find_index_byof_ip(
 //     ipv4_list: &[String],
 //     ipv6_list: &[String],
 //     ip_address: &str
@@ -951,7 +953,7 @@ fn find_ip_index(
 // /// # Returns
 // ///
 // /// * `Option<usize>`:  The combined index, or `None` if the IP address is not found.
-// fn find_ip_index(
+// fn find_index_byof_ip(
 //     ipv4_list: &[Ipv4Addr], 
 //     ipv6_list: &[Ipv6Addr], 
 //     ip_address: &IpAddr
@@ -972,7 +974,7 @@ fn find_ip_index(
 // ///
 // /// * `ipv4_list`: The list of IPv4 addresses.
 // /// * `ipv6_list`: The list of IPv6 addresses.
-// /// * `combined_index`: The combined index obtained from `find_ip_index`.
+// /// * `combined_index`: The combined index obtained from `find_index_byof_ip`.
 // ///
 // /// # Returns
 // ///
@@ -5005,7 +5007,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
     // // ipv6_addr_2 = ipv6_addr_1.clone(); // Clone the selected address for ipv6_addr_2 if needed
 
     // // get index of valid IP v6
-    // let ip_index = find_ip_index(
+    // let ip_index = find_index_byof_ip(
     //     &str_ipv4list,
     //     &str_ipv6list,
     //     &local_user_ipv6_address.to_string(), // as ip_address
@@ -8460,7 +8462,7 @@ fn handle_local_owner_desk(
 
 
     // // get index of valid IP v6
-    // let ip_index = find_ip_index(
+    // let ip_index = find_index_byof_ip(
     //     &local_owner_desk_setup_data.local_user_ipv6_addr_list, // as ip_list
     //     &local_user_ipv6_address, // as ip_address
     // );
