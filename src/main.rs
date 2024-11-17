@@ -62,6 +62,9 @@ pub mod tiny_tui {
 const DEBUG_FLAG: bool = true;
 const MAX_NETWORK_TYPE_LENGTH: usize = 1024; // Example: 1KB limit
 
+const EMPTY_IPV_4: Ipv4Addr = Ipv4Addr::new(127, 0, 0, 1); // == = 127.0.0.1
+const EMPTY_IPV_6: Ipv6Addr = Ipv6Addr::UNSPECIFIED; // Correct way to represent an unspecified IPv6 address
+
 // use std::sync::mpsc;
 use std::io;
 use std::io::{
@@ -412,14 +415,15 @@ fn get_local_ip_addresses() -> Result<Vec<IpAddr>, std::io::Error> {
 ///     uma_local_owner_user: The username of the local UMA user.
 ///
 /// Returns:
-///     (String, usize): A tuple containing the network type ("ipv6" or "ipv4") and the index of the valid IP address. 
+///     (String, u8): A tuple containing the network type ("ipv6" or "ipv4") and the index of the valid IP address. 
 ///     Returns ("none", 0) if no valid IP address is found.
 fn get_band__find_valid_network_index_and_type(
     uma_local_owner_user: &str,
 ) -> (
-    String, 
-    usize,
-    Ipv4Addr,
+    bool, // network_found_ok flag
+    String, // network_type
+    u8, // network_index
+    Ipv4Addr, 
     Ipv6Addr,
     ) {
     /*
@@ -435,9 +439,7 @@ fn get_band__find_valid_network_index_and_type(
     5. (pending) look for other network band types e.g. CB radio, optical, audio, etc.
     6. return (network_type, network_index) tuple (e.g. ('ipv6', 0)
     */
-    const EMPTY_IPV_4: Ipv4Addr = Ipv4Addr::new(127, 0, 0, 1); // == = 127.0.0.1
-    // const EMPTY_IPV_6: Ipv6Addr = Ipv6Addr::from_u128(0); // == ::1
-    const EMPTY_IPV_6: Ipv6Addr = Ipv6Addr::UNSPECIFIED; // Correct way to represent an unspecified IPv6 address
+
 
     
     // // 2. Load IP lists from the collaborator file
@@ -457,21 +459,37 @@ fn get_band__find_valid_network_index_and_type(
     //     }
     // };
     // 2. Load IP lists from the collaborator file
+    // let (ipv4_addresses, ipv6_addresses) = match load_local_ip_lists(uma_local_owner_user) {
+    //     Ok(lists) => lists,
+    //     Err(e) => {
+    //         debug_log!("Error loading IP lists: {}", e);
+    //         // Return "none" with default IP addresses
+    //         return ("none".to_string(), 0, Ipv4Addr::UNSPECIFIED, Ipv6Addr::UNSPECIFIED); 
+    //     }
+    // };
+    
+    // 2. Load IP lists from the collaborator file
     let (ipv4_addresses, ipv6_addresses) = match load_local_ip_lists(uma_local_owner_user) {
         Ok(lists) => lists,
         Err(e) => {
-            debug_log!("Error loading IP lists: {}", e);
-            // Return "none" with default IP addresses
-            return ("none".to_string(), 0, Ipv4Addr::UNSPECIFIED, Ipv6Addr::UNSPECIFIED); 
+            debug_log!("Error loading IP lists: {}. Returning filler values.", e);
+            return (
+                false,
+                "none".to_string(),
+                0,
+                EMPTY_IPV_4,  // Filler value
+                EMPTY_IPV_6,  // Filler value
+            );
         }
     };
-
+    
+    
     let (ipv4_addresses_string, ipv6_addresses_string) = match load_local_iplists_as_stringtype(uma_local_owner_user) {
         Ok(lists) => lists,
         Err(e) => {
             debug_log!("Error loading IP lists as strings: {}", e);
             // Return "none" with default IP addresses
-            return ("none".to_string(), 0, Ipv4Addr::UNSPECIFIED, Ipv6Addr::UNSPECIFIED); 
+            return (false, "none".to_string(), 0, Ipv4Addr::UNSPECIFIED, Ipv6Addr::UNSPECIFIED); 
         }
     };
 
@@ -485,20 +503,20 @@ fn get_band__find_valid_network_index_and_type(
             &ipv6_addresses_string,
             &valid_ipv6.to_string()
         ) {
-            return ("ipv6".to_string(), index, EMPTY_IPV_4, valid_ipv6);
+            return (true, "ipv6".to_string(), index, EMPTY_IPV_4, valid_ipv6);
         } else {
             debug_log!("Valid IPv6 address not found in the list.");
         }
     }
 
-    // 4. If no valid IPv6, try IPv4
+    // 4. If no valid IPv6, then try IPv4
     if let Some(valid_ipv4) = find_valid_local_owner_ipv4_address(&ipv4_addresses) {
         if let Some(index) = find_ip_index(
             &ipv4_addresses_string,
             &ipv6_addresses_string,
             &valid_ipv4.to_string()
         ) {
-            return ("ipv4".to_string(), index, valid_ipv4, EMPTY_IPV_6);
+            return (true, "ipv4".to_string(), index, valid_ipv4, EMPTY_IPV_6);
         } else {
             debug_log!("Valid IPv4 address not found in the list.");
         }
@@ -506,7 +524,7 @@ fn get_band__find_valid_network_index_and_type(
 
     // 5. No valid IP found
     debug_log!("No valid IPv4 or IPv6 address found.");
-    ("none".to_string(), 0, EMPTY_IPV_4, EMPTY_IPV_6) // Return a default value
+    (false, "none".to_string(), 0, EMPTY_IPV_4, EMPTY_IPV_6) // Return a default value
 }
 
 
@@ -688,15 +706,36 @@ fn load_local_ip_lists(owner: &str) -> Result<(Vec<Ipv4Addr>, Vec<Ipv6Addr>), Th
     Ok((ipv4_addresses, ipv6_addresses))
 }
 
-fn get_ip_by_index(index: usize, ipv4_list: &[Ipv4Addr], ipv6_list: &[Ipv6Addr]) -> Option<std::net::IpAddr> {
-    if index < ipv4_list.len() {
-        Some(std::net::IpAddr::V4(ipv4_list[index]))
-    } else if index < ipv4_list.len() + ipv6_list.len() {
-        Some(std::net::IpAddr::V6(ipv6_list[index - ipv4_list.len()]))
+// index is u8
+fn get_ip_by_index(
+    index: u8,
+    ipv4_list: &[Ipv4Addr],
+    ipv6_list: &[Ipv6Addr],
+) -> Option<(IpAddr, u8)> {
+    if index < ipv4_list.len() as u8 {
+        Some((IpAddr::V4(ipv4_list[index as usize]), index))
+    } else if index < (ipv4_list.len() + ipv6_list.len()) as u8 {
+        let ipv6_index = index - ipv4_list.len() as u8;
+        Some((IpAddr::V6(ipv6_list[ipv6_index as usize]), index))
     } else {
         None
     }
 }
+
+
+// fn get_ip_by_index(
+//     index: u8, 
+//     ipv4_list: &[Ipv4Addr], 
+//     ipv6_list: &[Ipv6Addr],
+// ) -> Option<std::net::IpAddr> {
+//     if index < ipv4_list.len() {
+//         Some(std::net::IpAddr::V4(ipv4_list[index]))
+//     } else if index < ipv4_list.len() + ipv6_list.len() {
+//         Some(std::net::IpAddr::V6(ipv6_list[index - ipv4_list.len()]))
+//     } else {
+//         None
+//     }
+// }
 
 /// Saves the combined network option index to a file.
 /// @ /sync_data/network_option_index.txt
@@ -712,7 +751,7 @@ fn get_ip_by_index(index: usize, ipv4_list: &[Ipv4Addr], ipv6_list: &[Ipv6Addr])
 ///
 /// * `Result<(), ThisProjectError>`:  `Ok(())` on success, or an error if an I/O operation fails.
 fn save_network_option_index_statefile(
-    combined_index: usize,
+    combined_index: u8,
 ) -> Result<(), ThisProjectError> {
     let mut file_path = PathBuf::from("sync_data");
     file_path.push("network_option_index.txt");
@@ -743,20 +782,38 @@ fn save_network_option_index_statefile(
 ///
 /// # Returns
 ///
-/// * `Option<usize>`:  The combined index, or `None` if the IP address is not found.
+/// * `Option<u8>`:  The combined index, or `None` if the IP address is not found.
 fn find_ip_index(
     ipv4_list: &[String],
     ipv6_list: &[String],
-    ip_address: &str
-) -> Option<usize> {
-    if ip_address.contains(':') {
-        // Assume it's an IPv6 address
-        ipv6_list.iter().position(|ip| ip == ip_address).map(|index| index + ipv4_list.len())
-    } else {
-        // Assume it's an IPv4 address
-        ipv4_list.iter().position(|ip| ip == ip_address)
+    ip_address: &str,
+) -> Option<u8> {
+    let ip_addr: IpAddr = ip_address.parse().ok()?;
+
+    match ip_addr {
+        IpAddr::V4(ipv4) => {
+            ipv4_list.iter().position(|ip| ip == &ipv4.to_string()).map(|index| index as u8)
+        }
+        IpAddr::V6(ipv6) => {
+            ipv6_list.iter().position(|ip| ip == &ipv6.to_string()).map(|index| (index + ipv4_list.len()) as u8)
+        }
     }
 }
+
+
+// fn find_ip_index(
+//     ipv4_list: &[String],
+//     ipv6_list: &[String],
+//     ip_address: &str
+// ) -> Option<u8> {
+//     if ip_address.contains(':') {
+//         // Assume it's an IPv6 address
+//         ipv6_list.iter().position(|ip| ip == ip_address).map(|index| index + ipv4_list.len())
+//     } else {
+//         // Assume it's an IPv4 address
+//         ipv4_list.iter().position(|ip| ip == ip_address)
+//     }
+// }
 
 
 // /// Finds the combined index of an IP address in the concatenated IPv4 and IPv6 lists.
@@ -936,7 +993,7 @@ fn find_ip_index(
 /// 
 fn write_band__save_network_band__type_index(
     network_type: String,
-    network_index: usize,
+    network_index: u8,
     this_ipv4: Ipv4Addr,
     this_ipv6: Ipv6Addr,
 ) -> Result<(), ThisProjectError> {
@@ -1484,7 +1541,7 @@ fn read_rc_bandnetwork_type_index(
 /// Uses absolute paths and handles file I/O and parsing errors.
 ///
 /// Returns:
-///     Result<(String, usize, Ipv4Addr, Ipv6Addr), ThisProjectError>: A tuple containing the network type, index, IPv4 address, and IPv6 address on success, or a ThisProjectError on failure.
+///     Result<(String, u8, Ipv4Addr, Ipv6Addr), ThisProjectError>: A tuple containing the network type, index, IPv4 address, and IPv6 address on success, or a ThisProjectError on failure.
 fn read_band__network_config_type_index_specs() -> Result<(String, u8, Ipv4Addr, Ipv6Addr), ThisProjectError> {
     // 1. Construct Absolute Paths (get current absolute working directory)
     let mut base_path = std::env::current_dir()?; // Start with absolute current directory. Handle potential errors.
@@ -1507,7 +1564,7 @@ fn read_band__network_config_type_index_specs() -> Result<(String, u8, Ipv4Addr,
     let ipv6_str = ipv6_result?.trim().to_string();
 
 
-    // 4. Parse network_index (usize), Handling Errors
+    // 4. Parse network_index (u8), Handling Errors
     let network_index: u8 = network_index_str
         .parse()
         .map_err(|e| ThisProjectError::InvalidData(format!("Invalid network index: {}", e)))?;
@@ -4610,7 +4667,8 @@ fn add_im_message(
 /// 
 /// ip availability is also read and recorded in sync-state stored
 /// as a combined-index that included type data (hopefully works with other signal types too)
-fn initialize_uma_application() -> Result<(), Box<dyn std::error::Error>> {
+/// return true for online, false for offline
+fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
     // Welcome to Uma Land!!
     debug_log("Staring initialize_uma_application()");
 
@@ -4636,7 +4694,7 @@ fn initialize_uma_application() -> Result<(), Box<dyn std::error::Error>> {
         if let Err(e) = local_user_metadata.save_owner_to_file(&uma_toml_path) { 
             eprintln!("Failed to create uma.toml: {}", e);
             // Handle the error (e.g., exit gracefully) 
-            return Ok(()); 
+            return Ok(false); 
         }
         debug_log!("uma.toml created successfully!"); 
     }
@@ -4649,7 +4707,7 @@ fn initialize_uma_application() -> Result<(), Box<dyn std::error::Error>> {
         },
         Err(e) => {
             eprintln!("Failed to load or parse uma.toml: {}", e); 
-            return Ok(()); 
+            return Ok(false); 
         }
     };
 
@@ -4664,7 +4722,7 @@ fn initialize_uma_application() -> Result<(), Box<dyn std::error::Error>> {
         },
         Err(e) => {
             eprintln!("Failed to load or parse uma.toml: {}", e); 
-            return Ok(()); 
+            return Ok(false); 
         }
     };
 
@@ -4742,7 +4800,7 @@ fn initialize_uma_application() -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("Error: {}", e); // Print the error message
         debug_log!("Error: {}", e);
         // Handle the error as needed (e.g., exit UMA)
-        return Ok(());
+        return Ok(false);
     }
     
     get_local_ip_addresses();
@@ -4958,25 +5016,44 @@ fn initialize_uma_application() -> Result<(), Box<dyn std::error::Error>> {
     //     local_user_ipv6_address, 
     //     ip_index
     // );
+    
+    
+    // Network Detection or Work Offline?
 
     
+
+    // Call get_band__find_valid_network_index_and_type to retrieve band info and online status
     let (
-        network_type, 
+        network_found_ok,
+        network_type,
         network_index,
         this_ipv4,
         this_ipv6,
     ) = get_band__find_valid_network_index_and_type(&uma_local_owner_user);
 
-    // set ipv6 state-file
-    // path: sync_data/ip.toml
-    write_band__save_network_band__type_index(
-        network_type,
-        network_index,
-        this_ipv4,
-        this_ipv6,
-    );
 
-    Ok(())
+    // Handle offline mode if no network connection is found
+    if !network_found_ok {  // Check the flag *before* writing/saving values to prevent corrupting or creating bad data from invalid inputs.
+        debug_log!("No valid network connection found. Entering offline mode.");
+        return Ok(false); // Return false to signal offline mode; do not initialize sync, do not continue processing those invalid or undefined network type and IP values. Halt immediately in this specific scenario and set `network_found_ok` boolean flag to `false` consistent with best practice for what you stated was the desired and specified handling for this exact use-case: halt Uma.
+    }
+
+
+    // set network data state-file(s) in sync_data/ directory:
+    if let Err(e) = write_band__save_network_band__type_index( // Check if writing to sync data state files fails
+        network_type, // network type, as String
+        network_index, // network index, as u8
+        this_ipv4,  //ipv4, as std::net::Ipv4Addr
+        this_ipv6, // ipv6, as std::net::Ipv6Addr
+    ) { // then handle that error: do not allow bad values to propagate to other parts of the system, halt uma and or handle in other specified way if this error can occur for other reasons not related to invalid IP retrieval. 
+        // Handle error, halt uma or do something else as per your specs if failure to save band configuration is an error distinct from failure to find a valid IP address.
+        // e.g. debug_log("Error saving network configuration: {}", e);
+        return Err(Box::new(e)); // Or handle the error as needed, including halting Uma with an informative message
+    };
+
+
+
+    Ok(true) // Indicate online mode only when valid IP data has been obtained, parsed, converted, and written to sync data state files correctly
 }
 
 fn handle_command(
@@ -12126,6 +12203,8 @@ fn main() {
     initialize_continue_uma_signal(); // set boolean flag for loops to hault
     initialize_hard_restart_signal(); // set boolean flag for uma restart
 
+    let mut online_mode: bool = false;
+    
     loop { // Main loop: let it fail, and try again
 
         if should_not_hard_restart() { // Check for restart
@@ -12135,26 +12214,39 @@ fn main() {
             break;
         }
 
-        debug_log("Start!");
-
-        if let Err(e) = initialize_uma_application() { 
-                eprintln!("Initialization failed: {}", e);
-                // Potentially add more error-specific handling here
-                std::process::exit(1); // Exit with non-zero code: indicate error
+        debug_log("boot...");
+        match initialize_uma_application() {
+            Ok(temp_online_val) => { 
+                online_mode = temp_online_val;  
+                if online_mode {   
+                    debug_log!("UMA initialized in online mode.");
+                } else {
+                    debug_log!("UMA initialized in offline mode.")
+                }
             }
-
+            Err(e) => {  
+                eprintln!("Initialization failed: {}", e);
+                debug_log!("Initialization failed: {}", e);  
+                std::process::exit(1);
+                break;
+            }
+        }
+        
+        debug_log("Start!");
+        
         // Thread 1: Executes the thread1_loop function
         let we_love_projects_loop = thread::spawn(move || {
             we_love_projects_loop();
         });
-        // Thread 2: Executes the thread2_loop function
-        let you_love_the_sync_team_office = thread::spawn(move || {
-            you_love_the_sync_team_office();
-        });
+        we_love_projects_loop.join().unwrap(); // Wait for finish
         
-        // Keep the main thread alive?
-        we_love_projects_loop.join().unwrap();
-        you_love_the_sync_team_office.join().unwrap();
+        // Thread 2: Executes the thread2_loop function
+        if online_mode {
+            let you_love_the_sync_team_office = thread::spawn(move || {
+                you_love_the_sync_team_office();
+            });
+            you_love_the_sync_team_office.join().unwrap(); // Wait for finish
+        };
 
         // End
         println!("All threads completed. The Uma says fare well and strive.");
