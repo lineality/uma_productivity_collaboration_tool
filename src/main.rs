@@ -1183,22 +1183,22 @@ fn write_save_rc_band_network_type_index(
 // }
 
 
-
-/// TODO: maybe use a parameter in team-channel instead of hard-coding 10 sec
-/// hlod_udp_handshake(): loop until satisfied:
+// TODO: what should this return? What does HLOD need? which ip-string, which ip-type,
+// TODO: maybe use a parameter in team-channel instead of hard-coding ~10 sec
+/// hlod_udp_handshake__rc_network_type_rc_ip_addr(): returns (rc_network_type, rc_ip_addr) as (String, String) loop until satisfied:
 /// every 10-60 sec: (lite-weight is the goal, not expensive-brute-force)
 /// 1. check for hault-uma (if not more often check somehow)
 /// 2. check for received ready-signal in /sync_data/ (if so, exit handshake) see below: with this you can get the rc_ip-data read_rc_band_network_type_index()
 /// 3. if not the above options: send a ready signal (iterating) to each listed collaborator ip 
 ///   ipv4 and ipv6 (until (step 2) there has been logged a ready-signal from one of them)
 ///
-fn hlod_udp_handshake(
+fn hlod_udp_handshake__rc_network_type_rc_ip_addr(
     local_owner_desk_setup_data: &ForLocalOwnerDeskThread,
     band_network_type: &str,
     band_local_user_ipv4_address: &Ipv4Addr,
     band_local_user_ipv6_address: &Ipv6Addr,
     band_network_index: u8,
-) -> Result<(SocketAddr, String), ThisProjectError> {
+) -> Result<(String, String), ThisProjectError> {
     // --- 1. Extract Data from Setup Data (Corrected) ---
     let (rc_ipv4_list, rc_ipv6_list) = (
         local_owner_desk_setup_data.remote_collaborator_ipv4_addr_list.clone(),
@@ -1211,7 +1211,10 @@ fn hlod_udp_handshake(
     let listen_ip_addr = match band_network_type {
         "ipv6" => IpAddr::V6(*band_local_user_ipv6_address),
         "ipv4" => IpAddr::V4(*band_local_user_ipv4_address),
-        _ => return Err(ThisProjectError::NetworkError("Invalid network type in hlod_udp_handshake".into())),
+        _ => return Err(ThisProjectError::NetworkError(
+            "Invalid network type in hlod_udp_handshake__rc_network_type_rc_ip_addr".into()
+            )
+        ),
     };
 
     let local_listen_addr = SocketAddr::new(
@@ -1225,7 +1228,7 @@ fn hlod_udp_handshake(
     ) {
         Ok(timestamp) => timestamp,
         Err(e) => {
-            debug_log!("hlod_udp_handshake(): Error getting timestamp: {}", e);
+            debug_log!("hlod_udp_handshake__rc_network_type_rc_ip_addr(): Error getting timestamp: {}", e);
             0
         }
     };
@@ -1247,14 +1250,14 @@ fn hlod_udp_handshake(
     got_signal_check_base_path.push("network_band");
     got_signal_check_base_path.push(&local_owner_desk_setup_data.remote_collaborator_name);        
 
-    loop { // hlod_udp_handshake() Main loop starts here
+    loop { // hlod_udp_handshake__rc_network_type_rc_ip_addr() Main loop starts here
         // 1. Check for Halt Signal and Team Channel Name (as before)
         if should_halt_uma() { // 1. check for halt-uma
             return Err(ThisProjectError::NetworkError("UMA halt signal received (not an error)".into())); // or log the exit?
         }
 
         // --- 2. Check for Received Ready Signal ---
-        // hlod_udp_handshake() Main loop starts here
+        // hlod_udp_handshake__rc_network_type_rc_ip_addr() Main loop starts here
         if got_signal_check_base_path.exists() {
             // The path exists...
 
@@ -1263,46 +1266,16 @@ fn hlod_udp_handshake(
                 &local_owner_desk_setup_data.remote_collaborator_name, // Correct collaborator name
                 &team_channel_name, // Use correctly retrieved team channel name
             ) {
-                let rc_socket_addr = SocketAddr::new(
-                    rc_ip_addr, 
-                    local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
-                ); // Corrected: now correctly assumes if remote has written rc_band_data, you can receive at your normal port
-
                 debug_log!(
-                    "hlod_udp_handshake(): Ready signal information found in sync_data for {}. rc_network_type: {}, rc_ip: {:?}, rc_socket_addr: {:?}",
+                    "hlod_udp_handshake__rc_network_type_rc_ip_addr(): Ready signal information found in sync_data for {}. rc_network_type: {}, rc_ip: {:?}",
                     local_owner_desk_setup_data.remote_collaborator_name,
-                    rc_network_type, // Add rc_network_type
-                    rc_ip_addr, // Correct field
-                    rc_socket_addr,
+                    rc_network_type, 
+                    rc_ip_addr, 
                 );
                 
+                return Ok((rc_network_type, rc_ip_addr)); // Return address, breaking loop
             }
         } // End of if-path
-            
-            
-        // if let Ok((rc_network_type, _, rc_ip)) = read_rc_band_network_type_index(  // Attempt to read remote band info. 
-        //     &local_owner_desk_setup_data.remote_collaborator_name,  // Access using setup data
-        //     &team_channel_name,  // Correct team channel name retrieval, pass string not Path
-        // ) {  // If successful, use values.
-            
-        //     // Combine rc_ip with port from ReadySignal (or appropriate port):
-        //     let rc_socket_addr = SocketAddr::new(rc_ip, local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip); // Correct port usage
-
-        //     debug_log!("hlod_udp_handshake():  Ready signal information found in sync_data for {}.  rc_network_type: {}, rc_ip: {:?}, rc_socket_addr: {:?}", 
-        //         local_owner_desk_setup_data.remote_collaborator_name, 
-        //         rc_network_type, 
-        //         rc_ip,
-        //         rc_socket_addr, 
-        //     ); 
-
-        //     return Ok((rc_socket_addr, rc_network_type));  // Return, breaking loop, breaking function.
-
-        // } else {
-        //     debug_log!("hlod_udp_handshake(): Ready signal information NOT found in sync_data for {}.  Proceeding to send ReadySignal.", 
-        //          local_owner_desk_setup_data.remote_collaborator_name
-        //     ); 
-        // }
-
 
         // --- 3. Send Ready Signal (Corrected Iteration and Arguments) ---
         // ... [Iterate remote IP addresses *only* if no ReadySignal received]
@@ -1315,10 +1288,10 @@ fn hlod_udp_handshake(
                         IpAddr::V6(*ipv6_addr), 
                         local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
                     );
-                    // debug_log!("hlod_udp_handshake(): Sending ReadySignal to: {:?},  band_network_type -> {:?}, band_network_index -> {:?}, latest_file_timestamp -> {:?}", target_addr, network_type_hlod, network_index_hlod, timestamp_for_rt); // Use the correct timestamp variable
+                    // debug_log!("hlod_udp_handshake__rc_network_type_rc_ip_addr(): Sending ReadySignal to: {:?},  band_network_type -> {:?}, band_network_index -> {:?}, latest_file_timestamp -> {:?}", target_addr, network_type_hlod, network_index_hlod, timestamp_for_rt); // Use the correct timestamp variable
 
 
-                    debug_log!("hlod_udp_handshake(): Sending ReadySignal to: {:?}, network_type -> {:?}, network_index -> {:?}, latest_file_timestamp -> {:?}", target_addr, network_type_hlod, network_index_hlod, timestamp_for_rt);
+                    debug_log!("hlod_udp_handshake__rc_network_type_rc_ip_addr(): Sending ReadySignal to: {:?}, network_type -> {:?}, network_index -> {:?}, latest_file_timestamp -> {:?}", target_addr, network_type_hlod, network_index_hlod, timestamp_for_rt);
                     // Use send_ready_signal()
                     if send_ready_signal( // Correct arguments. Use target_addr's port
                         local_user_salt_list, 
@@ -1342,7 +1315,7 @@ fn hlod_udp_handshake(
                         IpAddr::V4(*ipv4_addr), 
                         local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
                     );
-                    debug_log!("hlod_udp_handshake(): Sending ReadySignal to: {:?}, network_type -> {:?}, network_index -> {:?}, timestamp -> {:?}", target_addr, network_type_hlod, network_index_hlod, timestamp_for_rt); // Corrected debug_log
+                    debug_log!("hlod_udp_handshake__rc_network_type_rc_ip_addr(): Sending ReadySignal to: {:?}, network_type -> {:?}, network_index -> {:?}, timestamp -> {:?}", target_addr, network_type_hlod, network_index_hlod, timestamp_for_rt); // Corrected debug_log
 
                     send_ready_signal(  // Pass the correct port number to the send_ready_signal function
                         local_user_salt_list, 
@@ -1390,13 +1363,12 @@ fn hlod_udp_handshake(
 fn read_rc_band_network_type_index(
     remote_collaborator_name: &str,
     team_channel_name: &str,
-) -> Result<(String, u8, IpAddr), ThisProjectError> {
+) -> Result<(String, u8, String), ThisProjectError> {
     // 1. Construct Path
     let mut base_path = PathBuf::from("sync_data");
     base_path.push(team_channel_name);
     base_path.push("network_band");
     base_path.push(remote_collaborator_name);
-
 
     // 2. Read Network Type and Index (with error handling)
     let network_type = fs::read_to_string(base_path.join("network_type.txt"))?;
@@ -1407,20 +1379,15 @@ fn read_rc_band_network_type_index(
         .parse()
         .map_err(|e| ThisProjectError::ParseIntError(e))?; // Correct error type
 
+    // 3. Get IP Address String Based on Type and Index (Corrected):
+    // Do not parse here; just extract the raw string:    
+    let ip_address_string = match network_type.as_str() {
+        "ipv4" => fs::read_to_string(base_path.join("ipv4.txt"))?.trim().to_string(), // Read and trim
+        "ipv6" => fs::read_to_string(base_path.join("ipv6.txt"))?.trim().to_string(), // Read and trim
+        _ => return Err(ThisProjectError::NetworkError("Invalid network type".into())), // or have a default empty string...or what to do? maybe loop back
+    };
 
-    // 3. Load IP addresses from collaborator file. HLOD uses these to select the correct IP.
-    let (ipv4_addresses, ipv6_addresses) = load_local_ip_lists(remote_collaborator_name)?;
-
-    // 4. Determine RC's IP Address Based on Network Type and Index
-    let rc_ip = get_ip_from_index_and_type(
-        &ipv4_addresses, 
-        &ipv6_addresses, 
-        &network_type, 
-        network_index,
-    ).ok_or(ThisProjectError::NetworkError("Failed to get IP from received index and type".into()))?; // Return error if no IP found
-
-
-    Ok((network_type, network_index, rc_ip))
+    Ok((network_type, network_index, ip_address_string)) // Return the String representation
 }
 
 
@@ -8049,13 +8016,13 @@ fn handle_local_owner_desk(
     /////////////
     // Bootstrap
     /////////////
-    hlod_udp_handshake(
-    &local_owner_desk_setup_data, //: &ForLocalOwnerDeskThread,
-    &band_network_type, //: &str,
-    &band_local_user_ipv4_address, //: &Ipv4Addr,
-    &band_local_user_ipv6_address, //: &Ipv6Addr,
-    band_network_index, //: u8,
-);
+    let Ok((rc_network_type, rc_ip_addr)) = hlod_udp_handshake__rc_network_type_rc_ip_addr(
+        &local_owner_desk_setup_data, //: &ForLocalOwnerDeskThread,
+        &band_network_type, //: &str,
+        &band_local_user_ipv4_address, //: &Ipv4Addr,
+        &band_local_user_ipv6_address, //: &Ipv6Addr,
+        band_network_index, //: u8,
+    ) else { todo!() };
 
     
     // let (
