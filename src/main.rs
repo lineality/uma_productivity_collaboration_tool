@@ -498,7 +498,7 @@ fn get_band__find_valid_network_index_and_type(
         // Get index
         debug_log!("Found valid ipv6 address: {:?}", valid_ipv6);
         
-        if let Some(index) = find_index_byof_ip(
+        if let Some(index) = get_index_byof_ip(
             &ipv4_addresses_string,
             &ipv6_addresses_string,
             &valid_ipv6.to_string()
@@ -511,7 +511,7 @@ fn get_band__find_valid_network_index_and_type(
 
     // 4. If no valid IPv6, then try IPv4
     if let Some(valid_ipv4) = find_valid_local_owner_ipv4_address(&ipv4_addresses) {
-        if let Some(index) = find_index_byof_ip(
+        if let Some(index) = get_index_byof_ip(
             &ipv4_addresses_string,
             &ipv6_addresses_string,
             &valid_ipv4.to_string()
@@ -767,14 +767,12 @@ fn save_network_option_index_statefile(
 }
 
 
-/// Finds the combined index of an IP address in the concatenated IPv4 and IPv6 lists.
+/// Finds the the index in either along, not combined.
 /// This converts between the u8 sent by uma over network and usize that Rust uses for array-indices.
 ///
-/// This function efficiently searches for the given `ip_address` within the combined `ipv4_list` and `ipv6_list`.
-/// It returns a combined index representing both the IP address type and its position:
-///  - If the IP is found in `ipv4_list`, its index is returned directly.
-///  - If the IP is found in `ipv6_list`, its index + ipv4_list.len() is returned.
-///  - If the IP is not found in either list, `None` is returned.
+/// This function searches for the given `ip_address` 
+/// each list alone.
+/// It returns the index found.
 ///
 /// # Arguments
 ///
@@ -785,25 +783,35 @@ fn save_network_option_index_statefile(
 /// # Returns
 ///
 /// * `Option<u8>`:  The combined index, or `None` if the IP address is not found.
-fn find_index_byof_ip(
+fn get_index_byof_ip(
     ipv4_list: &[String],
     ipv6_list: &[String],
     ip_address: &str,
 ) -> Option<u8> {
     let ip_addr: IpAddr = ip_address.parse().ok()?;
 
-    match ip_addr {
+    debug_log!("get_index_byof_ip ipv4_list{:?}",ipv4_list);
+    debug_log!("get_index_byof_ip ipv6_list{:?}",ipv6_list);
+    debug_log!("get_index_byof_ip ip_address{:?}",ip_address);
+    debug_log!("get_index_byof_ip ip_addr{:?}",ip_addr);
+
+    let result = match ip_addr {
         IpAddr::V4(ipv4) => {
             ipv4_list.iter().position(|ip| ip == &ipv4.to_string()).map(|index| index as u8)
         }
         IpAddr::V6(ipv6) => {
-            ipv6_list.iter().position(|ip| ip == &ipv6.to_string()).map(|index| (index + ipv4_list.len()) as u8)
+            ipv6_list.iter().position(|ip| ip == &ipv6.to_string()).map(|index| index as u8)
         }
-    }
+    };
+
+    debug_log!("get_index_byof_ip result {:?}", result);
+
+    result
+
 }
 
 
-// fn find_index_byof_ip(
+// fn get_index_byof_ip(
 //     ipv4_list: &[String],
 //     ipv6_list: &[String],
 //     ip_address: &str
@@ -835,7 +843,7 @@ fn find_index_byof_ip(
 // /// # Returns
 // ///
 // /// * `Option<usize>`:  The combined index, or `None` if the IP address is not found.
-// fn find_index_byof_ip(
+// fn get_index_byof_ip(
 //     ipv4_list: &[String],
 //     ipv6_list: &[String],
 //     ip_address: &str
@@ -868,7 +876,7 @@ fn find_index_byof_ip(
 // /// # Returns
 // ///
 // /// * `Option<usize>`:  The combined index, or `None` if the IP address is not found.
-// fn find_index_byof_ip(
+// fn get_index_byof_ip(
 //     ipv4_list: &[Ipv4Addr],
 //     ipv6_list: &[Ipv6Addr],
 //     ip_address: &Ipv6Addr
@@ -902,7 +910,7 @@ fn find_index_byof_ip(
 // /// # Returns
 // ///
 // /// * `Option<usize>`:  The combined index, or `None` if the IP address is not found.
-// fn find_index_byof_ip(
+// fn get_index_byof_ip(
 //     ipv4_list: &[String],
 //     ipv6_list: &[String],
 //     ip_address: &str
@@ -919,7 +927,7 @@ fn find_index_byof_ip(
 
 
 // /// returns the index of the input
-// fn find_index_byof_ip(
+// fn get_index_byof_ip(
 //     ipv4_list: &[String],
 //     ipv6_list: &[String],
 //     ip_address: &str
@@ -953,7 +961,7 @@ fn find_index_byof_ip(
 // /// # Returns
 // ///
 // /// * `Option<usize>`:  The combined index, or `None` if the IP address is not found.
-// fn find_index_byof_ip(
+// fn get_index_byof_ip(
 //     ipv4_list: &[Ipv4Addr], 
 //     ipv6_list: &[Ipv6Addr], 
 //     ip_address: &IpAddr
@@ -974,7 +982,7 @@ fn find_index_byof_ip(
 // ///
 // /// * `ipv4_list`: The list of IPv4 addresses.
 // /// * `ipv6_list`: The list of IPv6 addresses.
-// /// * `combined_index`: The combined index obtained from `find_index_byof_ip`.
+// /// * `combined_index`: The combined index obtained from `get_index_byof_ip`.
 // ///
 // /// # Returns
 // ///
@@ -5007,7 +5015,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
     // // ipv6_addr_2 = ipv6_addr_1.clone(); // Clone the selected address for ipv6_addr_2 if needed
 
     // // get index of valid IP v6
-    // let ip_index = find_index_byof_ip(
+    // let ip_index = get_index_byof_ip(
     //     &str_ipv4list,
     //     &str_ipv6list,
     //     &local_user_ipv6_address.to_string(), // as ip_address
@@ -8462,7 +8470,7 @@ fn handle_local_owner_desk(
 
 
     // // get index of valid IP v6
-    // let ip_index = find_index_byof_ip(
+    // let ip_index = get_index_byof_ip(
     //     &local_owner_desk_setup_data.local_user_ipv6_addr_list, // as ip_list
     //     &local_user_ipv6_address, // as ip_address
     // );
@@ -12240,7 +12248,7 @@ fn main() {
         let we_love_projects_loop = thread::spawn(move || {
             we_love_projects_loop();
         });
-        we_love_projects_loop.join().unwrap(); // Wait for finish
+
         
         // Thread 2: Executes the thread2_loop function
         if online_mode {
@@ -12249,7 +12257,12 @@ fn main() {
             });
             you_love_the_sync_team_office.join().unwrap(); // Wait for finish
         };
-
+        
+        
+        we_love_projects_loop.join().unwrap(); // Wait for finish
+        // if online_mode {
+        //     you_love_the_sync_team_office.join().unwrap();
+        //     } // Wait for finish
         // End
         println!("All threads completed. The Uma says fare well and strive.");
         debug_log("All threads completed. The Uma says fare well and strive.");
