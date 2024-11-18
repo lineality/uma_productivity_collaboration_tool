@@ -1098,6 +1098,7 @@ fn write_save_rc_bandnetwork_type_index(
     this_ipv4: Ipv4Addr,
     this_ipv6: Ipv6Addr,
 ) -> Result<(), ThisProjectError> {
+    debug_log("write_save_rc_bandnetwork_type_index(), starting");
 
     // 1. Construct Path:
     let mut base_path = PathBuf::from("sync_data");
@@ -1106,31 +1107,40 @@ fn write_save_rc_bandnetwork_type_index(
     base_path.push(remote_collaborator_name);
 
     // Create directory structure if it doesn't exist
-    if let Some(parent) = base_path.parent() {
-        create_dir_all(parent)?;
-    }
+    create_dir_all(&base_path)?;
+    
+    debug_log!("write_save_rc_bandnetwork_type_index(), base_path {:?}", base_path);
 
     // 3. Construct Absolute File Paths
     let type_path = base_path.join("network_type.txt");
     let index_path = base_path.join("network_index.txt");
     let ipv4_path = base_path.join("ipv4.txt");
     let ipv6_path = base_path.join("ipv6.txt");
+    
+    debug_log!("write_save_rc_bandnetwork_type_index(), type_path {:?}", type_path);
+    debug_log!("write_save_rc_bandnetwork_type_index(), index_path {:?}", index_path);
+    debug_log!("write_save_rc_bandnetwork_type_index(), ipv4_path {:?}", ipv4_path);
+    debug_log!("write_save_rc_bandnetwork_type_index(), ipv6_path {:?}", ipv6_path);
 
-    // 4. Write to Files (handling potential errors):
+    // 4.1 Write to Files (handling potential errors):
     let mut type_file = File::create(&type_path)?; // Note the & for borrowing
     writeln!(type_file, "{}", network_type)?;
+    
+    debug_log!("write_save_rc_bandnetwork_type_index(), type_file {:?}", type_file);
 
     let mut index_file = File::create(&index_path)?;
     writeln!(index_file, "{}", network_index)?;
+    
+    debug_log!("write_save_rc_bandnetwork_type_index(), index_file {:?}", index_file);
 
-     // 4. Write to Files (handling potential errors):
-     // TODO this is not working, it is writing "sync_data/ipv6.txt" as the file text
-     // the path to the file should not be the file content...
+    // 4.2 Write to Files (handling potential errors):
     let mut ip4_file = File::create(&ipv4_path)?; // Note the & for borrowing
     writeln!(ip4_file, "{}", this_ipv4.to_string())?;  // Write IP string
+    debug_log!("write_save_rc_bandnetwork_type_index(), ip4_file {:?}", ip4_file);
 
     let mut ip6_file = File::create(&ipv6_path)?;
     writeln!(ip6_file, "{}", this_ipv6.to_string())?;  // Write IP string
+    debug_log!("write_save_rc_bandnetwork_type_index(), ip6_file {:?}", ip6_file);
     
     Ok(())
 }
@@ -9972,6 +9982,7 @@ fn get_rc_band_ready_gotit_socketaddrses_hrcd(
     let mut buf = [0; 1024];
 
     // --- 1. Load Local Band Information (as before) ---
+    debug_log("get_rc_band...HRCD: 1. load local band");
     let (
         local_network_type,
         _, // local_network_index is not used here
@@ -9981,6 +9992,7 @@ fn get_rc_band_ready_gotit_socketaddrses_hrcd(
 
 
     // --- 2. Determine Local IP Address (as before) ---
+    debug_log("get_rc_band...HRCD: 2. load local band");
     let local_ip = match local_network_type.as_str() {
         "ipv6" => IpAddr::V6(local_ipv6),
         "ipv4" => IpAddr::V4(local_ipv4),
@@ -9989,6 +10001,7 @@ fn get_rc_band_ready_gotit_socketaddrses_hrcd(
 
 
     // 3. Create SocketAddr for Listening (as before)
+    debug_log("get_rc_band...HRCD: 3. SocketAddr for Listening");
     let ready_socket_addr = SocketAddr::new(
         local_ip,
         room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip,
@@ -9996,16 +10009,18 @@ fn get_rc_band_ready_gotit_socketaddrses_hrcd(
     
 
     // --- 4. Bind Socket (outside the loop) ---
+    debug_log("get_rc_band...HRCD: 4. create_rc_udp_socket(ready_socket_addr)");
     let socket = create_rc_udp_socket(ready_socket_addr)?;
     
     // --- 5. Enter Loop to Continuously Listen ---
+    debug_log("get_rc_band...HRCD: 5. loop");
     loop { // Main listening loop
         // 5.1 Check for UMA shutdown
         if should_halt_uma() {
             return Err(ThisProjectError::NetworkError("get_rc_band_..._hrcd UMA halt signal received during band handshake".into()));
         }
         
-        debug_log!("get_rc_band_ready_gotit_socketaddrses_hrcd: Listening for ReadySignal on: {:?}", ready_socket_addr);
+        debug_log!("get_rc_band...HRCD: 5.1 Listening for ReadySignal on: {:?}", ready_socket_addr);
 
         // 5.2 Set Timeout (inside loop, in case it's reset by recv)
         socket.set_read_timeout(Some(timeout_duration))?;
@@ -10013,7 +10028,7 @@ fn get_rc_band_ready_gotit_socketaddrses_hrcd(
         // 5.3 Receive and Process
         match recv_ready_signal_with_timeout(&socket, &mut buf, &room_sync_input.remote_collaborator_salt_list) {
             Ok(Some((_, ready_signal))) => {
-
+                debug_log("get_rc_band...HRCD: 5.3 Receive and Process");
                 // Note: this Hash Verification  is already performed inside recv_ready_signal_with_timeout()
                 // 5.3.1 Hash and Timestamp Verification (Perform checks *inside* the Ok case)
                 // if !verify_readysignal_hashes(&ready_signal, &room_sync_input.remote_collaborator_salt_list) {
@@ -10028,9 +10043,14 @@ fn get_rc_band_ready_gotit_socketaddrses_hrcd(
                 }
                 
                 // --- 5.3.2 Extract and Save Remote Band Information ---
+                debug_log("get_rc_band...HRCD: 5.3.2 Extract and Save Remote");
                 // let (rc_network_type, rc_network_index) = decompress_banddata_byte(ready_signal.b);
                 let (rc_network_type, rc_network_index) = { // Create a new inner scope here
                     let band_result = decompress_banddata_byte(ready_signal.b);
+                    debug_log!(
+                        "get_rc_band...HRCD: 5.3.2 Extract and Save -> band_result: {:?}",
+                        band_result,
+                        );
                 
                     match band_result {
                         Ok((tempnetworktype, tempnetworkindex)) => (tempnetworktype, tempnetworkindex), // Assign values.
@@ -10057,10 +10077,18 @@ fn get_rc_band_ready_gotit_socketaddrses_hrcd(
                 let gotit_socket_addr = SocketAddr::new(rc_ip, room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip);  // Correct port from room_sync_input
 
                 // --- Write/Save Received Band Data ---
-                let this_team_channel_name = read_state_string("active_team_channel.txt")?;
+                let team_channel_name = match get_current_team_channel_name() {
+                    Some(name) => name,
+                    None => {
+                        debug_log!("Error: get_rc_band_ Could not get current channel name. Skipping set_as_active.");
+                        return Err(ThisProjectError::InvalidData("Could not get team channel name".into()));
+                    },
+                };
+                
+                debug_log("get_rc_band...HRCD: next: write_save_rc_bandnetwork_type_index");
                 write_save_rc_bandnetwork_type_index(
                     room_sync_input.remote_collaborator_name.clone(),
-                    this_team_channel_name,
+                    team_channel_name,
                     rc_network_type,
                     rc_network_index,
                     local_ipv4,
