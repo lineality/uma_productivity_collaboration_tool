@@ -11223,26 +11223,23 @@ fn handle_remote_collaborator_meetingroom_desk(
                     }; 
                     debug_log!("HRCD 3.3 this_team_channelname -> {:?}", this_team_channelname);
 
-                    // //  if echo==true: skip remaking queue
-                    // // note: as long as send is not parallel, explicit echo here may be depricated
-                    // debug_log!("HRCD 3.3 ?is-echo? ready_signal.re.unwrap_or(false) -> {:?}", ready_signal.re.unwrap_or(false));
-                    // if !ready_signal.re.unwrap_or(true) {
-                    //     debug_log("HRCD 3.3 get_or_create_send_queue");
-                    //     session_send_queue = match session_send_queue {
-                    //         input_sendqueue => {
-                    //             get_or_create_send_queue(
-                    //                 &this_team_channelname, // for team_channel_name
-                    //                 &room_sync_input.local_user_name, // local owner user name
-                    //                 input_sendqueue, // for session_send_queue
-                    //                 ready_signal_timestamp, // for ready_signal_timestamp
-                    //             )?
-                    //         }
-                    //     };
+                    // TODO currently set to always run... ok?
+                    debug_log("HRCD 3.3 get_or_create_send_queue");
+                    session_send_queue = match session_send_queue {
+                        input_sendqueue => {
+                            get_or_create_send_queue(
+                                &this_team_channelname, // for team_channel_name
+                                &room_sync_input.local_user_name, // local owner user name
+                                input_sendqueue, // for session_send_queue
+                                ready_signal_timestamp, // for ready_signal_timestamp
+                            )?
+                        }
+                    };
+                    
+                    // reset flag
+                    reset_sendq_flag = false;
                         
-                    //     // reset flag
-                    //     reset_sendq_flag = false;
-                        
-                    // }
+
                     debug_log!(
                         "HRCD ->[]<- 3.3 Get / Make session_send_queue {:?}",
                         session_send_queue   
