@@ -9695,8 +9695,10 @@ fn get_or_create_send_queue(
         ready_signal_rt_timestamp   
     );
     debug_log!("HRCD->get_or_create_send_queue: end: Q -> {:?}", session_send_queue);
+    
+    // Testing?
     // 1.5.6 Sleep for a duration (e.g., 100ms)
-    thread::sleep(Duration::from_millis(100000));
+    // thread::sleep(Duration::from_millis(100000));
 
     Ok(session_send_queue)
 }
@@ -10956,8 +10958,8 @@ fn handle_remote_collaborator_meetingroom_desk(
                 break;
             }
 
-            // set before the loop
-            let mut reset_sendq_flag: bool = false;
+            // // set before the loop
+            // let mut reset_sendq_flag: bool = false;
             
             // --- 2.2. Handle Ready Signal:  ---
             // "Listener"?
@@ -11178,7 +11180,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                                     back_of_queue_timestamp: oldest_prefail_flag_rt_timestamp,
                                     items: Vec::new(),
                                 };
-                                reset_sendq_flag = true;
+                                // reset_sendq_flag = true;
                                 debug_log!("HRCD Resetting send queue using timestamp from flag: {}", oldest_prefail_flag_rt_timestamp);
                             } else {
                                 debug_log!("HRCD No retry flags found. Using ReadySignal timestamp.");
@@ -11225,19 +11227,28 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                     // TODO currently set to always run... ok?
                     debug_log("HRCD 3.3 get_or_create_send_queue");
-                    session_send_queue = match session_send_queue {
-                        input_sendqueue => {
-                            get_or_create_send_queue(
-                                &this_team_channelname, // for team_channel_name
-                                &room_sync_input.local_user_name, // local owner user name
-                                input_sendqueue, // for session_send_queue
-                                ready_signal_timestamp, // for ready_signal_timestamp
-                            )?
-                        }
-                    };
+                    
+                    session_send_queue = get_or_create_send_queue(
+                        &this_team_channelname, // for team_channel_name
+                        &room_sync_input.local_user_name, // local owner user name
+                        session_send_queue, // for session_send_queue
+                        ready_signal_timestamp, // for ready_signal_timestamp
+                    )?;
+                    
+                    
+                    // session_send_queue = match session_send_queue {
+                    //     input_sendqueue => {
+                    //         get_or_create_send_queue(
+                    //             &this_team_channelname, // for team_channel_name
+                    //             &room_sync_input.local_user_name, // local owner user name
+                    //             input_sendqueue, // for session_send_queue
+                    //             ready_signal_timestamp, // for ready_signal_timestamp
+                    //         )?
+                    //     }
+                    // };
                     
                     // reset flag
-                    reset_sendq_flag = false;
+                    // reset_sendq_flag = false;
                         
 
                     debug_log!(
