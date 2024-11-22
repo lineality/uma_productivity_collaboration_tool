@@ -1261,7 +1261,7 @@ fn write_save_rc_bandnetwork_type_index(
 // }
 
 
-// TODO: what should this return? What does HLOD need? which ip-string, which ip-type,
+
 // TODO: maybe use a parameter in team-channel instead of hard-coding ~10 sec
 /// hlod_udp_handshake__rc_network_type_rc_ip_addr(): returns (rc_network_type, rc_ip_addr) as (String, String) loop until satisfied:
 /// every 10-60 sec: (lite-weight is the goal, not expensive-brute-force)
@@ -1277,6 +1277,8 @@ fn hlod_udp_handshake__rc_network_type_rc_ip_addr(
     band_local_user_ipv6_address: &Ipv6Addr,
     band_local_network_index: u8,
 ) -> Result<(String, String), ThisProjectError> {
+    debug_log("inHLOD: Start hlod_udp_handshake__rc_network_type_rc_ip_addr()");
+    
     // --- 1. Extract Data from Setup Data ---
     let local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip = local_owner_desk_setup_data.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip;
 
@@ -1311,13 +1313,15 @@ fn hlod_udp_handshake__rc_network_type_rc_ip_addr(
     let team_channel_name = get_current_team_channel_name()
         .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
 
-    // setup: Construct Path to check for a ready signal recieved from the rc (remote collaborator)
+    // setup: Construct Path to check for a ready signal received from the rc (remote collaborator)
     let mut got_signal_check_base_path = PathBuf::from("sync_data");
     got_signal_check_base_path.push(team_channel_name.clone());
     got_signal_check_base_path.push("network_band");
     got_signal_check_base_path.push(&local_owner_desk_setup_data.remote_collaborator_name);        
 
     loop { // hlod_udp_handshake__rc_network_type_rc_ip_addr() Main loop starts here
+        debug_log("hlod_udp_handshake__rc_network_type_rc_ip_addr() main loop (re)starting from the top...");
+        
         // 1. Check for Halt Signal and Team Channel Name (as before)
         if should_halt_uma() { // 1. check for halt-uma
             return Err(ThisProjectError::NetworkError("UMA halt signal received (not an error)".into())); // or log the exit?
@@ -1347,6 +1351,7 @@ fn hlod_udp_handshake__rc_network_type_rc_ip_addr(
         // --- 3. Send Ready Signal (Corrected Iteration and Arguments) ---
 
         // Send to each IPv6 address in rc_ipv6_list
+        debug_log("hlod_udp_handshake__rc_network_type_rc_ip_addr() Sending Handshake ready signals!");
         for ipv6_addr_string in &local_owner_desk_setup_data.remote_collaborator_ipv6_addr_list {
             send_ready_signal(
                 &local_owner_desk_setup_data.local_user_salt_list,
@@ -1441,8 +1446,23 @@ fn hlod_udp_handshake__rc_network_type_rc_ip_addr(
         //     }
         // }
 
-        /// a system exists elsewhere for pausing AND/while checking n-sec for quit-uma
-        std::thread::sleep(Duration::from_secs(3));
+        
+
+        // 1.1 Wait (and check for exit Uma)  this waits and checks N times: for i in 0..N {
+        for i in 0..5 {
+            // break for loop ?
+            if should_halt_uma() {
+                debug_log!("should_halt_uma(), exiting Uma in handle_local_owner_desk()");
+                break; // break this for-loop
+            }
+            thread::sleep(Duration::from_secs(3));
+        }
+        // Then break out of this function main loop
+        if should_halt_uma() {
+            debug_log!("HLOD should_halt_uma(), exiting Uma in handle_local_owner_desk()");
+            break Ok((Default::default(), Default::default()));
+        }
+
     } // loop end
 }
 
@@ -7420,8 +7440,8 @@ fn send_data(data: &[u8], target_addr: SocketAddr) -> Result<(), io::Error> {
 ///
 /// This is one of those values and functions that can be confusing
 /// because both you and your remote collaborator have quasi-mirror-image sync systems
-/// with reversed roles. Both of you are making 'latest_recieved' timestamps
-/// and both of you are using your and their 'latest_recieved' timestamps,
+/// with reversed roles. Both of you are making 'latest_received' timestamps
+/// and both of you are using your and their 'latest_received' timestamps,
 /// which are simultanously 'the same' abstract value but very different local-context-role-specific values
 ///
 /// the complimentary function is: get_latest_received_from_collaborator_in_teamchannel_file_timestamp()
@@ -8337,6 +8357,8 @@ fn handle_local_owner_desk(
     //     // TODO: maybe signal uma to hault
     // }
     
+    debug_log("HLOD Starting the handle_local_owner_desk()");
+    
     
     // Clone the values
     let salt_list_1 = local_owner_desk_setup_data.local_user_salt_list.clone();
@@ -8347,6 +8369,8 @@ fn handle_local_owner_desk(
     let localowner_gotit_port = local_owner_desk_setup_data.local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip.clone();
     
     let remote_collaborator_name = local_owner_desk_setup_data.remote_collaborator_name.clone();
+                
+    debug_log("HLOD setup: cloned values.");
                 
     // Instead of storing Option<&Ipv6Addr>, store the owned Ipv6Addr
     // let local_user_ipv6_address_2 = local_user_ipv6_address.clone();
@@ -8395,7 +8419,7 @@ fn handle_local_owner_desk(
             return Err(e); // Or handle differently
         }
     };
-    // TODO maybe need to copy a clone of band into
+    debug_log("HLOD setup: read_band__network_config_type_index_specs() run");
     
     /////////////
     // Bootstrap
@@ -8418,7 +8442,7 @@ fn handle_local_owner_desk(
         // TODO, handled another way?
         return Err(ThisProjectError::NetworkError("Handshake failed".into())); 
         };
-
+    debug_log("HLOD setup: hlod_udp_handshake__rc_network_type_rc_ip_addr() run");
 
     
     // let (
@@ -8497,8 +8521,8 @@ fn handle_local_owner_desk(
     //     ip_index.expect("REASON"),
     // );
 
-    loop { // 1. start overall loop to restart whole desk
-        
+    loop { // 1. start overall loop to (re)start whole desk
+        debug_log("HLOD 1. start overall loop to (re)start whole desk");
         
         let remote_collaborator_name_for_thread = remote_collaborator_name.clone();
         let salt_list_1_drone_clone = salt_list_1.clone();
@@ -9709,8 +9733,8 @@ fn get_or_create_send_queue(
 ///
 /// This is one of those values and functions that can be confusing
 /// because both you and your remote collaborate have quasi-mirror-image sync systems
-/// with reversed roles. Both of you are making 'latest_recieved' timestamps
-/// and both of you are using your and their 'latest_recieved' timestamps,
+/// with reversed roles. Both of you are making 'latest_received' timestamps
+/// and both of you are using your and their 'latest_received' timestamps,
 /// which are simultanously 'the same' abstract value but very different local-context-role-specific values
 ///
 /// the complimentary function is: get_latestreceivedfromme_file_timestamp_plaintextstatefile()
