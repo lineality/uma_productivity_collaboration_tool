@@ -1466,6 +1466,7 @@ fn hlod_udp_handshake__rc_network_type_rc_ip_addr(
     } // loop end
 }
 
+// HEREHERE todo TODO fix this, not checking for likely duely noneexistant files
 /// Reads the remote collaborator's band data (network type, index, IP address). -> (network_type, network_index, rc_ip)
 ///
 /// This function reads the remote collaborator's network band information, which was previously
