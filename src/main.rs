@@ -1347,9 +1347,12 @@ fn hlod_udp_handshake__rc_network_type_rc_ip_addr(
                 return Ok((rc_network_type, rc_ip_addr_string)); // Return address, breaking loop
             } else {
                 // ... (No ready signal yet, continue sending your own)
-                debug_log("hlod_udp_handshake__rc_network_type_rc_ip_addr() (No ready signal yet, continue sending your own)");
+                debug_log("hlod_udp_handshake path but no files");
             }
-        } // End of if-path
+        } else { 
+                // ... (No ready signal yet, continue sending your own)
+                debug_log("hlod_udp_handshake no path yet");
+        } // End of if got_signal_check_base_path.exists()
 
         // --- 3. Send Ready Signal (Corrected Iteration and Arguments) ---
 
@@ -1389,6 +1392,7 @@ fn hlod_udp_handshake__rc_network_type_rc_ip_addr(
                 local_owner_desk_setup_data.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
             );            
         }
+        
         
         // // ... [Iterate remote IP addresses *only* if no ReadySignal received]
 
@@ -1455,14 +1459,14 @@ fn hlod_udp_handshake__rc_network_type_rc_ip_addr(
         for i in 0..5 {
             // break for loop ?
             if should_halt_uma() {
-                debug_log!("should_halt_uma(), exiting Uma in handle_local_owner_desk()");
+                debug_log!("hold_udp_handshake: should_halt_uma(), exiting Uma in handle_local_owner_desk()");
                 break; // break this for-loop
             }
             thread::sleep(Duration::from_secs(3));
         }
         // Then break out of this function main loop
         if should_halt_uma() {
-            debug_log!("HLOD should_halt_uma(), exiting Uma in handle_local_owner_desk()");
+            debug_log!("hold_udp_handshake: should_halt_uma(), exiting Uma in handle_local_owner_desk()");
             break Ok((Default::default(), Default::default()));
         }
 
