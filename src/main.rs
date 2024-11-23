@@ -1333,7 +1333,7 @@ fn hlod_udp_handshake__rc_network_type_rc_ip_addr(
             // The path exists...
 
             // --- The purpose of this block is to use existing band data if it exists in sync_data
-            if let Ok((rc_network_type, _, rc_ip_addr_string)) = read_rc_bandnetwork_type_index(
+            if let Ok(Some((rc_network_type, _, rc_ip_addr_string))) = read_rc_bandnetwork_type_index(
                 &local_owner_desk_setup_data.remote_collaborator_name, // Correct collaborator name
                 &team_channel_name, // Use correctly retrieved team channel name
             ) {
@@ -1345,6 +1345,9 @@ fn hlod_udp_handshake__rc_network_type_rc_ip_addr(
                 );
                 
                 return Ok((rc_network_type, rc_ip_addr_string)); // Return address, breaking loop
+            } else {
+                // ... (No ready signal yet, continue sending your own)
+                debug_log("hlod_udp_handshake__rc_network_type_rc_ip_addr() (No ready signal yet, continue sending your own)");
             }
         } // End of if-path
 
@@ -1489,32 +1492,97 @@ fn hlod_udp_handshake__rc_network_type_rc_ip_addr(
 fn read_rc_bandnetwork_type_index(
     remote_collaborator_name: &str,
     team_channel_name: &str,
-) -> Result<(String, u8, String), ThisProjectError> {
-    // 1. Construct Path
+) -> Result<Option<(String, u8, String)>, ThisProjectError> { // Returns Option
+
     let mut base_path = PathBuf::from("sync_data");
     base_path.push(team_channel_name);
     base_path.push("network_band");
     base_path.push(remote_collaborator_name);
 
-    // 2. Read Network Type and Index (with error handling)
-    let network_type = fs::read_to_string(base_path.join("network_type.txt"))?;
+    // Check if the directory for the collaborator's band data exists
+    if !base_path.exists() {
+        debug_log!("read_rc_bandnetwork_type_index: Directory for collaborator '{}' not found.  No ready signal received yet.", remote_collaborator_name);
+        return Ok(None); // Return None, not an error
+    }
 
-    // Improved error handling for parsing network index:
-    let network_index: u8 = fs::read_to_string(base_path.join("network_index.txt"))?
-        .trim()
-        .parse()
-        .map_err(|e| ThisProjectError::ParseIntError(e))?; // Correct error type
 
-    // 3. Get IP Address String Based on Type and Index (Corrected):
-    // Do not parse here; just extract the raw string:    
-    let ip_address_string = match network_type.as_str() {
-        "ipv4" => fs::read_to_string(base_path.join("ipv4.txt"))?.trim().to_string(), // Read and trim
-        "ipv6" => fs::read_to_string(base_path.join("ipv6.txt"))?.trim().to_string(), // Read and trim
-        _ => return Err(ThisProjectError::NetworkError("Invalid network type".into())), // or have a default empty string...or what to do? maybe loop back
+    let network_type_path = base_path.join("network_type.txt");
+    let network_index_path = base_path.join("network_index.txt");
+    let ipv4_path = base_path.join("ipv4.txt");
+    let ipv6_path = base_path.join("ipv6.txt");
+
+    // Use a match statement to handle potential file not found errors
+    let network_type = match fs::read_to_string(&network_type_path) {
+        Ok(content) => content.trim().to_string(),
+        Err(e) if e.kind() == ErrorKind::NotFound => {
+            debug_log!("read_rc_bandnetwork_type_index: network_type.txt not found for collaborator '{}'.", remote_collaborator_name);
+            return Ok(None); // Return None
+        }
+        Err(e) => return Err(ThisProjectError::IoError(e)), // Return other IO errors
     };
 
-    Ok((network_type, network_index, ip_address_string)) // Return the String representation
+    let network_index: u8 = match fs::read_to_string(&network_index_path) {  //Similar handling
+        Ok(content) => content.trim().parse().map_err(ThisProjectError::ParseIntError)?,
+        Err(e) if e.kind() == ErrorKind::NotFound => {
+             debug_log!("read_rc_bandnetwork_type_index:  network_index.txt not found for collaborator '{}'.", remote_collaborator_name);
+            return Ok(None);
+        }
+        Err(e) => return Err(ThisProjectError::IoError(e)),
+    };
+
+
+    let ip_address_string = match network_type.as_str() { // ... (as before)
+        "ipv4" => match fs::read_to_string(&ipv4_path) { //Handle potential file not found error here as well:
+                Ok(s) => s.trim().to_string(),
+                Err(e) if e.kind() == ErrorKind::NotFound => {
+                    debug_log!("read_rc_bandnetwork_type_index: ipv4.txt not found for collaborator '{}'.", remote_collaborator_name);
+                    return Ok(None);
+                }                
+                Err(e) => return Err(ThisProjectError::IoError(e)),
+            },
+        "ipv6" => match fs::read_to_string(&ipv6_path) {  // And here.
+                Ok(s) => s.trim().to_string(),
+                Err(e) if e.kind() == ErrorKind::NotFound => {
+                     debug_log!("read_rc_bandnetwork_type_index: ipv6.txt not found for collaborator '{}'.", remote_collaborator_name);
+                    return Ok(None);
+                }                
+                Err(e) => return Err(ThisProjectError::IoError(e)),
+            },
+        _ => return Err(ThisProjectError::NetworkError("Invalid network type".into())),
+    };
+
+    Ok(Some((network_type, network_index, ip_address_string)))  // Wrap the result in Some()
 }
+// fn read_rc_bandnetwork_type_index(
+//     remote_collaborator_name: &str,
+//     team_channel_name: &str,
+// ) -> Result<(String, u8, String), ThisProjectError> {
+//     debug_log("start read_rc_bandnetwork_type_index");
+//     // 1. Construct Path
+//     let mut base_path = PathBuf::from("sync_data");
+//     base_path.push(team_channel_name);
+//     base_path.push("network_band");
+//     base_path.push(remote_collaborator_name);
+
+//     // 2. Read Network Type and Index (with error handling)
+//     let network_type = fs::read_to_string(base_path.join("network_type.txt"))?;
+
+//     // Improved error handling for parsing network index:
+//     let network_index: u8 = fs::read_to_string(base_path.join("network_index.txt"))?
+//         .trim()
+//         .parse()
+//         .map_err(|e| ThisProjectError::ParseIntError(e))?; // Correct error type
+
+//     // 3. Get IP Address String Based on Type and Index (Corrected):
+//     // Do not parse here; just extract the raw string:    
+//     let ip_address_string = match network_type.as_str() {
+//         "ipv4" => fs::read_to_string(base_path.join("ipv4.txt"))?.trim().to_string(), // Read and trim
+//         "ipv6" => fs::read_to_string(base_path.join("ipv6.txt"))?.trim().to_string(), // Read and trim
+//         _ => return Err(ThisProjectError::NetworkError("Invalid network type".into())), // or have a default empty string...or what to do? maybe loop back
+//     };
+//     debug_log("end start read_rc_bandnetwork_type_index");
+//     Ok((network_type, network_index, ip_address_string)) // Return the String representation
+// }
 
 
 // fn write_band__save_network_band__type_index(
