@@ -6902,6 +6902,8 @@ impl SendQueue {
 /// and returns a vector of `PathBuf` representing the paths to the update flag files.  It also deletes the flag files
 /// after reading their contents, ensuring that flags are processed only once.
 ///
+/// Note: each potential participant must have a separate flag.
+///
 /// # Arguments
 ///
 /// * `team_channel_name`: The name of the team channel.
@@ -9672,6 +9674,7 @@ fn get_absolute_team_channel_path(team_channel_name: &str) -> io::Result<PathBuf
 fn get_or_create_send_queue(
     team_channel_name: &str,
     localowneruser_name: &str,
+    remote_collaborator_name: &str,
     mut session_send_queue: SendQueue,
     ready_signal_rt_timestamp: u64,
 ) -> Result<SendQueue, ThisProjectError> {
@@ -9685,7 +9688,7 @@ fn get_or_create_send_queue(
     */
     // let mut back_of_queue_timestamp = session_send_queue.back_of_queue_timestamp.clone();
     debug_log!(
-        "HRCD->get_or_create_send_queue(): start;  ready_signal_rt_timestamp -> {:?}",
+        "inHRCD->get_or_create_send_queue 1: start;  ready_signal_rt_timestamp -> {:?}",
         ready_signal_rt_timestamp   
     );
     
@@ -9696,7 +9699,7 @@ fn get_or_create_send_queue(
     ) {
         Ok(paths) => paths,
         Err(e) => {
-            debug_log!("Error getting update flag paths: {}", e);
+            debug_log!("inHRCD->get_or_create_send_queue 2: Error getting update flag paths: {}", e);
             return Err(e); // Or handle as needed
         }
     };
@@ -9711,7 +9714,7 @@ fn get_or_create_send_queue(
     // got-it loop should be setting a timestamp_of_latest_received_file_that_i_sent
     // timestamp, read that
     if ready_signal_rt_timestamp == session_send_queue.back_of_queue_timestamp {
-        debug_log("HRCD->get_or_create_send_queue: ready_signal_rt_timestamp == back_of_queue_timestamp");
+        debug_log("inHRCD->get_or_create_send_queue 3: ready_signal_rt_timestamp == back_of_queue_timestamp");
         return Ok(session_send_queue)
     }
     
@@ -9732,51 +9735,81 @@ fn get_or_create_send_queue(
     let team_channel_path = match team_channel_path_result {
         Ok(path) => path,
         Err(e) => {
-            debug_log!("Error getting absolute team channel path: {}", e);
+            debug_log!("inHRCD->get_or_create_send_queue 4: Error getting absolute team channel path: {}", e);
             return Err(e.into());  // Or handle the error differently
         }
     };
 
-    debug_log!("HRCD->Starting crawl of directory: {:?}", team_channel_path);
+    debug_log!("inHRCD->get_or_create_send_queue 5: Starting crawl of directory: {:?}", team_channel_path);
 
-    // 3. Only when a new send-queue is needed, get the paths of files
-    // for only files that are owned by you
-    // for only files in the current team_channel
-    // for only files dated after (younger than) the .rt ready_signal_rt_timestamp
-    // which is not the time the ready-signal was sent, but is 
-    // the updated_at timestamp
-    // of the last received-by-them sent-by-you file.
-    //
+    // --- 3. Make a new Queue ---
+    /*
+    Only when a new send-queue is needed, 
+    get the paths of files
+    for only files that are owned by you
+    for only files in the current team_channel
+    for only files where current remote collaborator is on the list of teamchannel_collaborators_with_access
+    for only files dated after (younger than) the .rt ready_signal_rt_timestamp
+    which is not the time the ready-signal was sent, but is 
+    the updated_at timestamp
+    of the last received-by-them sent-by-you file.
+    */
     // ...Use the unwrapped PathBuf with WalkDir
     for entry in WalkDir::new(&team_channel_path) { // Note the & for borrowing
         let entry = entry?;
         if entry.file_type().is_file() && entry.path().extension() == Some(OsStr::new("toml")) {
-            debug_log!("HRCD->get_or_create_send_queue: file is toml, entry -> {:?}", entry);
+            debug_log!("inHRCD->get_or_create_send_queue 6: file is toml, entry -> {:?}", entry);
             // If a .toml file
             let toml_string = fs::read_to_string(entry.path())?;
             let toml_value: Value = toml::from_str(&toml_string)?;
 
             // If owner = target collaborator
             if toml_value.get("owner").and_then(Value::as_str) == Some(localowneruser_name) {
-                debug_log("HRCD->get_or_create_send_queue: file owner == colaborator name");
-                // If updated_at_timestamp exists
-                if let Some(toml_updatedat_timestamp) = toml_value.get("updated_at_timestamp").and_then(Value::as_integer) {
-                    debug_log("HRCD->get_or_create_send_queue: updated_at_timestamp field exists in file");
-                    let toml_updatedat_timestamp = toml_updatedat_timestamp as u64;
+                debug_log!("inHRCD->get_or_create_send_queue 7: file owner == colaborator name {:?}", toml_value);
+                
+                
+                // if current remote collaborator is on the list of teamchannel_collaborators_with_access
+                
+                // 1. Get collaborators for this file (if available):
+                let file_collaborators: Vec<String> = toml_value
+                    .get("teamchannel_collaborators_with_access") // Must match the key in your TOML files
+                    .and_then(Value::as_array)
+                    .map(|arr| arr.iter().filter_map(Value::as_str).map(String::from).collect())
+                    .unwrap_or_default();  // Handle case where the field is missing
+                    
+                    
+                // 2. Check if remote collaborator is in the access list:
+                if file_collaborators.contains(&remote_collaborator_name.to_string()) {  // Accessing remote_collaborator_name correctly here
 
-                    // If updated_at_timestamp > back_of_queue_timestamp (or back_of_queue_timestamp is 0)
-                    // if timestamp > back_of_queue_timestamp || back_of_queue_timestamp == 0 {
-                    if toml_updatedat_timestamp > session_send_queue.back_of_queue_timestamp {
-                        debug_log("HRCD->get_or_create_send_queue: timestamp > back_of_queue_timestamp");
-                        // Add filepath to send_queue
-                        session_send_queue.items.push(entry.path().to_path_buf());
+                    // If updated_at_timestamp exists
+                    if let Some(toml_updatedat_timestamp) = toml_value.get("updated_at_timestamp").and_then(Value::as_integer) {
+                        debug_log!(
+                            "inHRCD->get_or_create_send_queue 8: updated_at_timestamp=>{:?} vs. rt=>{:?}", 
+                            toml_updatedat_timestamp,
+                            ready_signal_rt_timestamp,
+                        );
+                        let toml_updatedat_timestamp = toml_updatedat_timestamp as u64;
+
+                        // If updated_at_timestamp > back_of_queue_timestamp (or back_of_queue_timestamp is 0)
+                        // if timestamp > back_of_queue_timestamp || back_of_queue_timestamp == 0 {
+                        if toml_updatedat_timestamp > session_send_queue.back_of_queue_timestamp {
+                            debug_log("inHRCD->get_or_create_send_queue 9: timestamp > back_of_queue_timestamp");
+                            // Add filepath to send_queue
+                            session_send_queue.items.push(entry.path().to_path_buf());
+                        }
                     }
+                } else {
+                    debug_log!(
+                        "Collaborator '{}' does not have access to file: {:?}",
+                        remote_collaborator_name,
+                        entry.path()
+                    );
                 }
             }
         }
     }
     
-    debug_log("get_or_create_send_queue calling, get_toml_file_timestamp(), Hello?");
+    debug_log("inHRCD-> get_or_create_send_queue 10: calling, get_toml_file_timestamp(), Hello?");
     
 
     
@@ -9788,10 +9821,10 @@ fn get_or_create_send_queue(
     // TODO(remove this later) extra Inspection here:
     debug_log("|| Extra Insepction || get_or_create_send_queue: end: Q");
     debug_log!(
-        "HRCD->get_or_create_send_queue(): start;  ready_signal_rt_timestamp -> {:?}",
+        "inHRCD->get_or_create_send_queue 11: start;  ready_signal_rt_timestamp -> {:?}",
         ready_signal_rt_timestamp   
     );
-    debug_log!("HRCD->get_or_create_send_queue: end: Q -> {:?}", session_send_queue);
+    debug_log!("inHRCD->get_or_create_send_queue 12: end: Q -> {:?}", session_send_queue);
     
     // Testing?
     // 1.5.6 Sleep for a duration (e.g., 100ms)
@@ -11328,6 +11361,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                     session_send_queue = get_or_create_send_queue(
                         &this_team_channelname, // for team_channel_name
                         &room_sync_input.local_user_name, // local owner user name
+                        &room_sync_input.remote_collaborator_name, // remote_collaborator_name
                         session_send_queue, // for session_send_queue
                         ready_signal_timestamp, // for ready_signal_timestamp
                     )?;
