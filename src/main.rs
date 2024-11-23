@@ -7360,6 +7360,8 @@ fn set_prefail_flag_rt_timestamp__for_sendfile(
 fn get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(
     remote_collaborator_name: &str,
 ) -> Result<u64, ThisProjectError> {
+    
+    // zero is null here, means no data (is not used as zero)
     let mut oldest_timestamp: u64 = 0;
 
     let team_channel_name = get_current_team_channel_name()
@@ -7375,6 +7377,7 @@ fn get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(
             "get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(): Directory {:?} not found. Returning 0.",
             directory
             );
+        // zero is null here, means no data (is not used as zero)
         return Ok(0);
     }    
 
@@ -7388,9 +7391,9 @@ fn get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(
 
             // Parse timestamp from filename, with error handling
             match file_name.parse::<u64>() {
-                Ok(timestamp) => {
-                    if oldest_timestamp == 0 || timestamp < oldest_timestamp {
-                        oldest_timestamp = timestamp;
+                Ok(file_timestamp) => {
+                    if oldest_timestamp == 0 || file_timestamp < oldest_timestamp {
+                        oldest_timestamp = file_timestamp;
                     }
                 }
                 Err(e) => {
