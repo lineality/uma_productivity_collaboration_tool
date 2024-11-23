@@ -9780,11 +9780,16 @@ fn get_or_create_send_queue(
                     
                 // 2. Check if remote collaborator is in the access list:
                 if file_collaborators.contains(&remote_collaborator_name.to_string()) {  // Accessing remote_collaborator_name correctly here
+                    debug_log!(
+                        "inHRCD->get_or_create_send_queue 8, access: file_collaborators=>{:?} vs. remote_collaborator_name=>{:?}", 
+                        file_collaborators,
+                        remote_collaborator_name,
+                    );
 
                     // If updated_at_timestamp exists
                     if let Some(toml_updatedat_timestamp) = toml_value.get("updated_at_timestamp").and_then(Value::as_integer) {
                         debug_log!(
-                            "inHRCD->get_or_create_send_queue 8: updated_at_timestamp=>{:?} vs. rt=>{:?}", 
+                            "inHRCD->get_or_create_send_queue 9: updated_at_timestamp=>{:?} vs. rt=>{:?}", 
                             toml_updatedat_timestamp,
                             ready_signal_rt_timestamp,
                         );
@@ -9793,14 +9798,14 @@ fn get_or_create_send_queue(
                         // If updated_at_timestamp > back_of_queue_timestamp (or back_of_queue_timestamp is 0)
                         // if timestamp > back_of_queue_timestamp || back_of_queue_timestamp == 0 {
                         if toml_updatedat_timestamp > session_send_queue.back_of_queue_timestamp {
-                            debug_log("inHRCD->get_or_create_send_queue 9: timestamp > back_of_queue_timestamp");
+                            debug_log("inHRCD->get_or_create_send_queue 10: timestamp > back_of_queue_timestamp");
                             // Add filepath to send_queue
                             session_send_queue.items.push(entry.path().to_path_buf());
                         }
                     }
                 } else {
                     debug_log!(
-                        "Collaborator '{}' does not have access to file: {:?}",
+                        "get_or_create_send_queue, Collaborator '{}' does not have access to file: {:?}",
                         remote_collaborator_name,
                         entry.path()
                     );
@@ -9809,7 +9814,7 @@ fn get_or_create_send_queue(
         }
     }
     
-    debug_log("inHRCD-> get_or_create_send_queue 10: calling, get_toml_file_timestamp(), Hello?");
+    debug_log("inHRCD-> get_or_create_send_queue 11: calling, get_toml_file_timestamp(), Hello?");
     
 
     
@@ -9821,10 +9826,10 @@ fn get_or_create_send_queue(
     // TODO(remove this later) extra Inspection here:
     debug_log("|| Extra Insepction || get_or_create_send_queue: end: Q");
     debug_log!(
-        "inHRCD->get_or_create_send_queue 11: start;  ready_signal_rt_timestamp -> {:?}",
+        "inHRCD->get_or_create_send_queue 12: start;  ready_signal_rt_timestamp -> {:?}",
         ready_signal_rt_timestamp   
     );
-    debug_log!("inHRCD->get_or_create_send_queue 12: end: Q -> {:?}", session_send_queue);
+    debug_log!("inHRCD->get_or_create_send_queue 13: end: Q -> {:?}", session_send_queue);
     
     // Testing?
     // 1.5.6 Sleep for a duration (e.g., 100ms)
