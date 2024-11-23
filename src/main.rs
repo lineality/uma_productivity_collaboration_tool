@@ -7357,7 +7357,7 @@ fn set_prefail_flag_rt_timestamp__for_sendfile(
 ///
 /// * `Result<u64, ThisProjectError>`: The oldest timestamp (or 0) on success, or
 ///   a `ThisProjectError` on failure.
-fn get_oldest_sendfile_prefailflag_rt_timestamp_or_zero(
+fn get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(
     remote_collaborator_name: &str,
 ) -> Result<u64, ThisProjectError> {
     let mut oldest_timestamp: u64 = 0;
@@ -7370,9 +7370,11 @@ fn get_oldest_sendfile_prefailflag_rt_timestamp_or_zero(
         .join("fail_retry_flags")
         .join(remote_collaborator_name);
 
-
     if !directory.exists() { // Handle directory existance
-        debug_log!("get_oldest_sendfile_prefailflag_rt_timestamp_or_zero(): Directory not found. Returning 0.");
+        debug_log!(
+            "get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(): Directory {:?} not found. Returning 0.",
+            directory
+            );
         return Ok(0);
     }    
 
@@ -7393,7 +7395,7 @@ fn get_oldest_sendfile_prefailflag_rt_timestamp_or_zero(
                 }
                 Err(e) => {
                     debug_log!(
-                        "get_oldest_sendfile_prefailflag_rt_timestamp_or_zero(): Error parsing timestamp from filename {}: {}",
+                        "get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(): Error parsing timestamp from filename {}: {}",
                         file_name,
                         e
                     );
@@ -7414,7 +7416,7 @@ fn get_oldest_sendfile_prefailflag_rt_timestamp_or_zero(
 // /// iterate throuhg directory
 // /// keep oldest timestamp found
 // /// return u64 timestamp
-// fn get_oldest_sendfile_prefailflag_rt_timestamp_or_zero(
+// fn get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(
 //     remote_collaborator_name: &str,
 // ) -> u64, ThisProjectError> {
     
@@ -9679,6 +9681,8 @@ fn get_or_create_send_queue(
     ready_signal_rt_timestamp: u64,
 ) -> Result<SendQueue, ThisProjectError> {
     /*
+    TODO is this checking for fail-flag dates...or is the done before calling this?
+    
     #[derive(Debug, Clone)]
     struct SendQueue {
         back_of_queue_timestamp: u64,
@@ -9709,10 +9713,9 @@ fn get_or_create_send_queue(
         session_send_queue.add_to_front_of_sendq(this_iter_newpath); // Use the new method
     }
     
-    // Note: this will not be true when making a queue, e.g. during first time bootstrapping
-    // TODO WRONG, when the sendqueue was made is NOT the mode recent sent file
-    // got-it loop should be setting a timestamp_of_latest_received_file_that_i_sent
-    // timestamp, read that
+    // This is only valid IF the prefail flags have been checked,
+    // this *should be happening in HRCD before calling this function
+    // and setting the back_of_queue_timestamp to be the oldest flag
     if ready_signal_rt_timestamp == session_send_queue.back_of_queue_timestamp {
         debug_log("inHRCD->get_or_create_send_queue 3: ready_signal_rt_timestamp == back_of_queue_timestamp");
         return Ok(session_send_queue)
@@ -11306,9 +11309,9 @@ fn handle_remote_collaborator_meetingroom_desk(
                     // Set back_of_queue_timestamp
                     //////////////////////////////
 
-                    match get_oldest_sendfile_prefailflag_rt_timestamp_or_zero(&room_sync_input.remote_collaborator_name) {
+                    match get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(&room_sync_input.remote_collaborator_name) {
                         Ok(oldest_prefail_flag_rt_timestamp) => {
-                            // 2. Now you can compare:
+                            // 2. Now you can compare: (zero means no timestamps exist)
                             if oldest_prefail_flag_rt_timestamp != 0 {
                                 // 3. Reset the send queue:
                                 session_send_queue = SendQueue {
@@ -11335,21 +11338,6 @@ fn handle_remote_collaborator_meetingroom_desk(
                         }
                     }
 
-                    // let oldest_prefail_flag_rt_timestamp = get_oldest_sendfile_prefailflag_rt_timestamp_or_zero(
-                    //     &room_sync_input.remote_collaborator_name
-                    // );
-                    
-                    // // If there are fail flags, use that time, otherwise use ReadySignal .rt time:
-                    // if oldest_prefail_flag_rt_timestamp != 0 {
-                        
-                    //     // prep to reset a new SendQueue
-                    //     session_send_queue = SendQueue {
-                    //         back_of_queue_timestamp: oldest_prefail_flag_rt_timestamp,
-                    //         items: Vec::new(),
-                    //     }; 
-                    //     reset_sendq_flag = true;
-                    // }; 
-                    
                     // --- 3.3 Get / Make Send-Queue ---
                     let this_team_channelname = match get_current_team_channel_name() {
                         Some(name) => name,
