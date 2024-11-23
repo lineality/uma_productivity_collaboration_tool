@@ -7367,22 +7367,22 @@ fn get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(
     let team_channel_name = get_current_team_channel_name()
         .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
 
-    let directory = PathBuf::from("sync_data")
+    let prefail_directory = PathBuf::from("sync_data")
         .join(&team_channel_name)
         .join("fail_retry_flags")
         .join(remote_collaborator_name);
 
-    if !directory.exists() { // Handle directory existance
+    if !prefail_directory.exists() { // Handle prefail_directory existance
         debug_log!(
             "get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(): Directory {:?} not found. Returning 0.",
-            directory
+            prefail_directory
             );
         // zero is null here, means no data (is not used as zero)
         return Ok(0);
     }    
 
-    // Correct iteration:
-    for entry in fs::read_dir(&directory)? { // Note the &
+    // 1. Find oldest timestamp
+    for entry in fs::read_dir(&prefail_directory)? { // Note the &
         let entry = entry?;
         let path = entry.path();
 
@@ -7398,7 +7398,7 @@ fn get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(
                 }
                 Err(e) => {
                     debug_log!(
-                        "get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(): Error parsing timestamp from filename {}: {}",
+                        "get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(): Error parsing file_timestamp from filename {}: {}",
                         file_name,
                         e
                     );
@@ -7409,6 +7409,27 @@ fn get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(
         }
     }
 
+    // 2. Delete all files in prefail_directory *AFTER* finding the oldest
+    if oldest_timestamp != 0 {  // Only clean up if flags exist.
+        for entry in fs::read_dir(&prefail_directory)? {  //Re-read the directory
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_file() {
+                if let Err(e) = fs::remove_file(path) {
+                    debug_log!(
+                        "get_oldest_sendfile...: Error removing flag file: {:?}",
+                        e
+                    );
+                    // Handle the error appropriately (log, continue, or return Err)
+                    // For example, you might want to continue deleting other files:
+                    // continue;
+                    // Or stop and return the error:
+                    return Err(ThisProjectError::IoError(e));
+                }
+            }
+        }
+    }
+    
     Ok(oldest_timestamp)
 }
 
