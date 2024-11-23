@@ -1299,7 +1299,7 @@ fn hlod_udp_handshake__rc_network_type_rc_ip_addr(
     );
 
     // --- Prepare ReadySignal ---
-    let timestamp_for_rt = match get_latest_received_from_collaborator_in_teamchannel_file_timestamp(
+    let timestamp_for_rt = match get_latest_received_from_rc_in_teamchannel_file_timestamp_filecrawl(
         &local_owner_desk_setup_data.remote_collaborator_name,
     ) {
         Ok(timestamp) => timestamp,
@@ -1308,6 +1308,11 @@ fn hlod_udp_handshake__rc_network_type_rc_ip_addr(
             0
         }
     };
+    debug_log!(
+        "hlod_udp_handshake: .rt, timestamp_for_rt, from get_latest_received_from_rc_in_teamchannel_file_timestamp_filecrawl -> {:?}", 
+        timestamp_for_rt,
+    );
+    
 
     // setup: Get Team Channel Name
     let team_channel_name = get_current_team_channel_name()
@@ -1354,7 +1359,8 @@ fn hlod_udp_handshake__rc_network_type_rc_ip_addr(
                 debug_log("hlod_udp_handshake no path yet");
         } // End of if got_signal_check_base_path.exists()
 
-        // --- 3. Send Ready Signal (Corrected Iteration and Arguments) ---
+        // --- 3. Send Ready Signal ---
+        // ... [Iterate remote IP addresses *only* if no ReadySignal received]
 
         // Send to each IPv6 address in rc_ipv6_list
         debug_log("hlod_udp_handshake__rc_network_type_rc_ip_addr() Sending Handshake ready signals!");
@@ -1362,11 +1368,11 @@ fn hlod_udp_handshake__rc_network_type_rc_ip_addr(
             send_ready_signal(
                 &local_owner_desk_setup_data.local_user_salt_list,
                 "ipv6".to_string(),                            // Correct: Always "ipv6" here
-                ipv6_addr_string.to_string(),                    // Correct: Use remote IPv6 address
+                ipv6_addr_string.to_string(),                  //Correct: Use remote IPv6 address
                 local_owner_desk_setup_data.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip,  // Use provided port
-                timestamp_for_rt,                            //  Use calculated timestamp
-                band_local_network_type,
-                band_local_network_index,                            //  Use band index
+                timestamp_for_rt,                              // Use calculated timestamp
+                band_local_network_type,                       // band_local_network_type
+                band_local_network_index,                      // Use band index
             )?;
             debug_log!(
                 "ReadySignal sent to IPv6: {}:{}",
@@ -1392,68 +1398,6 @@ fn hlod_udp_handshake__rc_network_type_rc_ip_addr(
                 local_owner_desk_setup_data.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
             );            
         }
-        
-        
-        // // ... [Iterate remote IP addresses *only* if no ReadySignal received]
-
-        // // IPV6
-        // match network_type_hlod.as_str() { 
-        //     "ipv6" => {
-        //         for ipv6_addr in &rc_ipv6_list {
-        //             // Create `target_addr` inside the loop
-        //             let target_addr = SocketAddr::new(
-        //                 IpAddr::V6(*ipv6_addr), 
-        //                 local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
-        //             );
-        //             // debug_log!("hlod_udp_handshake__rc_network_type_rc_ip_addr(): Sending ReadySignal to: {:?},  band_local_network_type -> {:?}, band_local_network_index -> {:?}, latest_file_timestamp -> {:?}", target_addr, network_type_hlod, network_index_hlod, timestamp_for_rt); // Use the correct timestamp variable
-
-
-        //             debug_log!("hlod_udp_handshake__rc_network_type_rc_ip_addr(): Sending ReadySignal to: {:?}, network_type -> {:?}, network_index -> {:?}, latest_file_timestamp -> {:?}", target_addr, network_type_hlod, network_index_hlod, timestamp_for_rt);
-        //             // Use send_ready_signal()
-        //             if send_ready_signal( // Correct arguments. Use target_addr's port
-        //                 local_user_salt_list, 
-        //                 &ipv4_addr_hlod, // Remote collaborator's network type (ipv4, ipv6, etc.)
-        //                 &ipv6_addr_hlod, // Remote collaborator's IP string 
-        //                 target_addr.port(),  // Use target_addr's port
-        //                 timestamp_for_rt,    //  Use correct timestamp
-        //                 &network_type_hlod,   
-        //                 network_index_hlod,   // Correct type
-        //             ).is_ok() {
-        //                 debug_log!("ipv6 Ready signal sent successfully to {:?}", target_addr); 
-        //             };
-                    
-        //         }
-        //     },
-
-        //     "ipv4" => { // Iterate IPv4 addresses and send ready signals.
-        //         for ipv4_addr in &rc_ipv4_list {
-        //             // Create `target_addr` here, using the ipv4_addr
-        //             let target_addr = SocketAddr::new(
-        //                 IpAddr::V4(*ipv4_addr), 
-        //                 local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
-        //             );
-        //             debug_log!("hlod_udp_handshake__rc_network_type_rc_ip_addr(): Sending ReadySignal to: {:?}, network_type -> {:?}, network_index -> {:?}, timestamp -> {:?}", target_addr, network_type_hlod, network_index_hlod, timestamp_for_rt); // Corrected debug_log
-
-        //             send_ready_signal(  // Pass the correct port number to the send_ready_signal function
-        //                 local_user_salt_list, 
-        //                 &ipv4_addr_hlod,  // Local IPv4. Not part of the iteration now
-        //                 &ipv6_addr_hlod,  // Local IPv6. Not part of the iteration now.
-        //                 target_addr.port(),        //  Use correct target address's port
-        //                 timestamp_for_rt, // Correct timestamp
-        //                 &network_type_hlod,       // network_type_hlod  // Corrected network type handling
-        //                 network_index_hlod,   // Correct index handling.
-        //             )?;
-        //             debug_log!("ipv4 Ready signal sent successfully to {:?}", target_addr);
-        //         }
-        //     }
-        //     _ => {
-        //         debug_log!("Invalid network type selected.");
-        //         return Err(ThisProjectError::NetworkError("Invalid network type selected".into()));  // or exit UMA?
-
-        //     }
-        // }
-
-        
 
         // 1.1 Wait (and check for exit Uma)  this waits and checks N times: for i in 0..N {
         for i in 0..5 {
@@ -1557,98 +1501,6 @@ fn read_rc_bandnetwork_type_index(
 
     Ok(Some((network_type, network_index, ip_address_string)))  // Wrap the result in Some()
 }
-// fn read_rc_bandnetwork_type_index(
-//     remote_collaborator_name: &str,
-//     team_channel_name: &str,
-// ) -> Result<(String, u8, String), ThisProjectError> {
-//     debug_log("start read_rc_bandnetwork_type_index");
-//     // 1. Construct Path
-//     let mut base_path = PathBuf::from("sync_data");
-//     base_path.push(team_channel_name);
-//     base_path.push("network_band");
-//     base_path.push(remote_collaborator_name);
-
-//     // 2. Read Network Type and Index (with error handling)
-//     let network_type = fs::read_to_string(base_path.join("network_type.txt"))?;
-
-//     // Improved error handling for parsing network index:
-//     let network_index: u8 = fs::read_to_string(base_path.join("network_index.txt"))?
-//         .trim()
-//         .parse()
-//         .map_err(|e| ThisProjectError::ParseIntError(e))?; // Correct error type
-
-//     // 3. Get IP Address String Based on Type and Index (Corrected):
-//     // Do not parse here; just extract the raw string:    
-//     let ip_address_string = match network_type.as_str() {
-//         "ipv4" => fs::read_to_string(base_path.join("ipv4.txt"))?.trim().to_string(), // Read and trim
-//         "ipv6" => fs::read_to_string(base_path.join("ipv6.txt"))?.trim().to_string(), // Read and trim
-//         _ => return Err(ThisProjectError::NetworkError("Invalid network type".into())), // or have a default empty string...or what to do? maybe loop back
-//     };
-//     debug_log("end start read_rc_bandnetwork_type_index");
-//     Ok((network_type, network_index, ip_address_string)) // Return the String representation
-// }
-
-
-// fn write_band__save_network_band__type_index(
-//     network_type: String,
-//     network_index: usize,
-// ) -> Result<(), ThisProjectError> {
-//     // 1. Construct Path:
-//     let mut file_path = PathBuf::from("sync_data");
-//     file_path.push("network_index.txt");
-
-//     // 2. Create Directory (if doesn't exist):
-//     if let Some(parent_dir) = file_path.parent() {
-//         create_dir_all(parent_dir)?;
-//     }
-
-//     // 3. Write to file:
-//     let mut file = File::create(&file_path)?;
-//     write!(file, "{}", network_index)?; // Write the index directly to the file.
-
-    
-//     // 4. Construct Path:
-//     let mut file_path = PathBuf::from("sync_data");
-//     file_path.push("network_type.txt");
-
-//     // 5. Create Directory (if doesn't exist):
-//     if let Some(parent_dir) = file_path.parent() {
-//         create_dir_all(parent_dir)?;
-//     }
-
-//     // 6. Write to file:
-//     let mut file = File::create(&file_path)?;
-//     write!(file, "{}", network_type)?; // Write the index directly to the file.
-
-//     Ok(())
-// }
-
-// /// Reads the local user's selected IP index from a file.
-// ///
-// /// This function attempts to read...
-// fn read_band__network_config_type_index_specs() -> Result<Option<usize>, ThisProjectError> {
-//     // 1. Construct Path
-//     let mut file_path = PathBuf::from("sync_data");
-//     file_path.push("ip_index.txt");
-
-//     // 2. Attempt to read file.
-//     match read_to_string(&file_path) {
-//         Ok(contents) => {
-//             // 3. Parse contents, handle parse errors:
-//             match contents.trim().parse::<usize>() {
-//                 Ok(index) => Ok(Some(index)),
-//                 Err(e) => Err(ThisProjectError::ParseIntError(e)),
-//             }
-//         },
-
-//         // 4. Return Ok(None) if file not found:
-//         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-
-//         // 5. Handle other errors (return the original IO error if one occurred):
-//         Err(e) => Err(ThisProjectError::IoError(e)),
-
-//     }
-// }
 
 /// Reads the local user's network band configuration data from files in the sync_data directory.
 /// Uses absolute paths and handles file I/O and parsing errors.
@@ -7545,8 +7397,12 @@ fn send_data(data: &[u8], target_addr: SocketAddr) -> Result<(), io::Error> {
 /// and both of you are using your and their 'latest_received' timestamps,
 /// which are simultanously 'the same' abstract value but very different local-context-role-specific values
 ///
-/// the complimentary function is: get_latest_received_from_collaborator_in_teamchannel_file_timestamp()
-fn get_latestreceivedfromme_file_timestamp_plaintextstatefile(
+/// the complimentary function is: get_latest_received_from_rc_in_teamchannel_file_timestamp_filecrawl()
+/// 
+/// example location of use:
+/// Drone Loop to Send ReadySignals  (hlod)
+/// 1.2 Refresh Timestamp
+fn read_latestreceivedfromme_file_timestamp_plaintextstatefile(
     collaborator_name: &str,
     team_channel_name: &str,
 ) -> Result<u64, ThisProjectError> {
@@ -7576,7 +7432,7 @@ fn get_latestreceivedfromme_file_timestamp_plaintextstatefile(
         },
         Err(e) if e.kind() == ErrorKind::NotFound => {
             debug_log!(
-                "Error: glrfftptsf() getting timestamp: e'{}'e. Using0 inside get_latestreceivedfromme_file_timestamp_plaintextstatefile()",
+                "Error: glrfftptsf() getting timestamp: e'{}'e. Using0 inside read_latestreceivedfromme_file_timestamp_plaintextstatefile()",
                 e,
             );
             // File not found, initialize to 0
@@ -7586,6 +7442,133 @@ fn get_latestreceivedfromme_file_timestamp_plaintextstatefile(
         }
         Err(e) => Err(ThisProjectError::IoError(e)), // Other IO errors
     }
+}
+
+
+
+/// Gets the latest received file timestamp for a collaborator in a team channel, using a plain text file.
+///
+/// This function reads the timestamp from a plain text file at:
+/// `sync_data/{team_channel_name}/latest_receivedfile_timestamps/
+/// {collaborator_name}/latest_received_from_rc_filetimestamp.txt`
+/// If the file or directory structure doesn't exist, it creates them and initializes the timestamp to 0.
+///
+/// # Arguments
+///
+/// * `team_channel_name`: The name of the team channel.
+/// * `collaborator_name`: The name of the collaborator.
+///
+/// # Returns
+///
+/// * `Result<u64, ThisProjectError>`:  The latest received timestamp on success, or a `ThisProjectError` if an error occurs.
+///
+/// This is one of those values and functions that can be confusing
+/// because both you and your remote collaborator have quasi-mirror-image sync systems
+/// with reversed roles. Both of you are making 'latest_received' timestamps
+/// and both of you are using your and their 'latest_received' timestamps,
+/// which are simultanously 'the same' abstract value but very different local-context-role-specific values
+///
+/// the complimentary function is: read_latestreceivedfromme_file_timestamp_plaintextstatefile()
+/// 
+/// example location of use:
+/// Drone Loop to Send ReadySignals  (hlod)
+/// 1.2 Refresh Timestamp
+///
+/// the complimentary function is: read_latestreceivedfromme_file_timestamp_plaintextstatefile()
+fn read_latest_received_from_rc_filetimestamp_plaintextstatefile(
+    team_channel_name: &str,
+    collaborator_name: &str,
+) -> Result<u64, ThisProjectError> {
+    let mut file_path = PathBuf::from("sync_data");
+    file_path.push(team_channel_name);
+    file_path.push("latest_receivedfile_timestamps");
+    file_path.push(collaborator_name);
+    file_path.push("latest_received_from_rc_filetimestamp.txt");
+
+    // Create directory structure if it doesn't exist
+    if let Some(parent) = file_path.parent() {
+        create_dir_all(parent)?;
+    }
+
+    // Read or initialize the timestamp
+    match read_to_string(&file_path) {
+        Ok(timestamp_str) => {
+            // if let Ok(timestamp) = timestamp_str.trim().parse() {
+            // Parse with error handling
+            match timestamp_str.trim().parse::<u64>() {
+                Ok(timestamp) => Ok(timestamp),
+                Err(e) => {
+                    debug_log!("Error parsing timestamp from file: {}", e);
+                    Err(ThisProjectError::from(e))
+                }
+            }
+        },
+        Err(e) if e.kind() == ErrorKind::NotFound => {
+            debug_log!(
+                "Error: glrfftptsf() getting timestamp: e'{}'e. Using0 inside read_latest_received_from_rc_filetimestamp_plaintextstatefile()",
+                e,
+            );
+            // File not found, initialize to 0
+            let mut file = File::create(&file_path)?;
+            file.write_all(b"0")?; // Write zero timestamp
+            Ok(0)
+        }
+        Err(e) => Err(ThisProjectError::IoError(e)), // Other IO errors
+    }
+}
+
+
+/// Sets the latest received file timestamp from the remote collaborator (RC) in a team channel, using a plain text file.
+///
+/// This function writes the given `timestamp` to a plain text file at:
+/// `sync_data/{team_channel_name}/latest_receivedfile_timestamps/{collaborator_name}/latest_received_from_rc_filetimestamp.txt`
+/// If the file or directory structure doesn't exist, it creates them.
+///
+/// # Arguments
+///
+/// * `team_channel_name`: The name of the team channel.
+/// * `collaborator_name`: The name of the remote collaborator (RC).
+/// * `timestamp`: The timestamp to write to the file.
+///
+/// # Returns
+///
+/// * `Result<(), ThisProjectError>`:  `Ok(())` on success, or a `ThisProjectError` if an error occurs (e.g., during file or directory creation, or writing to the file).
+///
+/// This function is used to store the latest `updated_at_timestamp` received from files sent by the remote collaborator. 
+/// This timestamp is used to track synchronization progress and avoid sending redundant files.
+///
+/// This is one of those values and functions that can be confusing
+/// because both you and your remote collaborator have quasi-mirror-image sync systems
+/// with reversed roles. Both of you are making 'latest_received' timestamps
+/// and both of you are using your and their 'latest_received' timestamps,
+/// which are simultanously 'the same' abstract value but very different local-context-role-specific values
+///
+/// The complimentary function is: `read_latest_received_from_rc_filetimestamp_plaintextstatefile()`.
+///
+/// Example location of use:
+/// InTrayListerLoop in `handle_local_owner_desk()` after receiving and saving a file, 
+/// this function is called to update the timestamp.  The complimentary function is 
+/// `read_latest_received_from_rc_filetimestamp_plaintextstatefile()`, which is used in the 
+/// drone loop to refresh the timestamp.
+fn write_latest_received_from_rc_filetimestamp_plaintextstatefile(
+    team_channel_name: &str,
+    collaborator_name: &str,
+    timestamp: u64, // Added timestamp argument
+) -> Result<(), ThisProjectError> {
+    let mut file_path = PathBuf::from("sync_data");
+    file_path.push(team_channel_name);
+    file_path.push("latest_receivedfile_timestamps");
+    file_path.push(collaborator_name);
+    file_path.push("latest_received_from_rc_filetimestamp.txt");
+
+    if let Some(parent) = file_path.parent() {
+        create_dir_all(parent)?;
+    }
+
+    // Write the timestamp to the file
+    std::fs::write(file_path, timestamp.to_string())?; // Changed to write
+
+    Ok(()) // Return Ok(()) on success
 }
 
 /// Gets the latest received file's `updated_at_timestamp` for a collaborator.
@@ -7609,7 +7592,7 @@ fn actual_latest_received_from_rc_file_timestamp(
     let team_channel_path = PathBuf::from("project_graph_data/team_channels").join(team_channel_name);
 
     debug_log!(
-        "get_latestreceivedfromme_file_timestamp_plaintextstatefile(): Starting GLRFRCFT team_channel_path: {:?}, collaborator_name: {}",
+        "read_latestreceivedfromme_file_timestamp_plaintextstatefile(): Starting GLRFRCFT team_channel_path: {:?}, collaborator_name: {}",
         team_channel_path, collaborator_name
     );
 
@@ -7696,174 +7679,6 @@ fn set_latest_received_from_rc_file_timestamp_plaintext(
 }
 
 
-
-   // // Create the initial ReadySignal (without hashes)
-    // let proto_ready_signal = ReadySignal {
-    //     rt: Some(last_received_timestamp),
-    //     rst: Some(get_current_unix_timestamp()),
-    //     re: Some(is_echo_send),
-    //     rh: None,
-    // };
-
-    // // Calculate and add hashes
-    // let ready_signal = add_pearson_hash_to_readysignal_struct(
-    //     &proto_ready_signal,
-    //     local_user_salt_list,
-    // )
-    // .ok_or(ThisProjectError::InvalidData("Failed to calculate ReadySignal hashes".into()))?; // Handle potential None
-    
-
-    // let serialized_signal = serialize_ready_signal(&ready_signal)?; // Serialize the ReadySignal
-
-    // debug_log!(
-    //     "Sending ReadySignal to {}: {:?}\n  (is_echo_send: {})",
-    //     target_addr, ready_signal, is_echo_send
-    // );
-
-    // // Bind and Send (using existing send_data function)
-    // let socket = UdpSocket::bind(":::0")?; // Bind to any available port on any interface.
-    // send_data(&serialized_signal, target_addr)?;
-
-
-    // // 4. Creates a ReadySignal instance to be the ready signal (Corrected)
-    // let proto_ready_signal = match get_latest_received_from_collaborator_in_teamchannel_file_timestamp(
-    //     // Clone the remote_collaborator_name
-    //     &local_owner_desk_setup_data_clone.remote_collaborator_name.clone() 
-    //     &local_owner_desk_setup_data_clone.local_user_salt_list.clone(), 
-    // ) {
-    //     Ok(latest_receivedfromme_file_timestamp) => ReadySignal {
-    //         rt: Some(latest_receivedfromme_file_timestamp), // Correct field name and type
-    //         rst: Some(get_current_unix_timestamp()), 
-    //         re: Some(false), // Correct field name and type
-    //         rh: None, // You'll need to calculate and add the hashes here later
-    //     },
-    //     Err(e) => {
-    //         debug_log!("Error getting last received timestamp: {}", e); 
-    //         // Handle the error here. You might want to:
-    //         return Ok(()); // Exit the thread
-
-    //         // or
-    //         // continue; // Skip to the next iteration of the loop (if this is inside a loop)
-    //         // or 
-    //         // create a ReadySignal with a default timestamp value:
-    //         // ReadySignal {
-    //         //     rt: Some(0), // Default timestamp
-    //         //     rst: Some(get_current_unix_timestamp()),
-    //         //     re: Some(false),
-    //         //     rh: None, 
-    //         // }
-    //     }
-    // };
-
-
-// /// Sends a ReadySignal to the specified target address.
-// ///
-// /// This function encapsulates the logic for sending a ReadySignal.  It handles
-// /// timestamp generation, hash calculation, serialization, and the actual sending
-// /// of the signal via UDP.
-// /// uses band_local_network_type to select what ipaddress to use
-// ///
-// /// # Arguments
-// ///
-// /// * local_user_salt_list: &[u128], 
-// /// * local_user_ipv4_address: &Ipv4Addr, 
-// /// * local_user_ipv6_address: &Ipv6Addr, 
-// /// * local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip: u16,
-// /// * last_received_timestamp: u64, // for rst
-// /// * network_type: String, // for nt
-// /// * network_index: u8, // for ni
-// ///
-// /// # Returns
-// /// ?
-// fn send_ready_signal(
-//     local_user_salt_list: &[u128], 
-//     local_user_ipv4_address: &Ipv4Addr, 
-//     local_user_ipv6_address: &Ipv6Addr, 
-//     local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip: u16,
-//     last_received_timestamp: u64, // for rst
-//     network_type: String, // for nt
-//     network_index: u8, // for ni
-// ) -> Result<(), ThisProjectError> {
-//     /*
-//     taget address depends on the nt/ni netowrk band info:
-//     if nt = ipv6
-//     else if nt = ipv4
-    
-//     */
-//     let for_rst = get_current_unix_timestamp();
-    
-//     // calculate_ready_signal_hashes
-//     let hash_list = calculate_ready_signal_hashes(
-//         last_received_timestamp, // rt: u64,
-//         for_rst, // rst: u64,
-//         network_type, // nt: &str,
-//         network_index, // ni: u8,
-//         local_user_salt_list, // local_user_salt_list: &[u128],
-//     );
-    
-//     // 4.1 Create the initial ReadySignal (without hashes)
-//     let ready_signal_struct = ReadySignal {
-//         rt: last_received_timestamp,
-//         rst: for_rst,
-//         b: 
-//         // nt: network_type,
-//         // ni: network_index,
-//         rh: hash_list,
-//     };
-    
-//     // 5. Serialize the ReadySignal
-//     let serialized_readysignal_data = serialize_ready_signal(
-//         &ready_signal_struct
-//     ).expect("inHLOD send_ready_signal() err Failed to serialize ReadySignal, ready_signal_struct"); 
-
-//     // --- Inspect Serialized Data ---
-//     debug_log!("inHLOD send_ready_signal() inspect Serialized Data: {:?}", ready_signal_struct);
-//     debug_log!("inHLOD send_ready_signal() serialized_readysignal_data: {:?}", serialized_readysignal_data);
-
-//     // 6. Send the signal based on network_type:
-//     // uses band_local_network_type to select what ipaddress to use
-//     /*
-//     if network_type == "ipv6"
-//     if network_type == "ipv4"
-//     other (future: CB radio)
-//     else
-//     */
-    
-//     //    local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
-//     // TODO figure out way to specify ipv6, 4, prioritizing, trying, etc.
-//     // (in theory...you could try them all?)
-//     // Select the first IPv6 address if available
-
-
-
-//     // Send the readysignal_data to the collaborator's ready_port
-//     // let target_addr = SocketAddr::new(
-//     //     IpAddr::V6(ipv6_address_copy), // Use the copied address
-//     //     local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
-//     // ); 
-//     // let target_addr = SocketAddr::new(
-//     //     IpAddr::V6(*local_user_ipv6_address), // Directly use the provided address
-//     //     local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip,
-//     // );
-
-//     // Log before sending
-//     debug_log!(
-//         "inHLOD send_ready_signal() Attempting to send ReadySignal to {}: {:?}", 
-//         target_addr, 
-//         local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
-//     );
-
-//     // // If sending to the first address succeeds, no need to iterate further
-
-//     // if send_data(&serialized_readysignal_data, target_addr).is_ok() {
-//     //     debug_log("inHLOD send_ready_signal() 6. Successfully sent ReadySignal to {} (first address)");
-//     //     return Ok(()); // Exit the thread
-//     // } else {
-//     //     debug_log("inHLOD send_ready_signal() err 6. Failed to send ReadySignal to {} (first address)");
-//     //     return Err(ThisProjectError::NetworkError("Failed to send ReadySignal".to_string())); // Return an error
-//     // }
-//     Ok(())
-// }
 
 
 #[derive(Debug)]
@@ -8241,7 +8056,7 @@ fn send_ready_signal(
     rc_network_type_string: String, // Remote collaborator's network type (ipv4, ipv6, etc.)
     rc_ip_addr_string: String, // Remote collaborator's IP string
     target_port: u16, // local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
-    last_received_timestamp: u64,
+    last_received_timestamp: u64, // last_received_timestamp
     local_user_network_type: &str, // LOU needed for .b section
     local_user_network_index: u8,  // LOU needed for .b section
 ) -> Result<(), ThisProjectError> {
@@ -8625,7 +8440,8 @@ fn handle_local_owner_desk(
     loop { // 1. start overall loop to (re)start whole desk
         debug_log("HLOD 1. start overall loop to (re)start whole desk");
         
-        let remote_collaborator_name_for_thread = remote_collaborator_name.clone();
+        let remote_collaborator_name_for_thread_1 = remote_collaborator_name.clone();
+        let remote_collaborator_name_for_thread_2 = remote_collaborator_name.clone();
         let salt_list_1_drone_clone = salt_list_1.clone();
 
         // 1.1 check for halt/quit uma signal
@@ -8674,7 +8490,7 @@ fn handle_local_owner_desk(
 
         let mut latest_received_from_rc_file_timestamp = match actual_latest_received_from_rc_file_timestamp(
             &team_channel_name, // Correct argument order.
-            &remote_collaborator_name_for_thread,
+            &remote_collaborator_name_for_thread_1,
         ) {
             Ok(temp_extractor) => temp_extractor, 
             Err(e) => {
@@ -8690,7 +8506,7 @@ fn handle_local_owner_desk(
         // update state: latest received timestamp
         set_latest_received_from_rc_file_timestamp_plaintext(
             &team_channel_name, // for team_channel_name
-            &local_owner_desk_setup_data.remote_collaborator_name, // for collaborator_name
+            &remote_collaborator_name.clone(), // for collaborator_name
             latest_received_from_rc_file_timestamp, // for timestamp
         );
         
@@ -8706,7 +8522,6 @@ fn handle_local_owner_desk(
             ////////////////////////////////////
             // Drone Loop to Send ReadySignals  (hlod)
             //////////////////////////////////
-
             loop {
                 
                 
@@ -8728,20 +8543,20 @@ fn handle_local_owner_desk(
                 debug_log!("\nHLOD Drone Loop Start...thanks for coming around!");
 
                 // 1.2 Refresh Timestamp
-                // Get/Set latest_receivedfromme_file_timestamp
-                // output  zero and set zero file if no file/path etc.
+                // get timestamp of the file you (local owner user) recieved most recently from the RC
+                // remote collaborator in this team-channel. 
                 /*
                 @
                 sync_data/{team_channel}/latest_receivedfile_timestamps/bob/latest_receivedfromme_file_timestamp
                 */
 
-                latest_received_from_rc_file_timestamp = match get_latestreceivedfromme_file_timestamp_plaintextstatefile(
-                    &team_channel_name, // Correct argument order.
-                    &remote_collaborator_name_for_thread,
+                latest_received_from_rc_file_timestamp = match read_latest_received_from_rc_filetimestamp_plaintextstatefile(
+                    &team_channel_name,
+                    &remote_collaborator_name_for_thread_2,
                 ) {
                     Ok(temp_extractor) => temp_extractor, 
                     Err(e) => {
-                        debug_log!("HLOD GotItSignal Error getting timestamp via get_latestreceivedfromme_file_timestamp_plaintextstatefile: e'{}'e. Using 0.", e);
+                        debug_log!("HLOD GotItSignal Error getting timestamp via get_latest_received_from_rc_in_teamchannel_file_timestamp_filecrawl: e'{}'e. Using 0.", e);
                         0 // Use a default timestamp (0) if an error occurs.
                     }
                 };
@@ -9875,8 +9690,7 @@ fn get_or_create_send_queue(
 /// and both of you are using your and their 'latest_received' timestamps,
 /// which are simultanously 'the same' abstract value but very different local-context-role-specific values
 ///
-/// the complimentary function is: get_latestreceivedfromme_file_timestamp_plaintextstatefile()
-fn get_latest_received_from_collaborator_in_teamchannel_file_timestamp(
+fn get_latest_received_from_rc_in_teamchannel_file_timestamp_filecrawl(
     collaborator_name: &str,
 ) -> Result<u64, ThisProjectError> {
     let mut last_timestamp: u64 = 0; // Initialize with 0 (for bootstrap when no files exist)
@@ -9896,229 +9710,34 @@ fn get_latest_received_from_collaborator_in_teamchannel_file_timestamp(
             // Check if the file is owned by the collaborator
             if toml_value.get("owner").and_then(Value::as_str) == Some(collaborator_name) {
                 // Get the updated_at_timestamp
-                if let Some(timestamp) = toml_value
+                if let Some(this_timestamp) = toml_value
                     .get("updated_at_timestamp")
                     .and_then(Value::as_integer)
                     .map(|ts| ts as u64) // Convert to u64
                 {
-                    if timestamp > last_timestamp {
-                        last_timestamp = timestamp;
+                    if this_timestamp > last_timestamp {
+                        last_timestamp = this_timestamp;
                     }
                 }
             }
         }
     }
-
+    
     debug_log!("get_last_file_timestamp() -> last_timestamp {:?}", last_timestamp); 
+    
+    // --- Get team channel name ---
+    let team_channel_name = get_current_team_channel_name()
+        .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
+
+    //
+    write_latest_received_from_rc_filetimestamp_plaintextstatefile(
+    &team_channel_name, // team_channel_name: &str,
+    collaborator_name, // collaborator_name: &str,
+    last_timestamp, // timestamp: u64, // Added timestamp argument
+    );
+    
     Ok(last_timestamp) // Returns 0 if no matching files are found
 }
-
-
-// /// listener loop that listens until it gets a quit signal or a legit ReadySignal
-// /// Listens for a ReadySignal on multiple IP addresses and returns the sender's IP and network type.
-// ///
-// /// This function attempts to bind to each IPv6 and then IPv4 address associated with the local machine and listens for a ReadySignal
-// /// on the specified port for a limited time. It returns the IP address and network type ("ipv4" or "ipv6") of the first received valid signal.
-// ///
-// /// # Arguments
-// ///
-// /// * `room_sync_input`: A reference to the `ForRemoteCollaboratorDeskThread` struct containing collaborator data.
-// ///
-// /// # Returns
-// ///
-// /// * `Result<(SocketAddr, String), ThisProjectError>`:  A tuple containing the sender's `SocketAddr` and network type on success,
-// ///    or a `ThisProjectError` if no valid ReadySignal is received within the timeout or if an error occurs.
-// ///
-// /// note: should check for quit-uma signal between tries (if not faster)
-// // fn get_rc_ip_and_network_type(
-// fn get_rc_ready_and_gotit_socketaddres(
-//     room_sync_input: &ForRemoteCollaboratorDeskThread,
-// ) -> Result<(SocketAddr, SocketAddr), ThisProjectError> {
-//     // 1. Set timeout duration.
-//     let timeout_duration = Duration::from_secs(15); // 15-second timeout
-    
-//     // 2. Create a buffer to receive data.
-//     let mut buf = [0; 1024]; // Adjust buffer size as needed
-
-//     loop {
-//         // Check for Uma halt signal
-//         if should_halt_uma() {
-//             return Err(ThisProjectError::NetworkError("Uma halt signal received".into()));
-//         }
-    
-//         // 3. Try IPv6 addresses first.
-//         if let Some(ipv6_addr) = room_sync_input.remote_collaborator_ipv6_addr_list.first() {
-//             debug_log!("Trying to get RC Band data from IPv6: {}", ipv6_addr);
-//             let socket_addr = SocketAddr::new(IpAddr::V6(*ipv6_addr), room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip); // Use the port from room_sync_input
-//             let socket_result = UdpSocket::bind(socket_addr);
-            
-//             match socket_result {
-//                 Ok(socket) => {
-//                     // set_socket_timeout()
-//                 socket.set_read_timeout(Some(timeout_duration))?;                
-//                 debug_log!("HRCD get_rc_ip_and_network_type(): Socket created, start listening.");
-
-//                 return match recv_ready_signal_with_timeout(&socket, &mut buf, &room_sync_input.remote_collaborator_salt_list) { // Pass the buffer and salts
-//                         Ok(Some(src_addr)) => Ok((src_addr, "ipv6".to_string())), // Return IP and network type
-//                         Ok(None) => {
-//                             debug_log!("HRCD get_rc_ip_and_network_type(): Timeout or no valid ready signal on ipv6: {:?}", ipv6_addr);                
-
-//                         Err(ThisProjectError::NetworkError("Timeout or no valid ready signal on ipv6".into()))
-
-//                         }, // Handle timeout
-//                         Err(e) => {
-//                             debug_log!("HRCD get_rc_ip_and_network_type(): Error receiving ready signal on ipv6: {:?}, err -> {}", ipv6_addr, e);                
-
-//                         Err(e)  // Handle error
-//                     },
-//                 };
-
-//                 },
-//                 Err(e) => {
-//                     debug_log!("HRCD get_rc_ip_and_network_type(): Failed to bind to ipv6 address {:?}: {}", socket_addr, e);
-//                     // You can handle errors for individual addresses here, 
-//                     // for example by logging or by trying a different port.
-//                     // For now, continue to the IPv4 section if IPv6 binding fails.
-//                 },
-//             }
-//         }
-
-//         // 4. If no valid IPv6, try IPv4
-//         if let Some(ipv4_addr) = room_sync_input.remote_collaborator_ipv4_addr_list.first() {
-//             debug_log!("HRCD get_rc_ip_and_network_type(): Trying IPv4: {}", ipv4_addr);
-
-//             let socket_addr = SocketAddr::new(IpAddr::V4(*ipv4_addr), room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip);
-//             let socket_result = UdpSocket::bind(socket_addr);
-//             match socket_result {
-//                 Ok(socket) => {
-//                     socket.set_read_timeout(Some(timeout_duration))?;
-
-//                     return match recv_ready_signal_with_timeout(&socket, &mut buf, &room_sync_input.remote_collaborator_salt_list) { // Pass buffer and salts
-//                         Ok(Some(src_addr)) => Ok((src_addr, "ipv4".to_string())), // Correctly return "ipv4" as a string
-//                         Ok(None) => {
-//                             debug_log!("HRCD get_rc_ip_and_network_type(): Timeout or no valid ready signal on ipv4: {:?}", ipv4_addr);
-//                         Err(ThisProjectError::NetworkError("Timeout or no valid ready signal on ipv4".into())) // Or handle timeout error differently
-
-//                         },
-//                         Err(e) => {
-//                             debug_log!("HRCD get_rc_ip_and_network_type(): Error receiving ready signal on ipv4: {:?}, err -> {}", ipv4_addr, e);
-
-//                         Err(e) // Or handle recv error differently
-//                     },
-//                 };
-//                 },
-//                 Err(e) => {
-//                     debug_log!("HRCD get_rc_ip_and_network_type(): Failed to bind to ipv4 address {:?}: {}", socket_addr, e);
-//                 }
-//             }
-//         }
-//     }
-
-//     // Return an error if no valid IP address is found (both ipv6 and ipv4)
-//     Err(ThisProjectError::NetworkError("No valid IP address found for remote collaborator".into()))
-// }
-
-
-
-// /// Retrieves SocketAddrs for the remote collaborator's ready and "got it" ports.
-// ///
-// /// Continually, as when a remote collaborator may be never or belatedly online:
-// /// Iterates through the ipv6 and ipv4 addresses, listening for a ReadySignal. Returns SocketAddrs
-// /// for the ready and "got it" ports on the first valid IP. Directly uses UdpSocket::bind for
-// /// improved simplicity and efficiency. Does One Thing Well.
-// ///
-// /// # Arguments
-// ///
-// /// * `room_sync_input`: The collaborator's connection data.
-// ///
-// /// # Returns
-// ///
-// /// * `Result<(SocketAddr, SocketAddr), ThisProjectError>`: 
-// /// Tuple of SocketAddrs (ready, gotit), or an error.
-// ///
-// fn get_rc_band_ready_gotit_socketaddrses_hrcd(
-//     room_sync_input: &ForRemoteCollaboratorDeskThread,
-// ) -> Result<(SocketAddr, SocketAddr), ThisProjectError> {
-//     let timeout_duration = Duration::from_secs(15);
-//     let mut buf = [0; 1024];
-
-    
-    
-//     for ipv6_addr in &room_sync_input.remote_collaborator_ipv6_addr_list {
-//         let ready_socket_addr = SocketAddr::new(IpAddr::V6(*ipv6_addr), room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip);
-
-        
-        
-        
-//         match UdpSocket::bind(ready_socket_addr) {
-//             Ok(socket) => {
-//                 socket.set_read_timeout(Some(timeout_duration))?;
-//                 debug_log!("Listening on {:?} for ReadySignal (IPv6)", ready_socket_addr);
-
-//                 /*
-//                 fn recv_ready_signal_with_timeout( // Hash and timestamp checks moved HERE!
-//                     socket: &UdpSocket, 
-//                     buf: &mut [u8], 
-//                     salt_list: &[u128],
-//                 */
-//                 match recv_ready_signal_with_timeout(&socket, &mut buf, &room_sync_input.local_user_salt_list) {
-//                     Ok(Some((src_addr, ready_signal))) => {  // Return ready_signal
-//                         // Verify Hashes
-//                         if verify_readysignal_hashes(&ready_signal, &room_sync_input.local_user_salt_list) { // Verify hashes HERE!
-//                             let gotit_socket_addr = SocketAddr::new(IpAddr::V6(*ipv6_addr), room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip);
-//                             return Ok((ready_socket_addr, gotit_socket_addr));
-//                         } else {
-//                             debug_log!("ReadySignal hash verification failed. Discarding.");
-//                             continue; // Try next address or network type.
-//                         }
-//                     }
-//                     Ok(None) => {
-//                         debug_log!("Timeout or no valid ReadySignal received on {:?}. Trying next address...", ready_socket_addr);
-//                         continue;
-//                     },
-//                     Err(e) => return Err(e),
-//                 }
-//             }
-//             Err(e) => {
-//                 debug_log!("Failed to bind to {:?} (IPv6): {}", ready_socket_addr, e);
-//             }
-//         }
-//     }
-
-
-//     for ipv4_addr in &room_sync_input.remote_collaborator_ipv4_addr_list {
-//         let ready_socket_addr = SocketAddr::new(IpAddr::V4(*ipv4_addr), room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip);
-//         match UdpSocket::bind(ready_socket_addr) {
-//             Ok(socket) => {
-//                 socket.set_read_timeout(Some(timeout_duration))?;
-//                 debug_log!("Listening on {:?} for ReadySignal (IPv4)", ready_socket_addr);
-
-//                 match recv_ready_signal_with_timeout(&socket, &mut buf, &room_sync_input.local_user_salt_list) {
-//                     Ok(Some((src_addr, ready_signal))) => {
-//                         if verify_readysignal_hashes(&ready_signal, &room_sync_input.local_user_salt_list) { // Verify here as well!
-//                             let gotit_socket_addr = SocketAddr::new(IpAddr::V4(*ipv4_addr), room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip);
-//                             return Ok((ready_socket_addr, gotit_socket_addr));
-//                         } else {
-//                             debug_log!("ReadySignal hash verification failed. Discarding.");
-//                             continue;
-//                         }
-//                     }
-//                     Ok(None) => {
-//                         debug_log!("Timeout or no valid ReadySignal received on {:?}. Trying next address...", ready_socket_addr);
-//                         continue;
-//                     }
-//                     Err(e) => return Err(e),
-
-//                 }
-//             }
-//             Err(e) => {
-//                 debug_log!("Failed to bind to {:?} (IPv4): {}", ready_socket_addr, e);
-//             }
-//         }
-//     }
-
-//     Err(ThisProjectError::NetworkError("No valid ReadySignal received".into()))
-// }
 
 
 /// Waits and checks indefintely until either a legitimate ready signal or exit uma
@@ -11292,13 +10911,18 @@ fn handle_remote_collaborator_meetingroom_desk(
                         "HRCD 3.1 check ready_signal_timestamp for send-queue: ready_signal_timestamp -> {:?}", 
                         ready_signal_timestamp
                     );
-
+                    
+                    debug_log!(
+                        "HRCD 3.1 check rt: rc's last-file-received-from-you timestamp received in a readysignal. ready_signal.rt -> {:?}", 
+                        ready_signal.rt,
+                    );
+                    
                     // --- 3.2 timestamp freshness checks ---
                     let current_timestamp = get_current_unix_timestamp();
                     
                     debug_log!(
                         "HRCD 3.2 check timestamp freshness checks: current_timestamp -> {:?}",
-                        current_timestamp
+                        current_timestamp,
                     );
 
                     // 3.2.1 No Future Dated Requests
@@ -11522,28 +11146,17 @@ fn handle_remote_collaborator_meetingroom_desk(
                                 sendfile_struct   
                             );
                             
+                            debug_log!("HRCD 4.7.2 ready_signal.rt for set_prefail_flag_rt_timestamp__for_sendfile {:?}", ready_signal.rt);
                             
-                            // // 4.7 set_prefail_flag_rt_timestamp__for_sendfile
-                            // if let Err(e) = set_prefail_flag_rt_timestamp__for_sendfile(
-                            //     &ready_signal.rt, // .rt timestamp
-                            //     &room_sync_input.remote_collaborator_name
-                            // ) {
-                            //     debug_log!("HRCD 4.7 Error setting pre-fail flag: {}", e);
-                            //     continue; // Handle error as you see fit
-                            // };
-                            
-                            debug_log!("HRCD 4.7 ready_signal.rt {:?}", ready_signal.rt);
-                            
-                            // 4.7 set_prefail_flag_rt_timestamp__for_sendfile
-
+                            // 4.7.2 set_prefail_flag_rt_timestamp__for_sendfile
                             if let Err(e) = set_prefail_flag_rt_timestamp__for_sendfile(
                                 ready_signal.rt,
                                 &room_sync_input.remote_collaborator_name,
                             ) {
-                                debug_log!("HRCD 4.7 Error setting pre-fail flag: {}", e);
+                                debug_log!("HRCD 4.7.2.e Error setting pre-fail flag: {}", e);
                                 continue; // Handle error as you see fit
                             }
-                            debug_log!("HRCD 4.7 prefail flag set using timestamp {:?}", &ready_signal.rt);
+                            debug_log!("HRCD 4.7.2 prefail flag set using timestamp {:?}", &ready_signal.rt);
 
                     
                     
