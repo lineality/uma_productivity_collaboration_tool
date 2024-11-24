@@ -7470,62 +7470,62 @@ fn read_latest_received_from_rc_filetimestamp_plaintextstatefile(
 }
 
 
-/// Sets the latest received file timestamp from the remote collaborator (RC) in a team channel, using a plain text file.
-///
-/// This function writes the given `timestamp` to a plain text file at:
-/// `sync_data/{team_channel_name}/latest_receivedfile_timestamps/{collaborator_name}/latest_received_from_rc_filetimestamp.txt`
-/// If the file or directory structure doesn't exist, it creates them.
-///
-/// # Arguments
-///
-/// * `team_channel_name`: The name of the team channel.
-/// * `collaborator_name`: The name of the remote collaborator (RC).
-/// * `timestamp`: The timestamp to write to the file.
-///
-/// # Returns
-///
-/// * `Result<(), ThisProjectError>`:  `Ok(())` on success, or a `ThisProjectError` if an error occurs (e.g., during file or directory creation, or writing to the file).
-///
-/// This function is used to store the latest `updated_at_timestamp` received from files sent by the remote collaborator. 
-/// This timestamp is used to track synchronization progress and avoid sending redundant files.
-///
-/// This is one of those values and functions that can be confusing
-/// because both you and your remote collaborator have quasi-mirror-image sync systems
-/// with reversed roles. Both of you are making 'latest_received' timestamps
-/// and both of you are using your and their 'latest_received' timestamps,
-/// which are simultanously 'the same' abstract value but very different local-context-role-specific values
-///
-/// The complimentary function is: `read_latest_received_from_rc_filetimestamp_plaintextstatefile()`.
-///
-/// Example location of use:
-/// InTrayListerLoop in `handle_local_owner_desk()` after receiving and saving a file, 
-/// this function is called to update the timestamp.  The complimentary function is 
-/// `read_latest_received_from_rc_filetimestamp_plaintextstatefile()`, which is used in the 
-/// drone loop to refresh the timestamp.
-fn write_latest_received_from_rc_filetimestamp_plaintextstatefile(
-    remote_collaborator_name: &str,
-    timestamp: u64, // Added timestamp argument
-) -> Result<(), ThisProjectError> {
+// /// Sets the latest received file timestamp from the remote collaborator (RC) in a team channel, using a plain text file.
+// ///
+// /// This function writes the given `timestamp` to a plain text file at:
+// /// `sync_data/{team_channel_name}/latest_receivedfile_timestamps/{collaborator_name}/latest_received_from_rc_filetimestamp.txt`
+// /// If the file or directory structure doesn't exist, it creates them.
+// ///
+// /// # Arguments
+// ///
+// /// * `team_channel_name`: The name of the team channel.
+// /// * `collaborator_name`: The name of the remote collaborator (RC).
+// /// * `timestamp`: The timestamp to write to the file.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<(), ThisProjectError>`:  `Ok(())` on success, or a `ThisProjectError` if an error occurs (e.g., during file or directory creation, or writing to the file).
+// ///
+// /// This function is used to store the latest `updated_at_timestamp` received from files sent by the remote collaborator. 
+// /// This timestamp is used to track synchronization progress and avoid sending redundant files.
+// ///
+// /// This is one of those values and functions that can be confusing
+// /// because both you and your remote collaborator have quasi-mirror-image sync systems
+// /// with reversed roles. Both of you are making 'latest_received' timestamps
+// /// and both of you are using your and their 'latest_received' timestamps,
+// /// which are simultanously 'the same' abstract value but very different local-context-role-specific values
+// ///
+// /// The complimentary function is: `read_latest_received_from_rc_filetimestamp_plaintextstatefile()`.
+// ///
+// /// Example location of use:
+// /// InTrayListerLoop in `handle_local_owner_desk()` after receiving and saving a file, 
+// /// this function is called to update the timestamp.  The complimentary function is 
+// /// `read_latest_received_from_rc_filetimestamp_plaintextstatefile()`, which is used in the 
+// /// drone loop to refresh the timestamp.
+// fn write_latest_received_from_rc_filetimestamp_plaintextstatefile(
+//     remote_collaborator_name: &str,
+//     timestamp: u64, // Added timestamp argument
+// ) -> Result<(), ThisProjectError> {
     
-    // --- Get team channel name ---
-    let team_channel_name = get_current_team_channel_name()
-        .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
+//     // --- Get team channel name ---
+//     let team_channel_name = get_current_team_channel_name()
+//         .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
     
-    let mut file_path = PathBuf::from("sync_data");
-    file_path.push(team_channel_name);
-    file_path.push("latest_receivedfile_timestamps");
-    file_path.push(remote_collaborator_name);
-    file_path.push("latest_received_from_rc_filetimestamp.txt");
+//     let mut file_path = PathBuf::from("sync_data");
+//     file_path.push(team_channel_name);
+//     file_path.push("latest_receivedfile_timestamps");
+//     file_path.push(remote_collaborator_name);
+//     file_path.push("latest_received_from_rc_filetimestamp.txt");
 
-    if let Some(parent) = file_path.parent() {
-        create_dir_all(parent)?;
-    }
+//     if let Some(parent) = file_path.parent() {
+//         create_dir_all(parent)?;
+//     }
 
-    // Write the timestamp to the file
-    std::fs::write(file_path, timestamp.to_string())?; // Changed to write
+//     // Write the timestamp to the file
+//     std::fs::write(file_path, timestamp.to_string())?; // Changed to write
 
-    Ok(()) // Return Ok(()) on success
-}
+//     Ok(()) // Return Ok(()) on success
+// }
 
 /// Gets the latest received file's `updated_at_timestamp` for a collaborator.
 ///
@@ -7607,22 +7607,22 @@ fn actual_latest_received_from_rc_file_timestamp(
 /// # Arguments
 ///
 /// * `team_channel_name`: The name of the team channel.
-/// * `collaborator_name`: The name of the collaborator.
+/// * `remote_collaborator_name`: The name of the collaborator.
 /// * `timestamp`: The timestamp to set.
 ///
 /// # Returns
 ///
 /// * `Result<(), ThisProjectError>`: `Ok(())` on success, or a `ThisProjectError` if an error occurs.
-fn set_latest_received_from_rc_file_timestamp_plaintext(
+fn write_save_latest_received_from_rc_file_timestamp_plaintext(
     team_channel_name: &str,
-    collaborator_name: &str,
+    remote_collaborator_name: &str,
     timestamp: u64,
 ) -> Result<(), ThisProjectError> {
     let mut file_path = PathBuf::from("sync_data");
     file_path.push(team_channel_name);
     file_path.push("latest_receivedfile_timestamps");
-    file_path.push(collaborator_name);
-    file_path.push("latest_receivedfromme_file_timestamp.txt");
+    file_path.push(remote_collaborator_name);
+    file_path.push("latest_received_from_rc_filetimestamp.txt");
 
     // Create directory structure if it doesn't exist
     if let Some(parent) = file_path.parent() {
@@ -8149,10 +8149,10 @@ fn send_gotit_signal(
     // // If sending to the first address succeeds, no need to iterate further
 
     if send_data(&serialized_gotitsignal_data, target_addr).is_ok() {
-        debug_log("inHLOD send_gotit_signal() 6. Successfully sent ReadySignal to {} (first address)");
+        debug_log("inHLOD send_gotit_signal() 6. Successfully sent GotIt to {} (first address)");
         return Ok(()); // Exit the thread
     } else {
-        debug_log("inHLOD send_gotit_signal() err 6. Failed to send ReadySignal to {} (first address)");
+        debug_log("inHLOD send_gotit_signal() err 6. Failed to send GotIt to {} (first address)");
         return Err(ThisProjectError::NetworkError("Failed to send ReadySignal".to_string())); // Return an error
     }
 
@@ -8444,6 +8444,7 @@ fn handle_local_owner_desk(
         the value is saved in a quasi-state or state.
         */
 
+        // initialization
         let mut latest_received_from_rc_file_timestamp = match actual_latest_received_from_rc_file_timestamp(
             &team_channel_name, // Correct argument order.
             &remote_collaborator_name_for_thread_1,
@@ -8459,8 +8460,9 @@ fn handle_local_owner_desk(
             latest_received_from_rc_file_timestamp,
         );
 
+        // initialization
         // update state: latest received timestamp
-        set_latest_received_from_rc_file_timestamp_plaintext(
+        write_save_latest_received_from_rc_file_timestamp_plaintext(
             &team_channel_name, // for team_channel_name
             &remote_collaborator_name.clone(), // for collaborator_name
             latest_received_from_rc_file_timestamp, // for timestamp
@@ -8898,16 +8900,14 @@ fn handle_local_owner_desk(
                             continue;
                         }
                     };
-                    
-                    
-                    
+
                     // update state: latest received timestamp
-                    set_latest_received_from_rc_file_timestamp_plaintext(
+                    write_save_latest_received_from_rc_file_timestamp_plaintext(
                         &team_channel_name, // for team_channel_name
                         &local_owner_desk_setup_data.remote_collaborator_name, // for collaborator_name
                         received_file_updatedat_timestamp, // for timestamp
                     );
-                    
+
                     // Now you have the received_file_updatedat_timestamp timestamp
                     debug_log!("Received file was updated_at: {}", received_file_updatedat_timestamp);
                     // println!("Received file updated at: {}", received_file_updatedat_timestamp);
@@ -9646,6 +9646,8 @@ fn get_or_create_send_queue(
 /// and both of you are using your and their 'latest_received' timestamps,
 /// which are simultanously 'the same' abstract value but very different local-context-role-specific values
 ///
+/// note: this result should usuall be saved e.g. with
+/// write_save_latest_received_from_rc_file_timestamp_plaintext()
 fn get_latest_received_from_rc_in_teamchannel_file_timestamp_filecrawl(
     collaborator_name: &str,
 ) -> Result<u64, ThisProjectError> {
@@ -9681,12 +9683,16 @@ fn get_latest_received_from_rc_in_teamchannel_file_timestamp_filecrawl(
     
     debug_log!("get_last_file_timestamp() -> last_timestamp {:?}", last_timestamp); 
 
-    //
-    write_latest_received_from_rc_filetimestamp_plaintextstatefile(
-        collaborator_name, // collaborator_name: &str,
-        last_timestamp, // timestamp: u64, // Added timestamp argument
-    );
+    let team_channel_name = get_current_team_channel_name()
+        .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
     
+    // update state: latest received timestamp
+    write_save_latest_received_from_rc_file_timestamp_plaintext(
+        &team_channel_name, // for team_channel_name
+        &collaborator_name, // for collaborator_name
+        last_timestamp, // for timestamp
+    );
+
     Ok(last_timestamp) // Returns 0 if no matching files are found
 }
 
@@ -11046,27 +11052,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                                 file_path   
                             );
                             
-                            // Sendqueue is a list of file-paths
-                            // Get the timestamp from the TOML file:
-                            let new_rt_timestamp = match get_toml_file_timestamp(&file_path) { //Pass the PathBuf here
-                                Ok(temp_timestamp) => temp_timestamp, 
-                                Err(e) => {
-                                    debug_log!(
-                                        "Error getting new_rt_timestamp from {:?}: {:?}", 
-                                        file_path, 
-                                        e,
-                                    );
-                                    // Handle the error appropriately.  For now, let's skip this file:
-                                    // continue;  // Skip to the next file
-                                    0
-                                }
-                            };
 
-                            // write the new timestamp
-                            write_latest_received_from_rc_filetimestamp_plaintextstatefile(
-                                &room_sync_input.remote_collaborator_name, // remote_collaborator_name
-                                new_rt_timestamp, // timestamp: u64, // Added timestamp argument
-                            );
 
                             // 4.2.1 Get File Send Time
                             let intray_send_time = get_current_unix_timestamp(); 
