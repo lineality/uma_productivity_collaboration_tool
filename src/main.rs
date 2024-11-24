@@ -8853,12 +8853,14 @@ fn handle_local_owner_desk(
                         continue;
                     }
 
+                    // TODO: not 'Option' so is this needed?
                     // 3.2.3 Check .intray_hash_list hash
                     if incoming_intray_file_struct.intray_hash_list.is_none() {
                         debug_log("HLOD 2.4.4 Check: intray_hash_list hash field is empty. Drop packet and keep going.");
                         continue; // Drop packet: Restart the loop to listen for the next signal
                     }
 
+                    // TODO: not 'Option' so is this needed?
                     // 3.2.4 Check .intray_send_time timestamp
                     if incoming_intray_file_struct.intray_send_time.is_none() {
                         debug_log("HLOD 2.4.5 Check: intray_send_time ready signal sent-at timestamp field is empty. Drop packet and keep going.");
@@ -11031,11 +11033,11 @@ fn handle_remote_collaborator_meetingroom_desk(
                     */
                     
                     // 3.1 ready_signal_timestamp for send-queue
-                    let ready_signal_timestamp = ready_signal.rst; // Unwrap the timestamp outside the match, as it's always required.
+                    let rst_sent_ready_signal_timestamp = ready_signal.rst; // Unwrap the timestamp outside the match, as it's always required.
                     
                     debug_log!(
-                        "HRCD 3.1 check ready_signal_timestamp for send-queue: ready_signal_timestamp -> {:?}", 
-                        ready_signal_timestamp
+                        "HRCD 3.1 check rst_sent_ready_signal_timestamp for send-queue: rst_sent_ready_signal_timestamp -> {:?}", 
+                        rst_sent_ready_signal_timestamp
                     );
                     
                     debug_log!(
@@ -11052,19 +11054,19 @@ fn handle_remote_collaborator_meetingroom_desk(
                     );
 
                     // 3.2.1 No Future Dated Requests
-                    if ready_signal_timestamp > current_timestamp + 5 { // Allow for some clock skew (5 seconds)
+                    if rst_sent_ready_signal_timestamp > current_timestamp + 5 { // Allow for some clock skew (5 seconds)
                         debug_log!("HRCD 3.2.1 check: Received future-dated timestamp. Discarding.");
                         continue;
                     }
 
                     // 3.2.2 No Requests Older Than ~10 sec
-                    if current_timestamp - 10 > ready_signal_timestamp {
+                    if current_timestamp - 10 > rst_sent_ready_signal_timestamp {
                         debug_log!("HRCD 3.2.2 check: Received outdated timestamp (older than 10 seconds). Discarding.");
                         continue;
                     }
 
                     // 3.2.3 only 3 0=timstamp requests per session (count them!)
-                    if ready_signal_timestamp == 0 {
+                    if rst_sent_ready_signal_timestamp == 0 {
                         if zero_timestamp_counter >= 5 {
                             debug_log("HRCD 3.2.3 check: Too many zero-timestamp requests. Discarding.");
                             continue;
@@ -11130,7 +11132,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                         &room_sync_input.local_user_name, // local owner user name
                         &room_sync_input.remote_collaborator_name, // remote_collaborator_name
                         session_send_queue, // for session_send_queue
-                        ready_signal_timestamp, // for ready_signal_timestamp
+                        ready_signal.rt, // for ready_signal_rt_timestamp
                     )?;
                     
                     
@@ -11140,7 +11142,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                     //             &this_team_channelname, // for team_channel_name
                     //             &room_sync_input.local_user_name, // local owner user name
                     //             input_sendqueue, // for session_send_queue
-                    //             ready_signal_timestamp, // for ready_signal_timestamp
+                    //             rst_sent_ready_signal_timestamp, // for rst_sent_ready_signal_timestamp
                     //         )?
                     //     }
                     // };
