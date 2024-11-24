@@ -1039,54 +1039,6 @@ fn write_band__save_network_band__type_index(
     Ok(())
 }
 
-
-
-
-
-// /// Saves the local user's network band config data
-// /// to sync_data text files
-// /// 
-// fn write_band__save_network_band__type_index(
-//     remote_collaborator_name: String,
-//     team_channel_name: String,
-//     network_type: String,
-//     network_index: u8,
-//     this_ipv4: Ipv4Addr,
-//     this_ipv6: Ipv6Addr,
-// ) -> Result<(), ThisProjectError> {
-
-//     // 1. Construct Path:
-//     let mut base_path = PathBuf::from("sync_data");
-
-//     // 2. Create Directory (if doesn't exist)
-//     create_dir_all(&base_path)?;
-
-//     // 3. Construct Absolute File Paths
-//     let type_path = base_path.join("network_type.txt");
-//     let index_path = base_path.join("network_index.txt");
-//     let ipv4_path = base_path.join("ipv4.txt");
-//     let ipv6_path = base_path.join("ipv6.txt");
-
-//     // 4. Write to Files (handling potential errors):
-//     let mut type_file = File::create(&type_path)?; // Note the & for borrowing
-//     writeln!(type_file, "{}", network_type)?;
-
-//     let mut index_file = File::create(&index_path)?;
-//     writeln!(index_file, "{}", network_index)?;
-
-//      // 4. Write to Files (handling potential errors):
-//      // TODO this is not working, it is writing "sync_data/ipv6.txt" as the file text
-//      // the path to the file should not be the file content...
-//     let mut ip4_file = File::create(&ipv4_path)?; // Note the & for borrowing
-//     writeln!(ip4_file, "{}", this_ipv4.to_string())?;  // Write IP string
-
-//     let mut ip6_file = File::create(&ipv6_path)?;
-//     writeln!(ip6_file, "{}", this_ipv6.to_string())?;  // Write IP string
-    
-//     Ok(())
-// }
-
-
 /// Saves the local user's network band config data
 /// to sync_data text files
 /// 
@@ -7551,14 +7503,18 @@ fn read_latest_received_from_rc_filetimestamp_plaintextstatefile(
 /// `read_latest_received_from_rc_filetimestamp_plaintextstatefile()`, which is used in the 
 /// drone loop to refresh the timestamp.
 fn write_latest_received_from_rc_filetimestamp_plaintextstatefile(
-    team_channel_name: &str,
-    collaborator_name: &str,
+    remote_collaborator_name: &str,
     timestamp: u64, // Added timestamp argument
 ) -> Result<(), ThisProjectError> {
+    
+    // --- Get team channel name ---
+    let team_channel_name = get_current_team_channel_name()
+        .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
+    
     let mut file_path = PathBuf::from("sync_data");
     file_path.push(team_channel_name);
     file_path.push("latest_receivedfile_timestamps");
-    file_path.push(collaborator_name);
+    file_path.push(remote_collaborator_name);
     file_path.push("latest_received_from_rc_filetimestamp.txt");
 
     if let Some(parent) = file_path.parent() {
@@ -9724,16 +9680,11 @@ fn get_latest_received_from_rc_in_teamchannel_file_timestamp_filecrawl(
     }
     
     debug_log!("get_last_file_timestamp() -> last_timestamp {:?}", last_timestamp); 
-    
-    // --- Get team channel name ---
-    let team_channel_name = get_current_team_channel_name()
-        .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
 
     //
     write_latest_received_from_rc_filetimestamp_plaintextstatefile(
-    &team_channel_name, // team_channel_name: &str,
-    collaborator_name, // collaborator_name: &str,
-    last_timestamp, // timestamp: u64, // Added timestamp argument
+        collaborator_name, // collaborator_name: &str,
+        last_timestamp, // timestamp: u64, // Added timestamp argument
     );
     
     Ok(last_timestamp) // Returns 0 if no matching files are found
@@ -11095,6 +11046,28 @@ fn handle_remote_collaborator_meetingroom_desk(
                                 file_path   
                             );
                             
+                            // Sendqueue is a list of file-paths
+                            // Get the timestamp from the TOML file:
+                            let new_rt_timestamp = match get_toml_file_timestamp(&file_path) { //Pass the PathBuf here
+                                Ok(temp_timestamp) => temp_timestamp, 
+                                Err(e) => {
+                                    debug_log!(
+                                        "Error getting new_rt_timestamp from {:?}: {:?}", 
+                                        file_path, 
+                                        e,
+                                    );
+                                    // Handle the error appropriately.  For now, let's skip this file:
+                                    // continue;  // Skip to the next file
+                                    0
+                                }
+                            };
+
+                            // write the new timestamp
+                            write_latest_received_from_rc_filetimestamp_plaintextstatefile(
+                                &room_sync_input.remote_collaborator_name, // remote_collaborator_name
+                                new_rt_timestamp, // timestamp: u64, // Added timestamp argument
+                            );
+
                             // 4.2.1 Get File Send Time
                             let intray_send_time = get_current_unix_timestamp(); 
 
@@ -11157,28 +11130,6 @@ fn handle_remote_collaborator_meetingroom_desk(
                                 continue; // Handle error as you see fit
                             }
                             debug_log!("HRCD 4.7.2 prefail flag set using timestamp {:?}", &ready_signal.rt);
-
-                    
-                    
-                            
-                            // match &ready_signal.rt { // Handle the Option
-                            //     Some(rt_timestamp) => {
-                            //         if let Err(e) = set_prefail_flag_rt_timestamp__for_sendfile(
-                            //             *rt_timestamp, // Dereference to get the u64 value
-                            //             &room_sync_input.remote_collaborator_name,
-                            //         ) {
-                            //             debug_log!("HRCD 4.7 Error setting pre-fail flag: {}", e);
-                            //             continue; // Handle error as you see fit
-                            //         }
-                            //         debug_log!("HRCD 4.7 prefail flag set using timestamp {:?}", rt_timestamp);
-
-                            //     }
-                            //     None => {
-                            //         debug_log!("HRCD 4.7:  ready_signal.rt is None. Cannot set pre-fail flag.");
-                            //         // Handle the None case appropriately (e.g., log a message, continue, or return an error).
-                            //         continue;
-                            //     }
-                            // }
                             
                             debug_log!(
                                 "HRCD 4.6-7 Create sendfile_struct {:?}",
@@ -11403,23 +11354,74 @@ enum SyncResult {
     Failure(ThisProjectError), // Contains an error if sync failed 
 }
 
-/// Extracts the channel name from a team channel directory path. 
+/// Extracts the channel name from a team channel directory path, with retry logic.
 /// 
-/// This function assumes the path is in the format 
-/// "project_graph_data/team_channels/channel_name". 
-/// It returns the "channel_name" part of the path.
+/// This function attempts to read the channel directory path from the 
+/// "project_graph_data/session_state_items/current_node_directory_path.txt" file.  
+/// If the file read fails, it retries up to 3 times with a 2-second pause between each retry.
+/// It assumes the path format is "project_graph_data/team_channels/channel_name" 
+/// and returns the "channel_name" part.
 ///
 /// # Returns
 /// 
-/// * `Option<String>`: The channel name if successfully extracted, `None` otherwise.
+/// * `Option<String>`: The channel name if successfully extracted, 
+///   `None` if the file read fails after multiple retries or the path is invalid.
 fn get_current_team_channel_name() -> Option<String> {
-    // get path, derive name from path
-    let channel_dir_path_str = read_state_string("current_node_directory_path.txt").ok()?; // read as string first
-    debug_log!("1. Channel directory path (from session state) [in fn get_current_team_channel_name()] channel_dir_path_str -> {:?}", channel_dir_path_str); 
-    
-    let path = Path::new(&channel_dir_path_str);
-    path.file_name()?.to_str().map(String::from) 
+    let mut retries = 5;
+    let pause_duration = Duration::from_secs(2);
+
+    loop {
+        let channel_dir_path_str_result = read_state_string("current_node_directory_path.txt");
+
+        match channel_dir_path_str_result {
+            Ok(channel_dir_path_str) => {
+                debug_log!("1. Channel directory path (from session state): {:?}", channel_dir_path_str); // Log the path
+
+                let path = Path::new(&channel_dir_path_str);
+                // Improved path validation:
+                if let Some(file_name) = path.file_name().and_then(|name| name.to_str()).map(String::from) {
+                    return Some(file_name);  // Return the valid channel name
+                } else {
+                    debug_log!("Invalid path format (no file name)"); 
+                    return None;
+                }
+            }
+            Err(e) => {
+                if retries > 0 {
+                    retries -= 1;
+                    debug_log!(
+                        "Error reading channel path: {}. Retrying in {:?}... ({} retries remaining)",
+                        e, pause_duration, retries
+                    );
+                    thread::sleep(pause_duration);
+                    continue;
+                } else {
+                    debug_log!("Failed to read channel path after multiple retries: {}", e);
+                    return None;
+                }
+            }
+        }
+    }
 }
+
+
+// /// Extracts the channel name from a team channel directory path. 
+// /// 
+// /// This function assumes the path is in the format 
+// /// "project_graph_data/team_channels/channel_name". 
+// /// It returns the "channel_name" part of the path.
+// ///
+// /// # Returns
+// /// 
+// /// * `Option<String>`: The channel name if successfully extracted, `None` otherwise.
+// fn get_current_team_channel_name() -> Option<String> {
+//     // get path, derive name from path
+//     let channel_dir_path_str = read_state_string("current_node_directory_path.txt").ok()?; // read as string first
+//     debug_log!("1. Channel directory path (from session state) [in fn get_current_team_channel_name()] channel_dir_path_str -> {:?}", channel_dir_path_str); 
+    
+//     let path = Path::new(&channel_dir_path_str);
+//     path.file_name()?.to_str().map(String::from) 
+// }
 
 /// for normal mode, updates graph-navigation location and graph-state for both
 /// 1. the struct
