@@ -4108,16 +4108,17 @@ impl InstantMessageFile {
         text_message: &str,
         signature: Option<String>,
         graph_navigation_instance_state: &GraphNavigationInstanceState,  // gets uma.toml data
+        recipients_list: Vec<String>,
     ) -> InstantMessageFile {
         let timestamp = get_current_unix_timestamp();
         // Calculate expiration date using the value from local_user_metadata
         let expires_at = timestamp + 
             (graph_navigation_instance_state.default_im_messages_expiration_days * 24 * 60 * 60);
-        let teamchannel_collaborators_with_access = graph_navigation_instance_state.current_node_teamchannel_collaborators_with_access.clone();
+        // let teamchannel_collaborators_with_access = graph_navigation_instance_state.current_node_teamchannel_collaborators_with_access.clone();
 
         InstantMessageFile {
             owner: owner.to_string(),
-            teamchannel_collaborators_with_access: teamchannel_collaborators_with_access,
+            teamchannel_collaborators_with_access: recipients_list,
             node_name: node_name.to_string(), // Store the node name
             filepath_in_node: filepath_in_node.to_string(), // Store the filepath
             text_message: text_message.to_string(),
@@ -4531,7 +4532,189 @@ fn remove_non_alphanumeric(s: &str) -> String {
     s.chars().filter(|c| c.is_ascii_alphanumeric()).collect()
 }
 
+// /// save for every member with access in channel...
+// fn write_newfile_sendq_flag(
+//     recipients_list: Vec<String>,
+//     file_path: Path,
+// ) {
+//     team_channel_name = get_current_team_channel_name();
+//     // e.g. sync_data/teamtest/new_file_path_flags/bob}
+    
+//     // // maybe iterate through recipients_list
 
+//     // 1. make paths (for each participant in list)
+//     // make parent path if not yet exists
+    
+//     // 2. save files to paths
+
+// }
+
+
+
+/// Writes a new file send queue flag for each recipient in the given list.
+///
+/// Creates a flag file for each recipient in the `recipients_list` under the directory:
+/// `sync_data/{team_channel_name}/sendqueue_updates/{recipient_name}/{filename}.txt`,
+/// where `filename` is the sanitized filename of `file_path`.
+///
+/// # Arguments
+///
+/// * `recipients_list`: A vector of recipient usernames.
+/// * `file_path`: The path to the file to be added to the send queue.
+///
+/// # Returns
+///
+/// * `Result<(), ThisProjectError>`: `Ok(())` on success, or a `ThisProjectError` if an error occurs during directory or file creation.
+fn write_newfile_sendq_flag(
+    recipients_list: &[String], // Use a slice for efficiency
+    file_path: &Path, // Use a reference to avoid unnecessary cloning
+) -> Result<(), ThisProjectError> {
+    let team_channel_name = get_current_team_channel_name()
+        .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
+
+    let filename = get_current_unix_timestamp();
+
+    for recipient in recipients_list {
+        let mut flag_path = PathBuf::from("sync_data");
+        flag_path.push(&team_channel_name);
+        flag_path.push("sendqueue_updates");
+        flag_path.push(recipient);
+        flag_path.push(format!("{}.txt", filename)); // Use format! for filename
+
+        if let Some(parent_dir) = flag_path.parent() {
+            create_dir_all(parent_dir)?;
+        }
+
+        let file_path_string = file_path.to_string_lossy(); // For writing to the flag file
+
+        // Create flag file (empty file acts as a flag). Handle potential errors.
+        match File::create(&flag_path) {
+            Ok(mut file) => {
+                if let Err(e) = file.write_all(file_path_string.as_bytes()) {
+                    debug_log!(
+                        "write_newfile_sendq_flag(): Error writing file path to flag file: {}",
+                        e
+                    );
+                    return Err(e.into());  // Or handle error appropriately
+                } else {
+                    debug_log!("write_newfile_sendq_flag(): Flag file created: {:?} contents: {:?}", flag_path, file_path_string);
+                    
+                }
+            },
+            Err(e) => {
+                debug_log!(
+                    "write_newfile_sendq_flag(): Error creating flag file: {}",
+                    e
+                );
+                return Err(e.into());
+            }
+        }                
+    }
+    Ok(())
+}
+
+// /// read all newfile sendqueue flags w cleanup
+// /// 1. get all paths for this rc (remote collaborator)
+// /// 2. delete all path flags
+// /// 3. return all paths as array
+// fn read_all_newfile_sendq_flags_w_cleanup(
+//     remote_collaborator_name: &str,
+//     team_channel_name: &str,
+// ) {
+//     // e.g. sync_data/teamtest/new_file_path_flags/bob
+
+//     // 1. get all paths for this rc (remote collaborator)
+//     // 2. delete all path flags
+//     // 3. return all paths as array
+// }
+
+/// Reads all new file send queue flags and cleans up the flag files.
+///
+/// This function reads all flag files in the directory
+/// `sync_data/{team_channel_name}/sendqueue_updates/{remote_collaborator_name}/`
+/// and returns the file paths contained within those flags as a vector.
+/// After reading, it deletes all flag files to ensure they are processed only once.
+///
+/// # Arguments
+///
+/// * `remote_collaborator_name`: The name of the remote collaborator.
+/// * `team_channel_name`: The name of the team channel.
+///
+/// # Returns
+///
+/// * `Result<Vec<PathBuf>, ThisProjectError>`: A vector of file paths on success, or a `ThisProjectError` if an error occurs during directory access or file operations.
+fn read_all_newfile_sendq_flags_w_cleanup(
+    remote_collaborator_name: &str,
+    team_channel_name: &str,
+) -> Result<Vec<PathBuf>, ThisProjectError> {
+    let mut flag_dir = PathBuf::from("sync_data");
+    flag_dir.push(team_channel_name);
+    flag_dir.push("sendqueue_updates");
+    flag_dir.push(remote_collaborator_name);
+
+    let mut file_paths = Vec::new();
+
+    // 1. Read all flag files and collect paths: Check if directory exists
+    if flag_dir.exists() { // Only proceed if the directory exists
+        match fs::read_dir(&flag_dir) {
+            Ok(entries) => {
+                for entry in entries.flatten() {  // Flatten to handle potential errors directly
+                    let flag_file_path = entry.path();
+                    if flag_file_path.is_file() {
+                        match fs::read_to_string(&flag_file_path) {
+                            Ok(file_path_str) => {
+                                let file_path = PathBuf::from(file_path_str.trim()); //Important: trim whitespace!
+                                file_paths.push(file_path);
+                            }
+                            Err(e) => {
+                                debug_log!("Error reading flag file: {} - {}", flag_file_path.display(), e);
+                                // Choose whether to continue or return an error:
+                                return Err(e.into()); // Or continue;
+                            }
+                        }
+
+                        // 2. Delete the flag file immediately after reading (cleanup): Handle errors
+                        if let Err(e) = fs::remove_file(&flag_file_path) {
+                            debug_log!("Error removing flag file: {} - {}", flag_file_path.display(), e);
+                            // Handle the remove error if needed
+                            // return Err(e.into()); // Or continue;
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                debug_log!(
+                    "read_all_newfile_sendq_flags_w_cleanup: Error reading directory: {}",
+                    e
+                );
+                return Err(e.into());
+            }
+        }
+
+
+        // 3. Remove directory if empty:  Handle errors
+        if fs::read_dir(&flag_dir)?.next().is_none() { // Directory is now empty
+            if let Err(e) = fs::remove_dir(&flag_dir) { // Just remove the directory, not recursively
+                debug_log!(
+                    "read_all_newfile_sendq_flags_w_cleanup: Error removing empty directory: {}",
+                    e
+                );
+                // Handle error, e.g., continue or return
+                return Err(e.into());  // Or continue;
+            }
+        }
+    }
+    
+
+    Ok(file_paths)  // Return Ok with file paths or handle not existing as needed
+}
+
+
+/// Add New Message File
+/// 1. create message .toml
+/// 2. save .toml to team-channel messages path
+/// 3. save that path as 
+///
 fn add_im_message(
     message_path: &Path,
     owner: &str,
@@ -4539,6 +4722,24 @@ fn add_im_message(
     signature: Option<String>,
     graph_navigation_instance_state: &GraphNavigationInstanceState, // Pass local_user_metadata here
 ) -> Result<(), io::Error> {
+    
+    // 1. Parse for {to:user} syntax
+    let mut recipients_list = graph_navigation_instance_state.current_node_teamchannel_collaborators_with_access.clone();
+    if let Some(to_clause) = text.find("{to:") {
+        if let Some(end_brace) = text[to_clause..].find('}') {
+            let recipient_name = text[to_clause + 4..to_clause + end_brace].trim();
+            recipients_list.clear(); // Clear default list: restrict to listed recipient only
+
+            // 2. Check if recipient in team channel list and is not sender.
+            if graph_navigation_instance_state.current_node_teamchannel_collaborators_with_access.contains(&recipient_name.to_string()) && recipient_name != owner {
+                recipients_list.push(recipient_name.to_string()); // Add only the specified recipient
+            } else {
+                // Log if user not found
+                debug_log!("'to:' but Recipient '{}' not found in channel or is sender.", recipient_name);                
+            }
+        }
+    }
+
     // separate name and path
     let parent_dir = if let Some(parent) = message_path.parent() {
         parent
@@ -4570,11 +4771,23 @@ fn add_im_message(
         text, // text_message: &str,
         signature, // signature: Option<String>,
         graph_navigation_instance_state, // graph_navigation_instance_state: &GraphNavigationInstanceState,  // gets uma.toml data
+        recipients_list.clone(),
     );
     let toml_data = toml::to_string(&message).map_err(|e| {
         io::Error::new(io::ErrorKind::Other, format!("TOML serialization error: {}", e))
     })?; // Wrap TOML error in io::Error
     fs::write(message_path, toml_data)?;
+    
+    
+    // Write update flag for each possible remote collaborator
+    // sync_data/teamtest/new_file_path_flags/bob
+    // sync_data/teamtest/new_file_path_flags/charlotte
+    // etc.
+    write_newfile_sendq_flag(
+        &recipients_list,
+        &message_path,
+    );
+    
     Ok(())
 }
 
@@ -9647,6 +9860,7 @@ fn get_or_create_send_queue(
     ready_signal_rt_timestamp: u64,
 ) -> Result<SendQueue, ThisProjectError> {
     /*
+    
     TODO is this checking for fail-flag dates...or is the done before calling this?
     
     #[derive(Debug, Clone)]
@@ -9661,6 +9875,73 @@ fn get_or_create_send_queue(
         "inHRCD->get_or_create_send_queue 1: start;  ready_signal_rt_timestamp -> {:?}",
         ready_signal_rt_timestamp   
     );
+    
+    /*
+    Conditions for making a new send_queue
+    1. Backtrack Order: If the ready_signal_rt_timestamp is older 
+       than session_send_queue.back_of_queue_timestamp
+       indicating that the user is requesting a back-track.
+    
+    2. Prefail Flag Check: If there is a fail flag, 
+       remake the queue with that timestamp
+    
+    'normally' only one queue is ever made, 
+    and that queue most-times remains empty with nothing sent
+    unless and until a new local-owned-filed is made and added to the queue
+    which should be checked for ~last.
+    
+    */
+    let mut make_a_new_queue_flag = false;
+
+    /*
+    It is not clear that this comparison needs to be done:
+    ready_signal_rt_timestamp == session_send_queue.back_of_queue_timestamp
+    
+    because preset-fail-flags are set, moving ahead cannot be done
+    unless a confirmed gotit recept (of a confirmed file recept) happens.
+    */
+    
+    // Backtrack Order
+    // if remote collaborator requests a reset to an older time (ah, those were the days...)
+    // set the back_of_queue_timestamp to be sent .rt time ... if the .rt is older
+    if ready_signal_rt_timestamp < session_send_queue.back_of_queue_timestamp {
+        session_send_queue.back_of_queue_timestamp = ready_signal_rt_timestamp;
+        make_a_new_queue_flag = true;
+    }
+
+    ///////////////////////////////////
+    // Prefail Flag Check on Isle Five
+    ///////////////////////////////////
+    match get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(&remote_collaborator_name) {
+        Ok(oldest_prefail_flag_rt_timestamp) => {
+            // 2. Now you can compare: (zero means no timestamps exist)
+            if oldest_prefail_flag_rt_timestamp != 0 {
+                // 3. Reset the send queue:
+                session_send_queue = SendQueue {
+                    back_of_queue_timestamp: oldest_prefail_flag_rt_timestamp,
+                    items: Vec::new(),
+                };
+                // reset_sendq_flag = true;
+                debug_log!("HRCD Resetting send queue using timestamp from flag: {}", oldest_prefail_flag_rt_timestamp);
+                make_a_new_queue_flag = true
+            } else {
+                debug_log!("HRCD No retry flags found. Using ReadySignal timestamp.");
+                // Handle the case where no pre-fail flags were found. Perhaps use the timestamp from the ready signal?
+                session_send_queue.back_of_queue_timestamp = ready_signal_rt_timestamp
+
+            }
+        }
+        Err(e) => {
+            // 4. Handle the error:
+            debug_log!("HRCD Error getting oldest retry timestamp: {}", e);
+            // Decide how to handle the error. You might:
+            // - continue; // Skip to the next iteration
+            // - return Err(e); // Or wrap the error: return Err(ThisProjectError::from(e));
+            // - use a default timestamp: back_of_queue_timestamp = 0;
+            make_a_new_queue_flag = true
+        }
+    }
+    
     
     // Get update flag paths
     let newpath_list = match get_sendq_update_flag_paths(
@@ -9679,22 +9960,7 @@ fn get_or_create_send_queue(
         session_send_queue.add_to_front_of_sendq(this_iter_newpath); // Use the new method
     }
     
-    // This is only valid IF the prefail flags have been checked,
-    // this *should be happening in HRCD before calling this function
-    // and setting the back_of_queue_timestamp to be the oldest flag
-    if ready_signal_rt_timestamp == session_send_queue.back_of_queue_timestamp {
-        debug_log("inHRCD->get_or_create_send_queue 3: ready_signal_rt_timestamp == back_of_queue_timestamp");
-        return Ok(session_send_queue)
-    }
-    
-    // set the back_of_queue_timestamp to be sent .rt time
-    
-    
-    
-    // let mut send_queue = SendQueue {
-    //     back_of_queue_timestamp,
-    //     items: Vec::new(),
-    // };
+
 
     // 1. Get the path RESULT
     let team_channel_path_result = get_absolute_team_channel_path(team_channel_name);
@@ -9712,86 +9978,113 @@ fn get_or_create_send_queue(
     debug_log!("inHRCD->get_or_create_send_queue 5: Starting crawl of directory: {:?}", team_channel_path);
 
     // --- 3. Make a new Queue ---
-    /*
-    Only when a new send-queue is needed, 
-    get the paths of files
-    for only files that are owned by you
-    for only files in the current team_channel
-    for only files where current remote collaborator is on the list of teamchannel_collaborators_with_access
-    for only files dated after (younger than) the .rt ready_signal_rt_timestamp
-    which is not the time the ready-signal was sent, but is 
-    the updated_at timestamp
-    of the last received-by-them sent-by-you file.
-    */
-    // ...Use the unwrapped PathBuf with WalkDir
-    for entry in WalkDir::new(&team_channel_path) { // Note the & for borrowing
-        let entry = entry?;
-        if entry.file_type().is_file() && entry.path().extension() == Some(OsStr::new("toml")) {
-            debug_log!("inHRCD->get_or_create_send_queue 6: file is toml, entry -> {:?}", entry);
-            // If a .toml file
-            let toml_string = fs::read_to_string(entry.path())?;
-            let toml_value: Value = toml::from_str(&toml_string)?;
+    
+    if make_a_new_queue_flag {
+    
+        /*
+        Only when a new send-queue is needed, 
+        get the paths of files
+        for only files that are owned by you
+        for only files in the current team_channel
+        for only files where current remote collaborator is on the list of teamchannel_collaborators_with_access
+        for only files dated after (younger than) the .rt ready_signal_rt_timestamp
+        which is not the time the ready-signal was sent, but is 
+        the updated_at timestamp
+        of the last received-by-them sent-by-you file.
+        */
+        // ...Use the unwrapped PathBuf with WalkDir
+        for entry in WalkDir::new(&team_channel_path) { // Note the & for borrowing
+            let entry = entry?;
+            if entry.file_type().is_file() && entry.path().extension() == Some(OsStr::new("toml")) {
+                debug_log!("inHRCD->get_or_create_send_queue 6: file is toml, entry -> {:?}", entry);
+                // If a .toml file
+                let toml_string = fs::read_to_string(entry.path())?;
+                let toml_value: Value = toml::from_str(&toml_string)?;
 
-            // If owner = target collaborator
-            if toml_value.get("owner").and_then(Value::as_str) == Some(localowneruser_name) {
-                debug_log!("inHRCD->get_or_create_send_queue 7: file owner == colaborator name {:?}", toml_value);
-                
-                
-                // if current remote collaborator is on the list of teamchannel_collaborators_with_access
-                
-                // 1. Get collaborators for this file (if available):
-                let file_collaborators: Vec<String> = toml_value
-                    .get("teamchannel_collaborators_with_access") // Must match the key in your TOML files
-                    .and_then(Value::as_array)
-                    .map(|arr| arr.iter().filter_map(Value::as_str).map(String::from).collect())
-                    .unwrap_or_default();  // Handle case where the field is missing
+                // If owner = target collaborator
+                if toml_value.get("owner").and_then(Value::as_str) == Some(localowneruser_name) {
+                    debug_log!("inHRCD->get_or_create_send_queue 7: file owner == colaborator name {:?}", toml_value);
                     
                     
-                // 2. Check if remote collaborator is in the access list:
-                if file_collaborators.contains(&remote_collaborator_name.to_string()) {  // Accessing remote_collaborator_name correctly here
-                    debug_log!(
-                        "inHRCD->get_or_create_send_queue 8, access: file_collaborators=>{:?} vs. remote_collaborator_name=>{:?}", 
-                        file_collaborators,
-                        remote_collaborator_name,
-                    );
-
-                    // If updated_at_timestamp exists
-                    if let Some(toml_updatedat_timestamp) = toml_value.get("updated_at_timestamp").and_then(Value::as_integer) {
+                    // if current remote collaborator is on the list of teamchannel_collaborators_with_access
+                    
+                    // 1. Get collaborators for this file (if available):
+                    let file_collaborators: Vec<String> = toml_value
+                        .get("teamchannel_collaborators_with_access") // Must match the key in your TOML files
+                        .and_then(Value::as_array)
+                        .map(|arr| arr.iter().filter_map(Value::as_str).map(String::from).collect())
+                        .unwrap_or_default();  // Handle case where the field is missing
+                        
+                        
+                    // 2. Check if remote collaborator is in the access list:
+                    if file_collaborators.contains(&remote_collaborator_name.to_string()) {  // Accessing remote_collaborator_name correctly here
                         debug_log!(
-                            "inHRCD->get_or_create_send_queue 9: updated_at_timestamp=>{:?} vs. rt=>{:?}", 
-                            toml_updatedat_timestamp,
-                            ready_signal_rt_timestamp,
+                            "inHRCD->get_or_create_send_queue 8, access: file_collaborators=>{:?} vs. remote_collaborator_name=>{:?}", 
+                            file_collaborators,
+                            remote_collaborator_name,
                         );
-                        let toml_updatedat_timestamp = toml_updatedat_timestamp as u64;
 
-                        // If updated_at_timestamp > back_of_queue_timestamp (or back_of_queue_timestamp is 0)
-                        // if timestamp > back_of_queue_timestamp || back_of_queue_timestamp == 0 {
-                        if toml_updatedat_timestamp > session_send_queue.back_of_queue_timestamp {
-                            debug_log("inHRCD->get_or_create_send_queue 10: timestamp > back_of_queue_timestamp");
-                            // Add filepath to send_queue
-                            session_send_queue.items.push(entry.path().to_path_buf());
+                        // If updated_at_timestamp exists
+                        if let Some(toml_updatedat_timestamp) = toml_value.get("updated_at_timestamp").and_then(Value::as_integer) {
+                            debug_log!(
+                                "inHRCD->get_or_create_send_queue 9: updated_at_timestamp=>{:?} vs. rt=>{:?}", 
+                                toml_updatedat_timestamp,
+                                ready_signal_rt_timestamp,
+                            );
+                            let toml_updatedat_timestamp = toml_updatedat_timestamp as u64;
+
+                            // If updated_at_timestamp > back_of_queue_timestamp (or back_of_queue_timestamp is 0)
+                            // if timestamp > back_of_queue_timestamp || back_of_queue_timestamp == 0 {
+                            if toml_updatedat_timestamp > session_send_queue.back_of_queue_timestamp {
+                                debug_log("inHRCD->get_or_create_send_queue 10: timestamp > back_of_queue_timestamp");
+                                // Add filepath to send_queue
+                                session_send_queue.items.push(entry.path().to_path_buf());
+                            }
                         }
+                    } else {
+                        debug_log!(
+                            "get_or_create_send_queue, Collaborator '{}' does not have access to file: {:?}",
+                            remote_collaborator_name,
+                            entry.path()
+                        );
                     }
-                } else {
-                    debug_log!(
-                        "get_or_create_send_queue, Collaborator '{}' does not have access to file: {:?}",
-                        remote_collaborator_name,
-                        entry.path()
-                    );
                 }
             }
         }
     }
-    
-    debug_log("inHRCD-> get_or_create_send_queue 11: calling, get_toml_file_timestamp(), Hello?");
-    
 
+    debug_log("inHRCD-> get_or_create_send_queue 11: calling, get_toml_file_timestamp(), Hello?");
+
+    //////////////
+    // New Files
+    //////////////
+    // Check for new-file flags, add those to the queue 
+    // this needs to be done ~last (before sorting is ok)
+
+    // --- Get new file paths and add them to the send queue ---
+    let new_file_paths_result = read_all_newfile_sendq_flags_w_cleanup(
+        remote_collaborator_name,
+        &team_channel_name, 
+    );
     
+    // add to sendqueue
+    match new_file_paths_result {
+        Ok(new_file_paths) => {
+            session_send_queue.items.extend(new_file_paths); // Extend the items Vec directly
+        },
+        Err(e) => {
+            debug_log!("Error reading new file flags: {}", e);
+            // Handle error as needed
+        }
+    };
+
     // Sort the files in the queue based on their modification time
     session_send_queue.items.sort_by_key(|path| {
         get_toml_file_timestamp(path).unwrap_or(0) // Handle potential errors in timestamp retrieval
     });
-    
+
+    // Remove duplicates?
+
     // TODO(remove this later) extra Inspection here:
     debug_log("|| Extra Insepction || get_or_create_send_queue: end: Q");
     debug_log!(
@@ -11085,35 +11378,6 @@ fn handle_remote_collaborator_meetingroom_desk(
                     // Set back_of_queue_timestamp
                     //////////////////////////////
 
-                    match get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(&room_sync_input.remote_collaborator_name) {
-                        Ok(oldest_prefail_flag_rt_timestamp) => {
-                            // 2. Now you can compare: (zero means no timestamps exist)
-                            if oldest_prefail_flag_rt_timestamp != 0 {
-                                // 3. Reset the send queue:
-                                session_send_queue = SendQueue {
-                                    back_of_queue_timestamp: oldest_prefail_flag_rt_timestamp,
-                                    items: Vec::new(),
-                                };
-                                // reset_sendq_flag = true;
-                                debug_log!("HRCD Resetting send queue using timestamp from flag: {}", oldest_prefail_flag_rt_timestamp);
-                            } else {
-                                debug_log!("HRCD No retry flags found. Using ReadySignal timestamp.");
-                                // Handle the case where no pre-fail flags were found. Perhaps use the timestamp from the ready signal?
-                                session_send_queue.back_of_queue_timestamp = ready_signal.rt
-
-                            }
-                        }
-                        Err(e) => {
-                            // 4. Handle the error:
-                            debug_log!("HRCD Error getting oldest retry timestamp: {}", e);
-                            // Decide how to handle the error. You might:
-                            // - continue; // Skip to the next iteration
-                            // - return Err(e); // Or wrap the error: return Err(ThisProjectError::from(e));
-                            // - use a default timestamp: back_of_queue_timestamp = 0;
-                            continue; // Skip for now
-                        }
-                    }
-
                     // --- 3.3 Get / Make Send-Queue ---
                     let this_team_channelname = match get_current_team_channel_name() {
                         Some(name) => name,
@@ -11968,6 +12232,17 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                     app.input_mode = InputMode::Command; // Access input_mode using self
                     app.current_path.pop(); // Go back to the parent directory
                 } else if !input.is_empty() {
+                    // TODO
+                    /*
+                    add feature and functionality
+                    to put likely json type into
+                    into the message text
+                    to be used for 'howler'
+                    selected rc 
+                    and expiration dates
+                    
+                    */
+                    
                     debug_log("!input.is_empty()");
 
                     let local_owner_user = &app.graph_navigation_instance_state.local_owner_user; // Access using self
