@@ -9858,6 +9858,7 @@ fn get_or_create_send_queue(
     remote_collaborator_name: &str,
     mut session_send_queue: SendQueue,
     ready_signal_rt_timestamp: u64,
+    bootstrap_sendqueue: bool,
 ) -> Result<SendQueue, ThisProjectError> {
     /*
     
@@ -9878,35 +9879,49 @@ fn get_or_create_send_queue(
     
     /*
     Conditions for making a new send_queue
-    1. Backtrack Order: If the ready_signal_rt_timestamp is older 
+    
+    1. First Time Bootstrap
+    
+    2. Backtrack Order: If the ready_signal_rt_timestamp is older 
        than session_send_queue.back_of_queue_timestamp
        indicating that the user is requesting a back-track.
     
-    2. Prefail Flag Check: If there is a fail flag, 
+    3. Prefail Flag Check: If there is a fail flag, 
        remake the queue with that timestamp
     
     'normally' only one queue is ever made, 
     and that queue most-times remains empty with nothing sent
     unless and until a new local-owned-filed is made and added to the queue
     which should be checked for ~last.
-    
     */
     let mut make_a_new_queue_flag = false;
-
+    if bootstrap_sendqueue {
+        make_a_new_queue_flag = true;
+    }
+    debug_log!(
+        "inHRCD->get_or_create_send_queue: bootstrap_sendqueue={:?}, make_a_new_queue_flag={:?}",
+        bootstrap_sendqueue,
+        make_a_new_queue_flag
+    );
     /*
     It is not clear that this comparison needs to be done:
     ready_signal_rt_timestamp == session_send_queue.back_of_queue_timestamp
     
     because preset-fail-flags are set, moving ahead cannot be done
     unless a confirmed gotit recept (of a confirmed file recept) happens.
+    changing the back_of_queue_timestamp date may have no advanstage
+    (or maybe some use will be discovered, likely it is not harmful)
     */
     
+    
+    debug_log("inHRCD->get_or_create_send_queue  checking: ready_signal_rt_timestamp < back_of_queue_timestamp");
     // Backtrack Order
     // if remote collaborator requests a reset to an older time (ah, those were the days...)
     // set the back_of_queue_timestamp to be sent .rt time ... if the .rt is older
     if ready_signal_rt_timestamp < session_send_queue.back_of_queue_timestamp {
         session_send_queue.back_of_queue_timestamp = ready_signal_rt_timestamp;
         make_a_new_queue_flag = true;
+        debug_log("inHRCD->get_or_create_send_queue: found: ready_signal_rt_timestamp < back_of_queue_timestamp, make_a_new_queue_flag = true");
     }
 
     ///////////////////////////////////
@@ -9922,10 +9937,11 @@ fn get_or_create_send_queue(
                     items: Vec::new(),
                 };
                 // reset_sendq_flag = true;
-                debug_log!("HRCD Resetting send queue using timestamp from flag: {}", oldest_prefail_flag_rt_timestamp);
+                debug_log!("inHRCD->get_or_create_send_queue  Resetting send queue using timestamp from flag: {}", oldest_prefail_flag_rt_timestamp);
+                debug_log("inHRCD->get_or_create_send_queue: found: prefailflag(s), make_a_new_queue_flag = true");
                 make_a_new_queue_flag = true
             } else {
-                debug_log!("HRCD No retry flags found. Using ReadySignal timestamp.");
+                debug_log("inHRCD->get_or_create_send_queue  No retry flags found. Using ReadySignal timestamp.");
                 // Handle the case where no pre-fail flags were found. Perhaps use the timestamp from the ready signal?
                 session_send_queue.back_of_queue_timestamp = ready_signal_rt_timestamp
 
@@ -9933,11 +9949,13 @@ fn get_or_create_send_queue(
         }
         Err(e) => {
             // 4. Handle the error:
-            debug_log!("HRCD Error getting oldest retry timestamp: {}", e);
+            debug_log!("inHRCD->get_or_create_send_queue  Error getting oldest retry timestamp: {}", e);
             // Decide how to handle the error. You might:
             // - continue; // Skip to the next iteration
             // - return Err(e); // Or wrap the error: return Err(ThisProjectError::from(e));
             // - use a default timestamp: back_of_queue_timestamp = 0;
+            
+            debug_log("inHRCD->get_or_create_send_queue: error, so: make_a_new_queue_flag = true");
             make_a_new_queue_flag = true
         }
     }
@@ -9975,12 +9993,13 @@ fn get_or_create_send_queue(
         }
     };
 
-    debug_log!("inHRCD->get_or_create_send_queue 5: Starting crawl of directory: {:?}", team_channel_path);
+    
 
     // --- 3. Make a new Queue ---
+    debug_log!("inHRCD->get_or_create_send_queue 5: no crawl if false, make_a_new_queue_flag -> {:?}", make_a_new_queue_flag);
     
     if make_a_new_queue_flag {
-    
+        debug_log!("inHRCD->get_or_create_send_queue 5: Starting crawl of directory: {:?}", team_channel_path);
         /*
         Only when a new send-queue is needed, 
         get the paths of files
@@ -11140,10 +11159,11 @@ fn handle_remote_collaborator_meetingroom_desk(
         
         // 1.6.2 hash_set_session_nonce = HashSet::new() as protection against replay attacks Create a HashSet to store received hashes
         let mut hash_set_session_nonce = HashSet::new();  // Create a HashSet to store received hashes
-        
-        
+
         let mut rc_set_as_active = false;
         
+        // For first-time bootstrap
+        let mut bootstrap_sendqueue = true;
         
         // --- 2. Enter Main Loop ---
         // enter main loop (to handling signals, sending)
@@ -11397,7 +11417,10 @@ fn handle_remote_collaborator_meetingroom_desk(
                         &room_sync_input.remote_collaborator_name, // remote_collaborator_name
                         session_send_queue, // for session_send_queue
                         ready_signal.rt, // for ready_signal_rt_timestamp
+                        bootstrap_sendqueue,
                     )?;
+                    
+                    bootstrap_sendqueue = false;
                     
                     
                     // session_send_queue = match session_send_queue {
