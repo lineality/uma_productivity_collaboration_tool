@@ -7327,64 +7327,264 @@ fn hash_checker_for_sendfile_struct(
 //     Ok(())
 // }
 
-/// Sets a "pre-fail" flag file using the ReadySignal timestamp (.rt).
+
+
+/// Extracts the `updated_at_timestamp` field from a TOML file.
 ///
-/// Creates an empty file as a flag in the `sync_data` directory. The file's
-/// name is the ReadySignal's .rt timestamp as a string. Its presence indicates a file
-/// send attempt is in progress (and assumed failed unless removed).  Directory
-/// structure: `sync_data/{team_channel_name}/fail_retry_flags/{remote_collaborator_name}/{rt_timestamp}`.
+/// This function reads the TOML file at the specified path, parses it, and extracts the
+/// `updated_at_timestamp` field.  It handles potential errors during file reading, TOML
+/// parsing, and missing or invalid timestamp fields.
 ///
 /// # Arguments
 ///
-/// * `rt_timestamp`: The .rt timestamp from the ReadySignal.
+/// * `file_path`: The path to the TOML file.
+///
+/// # Returns
+///
+/// * `Result<u64, ThisProjectError>`: The `updated_at_timestamp` value on success, or a
+///   `ThisProjectError` if an error occurs.
+fn get_updated_at_timestamp_from_toml_file(file_path: &Path) -> Result<u64, ThisProjectError> {
+    // 1. Read the TOML file: Handle file read errors
+    let toml_string = match std::fs::read_to_string(file_path) {
+        Ok(content) => content,
+        Err(e) => {
+            debug_log!("Error reading TOML file {:?}: {}", file_path, e);
+            return Err(ThisProjectError::from(e));
+        }
+    };
+    debug_log!("Read TOML file: {:?}", file_path);
+    
+
+    // 2. Parse the TOML string: Handle TOML parsing errors
+    let toml_value: Value = match toml::from_str(&toml_string) {
+        Ok(value) => value,
+        Err(e) => {
+            debug_log!("Error parsing TOML string: {}", e);
+            return Err(ThisProjectError::from(e)); // Or handle error differently
+        }
+    };
+    debug_log!("Parsed TOML value.");
+
+    // 3. Extract updated_at_timestamp:  Handle missing/invalid timestamp
+    let updated_at_timestamp = match toml_value.get("updated_at_timestamp") {
+        Some(Value::Integer(ts)) => *ts as u64, // Convert to u64, handle overflow
+        Some(_) => {
+            debug_log!("'updated_at_timestamp' has invalid type");
+            return Err(ThisProjectError::InvalidData(
+                "'updated_at_timestamp' has invalid type".into(),
+            ));
+        }
+        None => {
+            debug_log!("'updated_at_timestamp' field not found in TOML file");
+            return Err(ThisProjectError::InvalidData(
+                "'updated_at_timestamp' field not found in TOML file".into(),
+            ));
+        }
+    };
+    debug_log!("Extracted timestamp: {}", updated_at_timestamp);
+
+    Ok(updated_at_timestamp) // Return the timestamp if successful
+}
+
+/// Sets a "pre-fail" flag file.  The filename is the file's `updated_at` timestamp.
+/// The file content is the ReadySignal's `.rt` timestamp.
+///
+/// Directory structure: `sync_data/{team_channel_name}/fail_retry_flags/{remote_collaborator_name}/{file_updated_at_timestamp}`.
+///
+/// # Arguments
+///
+/// * `file_updated_at_time`: The file's `updated_at_timestamp`.
+/// * `rt_timestamp`: The `.rt` timestamp from the ReadySignal.
 /// * `remote_collaborator_name`: Remote collaborator's name.
 ///
 /// # Returns
 ///
-/// * `Result<(), ThisProjectError>`: `Ok(())` on success, or a `ThisProjectError`
-///   on failure.
+/// * `Result<(), ThisProjectError>`: `Ok(())` on success, or a `ThisProjectError`.
 fn set_prefail_flag_rt_timestamp__for_sendfile(
+    file_updated_at_time: u64,
     rt_timestamp: u64,
     remote_collaborator_name: &str,
 ) -> Result<(), ThisProjectError> {
     let team_channel_name = get_current_team_channel_name()
         .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
 
-    let mut directory = PathBuf::from("sync_data");
-    directory.push(&team_channel_name);
-    directory.push("fail_retry_flags");
-    directory.push(remote_collaborator_name);
-    
-    // 1. Create directory with error handling
-    match fs::create_dir_all(&directory) {
-        Ok(_) => debug_log!("set_prefail_flag_rt_timestamp__for_sendfile(): Directory created successfully: {:?}", directory),
-        Err(e) => {
-            debug_log!("set_prefail_flag_rt_timestamp__for_sendfile(): Error creating directory: {}", e);
-            return Err(ThisProjectError::IoError(e));
-        }
-    };
-    
+    let mut flag_file_path = PathBuf::from("sync_data")
+        .join(&team_channel_name)
+        .join("fail_retry_flags")
+        .join(remote_collaborator_name)
+        .join(file_updated_at_time.to_string());  // Filename is the file's updated_at timestamp
 
-    let flag_file_path = directory.join(rt_timestamp.to_string());
+    // Create directory structure if it doesn't exist
+    if let Some(parent) = flag_file_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
 
-    // 2. Create file with error handling
-    match File::create(&flag_file_path) { // Use & for path
-        Ok(_) => debug_log!("set_prefail_flag_rt_timestamp__for_sendfile():  Flag file created: {:?}", flag_file_path), // Use :? not !
-        Err(e) => {
-            debug_log!("set_prefail_flag_rt_timestamp__for_sendfile(): Error creating flag file: {}", e);
-            return Err(ThisProjectError::IoError(e));
-        }
-    };
-    
+    // Write the .rt timestamp to the file
+    fs::write(flag_file_path, rt_timestamp.to_string())?;
+
+    debug_log!(
+        "Set pre-fail flag for file updated at {} with ReadySignal timestamp {}.",
+        file_updated_at_time, rt_timestamp
+    );
     Ok(())
 }
 
-/// Retrieves the oldest send file pre-fail flag timestamp or zero if no flags exist.
+// /// Sets a "pre-fail" flag file using the ReadySignal timestamp (.rt).
+// ///
+// /// revised: string in file is the .rt value (maybe),
+// /// name of file is the last-updated-at values o files
+// ///
+// /// Creates an empty file as a flag in the `sync_data` directory. The file's
+// /// name is the ReadySignal's .rt timestamp as a string. Its presence indicates a file
+// /// send attempt is in progress (and assumed failed unless removed).  Directory
+// /// structure: `sync_data/{team_channel_name}/fail_retry_flags/{remote_collaborator_name}/{rt_timestamp}`.
+// ///
+// /// # Arguments
+// ///
+// /// * `rt_timestamp`: The .rt timestamp from the ReadySignal.
+// /// * `remote_collaborator_name`: Remote collaborator's name.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<(), ThisProjectError>`: `Ok(())` on success, or a `ThisProjectError`
+// ///   on failure.
+// fn set_prefail_flag_rt_timestamp__for_sendfile(
+//     file_last_updatedat_time: u64,
+//     rt_timestamp: u64,
+//     remote_collaborator_name: &str,
+// ) -> Result<(), ThisProjectError> {
+//     let team_channel_name = get_current_team_channel_name()
+//         .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
+
+//     let mut directory = PathBuf::from("sync_data");
+//     directory.push(&team_channel_name);
+//     directory.push("fail_retry_flags");
+//     directory.push(remote_collaborator_name);
+    
+//     // 1. Create directory with error handling
+//     match fs::create_dir_all(&directory) {
+//         Ok(_) => debug_log!("set_prefail_flag_rt_timestamp__for_sendfile(): Directory created successfully: {:?}", directory),
+//         Err(e) => {
+//             debug_log!("set_prefail_flag_rt_timestamp__for_sendfile(): Error creating directory: {}", e);
+//             return Err(ThisProjectError::IoError(e));
+//         }
+//     };
+    
+
+//     let flag_file_path = directory.join(rt_timestamp.to_string());
+
+//     // 2. Create file with error handling
+//     match File::create(&flag_file_path) { // Use & for path
+//         Ok(_) => debug_log!("set_prefail_flag_rt_timestamp__for_sendfile():  Flag file created: {:?}", flag_file_path), // Use :? not !
+//         Err(e) => {
+//             debug_log!("set_prefail_flag_rt_timestamp__for_sendfile(): Error creating flag file: {}", e);
+//             return Err(ThisProjectError::IoError(e));
+//         }
+//     };
+    
+//     Ok(())
+// }
+
+// /// Retrieves the oldest send file pre-fail flag timestamp or zero if no flags exist.
+// ///
+// /// This function iterates through the fail_retry_flags directory for the given
+// /// team channel and remote collaborator, finds the oldest timestamp among the
+// /// flag files (which are named with the .rt timestamp), and returns it. If no
+// /// flags are found, it returns 0.
+// ///
+// /// # Arguments
+// ///
+// /// * `remote_collaborator_name`: The name of the remote collaborator.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<u64, ThisProjectError>`: The oldest timestamp (or 0) on success, or
+// ///   a `ThisProjectError` on failure.
+// fn get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(
+//     remote_collaborator_name: &str,
+// ) -> Result<u64, ThisProjectError> {
+    
+//     // zero is null here, means no data (is not used as zero)
+//     let mut oldest_timestamp: u64 = 0;
+
+//     let team_channel_name = get_current_team_channel_name()
+//         .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
+
+//     let prefail_directory = PathBuf::from("sync_data")
+//         .join(&team_channel_name)
+//         .join("fail_retry_flags")
+//         .join(remote_collaborator_name);
+
+//     if !prefail_directory.exists() { // Handle prefail_directory existance
+//         debug_log!(
+//             "get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(): Directory {:?} not found. Returning 0.",
+//             prefail_directory
+//             );
+//         // zero is null here, means no data (is not used as zero)
+//         return Ok(0);
+//     }    
+
+//     // 1. Find oldest timestamp
+//     for entry in fs::read_dir(&prefail_directory)? { // Note the &
+//         let entry = entry?;
+//         let path = entry.path();
+
+//         if path.is_file() {
+//             let file_name = path.file_name().unwrap().to_str().unwrap(); // Handle unwrap result!
+
+//             // Parse timestamp from filename, with error handling
+//             match file_name.parse::<u64>() {
+//                 Ok(file_timestamp) => {
+//                     if oldest_timestamp == 0 || file_timestamp < oldest_timestamp {
+//                         oldest_timestamp = file_timestamp;
+//                     }
+//                 }
+//                 Err(e) => {
+//                     debug_log!(
+//                         "get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(): Error parsing file_timestamp from filename {}: {}",
+//                         file_name,
+//                         e
+//                     );
+//                     // Handle parsing error as you see fit, e.g., continue, log and return error, etc.
+//                     continue; // Skip to next file
+//                 }
+//             }
+//         }
+//     }
+
+//     // 2. Delete all files in prefail_directory *AFTER* finding the oldest
+//     if oldest_timestamp != 0 {  // Only clean up if flags exist.
+//         for entry in fs::read_dir(&prefail_directory)? {  //Re-read the directory
+//             let entry = entry?;
+//             let path = entry.path();
+//             if path.is_file() {
+//                 if let Err(e) = fs::remove_file(path) {
+//                     debug_log!(
+//                         "get_oldest_sendfile...: Error removing flag file: {:?}",
+//                         e
+//                     );
+//                     // Handle the error appropriately (log, continue, or return Err)
+//                     // For example, you might want to continue deleting other files:
+//                     // continue;
+//                     // Or stop and return the error:
+//                     return Err(ThisProjectError::IoError(e));
+//                 }
+//             }
+//         }
+//     }
+    
+//     Ok(oldest_timestamp)
+// }
+
+
+/// Retrieves the .rt timestamp from the oldest pre-fail flag file.
 ///
-/// This function iterates through the fail_retry_flags directory for the given
-/// team channel and remote collaborator, finds the oldest timestamp among the
-/// flag files (which are named with the .rt timestamp), and returns it. If no
-/// flags are found, it returns 0.
+/// Iterates through the `fail_retry_flags` directory, finds the oldest file (based on filename, which is the `updated_at` timestamp),
+/// reads the `.rt` timestamp (the file content) from that oldest file, and returns it.
+/// Deletes all flag files after reading the oldest timestamp, ensuring flags are processed only once.
+/// Returns 0 if no flags are found or if an error occurs during file operations.
+///
+/// Directory structure: `sync_data/{team_channel_name}/fail_retry_flags/{remote_collaborator_name}/{file_updated_at_timestamp}`
 ///
 /// # Arguments
 ///
@@ -7392,14 +7592,12 @@ fn set_prefail_flag_rt_timestamp__for_sendfile(
 ///
 /// # Returns
 ///
-/// * `Result<u64, ThisProjectError>`: The oldest timestamp (or 0) on success, or
-///   a `ThisProjectError` on failure.
+/// * `Result<u64, ThisProjectError>`: The `.rt` timestamp from the oldest flag file (or 0) on success, or a `ThisProjectError`.
 fn get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(
     remote_collaborator_name: &str,
 ) -> Result<u64, ThisProjectError> {
-    
-    // zero is null here, means no data (is not used as zero)
-    let mut oldest_timestamp: u64 = 0;
+    let mut oldest_timestamp = 0u64;
+    let mut oldest_file_path: Option<PathBuf> = None; // Store path to the oldest file
 
     let team_channel_name = get_current_team_channel_name()
         .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
@@ -7409,67 +7607,58 @@ fn get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(
         .join("fail_retry_flags")
         .join(remote_collaborator_name);
 
-    if !prefail_directory.exists() { // Handle prefail_directory existance
+    if !prefail_directory.exists() {
         debug_log!(
-            "get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(): Directory {:?} not found. Returning 0.",
+            "get_oldest_sendfile...: Directory {:?} not found. Returning 0.",
             prefail_directory
-            );
-        // zero is null here, means no data (is not used as zero)
+        );
         return Ok(0);
-    }    
+    }
 
-    // 1. Find oldest timestamp
-    for entry in fs::read_dir(&prefail_directory)? { // Note the &
+    // 1. Find the oldest file:
+    for entry in fs::read_dir(&prefail_directory)? {
         let entry = entry?;
         let path = entry.path();
-
         if path.is_file() {
-            let file_name = path.file_name().unwrap().to_str().unwrap(); // Handle unwrap result!
+            let file_name = path.file_name().and_then(|n| n.to_str()).ok_or(ThisProjectError::InvalidData("Invalid flag file name".into()))?;
+            let file_updated_at: u64 = file_name.parse().map_err(|_| ThisProjectError::InvalidData("Invalid timestamp in flag file name".into()))?;
 
-            // Parse timestamp from filename, with error handling
-            match file_name.parse::<u64>() {
-                Ok(file_timestamp) => {
-                    if oldest_timestamp == 0 || file_timestamp < oldest_timestamp {
-                        oldest_timestamp = file_timestamp;
-                    }
-                }
-                Err(e) => {
-                    debug_log!(
-                        "get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(): Error parsing file_timestamp from filename {}: {}",
-                        file_name,
-                        e
-                    );
-                    // Handle parsing error as you see fit, e.g., continue, log and return error, etc.
-                    continue; // Skip to next file
-                }
+            if oldest_file_path.is_none() || file_updated_at < oldest_timestamp {
+                oldest_timestamp = file_updated_at;
+                oldest_file_path = Some(path.clone()); //Store the path
             }
         }
     }
 
-    // 2. Delete all files in prefail_directory *AFTER* finding the oldest
-    if oldest_timestamp != 0 {  // Only clean up if flags exist.
-        for entry in fs::read_dir(&prefail_directory)? {  //Re-read the directory
+    // 2. Read .rt timestamp from the oldest file (if found):
+    if let Some(path) = oldest_file_path {
+        match fs::read_to_string(&path) { // Read content (rt timestamp)
+            Ok(content) => {
+                oldest_timestamp = content.trim().parse().map_err(|_| ThisProjectError::InvalidData("Invalid .rt timestamp in flag file".into()))?;
+                debug_log!("Oldest .rt timestamp found: {}", oldest_timestamp);
+            },
+            Err(e) => {
+                debug_log!("Error reading .rt timestamp from file {:?}: {}", path, e);
+                return Err(ThisProjectError::from(e));
+            }
+        }
+
+
+        // 3. Delete all flag files *after* reading the timestamp:
+        for entry in fs::read_dir(&prefail_directory)? {
             let entry = entry?;
             let path = entry.path();
             if path.is_file() {
-                if let Err(e) = fs::remove_file(path) {
-                    debug_log!(
-                        "get_oldest_sendfile...: Error removing flag file: {:?}",
-                        e
-                    );
-                    // Handle the error appropriately (log, continue, or return Err)
-                    // For example, you might want to continue deleting other files:
-                    // continue;
-                    // Or stop and return the error:
-                    return Err(ThisProjectError::IoError(e));
+                if let Err(e) = fs::remove_file(&path) { // Use &path
+                    debug_log!("Error removing flag file {:?}: {}", path, e);
+                    return Err(ThisProjectError::from(e)); // Or handle error as needed
                 }
             }
         }
     }
-    
+
     Ok(oldest_timestamp)
 }
-
 
 // /// This function removes all sendfile fail flags
 // /// for a team channel, for a remote collaborator
@@ -7504,6 +7693,7 @@ fn get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(
 
 
 /// Removes a specific pre-fail flag file based on its ID (timestamp).
+/// currently gotit sign di (doc id) is the updated-at time of the file
 ///
 /// This function attempts to remove the flag file located at:
 /// `sync_data/{team_channel_name}/fail_retry_flags/{remote_collaborator_name}/{di_flag_id}`.
@@ -7527,13 +7717,15 @@ fn remove_one_prefail_flag__for_sendfile(
     remote_collaborator_name: &str, // Use &str for efficiency
     team_channel_name: &str,   // Use &str for efficiency
 ) -> Result<(), ThisProjectError> {
-    // ... (Your existing directory construction logic, unchanged)
-    let mut flag_file_path = PathBuf::from("sync_data");
-    flag_file_path.push(team_channel_name);
-    flag_file_path.push("fail_retry_flags");
-    flag_file_path.push(remote_collaborator_name);
 
-    // No directory.exists() check here: it's handled in the remove_file call.
+    let mut flag_file_path = PathBuf::from("sync_data")
+        .join(team_channel_name)
+        .join("fail_retry_flags")
+        .join(remote_collaborator_name);
+
+    if !flag_file_path.exists() { // Check for existance
+        return Ok(()); //
+    }
     
     flag_file_path.push(di_flag_id.to_string());  // Use di_flag_id directly
 
@@ -7546,7 +7738,7 @@ fn remove_one_prefail_flag__for_sendfile(
             Ok(())
         }
         Err(e) if e.kind() == ErrorKind::NotFound => {
-            debug_log!("remove_one...: Flag file not found (not an error): {}", di_flag_id);
+            debug_log!("remove_one...: Flag file not found: {}", di_flag_id);
             Ok(()) // Not an error if the file isn't found.
         }
         Err(e) => {
@@ -8955,7 +9147,6 @@ fn handle_local_owner_desk(
             // Drone Loop to Send ReadySignals  (hlod)
             //////////////////////////////////
             loop {
-                
                 
                 // 1.1 Wait (and check for exit Uma)  this waits and checks N times: for i in 0..N {
                 for i in 0..5 {
@@ -11158,7 +11349,7 @@ fn handle_remote_collaborator_meetingroom_desk(
             // Listen for 'I got it' GotItSignal
             ////////////////////////////////////
 
-            loop {
+            loop { // gotit loop
                 debug_log(
                     "HRCD Got it loop starting."
                 ); 
@@ -11228,8 +11419,6 @@ fn handle_remote_collaborator_meetingroom_desk(
                         ```path
                         sync_data/team_channel/fail_flags/NAME-of-COLLABORATOR/DOC-ID
                         ```
-                        
-
                         */
 
                         remove_one_prefail_flag__for_sendfile(
@@ -11645,9 +11834,15 @@ fn handle_remote_collaborator_meetingroom_desk(
                             
                             debug_log!("HRCD 4.7.2 ready_signal.rt for set_prefail_flag_rt_timestamp__for_sendfile {:?}", ready_signal.rt);
                             
-                            // 4.7.2 set_prefail_flag_rt_timestamp__for_sendfile
+                            
+                            // get updatedat value of .toml
+                            let file_last_updatedat_time: u64 = get_updated_at_timestamp_from_toml_file(&file_path)?;
+                            
+                            
+                            // 4.7.2 HRCD set_prefail_flag_rt_timestamp__for_sendfile
                             if let Err(e) = set_prefail_flag_rt_timestamp__for_sendfile(
-                                ready_signal.rt,
+                                file_last_updatedat_time, // for fail flag file name
+                                ready_signal.rt, // for fail flag file value
                                 &room_sync_input.remote_collaborator_name,
                             ) {
                                 debug_log!("HRCD 4.7.2.e Error setting pre-fail flag: {}", e);
