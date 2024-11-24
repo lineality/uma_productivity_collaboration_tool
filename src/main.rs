@@ -141,10 +141,13 @@ use getifaddrs::{getifaddrs, InterfaceFlags};
 mod tiny_tui_module;
 use tiny_tui_module::tiny_tui;
 
+const FILE_READWRITE_N_RETRIES: u64 = 5;
+const FILE_READWRITE_RETRY_SEC_PAUSE: u64 = 2;
+const FILE_READWRITE_RETRY_SEC_PAUSE_MIN: u64 = 1;
+const FILE_READWRITE_RETRY_SEC_PAUSE_MAX: u64 = 6;
 const CONTINUE_UMA_PATH: &str = "project_graph_data/session_state_items/continue_uma.txt";
 const HARD_RESTART_FLAG_PATH: &str = "project_graph_data/session_state_items/yes_hard_restart_flag.txt";
 const SYNC_START_OK_FLAG_PATH: &str = "project_graph_data/session_state_items/ok_to_start_sync_flag.txt";
-
 
 
 pub enum SyncError {
@@ -1000,14 +1003,14 @@ fn get_index_byof_ip(
 
 /// Saves the local user's network band config data
 /// to sync_data text files
-/// 
-fn write_band__save_network_band__type_index(
+/// As this is done only once during startup, retry is likely not needed 
+///
+fn write_local_band__save_network_band__type_index(
     network_type: String,
     network_index: u8,
     this_ipv4: Ipv4Addr,
     this_ipv6: Ipv6Addr,
 ) -> Result<(), ThisProjectError> {
-
     // 1. Construct Path:
     let mut base_path = PathBuf::from("sync_data");
 
@@ -1041,6 +1044,7 @@ fn write_band__save_network_band__type_index(
 
 /// Saves the local user's network band config data
 /// to sync_data text files
+/// as this is done only once during startup, retry is likely not needed
 /// 
 fn write_save_rc_bandnetwork_type_index(
     remote_collaborator_name: String,
@@ -1050,6 +1054,14 @@ fn write_save_rc_bandnetwork_type_index(
     this_ipv4: Ipv4Addr,
     this_ipv6: Ipv6Addr,
 ) -> Result<(), ThisProjectError> {
+    /* ?
+    Wait random time in A to B range, N times
+    FILE_READWRITE_N_RETRIES
+    FILE_READWRITE_RETRY_SEC_PAUSE_MIN
+    FILE_READWRITE_RETRY_SEC_PAUSE_max
+    */
+
+    
     debug_log("write_save_rc_bandnetwork_type_index(), starting");
 
     // 1. Construct Path:
@@ -1389,6 +1401,7 @@ fn hlod_udp_handshake__rc_network_type_rc_ip_addr(
 ///
 /// * `Result<(String, u8, IpAddr), ThisProjectError>`: A tuple containing the network type,
 ///   network index, and IP address on success, or a `ThisProjectError` if reading or parsing fails.
+///
 fn read_rc_bandnetwork_type_index(
     remote_collaborator_name: &str,
     team_channel_name: &str,
@@ -1639,6 +1652,13 @@ fn serialize_ip_addresses<T: std::fmt::Display>(
 // Function to write a TOML string to a file
 // Function to write a TOML string to a file
 fn write_toml_to_file(file_path: &str, toml_string: &str) -> Result<(), ThisProjectError> {
+    /* ?
+    Wait random time in A to B range, N times
+    FILE_READWRITE_N_RETRIES
+    FILE_READWRITE_RETRY_SEC_PAUSE_MIN
+    FILE_READWRITE_RETRY_SEC_PAUSE_max
+    */
+
     // Attempt to create the file. 
     let mut file = match File::create(file_path) {
         Ok(file) => file,
@@ -4957,7 +4977,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
 
 
     // set network data state-file(s) in sync_data/ directory:
-    if let Err(e) = write_band__save_network_band__type_index( // Check if writing to sync data state files fails
+    if let Err(e) = write_local_band__save_network_band__type_index( // Check if writing to sync data state files fails
         network_type, // network type, as String
         network_index, // network index, as u8
         this_ipv4,  //ipv4, as std::net::Ipv4Addr
@@ -7358,6 +7378,13 @@ fn read_latestreceivedfromme_file_timestamp_plaintextstatefile(
     collaborator_name: &str,
     team_channel_name: &str,
 ) -> Result<u64, ThisProjectError> {
+    /*
+    Wait random time in A to B range, N times
+    FILE_READWRITE_N_RETRIES
+    FILE_READWRITE_RETRY_SEC_PAUSE_MIN
+    FILE_READWRITE_RETRY_SEC_PAUSE_max
+    */
+    
     let mut file_path = PathBuf::from("sync_data");
     file_path.push(team_channel_name);
     file_path.push("latest_receivedfile_timestamps");
@@ -7400,6 +7427,9 @@ fn read_latestreceivedfromme_file_timestamp_plaintextstatefile(
 
 /// Gets the latest received file timestamp for a collaborator in a team channel, using a plain text file.
 ///
+/// As another thread may be reading/writing the file, there 
+/// is a random-wait retry system
+///
 /// This function reads the timestamp from a plain text file at:
 /// `sync_data/{team_channel_name}/latest_receivedfile_timestamps/
 /// {collaborator_name}/latest_received_from_rc_filetimestamp.txt`
@@ -7426,6 +7456,10 @@ fn read_latestreceivedfromme_file_timestamp_plaintextstatefile(
 /// Drone Loop to Send ReadySignals  (hlod)
 /// 1.2 Refresh Timestamp
 ///
+/// If the system is busy and needs to wait, just wait and retry
+/// retry-wait must not be considered an 'error' to 'handled'
+/// to collapse the entire system.
+///
 /// the complimentary function is: read_latestreceivedfromme_file_timestamp_plaintextstatefile()
 fn read_latest_received_from_rc_filetimestamp_plaintextstatefile(
     team_channel_name: &str,
@@ -7437,37 +7471,102 @@ fn read_latest_received_from_rc_filetimestamp_plaintextstatefile(
     file_path.push(collaborator_name);
     file_path.push("latest_received_from_rc_filetimestamp.txt");
 
-    // Create directory structure if it doesn't exist
-    if let Some(parent) = file_path.parent() {
-        create_dir_all(parent)?;
-    }
+    let mut retries = FILE_READWRITE_N_RETRIES;
 
-    // Read or initialize the timestamp
-    match read_to_string(&file_path) {
-        Ok(timestamp_str) => {
-            // if let Ok(timestamp) = timestamp_str.trim().parse() {
-            // Parse with error handling
-            match timestamp_str.trim().parse::<u64>() {
-                Ok(timestamp) => Ok(timestamp),
-                Err(e) => {
-                    debug_log!("Error parsing timestamp from file: {}", e);
-                    Err(ThisProjectError::from(e))
+    // Retry loop
+    loop { 
+        // Generate a random pause duration within the specified range
+        let pause_duration = Duration::from_secs(rand::thread_rng().gen_range(FILE_READWRITE_RETRY_SEC_PAUSE_MIN..=FILE_READWRITE_RETRY_SEC_PAUSE_MAX));
+
+        match read_to_string(&file_path) {
+            Ok(timestamp_str) => {
+                match timestamp_str.trim().parse::<u64>() {
+                    Ok(timestamp) => return Ok(timestamp), // Success!
+                    Err(e) => {
+                        debug_log!("Error parsing timestamp from file: {}. Retrying...", e);
+                    }
                 }
             }
-        },
-        Err(e) if e.kind() == ErrorKind::NotFound => {
-            debug_log!(
-                "Error: glrfftptsf() getting timestamp: e'{}'e. Using0 inside read_latest_received_from_rc_filetimestamp_plaintextstatefile()",
-                e,
-            );
-            // File not found, initialize to 0
-            let mut file = File::create(&file_path)?;
-            file.write_all(b"0")?; // Write zero timestamp
-            Ok(0)
+            Err(e) if e.kind() == ErrorKind::NotFound => {
+                // Create directories and file if not found (only on first attempt)
+                if retries == FILE_READWRITE_N_RETRIES { // Only create on the first try:
+                    if let Some(parent) = file_path.parent() {
+                        create_dir_all(parent)?;
+                    }
+                    let mut file = File::create(&file_path)?;
+                    file.write_all(b"0")?;
+                    return Ok(0);
+                } else {
+                    debug_log!("File not found. Retrying...");
+                }
+            }
+            Err(e) => {
+                debug_log!("IO error reading timestamp file: {}. Retrying...", e);
+            }
         }
-        Err(e) => Err(ThisProjectError::IoError(e)), // Other IO errors
+
+        if retries == 0 {
+            debug_log!("Failed to read timestamp after multiple retries. Using default value 0.");
+            return Ok(0); // Or return an appropriate error
+        }
+
+        retries -= 1;
+        thread::sleep(pause_duration);  // Pause before retrying
     }
 }
+
+
+
+// fn read_latest_received_from_rc_filetimestamp_plaintextstatefile(
+//     team_channel_name: &str,
+//     collaborator_name: &str,
+// ) -> Result<u64, ThisProjectError> {
+//     /*
+//     upgrade needs to use these:
+    
+//     Wait random time in A to B range, N times
+//     FILE_READWRITE_N_RETRIES
+//     FILE_READWRITE_RETRY_SEC_PAUSE_MIN
+//     FILE_READWRITE_RETRY_SEC_PAUSE_max
+//     */
+    
+//     let mut file_path = PathBuf::from("sync_data");
+//     file_path.push(team_channel_name);
+//     file_path.push("latest_receivedfile_timestamps");
+//     file_path.push(collaborator_name);
+//     file_path.push("latest_received_from_rc_filetimestamp.txt");
+
+//     // Create directory structure if it doesn't exist
+//     if let Some(parent) = file_path.parent() {
+//         create_dir_all(parent)?;
+//     }
+
+//     // Read or initialize the timestamp
+//     match read_to_string(&file_path) {
+//         Ok(timestamp_str) => {
+//             // if let Ok(timestamp) = timestamp_str.trim().parse() {
+//             // Parse with error handling
+//             match timestamp_str.trim().parse::<u64>() {
+//                 Ok(timestamp) => Ok(timestamp),
+//                 Err(e) => {
+//                     debug_log!("Error parsing timestamp from file: {}", e);
+//                     Err(ThisProjectError::from(e))
+//                 }
+//             }
+//         },
+//         Err(e) if e.kind() == ErrorKind::NotFound => {
+//             debug_log!(
+//                 "Error: glrfftptsf() getting timestamp: e'{}'e. Using0 inside read_latest_received_from_rc_filetimestamp_plaintextstatefile()",
+//                 e,
+//             );
+//             // File not found, initialize to 0
+//             let mut file = File::create(&file_path)?;
+//             file.write_all(b"0")?; // Write zero timestamp
+//             Ok(0)
+//         }
+//         Err(e) => Err(ThisProjectError::IoError(e)), // Other IO errors
+//     }
+// }
 
 
 // /// Sets the latest received file timestamp from the remote collaborator (RC) in a team channel, using a plain text file.
@@ -7602,6 +7701,9 @@ fn actual_latest_received_from_rc_file_timestamp(
 
 /// Sets the latest received file timestamp for a collaborator in a team channel, using a plain text file.
 ///
+/// As another thread may be reading/writing the file, there 
+/// is a random-wait retry system
+///
 /// This function writes the `timestamp` to a file at the specified path, creating the directory structure if needed.
 ///
 /// # Arguments
@@ -7628,11 +7730,78 @@ fn write_save_latest_received_from_rc_file_timestamp_plaintext(
     if let Some(parent) = file_path.parent() {
         create_dir_all(parent)?;
     }
+    
+    let mut retries = FILE_READWRITE_N_RETRIES;
 
-    // Write the timestamp to the file, overwriting any previous content
-    std::fs::write(file_path, timestamp.to_string())?;
-    Ok(())
+    loop {
+        // Random pause duration
+        let pause_duration = Duration::from_secs(rand::thread_rng().gen_range(FILE_READWRITE_RETRY_SEC_PAUSE_MIN..=FILE_READWRITE_RETRY_SEC_PAUSE_MAX));
+        
+        // Attempt to write to the file
+        match std::fs::write(&file_path, timestamp.to_string()) { // Note the &
+            Ok(_) => return Ok(()), // Success! Exit the loop.
+            Err(e) => {
+                // Check if the directory structure exists and create it if it doesn't.
+                // Create the directory *only* if the file write fails *and* it's due to a missing directory:
+                if e.kind() == ErrorKind::NotFound && retries == FILE_READWRITE_N_RETRIES {
+                    if let Some(parent) = file_path.parent() {
+                        if let Err(dir_err) = create_dir_all(parent) {
+                            debug_log!(
+                                "Error creating directory: {}", 
+                                dir_err
+                            ); // Log and return the error if the directory can't be created.
+                            return Err(ThisProjectError::IoError(dir_err)); // Return appropriate error
+                        }
+                    }
+
+                }
+                                                
+                // Log the error before retrying
+                debug_log!(
+                    "Error writing timestamp to file: {}. Retrying... in write_save_latest_received_from_rc_file_timestamp_plaintext()", 
+                    e
+                );
+            }
+        }
+        
+
+        if retries == 0 { // Maximum retries reached. Return an error or use a default value as needed.
+            debug_log!("Failed to write timestamp to file after multiple retries.");
+            return Err(ThisProjectError::NetworkError("Failed to write timestamp after retries".into())); // Or return a more appropriate error
+        }
+
+        retries -= 1;
+        thread::sleep(pause_duration); // Pause before the next retry
+    }
 }
+
+
+// fn write_save_latest_received_from_rc_file_timestamp_plaintext(
+//     team_channel_name: &str,
+//     remote_collaborator_name: &str,
+//     timestamp: u64,
+// ) -> Result<(), ThisProjectError> {
+//     /*
+//     Wait random time in A to B range, N times
+//     FILE_READWRITE_N_RETRIES
+//     FILE_READWRITE_RETRY_SEC_PAUSE_MIN
+//     FILE_READWRITE_RETRY_SEC_PAUSE_max
+//     */
+//     let mut file_path = PathBuf::from("sync_data");
+//     file_path.push(team_channel_name);
+//     file_path.push("latest_receivedfile_timestamps");
+//     file_path.push(remote_collaborator_name);
+//     file_path.push("latest_received_from_rc_filetimestamp.txt");
+
+//     // Create directory structure if it doesn't exist
+//     if let Some(parent) = file_path.parent() {
+//         create_dir_all(parent)?;
+//     }
+
+//     // Write the timestamp to the file, overwriting any previous content
+//     std::fs::write(file_path, timestamp.to_string())?;
+//     Ok(())
+// }
 
 
 
@@ -8389,7 +8558,7 @@ fn handle_local_owner_desk(
 
     // // set ipv6 state-file
     // // path: sync_data/ip.toml
-    // write_band__save_network_band__type_index(
+    // write_local_band__save_network_band__type_index(
     //     ip_index.expect("REASON"),
     // );
 
@@ -11353,8 +11522,8 @@ enum SyncResult {
 /// * `Option<String>`: The channel name if successfully extracted, 
 ///   `None` if the file read fails after multiple retries or the path is invalid.
 fn get_current_team_channel_name() -> Option<String> {
-    let mut retries = 5;
-    let pause_duration = Duration::from_secs(2);
+    let mut retries = FILE_READWRITE_N_RETRIES;
+    let pause_duration = Duration::from_secs(FILE_READWRITE_RETRY_SEC_PAUSE_MIN);
 
     loop {
         let channel_dir_path_str_result = read_state_string("current_node_directory_path.txt");
