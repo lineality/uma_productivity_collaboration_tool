@@ -7502,6 +7502,98 @@ fn get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(
 // }
 
 
+
+/// Removes a specific pre-fail flag file based on its ID (timestamp).
+///
+/// This function attempts to remove the flag file located at:
+/// `sync_data/{team_channel_name}/fail_retry_flags/{remote_collaborator_name}/{di_flag_id}`.
+/// It returns an `Ok(())` if the file is successfully removed or if the file
+/// doesn't exist (which isn't considered an error in this context, as the goal is
+/// simply to ensure the flag is *not* present). It returns an error only if a file
+/// operation *other than* `NotFound` occurs.
+///
+/// # Arguments
+///
+/// * `di_flag_id`: The document ID (timestamp) used as the flag file name.
+/// * `remote_collaborator_name`: The remote collaborator's name.
+/// * `team_channel_name`: The team channel name.
+///
+/// # Returns
+///
+/// * `Result<(), ThisProjectError>`: `Ok(())` on successful removal or if the
+/// file doesn't exist, or a `ThisProjectError` on other file operation errors.
+fn remove_one_prefail_flag__for_sendfile(
+    di_flag_id: u64,         // Use u64 directly, as the flag ID comes from a u64 timestamp.
+    remote_collaborator_name: &str, // Use &str for efficiency
+    team_channel_name: &str,   // Use &str for efficiency
+) -> Result<(), ThisProjectError> {
+    // ... (Your existing directory construction logic, unchanged)
+    let mut flag_file_path = PathBuf::from("sync_data");
+    flag_file_path.push(team_channel_name);
+    flag_file_path.push("fail_retry_flags");
+    flag_file_path.push(remote_collaborator_name);
+
+    // No directory.exists() check here: it's handled in the remove_file call.
+    
+    flag_file_path.push(di_flag_id.to_string());  // Use di_flag_id directly
+
+    match remove_file(flag_file_path) {
+        Ok(_) => {
+            debug_log!(
+                "remove_one...: Successfully removed flag with id: {}",
+                di_flag_id
+            );
+            Ok(())
+        }
+        Err(e) if e.kind() == ErrorKind::NotFound => {
+            debug_log!("remove_one...: Flag file not found (not an error): {}", di_flag_id);
+            Ok(()) // Not an error if the file isn't found.
+        }
+        Err(e) => {
+            debug_log!("remove_one...: Error removing flag file: {}", e);
+            Err(ThisProjectError::IoError(e))  // Return other errors
+        }
+    }
+}
+
+
+// /// Removes one pre-fail flag
+// /// the document id for got-it flag == .rt timestamp updatedat file timestamp
+// /// e.g. when sendque uses it for reboot
+// fn remove_one_prefail_flag__for_sendfile(
+//     di_flag_id: String, // docusment id flag timestamp
+//     remote_collaborator_name: String,
+//     team_channel_name: String,
+// ) -> Result<(), ThisProjectError> {
+//     let team_channel_name = get_current_team_channel_name()
+//         .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
+
+//     let directory = PathBuf::from("sync_data")
+//         .join(&team_channel_name)
+//         .join("fail_retry_flags")
+//         .join(remote_collaborator_name);
+
+//     if !directory.exists() { // Check for existance
+//         return Ok(()); // Or log a message: debug_log!("Directory not found: {:?}", directory);
+//     }
+
+//     // TODO HERE HERE 
+//     let flag_file_path = directory.join(di_flag_id.to_string());
+//     if flag_file_path.is_file() { // Only remove files
+//         match fs::remove_file(&path) { // Use remove_file, not remove_dir_all
+//             Ok(_) => debug_log!("Removed flag file: {:?}", path),
+//             Err(e) => {
+//                 debug_log!("Error removing flag file: {:?} - {}", path, e);
+//                 // Either continue or return the error if you want to stop on the first error.
+//                 return Err(ThisProjectError::IoError(e)); 
+//             }
+//         }
+//     }
+
+//     Ok(())
+// }
+
+
 /// Removes all pre-fail flag files for a remote collaborator.
 ///
 /// This function removes all files within the fail_retry_flags directory for the
@@ -9936,7 +10028,6 @@ fn get_or_create_send_queue(
                     back_of_queue_timestamp: oldest_prefail_flag_rt_timestamp,
                     items: Vec::new(),
                 };
-                // reset_sendq_flag = true;
                 debug_log!("inHRCD->get_or_create_send_queue  Resetting send queue using timestamp from flag: {}", oldest_prefail_flag_rt_timestamp);
                 debug_log("inHRCD->get_or_create_send_queue: found: prefailflag(s), make_a_new_queue_flag = true");
                 make_a_new_queue_flag = true
@@ -11011,6 +11102,12 @@ fn handle_remote_collaborator_meetingroom_desk(
         /////////////
         // Bootstrap
         /////////////
+        
+        // TODO
+        // setup: Get Team Channel Name
+        let team_channel_name = get_current_team_channel_name()
+            .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
+            
         // 1.2 Get Remote Collaborator's IP and Network Type
         debug_log("HRCD starting search for Remote Collaborator's IP");
 
@@ -11053,6 +11150,8 @@ fn handle_remote_collaborator_meetingroom_desk(
             items: Vec::new(),
         };
 
+        let remote_collaborator_name_clone = room_sync_input.remote_collaborator_name.clone();
+        
         // --- HRCD 1.5 Spawn a thread to handle recieving GotItSignal(s) and SendFile prefail-flag removal ---
         let gotit_thread = thread::spawn(move || {
             //////////////////////////////////////
@@ -11130,15 +11229,15 @@ fn handle_remote_collaborator_meetingroom_desk(
                         sync_data/team_channel/fail_flags/NAME-of-COLLABORATOR/DOC-ID
                         ```
                         
-                        remove_prefail_flag__for_sendfile(
-                            hash_array: &[u8],
-                            directory: &Path,
-                        )
-                        */
-                        
-                        // 1.5.6 update ~timestamp_of_latest_received_file_that_i_sent
-                        
 
+                        */
+
+                        remove_one_prefail_flag__for_sendfile(
+                            document_id, // di_flag_id: String,
+                            &remote_collaborator_name_clone, // remote_collaborator_name: String,
+                            &team_channel_name, // team_channel_name: String,
+                        );
+                        // 1.5.6 update ~timestamp_of_latest_received_file_that_i_sent
                             
                     // // 1.5.7 Sleep for a short duration (e.g., 100ms)
                     // thread::sleep(Duration::from_millis(1000));
@@ -11179,9 +11278,6 @@ fn handle_remote_collaborator_meetingroom_desk(
                 );
                 break;
             }
-
-            // // set before the loop
-            // let mut reset_sendq_flag: bool = false;
             
             // --- 2.2. Handle Ready Signal:  ---
             // "Listener"?
@@ -11421,22 +11517,6 @@ fn handle_remote_collaborator_meetingroom_desk(
                     )?;
                     
                     bootstrap_sendqueue = false;
-                    
-                    
-                    // session_send_queue = match session_send_queue {
-                    //     input_sendqueue => {
-                    //         get_or_create_send_queue(
-                    //             &this_team_channelname, // for team_channel_name
-                    //             &room_sync_input.local_user_name, // local owner user name
-                    //             input_sendqueue, // for session_send_queue
-                    //             rst_sent_ready_signal_timestamp, // for rst_sent_ready_signal_timestamp
-                    //         )?
-                    //     }
-                    // };
-                    
-                    // reset flag
-                    // reset_sendq_flag = false;
-                        
 
                     debug_log!(
                         "HRCD ->[]<- 3.3 Get / Make session_send_queue {:?}",
