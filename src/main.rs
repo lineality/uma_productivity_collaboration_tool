@@ -11770,6 +11770,16 @@ fn handle_remote_collaborator_meetingroom_desk(
                     from the last element to the first, 
                     removing each item as it's processed.
                     */
+                    
+                    debug_log!(
+                        "HRCD ->[cue]<- 4.3 Send One File from Queue, session_send_queue -> {:?}",
+                        session_send_queue   
+                    );
+                    // // testing
+                    // let id = thread::current().id();
+                    // debug_log!("The id of the current thread is: {:?}", id);
+                    
+                    
                     // 4. while: Send File: Send One File from Queue
                     if let ref mut queue = session_send_queue {
                         while let Some(file_path) = queue.items.pop() {
@@ -11778,8 +11788,6 @@ fn handle_remote_collaborator_meetingroom_desk(
                                 "HRCD 4.2 Send File: if/while let Some(file_path) = queue.items.pop()  file_path {:?}",
                                 file_path   
                             );
-                            
-
 
                             // 4.2.1 Get File Send Time
                             let intray_send_time = get_current_unix_timestamp(); 
