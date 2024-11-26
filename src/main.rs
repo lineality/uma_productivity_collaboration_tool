@@ -2254,9 +2254,9 @@ fn debug_log(message: &str) {
 }
 
 /// read timestamps from .toml files, like you were born to do just that...on Mars!!
-fn get_toml_file_timestamp(file_path: &Path) -> Result<u64, ThisProjectError> {
+fn get_toml_file_updated_at_timestamp(file_path: &Path) -> Result<u64, ThisProjectError> {
     debug_log!(
-        "Starting get_toml_file_timestamp, file_path -> {:?}",
+        "Starting get_toml_file_updated_at_timestamp, file_path -> {:?}",
         file_path   
     );
 
@@ -2275,7 +2275,7 @@ fn get_toml_file_timestamp(file_path: &Path) -> Result<u64, ThisProjectError> {
         })?;
 
     debug_log!(
-        "[Done] get_toml_file_timestamp, timestamp -> {:?}",
+        "[Done] get_toml_file_updated_at_timestamp, timestamp -> {:?}",
         timestamp   
     );
     
@@ -10342,7 +10342,7 @@ fn get_or_create_send_queue(
         }
     }
 
-    debug_log("inHRCD-> get_or_create_send_queue 11: calling, get_toml_file_timestamp(), Hello?");
+    debug_log("inHRCD-> get_or_create_send_queue 11: calling, get_toml_file_updated_at_timestamp(), Hello?");
 
     
     // Get update flag paths
@@ -10388,7 +10388,8 @@ fn get_or_create_send_queue(
 
     // Sort the files in the queue based on their modification time
     session_send_queue.items.sort_by_key(|path| {
-        get_toml_file_timestamp(path).unwrap_or(0) // Handle potential errors in timestamp retrieval
+        // get_toml_file_updated_at_timestamp(path).unwrap_or(0) // Handle potential errors in timestamp retrieval
+        std::cmp::Reverse(get_toml_file_updated_at_timestamp(path).unwrap_or(0)) // puts older items' first in queue
     });
 
     // Remove duplicates?
@@ -11082,7 +11083,7 @@ fn get_latest_timestamp_from_team_channel_dir() -> Result<u64, ThisProjectError>
         let entry = entry?; // Check for WalkDir errors
         let path = entry.path();
         if path.is_file() && path.extension() == Some(OsStr::new("toml")) { 
-            match get_toml_file_timestamp(path) {
+            match get_toml_file_updated_at_timestamp(path) {
                 Ok(timestamp) => { 
                     if timestamp > latest_timestamp {
                         latest_timestamp = timestamp;
@@ -11911,8 +11912,8 @@ fn handle_remote_collaborator_meetingroom_desk(
                                             
                                             // --- 4.7.3 Get Timestamp ---
                                             //  Timestamp Log is depricated (most likely)
-                                            debug_log("HRCD calling calling get_toml_file_timestamp(), yes...");
-                                            if let Ok(timestamp) = get_toml_file_timestamp(&file_path) {
+                                            debug_log("HRCD calling calling get_toml_file_updated_at_timestamp(), yes...");
+                                            if let Ok(timestamp) = get_toml_file_updated_at_timestamp(&file_path) {
                                             //     update_collaborator_sendqueue_timestamp_log(
                                             //         // TODO: Replace with the actual team channel name
                                             //         &this_team_channelname, 
