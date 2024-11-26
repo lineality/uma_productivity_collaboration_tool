@@ -4692,17 +4692,17 @@ fn read_all_newfile_sendq_flags_w_cleanup(
         }
 
 
-        // 3. Remove directory if empty:  Handle errors
-        if fs::read_dir(&flag_dir)?.next().is_none() { // Directory is now empty
-            if let Err(e) = fs::remove_dir(&flag_dir) { // Just remove the directory, not recursively
-                debug_log!(
-                    "read_all_newfile_sendq_flags_w_cleanup: Error removing empty directory: {}",
-                    e
-                );
-                // Handle error, e.g., continue or return
-                return Err(e.into());  // Or continue;
-            }
-        }
+        // // 3. Remove directory if empty:  Handle errors
+        // if fs::read_dir(&flag_dir)?.next().is_none() { // Directory is now empty
+        //     if let Err(e) = fs::remove_dir(&flag_dir) { // Just remove the directory, not recursively
+        //         debug_log!(
+        //             "read_all_newfile_sendq_flags_w_cleanup: Error removing empty directory: {}",
+        //             e
+        //         );
+        //         // Handle error, e.g., continue or return
+        //         return Err(e.into());  // Or continue;
+        //     }
+        // }
     }
     
 
@@ -9604,6 +9604,10 @@ fn handle_local_owner_desk(
                     let rc_network_type_string_2 = rc_network_type_string.clone();
                     let rc_ip_addr_string_2 = rc_ip_addr_string.clone();
                         
+                    // TODO: how long?
+                    // this lets last item run
+                    thread::sleep(Duration::from_secs(5));
+                        
                     send_ready_signal(
                         &local_owner_desk_setup_data.local_user_salt_list, // local_user_salt_list: &[u128], 
                         rc_network_type_string_2, // Remote collaborator's network type (ipv4, ipv6
@@ -10341,22 +10345,22 @@ fn get_or_create_send_queue(
     debug_log("inHRCD-> get_or_create_send_queue 11: calling, get_toml_file_timestamp(), Hello?");
 
     
-    // // Get update flag paths
-    // let newpath_list = match get_sendq_update_flag_paths(
-    //     team_channel_name, // No & needed now
-    //     localowneruser_name, // Correct collaborator name
-    // ) {
-    //     Ok(paths) => paths,
-    //     Err(e) => {
-    //         debug_log!("inHRCD->get_or_create_send_queue 2: Error getting update flag paths: {}", e);
-    //         return Err(e); // Or handle as needed
-    //     }
-    // };
+    // Get update flag paths
+    let newpath_list = match get_sendq_update_flag_paths(
+        team_channel_name, // No & needed now
+        localowneruser_name, // Correct collaborator name
+    ) {
+        Ok(paths) => paths,
+        Err(e) => {
+            debug_log!("inHRCD->get_or_create_send_queue 2: Error getting update flag paths: {}", e);
+            return Err(e); // Or handle as needed
+        }
+    };
 
-    // // Add new paths to the front of the queue
-    // for this_iter_newpath in newpath_list {
-    //     session_send_queue.add_to_front_of_sendq(this_iter_newpath); // Use the new method
-    // }
+    // Add new paths to the front of the queue
+    for this_iter_newpath in newpath_list {
+        session_send_queue.add_to_front_of_sendq(this_iter_newpath); // Use the new method
+    }
     
     
     //////////////
@@ -10365,22 +10369,22 @@ fn get_or_create_send_queue(
     // Check for new-file flags, add those to the queue 
     // this needs to be done ~last (before sorting is ok)
 
-    // --- Get new file paths and add them to the send queue ---
-    let new_file_paths_result = read_all_newfile_sendq_flags_w_cleanup(
-        remote_collaborator_name,
-        &team_channel_name, 
-    );
+    // // --- Get new file paths and add them to the send queue ---
+    // let new_file_paths_result = read_all_newfile_sendq_flags_w_cleanup(
+    //     remote_collaborator_name,
+    //     &team_channel_name, 
+    // );
     
-    // add to sendqueue
-    match new_file_paths_result {
-        Ok(new_file_paths) => {
-            session_send_queue.items.extend(new_file_paths); // Extend the items Vec directly
-        },
-        Err(e) => {
-            debug_log!("Error reading new file flags: {}", e);
-            // Handle error as needed
-        }
-    };
+    // // add to sendqueue
+    // match new_file_paths_result {
+    //     Ok(new_file_paths) => {
+    //         session_send_queue.items.extend(new_file_paths); // Extend the items Vec directly
+    //     },
+    //     Err(e) => {
+    //         debug_log!("Error reading new file flags: {}", e);
+    //         // Handle error as needed
+    //     }
+    // };
 
     // Sort the files in the queue based on their modification time
     session_send_queue.items.sort_by_key(|path| {
@@ -11456,6 +11460,7 @@ fn handle_remote_collaborator_meetingroom_desk(
         // For first-time bootstrap
         let mut bootstrap_sendqueue = true;
         
+        
         // --- 2. Enter Main Loop ---
         // enter main loop (to handling signals, sending)
         loop {
@@ -11501,12 +11506,22 @@ fn handle_remote_collaborator_meetingroom_desk(
                         rc_set_as_active = true;
                         debug_log("HRCD rc_set_as_active = true")
                     }
+                    
+                    
 
                     // --- Inspect Raw Bytes ---
                     debug_log!(
                         "HRCD 2.2.1 Ready Signal Raw bytes received: {:?}", 
                         &buf[..amt]
                     ); 
+                                        // --- Inspect Raw Bytes ---
+                    debug_log!(
+                        "HRCD thread::sleep(Duration::from_secs(3));", 
+                    ); 
+                    
+                    // TODO: how long?
+                    // this lets last item run
+                    thread::sleep(Duration::from_secs(5));
 
                     // --- Inspect Bytes as Hex ---
                     let hex_string = buf[..amt].iter()
@@ -11775,7 +11790,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                     */
                     
                     debug_log!(
-                        "HRCD ->[cue]<- 4.3 Send One File from Queue, session_send_queue -> {:?}",
+                        "HRCD ->[cue]<- 4.1 Send One File from Queue, session_send_queue -> {:?}",
                         session_send_queue   
                     );
                     // // testing
@@ -11785,8 +11800,19 @@ fn handle_remote_collaborator_meetingroom_desk(
                     
                     // 4. while: Send File: Send One File from Queue
                     if let ref mut queue = session_send_queue {
+                        
+                        debug_log!(
+                            "HRCD 4 before le pop, queue.items -> {:?}",
+                            queue.items   
+                        );
+                        
                         while let Some(file_path) = queue.items.pop() {
 
+                            debug_log!(
+                                "HRCD 4 after le pop, queue.items -> {:?}",
+                                queue.items   
+                            );
+                            
                             debug_log!(
                                 "HRCD 4.2 Send File: if/while let Some(file_path) = queue.items.pop()  file_path {:?}",
                                 file_path   
