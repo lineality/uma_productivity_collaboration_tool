@@ -10226,7 +10226,6 @@ fn get_or_create_send_queue(
                 debug_log("inHRCD->get_or_create_send_queue  No retry flags found. Using ReadySignal timestamp.");
                 // Handle the case where no pre-fail flags were found. Perhaps use the timestamp from the ready signal?
                 session_send_queue.back_of_queue_timestamp = ready_signal_rt_timestamp
-
             }
         }
         Err(e) => {
@@ -10243,22 +10242,7 @@ fn get_or_create_send_queue(
     }
     
     
-    // Get update flag paths
-    let newpath_list = match get_sendq_update_flag_paths(
-        team_channel_name, // No & needed now
-        localowneruser_name, // Correct collaborator name
-    ) {
-        Ok(paths) => paths,
-        Err(e) => {
-            debug_log!("inHRCD->get_or_create_send_queue 2: Error getting update flag paths: {}", e);
-            return Err(e); // Or handle as needed
-        }
-    };
 
-    // Add new paths to the front of the queue
-    for this_iter_newpath in newpath_list {
-        session_send_queue.add_to_front_of_sendq(this_iter_newpath); // Use the new method
-    }
     
 
 
@@ -10356,6 +10340,25 @@ fn get_or_create_send_queue(
 
     debug_log("inHRCD-> get_or_create_send_queue 11: calling, get_toml_file_timestamp(), Hello?");
 
+    
+    // // Get update flag paths
+    // let newpath_list = match get_sendq_update_flag_paths(
+    //     team_channel_name, // No & needed now
+    //     localowneruser_name, // Correct collaborator name
+    // ) {
+    //     Ok(paths) => paths,
+    //     Err(e) => {
+    //         debug_log!("inHRCD->get_or_create_send_queue 2: Error getting update flag paths: {}", e);
+    //         return Err(e); // Or handle as needed
+    //     }
+    // };
+
+    // // Add new paths to the front of the queue
+    // for this_iter_newpath in newpath_list {
+    //     session_send_queue.add_to_front_of_sendq(this_iter_newpath); // Use the new method
+    // }
+    
+    
     //////////////
     // New Files
     //////////////
