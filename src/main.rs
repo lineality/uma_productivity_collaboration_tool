@@ -10388,8 +10388,8 @@ fn get_or_create_send_queue(
 
     // Sort the files in the queue based on their modification time
     session_send_queue.items.sort_by_key(|path| {
-        // get_toml_file_updated_at_timestamp(path).unwrap_or(0) // Handle potential errors in timestamp retrieval
-        std::cmp::Reverse(get_toml_file_updated_at_timestamp(path).unwrap_or(0)) // puts older items' first in queue
+        get_toml_file_updated_at_timestamp(path).unwrap_or(0) // Handle potential errors in timestamp retrieval
+        // std::cmp::Reverse(get_toml_file_updated_at_timestamp(path).unwrap_or(0)) // puts older items' first in queue
     });
 
     // Remove duplicates?
