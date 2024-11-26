@@ -10387,11 +10387,17 @@ fn get_or_create_send_queue(
     // };
 
     // Sort the files in the queue based on their modification time
+    debug_log("Sequence of queue should be yougnest last, oldest first");
     session_send_queue.items.sort_by_key(|path| {
         get_toml_file_updated_at_timestamp(path).unwrap_or(0) // Handle potential errors in timestamp retrieval
         // std::cmp::Reverse(get_toml_file_updated_at_timestamp(path).unwrap_or(0)) // puts older items' first in queue
     });
-
+    debug_log!(
+        "session_send_queue.items -> {:?}",
+        session_send_queue.items   
+    );
+    
+    
     // Remove duplicates?
 
     // TODO(remove this later) extra Inspection here:
