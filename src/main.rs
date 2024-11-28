@@ -4555,7 +4555,7 @@ fn remove_non_alphanumeric(s: &str) -> String {
 /// Writes a new file send queue flag for each recipient in the given list.
 ///
 /// Creates a flag file for each recipient in the `recipients_list` under the directory:
-/// `sync_data/{team_channel_name}/sendqueue_updates/{recipient_name}/{filename}.txt`,
+/// `sync_data/{team_channel_name}/sendqueue_updates/{recipient_name}/{timestamp_flagfile_name}.txt`,
 /// where `filename` is the sanitized filename of `file_path`.
 ///
 /// # Arguments
@@ -4573,14 +4573,14 @@ fn write_newfile_sendq_flag(
     let team_channel_name = get_current_team_channel_name()
         .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
 
-    let filename = get_current_unix_timestamp();
+    let timestamp_flagfile_name = get_current_unix_timestamp();
 
     for recipient in recipients_list {
         let mut flag_path = PathBuf::from("sync_data");
         flag_path.push(&team_channel_name);
         flag_path.push("sendqueue_updates");
         flag_path.push(recipient);
-        flag_path.push(format!("{}.txt", filename)); // Use format! for filename
+        flag_path.push(format!("{}.txt", timestamp_flagfile_name));
 
         if let Some(parent_dir) = flag_path.parent() {
             create_dir_all(parent_dir)?;
@@ -7136,6 +7136,7 @@ fn get_active_collaborator_names() -> Result<Vec<String>, ThisProjectError> {
     }
 }
 
+/// depricated...this saves a name...
 /// Adds a file path to the send queue for all active collaborators in a team channel.
 ///
 /// This function creates a new file containing the file path to be sent. The file is placed in a directory structure under `sync_data`,
@@ -11487,6 +11488,7 @@ fn handle_remote_collaborator_meetingroom_desk(
             debug_log(
                 "HRCD  2.: Starting, restarting Main loop"
             ); 
+            
             // --- 2.1 Check for 'should_halt_uma' Signal ---
             if should_halt_uma() {
                 debug_log!(
@@ -11506,6 +11508,11 @@ fn handle_remote_collaborator_meetingroom_desk(
                         "HRCD 2.2.1 Ok((amt, src)) ready_port Signal Received {} bytes from {}", 
                         amt, 
                         src
+                    );
+                    
+                    debug_log!(
+                        "HRCD 2.2.1 check queue {:?}", 
+                        session_send_queue.items,
                     );
                     
                     if should_halt_uma() {
@@ -12619,11 +12626,13 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                         Some(name) => name,
                         None => "XYZ".to_string(),
                     }; 
-                    // save_updateflag_path_for_sendqueue
-                    save_updateflag_path_for_sendqueue(
-                        &this_team_channelname,
-                        &message_path, // Take PathBuf directly
-                    );
+                    
+                    // depricated
+                    // // save_updateflag_path_for_sendqueue
+                    // save_updateflag_path_for_sendqueue(
+                    //     &this_team_channelname,
+                    //     &message_path, // Take PathBuf directly
+                    // );
 
                     app.load_im_messages(); // Access using self
                 }
