@@ -1374,12 +1374,13 @@ fn hlod_udp_handshake__rc_network_type_rc_ip_addr(
         }
         // Then break out of this function main loop
         if should_halt_uma() {
-            debug_log!("hold_udp_handshake: should_halt_uma(), exiting Uma in handle_local_owner_desk()");
+            debug_log!("hold_udp_handshake: should_halt_uma(). Exiting hlod_upd_handshake()");
             break Ok((Default::default(), Default::default()));
         }
 
     } // loop end
 }
+
 
 // HEREHERE todo TODO fix this, not checking for likely duely noneexistant files
 /// Reads the remote collaborator's band data (network type, index, IP address). -> (network_type, network_index, rc_ip)
@@ -9660,6 +9661,7 @@ fn handle_local_owner_desk(
         "HLOD Exiting handle_local_owner_desk() for {}", 
         local_owner_desk_setup_data.local_user_name
     ); // Add collaborator name
+    debug_log(">*< Halt signal received. Exiting The Uma. Closing... handle_local_owner_desk() |o|");
 }
 }
 
@@ -12231,7 +12233,7 @@ fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
 
     // 1.5.1 Check for halt-uma signal
     if should_halt_uma() {
-        debug_log!(">*< Halt signal received. Exiting The Uma... in you_love_the_sync_team_office() |o|");
+        debug_log(">*< Halt signal received. Exiting The Uma. Closing... you_love_the_sync_team_office() |o|");
         return Ok(()); // Exit the function
     }
     
@@ -12618,6 +12620,8 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         }
     }
     debug_log("Finish: we love project loop.");
+    debug_log(">*< Halt signal received. Exiting The Uma. Closing... we_love_projects_loop() |o|");
+    
     Ok(())
 }
 
@@ -12791,9 +12795,7 @@ fn main() {
     loop { // Main loop: let it fail, and try again
 
         if should_not_hard_restart() { // Check for restart
-            debug_log(
-                "Halting handle_remote_collaborator_meetingroom_desk()"
-            );
+            debug_log("should_halt_uma(), exiting Uma in main()");
             break;
         }
 
@@ -12839,5 +12841,6 @@ fn main() {
         // End
         println!("All threads completed. The Uma says fare well and strive.");
         debug_log("All threads completed. The Uma says fare well and strive.");
+        debug_log(">*< Halt signal received. Exiting The Uma. Closing... main() |o|");
     }
 }
