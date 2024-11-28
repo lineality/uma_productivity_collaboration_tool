@@ -10395,6 +10395,10 @@ fn get_or_create_send_queue(
         get_toml_file_updated_at_timestamp(path).unwrap_or(0) // Handle potential errors in timestamp retrieval
         // std::cmp::Reverse(get_toml_file_updated_at_timestamp(path).unwrap_or(0)) // puts older items' first in queue
     });
+    
+    // reverse order so oldest are at the front
+    session_send_queue.items.reverse();
+    
     debug_log!(
         "session_send_queue.items -> {:?}",
         session_send_queue.items   
