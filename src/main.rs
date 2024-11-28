@@ -7960,7 +7960,7 @@ fn read_latestreceivedfromme_file_timestamp_plaintextstatefile(
 /// to collapse the entire system.
 ///
 /// the complimentary function is: read_latestreceivedfromme_file_timestamp_plaintextstatefile()
-fn read_latest_received_from_rc_filetimestamp_plaintextstatefile(
+fn read_rc_latest_received_from_rc_filetimestamp_plaintextstatefile(
     team_channel_name: &str,
     collaborator_name: &str,
 ) -> Result<u64, ThisProjectError> {
@@ -8016,7 +8016,7 @@ fn read_latest_received_from_rc_filetimestamp_plaintextstatefile(
 
 
 
-// fn read_latest_received_from_rc_filetimestamp_plaintextstatefile(
+// fn read_rc_latest_received_from_rc_filetimestamp_plaintextstatefile(
 //     team_channel_name: &str,
 //     collaborator_name: &str,
 // ) -> Result<u64, ThisProjectError> {
@@ -8055,7 +8055,7 @@ fn read_latest_received_from_rc_filetimestamp_plaintextstatefile(
 //         },
 //         Err(e) if e.kind() == ErrorKind::NotFound => {
 //             debug_log!(
-//                 "Error: glrfftptsf() getting timestamp: e'{}'e. Using0 inside read_latest_received_from_rc_filetimestamp_plaintextstatefile()",
+//                 "Error: glrfftptsf() getting timestamp: e'{}'e. Using0 inside read_rc_latest_received_from_rc_filetimestamp_plaintextstatefile()",
 //                 e,
 //             );
 //             // File not found, initialize to 0
@@ -8093,12 +8093,12 @@ fn read_latest_received_from_rc_filetimestamp_plaintextstatefile(
 // /// and both of you are using your and their 'latest_received' timestamps,
 // /// which are simultanously 'the same' abstract value but very different local-context-role-specific values
 // ///
-// /// The complimentary function is: `read_latest_received_from_rc_filetimestamp_plaintextstatefile()`.
+// /// The complimentary function is: `read_rc_latest_received_from_rc_filetimestamp_plaintextstatefile()`.
 // ///
 // /// Example location of use:
 // /// InTrayListerLoop in `handle_local_owner_desk()` after receiving and saving a file, 
 // /// this function is called to update the timestamp.  The complimentary function is 
-// /// `read_latest_received_from_rc_filetimestamp_plaintextstatefile()`, which is used in the 
+// /// `read_rc_latest_received_from_rc_filetimestamp_plaintextstatefile()`, which is used in the 
 // /// drone loop to refresh the timestamp.
 // fn write_latest_received_from_rc_filetimestamp_plaintextstatefile(
 //     remote_collaborator_name: &str,
@@ -9151,7 +9151,7 @@ fn handle_local_owner_desk(
             loop {
                 
                 // 1.1 Wait (and check for exit Uma)  this waits and checks N times: for i in 0..N {
-                for i in 0..5 {
+                for i in 0..10 {
                     // break for loop ?
                     if should_halt_uma() {
                         debug_log!("should_halt_uma(), exiting Uma in handle_local_owner_desk()");
@@ -9175,7 +9175,7 @@ fn handle_local_owner_desk(
                 sync_data/{team_channel}/latest_receivedfile_timestamps/bob/latest_receivedfromme_file_timestamp
                 */
 
-                latest_received_from_rc_file_timestamp = match read_latest_received_from_rc_filetimestamp_plaintextstatefile(
+                latest_received_from_rc_file_timestamp = match read_rc_latest_received_from_rc_filetimestamp_plaintextstatefile(
                     &team_channel_name,
                     &remote_collaborator_name_for_thread_2,
                 ) {
@@ -11548,7 +11548,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                     
                     // TODO: how long?
                     // this lets last item run
-                    thread::sleep(Duration::from_secs(5));
+                    // thread::sleep(Duration::from_secs(5));
 
                     // --- Inspect Bytes as Hex ---
                     let hex_string = buf[..amt].iter()
