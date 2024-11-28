@@ -73,7 +73,7 @@ use std::io::{
     Write,
     // Read,
 };
-use std::str::FromStr; 
+// use std::str::FromStr; 
 use std::process::Stdio;
 use std::error::Error as StdError; 
 use walkdir::WalkDir;
@@ -1012,7 +1012,7 @@ fn write_local_band__save_network_band__type_index(
     this_ipv6: Ipv6Addr,
 ) -> Result<(), ThisProjectError> {
     // 1. Construct Path:
-    let mut base_path = PathBuf::from("sync_data");
+    let base_path = PathBuf::from("sync_data");
 
     // 2. Create Directory (if doesn't exist)
     create_dir_all(&base_path)?;
@@ -5087,7 +5087,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         // // load names of current collaborators to check for collisions: TODO
         // if check_collaborator_name_collision();
 
-        let mut rng = rand::thread_rng(); 
+        // let mut rng = rand::thread_rng(); 
         
         // let updated_at_timestamp = get_current_unix_timestamp()
         
@@ -9315,6 +9315,7 @@ fn handle_local_owner_desk(
                     
                     let mut incoming_intray_file_struct: SendFile = match deserialize_intray_send_file_struct(&buf[..amt]) {
                         Ok(incoming_intray_file_struct) => {
+                            debug_log("HLOD-InTray 2.3 SendFile listener: Receive File Data...do you copy, gold leader... >*<");
 
                             debug_log!("HLOD-InTray 2.3 Deserialize Ok(incoming_intray_file_struct) {}: Received SendFile: {:?}",
                                 local_owner_desk_setup_data.remote_collaborator_name, 
@@ -11356,6 +11357,12 @@ fn handle_remote_collaborator_meetingroom_desk(
             back_of_queue_timestamp: 0,
             items: Vec::new(),
         };
+        
+        debug_log!(
+            // this does require &
+            "HRCD 1.5.2 check: new session_send_queue.items -> {:?} (Should be empty...)", 
+            session_send_queue.items
+        ); 
 
         let remote_collaborator_name_clone = room_sync_input.remote_collaborator_name.clone();
         
@@ -11367,7 +11374,7 @@ fn handle_remote_collaborator_meetingroom_desk(
 
             loop { // gotit loop
                 debug_log(
-                    "HRCD Got it loop starting."
+                    "HRCD Got it loop starting. GotItloop"
                 ); 
                 // 1.5.1 Check for halt-uma signal
                 if should_halt_uma() {
@@ -12813,7 +12820,7 @@ fn main() {
                 eprintln!("Initialization failed: {}", e);
                 debug_log!("Initialization failed: {}", e);  
                 std::process::exit(1);
-                break;
+                // break;
             }
         }
         
