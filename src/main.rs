@@ -8503,7 +8503,7 @@ fn handle_local_owner_desk(
                     })?;
                     
                     // TODO for not only handling IM files
-                    if !file_str.contains("filepath_in_node = '/instant_message_browser'") {
+                    if !file_str.contains("filepath_in_node = \"/instant_message_browser\"") {
                         debug_log!("HLOD-InTray: Not an instant message file. Skipping.");
                         continue;
                     }
