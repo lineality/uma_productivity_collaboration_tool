@@ -8684,7 +8684,7 @@ fn send_ready_signal(
     local_user_network_type: &str, // LOU needed for .b section
     local_user_network_index: u8,  // LOU needed for .b section
 ) -> Result<(), ThisProjectError> {
-    debug_log!("send_ready_signal(), Starting...");
+    debug_log!("send_ready_signal()1: Starting...");
 
     // for ready_signal.b
     let b_band_data = match compress_band_data_byte(
@@ -8695,7 +8695,7 @@ fn send_ready_signal(
         Err(e) => {
             // Handle the error here. You could print an error message, return from the function,
             // or do something else depending on your specific needs.
-            eprintln!("send_ready_signal() Error compressing band data: {:?}", e);
+            eprintln!("send_ready_signal()2: Error compressing band data: {:?}", e);
             return Ok(());
         }
     };
@@ -8722,11 +8722,11 @@ fn send_ready_signal(
         b: b_band_data,
         rh: hashes,
     };
-    debug_log!("send_ready_signal(): ReadySignal created: {:?}", ready_signal);
+    debug_log!("send_ready_signal()3: ReadySignal created: {:?}", ready_signal);
 
     // 3. Serialize
     let serialized_signal = serialize_ready_signal(&ready_signal)?;
-    debug_log!("send_ready_signal(): ReadySignal serialized.");
+    debug_log!("send_ready_signal()4: ReadySignal serialized.");
 
     // 4. Determine target IP based on network_type:
     let send_readysignal_ip_addr = match rc_network_type_string {
@@ -8744,9 +8744,9 @@ fn send_ready_signal(
     let target_addr = SocketAddr::new(send_readysignal_ip_addr, target_port);
 
     // 5. Send the signal
-    debug_log!("send_ready_signal(): Sending ReadySignal to: {:?}", target_addr);
+    debug_log!("send_ready_signal()4: Sending ReadySignal to: {:?}", target_addr);
     send_data(&serialized_signal, target_addr)?;
-    debug_log!("send_ready_signal(): ReadySignal sent successfully.");
+    debug_log!("send_ready_signal()5: ReadySignal sent successfully.");
 
     Ok(())
 }
@@ -9579,7 +9579,7 @@ fn handle_local_owner_desk(
                     );
 
                     // Now you have the received_file_updatedat_timestamp timestamp
-                    debug_log!("Received file was updated_at: {}", received_file_updatedat_timestamp);
+                    debug_log!("7.3 HLOD-InTray: Received file was updated_at: {}", received_file_updatedat_timestamp);
                     // println!("Received file updated at: {}", received_file_updatedat_timestamp);
                     
                     // 1.4 Send Echo Ready Signal (using a function)
@@ -9591,9 +9591,8 @@ fn handle_local_owner_desk(
                             (because context= filesync timeline ID)
                         gh: Option<Vec<u8>>, // N hashes of rt + re
                     */
-                    thread::sleep(Duration::from_secs(4));
-                    
 
+                    debug_log("7.3 HLOD-InTray: send_gotit_signal ");
                     send_gotit_signal(
                         &local_owner_desk_setup_data.local_user_salt_list,
                         &band_local_user_ipv4_address, // local_user_ipv4_address: &Ipv4Addr, 
@@ -9603,7 +9602,6 @@ fn handle_local_owner_desk(
                         received_file_updatedat_timestamp, // as di
                     );
 
-
                     // 1.4 Send Echo Ready Signal (using a function)
                     // 2nd copy for other threads
                     let rc_network_type_string_2 = rc_network_type_string.clone();
@@ -9612,13 +9610,14 @@ fn handle_local_owner_desk(
                     // TODO: how long?
                     // this lets last item run
                     thread::sleep(Duration::from_secs(5));
-                        
+                    thread::sleep(Duration::from_secs(4));
+                                 
                     send_ready_signal(
                         &local_owner_desk_setup_data.local_user_salt_list, // local_user_salt_list: &[u128], 
                         rc_network_type_string_2, // Remote collaborator's network type (ipv4, ipv6
                         rc_ip_addr_string_2,  // Remote collaborator's IP string
                         local_owner_desk_setup_data.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip,
-                        latest_received_from_rc_file_timestamp, // last_received_timestamp: u64, // for rst
+                        received_file_updatedat_timestamp, // last_received_timestamp: u64, // for rst
                         &band_local_network_type, // network_type: String, // for nt
                         band_local_network_index, //network_index: u8, // for ni
                     )?;
