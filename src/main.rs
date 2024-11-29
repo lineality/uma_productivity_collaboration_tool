@@ -7097,18 +7097,34 @@ fn get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(
                 return Err(ThisProjectError::from(e));
             }
         }
-
-        // 3. Delete all flag files *after* reading the timestamp:
-        for entry in fs::read_dir(&prefail_directory)? {
-            let entry = entry?;
-            let path = entry.path();
-            if path.is_file() {
-                if let Err(e) = fs::remove_file(&path) { // Use &path
-                    debug_log!("get_oldest prefail: Error removing flag file {:?}: {}", path, e);
+        // 3. Delete oldest flag
+        // TODO alpha version: remove only oldest flag
+        match fs::read_to_string(&path) { // Read content (rt timestamp)
+            Ok(pathtemp) => {
+                if let Err(e) = fs::remove_file(pathtemp) { // Use &path
+                    debug_log!(
+                        "get_oldest prefail: Error removing oldest_file_path flag file {:?}: {}",
+                        path,
+                        e);
                     return Err(ThisProjectError::from(e)); // Or handle error as needed
                 }
+            },
+            Err(e) => {
+                debug_log!("get_oldest prefail: Error in remove_file {:?}: {}", path, e);
+                return Err(ThisProjectError::from(e));
             }
         }
+
+        // for entry in fs::read_dir(&prefail_directory)? {
+        //     let entry = entry?;
+        //     let path = entry.path();
+        //     if path.is_file() {
+        //         if let Err(e) = fs::remove_file(&path) { // Use &path
+        //             debug_log!("get_oldest prefail: Error removing flag file {:?}: {}", path, e);
+        //             return Err(ThisProjectError::from(e)); // Or handle error as needed
+        //         }
+        //     }
+    
     }
 
     Ok(oldest_timestamp)
@@ -7169,6 +7185,9 @@ fn remove_one_prefail_flag__for_sendfile(
         }
     }
 }
+
+
+
 
 /// Removes all pre-fail flag files for a remote collaborator.
 ///
@@ -8191,9 +8210,13 @@ fn handle_local_owner_desk(
         // 3. InTrayListerLoop Start
         ////////////////////////////
 
-        // 3.1 hash_set_session_nonce = HashSet::new() as protection against replay attacks Create a HashSet to store received hashes
-        let mut hash_set_session_nonce = HashSet::new();  // Create a HashSet to store received hashes
-
+        // 3.1 intrystruct_hash_set_session_nonce = HashSet::new() as protection against replay attacks Create a HashSet to store received hashes
+        let mut intrystruct_hash_set_session_nonce = HashSet::new();  // Create a HashSet to store received hashes
+        
+        // to discard duplicate files already saved
+        // TODO: to scale this should be perhaps a stub-file flag
+        let mut file_hash_set_session_nonce = HashSet::new();  // Create a HashSet to store received hashes
+        
         // --- 2. Enter In-Try-loop ---
         // restarts if crashes
         // enter main loop (to handle in-tray Send-File, gotit signl sending, 'echo' ready-signal sending)
@@ -8322,14 +8345,12 @@ fn handle_local_owner_desk(
                         continue;
                     }
 
-                    // TODO: not 'Option' so is this needed?
                     // 3.2.3 Check .intray_hash_list hash
                     if incoming_intray_file_struct.intray_hash_list.is_none() {
                         debug_log("HLOD 2.4.4 Check: intray_hash_list hash field is empty. Drop packet and keep going.");
                         continue; // Drop packet: Restart the loop to listen for the next signal
                     }
 
-                    // TODO: not 'Option' so is this needed?
                     // 3.2.4 Check .intray_send_time timestamp
                     if incoming_intray_file_struct.intray_send_time.is_none() {
                         debug_log("HLOD 2.4.5 Check: intray_send_time ready signal sent-at timestamp field is empty. Drop packet and keep going.");
@@ -8343,11 +8364,11 @@ fn handle_local_owner_desk(
 
                     // 4.2
                     if !incoming_intray_file_struct_hash_vec.is_empty() {
-                        if hash_set_session_nonce.contains(&incoming_intray_file_struct_hash_vec) {
+                        if intrystruct_hash_set_session_nonce.contains(&incoming_intray_file_struct_hash_vec) {
                             debug_log!("HLOD 4.2 quasi nonce check: Duplicate SendFile received (hash match). Discarding.");
                             continue; // Discard the duplicate signal
                         }
-                        hash_set_session_nonce.insert(incoming_intray_file_struct_hash_vec); // Add hash to the set
+                        intrystruct_hash_set_session_nonce.insert(incoming_intray_file_struct_hash_vec); // Add hash to the set
                     } else {
                         debug_log!("HLOD 4.2 quasi nonce check: SendFile received without hashes. Discarding."); // Or handle differently
                         continue;
@@ -8481,7 +8502,8 @@ fn handle_local_owner_desk(
                         ThisProjectError::InvalidData("Invalid UTF-8 in file content".into())
                     })?;
                     
-                    if !file_str.contains("filepath_in_node = \"/instant_message_browser\"") {
+                    // TODO for not only handling IM files
+                    if !file_str.contains("filepath_in_node = '/instant_message_browser'") {
                         debug_log!("HLOD-InTray: Not an instant message file. Skipping.");
                         continue;
                     }
@@ -8508,6 +8530,31 @@ fn handle_local_owner_desk(
                         "HLOD 7.2 got-made message_path -> {:?}",
                         message_path
                     );
+                    
+                    
+                    // check: see if this same file was already saved
+                    // 1. Calculate the hash of the received file content using the *local* user's salts and the *raw bytes*:
+                    let received_file_hash_result = calculate_pearson_hashlist_for_string( // Use a byte-oriented hash function
+                        &file_str,  // Hash the raw bytes
+                        &local_owner_desk_setup_data.local_user_salt_list, // Use *local* user's salts
+                    );
+                    
+                    let received_file_hash = match received_file_hash_result {
+                        Ok(hash) => hash,
+                        Err(e) => {
+                            debug_log!("Error calculating hash for received file: {}", e);
+                            continue; // Skip to next file if hashing fails
+                        }
+                    };
+                    
+                    // 2. Check for duplicates and insert the hash (as before)
+                    if file_hash_set_session_nonce.contains(&received_file_hash) {
+                        debug_log!("Duplicate file received (hash match). Discarding.");
+                        continue; // Discard the duplicate file
+                    }
+                    file_hash_set_session_nonce.insert(received_file_hash); // Insert BEFORE saving
+                                        
+                    
                     
                     // 3. Saving the File
                     if let Err(e) = fs::write(&message_path, &extacted_clearsigned_data) {
@@ -8571,6 +8618,11 @@ fn handle_local_owner_desk(
                         localowner_gotit_port,
                         received_file_updatedat_timestamp, // as di
                     );
+                    
+                    
+                    //
+                    
+
 
                     // 1.4 Send Echo Ready Signal (using a function)
                     // 2nd copy for other threads
@@ -9933,8 +9985,8 @@ fn handle_remote_collaborator_meetingroom_desk(
         // 1.6.1 zero_timestamp_counter = 0 for ready signal send-at timestamps
         let mut zero_timestamp_counter = 0;
         
-        // 1.6.2 hash_set_session_nonce = HashSet::new() as protection against replay attacks Create a HashSet to store received hashes
-        let mut hash_set_session_nonce = HashSet::new();  // Create a HashSet to store received hashes
+        // 1.6.2 intrystruct_hash_set_session_nonce = HashSet::new() as protection against replay attacks Create a HashSet to store received hashes
+        let mut intrystruct_hash_set_session_nonce = HashSet::new();  // Create a HashSet to store received hashes
 
         let mut rc_set_as_active = false;
         
@@ -10072,11 +10124,11 @@ fn handle_remote_collaborator_meetingroom_desk(
                     let ready_signal_hash_vec = ready_signal.rh.clone();
 
                     if !ready_signal_hash_vec.is_empty() {
-                        if hash_set_session_nonce.contains(&ready_signal_hash_vec) {
+                        if intrystruct_hash_set_session_nonce.contains(&ready_signal_hash_vec) {
                             debug_log!("HRCD 2.6 quasi nonce check: Duplicate ReadySignal received (hash match). Discarding.");
                             continue; // Discard the duplicate signal
                         }
-                        hash_set_session_nonce.insert(ready_signal_hash_vec); // Add hash to the set
+                        intrystruct_hash_set_session_nonce.insert(ready_signal_hash_vec); // Add hash to the set
                     } else {
                         debug_log!("HRCD 2.6 quasi nonce check: ReadySignal received without hashes. Discarding."); // Or handle differently
                         continue;
