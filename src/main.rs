@@ -1813,8 +1813,6 @@ pub fn verify_toml_signature(file_path: &Path) -> Result<(), Error> {
     }
 }
 
-
-
 fn debug_log(message: &str) {
     if DEBUG_FLAG {
         let mut file = OpenOptions::new()
@@ -1825,6 +1823,18 @@ fn debug_log(message: &str) {
     
         writeln!(file, "{}", message).expect("Failed to write to log file");
     }
+}
+
+fn debugpause(n: u64) {
+    debug_log("DebugPause Time!");
+    let wait_until = SystemTime::now() + Duration::from_secs(n);
+    loop {
+        if SystemTime::now() >= wait_until {
+            break;
+        }
+        thread::sleep(Duration::from_millis(2000));
+    }
+    debug_log("...ok");
 }
 
 /// read timestamps from .toml files, like you were born to do just that...on Mars!!
@@ -7034,12 +7044,12 @@ fn set_prefail_flag_rt_timestamp__for_sendfile(
 fn get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(
     remote_collaborator_name: &str,
 ) -> Result<u64, ThisProjectError> {
-    debug_log("starting get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup()");
+    debug_log("get_oldest prefail: starting get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup()");
     let mut oldest_timestamp = 0u64;
     let mut oldest_file_path: Option<PathBuf> = None; // Store path to the oldest file
 
     let team_channel_name = get_current_team_channel_name()
-        .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
+        .ok_or(ThisProjectError::InvalidData("get_oldest prefail... Unable to get team channel name".into()))?;
 
     let prefail_directory = PathBuf::from("sync_data")
         .join(&team_channel_name)
@@ -7048,7 +7058,7 @@ fn get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(
 
     if !prefail_directory.exists() {
         debug_log!(
-            "get_oldest_sendfile...: Directory {:?} not found. Returning 0.",
+            "get_oldest...: Directory {:?} not found. Returning 0.",
             prefail_directory
         );
         return Ok(0);
@@ -7056,12 +7066,14 @@ fn get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(
 
     // 1. Find the oldest file:
     for entry in fs::read_dir(&prefail_directory)? {
-        debug_log!(
-            "get_oldest_sendfile... entry -> {:?}",
-            entry
-        );
         let entry = entry?;
         let path = entry.path();
+        
+        debug_log!(
+            "get_oldest prefail... path -> {:?}",
+            path
+        );
+        
         if path.is_file() {
             let file_name = path.file_name().and_then(|n| n.to_str()).ok_or(ThisProjectError::InvalidData("Invalid flag file name".into()))?;
             let file_updated_at: u64 = file_name.parse().map_err(|_| ThisProjectError::InvalidData("Invalid timestamp in flag file name".into()))?;
@@ -7078,10 +7090,10 @@ fn get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(
         match fs::read_to_string(&path) { // Read content (rt timestamp)
             Ok(content) => {
                 oldest_timestamp = content.trim().parse().map_err(|_| ThisProjectError::InvalidData("Invalid .rt timestamp in flag file".into()))?;
-                debug_log!("Oldest .rt timestamp found: {}", oldest_timestamp);
+                debug_log!("get_oldest prefail: Oldest .rt timestamp found: {}", oldest_timestamp);
             },
             Err(e) => {
-                debug_log!("Error reading .rt timestamp from file {:?}: {}", path, e);
+                debug_log!("get_oldest prefail: Error reading .rt timestamp from file {:?}: {}", path, e);
                 return Err(ThisProjectError::from(e));
             }
         }
@@ -7092,7 +7104,7 @@ fn get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(
             let path = entry.path();
             if path.is_file() {
                 if let Err(e) = fs::remove_file(&path) { // Use &path
-                    debug_log!("Error removing flag file {:?}: {}", path, e);
+                    debug_log!("get_oldest prefail: Error removing flag file {:?}: {}", path, e);
                     return Err(ThisProjectError::from(e)); // Or handle error as needed
                 }
             }
@@ -10304,6 +10316,9 @@ fn handle_remote_collaborator_meetingroom_desk(
                             }
                             debug_log!("HRCD 4.7.2 prefail flag set using timestamp {:?}", &ready_signal.rt);
                             
+                            
+                            debugpause(30);
+                            
                             debug_log!(
                                 "HRCD 4.6-7 Create sendfile_struct {:?}",
                                 sendfile_struct   
@@ -11194,7 +11209,6 @@ fn main() {
             we_love_projects_loop();
         });
 
-        
         // Thread 2: Executes the thread2_loop function
         if online_mode {
             let you_love_the_sync_team_office = thread::spawn(move || {
@@ -11202,7 +11216,6 @@ fn main() {
             });
             you_love_the_sync_team_office.join().unwrap(); // Wait for finish
         };
-        
         
         we_love_projects_loop.join().unwrap(); // Wait for finish
         // if online_mode {
