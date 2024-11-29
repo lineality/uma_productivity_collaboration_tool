@@ -7549,7 +7549,7 @@ fn get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(
 /// It returns an `Ok(())` if the file is successfully removed or if the file
 /// doesn't exist (which isn't considered an error in this context, as the goal is
 /// simply to ensure the flag is *not* present). It returns an error only if a file
-/// operation *other than* `NotFound` occurs.
+/// operation other than `NotFound` occurs.
 ///
 /// # Arguments
 ///
@@ -7581,59 +7581,21 @@ fn remove_one_prefail_flag__for_sendfile(
     match remove_file(flag_file_path) {
         Ok(_) => {
             debug_log!(
-                "remove_one...: Successfully removed flag with id: {}",
+                "remove_one_prefail_flag__for_sendfile(): Successfully removed flag with id: {}",
                 di_flag_id
             );
             Ok(())
         }
         Err(e) if e.kind() == ErrorKind::NotFound => {
-            debug_log!("remove_one...: Flag file not found: {}", di_flag_id);
+            debug_log!("remove_one_prefail_flag__for_sendfile(): Flag file not found: {}", di_flag_id);
             Ok(()) // Not an error if the file isn't found.
         }
         Err(e) => {
-            debug_log!("remove_one...: Error removing flag file: {}", e);
+            debug_log!("remove_one_prefail_flag__for_sendfile(): Error removing flag file: {}", e);
             Err(ThisProjectError::IoError(e))  // Return other errors
         }
     }
 }
-
-
-// /// Removes one pre-fail flag
-// /// the document id for got-it flag == .rt timestamp updatedat file timestamp
-// /// e.g. when sendque uses it for reboot
-// fn remove_one_prefail_flag__for_sendfile(
-//     di_flag_id: String, // docusment id flag timestamp
-//     remote_collaborator_name: String,
-//     team_channel_name: String,
-// ) -> Result<(), ThisProjectError> {
-//     let team_channel_name = get_current_team_channel_name()
-//         .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
-
-//     let directory = PathBuf::from("sync_data")
-//         .join(&team_channel_name)
-//         .join("fail_retry_flags")
-//         .join(remote_collaborator_name);
-
-//     if !directory.exists() { // Check for existance
-//         return Ok(()); // Or log a message: debug_log!("Directory not found: {:?}", directory);
-//     }
-
-//     // TODO HERE HERE 
-//     let flag_file_path = directory.join(di_flag_id.to_string());
-//     if flag_file_path.is_file() { // Only remove files
-//         match fs::remove_file(&path) { // Use remove_file, not remove_dir_all
-//             Ok(_) => debug_log!("Removed flag file: {:?}", path),
-//             Err(e) => {
-//                 debug_log!("Error removing flag file: {:?} - {}", path, e);
-//                 // Either continue or return the error if you want to stop on the first error.
-//                 return Err(ThisProjectError::IoError(e)); 
-//             }
-//         }
-//     }
-
-//     Ok(())
-// }
-
 
 /// Removes all pre-fail flag files for a remote collaborator.
 ///
@@ -7683,11 +7645,9 @@ fn remove_prefail_flags__for_sendfile(
     Ok(())
 }
 
-
 // let timestamp_request_port = // ... port for sending "ready to receive" to collaborator
 // let file_receive_port = // ...  port for receiving files from collaborator 
 // let receipt_confirmation_port = // ... port for sending confirmations to collaborator
-
 fn send_data(data: &[u8], target_addr: SocketAddr) -> Result<(), io::Error> { 
     let socket = UdpSocket::bind(":::0")?; 
     socket.send_to(data, target_addr)?;
@@ -7769,8 +7729,6 @@ fn read_latestreceivedfromme_file_timestamp_plaintextstatefile(
     }
 }
 
-
-
 /// Gets the latest received file timestamp for a collaborator in a team channel, using a plain text file.
 ///
 /// As another thread may be reading/writing the file, there 
@@ -7779,7 +7737,8 @@ fn read_latestreceivedfromme_file_timestamp_plaintextstatefile(
 /// This function reads the timestamp from a plain text file at:
 /// `sync_data/{team_channel_name}/latest_receivedfile_timestamps/
 /// {collaborator_name}/latest_received_from_rc_filetimestamp.txt`
-/// If the file or directory structure doesn't exist, it creates them and initializes the timestamp to 0.
+/// If the file or directory structure doesn't exist, 
+/// it creates them and initializes the timestamp to 0.
 ///
 /// # Arguments
 ///
@@ -7861,117 +7820,6 @@ fn read_rc_latest_received_from_rc_filetimestamp_plaintextstatefile(
     }
 }
 
-
-
-// fn read_rc_latest_received_from_rc_filetimestamp_plaintextstatefile(
-//     team_channel_name: &str,
-//     collaborator_name: &str,
-// ) -> Result<u64, ThisProjectError> {
-//     /*
-//     upgrade needs to use these:
-    
-//     Wait random time in A to B range, N times
-//     FILE_READWRITE_N_RETRIES
-//     FILE_READWRITE_RETRY_SEC_PAUSE_MIN
-//     FILE_READWRITE_RETRY_SEC_PAUSE_max
-//     */
-    
-//     let mut file_path = PathBuf::from("sync_data");
-//     file_path.push(team_channel_name);
-//     file_path.push("latest_receivedfile_timestamps");
-//     file_path.push(collaborator_name);
-//     file_path.push("latest_received_from_rc_filetimestamp.txt");
-
-//     // Create directory structure if it doesn't exist
-//     if let Some(parent) = file_path.parent() {
-//         create_dir_all(parent)?;
-//     }
-
-//     // Read or initialize the timestamp
-//     match read_to_string(&file_path) {
-//         Ok(timestamp_str) => {
-//             // if let Ok(timestamp) = timestamp_str.trim().parse() {
-//             // Parse with error handling
-//             match timestamp_str.trim().parse::<u64>() {
-//                 Ok(timestamp) => Ok(timestamp),
-//                 Err(e) => {
-//                     debug_log!("Error parsing timestamp from file: {}", e);
-//                     Err(ThisProjectError::from(e))
-//                 }
-//             }
-//         },
-//         Err(e) if e.kind() == ErrorKind::NotFound => {
-//             debug_log!(
-//                 "Error: glrfftptsf() getting timestamp: e'{}'e. Using0 inside read_rc_latest_received_from_rc_filetimestamp_plaintextstatefile()",
-//                 e,
-//             );
-//             // File not found, initialize to 0
-//             let mut file = File::create(&file_path)?;
-//             file.write_all(b"0")?; // Write zero timestamp
-//             Ok(0)
-//         }
-//         Err(e) => Err(ThisProjectError::IoError(e)), // Other IO errors
-//     }
-// }
-
-
-// /// Sets the latest received file timestamp from the remote collaborator (RC) in a team channel, using a plain text file.
-// ///
-// /// This function writes the given `timestamp` to a plain text file at:
-// /// `sync_data/{team_channel_name}/latest_receivedfile_timestamps/{collaborator_name}/latest_received_from_rc_filetimestamp.txt`
-// /// If the file or directory structure doesn't exist, it creates them.
-// ///
-// /// # Arguments
-// ///
-// /// * `team_channel_name`: The name of the team channel.
-// /// * `collaborator_name`: The name of the remote collaborator (RC).
-// /// * `timestamp`: The timestamp to write to the file.
-// ///
-// /// # Returns
-// ///
-// /// * `Result<(), ThisProjectError>`:  `Ok(())` on success, or a `ThisProjectError` if an error occurs (e.g., during file or directory creation, or writing to the file).
-// ///
-// /// This function is used to store the latest `updated_at_timestamp` received from files sent by the remote collaborator. 
-// /// This timestamp is used to track synchronization progress and avoid sending redundant files.
-// ///
-// /// This is one of those values and functions that can be confusing
-// /// because both you and your remote collaborator have quasi-mirror-image sync systems
-// /// with reversed roles. Both of you are making 'latest_received' timestamps
-// /// and both of you are using your and their 'latest_received' timestamps,
-// /// which are simultanously 'the same' abstract value but very different local-context-role-specific values
-// ///
-// /// The complimentary function is: `read_rc_latest_received_from_rc_filetimestamp_plaintextstatefile()`.
-// ///
-// /// Example location of use:
-// /// InTrayListerLoop in `handle_local_owner_desk()` after receiving and saving a file, 
-// /// this function is called to update the timestamp.  The complimentary function is 
-// /// `read_rc_latest_received_from_rc_filetimestamp_plaintextstatefile()`, which is used in the 
-// /// drone loop to refresh the timestamp.
-// fn write_latest_received_from_rc_filetimestamp_plaintextstatefile(
-//     remote_collaborator_name: &str,
-//     timestamp: u64, // Added timestamp argument
-// ) -> Result<(), ThisProjectError> {
-    
-//     // --- Get team channel name ---
-//     let team_channel_name = get_current_team_channel_name()
-//         .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
-    
-//     let mut file_path = PathBuf::from("sync_data");
-//     file_path.push(team_channel_name);
-//     file_path.push("latest_receivedfile_timestamps");
-//     file_path.push(remote_collaborator_name);
-//     file_path.push("latest_received_from_rc_filetimestamp.txt");
-
-//     if let Some(parent) = file_path.parent() {
-//         create_dir_all(parent)?;
-//     }
-
-//     // Write the timestamp to the file
-//     std::fs::write(file_path, timestamp.to_string())?; // Changed to write
-
-//     Ok(()) // Return Ok(()) on success
-// }
-
 /// Gets the latest received file's `updated_at_timestamp` for a collaborator.
 ///
 /// Crawls the team channel directory, finds TOML files owned by the collaborator,
@@ -7996,7 +7844,6 @@ fn actual_latest_received_from_rc_file_timestamp(
         "read_latestreceivedfromme_file_timestamp_plaintextstatefile(): Starting GLRFRCFT team_channel_path: {:?}, collaborator_name: {}",
         team_channel_path, collaborator_name
     );
-
 
     // 1. Crawl the team channel directory:
     for entry in walkdir::WalkDir::new(team_channel_path) { // Use walkdir to traverse subdirectories
@@ -8121,113 +7968,11 @@ fn write_save_latest_received_from_rc_file_timestamp_plaintext(
     }
 }
 
-
-// fn write_save_latest_received_from_rc_file_timestamp_plaintext(
-//     team_channel_name: &str,
-//     remote_collaborator_name: &str,
-//     timestamp: u64,
-// ) -> Result<(), ThisProjectError> {
-//     /*
-//     Wait random time in A to B range, N times
-//     FILE_READWRITE_N_RETRIES
-//     FILE_READWRITE_RETRY_SEC_PAUSE_MIN
-//     FILE_READWRITE_RETRY_SEC_PAUSE_max
-//     */
-//     let mut file_path = PathBuf::from("sync_data");
-//     file_path.push(team_channel_name);
-//     file_path.push("latest_receivedfile_timestamps");
-//     file_path.push(remote_collaborator_name);
-//     file_path.push("latest_received_from_rc_filetimestamp.txt");
-
-//     // Create directory structure if it doesn't exist
-//     if let Some(parent) = file_path.parent() {
-//         create_dir_all(parent)?;
-//     }
-
-//     // Write the timestamp to the file, overwriting any previous content
-//     std::fs::write(file_path, timestamp.to_string())?;
-//     Ok(())
-// }
-
-
-
-
 #[derive(Debug)]
 enum CompressionError {
     InvalidNetworkType,
     NetworkIndexOutOfRange,
 }
-
-
-
-
-// /// compress type and index band info into one byte
-// /// 100's place is 0 for "ipv4" or 1 for "ipv6"
-// /// 0-99 in ones and tens place are the index u8 value
-// ///
-// /// error handling: if network_type is not "ipv4" or "ipv6", panic!
-// fn compress_band_data_byte(
-//     network_type: &str,
-//     network_index: u8,
-// ) -> Result<u8, CompressionError> {
-//     let mut band_byte: u8 = 0;
-
-//     // 1. make hundred's digit
-//     match network_type {
-//         "ipv4" => band_byte |= 0,
-//         "ipv6" => band_byte |= 1 << 7,
-//         _ => return Err(CompressionError::InvalidNetworkType),
-//     }
-
-//     // 2. make 0-99 index number
-//     if network_index > 99 {
-//         return Err(CompressionError::NetworkIndexOutOfRange);
-//     }
-//     band_byte |= network_index;
-
-//     // Look
-//     debug_log!("decompress_banddata_byte(), band_byte[{:?}]: (network_type, network_index) ({:?}, {:?})",
-//         band_byte,
-//         network_type,
-//         network_index
-//     );
-    
-//     // 3. make byte
-//     // 4. return byte
-//     Ok(band_byte)
-// }
-
-// /// decompress type and index band info from one byte
-// /// 100's place is 0 for "ipv4" or 1 for "ipv6"
-// /// 0-99 in ones and tens place are the index u8 value
-// ///
-// /// Note: it is possible for this to output a network index
-// /// that does not exist
-// ///
-// /// Since all possible byte values are accounted for, 
-// /// the function will not error for any input.
-// fn decompress_banddata_byte(
-//         band_byte: u8,
-//     ) -> (String, u8) {
-//         let network_type = if band_byte & (1 << 7) != 0 {
-//             "ipv6".to_string()
-//         } else {
-//             "ipv4".to_string()
-//         };
-
-//         // 2. get 0-99 index number
-//         let network_index = band_byte & 0b01111111;
-
-//         // Look
-//         debug_log!("decompress_banddata_byte(), band_byte[{:?}]: (network_type, network_index) ({:?}, {:?})",
-//             band_byte,
-//             network_type,
-//             network_index
-//         );
-        
-//         // 4. return  (network_type, network_index)
-//         (network_type, network_index)
-//     }
 
 /// Compresses network type and index into a single u8, strictly using 3 digits.
 /// Hundreds digit: 0 for IPv4, 1 for IPv6.
@@ -8262,8 +8007,6 @@ fn compress_band_data_byte(
     Ok(band_byte)
 }
 
-
-
 #[derive(Debug)]
 enum DecompressionError {
     InvalidBandByte,
@@ -8281,8 +8024,6 @@ impl std::fmt::Display for DecompressionError {
 }
 // Implement Error for DecompressionError for compatibility:
 impl std::error::Error for DecompressionError {}
-
-
 
 /// Decompresses network type and index from a u8 byte.
 ///
@@ -8320,190 +8061,6 @@ fn decompress_banddata_byte(band_byte: u8) -> Result<(String, u8), Decompression
     debug_log!("decompress_banddata_byte(), band_byte: {}: (network_type, network_index) ({}, {})", band_byte, network_type, network_index);
     Ok((network_type, network_index)) // Valid data: return Ok(data)
 }
-
-// /// Decompresses network type and index from a u8, using only 3 digits (0-199).
-// /// Hundreds digit: 0 for IPv4, 1 for IPv6.
-// /// Remaining digits:  Network index.
-// /// Returns None for invalid indices (>= 100), improving safety and consistency with spec.
-// ///
-// /// # Arguments
-// /// * `band_byte`:  The compressed byte.
-// ///
-// /// # Returns
-// ///
-// /// * `Option<(String, u8)>`: The network type and index (if index is from 0-99) or None if the index part is invalid (>= 100).
-
-// fn decompress_banddata_byte(band_byte: u8) -> Option<(String, u8)> {
-//     if band_byte >= 200 { //Invalid input:  outside of 3-digit range 0-199.
-//         debug_log!("decompress_banddata_byte(): Invalid band_byte: {} (must be 0-199).", band_byte);
-//         return None; 
-//     }
-
-//     let hundreds_digit = band_byte / 100; // Integer division to get hundreds place
-//     let network_index = band_byte % 100;  // Modulo to get remaining two digits
-
-
-//     if network_index >= 100 {  // Check now after extracting both digits, enforcing strict adherence to specification.
-//         debug_log!("decompress_banddata_byte(): Invalid index: {} (must be from 0-99).", network_index);
-//         return None;  // Return None, do not return values that are not within original specifications.  
-//     }    
-    
-
-//     let network_type = if hundreds_digit == 1 {
-//         "ipv6".to_string()
-//     } else {
-//         "ipv4".to_string()
-//     };
-
-
-//     debug_log!("decompress_banddata_byte(), band_byte: {}: (network_type, network_index) ({}, {})", band_byte, network_type, network_index);
-//     Some((network_type, network_index)) // Valid index: Wrap the tuple with Some() to return an Option
-// }
-
-// /// compress type and index band info into one byte
-// /// 100's place is 0 for "ipv4" or 1 for "ipv6"
-// /// 0-99 in ones and tens place are the index u8 value
-// ///
-// /// error handling?
-// fn compress_band_data_byte(
-//         network_type: String,
-//         network_index: u8,
-//     ) -> u8 {
-        
-//         let mut band_byte: u8;
-        
-//         // 1. make hundred's digit
-        
-//         // 2. make 0-99 index number
-    
-//         // 3. make byte
-        
-//         // 4. return byte
-//         band_byte
-//     }
-
-
-// /// decompress type and index band info from one byte
-// /// 100's place is 0 for "ipv4" or 1 for "ipv6"
-// /// 0-99 in ones and tens place are the index u8 value
-// ///
-// /// error handling?
-// fn decompress_banddata_byte(
-//         band_byte: u8,
-//     ) -> (String, u8) {
-        
-//         let mut band_byte: u8;
-        
-//         // 1. get hundred's digit
-        
-//         // set network_type
-        
-//         // 2. get 0-99 index number
-        
-//         // set network_index
-        
-//         // 4. return  (network_type, network_index)
-//         (network_type, network_index)
-//     }
-
-
-// /* 
-// TODO: Because we now have the rc_network_type_string, rc_ip_addr_string
-// should the inputs for this change to:
-// fn send_ready_signal(
-//     local_user_salt_list: &[u128],
-//     rc_network_type_string: String,
-//     rc_ip_addr_string: String,
-//     ...
-// */
-// /// Sends a ReadySignal to the specified target address, selecting the IP address based on the network type.
-// /// goes to: their_rmtclb_ip
-// ///     i.e. local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
-// ///
-// /// Handles hash calculation, serialization, and sending the signal via UDP.
-// ///
-// /// Args:
-// ///     local_user_salt_list: A slice of `u128` salt values for hash calculation.
-// ///     local_user_ipv4_address: The local user's IPv4 address.
-// ///     local_user_ipv6_address: The local user's IPv6 address.
-// ///     target_port: The target port on the remote machine.
-// ///     last_received_timestamp: The timestamp of the last received file.
-// ///     network_type: A string slice representing the network type ("ipv6" or "ipv4").
-// ///     network_index: The index of the valid IP address in the local user's IP list (included in ReadySignal, but not used for IP selection).
-// ///
-// /// Returns:
-// ///     Result<(), ThisProjectError>: `Ok(())` on success, or a `ThisProjectError` if an error occurred.
-// fn send_ready_signal(
-//     local_user_salt_list: &[u128],
-//     local_user_ipv4_address: &Ipv4Addr,
-//     local_user_ipv6_address: &Ipv6Addr,
-//     target_port: u16,
-//     last_received_timestamp: u64,
-//     network_type: &str,
-//     network_index: u8,
-// ) -> Result<(), ThisProjectError> {
-//     debug_log!("send_ready_signal: Starting...");
-
-//     // 1. Calculate hashes
-//     let current_timestamp = get_current_unix_timestamp();
-//     let hashes_result = calculate_ready_signal_hashes(
-//         last_received_timestamp,
-//         current_timestamp,
-//         network_type,
-//         network_index,
-//         local_user_salt_list,
-//     );
-//     let hashes = match hashes_result {
-//         Ok(h) => h,
-//         Err(e) => return Err(e),
-//     };
-
-//     // let b_band_data = compress_band_data_byte(
-//     //     network_type,
-//     //     network_index,
-//     // );
-
-//     let b_band_data = match compress_band_data_byte(network_type, network_index) {
-//         Ok(data) => data,
-//         Err(e) => {
-//             // Handle the error here. You could print an error message, return from the function,
-//             // or do something else depending on your specific needs.
-//             eprintln!("Error compressing band data: {:?}", e);
-//             return Ok(());
-//         }
-//     };
-
-//     // 2. Create ReadySignal 
-//     let ready_signal = ReadySignal {
-//         rt: last_received_timestamp,
-//         rst: current_timestamp,
-//         b: b_band_data,
-//         rh: hashes,
-//     };
-//     debug_log!("send_ready_signal: ReadySignal created: {:?}", ready_signal);
-
-//     // 3. Serialize
-//     let serialized_signal = serialize_ready_signal(&ready_signal)?;
-//     debug_log!("send_ready_signal: ReadySignal serialized.");
-
-//     // 4. Determine target IP based on network_type:
-//     let ip_addr = match network_type {
-//         "ipv6" => IpAddr::V6(*local_user_ipv6_address),
-//         "ipv4" => IpAddr::V4(*local_user_ipv4_address),
-//         _ => return Err(ThisProjectError::NetworkError("Invalid network type".into())),
-//     };
-//     let target_addr = SocketAddr::new(ip_addr, target_port);
-
-//     // 5. Send the signal
-//     debug_log!("send_ready_signal: Sending ReadySignal to: {:?}", target_addr);
-//     send_data(&serialized_signal, target_addr)?;
-//     debug_log!("send_ready_signal: ReadySignal sent successfully.");
-
-//     Ok(())
-// }
-
-
-
 
 /// Sends a ReadySignal to the specified target address, selecting the IP address based on the network type.
 /// goes to: their_rmtclb_ip
@@ -8560,8 +8117,6 @@ fn send_ready_signal(
         Err(e) => return Err(e),
     };
 
-
-
     // 2. Create ReadySignal 
     let ready_signal = ReadySignal {
         rt: last_received_timestamp,
@@ -8597,7 +8152,6 @@ fn send_ready_signal(
 
     Ok(())
 }
-
 
 // draft based on 'send ready signal' function
 /// Sends a Gotit to the specified target address.
@@ -8673,8 +8227,6 @@ fn send_gotit_signal(
 
     Ok(())
 }
-
-
 
 /// Set up the local owner users in-tray desk
 /// requests to recieve are sent from here
@@ -9653,39 +9205,6 @@ fn deserialize_ready_signal(bytes: &[u8], salt_list: &[u128]) -> Result<ReadySig
     Ok(ReadySignal { rt, rst, b, rh })
 }
 
-
-
-// fn deserialize_ready_signal(bytes: &[u8]) -> Result<ReadySignal, io::Error> {
-//     // ... [Your existing code for logging and length checking] ...
-
-//     // Extract timestamp (rt):
-//     let rt = u64::from_be_bytes(bytes[0..8].try_into().unwrap());
-//     debug_log!("DRS: ready_signal_timestamp: {}", rt);
-
-//     // Extract send timestamp (rst):
-//     let rst = u64::from_be_bytes(bytes[8..16].try_into().unwrap());
-//     debug_log!("DRS: ready_signal_send_timestamp: {}", rst);
-
-//     // Extract echo_send (re):
-//     let re = if bytes.len() > 16 { bytes[16] != 0 } else { false };
-//     debug_log!("DRS: echo_send: {}", re);
-    
-//     // Extract hashes (rh):
-//     let rh = if bytes.len() > 17 { 
-//         Some(bytes[17..].to_vec()) 
-//     } else {
-//         None
-//     };
-    
-//     // Correct the return statement to include rst:
-//     Ok(ReadySignal { 
-//         rt: Some(rt), 
-//         rst: Some(rst), // Include rst
-//         re: Some(re), 
-//         rh 
-//     })
-// }
-
 /// Deserializes a byte slice into a SendFile struct.
 ///
 /// This function performs the reverse operation of serializing a SendFile struct.
@@ -9778,70 +9297,6 @@ fn serialize_send_file(send_file: &SendFile) -> Result<Vec<u8>, ThisProjectError
     Ok(serialized_data)
 }
 
-
-//     // 2. Extract intray_send_time
-//     let intray_send_time = u64::from_be_bytes(bytes[0..timestamp_len].try_into().unwrap());
-
-//     // 3. Extract intray_hash_list
-//     let hash_list_start = timestamp_len;
-//     let hash_list_end = hash_list_start + 4; // Assuming 4 salts (4 * u8 hashes)
-//     debug_log!(
-//         "DISFS hash_list_start {} hash_list_end {}",
-//         hash_list_start, hash_list_end   
-//     );
-    
-//     // if bytes.len() < hash_list_end {
-//     //     debug_log!("DISFS bytes.len() < hash_list_end -> returning: Err(ThisProjectError::InvalidData(\"Invalid byte array length for SendFile intray_hash_list\".into()))");
-//     //     return Err(ThisProjectError::InvalidData("Invalid byte array length for SendFile intray_hash_list".into()));
-//     // }
-//     debug_log!("DISFS bytes.len() >= hash_list_end {:?}", bytes.len() >= hash_list_end );
-    
-//     let intray_hash_list = if bytes.len() >= hash_list_end {
-//         bytes[hash_list_start..hash_list_end].to_vec() // Extract hashes
-//     } else {
-//         return Err(ThisProjectError::InvalidData("Invalid byte array length for SendFile".into()));
-//     };
-
-//     // 4. Extract gpg_encrypted_intray_file
-//     let gpg_encrypted_file_start = hash_list_end;
-//     let gpg_encrypted_intray_file = if bytes.len() > gpg_encrypted_file_start {
-//         debug_log!("DISFS gpg_encrypted_file_start-> {}", gpg_encrypted_file_start);
-//         bytes[gpg_encrypted_file_start..].to_vec() // Extract file content
-//     } else {
-//         Vec::new() // Or handle the case where there's no file content as needed
-//     };
-
-
-//     // 5. Construct and return the SendFile struct
-//     debug_log!("DISFS constructing SendFile struct");
-    
-//     Ok(SendFile {
-//         intray_send_time: Some(intray_send_time),
-//         gpg_encrypted_intray_file: Some(gpg_encrypted_intray_file.clone()),
-//         intray_hash_list: Some(gpg_encrypted_intray_file),
-//     })
-// }
-
-// // maybe depricated
-// fn serialize_option_gotit_signal(signal: &GotItSignal) -> std::io::Result<Vec<u8>> {
-//     let mut bytes = Vec::new();
-
-//     // bytes.extend_from_slice(&signal.gst.to_be_bytes());
-//     bytes.extend_from_slice(&signal.gst.expect("REASON").to_be_bytes());
-//     bytes.extend_from_slice(&signal.di.expect("REASON").to_be_bytes()); 
-//     // bytes.extend_from_slice(signal.gh.as_bytes());
-//     // Handle the gh Option
-//     if let Some(hash_list) = &signal.gh { 
-//         // If gh is Some, extend the bytes vector with the hash_list
-//         bytes.extend_from_slice(hash_list);
-//     } else {
-//         // Handle the None case (e.g., add a placeholder or return an error)
-//         // bytes.extend_from_slice(&[0u8; 32]); // Example: Add a 32-byte placeholder
-//     }
-
-//     Ok(bytes)
-// }
-
 fn serialize_gotit_signal(signal: &GotItSignal) -> std::io::Result<Vec<u8>> {
     let mut bytes = Vec::new();
 
@@ -9851,40 +9306,6 @@ fn serialize_gotit_signal(signal: &GotItSignal) -> std::io::Result<Vec<u8>> {
 
     Ok(bytes)
 }
-
-// fn deserialize_gotit_signal(bytes: &[u8]) -> Result<GotItSignal, io::Error> {
-//     // Calculate expected lengths (assuming a u64 for both timestamp and ID)
-//     let timestamp_len = std::mem::size_of::<u64>();
-//     let id_len = std::mem::size_of::<u64>();
-//     let expected_min_length = timestamp_len + id_len; // Minimum length for timestamp and ID
-
-//     // Check if the byte array has enough data for at least the timestamp and document ID
-//     if bytes.len() < expected_min_length {
-//         return Err(io::Error::new(
-//             io::ErrorKind::InvalidData,
-//             "Invalid byte array length for GotItSignal: too short",
-//         ));
-//     }
-
-//     // Extract the timestamp
-//     let gst = u64::from_be_bytes(bytes[0..timestamp_len].try_into().unwrap());
-
-//     // Extract the document ID
-//     let di = u64::from_be_bytes(bytes[timestamp_len..expected_min_length].try_into().unwrap());
-
-//     // Extract the hash list (if present)
-//     let gh = if bytes.len() > expected_min_length {
-//         Some(bytes[expected_min_length..].to_vec()) // Take the remaining bytes as the hash list
-//     } else {
-//         None // No hash list present
-//     };
-
-//     Ok(GotItSignal { 
-//         gst: Some(gst), 
-//         di: Some(di), 
-//         gh: gh.expect("REASON"), 
-//     }) 
-// }
 
 /// File Deserialization (Receiving):
 /// Receive Bytes: Receive the byte array from the network using socket.recv_from().
@@ -9968,7 +9389,6 @@ fn get_absolute_team_channel_path(team_channel_name: &str) -> io::Result<PathBuf
     channel_path.canonicalize() // Get the absolute path
 }
 
-
 /// Gets existing send-Queue or makes a new one: to send out locally owned files: a queue of paths to those files
 /// if back_of_queue_timestamp != 0 and
 /// if request-time-stamp = send-q back_of_queue_timestamp -> just return timestamp
@@ -10049,8 +9469,7 @@ fn get_or_create_send_queue(
     changing the back_of_queue_timestamp date may have no advanstage
     (or maybe some use will be discovered, likely it is not harmful)
     */
-    
-    
+
     debug_log("inHRCD->get_or_create_send_queue  checking: ready_signal_rt_timestamp < back_of_queue_timestamp");
     // Backtrack Order
     // if remote collaborator requests a reset to an older time (ah, those were the days...)
@@ -10094,11 +9513,6 @@ fn get_or_create_send_queue(
             make_a_new_queue_flag = true
         }
     }
-    
-    
-
-    
-
 
     // 1. Get the path RESULT
     let team_channel_path_result = get_absolute_team_channel_path(team_channel_name);
@@ -10112,8 +9526,6 @@ fn get_or_create_send_queue(
             return Err(e.into());  // Or handle the error differently
         }
     };
-
-    
 
     // --- 3. Make a new Queue ---
     debug_log!("inHRCD->get_or_create_send_queue 5: no crawl if false, make_a_new_queue_flag -> {:?}", make_a_new_queue_flag);
@@ -10143,8 +9555,7 @@ fn get_or_create_send_queue(
                 // If owner = target collaborator
                 if toml_value.get("owner").and_then(Value::as_str) == Some(localowneruser_name) {
                     debug_log!("inHRCD->get_or_create_send_queue 7: file owner == colaborator name {:?}", toml_value);
-                    
-                    
+
                     // if current remote collaborator is on the list of teamchannel_collaborators_with_access
                     
                     // 1. Get collaborators for this file (if available):
@@ -10211,8 +9622,7 @@ fn get_or_create_send_queue(
     for this_iter_newpath in newpath_list {
         session_send_queue.add_to_front_of_sendq(this_iter_newpath); // Use the new method
     }
-    
-    
+
     //////////////
     // New Files
     //////////////
@@ -10634,182 +10044,6 @@ fn get_ip_from_index_and_type(
     }
 }
 
-
-
-// ... other functions ...
-
-
-// /// Receives a ReadySignal with a timeout, handling potential errors and timeouts.  Now returns the deserialized ReadySignal on success.
-// ///
-// /// # Arguments
-// ///
-// /// * `socket`: The UDP socket to receive data on.
-// /// * `buf`: A mutable buffer to store the received data.
-// /// * `salt_list`: The salt list for hash verification.
-// ///
-// /// # Returns
-// ///
-// /// * `Result<Option<(SocketAddr, ReadySignal)>, ThisProjectError>`:  A tuple containing the sender's `SocketAddr` and `ReadySignal` on success,
-// ///     or a `ThisProjectError` if no valid ReadySignal is received within the timeout or if an error occurs.
-// fn receive_ready_signal_with_timeout(
-//     socket: &UdpSocket, 
-//     buf: &mut [u8], 
-//     salt_list: &[u128],
-// ) -> Result<Option<(SocketAddr, ReadySignal)>, ThisProjectError> { // Changed return type
-//     debug_log!("receive_ready_signal_with_timeout(): Starting...");
-
-//     match socket.recv_from(buf) {
-//         Ok((amt, src)) => {
-//             debug_log!("receive_ready_signal_with_timeout(): Received {} bytes from {}", amt, src);
-
-//             match deserialize_ready_signal(&buf[..amt], &salt_list) { // Deserialize here
-//                 Ok(ready_signal) => Ok(Some((src, ready_signal))), // Return the source address AND ReadySignal
-//                 Err(e) => {
-//                     debug_log!("receive_ready_signal_with_timeout(): Failed to deserialize ReadySignal: {}", e);
-//                     Err(e)
-//                 }
-//             }
-
-//         },
-//         Err(e) if e.kind() == ErrorKind::WouldBlock => Ok(None), // Timeout
-//         Err(e) => Err(ThisProjectError::NetworkError(e.to_string())),
-//     }
-// }
-
-
-
-
-
-
-
-// fn get_rc_band_ready_gotit_socketaddrses_hrcd(
-//     room_sync_input: &ForRemoteCollaboratorDeskThread,
-// ) -> Result<(SocketAddr, SocketAddr), ThisProjectError> { // function name corrected
-//     let timeout_duration = Duration::from_secs(15);
-//     let mut buf = [0; 1024];
-
-
-//     for ipv6_addr in &room_sync_input.remote_collaborator_ipv6_addr_list {
-//         let ready_socket_addr = SocketAddr::new(IpAddr::V6(*ipv6_addr), room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip);
-        
-//         match UdpSocket::bind(ready_socket_addr) { // Directly bind the socket here.  HERE!! HERE!!
-//             Ok(socket) => {
-//                 socket.set_read_timeout(Some(timeout_duration))?;
-//                 debug_log!("Listening on {:?} for ReadySignal", ready_socket_addr); // HERE!! HERE!! corrected debug_log name
-                
-//                 if receive_ready_signal_with_timeout(&socket, &mut buf, &room_sync_input.local_user_salt_list).is_ok() { // Add salts for hash verification. // HERE!! HERE!! add salt arg
-//                     let gotit_socket_addr = SocketAddr::new(IpAddr::V6(*ipv6_addr), room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip); // Create correct gotit SocketAddr
-//                     return Ok((ready_socket_addr, gotit_socket_addr));
-//                 }
-
-
-//             }
-//             Err(e) => {
-//                 debug_log!("Failed to bind to {:?}: {}", ready_socket_addr, e); // Log binding errors
-//             }
-//         }
-//     }
-
-
-//     for ipv4_addr in &room_sync_input.remote_collaborator_ipv4_addr_list { // ipv4 handling here
-//         let ready_socket_addr = SocketAddr::new(IpAddr::V4(*ipv4_addr), room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip); // No change here.
-//         match UdpSocket::bind(ready_socket_addr) { // HERE!! HERE!! Directly use UdpSocket::bind().
-
-//             Ok(socket) => {
-//                 socket.set_read_timeout(Some(timeout_duration))?;
-//                 debug_log!("Listening on {:?} for ReadySignal", ready_socket_addr); // Log listening address
-
-//                 if receive_ready_signal_with_timeout(&socket, &mut buf, &room_sync_input.local_user_salt_list).is_ok() {  // Salts used here for verification, changed to local_user_salt_list. // HERE!! HERE!! add salt arg
-
-//                     let gotit_socket_addr = SocketAddr::new(IpAddr::V4(*ipv4_addr), room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip);
-//                     return Ok((ready_socket_addr, gotit_socket_addr));  //  Use ipv4 gotit port
-//                 }
-
-//             }
-//             Err(e) => {
-//                 debug_log!("Failed to bind to {:?}: {}", ready_socket_addr, e);
-//                 // Consider logging and handling errors with more specificity. 
-//                 // You may or may not want to halt Uma when no network band connections are found. 
-//             }
-//         }
-//     }
-//     Err(ThisProjectError::NetworkError("No valid ReadySignal received".into()))
-// }
-
-// /// Retrieves SocketAddrs for the remote collaborator's ready and "got it" ports based on the first valid IP address found.
-// ///
-// /// Iterates through the remote collaborator's IPv6 and IPv4 addresses, attempting to receive a ReadySignal on each.
-// /// Returns SocketAddrs for both the ready and "got it" ports using the first valid IP
-// ///
-// /// # Arguments
-// ///
-// /// * `room_sync_input`: The remote collaborator's connection data.
-// ///
-// /// # Returns (ready_socket_addr, gotit_socket_addr)
-// ///
-// /// * `Result<(SocketAddr, SocketAddr), ThisProjectError>`: Tuple of SocketAddrs (ready, gotit), or an error if no valid IP is found.
-// fn get_rc_band_ready_gotit_socketaddrses_hrcd(
-//     room_sync_input: &ForRemoteCollaboratorDeskThread,
-// ) -> Result<(SocketAddr, SocketAddr), ThisProjectError> {
-
-//     let timeout_duration = Duration::from_secs(15);
-//     let mut buf = [0; 1024];
-
-
-//     // Search for first valid ipv6, if there is one
-//     for ipv6_addr in &room_sync_input.remote_collaborator_ipv6_addr_list {
-//         let ready_socket_addr = SocketAddr::new(IpAddr::V6(*ipv6_addr), room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip);
-
-//         /*
-//             maybe should use:
-//             UdpSocket::bind(socket_addr).map_err(|e| {
-//         ThisProjectError::NetworkError(format!("Failed to bind to {} address: {}", band_local_network_type, e))
-//     })
-//         */
-//         if let Ok(socket) = no_such_redundant_abstacttion(ready_socket_addr) {  // Simplified using create_local_udp_socket
-//             socket.set_read_timeout(Some(timeout_duration))?;
-//             debug_log!("Listening on {:?} for ReadySignal ipv6_addr", ready_socket_addr);
-
-            
-//             if receive_ready_signal_with_timeout(&socket, &mut buf, &room_sync_input.local_user_salt_list).is_ok() {  // Assuming you'll add salt verification
-//                 let gotit_socket_addr = SocketAddr::new(IpAddr::V6(*ipv6_addr), room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip); // Create gotit SocketAddr here, correctly
-//                 return Ok((ready_socket_addr, gotit_socket_addr));
-//             }
-//         }
-//     }
-
-
-//     // Search for first valid ipv4, if there is one
-//     for ipv4_addr in &room_sync_input.remote_collaborator_ipv4_addr_list { // Iterate over ipv4 addresses if there was no ipv6 ReadySignal
-//         let ready_socket_addr = SocketAddr::new(IpAddr::V4(*ipv4_addr), room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip); // No change needed
-
-//         /*
-//             maybe should use:
-//             UdpSocket::bind(socket_addr).map_err(|e| {
-//         ThisProjectError::NetworkError(format!("Failed to bind to {} address: {}", band_local_network_type, e))
-//     })
-//         */
-//         if let Ok(socket) = no_such_redundant_abstacttion(ready_socket_addr) { // Create and bind, using new version
-//             socket.set_read_timeout(Some(timeout_duration))?;
-//             debug_log!("Listening on {:?} for ReadySignal ipv4_addr", ready_socket_addr);
-
-
-//             if receive_ready_signal_with_timeout(&socket, &mut buf, &room_sync_input.local_user_salt_list).is_ok() { // Check with salts
-//                 debug_log!("Received ReadySignal from IPv4: {}", ipv4_addr);
-
-//                 // Correct gotit port
-//                 let gotit_socket_addr = SocketAddr::new(IpAddr::V4(*ipv4_addr), room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip);
-//                 return Ok((ready_socket_addr, gotit_socket_addr));  // Return correct ipv4 SocketAddr here.
-//             }
-//         }
-//     }
-
-//     Err(ThisProjectError::NetworkError(
-//         "No valid ReadySignal received".into(),
-//     ))
-// }
-
-
 /// Receives a ReadySignal with a timeout, performing hash and timestamp verification.
 /// Goal purpose and scope: screening valid packets to verify a live-ip
 ///
@@ -10877,55 +10111,6 @@ fn receive_ready_signal_with_timeout( // Hash and timestamp checks moved HERE!
         },
     }
 }
-
-
-// /// Receives a ReadySignal with a timeout, handling potential errors and timeouts.
-// ///
-// /// # Arguments
-// ///
-// /// * `socket`: The UDP socket to receive data on.
-// /// * `buf`: A mutable buffer to store the received data.
-// /// * `salt_list`: The salt list for hash verification.
-// ///
-// /// # Returns
-// ///
-// /// * `Result<Option<SocketAddr>, ThisProjectError>`:
-// ///     - `Ok(Some(src_addr))`: If a valid ReadySignal is received within the timeout, returns the sender's address.
-// ///     - `Ok(None)`: If the timeout expires without receiving a valid ReadySignal.
-// ///     - `Err(ThisProjectError)`: If an error occurs during receiving or if the received data is invalid.
-// fn receive_ready_signal_with_timeout(
-//     socket: &UdpSocket, 
-//     buf: &mut [u8], 
-//     salt_list: &[u128],
-// ) -> Result<Option<SocketAddr>, ThisProjectError> {
-//     debug_log!("receive_ready_signal_with_timeout(): Starting...");
-
-//     match socket.recv_from(buf) {  // Receive data on the socket.
-//         Ok((amt, src)) => { // If data is received:
-
-//             debug_log!("receive_ready_signal_with_timeout(): Received {} bytes from {}", amt, src);
-
-//             // 1. Deserialize the ReadySignal.
-//             let ready_signal = deserialize_ready_signal(&buf[..amt], &salt_list)?;  // Note the use of &salt_list
-
-//             // 2. Verify the ReadySignal's timestamp.
-//             //     (Add your timestamp verification logic here)
-
-//             // 3. If the ReadySignal is valid, return the source address.
-//             Ok(Some(src)) 
-//         },
-//         Err(e) if e.kind() == ErrorKind::WouldBlock => { // If WouldBlock, timeout:
-//             debug_log!("receive_ready_signal_with_timeout(): Timeout. No data received within the timeout period.");            
-//             Ok(None)  // Indicate timeout with Ok(None) (do NOT return an error).
-//         },
-//         Err(e) => { // Other errors
-//             debug_log!("receive_ready_signal_with_timeout():  Error receiving data: {}", e);
-//             Err(ThisProjectError::NetworkError(e.to_string()))
-//         },
-//     }
-
-// }
-
 
 /// TODO: What on earth is this thing???
 ///
