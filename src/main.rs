@@ -9591,6 +9591,8 @@ fn handle_local_owner_desk(
                             (because context= filesync timeline ID)
                         gh: Option<Vec<u8>>, // N hashes of rt + re
                     */
+                    thread::sleep(Duration::from_secs(4));
+                    
 
                     send_gotit_signal(
                         &local_owner_desk_setup_data.local_user_salt_list,
