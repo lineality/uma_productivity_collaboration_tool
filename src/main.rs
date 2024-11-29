@@ -9530,120 +9530,6 @@ fn get_rc_band_ready_gotit_socketaddrses_hrcd(
     } // End of main listening loop
 }
 
-
-
-// fn get_rc_band_ready_gotit_socketaddrses_hrcd(
-//     room_sync_input: &ForRemoteCollaboratorDeskThread,
-// ) -> Result<(SocketAddr, SocketAddr), ThisProjectError> {
-//     let timeout_duration = Duration::from_secs(15);
-//     let mut buf = [0; 1024];
-
-//     // --- 1. Load Local Band Information ---
-//     let (
-//         local_network_type,
-//         local_network_index,
-//         local_ipv4,
-//         local_ipv6,
-//     ) = read_band__network_config_type_index_specs()?;
-
-
-//     // --- 2. Determine Local IP Address based on Local Band Information ---
-//     // Select appropriate IP based on loaded local network type. No iteration on remote IPs.
-//     let local_ip = match local_network_type.as_str() {
-//         "ipv6" => IpAddr::V6(local_ipv6),
-//         "ipv4" => IpAddr::V4(local_ipv4),
-//         _ => return Err(ThisProjectError::NetworkError("Invalid local network type".into())),
-//     };
-
-//     // 3. Create SocketAddr for Listening (using local IP and ready port)
-//     let ready_socket_addr = SocketAddr::new(
-//         local_ip,
-//         room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip,
-//     );
-    
-//     debug_log!("get_rc_band_ready_gotit_socketaddrses_hrcd: Binding to local address: {:?}", ready_socket_addr);
-
-
-//     // --- 4. Bind and Listen for ReadySignal ---
-//     let socket = create_rc_udp_socket(ready_socket_addr)?; // Directly create socket
-//     socket.set_read_timeout(Some(timeout_duration))?;
-
-
-//     // --- 5. Receive with Timeout and Perform Checks ---
-//     match receive_ready_signal_with_timeout(&socket, &mut buf, &room_sync_input.local_user_salt_list) {
-//         Ok(Some((_, ready_signal))) => {
-            
-            
-//             // --- 2.5 Hash-Check for ReadySignal ---
-//             // Drop packet when fail check
-//             if !verify_readysignal_hashes(
-//                 &ready_signal, 
-//                 &room_sync_input.remote_collaborator_salt_list,
-//             ) {
-//                 debug_log("HRCD 2.5: ReadySignal hash verification failed. Discarding signal.");
-//                 continue; // Discard the signal and continue listening
-//             }
-    
-    
-//             // 3.2.1 No Future Dated Requests
-//             if ready_signal_timestamp > current_timestamp + 5 { // Allow for some clock skew (5 seconds)
-//                 debug_log!("HRCD 3.2.1 check: Received future-dated timestamp. Discarding.");
-//                 continue;
-//             }
-
-//             // 3.2.2 No Requests Older Than ~10 sec
-//             if current_timestamp - 10 > ready_signal_timestamp {
-//                 debug_log!("HRCD 3.2.2 check: Received outdated timestamp (older than 10 seconds). Discarding.");
-//                 continue;
-//             }
-    
-
-//             // Extract remote collaborator's band data from ReadySignal
-//             let (rc_network_type, rc_network_index) = decompress_banddata_byte(ready_signal.b);
-
-
-//             // Select IP for "got it" signal based on RECEIVED rc_network_type and rc_network_index
-//             let rc_ip = match get_ip_from_index_and_type(
-//                 &room_sync_input.remote_collaborator_ipv4_addr_list, 
-//                 &room_sync_input.remote_collaborator_ipv6_addr_list, 
-//                 &rc_network_type, 
-//                 rc_network_index
-//             ) {
-//                 Some(ip) => ip,
-//                 None => return Err(ThisProjectError::NetworkError(
-//                     "Failed to get IP from received index and type".into(),
-//                 )),
-//             };
-            
-            
-//             let gotit_socket_addr = SocketAddr::new(rc_ip, room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip);  // Use correct port from room_sync_input
-//             debug_log!("get_rc_band_ready_gotit_socketaddrses_hrcd: Creating gotit SocketAddr with address {:?} and port {:?}", gotit_socket_addr.ip(), gotit_socket_addr.port());
-
-
-//             // Save received band data
-//             let this_team_channel_name = read_state_string("active_team_channel.txt")?;
-//             write_save_rc_bandnetwork_type_index(
-//                 room_sync_input.remote_collaborator_name.clone(),
-//                 this_team_channel_name, // Use value read from state
-//                 rc_network_type,
-//                 rc_network_index,
-//                 local_ipv4,  // use local data
-//                 local_ipv6, // use local data
-//             )?;
-            
-            
-//             // // 5. Done: Exit Loop and Return Socket Addresses ---
-//             return Ok((ready_socket_addr, gotit_socket_addr));
-//         }
-//         Ok(None) => {
-//             // --- Handle timeout (or invalid ReadySignal) ---
-//             return Err(ThisProjectError::NetworkError("No valid ReadySignal received within timeout".into()));
-//         }
-//         Err(e) => return Err(e), // Handle other errors
-//     }
-// }
-
-
 /// Gets the IP address from combined IPv4/IPv6 lists based on index and type.
 ///
 /// # Arguments
@@ -10448,8 +10334,6 @@ fn handle_remote_collaborator_meetingroom_desk(
     Ok(())
 }
 
-
-
 /// Creates a UDP socket bound to the specified address and port.
 ///
 /// Simplifies socket creation by taking a SocketAddr directly.
@@ -10467,50 +10351,6 @@ fn create_rc_udp_socket(socket_addr: SocketAddr) -> Result<UdpSocket, ThisProjec
         ThisProjectError::NetworkError(format!("Failed to bind to UDP socket: {}", e))
     })
 }
-
-
-// /// Creates a UDP socket bound to the specified IP address and port.
-// ///
-// /// This function handles both IPv4 and IPv6 addresses based on the provided `net_type`.
-// ///
-// /// # Arguments
-// ///
-// /// * `net_type`: A string indicating the network type ("ipv4" or "ipv6").
-// /// * `ip_address_string`: The IP address as a string.
-// /// * `port`: The port number.
-// ///
-// /// # Returns
-// ///
-// /// * `Result<UdpSocket, ThisProjectError>`: The created socket, or an error if the IP address is invalid, binding fails, or an unsupported network type is provided.
-// fn create_rc_udp_socket(
-//     net_type: &str,  // Borrow the string slice
-//     ip_address_struct: SocketAddr, // uses SocketAddr directly
-//     port: u16,
-// ) -> Result<UdpSocket, ThisProjectError> {
-//     match net_type {
-//         "ipv6" => {
-//             // let ip_address: Ipv6Addr = ip_address_string.parse().map_err(|_| {
-//             //     ThisProjectError::NetworkError("Invalid IPv6 address".into())
-//             // })?;
-//             let socket_addr = SocketAddr::new(IpAddr::V6(ip_address_struct), port);
-//             UdpSocket::bind(socket_addr).map_err(|e| {
-//                 ThisProjectError::NetworkError(format!("Failed to bind to IPv6 address: {}", e))
-//             })
-//         }
-//         "ipv4" => {
-//             // let ip_address: Ipv4Addr = ip_address_string.parse().map_err(|_| {
-//             //     ThisProjectError::NetworkError("Invalid IPv4 address".into())
-//             // })?;
-//             let socket_addr = SocketAddr::new(IpAddr::V4(ip_address_struct), port);
-//             UdpSocket::bind(socket_addr).map_err(|e| {
-//                 ThisProjectError::NetworkError(format!("Failed to bind to IPv4 address: {}", e))
-//             })
-//         }
-//         _ => Err(ThisProjectError::NetworkError("Unsupported network type".into())),
-//     }
-// }
-
-
 
 /// Creates a UDP socket bound to a locally chosen IP address and port based on the network band configuration.
 ///
@@ -10601,25 +10441,6 @@ fn get_current_team_channel_name() -> Option<String> {
         }
     }
 }
-
-
-// /// Extracts the channel name from a team channel directory path. 
-// /// 
-// /// This function assumes the path is in the format 
-// /// "project_graph_data/team_channels/channel_name". 
-// /// It returns the "channel_name" part of the path.
-// ///
-// /// # Returns
-// /// 
-// /// * `Option<String>`: The channel name if successfully extracted, `None` otherwise.
-// fn get_current_team_channel_name() -> Option<String> {
-//     // get path, derive name from path
-//     let channel_dir_path_str = read_state_string("current_node_directory_path.txt").ok()?; // read as string first
-//     debug_log!("1. Channel directory path (from session state) [in fn get_current_team_channel_name()] channel_dir_path_str -> {:?}", channel_dir_path_str); 
-    
-//     let path = Path::new(&channel_dir_path_str);
-//     path.file_name()?.to_str().map(String::from) 
-// }
 
 /// for normal mode, updates graph-navigation location and graph-state for both
 /// 1. the struct
