@@ -10316,9 +10316,6 @@ fn handle_remote_collaborator_meetingroom_desk(
                             }
                             debug_log!("HRCD 4.7.2 prefail flag set using timestamp {:?}", &ready_signal.rt);
                             
-                            
-                            debugpause(30);
-                            
                             debug_log!(
                                 "HRCD 4.6-7 Create sendfile_struct {:?}",
                                 sendfile_struct   
@@ -10363,7 +10360,8 @@ fn handle_remote_collaborator_meetingroom_desk(
                                     // Handle the serialization error (e.g., log, skip file)
                                 }
                             }
-                            debug_log!("\nHRCD: bottom of listener. (maybe)\n");
+                            // debugpause(30);
+                            debug_log!("\nHRCD: bottom of ready_signal listener. (maybe)\n");
 
 
                         } // end of while
