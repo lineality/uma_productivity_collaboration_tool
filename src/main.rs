@@ -2940,7 +2940,7 @@ struct GraphNavigationInstanceState {
     current_node_owner: String,
     current_node_description_for_tui: String,
     current_node_directory_path: PathBuf,
-    current_node_unique_id: u64,
+    current_node_unique_id: Vec<u8>,
     current_node_members: Vec<String>,
     home_square_one: bool,
     // app.&App,  // TODO really?
@@ -3096,7 +3096,7 @@ impl GraphNavigationInstanceState {
             // 2. Save u64 values as plain text:
             fs::write(session_items_path.join("default_im_messages_expiration_days.txt"), self.default_im_messages_expiration_days.to_string())?;
             fs::write(session_items_path.join("default_task_nodes_expiration_days.txt"), self.default_task_nodes_expiration_days.to_string())?;
-            fs::write(session_items_path.join("current_node_unique_id.txt"), self.current_node_unique_id.to_string())?;
+            fs::write(session_items_path.join("current_node_unique_id.txt"), pearson_hash_to_hex_string(&self.current_node_unique_id))?;
 
             // 3. Save PathBuf as plain text:
             // fs::write(session_items_path.join("current_full_file_path.txt"), self.current_full_file_path.to_string_lossy())?;
@@ -3213,8 +3213,8 @@ struct CoreNode {
     node_name: String,
     /// A description of the node, intended for display in the TUI.
     description_for_tui: String,
-    /// A unique identifier for the node, generated using a timestamp at node creation.
-    node_unique_id: u64,
+    /// A unique identifier for the node, generated using pearson hashes of the other fields
+    node_unique_id: Vec<u8>,
     /// The path to the directory on the file system where the node's data is stored.
     directory_path: PathBuf,
     /// An order number used to define the node's position within a list or hierarchy.
@@ -3233,6 +3233,40 @@ struct CoreNode {
     teamchannel_collaborators_with_access: Vec<String>,
     /// A map containing port assignments for each collaborator associated with the node.
     abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
+}
+
+/// Calculates Pearson hashes for the provided CoreNode fields and salts.
+/// This function is now external to CoreNode, taking individual fields as arguments.
+///
+/// Args:
+///     node_name: The node's name.
+///     description: The node's description.
+///     timestamp: The node's timestamp.
+///     salt_list: The list of salts for hashing.
+///
+/// Returns:
+///     Result<Vec<u8>, ThisProjectError>: A vector of calculated hashes, or an error.
+fn calculate_corenode_hashes(
+    node_name: &str,
+    description: &str,
+    updated_at_timestamp: u64,
+    salt_list: &[u128],
+) -> Result<Vec<u8>, ThisProjectError> {
+    let mut data_to_hash = Vec::new();
+    data_to_hash.extend_from_slice(node_name.as_bytes());
+    data_to_hash.extend_from_slice(description.as_bytes());
+    data_to_hash.extend_from_slice(&updated_at_timestamp.to_be_bytes());
+
+    let mut hash_list = Vec::new();
+    for salt in salt_list {
+        let mut salted_data = data_to_hash.clone();
+        salted_data.extend_from_slice(&salt.to_be_bytes());
+        match pearson_hash_base(&salted_data) {
+            Ok(hash) => hash_list.push(hash),
+            Err(e) => return Err(e.into()),  // Return the error.
+        }
+    }
+    Ok(hash_list)
 }
 
 /// update_collaborator_sendqueue_timestamp_log
@@ -3377,11 +3411,17 @@ fn load_core_node_from_toml_file(file_path: &Path) -> Result<CoreNode, String> {
         Err(e) => return Err(format!("Error parsing TOML in load_core_node_from_toml_file: {}", e)),
     };
 
+    // 3. Extract node_unique_id as hex string and decode using your function:
+    let node_unique_id = match toml_value.get("node_unique_id").and_then(Value::as_str) {
+        Some(hex_string) => hex_string_to_pearson_hash(hex_string)?, // Use your function. Propagate error with ?.
+        None => return Err("Missing node_unique_id".to_string()),
+    };
+    
     // 3. Deserialize into CoreNode Struct (Manually)
     let mut core_node = CoreNode {
         node_name: toml_value.get("node_name").and_then(Value::as_str).unwrap_or("").to_string(),
         description_for_tui: toml_value.get("description_for_tui").and_then(Value::as_str).unwrap_or("").to_string(),
-        node_unique_id: toml_value.get("node_unique_id").and_then(Value::as_integer).unwrap_or(0) as u64,
+        node_unique_id: node_unique_id,
         directory_path: PathBuf::from(toml_value.get("directory_path").and_then(Value::as_str).unwrap_or("")),
         // order_number: toml_value.get("order_number").and_then(Value::as_integer).unwrap_or(0) as u32,
         // priority: match toml_value.get("priority").and_then(Value::as_str).unwrap_or("Medium") {
@@ -3504,31 +3544,36 @@ impl CoreNode {
         node_name: String,
         description_for_tui: String,
         directory_path: PathBuf,
-        // order_number: u32,
-        // priority: NodePriority,
         owner: String,
         teamchannel_collaborators_with_access: Vec<String>,
         abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
-    ) -> CoreNode {
-        let expires_at = get_current_unix_timestamp() + 86400; // Expires in 1 day (for now)
+    ) -> Result<CoreNode, ThisProjectError> {
+        let expires_at = get_current_unix_timestamp() + 11111111111; // Expires in 352 years
         let updated_at_timestamp = get_current_unix_timestamp();
-        let node_unique_id = get_current_unix_timestamp(); 
 
-        CoreNode {
+        // 1. Get the salt list, handling potential errors:
+        let salt_list = get_saltlist_for_collaborator(&owner)?; // Use the ? operator to propagate errors
+
+        // 2. *Now* calculate the hash, using the retrieved salt list:
+        let node_unique_id = calculate_corenode_hashes(
+            &node_name,                 // &str
+            &description_for_tui,      // &str
+            updated_at_timestamp,        // u64
+            &salt_list,                 // &[u128]
+        )?;
+
+        // 3. Create the CoreNode instance (all fields now available):
+        Ok(CoreNode {
             node_name,
             description_for_tui,
             node_unique_id,
             directory_path,
-            // sec_to_next_sync,  // 3-5 seconds per sync is normal, but team can make more or less for traffic/need balance
-            // order_number,
-            // priority,
             owner,
             updated_at_timestamp,
             expires_at,
-            // children: Vec::new(),
             teamchannel_collaborators_with_access,        
             abstract_collaborator_port_assignments, 
-        }
+        })
     }
 
     /// Saves the `CoreNode` data to a `node.toml` file.
@@ -3582,28 +3627,25 @@ impl CoreNode {
     /// * `directory_path` - The file path where the child node's data will be stored.
     /// * `order_number` - The order number of the child node, determining its position within a list or hierarchy.
     /// * `priority` - The priority level of the child node (High, Medium, or Low).
-    fn add_child(
-        &mut self,
-        teamchannel_collaborators_with_access: Vec<String>, 
-        abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
-        owner: String,
-        description_for_tui: String,
-        directory_path: PathBuf,
-        // order_number: u32,
-        // priority: NodePriority,
-    ) {
-        let child = CoreNode::new(
-            self.node_name.clone(),
-            description_for_tui,
-            directory_path,
-            // order_number,
-            // priority,
-            owner,
-            teamchannel_collaborators_with_access,        
-            abstract_collaborator_port_assignments,   
-        );
-        // self.children.push(child);
-    }
+    // TODO maybe use for something else
+    // fn add_child(
+    //     &mut self,
+    //     teamchannel_collaborators_with_access: Vec<String>, 
+    //     abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
+    //     owner: String,
+    //     description_for_tui: String,
+    //     directory_path: PathBuf,
+    // ) {
+    //     let child = CoreNode::new(
+    //         self.node_name.clone(),
+    //         description_for_tui,
+    //         directory_path,
+    //         owner,
+    //         teamchannel_collaborators_with_access,        
+    //         abstract_collaborator_port_assignments,   
+    //     );
+
+    // }
     
     fn update_updated_at_timestamp(&mut self) {
         self.updated_at_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
@@ -3760,7 +3802,9 @@ fn create_team_channel(team_channel_name: String, owner: String) {
         HashMap::new(), // Empty collaborator ports map for a new channel
     );
 
-    new_node.save_node_to_file().expect("Failed to save initial node data"); 
+    // new_node.save_node_to_file().expect("Failed to save initial node data"); 
+    new_node.expect("REASON").save_node_to_file().expect("Failed to save initial node data"); 
+    
 }
 
 fn gpg_clearsign_file_to_sendbytes(
@@ -5714,77 +5758,49 @@ pub fn pearson_hash_base(input: &[u8]) -> Result<u8, std::io::Error> {
     Ok(hash)
 }
 
-// /// Calculates Pearson hashes for a ReadySignal struct.
-// ///
-// /// This function takes a `ReadySignal` and a list of salts (`local_user_salt_list`) as input.
-// /// It calculates a Pearson hash for the signal's data combined with each salt in the list.
-// /// The resulting hashes are then stored in the `rh` field of a new `ReadySignal` instance.
-// ///
-// /// # Arguments
-// ///
-// /// * `ready_signal`: The `ReadySignal` struct for which to calculate hashes.
-// /// * `local_user_salt_list`: A slice of `u128` salt values.
-// ///
-// /// # Returns
-// ///
-// /// * `Option<ReadySignal>`: A new `ReadySignal` instance with the calculated hashes, or `None` if an error occurred during hash calculation or if required fields of the input signal are missing.
-// fn add_pearson_hash_to_readysignal_struct(
-//     ready_signal: &ReadySignal,
-//     local_user_salt_list: &[u128],
-// ) -> Option<ReadySignal> {
-//     // debug_log!(
-//     //     "010101 calculate_and_add_pearson_hashes_to_ready_signal(): Input ReadySignal: {:?}",
-//     //     &ready_signal
-//     // );
+/// Converts a Pearson hash (Vec<u8>) to a hexadecimal string.
+///
+/// # Arguments
+///
+/// * `hash`: The Pearson hash as a `Vec<u8>`.
+///
+/// # Returns
+///
+/// * `String`: The hexadecimal representation of the hash.
+fn pearson_hash_to_hex_string(hash: &[u8]) -> String {
+    hash.iter()
+        .map(|&byte| format!("{:02x}", byte)) // Format each byte as two hex digits
+        .collect()
+}
 
-//     if let (Some(ready_timestamp), Some(ready_send_timestamp), Some(is_echo_send)) =
-//         (ready_signal.rt, ready_signal.rst, ready_signal.re)
-//     {
-//         let mut data_to_hash = Vec::new();
-//         data_to_hash.extend_from_slice(&ready_timestamp.to_be_bytes());
-//         data_to_hash.extend_from_slice(&ready_send_timestamp.to_be_bytes());
-//         data_to_hash.push(if is_echo_send { 1 } else { 0 });
+/// Converts a hexadecimal string to a Pearson hash (Vec<u8>).
+///
+/// Returns an error if the input string is not a valid hexadecimal representation.
+///
+/// # Arguments
+///
+/// * `hex_string`: The hexadecimal string.
+///
+/// # Returns
+///
+/// * `Result<Vec<u8>, String>`: The Pearson hash as a `Vec<u8>`, or an error message.
+fn hex_string_to_pearson_hash(hex_string: &str) -> Result<Vec<u8>, String> {
+    if hex_string.len() % 2 != 0 {
+        return Err("Invalid hex string: Length must be even".to_string());
+    }
 
-//         // debug_log!(
-//         //     "010101 calculate_and_add_pearson_hashes_to_ready_signal(): Data to hash: {:?}",
-//         //     &data_to_hash
-//         // );
+    let mut hash = Vec::with_capacity(hex_string.len() / 2);
+    for i in (0..hex_string.len()).step_by(2) {
+        let hex_byte = &hex_string[i..i + 2];
+        match u8::from_str_radix(hex_byte, 16) {
+            Ok(byte) => hash.push(byte),
+            Err(_) => return Err(format!("Invalid hex string: Invalid byte: {}", hex_byte)),
+        }
+    }
+    Ok(hash)
+}
 
-//         let mut ready_signal_hash_list: Vec<u8> = Vec::new();
-//         for salt in local_user_salt_list {
-//             let mut salted_data = data_to_hash.clone();
-//             salted_data.extend_from_slice(&salt.to_be_bytes());
 
-//             let hash_result = pearson_hash_base(&salted_data);
-//             // debug_log!(
-//             //     "010101 calculate_and_add_pearson_hashes_to_ready_signal(): Hash Result: {:?}",
-//             //     &hash_result
-//             // );
-
-//             match hash_result {
-//                 Ok(hash) => ready_signal_hash_list.push(hash),
-//                 Err(e) => {
-//                     debug_log!("Error calculating Pearson hash: {}", e);
-//                     return None;
-//                 }
-//             }
-//         }
-//         debug_log!(
-//             "010101 calculate_and_add_pearson_hashes_to_ready_signal(): Calculated Hashes: {:?}",
-//             &ready_signal_hash_list
-//         );
-
-//         Some(ReadySignal {
-//             rt: Some(ready_timestamp),
-//             rst: Some(ready_send_timestamp),
-//             b: Some(is_echo_send),
-//             rh: Some(ready_signal_hash_list),
-//         })
-//     } else {
-//         debug_log!("010101 calculate_and_add_pearson_hashes_to_ready_signal(): Missing fields in ReadySignal. Returning None.");
-//         None
-//     }
-// }
 
 /// Retrieves the salt list for a collaborator from their TOML configuration file.
 ///
@@ -5832,7 +5848,6 @@ fn get_saltlist_for_collaborator(collaborator_name: &str) -> Result<Vec<u128>, T
     salt_list_result // Return the salt list Result
 }
 
-
 // TODO useful sometime, if not now
 /// Calculates a list of Pearson hashes for a given input string using a provided salt list.
 ///
@@ -5867,9 +5882,6 @@ fn calculate_pearson_hashlist_for_string(
 
     Ok(hash_list)
 }
-
-
-
 
 /// Verifies the Pearson hashes in a ReadySignal against a provided salt list.
 ///
@@ -5947,41 +5959,6 @@ fn verify_readysignal_hashes(
     // All hashes match
     true
 }
-
-
-
-// fn verify_readysignal_hashes(
-//     ready_signal: &ReadySignal, 
-//     salt_list: &[u128]
-// ) -> bool {
-
-//     let mut data_to_hash = Vec::new();
-//     data_to_hash.extend_from_slice(&ready_signal.rt.to_be_bytes());
-//     data_to_hash.extend_from_slice(&ready_signal.rst.to_be_bytes()); 
-//     data_to_hash.extend_from_slice(&ready_signal.b.to_be_bytes()); 
-
-//     for (i, salt) in salt_list.iter().enumerate() {
-//         let mut salted_data = data_to_hash.clone();
-//         salted_data.extend_from_slice(&salt.to_be_bytes());
-//         match pearson_hash_base(&salted_data) {
-//             Ok(calculated_hash) => {
-//                 if calculated_hash != rh[i] { // Compare with the received hash
-//                     return false; // Hash mismatch
-//                 }
-//             }
-//             Err(e) => {
-//                 debug_log!("Error calculating Pearson hash: {}", e);
-//                 return false; // Error during hash calculation
-//             }
-//         }
-        
-//     // compare to hash in struct
-//     if calculated_hash != ready_signal.rh[i] { // Compare with the received hash
-//         return false; // Hash mismatch
-//     }
-//     // All hashes match
-//     true
-// }
 
 fn sync_flag_ok_or_wait(wait_this_many_seconds: u64) {
     // check for quit
@@ -6187,17 +6164,6 @@ struct SendFile {
     intray_hash_list: Option<Vec<u8>>, // N hashes of intray_this_send_timestamp + gpg_encrypted_intray_file
 }
 
-
-// #[derive(Serialize, Deserialize, Debug)] // Add Serialize/Deserialize for sending/receiving
-// struct ProtoReadysignal {
-//     rt: Option<u64>, // ready signal timestamp: last file obtained timestamp
-//     rst: Option<u64>, // send-time: generate_terse_timestamp_freshness_proxy(); for replay-attack protection
-//     nt: Option<String>, // Network Type (e.g. ipv6 vs. ipv4)
-//     ni: Option<u8>, // Network Index (e.g. which ipv6 in the list)
-//     rh: Option<Vec<u8>>, // N hashes of rt + re
-// }
-
-
 /// ReadySignal struct
 /// - Contents are 'Option<T>' so that assembly and inspection can occur in steps.
 /// - Terse names to reduce network traffic, as an exceptional circumstance
@@ -6209,8 +6175,6 @@ struct ReadySignal {
     b: u8, // Network Index (e.g. which ipv6 in the list)
     rh: Vec<u8>, // N hashes of rt + re
 }
-
-
 
 /// Serializes a ReadySignal into a byte vector
 /// Does NOT use serde.
@@ -6266,33 +6230,6 @@ fn calculate_ready_signal_hashes(
 
     Ok(ready_signal_hash_list)
 }
-
-// /// Proto Safety Layer for processing GotItSignal data
-// /// 
-// #[derive(Serialize, Deserialize, Debug)]
-// struct PrototGotitSignal {
-//     gst: Option<u64>, // send-time: generate_terse_timestamp_freshness_proxy(); for replay-attack protection
-//     di: Option<u64>, // the 'id' is updated_at file timestamp (because context= filesync timeline ID)
-//     gh: Option<Vec<u8>>, // N hashes of rt + re
-// }
-
-// /// maybe, draft
-// enum GotitEnum {
-    
-// }
-
-// // review use of gpg here
-// /// GotItSignal struct
-// /// Terse names to reduce network traffic, as an esceptional circumstatnce
-// /// Probably does not need a nonce because repeat does nothing...
-// /// less hash?
-// #[derive(Serialize, Deserialize, Debug)]
-// struct GotItSignal {
-//     gst: u64, // send-time: generate_terse_timestamp_freshness_proxy(); for replay-attack protection
-//     di: u64, // the 'id' is updated_at file timestamp (because context= filesync timeline ID)
-//     gh: Vec<u8>, // N hashes of rt + re
-// }
-
 
 // Define enums for each field you want to validate
 #[derive(Debug, PartialEq)]
@@ -6382,51 +6319,6 @@ fn calculate_gotitsignal_hashlist(
 
     Ok(gotit_signal_hash_list)
 }
-
-// // rough draft
-// fn calculate_gotitsignal_hashlist(
-//     rt_timestamp_for_di:,
-//     local_user_salt_list,
-// ) -> Result<Vec<u8>, Error> {
-    
-//     timestamp_for_gst = get_current_unix_timestamp();
-    
-//     let mut data_to_hash = Vec::new();
-//     data_to_hash.extend_from_slice(&timestamp_for_gst.to_be_bytes());
-//     data_to_hash.extend_from_slice(&rt_timestamp_for_di.to_be_bytes());
-//     data_to_hash.push(if is_echo_send { 1 } else { 0 }); // ?
-
-//     debug_log!(
-//         "101010 calculate_gotitsignal_hashlist(): Data to hash: {:?}",
-//         &data_to_hash
-//     );
-
-//     let mut gotit_signal_hash_list: Vec<u8> = Vec::new();
-//     for salt in local_user_salt_list {
-//         let mut salted_data = data_to_hash.clone();
-//         salted_data.extend_from_slice(&salt.to_be_bytes());
-
-//         let hash_result = pearson_hash_base(&salted_data);
-//         debug_log!(
-//             "101010 calculate_gotitsignal_hashlist(): Hash Result: {:?}",
-//             &hash_result
-//         );
-
-//         match hash_result {
-//             Ok(hash) => gotit_signal_hash_list.push(hash),
-//             Err(e) => {
-//                 debug_log!("Error calculating Pearson hash: {}", e);
-//                 return None;
-//             }
-//         }
-//     }
-//     debug_log!(
-//         "101010 calculate_gotitsignal_hashlist(): Calculated Hashes: {:?}",
-//         &gotit_signal_hash_list
-//     );
-
-//     Ok(gotit_signal_hash_list)
-// }
 
 
 /// Deserializes a byte slice into a `PrototGotitSignal`, manually handling the byte extraction.
@@ -10675,7 +10567,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         current_node_owner: String::new(),
         current_node_description_for_tui: String::new(),
         current_node_directory_path: PathBuf::new(),
-        current_node_unique_id: 0,
+        current_node_unique_id: Vec::new(),
         current_node_members: Vec::new(),
         home_square_one: true,
 
