@@ -379,38 +379,6 @@ fn get_local_ip_addresses() -> Result<Vec<IpAddr>, std::io::Error> {
 
 // another later task may be using a intranet mode.
 // */
-// fn find_valid_local_owner_ipv6_address(ipv6_addresses: &[Ipv6Addr]) -> Option<Ipv6Addr> {
-//     for &address in ipv6_addresses {
-//         if !address.is_loopback() && !address.is_unspecified() {
-//             let test_port = 55555; // Or some other test port
-//             if let Ok(_) = UdpSocket::bind(SocketAddr::new(IpAddr::V6(address), test_port)) {
-//                 return Some(address); // Found a bindable address
-//             } else {
-//                 // Log the error, and try the next address
-//                 debug_log!("find_valid_local_owner_ip_address: Error fail Could not bind to {}:{}. Trying next address...", address, test_port);
-
-//             }
-//         }
-//     }
-//     None // No valid address found
-// }
-
-
-// fn find_valid_local_owner_ipv4_address(ipv4_addresses: &[Ipv4Addr]) -> Option<Ipv4Addr> {
-//     for &address in ipv4_addresses {
-//         if !address.is_loopback() && !address.is_unspecified() {
-//             let test_port = 55555; // Or some other test port
-//             if let Ok(_) = UdpSocket::bind(SocketAddr::new(IpAddr::V4(address), test_port)) {
-//                 return Some(address); // Found a bindable address
-//             } else {
-//                 // Log the error, and try the next address
-//                 debug_log!("find_valid_local_owner_ip_address: Error fail Could not bind to {}:{}. Trying next address...", address, test_port);
-
-//             }
-//         }
-//     }
-//     None // No valid address found
-// }
 
 /// Get Band: Network config data
 /// The function is called during initialization bootstrapping
@@ -455,34 +423,6 @@ fn get_band__find_valid_network_index_and_type(
     6. return (network_type, network_index) tuple (e.g. ('ipv6', 0)
     */
 
-
-    
-    // // 2. Load IP lists from the collaborator file
-    // let (ipv4_addresses, ipv6_addresses) = match load_local_ip_lists(uma_local_owner_user) {
-    //     Ok(lists) => lists,
-    //     Err(e) => {
-    //         debug_log!("Error loading IP lists: {}", e);
-    //         return ("none".to_string(), 0); // Or handle error differently
-    //     }
-    // };
-
-    // let (ipv4_addresses_string, ipv6_addresses_string) = match load_local_iplists_as_stringtype(uma_local_owner_user) {
-    //     Ok(lists) => lists,
-    //     Err(e) => {
-    //         debug_log!("Error loading IP lists as strings: {}", e);
-    //         return ("none".to_string(), 0); // Or handle error differently
-    //     }
-    // };
-    // 2. Load IP lists from the collaborator file
-    // let (ipv4_addresses, ipv6_addresses) = match load_local_ip_lists(uma_local_owner_user) {
-    //     Ok(lists) => lists,
-    //     Err(e) => {
-    //         debug_log!("Error loading IP lists: {}", e);
-    //         // Return "none" with default IP addresses
-    //         return ("none".to_string(), 0, Ipv4Addr::UNSPECIFIED, Ipv6Addr::UNSPECIFIED); 
-    //     }
-    // };
-    
     // 2. Load IP lists from the collaborator file
     let (ipv4_addresses, ipv6_addresses) = match load_local_ip_lists(uma_local_owner_user) {
         Ok(lists) => lists,
@@ -497,8 +437,7 @@ fn get_band__find_valid_network_index_and_type(
             );
         }
     };
-    
-    
+
     let (ipv4_addresses_string, ipv6_addresses_string) = match load_local_iplists_as_stringtype(uma_local_owner_user) {
         Ok(lists) => lists,
         Err(e) => {
@@ -541,7 +480,6 @@ fn get_band__find_valid_network_index_and_type(
     debug_log!("No valid IPv4 or IPv6 address found.");
     (false, "none".to_string(), 0, EMPTY_IPV_4, EMPTY_IPV_6) // Return a default value
 }
-
 
 /// Attempts to bind a UDP socket to each address in the provided list.
 /// 
@@ -589,61 +527,6 @@ fn find_valid_local_owner_ipv4_address(ipv4_addresses: &[Ipv4Addr]) -> Option<Ip
     }
     None
 }
-
-// fn get_band__find_valid_network_index_and_type(
-//     uma_local_owner_user: String,
-//     ) -> (String, String) {
-//     /*
-//     1. get name of local owner
-//         paremeter
-//     2. get local owner file (or fields)
-//     "/project_graph_data/collaborator_files_address_book/{}__collaborator.toml", uma_local_owner_user
-//     3. look for valid ipv6
-//         find_valid_local_owner_ipv6_address
-//     4. (if not found) look for valid ivp4
-//         find_valid_local_owner_ipv4_address
-//     5. (pending) look for other
-//     6. return (network_type, network_index) tuple (e.g. ('ipv6', 0)
-//     */
-    
-//     // 1. get name of local owner
-    
-//     // 2. get local owner file (or fields) "/project_graph_data/collaborator_files_address_book/{}__collaborator.toml", uma_loca
-    
-//     // 3. look for valid ipv6
-//     for &address in ipv6_addresses {
-//         if !address.is_loopback() && !address.is_unspecified() {
-//             let test_port = 55555; // Or some other test port
-
-//             if let Ok(_) = UdpSocket::bind(SocketAddr::new(IpAddr::V6(address), test_port)) {
-//                 return Some(address); // Found a bindable address
-//             } else {
-//                 // Log the error, and try the next address
-//                 debug_log!("find_valid_local_owner_ip_address: Error fail Could not bind to {}:{}. Trying next address...", address, test_port);
-
-//             }
-//         }
-//     }
-    
-    
-//     // 4. (if not found) look for valid ivp4
-//     for &address in ipv4_addresses {
-//         if !address.is_loopback() && !address.is_unspecified() {
-//             let test_port = 55555; // Or some other test port
-
-//             if let Ok(_) = UdpSocket::bind(SocketAddr::new(IpAddr::V4(address), test_port)) {
-//                 return Some(address); // Found a bindable address
-//             } else {
-//                 // Log the error, and try the next address
-//                 debug_log!("find_valid_local_owner_ip_address: Error fail Could not bind to {}:{}. Trying next address...", address, test_port);
-
-//             }
-//         }
-//     }
-
-//     None // No valid address found
-// }
-
 
 /// Loads the local user's IPv4 and IPv6 addresses from their collaborator TOML file.
 ///
@@ -721,7 +604,6 @@ fn load_local_ip_lists(owner: &str) -> Result<(Vec<Ipv4Addr>, Vec<Ipv6Addr>), Th
     Ok((ipv4_addresses, ipv6_addresses))
 }
 
-
 /// This converts between the u8 sent by uma over network and usize that Rust uses for array-indices.
 fn get_ip_by_index(
     index: u8,
@@ -737,21 +619,6 @@ fn get_ip_by_index(
         None
     }
 }
-
-
-// fn get_ip_by_index(
-//     index: u8, 
-//     ipv4_list: &[Ipv4Addr], 
-//     ipv6_list: &[Ipv6Addr],
-// ) -> Option<std::net::IpAddr> {
-//     if index < ipv4_list.len() {
-//         Some(std::net::IpAddr::V4(ipv4_list[index]))
-//     } else if index < ipv4_list.len() + ipv6_list.len() {
-//         Some(std::net::IpAddr::V6(ipv6_list[index - ipv4_list.len()]))
-//     } else {
-//         None
-//     }
-// }
 
 /// Saves the combined network option index to a file.
 /// @ /sync_data/network_option_index.txt
@@ -780,7 +647,6 @@ fn save_network_option_index_statefile(
     write!(file, "{}", combined_index)?;
     Ok(())
 }
-
 
 /// Finds the the index in either along, not combined.
 /// This converts between the u8 sent by uma over network and usize that Rust uses for array-indices.
@@ -824,194 +690,6 @@ fn get_index_byof_ip(
     result
 
 }
-
-
-// fn get_index_byof_ip(
-//     ipv4_list: &[String],
-//     ipv6_list: &[String],
-//     ip_address: &str
-// ) -> Option<u8> {
-//     if ip_address.contains(':') {
-//         // Assume it's an IPv6 address
-//         ipv6_list.iter().position(|ip| ip == ip_address).map(|index| index + ipv4_list.len())
-//     } else {
-//         // Assume it's an IPv4 address
-//         ipv4_list.iter().position(|ip| ip == ip_address)
-//     }
-// }
-
-
-// /// Finds the combined index of an IP address in the concatenated IPv4 and IPv6 lists.
-// ///
-// /// This function efficiently searches for the given `ip_address` within the combined `ipv4_list` and `ipv6_list`.
-// /// It returns a combined index representing both the IP address type and its position:
-// ///  - If the IP is found in `ipv4_list`, its index is returned directly.
-// ///  - If the IP is found in `ipv6_list`, its index + ipv4_list.len() is returned.
-// ///  - If the IP is not found in either list, `None` is returned.
-// ///
-// /// # Arguments
-// ///
-// /// * `ipv4_list`: The list of IPv4 addresses as strings.
-// /// * `ipv6_list`: The list of IPv6 addresses as strings.
-// /// * `ip_address`: The IP address to search for as a string.
-// ///
-// /// # Returns
-// ///
-// /// * `Option<usize>`:  The combined index, or `None` if the IP address is not found.
-// fn get_index_byof_ip(
-//     ipv4_list: &[String],
-//     ipv6_list: &[String],
-//     ip_address: &str
-// ) -> Option<usize> {
-//     if ip_address.contains(':') {
-//         // Assume it's an IPv6 address
-//         ipv6_list.iter().position(|ip| ip == ip_address).map(|index| index + ipv4_list.len())
-//     } else {
-//         // Assume it's an IPv4 address
-//         ipv4_list.iter().position(|ip| ip == ip_address)
-//     }
-// }
-
-
-
-// /// Finds the combined index of an IP address in the concatenated IPv4 and IPv6 lists.
-// ///
-// /// This function efficiently searches for the given `ip_address` within the combined `ipv4_list` and `ipv6_list`.
-// /// It returns a combined index representing both the IP address type and its position:
-// ///  - If the IP is found in `ipv4_list`, its index is returned directly.
-// ///  - If the IP is found in `ipv6_list`, its index + ipv4_list.len() is returned.
-// ///  - If the IP is not found in either list, `None` is returned.
-// ///
-// /// # Arguments
-// ///
-// /// * `ipv4_list`: The list of IPv4 addresses.
-// /// * `ipv6_list`: The list of IPv6 addresses.
-// /// * `ip_address`: The IP address to search for.
-// ///
-// /// # Returns
-// ///
-// /// * `Option<usize>`:  The combined index, or `None` if the IP address is not found.
-// fn get_index_byof_ip(
-//     ipv4_list: &[Ipv4Addr],
-//     ipv6_list: &[Ipv6Addr],
-//     ip_address: &Ipv6Addr
-// ) -> Option<usize> {
-//     let ip_address_str = ip_address.to_string();
-//     if let IpAddr::V4(ipv4_addr) = ip_address {
-//         ipv4_list.iter().position(|&ip| ip == *ipv4_addr)
-//     } else if let IpAddr::V6(ipv6_addr) = ip_address {
-//         ipv6_list.iter().position(|&ip| ip == *ipv6_addr).map(|index| index + ipv4_list.len())
-//     } else {
-//         None  // Or handle other IP address types as needed.
-//     }
-// }
-
-
-
-// /// Finds the combined index of an IP address in the concatenated IPv4 and IPv6 lists.
-// ///
-// /// This function efficiently searches for the given `ip_address` within the combined `ipv4_list` and `ipv6_list`.
-// /// It returns a combined index representing both the IP address type and its position:
-// ///  - If the IP is found in `ipv4_list`, its index is returned directly.
-// ///  - If the IP is found in `ipv6_list`, its index + ipv4_list.len() is returned.
-// ///  - If the IP is not found in either list, `None` is returned.
-// ///
-// /// # Arguments
-// ///
-// /// * `ipv4_list`: The list of IPv4 addresses as strings.
-// /// * `ipv6_list`: The list of IPv6 addresses as strings.
-// /// * `ip_address`: The IP address to search for as a string.
-// ///
-// /// # Returns
-// ///
-// /// * `Option<usize>`:  The combined index, or `None` if the IP address is not found.
-// fn get_index_byof_ip(
-//     ipv4_list: &[String],
-//     ipv6_list: &[String],
-//     ip_address: &str
-// ) -> Option<usize> {
-//     if ip_address.contains(':') {
-//         // Assume it's an IPv6 address
-//         ipv6_list.iter().position(|ip| ip == ip_address).map(|index| index + ipv4_list.len())
-//     } else {
-//         // Assume it's an IPv4 address
-//         ipv4_list.iter().position(|ip| ip == ip_address)
-//     }
-// }
-
-
-
-// /// returns the index of the input
-// fn get_index_byof_ip(
-//     ipv4_list: &[String],
-//     ipv6_list: &[String],
-//     ip_address: &str
-// ) -> Option<usize> {
-//     if let Ok(ipv4_addr) = ip_address.parse::<Ipv4Addr>() {
-//         ipv4_list.iter().position(|ip| ip == &ipv4_addr.to_string())
-//     } else if let Ok(ipv6_addr) = ip_address.parse::<Ipv6Addr>() {
-//         ipv6_list.iter().position(|ip| ip == &ipv6_addr.to_string()).map(|index| index + ipv4_list.len())
-//     } else {
-//         None
-//     }
-// }
-
-
-
-
-// /// Finds the combined index of an IP address in the concatenated IPv4 and IPv6 lists.
-// ///
-// /// This function efficiently searches for the given `ip_address` within the combined `ipv4_list` and `ipv6_list`.
-// /// It returns a combined index representing both the IP address type and its position:
-// ///  - If the IP is found in `ipv4_list`, its index is returned directly.
-// ///  - If the IP is found in `ipv6_list`, its index + ipv4_list.len() is returned.
-// ///  - If the IP is not found in either list, `None` is returned.
-// ///
-// /// # Arguments
-// ///
-// /// * `ipv4_list`: The list of IPv4 addresses.
-// /// * `ipv6_list`: The list of IPv6 addresses.
-// /// * `ip_address`: The IP address to search for.
-// ///
-// /// # Returns
-// ///
-// /// * `Option<usize>`:  The combined index, or `None` if the IP address is not found.
-// fn get_index_byof_ip(
-//     ipv4_list: &[Ipv4Addr], 
-//     ipv6_list: &[Ipv6Addr], 
-//     ip_address: &IpAddr
-// ) -> Option<usize> {
-//     if let IpAddr::V4(ipv4_addr) = ip_address {
-//         ipv4_list.iter().position(|&ip| ip == *ipv4_addr)
-//     } else if let IpAddr::V6(ipv6_addr) = ip_address {
-//         ipv6_list.iter().position(|&ip| ip == *ipv6_addr).map(|index| index + ipv4_list.len()) // Add ipv4_list length for ipv6 indices
-//     } else {
-//         None  // Or handle other IP address types as needed.
-//     }
-// }
-
-
-// /// Gets the IP address from the combined IPv4/IPv6 list based on the combined index.
-// ///
-// /// # Arguments
-// ///
-// /// * `ipv4_list`: The list of IPv4 addresses.
-// /// * `ipv6_list`: The list of IPv6 addresses.
-// /// * `combined_index`: The combined index obtained from `get_index_byof_ip`.
-// ///
-// /// # Returns
-// ///
-// /// * `Option<IpAddr>`: The IP address at the given index, or `None` if the index is out of bounds.
-// fn get_ip_from_combined_index(ipv4_list: &[Ipv4Addr], ipv6_list: &[Ipv6Addr], combined_index: usize) -> Option<IpAddr> {
-//     if combined_index < ipv4_list.len() {
-//         ipv4_list.get(combined_index).map(|&ip| IpAddr::V4(ip)) // Return IPv4 address
-//     } else {
-//         let ipv6_index = combined_index - ipv4_list.len();
-//         ipv6_list.get(ipv6_index).map(|&ip| IpAddr::V6(ip))   // Return IPv6 address
-//     }
-// }
-
-
 
 /// Saves the local user's network band config data
 /// to sync_data text files
@@ -1120,123 +798,6 @@ fn write_save_rc_bandnetwork_type_index(
     
     Ok(())
 }
-
-
-// // fn hlod_udp_handshake( // Pass setup data by reference
-// fn hlod_udp_handshake(
-//     local_owner_desk_setup_data: &ForLocalOwnerDeskThread,
-//     band_local_network_type: &str, // type of IP being used
-//     band_local_user_ipv4_address: &Ipv4Addr, 
-//     band_local_user_ipv6_address: &Ipv6Addr, 
-//     band_local_network_index: usize,       // for ni  (the local user's chosen IP index from get_band__find_valid_network_index_and_type)
-// ) -> Result<(SocketAddr, String), ThisProjectError> {
-//     // 1. Create target SocketAddr for the *local* machine for receiving
-//     // ... [Create target addresses from setup data] ...
-//     // You'll need to extract the remote ready port from local_owner_desk_setup_data:
-//     let remote_ready_port = local_owner_desk_setup_data.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip; // Correct ready port from the setup data. This port was likely used for sending but for the formal protocol of how signals are processed, 'my desk' listens at that port.
-
-
-//     // --- Select IP Address and create SocketAddr for Listening (Corrected) ---
-//     let listen_ip_addr = match band_local_network_type {
-//         "ipv6" => IpAddr::V6(*band_local_user_ipv6_address),  // band_local_user_ipv6_address now a parameter
-//         "ipv4" => IpAddr::V4(*band_local_user_ipv4_address), // band_local_user_ipv4_address now a parameter
-//         _ => return Err(ThisProjectError::NetworkError("Invalid network type in hlod_udp_handshake".into())),
-//     };
-    
-//     let local_listen_addr = SocketAddr::new(listen_ip_addr, remote_ready_port); 
-
-//     // ... existing salt handling code ...
-    
-
-//     loop { // 2. loop until satisfied
-//         if should_halt_uma() { // 1. check for halt-uma
-//             return Err(ThisProjectError::NetworkError("UMA halt signal received".into())); // or log the exit?
-//         }
-
-
-//         // --- 2. check for received ready-signal (Corrected) ---
-        
-//         // Get Team Channel Name
-//         let team_channel_name = get_current_team_channel_name()
-//             .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
-
-//         if let Ok((rc_network_type, _, rc_ip)) = read_rc_bandnetwork_type_index(  // Attempt to read remote band info. 
-//             &local_owner_desk_setup_data.remote_collaborator_name,  // Access using setup data
-//             &team_channel_name,  // Correct team channel name retrieval, pass string not Path
-//         ) {  // If successful, use values.
-//             // Combine rc_ip with port from ReadySignal (or appropriate port):
-//             let rc_socket_addr = SocketAddr::new(rc_ip, remote_ready_port); // Correct port usage
-
-//             debug_log!("hlod_udp_handshake():  Ready signal information found in sync_data for {}.  rc_network_type: {}, rc_ip: {:?}, rc_socket_addr: {:?}", 
-//                 local_owner_desk_setup_data.remote_collaborator_name, 
-//                 rc_network_type, 
-//                 rc_ip,
-//                 rc_socket_addr, 
-//             ); 
-
-//             return Ok((rc_socket_addr, rc_network_type));  // Return, breaking loop, breaking function.
-
-//         } else {
-//             debug_log!("hlod_udp_handshake(): Ready signal information NOT found in sync_data for {}.  Proceeding to send ReadySignal.", 
-//                  local_owner_desk_setup_data.remote_collaborator_name
-//             ); 
-//         }
-
-//         // --- 3. sending a ready signal iterating --- 
-//         let (rc_ipv4_list, rc_ipv6_list) = (
-//             local_owner_desk_setup_data.remote_collaborator_ipv4_addr_list.clone(), 
-//             local_owner_desk_setup_data.remote_collaborator_ipv6_addr_list.clone()
-//         );
-//         debug_log!("HRCD hlod_udp_handshake 3 ipv4/ipv6 {:?} {:?}", rc_ipv4_list, rc_ipv6_list);
-
-
-//         match network_type_hlod.as_str() { // Match on network_type from local band information, iterate remote addresses. // HERE!! HERE!! corrected network type logic
-//             "ipv6" => {
-//                 for ipv6_addr in &rc_ipv6_list { // Correct IP address handling:
-//                     let target_addr = SocketAddr::new(IpAddr::V6(*ipv6_addr), remote_ready_port); // Correct remote port
-//                     debug_log!("hlod_udp_handshake(): Sending ReadySignal to: {:?},  band_local_network_type -> {:?}, band_local_network_index -> {:?}, latest_file_timestamp -> {:?}", target_addr, network_type_hlod, network_index_hlod, timestamp_for_rt);
-//                     send_ready_signal(
-//                         local_user_salt_list, // Correct salt list
-//                         &ipv4_addr_hlod, // Local IPv4. No longer part of iteration.
-//                         &ipv6_addr_hlod, // Local IPv6. No longer part of iteration.
-//                         target_addr.port(),        // Correct port
-//                         timestamp_for_rt,        // last_received_timestamp from correct function
-//                         &network_type_hlod,     //  rc_network_type after handshake.  Use local network type here.
-//                         network_index_hlod as u8,   //  band_local_network_index // Correctly passes band index, convert usize to u8 for the function
-//                     )?;
-//                     debug_log!("Ready signal sent successfully to {:?}", target_addr);
-//                 }
-//             },
-//             "ipv4" => { // Iterate and Send to each ipv4
-//                 for ipv4_addr in &rc_ipv4_list {
-//                     let target_addr = SocketAddr::new(IpAddr::V4(*ipv4_addr), remote_ready_port);
-//                     debug_log!("hlod_udp_handshake(): Sending ReadySignal to: {:?}, network_type -> {:?}, network_index -> {:?}, latest_file_timestamp -> {:?}", target_addr, network_type_hlod, network_index_hlod, timestamp_for_rt);
-//                     send_ready_signal(
-//                         local_user_salt_list, // Pass salt list directly.
-//                         &ipv4_addr_hlod,  // Local IPv4. No longer iterating on local ips.
-//                         &ipv6_addr_hlod,  // Local IPv6. No longer iterating on local ips.
-//                         target_addr.port(),      // Use target address's port directly
-//                         timestamp_for_rt,     // timestamp_for_rt// Correctly uses latest timestamp
-//                         &network_type_hlod,     // rc_network_type after handshake, and use network_type_hlod now.
-//                         network_index_hlod as u8, // Correct index handling
-//                     )?;
-//                     debug_log!("Ready signal sent successfully to {:?}", target_addr); // Log after sending, inside the Ok(_) case.
-//                 }
-//             }
-//             _ => { // invalid type, what now? exit handshake, restart handler? or return and halt UMA?
-//                 debug_log!("Invalid network type selected."); 
-//                 return Err(ThisProjectError::NetworkError("Invalid network type selected".into())); // Or loop back and retry the handshake.
-
-//             }
-//         } // End of network type handling
-        
-//         // 2.5 Wait 15 seconds (Corrected Placement): 
-//         // std::thread::sleep(Duration::from_secs(15)); // Sleep outside the sending loop
-//         std::thread::sleep(Duration::from_secs(3));
-//     } // Loop ends here (will exit after returning from inside)
-// }
-
-
 
 // TODO: maybe use a parameter in team-channel instead of hard-coding ~10 sec
 /// hlod_udp_handshake__rc_network_type_rc_ip_addr(): returns (rc_network_type, rc_ip_addr) as (String, String) loop until satisfied:
@@ -10133,7 +9694,6 @@ fn get_latest_timestamp_from_team_channel_dir() -> Result<u64, ThisProjectError>
         }
     };
 
-
     //  Crawl through the team channel directory
     for entry in WalkDir::new(channel_dir_path_str) {
         let entry = entry?; // Check for WalkDir errors
@@ -10155,160 +9715,6 @@ fn get_latest_timestamp_from_team_channel_dir() -> Result<u64, ThisProjectError>
     }
     Ok(latest_timestamp)
 }
-
-// // a loop in this? or is listener already enough?
-// // error type?
-// // setting up ready_socket
-// // how to call this?
-// //  fn decompress_banddata_byte() to get ip? (or use src?)
-// //
-// /// FIrst Bootstrap Ready-Signal Listening Loop for HRCD-rc-intray desk
-// /// returns: remote collaborator's (band_type string, band_ip string)
-// fn hrcd_udp_handshake(
-//     room_sync_input: &ForRemoteCollaboratorDeskThread
-//     ) -> Result<(String, String), ThisProjectError> {
-//     /*
-//     1. Get your local network-band info
-//     2. Make a socket-address
-//     3. listen for ready signal (that you can verify as legitimate)
-//     4. record the remote collaborator's ip data
-//     5. Done: exit loop, exit function
-//     */
-        
-//     // Load local owner band configuration data
-//     let (
-//         band_local_network_type, 
-//         band_local_network_index, 
-//         band_local_user_ipv4_address, 
-//         band_local_user_ipv6_address,
-//     ) = match read_band__network_config_type_index_specs() {
-//         Ok(data) => data,
-//         Err(e) => {
-//             // Handle the error (e.g., log and return or use default values)
-//             debug_log!("Error reading band configuration: error -> e'{}'e ", e);
-//             return Err(e); // Or handle differently
-//         }
-//     };
-
-//     // 4. Determine target IP based on network_type:
-//     let ip_addr = match band_local_network_type.to_string() {
-//         "ipv6" => IpAddr::V6(*band_local_user_ipv4_address),
-//         "ipv4" => IpAddr::V4(*band_local_user_ipv6_address),
-//         _ => return Err(ThisProjectError::NetworkError("Invalid network type".into())),
-//     };
-//     let target_addr = SocketAddr::new(ip_addr, room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip); 
-    
-    
-//     let ready_socket = UdpSocket::bind(target_addr).map_err(|e| {
-//         ThisProjectError::NetworkError(format!("Failed to bind to UDP socket: {}", e))
-//     });
-    
-//     // 2.2.1 Receive Ready Signal
-//     let mut buf = [0; 1024]; // TODO size?
-//     match ready_socket.recv_from(&mut buf) {                
-//         Ok((amt, src)) => {
-//             debug_log!(
-//                 "hrcd_udp_handshake 2.2.1 Ok((amt, src)) ready_port Signal Received {} bytes from {}", 
-//                 amt, 
-//                 src
-//             );
-            
-//             if should_halt_uma() {
-//                 debug_log!(
-//                     "hrcd_udp_handshake Halting handle_local_owner_desk() for {}", 
-//                     room_sync_input.remote_collaborator_name
-//                 );
-//                 break;
-//             }
-
-//             // --- Inspect Raw Bytes ---
-//             debug_log!(
-//                 "hrcd_udp_handshake 2.2.1 Ready Signal Raw bytes received: {:?}", 
-//                 &buf[..amt]
-//             ); 
-
-//             // --- Inspect Bytes as Hex ---
-//             let hex_string = buf[..amt].iter()
-//                 .map(|b| format!("{:02X}", b))
-//                 .collect::<String>();
-//             debug_log!(
-//                 "hrcd_udp_handshake 2.2.1 Ready Signal Raw bytes as hex: {}", 
-//                 hex_string
-//             );
-
-//             // --- 2.3 Deserialize the ReadySignal ---
-//             // TODO add size check to deserialize function
-//             let mut ready_signal: ReadySignal = match deserialize_ready_signal(&buf[..amt], &room_sync_input.remote_collaborator_salt_list) {
-//                 Ok(ready_signal) => {
-//                     // println!("hrcd_udp_handshake 2.3 Deserialize Ok(ready_signal) {}: Received ReadySignal: {:?}",
-//                     //     room_sync_input.remote_collaborator_name, ready_signal
-//                     // ); // Print to console
-//                     debug_log!("hrcd_udp_handshake 2.3 Deserialize Ok(ready_signal) {}: Received ReadySignal: {:?}",
-//                         room_sync_input.remote_collaborator_name, 
-//                         ready_signal
-//                     ); // Log the signal
-//                     ready_signal
-//                 },
-//                 Err(e) => {
-//                     debug_log!("hrcd_udp_handshake 2.3 Deserialize Err Receive data Failed to parse ready signal: {}", e);
-//                     continue; // Continue to the next iteration of the loop
-//                 }
-//             };
-
-//             // --- 2.4 Inspect & edge cases ---
-//             debug_log("\n#hrcd_udp_handshake# starting checks(plaid) 2.4");
-            
-//             // --- 2.5 Hash-Check for ReadySignal ---
-//             // Drop packet when fail check
-//             if !verify_readysignal_hashes(
-//                 &ready_signal, 
-//                 &room_sync_input.remote_collaborator_salt_list,
-//             ) {
-//                 debug_log("hrcd_udp_handshake 2.5: ReadySignal hash verification failed. Discarding signal.");
-//                 continue; // Discard the signal and continue listening
-//             }
-
-//             // --- 3.2 timestamp freshness checks ---
-//             let current_timestamp = get_current_unix_timestamp();
-            
-//             debug_log!(
-//                 "hrcd_udp_handshake 3.2 check timestamp freshness checks: current_timestamp -> {:?}",
-//                 current_timestamp
-//             );
-//             let ready_signal_timestamp = ready_signal.rst; // Unwrap the timestamp outside the match, as it's always required.
-//             // 3.2.1 No Future Dated Requests
-//             if ready_signal_timestamp > current_timestamp + 5 { // Allow for some clock skew (5 seconds)
-//                 debug_log!("hrcd_udp_handshake 3.2.1 check: Received future-dated timestamp. Discarding.");
-//                 continue;
-//             }
-
-//             // 3.2.2 No Requests Older Than ~10 sec
-//             if current_timestamp - 10 > ready_signal_timestamp {
-//                 debug_log!("hrcd_udp_handshake 3.2.2 check: Received outdated timestamp (older than 10 seconds). Discarding.");
-//                 continue;
-//             }
-
-//             debug_log("##hrcd_udp_handshake## [Done] checks(plaid) 3.2.3\n");
-    
-//             /////////////////////////////////////////
-//             // Save remote-collaborator IP settings
-//             /////////////////////////////////////////
-//             /*
-            
-//             */
-//             write_save_rc_bandnetwork_type_index(
-//                 remote_collaborator_name: String,
-//                 team_channel_name: String,
-//                 network_type: String,
-//                 network_index: u8,
-//                 this_ipv4: Ipv4Addr,
-//                 this_ipv6: Ipv6Addr,
-//             )
-            
-            
-//         }
-//     }
-// }
 
 /// handle_remote_collaborator_meetingroom_desk (send files here)
 /// very brief overview:
@@ -11074,46 +10480,6 @@ fn create_local_udp_socket(
         ThisProjectError::NetworkError(format!("Failed to bind to {} address: {}", band_local_network_type, e))
     })
 }
-
-// /// Creates a UDP socket bound to the specified IP address and port.
-// ///
-// /// This function handles both IPv4 and IPv6 addresses based on the provided `net_type`.
-// ///
-// /// # Arguments
-// ///
-// ///
-// /// # Returns
-// ///
-// /// * `Result<UdpSocket, ThisProjectError>`: The created socket, or an error if the IP address is invalid, binding fails, or an unsupported network type is provided.
-// fn create_local_udp_socket(
-//     band_local_network_type: &str,  // Borrow the string slice
-//     band_local_user_ipv4_address: &Ipv4Addr,, 
-//     band_local_user_ipv6_address: &Ipv6Addr,,
-//     ip_address_struct: SocketAddr, // uses SocketAddr directly
-//     port: u16,
-// ) -> Result<UdpSocket, ThisProjectError> {
-//     match net_type {
-//         "ipv6" => {
-//             // let ip_address: Ipv6Addr = ip_address_string.parse().map_err(|_| {
-//             //     ThisProjectError::NetworkError("Invalid IPv6 address".into())
-//             // })?;
-//             let socket_addr = SocketAddr::new(IpAddr::V6(ip_address_struct), port);
-//             UdpSocket::bind(socket_addr).map_err(|e| {
-//                 ThisProjectError::NetworkError(format!("Failed to bind to IPv6 address: {}", e))
-//             })
-//         }
-//         "ipv4" => {
-//             // let ip_address: Ipv4Addr = ip_address_string.parse().map_err(|_| {
-//             //     ThisProjectError::NetworkError("Invalid IPv4 address".into())
-//             // })?;
-//             let socket_addr = SocketAddr::new(IpAddr::V4(ip_address_struct), port);
-//             UdpSocket::bind(socket_addr).map_err(|e| {
-//                 ThisProjectError::NetworkError(format!("Failed to bind to IPv4 address: {}", e))
-//             })
-//         }
-//         _ => Err(ThisProjectError::NetworkError("Unsupported network type".into())),
-//     }
-// }
 
 // Result enum for the sync operation, allowing communication between threads
 enum SyncResult {
