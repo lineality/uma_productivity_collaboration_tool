@@ -304,6 +304,18 @@ impl From<ThisProjectError> for MyCustomError {
     }
 }
 
+fn remove_duplicates_from_path_array(vec: Vec<PathBuf>) -> Vec<PathBuf> {
+    let mut seen = HashSet::new();
+    let mut unique_vec = Vec::new();
+
+    for item in vec {
+        if seen.insert(item.clone()) {
+            unique_vec.push(item);
+        }
+    }
+
+    unique_vec
+}
 
 // Implement the From trait to easily convert from other error types into ThisProjectError
 impl From<io::Error> for ThisProjectError {
@@ -3635,9 +3647,9 @@ struct CoreNode {
     /// The path to the directory on the file system where the node's data is stored.
     directory_path: PathBuf,
     /// An order number used to define the node's position within a list or hierarchy.
-    order_number: u32,
+    // order_number: u32,
     /// The priority of the node, which can be High, Medium, or Low.
-    priority: NodePriority,
+    // priority: NodePriority,
     /// The username of the owner of the node.
     owner: String,
     /// The Unix timestamp representing when the node was last updated.
@@ -3645,7 +3657,7 @@ struct CoreNode {
     /// The Unix timestamp representing when the node will expire.
     expires_at: u64,
     /// A vector of `CoreNode` structs representing the child nodes of this node.
-    children: Vec<CoreNode>,
+    // children: Vec<CoreNode>,
     /// An ordered vector of collaborator usernames associated with this node.
     teamchannel_collaborators_with_access: Vec<String>,
     /// A map containing port assignments for each collaborator associated with the node.
@@ -3800,17 +3812,17 @@ fn load_core_node_from_toml_file(file_path: &Path) -> Result<CoreNode, String> {
         description_for_tui: toml_value.get("description_for_tui").and_then(Value::as_str).unwrap_or("").to_string(),
         node_unique_id: toml_value.get("node_unique_id").and_then(Value::as_integer).unwrap_or(0) as u64,
         directory_path: PathBuf::from(toml_value.get("directory_path").and_then(Value::as_str).unwrap_or("")),
-        order_number: toml_value.get("order_number").and_then(Value::as_integer).unwrap_or(0) as u32,
-        priority: match toml_value.get("priority").and_then(Value::as_str).unwrap_or("Medium") {
-            "High" => NodePriority::High,
-            "Medium" => NodePriority::Medium,
-            "Low" => NodePriority::Low,
-            _ => NodePriority::Medium,
-        },
+        // order_number: toml_value.get("order_number").and_then(Value::as_integer).unwrap_or(0) as u32,
+        // priority: match toml_value.get("priority").and_then(Value::as_str).unwrap_or("Medium") {
+        //     "High" => NodePriority::High,
+        //     "Medium" => NodePriority::Medium,
+        //     "Low" => NodePriority::Low,
+        //     _ => NodePriority::Medium,
+        // },
         owner: toml_value.get("owner").and_then(Value::as_str).unwrap_or("").to_string(),
         updated_at_timestamp: toml_value.get("updated_at_timestamp").and_then(Value::as_integer).unwrap_or(0) as u64,
         expires_at: toml_value.get("expires_at").and_then(Value::as_integer).unwrap_or(0) as u64,
-        children: Vec::new(), // You might need to load children recursively
+        // children: Vec::new(), // You might need to load children recursively
         teamchannel_collaborators_with_access: toml_value.get("teamchannel_collaborators_with_access").and_then(Value::as_array).map(|arr| arr.iter().filter_map(Value::as_str).map(String::from).collect()).unwrap_or_default(),
         abstract_collaborator_port_assignments: HashMap::new(),
     };
@@ -3872,32 +3884,7 @@ fn load_core_node_from_toml_file(file_path: &Path) -> Result<CoreNode, String> {
     Ok(core_node)
 }
 
-/*
-/// The name of the node. This is used for display and identification.
-node_name: String,
-/// A description of the node, intended for display in the TUI.
-description_for_tui: String,
-/// A unique identifier for the node, generated using a timestamp at node creation.
-node_unique_id: u64,
-/// The path to the directory on the file system where the node's data is stored.
-directory_path: PathBuf,
-/// An order number used to define the node's position within a list or hierarchy.
-order_number: u32,
-/// The priority of the node, which can be High, Medium, or Low.
-priority: NodePriority,
-/// The username of the owner of the node.
-owner: String,
-/// The Unix timestamp representing when the node was last updated.
-updated_at_timestamp: u64,
-/// The Unix timestamp representing when the node will expire.
-expires_at: u64,
-/// A vector of `CoreNode` structs representing the child nodes of this node.
-children: Vec<CoreNode>,
-/// An ordered vector of collaborator usernames associated with this node.
-teamchannel_collaborators_with_access: Vec<String>,
-/// A map containing port assignments for each collaborator associated with the node.
-abstract_collaborator_port_assignments: HashMap<String, CollaboratorPorts>,
-*/
+
 /// Creates a new `CoreNode` instance.
 ///
 /// # Arguments
@@ -3914,14 +3901,40 @@ abstract_collaborator_port_assignments: HashMap<String, CollaboratorPorts>,
 /// # Returns
 ///
 /// * A new `CoreNode` instance with the given attributes.
+///
+/// The name of the node. This is used for display and identification.
+/// node_name: String,
+/// A description of the node, intended for display in the TUI.
+/// description_for_tui: String,
+/// A unique identifier for the node, generated using a timestamp at node creation.
+/// node_unique_id: u64,
+/// The path to the directory on the file system where the node's data is stored.
+/// directory_path: PathBuf,
+/// An order number used to define the node's position within a list or hierarchy.
+/// order_number: u32,
+/// The priority of the node, which can be High, Medium, or Low.
+/// priority: NodePriority,
+/// The username of the owner of the node.
+/// owner: String,
+/// The Unix timestamp representing when the node was last updated.
+/// updated_at_timestamp: u64,
+/// The Unix timestamp representing when the node will expire.
+/// expires_at: u64,
+/// A vector of `CoreNode` structs representing the child nodes of this node.
+/// children: Vec<CoreNode>,
+/// An ordered vector of collaborator usernames associated with this node.
+/// teamchannel_collaborators_with_access: Vec<String>,
+/// A map containing port assignments for each collaborator associated with the node.
+/// abstract_collaborator_port_assignments: HashMap<String, CollaboratorPorts>,
+///
 impl CoreNode {
 
     fn new(
         node_name: String,
         description_for_tui: String,
         directory_path: PathBuf,
-        order_number: u32,
-        priority: NodePriority,
+        // order_number: u32,
+        // priority: NodePriority,
         owner: String,
         teamchannel_collaborators_with_access: Vec<String>,
         abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
@@ -3936,12 +3949,12 @@ impl CoreNode {
             node_unique_id,
             directory_path,
             // sec_to_next_sync,  // 3-5 seconds per sync is normal, but team can make more or less for traffic/need balance
-            order_number,
-            priority,
+            // order_number,
+            // priority,
             owner,
             updated_at_timestamp,
             expires_at,
-            children: Vec::new(),
+            // children: Vec::new(),
             teamchannel_collaborators_with_access,        
             abstract_collaborator_port_assignments, 
         }
@@ -4005,20 +4018,20 @@ impl CoreNode {
         owner: String,
         description_for_tui: String,
         directory_path: PathBuf,
-        order_number: u32,
-        priority: NodePriority,
+        // order_number: u32,
+        // priority: NodePriority,
     ) {
         let child = CoreNode::new(
             self.node_name.clone(),
             description_for_tui,
             directory_path,
-            order_number,
-            priority,
+            // order_number,
+            // priority,
             owner,
             teamchannel_collaborators_with_access,        
             abstract_collaborator_port_assignments,   
         );
-        self.children.push(child);
+        // self.children.push(child);
     }
     
     fn update_updated_at_timestamp(&mut self) {
@@ -4169,8 +4182,8 @@ fn create_team_channel(team_channel_name: String, owner: String) {
         team_channel_name.clone(),
         team_channel_name.clone(),
         new_channel_path.clone(),
-        5,
-        NodePriority::Medium,
+        // 5,  // depricated
+        // NodePriority::Medium,  // depricated
         owner,
         Vec::new(), // Empty collaborators list for a new channel
         HashMap::new(), // Empty collaborator ports map for a new channel
@@ -7404,9 +7417,19 @@ fn get_updated_at_timestamp_from_toml_file(file_path: &Path) -> Result<u64, This
 /// * `Result<(), ThisProjectError>`: `Ok(())` on success, or a `ThisProjectError`.
 fn set_prefail_flag_rt_timestamp__for_sendfile(
     file_updated_at_time: u64,
-    rt_timestamp: u64,
+    mut rt_timestamp: u64,
     remote_collaborator_name: &str,
 ) -> Result<(), ThisProjectError> {
+    
+    /*
+    edge case: if there are no files, the timestamp will be zero
+    if the rt_timestamp is zero: set the flag for 1 (not zero)
+    zero-return means there are no flags
+    */
+    if rt_timestamp == 0 {
+        rt_timestamp = 1;
+    }
+
     let team_channel_name = get_current_team_channel_name()
         .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
 
@@ -9607,8 +9630,8 @@ fn handle_local_owner_desk(
                         
                     // TODO: how long?
                     // this lets last item run
-                    thread::sleep(Duration::from_secs(5));
-                    thread::sleep(Duration::from_secs(4));
+                    // thread::sleep(Duration::from_secs(5));
+                    thread::sleep(Duration::from_secs(3));
                                  
                     send_ready_signal(
                         &local_owner_desk_setup_data.local_user_salt_list, // local_user_salt_list: &[u128], 
@@ -10404,6 +10427,8 @@ fn get_or_create_send_queue(
         session_send_queue.items   
     );
     
+    // remove duplicates
+    session_send_queue.items = remove_duplicates_from_path_array(session_send_queue.items);
     
     // Remove duplicates?
 
@@ -11603,30 +11628,6 @@ fn handle_remote_collaborator_meetingroom_desk(
                     */
 
                     debug_log("\n##HRCD## starting checks(plaid) 2.4");
-                    
-                    // // Check .rh hash
-                    // if ready_signal.rh.is_none() {
-                    //     debug_log("HRCD 2.4.1 Check: rh hash field is empty. Drop packet and keep going.");
-                    //     continue; // Drop packet: Restart the loop to listen for the next signal
-                    // }
-
-                    // // Check .rt timestamp
-                    // if ready_signal.rt.is_none() {
-                    //     debug_log("HRCD 2.4.2 Check: rt last-previous-file Timestamp field is empty. Drop packet and keep going.");
-                    //     continue; // Drop packet: Restart the loop to listen for the next signal
-                    // }
-
-                    // // Check .rst timestamp
-                    // if ready_signal.rst.is_none() {
-                    //     debug_log("HRCD 2.4.3 Check: rst ready signal sent-at timestamp field is empty. Drop packet and keep going.");
-                    //     continue; // Drop packet: Restart the loop to listen for the next signal
-                    // }
-
-                    // // Check .re is_send_echo
-                    // if ready_signal.re.is_none() {
-                    //     ready_signal.re = Some(false);
-                    //     debug_log("HRCD 2.4.4 Check: echo field is empty, so is_send_echo = false");
-                    // }
 
                     // --- 2.5 Hash-Check for ReadySignal ---
                     // Drop packet when fail check
@@ -11654,35 +11655,8 @@ fn handle_remote_collaborator_meetingroom_desk(
                         continue;
                     }
 
-                    // // --- check for edge case: echo without there being a queue item ---      
-                    // // Check: Nothing to Echo?
-                    // if ready_signal.re.expect("REASON") {
-                    //     if let Some(ref mut queue) = session_send_queue {
-                    //         if queue.items.is_empty() {
-                    //             debug_log!("HRCD: Received echo request but send queue is empty. Dropping request.");
-                    //             continue; // Restart the loop to listen for the next signal
-                    //         }
-
-                    //     } else {
-                    //         debug_log!("HRCD: Received echo request but send queue is not initialized. Dropping request.");
-                    //         continue; // Restart the loop
-                    //     }
-                    // }
-                    
-                    // TODO add request rules:
-                    // no future dated requests
-                    // no requests older than ~10 sec
-                    // only 3 0=timstamp requests per session (count them!)
-                    
-
-
-
                     // --- 3. Get or Create Send Queue ---
-                    /* 
-                    avoided edge case of echo with no queue:
-                    echo_send: if send_que is empty, Uma drops request as usual 
-                    */
-                    
+
                     // 3.1 ready_signal_timestamp for send-queue
                     let rst_sent_ready_signal_timestamp = ready_signal.rst; // Unwrap the timestamp outside the match, as it's always required.
                     
@@ -11728,9 +11702,6 @@ fn handle_remote_collaborator_meetingroom_desk(
                     debug_log("##HRCD## [Done] checks(plaid) 3.2.3\n");
                     
                     // 3.2.4 look for fail-flags:
-                    
-                    // TODO get Network Band
-                    
                     
                     ////////////////////////////////
                     // Set back_of_queue_timestamp
@@ -11828,11 +11799,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                         "HRCD ->[cue]<- 4.1 Send One File from Queue, session_send_queue -> {:?}",
                         session_send_queue   
                     );
-                    // // testing
-                    // let id = thread::current().id();
-                    // debug_log!("The id of the current thread is: {:?}", id);
-                    
-                    
+
                     // 4. while: Send File: Send One File from Queue
                     if let ref mut queue = session_send_queue {
                         
@@ -11931,7 +11898,6 @@ fn handle_remote_collaborator_meetingroom_desk(
                             
                             // --- 4.7 Send serializd-file: send UDP to intray ---
                             // 4.7.1 Send file
-
                             // 4.7 Send serializd-file Send if serialization was successful (handle Result)
                             match serialized_file_struct_to_send {
                                 Ok(extracted_serialized_data) => {  // Serialization OK
@@ -11975,6 +11941,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                     debug_log!("\nHRCD: end of inner match.\n");    
                 }, // end of the Ok inside the match: Ok((amt, src)) => {
                 Err(e) if e.kind() == ErrorKind::WouldBlock => {
+                    // TODO What is all this then?
                     // // --- 3.6 No Ready Signal, Log Periodically ---
                     // terrible idea: most people are simply not online most of the time
                     // this is not an error!!
