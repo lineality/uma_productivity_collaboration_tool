@@ -9124,7 +9124,7 @@ fn handle_local_owner_desk(
             }
         };
         debug_log!(
-            "echo: latest_received_from_rc_file_timestamp -> {:?}",
+            "HLOD: latest_received_from_rc_file_timestamp -> {:?}",
             latest_received_from_rc_file_timestamp,
         );
 
@@ -9185,9 +9185,11 @@ fn handle_local_owner_desk(
                         0 // Use a default timestamp (0) if an error occurs.
                     }
                 };
-
-
-                
+                debug_log!(
+                    "HLOD drone loop (ready-signals) latest_received_from_rc_file_timestamp -> {:?}",
+                    latest_received_from_rc_file_timestamp,
+                );
+        
                 // 1.3 Send Ready Signal (using a function)
                 send_ready_signal(
                     &salty_the_clone_list, // local_user_salt_list: &[u128], 
@@ -9208,11 +9210,7 @@ fn handle_local_owner_desk(
                 //         false,
                 //     );
                 // }
-                
-                
-                
-                
-                
+
                 debug_log!("\n");
             } // end drone loop (ready-signals)
         }); // end ready_thread
