@@ -6480,6 +6480,99 @@ impl SendQueue {
     }
 }
 
+/// unpack new node
+/// saves new node.toml file, ensuring path and feature directories
+/// Unpacks and saves a new node from received data.
+///
+/// This function takes the raw bytes of a clearsigned and decrypted `node.toml` file
+/// and saves it to the specified path. It also creates the standard UMA node
+/// subdirectories: "instant_message_browser" and "task_browser".
+///
+/// This function is used during file synchronization to create or update nodes
+/// on the local file system based on data received from a remote collaborator.
+/// It assumes the `extracted_clearsigned_file_data` contains valid TOML data
+/// for a `CoreNode` struct.
+///
+/// # Arguments
+///
+/// * `extracted_clearsigned_file_data`: The raw bytes of the decrypted and
+///   clearsigned `node.toml` file.
+/// * `new_full_abs_node_directory_path`: The *full absolute path* to the
+///   directory where the node should be saved. This path should *include* the
+///   node directory name itself (e.g.,
+///   `"project_graph_data/team_channels/my_team/my_node"`).
+///
+/// # Returns
+///
+/// * `Result<(), ThisProjectError>`: `Ok(())` on success, or a
+///   `ThisProjectError` if an error occurs during file or directory creation.
+///
+/// # Example
+///
+/// ```
+/// // ... (assuming you have extracted_clearsigned_file_data and new_full_abs_node_directory_path)
+///
+/// match unpack_new_node_save_toml_and_create_dir(&extracted_clearsigned_file_data, &new_full_abs_node_directory_path) {
+///     Ok(_) => println!("Node unpacked and saved successfully."),
+///     Err(e) => eprintln!("Error unpacking node: {}", e),
+/// }
+/// ```
+fn unpack_new_node_save_toml_and_create_dir(
+    extracted_clearsigned_file_data: &Vec<u8>, 
+    new_full_abs_node_directory_path: &Path,
+) -> Result<(), ThisProjectError> {
+    
+    // 1. Make full file path
+    let new_node_toml_file_path = new_full_abs_node_directory_path.join("node.toml"); // Path to the new node.toml
+
+    // 2. write file from GPG clearsign extracted data as node.toml
+    if let Err(e) = fs::write(
+        &new_node_toml_file_path, 
+        &extracted_clearsigned_file_data
+    ) {
+        debug_log!("HLOD-InTray: Failed to write message file: {:?}", e);
+        // Consider returning an error here instead of continuing the loop
+        return Err(ThisProjectError::from(e));
+    }
+    
+    // 3. Add IM-Browser directory
+    let im_browser_path = new_full_abs_node_directory_path.join("instant_message_browser");  // Construct path correctly
+    create_dir_all(&im_browser_path)?;
+
+    // 4. Add Task-Browser directory
+    let task_browser_path = new_full_abs_node_directory_path.join("task_browser");  // Construct path correctly
+    create_dir_all(&task_browser_path)?;
+
+    Ok(())
+}
+
+// /// unpack new node
+// /// saves new node.toml file, ensuring path and IM directory
+// fn unpack_new_node_save_toml_and_create_dir(
+//     toml_string: &str,
+//     path: &Path,
+//     dir_name: &str,  // Now this is the general name
+// ) -> Result<(), std::io::Error> {
+//     // 1. Create parent directories.
+//     create_dir_all(path)?;
+
+//     // 2. Create and write to node.toml.
+//     let toml_path = path.join("node.toml");
+//     let mut toml_file = File::create(&toml_path)?;
+//     toml_file.write_all(toml_string.as_bytes())?;
+
+//     // 3. Create associated directory.  (This is the only change)
+//     let dir_path = path.join(dir_name); // No longer specifically "instant_message_browser"
+//     create_dir_all(&dir_path)?;
+
+
+//     // Add this to create "instant_message_browser/" next to node.toml:
+//     let im_browser_path = path.join("instant_message_browser");
+//     create_dir_all(&im_browser_path)?;    
+
+//     Ok(())
+// }
+
 /// Retrieves the paths of all send queue update flags for a given collaborator in a team channel.
 ///
 /// This function reads the contents of the directory `sync_data/{team_channel_name}/sendqueue_updates/{collaborator_name}`
@@ -8443,7 +8536,7 @@ fn handle_local_owner_desk(
                     );
 
                     // 6.3 Extract the clearsigned data
-                    let extacted_clearsigned_data = match extract_clearsign_data(&decrypted_clearsignfile_data) {
+                    let extracted_clearsigned_file_data = match extract_clearsign_data(&decrypted_clearsignfile_data) {
                         Ok(data) => data,
                         Err(e) => {
                             debug_log!("HLOD 6.3: Clearsign extraction failed: {}. Skipping.", e);
@@ -8451,12 +8544,12 @@ fn handle_local_owner_desk(
                         }
                     };
                     debug_log!(
-                        "HLOD 6.3 extacted_clearsigned_data -> {:?}",
-                        extacted_clearsigned_data
+                        "HLOD 6.3 extracted_clearsigned_file_data -> {:?}",
+                        extracted_clearsigned_file_data
                     );
                     
                     // 7 Save File into Uma Folder Structure
-                    // let received_toml: Value = toml::from_slice(&extacted_clearsigned_data)?;
+                    // let received_toml: Value = toml::from_slice(&extracted_clearsigned_file_data)?;
                     /*
                     1. if X then save in A place
                     2. if Y then save in B place
@@ -8469,7 +8562,7 @@ fn handle_local_owner_desk(
                     let message_path = get_next_message_file_path(current_path, local_owner_user); 
                     */
                     // 7.1 1. Identifying Instant Message Files
-                    let file_str = std::str::from_utf8(&extacted_clearsigned_data).map_err(|_| {
+                    let file_str = std::str::from_utf8(&extracted_clearsigned_file_data).map_err(|_| {
                         ThisProjectError::InvalidData("Invalid UTF-8 in file content".into())
                     })?;
                     
@@ -8530,7 +8623,7 @@ fn handle_local_owner_desk(
                         file_hash_set_session_nonce.insert(received_file_hash); // Insert BEFORE saving
 
                         // 3. Saving the File
-                        if let Err(e) = fs::write(&message_path, &extacted_clearsigned_data) {
+                        if let Err(e) = fs::write(&message_path, &extracted_clearsigned_file_data) {
                             debug_log!("HLOD-InTray: Failed to write message file: {:?}", e);
                             // Consider returning an error here instead of continuing the loop
                             return Err(ThisProjectError::from(e));
@@ -8616,7 +8709,7 @@ fn handle_local_owner_desk(
                         */
                         
                         // 2. Access node data (must match `node_unique_id_str` from `create_node_id_to_path_lookup`):
-                        let node_unique_id_str_result = extract_string_from_toml_bytes(&extacted_clearsigned_data, "node_unique_id");
+                        let node_unique_id_str_result = extract_string_from_toml_bytes(&extracted_clearsigned_file_data, "node_unique_id");
                         // ?
                         // let new_node_dir_path_str = match extract_string_from_toml_bytes(received_file_bytes, "directory_path") {
                         //     Ok(s) => s,
@@ -8672,7 +8765,7 @@ fn handle_local_owner_desk(
                                                                                           
                                     // 3.2 replace (delete the old) node.toml file (file, not directory)
                                     // Write the received data to the OLD node.toml location, replacing it:
-                                    if let Err(e) = fs::write(&oldfile_node_toml_file_path, &extacted_clearsigned_data) {
+                                    if let Err(e) = fs::write(&oldfile_node_toml_file_path, &extracted_clearsigned_file_data) {
                                         debug_log!("Error writing node.toml: {:?} - {}", oldfile_node_toml_file_path, e);
                                         return Err(ThisProjectError::from(e));
                                     }
@@ -8681,22 +8774,36 @@ fn handle_local_owner_desk(
                                     // TODO HERE HERE
                                     // from olddir_abs_node_directory_path to new_full_abs_node_directory_path
                                     if let Err(error) = move_directory__from_path_to_path(olddir_abs_node_directory_path, new_full_abs_node_directory_path) {
-                                        eprintln!("An error occurred: {}", error);
+                                        debug_log!("An error occurred: {}", error);
                                     }
 
 
                                 
                                 } else {
                                     // Node is new, save it:
-                                    // 3. Saving the File as node.toml file
-                                    if let Err(e) = fs::write(
-                                        &new_node_toml_file_path, 
-                                        &extacted_clearsigned_data
+                                    // 3. Unpacking/Saving the File as node.toml file
+                                    
+                                    match unpack_new_node_save_toml_and_create_dir(
+                                        &extracted_clearsigned_file_data, 
+                                        &new_full_abs_node_directory_path
                                     ) {
-                                        debug_log!("HLOD-InTray: Failed to write message file: {:?}", e);
-                                        // Consider returning an error here instead of continuing the loop
-                                        return Err(ThisProjectError::from(e));
+                                        Ok(_) => debug_log("Node unpacked and saved successfully."),
+                                        Err(e) => debug_log!("Error unpacking node: {}", e),
                                     }
+                                    
+                                    // unpack_new_node_save_toml_and_create_dir(
+                                    //     &extracted_clearsigned_file_data,
+                                    //     &new_full_abs_node_directory_path,
+                                    // );
+                                    
+                                    // if let Err(e) = fs::write(
+                                    //     &new_node_toml_file_path, 
+                                    //     &extracted_clearsigned_file_data
+                                    // ) {
+                                    //     debug_log!("HLOD-InTray: Failed to write message file: {:?}", e);
+                                    //     // Consider returning an error here instead of continuing the loop
+                                    //     return Err(ThisProjectError::from(e));
+                                    // }
                                 }
                             }
                             Err(e) => {
@@ -8722,7 +8829,7 @@ fn handle_local_owner_desk(
 
                     // Extract timestamp
                     let received_file_updatedat_timestamp = match extract_updated_at_timestamp(
-                        &extacted_clearsigned_data
+                        &extracted_clearsigned_file_data
                     ) {
                         Ok(temp_extraction_timestamp) => temp_extraction_timestamp,
                         Err(e) => {
