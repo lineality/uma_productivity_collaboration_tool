@@ -3857,6 +3857,44 @@ fn create_team_channel(team_channel_name: String, owner: String) {
     
 }
 
+/// Recursively moves all contents from the source directory to the destination directory.
+/// Deletes the source directory if it is empty after moving all its contents.
+/// use std::fs;
+/// use std::path::Path;
+///
+/// e.g. 
+/// // Call the function to move the directory
+/// if let Err(error) = move_directory__from_path_to_path("path/to/old/directory", "path/to/new/directory") {
+///     eprintln!("An error occurred: {}", error);
+/// }
+fn move_directory__from_path_to_path<SourceDirectory: AsRef<Path>, DestinationDirectory: AsRef<Path>>(
+    source_directory: SourceDirectory,
+    destination_directory: DestinationDirectory,
+) -> std::io::Result<()> {
+    let source_path = source_directory.as_ref();
+    let destination_path = destination_directory.as_ref();
+
+    // Iterate through all entries in the source directory
+    for entry_result in fs::read_dir(source_path)? {
+        let entry = entry_result?;
+        let file_type = entry.file_type()?;
+
+        // If the entry is a directory, create it in the destination directory and move its contents
+        if file_type.is_dir() {
+            fs::create_dir_all(destination_path.join(entry.file_name()))?;
+            move_directory__from_path_to_path(entry.path(), destination_path.join(entry.file_name()))?;
+        }
+        // If the entry is a file, move it to the destination directory
+        else {
+            fs::rename(entry.path(), destination_path.join(entry.file_name()))?;
+        }
+    }
+
+    // Remove the source directory if it is empty
+    fs::remove_dir(source_path)?;
+    Ok(())
+}
+
 fn gpg_clearsign_file_to_sendbytes(
     file_path: &Path,
 ) -> Result<Vec<u8>, ThisProjectError> {
@@ -8509,7 +8547,7 @@ fn handle_local_owner_desk(
                         // attach to absolute path: TODO
                         
                         // Extract directory_path:
-                        let node_directory_path_result = file_str
+                        let new_node_directory_path_result = file_str
                             .lines()  // Iterate over lines
                             .find_map(|line| { // Use find_map to extract and parse in one step
                                 if line.starts_with("directory_path = \"") && line.ends_with("\"") {
@@ -8520,7 +8558,7 @@ fn handle_local_owner_desk(
                                 }
                             });
 
-                        let node_file_path = match node_directory_path_result {
+                        let node_file_path = match new_node_directory_path_result {
                             Some(path) => path,
                             None => {
                                 debug_log!("'directory_path' not found or invalid format in node.toml");
@@ -8529,11 +8567,18 @@ fn handle_local_owner_desk(
                         };
 
                         // get absolute path
-                        let full_abs_nodefilepath = PathBuf::from(node_file_path);
+                        let new_full_abs_node_directory_path = PathBuf::from(node_file_path);
                         
                         debug_log!(
-                            "HLOD 7.2 got-made full_abs_nodefilepath -> {:?}",
-                            &full_abs_nodefilepath
+                            "HLOD 7.2 got-made new_full_abs_node_directory_path -> {:?}",
+                            &new_full_abs_node_directory_path
+                        );
+                        
+                        let new_node_toml_file_path = new_full_abs_node_directory_path.join("node.toml"); // Path to the new node.toml
+                        
+                        debug_log!(
+                            "HLOD 7.2 got-made new_node_toml_file_path -> {:?}",
+                            &new_node_toml_file_path
                         );
 
                         // check: see if this same file was already saved
@@ -8572,31 +8617,80 @@ fn handle_local_owner_desk(
                         
                         // 2. Access node data (must match `node_unique_id_str` from `create_node_id_to_path_lookup`):
                         let node_unique_id_str_result = extract_string_from_toml_bytes(&extacted_clearsigned_data, "node_unique_id");
-
+                        // ?
+                        // let new_node_dir_path_str = match extract_string_from_toml_bytes(received_file_bytes, "directory_path") {
+                        //     Ok(s) => s,
+                        //     Err(_) => return Err(ThisProjectError::InvalidData("directory_path field missing from node file".into())),
+                        // };
+                        
                         match node_unique_id_str_result {
-                            Ok(node_unique_id_str) => {
+                            Ok(node_unique_id_str) => { // Node exists, handle move/replace:
+                                /*
+                                Establish Variables
+                                1. new node directory path (get) - Done Above
+                                    new_full_abs_node_directory_path
+                                    
+                                2. new node file path (matke) - Done Above
+                                    new_node_toml_file_path
+                                
+                                Look for (opposite make/get order from above): 
+                                3. Old node file path (get)
+                                4. old node directory path (make)
+                                
+                                If no old path: 
+                                5A. make new directory, 
+                                6A. save new file
+                                
+                                If old path exists:
+                                5B. remove OLD node FILE (just the file, not the directory)
+                                6B. save (relace) new node file in old directory
+                                7. recoursively move the old directory to the NEW directory path
+                                                                
+                                */
                                 // Use the node_unique_id_str
+                                
+                                // let new_node_dir_path = PathBuf::from(new_node_dir_path_str);
+                                // let new_node_toml_path = new_node_dir_path.join("node.toml"); // Path to the new node.toml
 
-                                if let Some(existing_path) = hashtable_node_id_to_path.get(&node_unique_id_str) {
-                                    // Node exists, handle move/replace:
-                                
-                                    // 3. Remove old node directory
-                                    std::fs::remove_dir_all(existing_path)?;
-                                
-                                    // 3. Saving the File
-                                    if let Err(e) = fs::write(
-                                        &full_abs_nodefilepath, 
-                                        &extacted_clearsigned_data
-                                    ) {
-                                        debug_log!("HLOD-InTray: Failed to write message file: {:?}", e);
-                                        // Consider returning an error here instead of continuing the loop
+                                // Get old node.toml file path (if exists)
+                                if let Some(olddir_existing_node_directory_path) = hashtable_node_id_to_path.get(&node_unique_id_str) {
+
+                                    // make old directory path
+                                    let olddir_abs_node_directory_path = PathBuf::from(olddir_existing_node_directory_path);
+
+                                    debug_log!(
+                                        "HLOD 7.2 got-made olddir_abs_node_directory_path -> {:?}",
+                                        &olddir_abs_node_directory_path
+                                    );
+
+                                    let oldfile_node_toml_file_path = olddir_abs_node_directory_path.join("node.toml"); // Path to the new node.toml
+
+                                    debug_log!(
+                                        "HLOD 7.2 got-made oldfile_node_toml_file_path -> {:?}",
+                                        &oldfile_node_toml_file_path
+                                    );                                    
+                                                                                          
+                                    // 3.2 replace (delete the old) node.toml file (file, not directory)
+                                    // Write the received data to the OLD node.toml location, replacing it:
+                                    if let Err(e) = fs::write(&oldfile_node_toml_file_path, &extacted_clearsigned_data) {
+                                        debug_log!("Error writing node.toml: {:?} - {}", oldfile_node_toml_file_path, e);
                                         return Err(ThisProjectError::from(e));
                                     }
+
+                                    // 3.3 Move old node directory (not remove/delete) (directory, not file)
+                                    // TODO HERE HERE
+                                    // from olddir_abs_node_directory_path to new_full_abs_node_directory_path
+                                    if let Err(error) = move_directory__from_path_to_path(olddir_abs_node_directory_path, new_full_abs_node_directory_path) {
+                                        eprintln!("An error occurred: {}", error);
+                                    }
+
+
+                                
                                 } else {
                                     // Node is new, save it:
-                                    // 3. Saving the File
+                                    // 3. Saving the File as node.toml file
                                     if let Err(e) = fs::write(
-                                        &full_abs_nodefilepath, 
+                                        &new_node_toml_file_path, 
                                         &extacted_clearsigned_data
                                     ) {
                                         debug_log!("HLOD-InTray: Failed to write message file: {:?}", e);
