@@ -2510,6 +2510,114 @@ impl App {
         tiny_tui::render_list(&self.tui_textmessage_list, &self.current_path); 
     } 
    
+    
+    fn enter_task_browser(&mut self) {
+        if self.current_path.join("task_browser").exists() {
+            self.current_path.push("task_browser");
+            self.load_tasks();
+            self.input_mode = InputMode::Command; // Or perhaps a dedicated TaskInputMode
+        } else {
+            debug_log!("'task_browser' directory not found in current node.");
+            // Potentially display an error in the TUI.
+        }
+    }
+
+    fn handle_task_action(&mut self, input: &str) -> bool {  //Returns true to exit Task Mode
+        if input == "q" || input == "quit" {
+            return true; //Exit task mode
+        } else if let Ok(selection) = input.parse::<usize>() {
+            if selection > 0 && selection <= self.tui_file_list.len() { // Use file_list for tasks now:
+                let task_index = selection - 1;
+                let full_task_path = self.get_full_task_path(task_index);
+                if let Some(path) = full_task_path {
+                    // Go to selected task node:  Update current_path
+                    // Note: you'll likely need to update GraphNavigationInstanceState as well to reflect this navigation change.
+                    // For simplicity here, we'll just print task details.
+                    self.current_path = path.clone();
+                    let node_toml_path = path.join("node.toml");
+                    if let Ok(toml_string) = fs::read_to_string(node_toml_path) {
+                        if let Ok(toml_value) = toml::from_str::<Value>(&toml_string) {
+                            debug_log!("Task Details:\n{:#?}", toml_value); //View task details for now.
+                            // TODO: Actual node navigation and state update here. 
+                        }
+                    }
+                    return true; // Exit task mode to view the task node. 
+                }
+            } else {
+                debug_log!("Invalid task number selection."); // Stay in task mode
+            }
+
+        }  else if input.starts_with('m') {
+            // Message owner, etc... (other task actions)
+            if let Some(task_number_str) = input.get(1..) {
+                if let Ok(task_number) = task_number_str.parse::<usize>() {
+                    // TODO: Implement message owner logic here (using task_number)
+                    debug_log!("Message owner of task {} (not implemented yet).", task_number);
+                } else {
+                     debug_log!("Invalid task number for message command.");
+                }
+            } else {
+                 debug_log!("Invalid message command format.");
+            }            
+        }
+
+        false // Stay in task mode by default
+    }
+
+
+    fn get_full_task_path(&self, task_index: usize) -> Option<PathBuf> { 
+        // Extract data to form a path:
+        if let Some(task_entry) = self.tui_file_list.get(task_index) {
+            let parts: Vec<&str> = task_entry.split('.').collect(); // Corrected split and collect
+            let task_name = parts.last().unwrap_or(&"").trim(); // Ensure this handles empty/invalid input
+            let column_index_parts: Vec<&str> = parts[0].split(' ').collect();
+            if column_index_parts.len() >= 1 {
+                let column_name = column_index_parts[0]; // Ensure this handles empty/invalid input
+
+                let task_path = self.current_path.join(column_name).join(task_name); // Ensure this handles potential path errors
+                Some(task_path)
+            } else { None }
+
+        } else { None }
+
+    }
+
+    fn load_tasks(&mut self) {
+        self.tui_directory_list.clear();
+        self.tui_file_list.clear();
+
+        let task_browser_dir = &self.current_path; // Use current path
+
+        // Column discovery and default creation
+        for default_col in ["#_plan", "#_started", "#_done"] {
+            let path = task_browser_dir.join(default_col);
+            if !path.exists() { // Only create if they don't exist.
+                create_dir_all(&path).expect("Failed to create directory");
+            }
+            self.tui_directory_list.push(default_col.to_string());
+        }
+
+        // Sorting isn't strictly necessary, but helps maintain visual consistency.
+        self.tui_directory_list.sort();
+
+        for (i, column_dir_name) in self.tui_directory_list.iter().enumerate() {
+            let column_dir = task_browser_dir.join(column_dir_name);
+            let mut task_counter = 1;
+
+            if let Ok(task_entries) = fs::read_dir(&column_dir) {
+                for task_entry in task_entries.flatten() {
+                    if task_entry.path().is_dir() {
+                        // Assuming task data is in node.toml within task directories
+                        let task_name = task_entry.file_name().to_string_lossy().to_string(); // Extract task name
+                        self.tui_file_list.push(format!("{} {}. {}", column_dir_name, i + 1, task_name)); // Numbered and with column name                        
+                        task_counter += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    
     fn next(&mut self) {
         if self.tui_focus < self.tui_file_list.len() - 1 {
             self.tui_focus += 1;
@@ -4489,102 +4597,104 @@ fn create_node_id_to_path_lookup(
     Ok(node_lookup)
 }
 
-// use std::collections::HashMap;
-// use std::fs::{self, DirEntry, File};  // Import DirEntry and File
-// use std::io;
-// use std::path::{Path, PathBuf};
-// use toml::Value; // Import the Value type
-// // ... other imports (e.g., for your tiny_tui)
-/// t is for task
-fn display_task_browser(current_node_path: &Path) -> bool {
-    let task_browser_dir = current_node_path.join("task_browser");
 
-    let mut columns: HashMap<String, HashMap<u32, PathBuf>> = HashMap::new();
-    let mut column_entries: Vec<DirEntry> = Vec::new(); // Correct type
+// // early alpha, maybe entirely wrong!
+// // use std::collections::HashMap;
+// // use std::fs::{self, DirEntry, File};  // Import DirEntry and File
+// // use std::io;
+// // use std::path::{Path, PathBuf};
+// // use toml::Value; // Import the Value type
+// // // ... other imports (e.g., for your tiny_tui)
+// /// t is for task
+// fn display_task_browser(current_node_path: &Path) -> bool {
+//     let task_browser_dir = current_node_path.join("task_browser");
 
-    // 1. Column Discovery and Default Creation
-    if let Ok(entries) = fs::read_dir(&task_browser_dir) {
-        for entry in entries.flatten() {
-            if entry.path().is_dir() && entry.file_name().to_string_lossy().starts_with("#_") {
-                column_entries.push(entry);
-            }
-        }
-    }
+//     let mut columns: HashMap<String, HashMap<u32, PathBuf>> = HashMap::new();
+//     let mut column_entries: Vec<DirEntry> = Vec::new(); // Correct type
+
+//     // 1. Column Discovery and Default Creation
+//     if let Ok(entries) = fs::read_dir(&task_browser_dir) {
+//         for entry in entries.flatten() {
+//             if entry.path().is_dir() && entry.file_name().to_string_lossy().starts_with("#_") {
+//                 column_entries.push(entry);
+//             }
+//         }
+//     }
 
 
-    // Create default columns if none exist:  Create DirEntry objects
-    if column_entries.is_empty() {
-        for default_col in ["#_plan", "#_started", "#_done"] {
-            let path = task_browser_dir.join(default_col);
-            fs::create_dir_all(&path).expect("Failed to create default column directory");
+//     // Create default columns if none exist:  Create DirEntry objects
+//     if column_entries.is_empty() {
+//         for default_col in ["#_plan", "#_started", "#_done"] {
+//             let path = task_browser_dir.join(default_col);
+//             fs::create_dir_all(&path).expect("Failed to create default column directory");
 
-            // Manually create DirEntry (workaround for read_dir not returning defaults immediately after creation):
-            let entry = fs::read_dir(&task_browser_dir).unwrap().find(|entry| {
-                entry.as_ref().unwrap().file_name().to_string_lossy() == default_col
-            }).unwrap(); // safe unwrap inside this specific context.
+//             // Manually create DirEntry (workaround for read_dir not returning defaults immediately after creation):
+//             let entry = fs::read_dir(&task_browser_dir).unwrap().find(|entry| {
+//                 entry.as_ref().unwrap().file_name().to_string_lossy() == default_col
+//             }).unwrap(); // safe unwrap inside this specific context.
 
-            // column_entries.push(entry);
-            column_entries.push(entry.expect("REASON"));
+//             // column_entries.push(entry);
+//             column_entries.push(entry.expect("REASON"));
             
-        }
-    }
+//         }
+//     }
 
-    column_entries.sort_by_key(|entry| entry.file_name());
+//     column_entries.sort_by_key(|entry| entry.file_name());
 
-    // Create HashMap and populate task data
-    for entry in column_entries {
-        let column_name = entry.file_name().to_string_lossy()[2..].to_string(); // Remove "#_"
-        let column_dir = task_browser_dir.join(entry.file_name()); // For task iteration inside this column
-        let mut task_map: HashMap<u32, PathBuf> = HashMap::new();
-        let mut task_counter = 1;
+//     // Create HashMap and populate task data
+//     for entry in column_entries {
+//         let column_name = entry.file_name().to_string_lossy()[2..].to_string(); // Remove "#_"
+//         let column_dir = task_browser_dir.join(entry.file_name()); // For task iteration inside this column
+//         let mut task_map: HashMap<u32, PathBuf> = HashMap::new();
+//         let mut task_counter = 1;
 
-        // Load tasks for this column:
-        if let Ok(task_entries) = fs::read_dir(column_dir) { 
-            for task_entry in task_entries.flatten() {
-                if task_entry.path().is_dir() { // tasks are directories, not files
-                    let task_path = task_entry.path(); 
-                    task_map.insert(task_counter, task_path);
-                    task_counter += 1;
-                }
-            }
-        }
+//         // Load tasks for this column:
+//         if let Ok(task_entries) = fs::read_dir(column_dir) { 
+//             for task_entry in task_entries.flatten() {
+//                 if task_entry.path().is_dir() { // tasks are directories, not files
+//                     let task_path = task_entry.path(); 
+//                     task_map.insert(task_counter, task_path);
+//                     task_counter += 1;
+//                 }
+//             }
+//         }
 
-        columns.insert(column_name, task_map);
-    }
+//         columns.insert(column_name, task_map);
+//     }
 
-    // 3. Display and Interaction
-    // ... (Use tiny_tui or other method to display columns and tasks)
+//     // 3. Display and Interaction
+//     // ... (Use tiny_tui or other method to display columns and tasks)
 
-    loop {
-        // ... (Display the task browser TUI using the 'columns' HashMap) ...
-        let input = tiny_tui::get_input().expect("Failed to get input");
+//     loop {
+//         // ... (Display the task browser TUI using the 'columns' HashMap) ...
+//         let input = tiny_tui::get_input().expect("Failed to get input");
 
-        if let Ok(task_number) = input.parse::<u32>() {
-            // Find the task based on number:
-            for (column_name, task_map) in &columns {
-                if let Some(task_path) = task_map.get(&task_number) {
+//         if let Ok(task_number) = input.parse::<u32>() {
+//             // Find the task based on number:
+//             for (column_name, task_map) in &columns {
+//                 if let Some(task_path) = task_map.get(&task_number) {
 
-                    //Example: View Task Details
-                    let node_toml_path = task_path.join("node.toml");
-                    let toml_string = fs::read_to_string(node_toml_path).expect("Failed to read TOML");
-                    let toml_value: Value = toml::from_str(&toml_string).expect("Failed to parse TOML");
-                    println!("Task Details:\n{:#?}", toml_value);  //Use {:#?} for pretty print                    
+//                     //Example: View Task Details
+//                     let node_toml_path = task_path.join("node.toml");
+//                     let toml_string = fs::read_to_string(node_toml_path).expect("Failed to read TOML");
+//                     let toml_value: Value = toml::from_str(&toml_string).expect("Failed to parse TOML");
+//                     println!("Task Details:\n{:#?}", toml_value);  //Use {:#?} for pretty print                    
                     
-                    // ... (Handle other task interactions: edit, move, etc.)...
-                    break; // Task found, exit inner loop
-                }
-            }
+//                     // ... (Handle other task interactions: edit, move, etc.)...
+//                     break; // Task found, exit inner loop
+//                 }
+//             }
 
 
-        } else if input.to_lowercase() == "q" || input.to_lowercase() == "quit" {
-             break; //Exit the task browser loop
-        } else {
-            // Handle other commands or invalid input
-             println!("Invalid command or task number.");
-        }
-    }
-    return false;
-}
+//         } else if input.to_lowercase() == "q" || input.to_lowercase() == "quit" {
+//              break; //Exit the task browser loop
+//         } else {
+//             // Handle other commands or invalid input
+//              println!("Invalid command or task number.");
+//         }
+//     }
+//     return false;
+// }
 
 
 /// ## State, Initialization & Network
@@ -5384,12 +5494,7 @@ fn handle_command(
                 ); 
 
                 // Enter Browser of Tasks
-                // display_task_browser(&app.current_path);
-                if display_task_browser(&app.current_path) { // Assuming it returns true to quit. Check value returned by `display_task_browser()`
-                    // Task browser exited, refresh the main TUI (team channel list):
-                    app.input_mode = InputMode::Command;
-                    app.update_directory_list()?; // Refresh the directory list (add error handling) 
-                } // no else needed, stay in task loop.
+                app.enter_task_browser();
                 
             }
             
@@ -5405,6 +5510,16 @@ fn handle_command(
             _ => {
                 // Display error message (e.g., "Invalid command")
                 debug_log(" 'other' commend? _ => {...");
+                // if app.is_in_task_browser_directory() {
+                if app.is_in_instant_message_browser_directory() {
+                
+                    if app.handle_task_action(input) { // Exit if handle_task_action returns true.
+                        app.current_path.pop(); // Leave task browser directory
+                    }; 
+                // Stay within the task browser function and mode otherwise.
+                } else {
+                // ... Handle other command input as usual ...
+                }
             }
             // ... (handle other commands)
             
