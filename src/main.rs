@@ -2449,7 +2449,7 @@ impl App {
                 let local_owner_user = self.graph_navigation_instance_state.local_owner_user.clone(); // Access from graph_navigation_instance_state
                 
                 let this_file_name = format!("1__{}.toml", local_owner_user);
-                let last_section = extract_last_section(&self.current_path);
+                let last_section = extract_last_path_section(&self.current_path);
 
                 // Add the first message (assuming the current user is the owner)
                 /*
@@ -3269,6 +3269,56 @@ fn calculate_corenode_hashes(
     Ok(hash_list)
 }
 
+
+
+/*
+let node_unique_id_str_result = extract_string_from_toml_bytes(received_file_bytes, "node_unique_id");
+
+// Then handle the result...
+match node_unique_id_str_result {
+    Ok(node_unique_id_str) => {
+        // Use the node_unique_id_str
+    }
+    Err(e) => {
+        // Handle error
+    }
+}
+*/
+/// Extracts a string value associated with a given key from a TOML-formatted byte slice.
+///
+/// This function manually parses the byte slice, looking for a line that matches the
+/// format `key = "value"`.  It handles cases where the key is not found or the value is
+/// not enclosed in double quotes. It does NOT handle TOML arrays or tables.
+/// It does NOT depend on the serde or toml crate.
+///
+/// # Arguments
+///
+/// * `toml_bytes`: The TOML data as a byte slice.
+/// * `key`: The key to search for.
+///
+/// # Returns
+///
+/// * `Result<String, ThisProjectError>`: The extracted value or an error.
+fn extract_string_from_toml_bytes(toml_bytes: &[u8], key: &str) -> Result<String, ThisProjectError> {
+    let toml_str = std::str::from_utf8(toml_bytes).map_err(|_| ThisProjectError::InvalidData("Invalid UTF-8".into()))?;
+
+    for line in toml_str.lines() {
+        let line = line.trim();
+        if line.starts_with(key) && line.contains('=') {
+            let parts: Vec<&str> = line.split('=').map(|s| s.trim()).collect();
+            if parts.len() == 2 {
+                let value = parts[1];
+                if value.starts_with('"') && value.ends_with('"') {
+                    return Ok(value[1..value.len() - 1].to_string());
+                } else {
+                    return Err(ThisProjectError::InvalidData("Value not in quotes".into()));
+                }
+            }
+        }
+    }
+    Err(ThisProjectError::InvalidData(format!("Key '{}' not found", key).into()))
+}
+
 /// update_collaborator_sendqueue_timestamp_log
 /// ### making a new timestamp (maybe good to do each session)
 /// 1. pick a target collaborator
@@ -4005,87 +4055,6 @@ fn gpg_decrypt_from_bytes(data: &[u8], your_gpg_key: &str) -> Result<Vec<u8>, Th
     }
 }
 
-// // use std::io::Error;
-// fn extract_clearsign_data(clearsigned_data: &[u8]) -> Result<Vec<u8>, ThisProjectError> {
-//     let clearsigned_string = String::from_utf8_lossy(clearsigned_data);
-
-//     // 1. Split the clearsigned message into its components (original data and signature).
-//     let parts: Vec<&str> = clearsigned_string
-//         .split("-----BEGIN PGP SIGNATURE-----")
-//         .collect();
-
-//     // 2. Handle cases where the signature is missing or malformed.
-//     if parts.len() < 2 {
-//         return Err(ThisProjectError::GpgError("Invalid clearsigned data format: Missing signature".into()));
-//     }
-
-//     // 3. Extract and return the data from before the signature.
-//     let original_data = parts[0].trim().as_bytes().to_vec(); // Convert to Vec<u8>
-    
-//     debug_log!(
-//         "extract_clearsign_data original_data: {:?}",
-//         original_data   
-//     );
-
-//     Ok(original_data)
-// }
-
-// fn extract_clearsign_data(clearsigned_data: &[u8]) -> Result<Vec<u8>, ThisProjectError> {
-//     let clearsigned_string = String::from_utf8_lossy(clearsigned_data);
-
-//     // Split at the beginning of the signature
-//     let parts: Vec<&str> = clearsigned_string
-//         .split("-----BEGIN PGP SIGNATURE-----")
-//         .collect();
-
-//     if parts.len() < 2 {
-//         return Err(ThisProjectError::GpgError("Invalid clearsigned data: Missing signature".into()));
-//     }
-
-//     // Extract the message part (before the signature)
-//     let message_part = parts[0];
-
-//     // Find the first non-whitespace character
-//     let start_index = message_part
-//         .find(|c: char| !c.is_whitespace())
-//         .unwrap_or(0); // Default to 0 if no non-whitespace is found
-
-//     // Extract the actual message content
-//     let message_content = &message_part[start_index..];
-//     // and Trim leading and trailing whitespace from the extracted message:
-//     let trimmed_message = message_content.trim();
-
-
-//     Ok(trimmed_message.as_bytes().to_vec())
-// }
-
-// fn extract_clearsign_data(clearsigned_data: &[u8]) -> Result<Vec<u8>, ThisProjectError> {
-//     let clearsigned_string = String::from_utf8_lossy(clearsigned_data);
-
-//     // Split at the beginning of the signature
-//     let parts: Vec<&str> = clearsigned_string
-//         .split("-----BEGIN PGP SIGNATURE-----")
-//         .collect();
-
-//     if parts.len() < 2 {
-//         return Err(ThisProjectError::GpgError("Invalid clearsigned data: Missing signature".into()));
-//     }
-
-//     // Extract the message part (before the signature)
-//     let message_part = parts[0];
-
-//     // Split into lines and remove the first 3 lines
-//     let message_lines: Vec<&str> = message_part
-//         .lines()
-//         .skip(3)
-//         .collect();
-
-//     // Join the remaining lines
-//     let message_content = message_lines.join("\n");
-
-//     Ok(message_content.as_bytes().to_vec())
-// }
-
 fn extract_clearsign_data(clearsigned_data: &[u8]) -> Result<Vec<u8>, ThisProjectError> {
     let clearsigned_string = String::from_utf8_lossy(clearsigned_data);
 
@@ -4241,21 +4210,6 @@ fn write_newfile_sendq_flag(
     }
     Ok(())
 }
-
-// /// read all newfile sendqueue flags w cleanup
-// /// 1. get all paths for this rc (remote collaborator)
-// /// 2. delete all path flags
-// /// 3. return all paths as array
-// fn read_all_newfile_sendq_flags_w_cleanup(
-//     remote_collaborator_name: &str,
-//     team_channel_name: &str,
-// ) {
-//     // e.g. sync_data/teamtest/new_file_path_flags/bob
-
-//     // 1. get all paths for this rc (remote collaborator)
-//     // 2. delete all path flags
-//     // 3. return all paths as array
-// }
 
 /// Reads all new file send queue flags and cleans up the flag files.
 ///
@@ -4419,6 +4373,84 @@ fn add_im_message(
     
     Ok(())
 }
+
+
+/*
+
+// Example usage (in file receiving):
+
+// ... after receiving and decrypting a node file ...
+
+// 1. Create lookup table:
+let node_id_to_path = create_node_id_to_path_lookup(&team_channel_path)?;
+
+
+// 2. Access node data (must match `node_unique_id_str` from `create_node_id_to_path_lookup`):
+let node_unique_id_str = received_toml.get("node_unique_id").and_then(Value::as_str).map(|s| s.to_owned()).unwrap_or_default();
+if let Some(existing_path) = node_id_to_path.get(&node_unique_id_str) {
+    // Node exists, handle move/replace:
+
+    // 3. Remove old node directory
+    std::fs::remove_dir_all(existing_path)?;
+
+    // ... (your node saving logic)
+} else {
+    // Node is new, save it:
+    // ... (your node saving logic)
+
+}
+*/
+/// Creates a lookup table of node unique IDs to their full file paths.
+///
+/// This function iterates through the team channel directory, identifies node directories (those containing a `node.toml` file),
+/// extracts the node's unique ID from the `node.toml`, and stores the ID and full file path in a HashMap.
+///
+/// # Arguments
+///
+/// * `team_channel_path`: The path to the team channel directory.
+///
+/// # Returns
+///
+/// * `Result<HashMap<String, PathBuf>, ThisProjectError>`:  A HashMap mapping node unique IDs to their paths, or a `ThisProjectError` if an error occurs.
+fn create_node_id_to_path_lookup(
+    team_channel_path: &Path,
+) -> Result<HashMap<String, PathBuf>, ThisProjectError> {
+    let mut node_lookup: HashMap<String, PathBuf> = HashMap::new();
+
+    for entry in WalkDir::new(team_channel_path) {
+        let entry = entry?;
+        let path = entry.path();
+
+        if path.is_dir() { // A. Nodes only (directories)
+            let node_toml_path = path.join("node.toml");
+            if node_toml_path.exists() {
+                // Found a node directory
+                let toml_string = std::fs::read_to_string(&node_toml_path)?;
+                let toml_value: Value = toml::from_str(&toml_string)?;
+
+                // B. Extract node unique ID
+                // let node_unique_id = toml_value.get("node_unique_id").and_then(Value::as_integer).unwrap_or(0) as u64;
+                
+                // Updated to get unique_id as hex_string:
+                let node_unique_id_str = toml_value.get("node_unique_id").and_then(Value::as_str).map(|s| s.to_owned()).unwrap_or_default();
+                if node_unique_id_str.is_empty() {
+                    continue; // Skip this node if no valid ID
+                }
+
+
+                // C. Get full file path
+                let full_path = path.to_path_buf();
+
+                // Add to lookup table:
+                node_lookup.insert(node_unique_id_str, full_path);
+            }
+        }
+    }
+
+    Ok(node_lookup)
+}
+
+
 
 /// ## State, Initialization & Network
 /// If as a vignette, let's look at a brief walkthrough of Alice starting up Uma as she embarks on a build with Bob. 
@@ -5219,7 +5251,7 @@ fn handle_command(
     return Ok(false); // Don't exit by default
 }
 
-fn extract_last_section(current_path: &PathBuf) -> Option<String> {
+fn extract_last_path_section(current_path: &PathBuf) -> Option<String> {
     current_path.file_name().and_then(|os_str| os_str.to_str().map(|s| s.to_string()))
 }
 
@@ -7947,6 +7979,15 @@ fn handle_local_owner_desk(
     loop { // 1. start overall loop to (re)start whole desk
         debug_log("HLOD 1. start overall loop to (re)start whole desk");
         
+        
+        // 1. Create lookup table:
+        let channel_dir_path_str = read_state_string("current_node_directory_path.txt")?; // read as string first
+        debug_log!("1. Channel directory path (from session state): {}", channel_dir_path_str); 
+        
+        // use absolute file path
+        let team_channel_path = PathBuf::from(channel_dir_path_str);
+        let hashtable_node_id_to_path = create_node_id_to_path_lookup(&team_channel_path)?;
+
         let remote_collaborator_name_for_thread_1 = remote_collaborator_name.clone();
         let remote_collaborator_name_for_thread_2 = remote_collaborator_name.clone();
         let salt_list_1_drone_clone = salt_list_1.clone();
@@ -8394,6 +8435,7 @@ fn handle_local_owner_desk(
                         ThisProjectError::InvalidData("Invalid UTF-8 in file content".into())
                     })?;
                     
+                    
                     debug_log!(
                         "HLOD 7.1 found message file, file_str -> {:?}",
                         file_str
@@ -8528,19 +8570,47 @@ fn handle_local_owner_desk(
                         5. (re)save at the new path
                         */
                         
-                        
-                        // 3. Saving the File
-                        if let Err(e) = fs::write(
-                            &full_abs_nodefilepath, 
-                            &extacted_clearsigned_data
-                        ) {
-                            debug_log!("HLOD-InTray: Failed to write message file: {:?}", e);
-                            // Consider returning an error here instead of continuing the loop
-                            return Err(ThisProjectError::from(e));
-                        }
+                        // 2. Access node data (must match `node_unique_id_str` from `create_node_id_to_path_lookup`):
+                        let node_unique_id_str_result = extract_string_from_toml_bytes(&extacted_clearsigned_data, "node_unique_id");
+
+                        match node_unique_id_str_result {
+                            Ok(node_unique_id_str) => {
+                                // Use the node_unique_id_str
+
+                                if let Some(existing_path) = hashtable_node_id_to_path.get(&node_unique_id_str) {
+                                    // Node exists, handle move/replace:
+                                
+                                    // 3. Remove old node directory
+                                    std::fs::remove_dir_all(existing_path)?;
+                                
+                                    // 3. Saving the File
+                                    if let Err(e) = fs::write(
+                                        &full_abs_nodefilepath, 
+                                        &extacted_clearsigned_data
+                                    ) {
+                                        debug_log!("HLOD-InTray: Failed to write message file: {:?}", e);
+                                        // Consider returning an error here instead of continuing the loop
+                                        return Err(ThisProjectError::from(e));
+                                    }
+                                } else {
+                                    // Node is new, save it:
+                                    // 3. Saving the File
+                                    if let Err(e) = fs::write(
+                                        &full_abs_nodefilepath, 
+                                        &extacted_clearsigned_data
+                                    ) {
+                                        debug_log!("HLOD-InTray: Failed to write message file: {:?}", e);
+                                        // Consider returning an error here instead of continuing the loop
+                                        return Err(ThisProjectError::from(e));
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                // Handle error
+                                continue;
+                            }
+                        }   
                     }  
-                    
-                    
                     
                     debug_log!("7.3 HLOD-InTray: Instant message file saved to: {:?}", message_path);
 
