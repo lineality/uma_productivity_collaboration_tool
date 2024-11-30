@@ -6525,21 +6525,24 @@ fn unpack_new_node_save_toml_and_create_dir(
     // 1. Make full file path
     let new_node_toml_file_path = new_full_abs_node_directory_path.join("node.toml"); // Path to the new node.toml
 
-    // 2. write file from GPG clearsign extracted data as node.toml
+    // 2. Create directory if it doesn't exist
+    fs::create_dir_all(new_full_abs_node_directory_path)?;
+    
+    // 3. write file from GPG clearsign extracted data as node.toml
     if let Err(e) = fs::write(
         &new_node_toml_file_path, 
         &extracted_clearsigned_file_data
     ) {
-        debug_log!("HLOD-InTray: Failed to write message file: {:?}", e);
+        debug_log!("HLOD-InTray: Unpack Node: Failed to write message file: {:?}", e);
         // Consider returning an error here instead of continuing the loop
         return Err(ThisProjectError::from(e));
     }
     
-    // 3. Add IM-Browser directory
+    // 4. Add IM-Browser directory
     let im_browser_path = new_full_abs_node_directory_path.join("instant_message_browser");  // Construct path correctly
     create_dir_all(&im_browser_path)?;
 
-    // 4. Add Task-Browser directory
+    // 5. Add Task-Browser directory
     let task_browser_path = new_full_abs_node_directory_path.join("task_browser");  // Construct path correctly
     create_dir_all(&task_browser_path)?;
 
