@@ -4337,7 +4337,7 @@ fn read_all_newfile_sendq_flags_w_cleanup(
 /// 3. save that path as 
 ///
 fn add_im_message(
-    message_path: &Path,
+    incoming_file_path: &Path,
     owner: &str,
     text: &str,
     signature: Option<String>,
@@ -4362,7 +4362,7 @@ fn add_im_message(
     }
 
     // separate name and path
-    let parent_dir = if let Some(parent) = message_path.parent() {
+    let parent_dir = if let Some(parent) = incoming_file_path.parent() {
         parent
     } else {
         Path::new("")
@@ -4397,7 +4397,7 @@ fn add_im_message(
     let toml_data = toml::to_string(&message).map_err(|e| {
         io::Error::new(io::ErrorKind::Other, format!("TOML serialization error: {}", e))
     })?; // Wrap TOML error in io::Error
-    fs::write(message_path, toml_data)?;
+    fs::write(incoming_file_path, toml_data)?;
     
     
     // Write update flag for each possible remote collaborator
@@ -4406,7 +4406,7 @@ fn add_im_message(
     // etc.
     write_newfile_sendq_flag(
         &recipients_list,
-        &message_path,
+        &incoming_file_path,
     );
     
     Ok(())
@@ -8562,7 +8562,7 @@ fn handle_local_owner_desk(
                     
                     current_path = project_graph_data/team_channels/{}/instant_message_browser/
                     
-                    let message_path = get_next_message_file_path(current_path, local_owner_user); 
+                    let incoming_file_path = get_next_message_file_path(current_path, local_owner_user); 
                     */
                     // 7.1 1. Identifying Instant Message Files
                     let file_str = std::str::from_utf8(&extracted_clearsigned_file_data).map_err(|_| {
@@ -8575,7 +8575,7 @@ fn handle_local_owner_desk(
                         file_str
                     );
                     
-                    let mut message_path: PathBuf = PathBuf::from("project_graph_data/team_channels");
+                    let mut incoming_file_path: PathBuf = PathBuf::from("project_graph_data/team_channels");
                     
                     let team_channel_name = get_current_team_channel_name()
                         .ok_or(ThisProjectError::InvalidData(
@@ -8593,14 +8593,14 @@ fn handle_local_owner_desk(
                         current_path.push(&team_channel_name);
                         current_path.push("instant_message_browser");
                         
-                        message_path = get_next_message_file_path(
+                        incoming_file_path = get_next_message_file_path(
                             &current_path, 
                             &local_owner_desk_setup_data.remote_collaborator_name // local user name
                         );
     
                         debug_log!(
-                            "HLOD 7.2 got-made message_path -> {:?}",
-                            message_path
+                            "HLOD 7.2 got-made incoming_file_path -> {:?}",
+                            incoming_file_path
                         );
 
                         // check: see if this same file was already saved
@@ -8626,11 +8626,13 @@ fn handle_local_owner_desk(
                         file_hash_set_session_nonce.insert(received_file_hash); // Insert BEFORE saving
 
                         // 3. Saving the File
-                        if let Err(e) = fs::write(&message_path, &extracted_clearsigned_file_data) {
+                        if let Err(e) = fs::write(&incoming_file_path, &extracted_clearsigned_file_data) {
                             debug_log!("HLOD-InTray: Failed to write message file: {:?}", e);
                             // Consider returning an error here instead of continuing the loop
                             return Err(ThisProjectError::from(e));
                         }
+                        
+                        debug_log!("7.3 HLOD-InTray: IM message file saved to: {:?}", incoming_file_path);
                     }
                     
                     
@@ -8664,6 +8666,9 @@ fn handle_local_owner_desk(
 
                         // get absolute path
                         let new_full_abs_node_directory_path = PathBuf::from(node_file_path);
+                        
+                        // make sure path exists
+                        fs::create_dir_all(new_full_abs_node_directory_path)?;
                         
                         debug_log!(
                             "HLOD 7.2 got-made new_full_abs_node_directory_path -> {:?}",
@@ -8753,7 +8758,7 @@ fn handle_local_owner_desk(
 
                                     // make old directory path
                                     let olddir_abs_node_directory_path = PathBuf::from(olddir_existing_node_directory_path);
-
+                                    
                                     debug_log!(
                                         "HLOD 7.2 got-made olddir_abs_node_directory_path -> {:?}",
                                         &olddir_abs_node_directory_path
@@ -8779,9 +8784,10 @@ fn handle_local_owner_desk(
                                     if let Err(error) = move_directory__from_path_to_path(olddir_abs_node_directory_path, new_full_abs_node_directory_path) {
                                         debug_log!("An error occurred: {}", error);
                                     }
+                                    
+                                    debug_log!("7.3 HLOD-InTray: moved file moved from: {:?}", olddir_abs_node_directory_path);
+                                    debug_log!("7.3 HLOD-InTray: moved-new file saved to: {:?}", new_full_abs_node_directory_path);
 
-
-                                
                                 } else {
                                     // Node is new, save it:
                                     // 3. Unpacking/Saving the File as node.toml file
@@ -8793,6 +8799,8 @@ fn handle_local_owner_desk(
                                         Ok(_) => debug_log("Node unpacked and saved successfully."),
                                         Err(e) => debug_log!("Error unpacking node: {}", e),
                                     }
+                                    
+                                    debug_log!("7.3 HLOD-InTray: new file saved to: {:?}", new_full_abs_node_directory_path);
                                     
                                     // unpack_new_node_save_toml_and_create_dir(
                                     //     &extracted_clearsigned_file_data,
@@ -8816,7 +8824,7 @@ fn handle_local_owner_desk(
                         }   
                     }  
                     
-                    debug_log!("7.3 HLOD-InTray: Instant message file saved to: {:?}", message_path);
+                    
 
                       /////////////
                      // Echo Base
@@ -11099,12 +11107,12 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                     let local_owner_user = &app.graph_navigation_instance_state.local_owner_user; // Access using self
 
                     // 1. final path name (.toml)
-                    let message_path = get_next_message_file_path(&app.current_path, local_owner_user); 
-                    debug_log(&format!("Next message path: {:?}", message_path)); // Log the calculated message path
+                    let incoming_file_path = get_next_message_file_path(&app.current_path, local_owner_user); 
+                    debug_log(&format!("Next message path: {:?}", incoming_file_path)); // Log the calculated message path
                     
                     // 2. make message file
                     add_im_message(
-                        &message_path,
+                        &incoming_file_path,
                         local_owner_user,
                         input.trim(), 
                         None,
@@ -11120,7 +11128,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                     // // save_updateflag_path_for_sendqueue
                     // save_updateflag_path_for_sendqueue(
                     //     &this_team_channelname,
-                    //     &message_path, // Take PathBuf directly
+                    //     &incoming_file_path, // Take PathBuf directly
                     // );
 
                     app.load_im_messages(); // Access using self
