@@ -8394,67 +8394,154 @@ fn handle_local_owner_desk(
                         ThisProjectError::InvalidData("Invalid UTF-8 in file content".into())
                     })?;
                     
-                    // TODO for not only handling IM files
-                    if !file_str.contains("filepath_in_node = \"/instant_message_browser\"") {
-                        debug_log!("HLOD-InTray: Not an instant message file. Skipping.");
-                        continue;
-                    }
-
                     debug_log!(
                         "HLOD 7.1 found message file, file_str -> {:?}",
                         file_str
                     );
                     
-                    // 7.2 
-                    // 2. Generating File Path
+                    let mut message_path: PathBuf = PathBuf::from("project_graph_data/team_channels");
+                    
                     let team_channel_name = get_current_team_channel_name()
-                        .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
-                    let mut current_path = PathBuf::from("project_graph_data/team_channels");
-                    current_path.push(&team_channel_name);
-                    current_path.push("instant_message_browser");
-                    
-                    let message_path = get_next_message_file_path(
-                        &current_path, 
-                        &local_owner_desk_setup_data.remote_collaborator_name // Use local user's name
-                    );
+                        .ok_or(ThisProjectError::InvalidData(
+                            "Unable to get team channel name".into())
+                        )?;
+                
+                    // TODO for now only handling IM and Node files
+                    if file_str.contains("filepath_in_node = \"/instant_message_browser\"") {
+                        debug_log!("HLOD-InTray: an instant message file.");
 
-                    debug_log!(
-                        "HLOD 7.2 got-made message_path -> {:?}",
-                        message_path
-                    );
-                    
-                    
-                    // check: see if this same file was already saved
-                    // 1. Calculate the hash of the received file content using the *local* user's salts and the *raw bytes*:
-                    let received_file_hash_result = calculate_pearson_hashlist_for_string( // Use a byte-oriented hash function
-                        &file_str,  // Hash the raw bytes
-                        &local_owner_desk_setup_data.local_user_salt_list, // Use *local* user's salts
-                    );
-                    
-                    let received_file_hash = match received_file_hash_result {
-                        Ok(hash) => hash,
-                        Err(e) => {
-                            debug_log!("Error calculating hash for received file: {}", e);
-                            continue; // Skip to next file if hashing fails
+                        // 7.2 
+                        // 2. Generating File Path
+
+                        let mut current_path = PathBuf::from("project_graph_data/team_channels");
+                        current_path.push(&team_channel_name);
+                        current_path.push("instant_message_browser");
+                        
+                        message_path = get_next_message_file_path(
+                            &current_path, 
+                            &local_owner_desk_setup_data.remote_collaborator_name // local user name
+                        );
+    
+                        debug_log!(
+                            "HLOD 7.2 got-made message_path -> {:?}",
+                            message_path
+                        );
+
+                        // check: see if this same file was already saved
+                        // 1. Calculate the hash of the received file content using the *local* user's salts and the *raw bytes*:
+                        let received_file_hash_result = calculate_pearson_hashlist_for_string( // Use a byte-oriented hash function
+                            &file_str,  // Hash the raw bytes
+                            &local_owner_desk_setup_data.local_user_salt_list, // Use *local* user's salts
+                        );
+
+                        let received_file_hash = match received_file_hash_result {
+                            Ok(hash) => hash,
+                            Err(e) => {
+                                debug_log!("Error calculating hash for received file: {}", e);
+                                continue; // Skip to next file if hashing fails
+                            }
+                        };
+
+                        // 2. Check for duplicates and insert the hash (as before)
+                        if file_hash_set_session_nonce.contains(&received_file_hash) {
+                            debug_log!("Duplicate file received (hash match). Discarding.");
+                            continue; // Discard the duplicate file
                         }
-                    };
-                    
-                    // 2. Check for duplicates and insert the hash (as before)
-                    if file_hash_set_session_nonce.contains(&received_file_hash) {
-                        debug_log!("Duplicate file received (hash match). Discarding.");
-                        continue; // Discard the duplicate file
-                    }
-                    file_hash_set_session_nonce.insert(received_file_hash); // Insert BEFORE saving
-                                        
-                    
-                    
-                    // 3. Saving the File
-                    if let Err(e) = fs::write(&message_path, &extacted_clearsigned_data) {
-                        debug_log!("HLOD-InTray: Failed to write message file: {:?}", e);
-                        // Consider returning an error here instead of continuing the loop
-                        return Err(ThisProjectError::from(e));
-                    }
+                        file_hash_set_session_nonce.insert(received_file_hash); // Insert BEFORE saving
 
+                        // 3. Saving the File
+                        if let Err(e) = fs::write(&message_path, &extacted_clearsigned_data) {
+                            debug_log!("HLOD-InTray: Failed to write message file: {:?}", e);
+                            // Consider returning an error here instead of continuing the loop
+                            return Err(ThisProjectError::from(e));
+                        }
+                    }
+                    
+                    
+                    // TODO for now only handling IM and Node files
+                    if file_str.contains("node_unique_id = \"") {
+                        debug_log!("HLOD-InTray: an Ode file. (Grecian Urn...you know.)");
+
+                        // 7.2 
+                        // 2. Generating File Path
+                        // attach to absolute path: TODO
+                        
+                        // Extract directory_path:
+                        let node_directory_path_result = file_str
+                            .lines()  // Iterate over lines
+                            .find_map(|line| { // Use find_map to extract and parse in one step
+                                if line.starts_with("directory_path = \"") && line.ends_with("\"") {
+                                    let path_str = &line["directory_path = \"".len()..line.len() - 1];
+                                    Some(PathBuf::from(path_str))
+                                } else {
+                                    None
+                                }
+                            });
+
+                        let node_file_path = match node_directory_path_result {
+                            Some(path) => path,
+                            None => {
+                                debug_log!("'directory_path' not found or invalid format in node.toml");
+                                continue; // Or handle error as you see fit
+                            }
+                        };
+
+                        // get absolute path
+                        let full_abs_nodefilepath = PathBuf::from(node_file_path);
+                        
+                        debug_log!(
+                            "HLOD 7.2 got-made full_abs_nodefilepath -> {:?}",
+                            &full_abs_nodefilepath
+                        );
+
+                        // check: see if this same file was already saved
+                        // 1. Calculate the hash of the received file content using the *local* user's salts and the *raw bytes*:
+                        let received_file_hash_result = calculate_pearson_hashlist_for_string( // Use a byte-oriented hash function
+                            &file_str,  // Hash the raw bytes
+                            &local_owner_desk_setup_data.local_user_salt_list, // Use *local* user's salts
+                        );
+
+                        let received_file_hash = match received_file_hash_result {
+                            Ok(hash) => hash,
+                            Err(e) => {
+                                debug_log!("Error calculating hash for received file: {}", e);
+                                continue; // Skip to next file if hashing fails
+                            }
+                        };
+
+                        // 2. Check for duplicates and insert the hash (as before)
+                        if file_hash_set_session_nonce.contains(&received_file_hash) {
+                            debug_log!("Duplicate file received (hash match). Discarding.");
+                            continue; // Discard the duplicate file
+                        }
+                        file_hash_set_session_nonce.insert(received_file_hash); // Insert BEFORE saving
+
+                        
+                        /////////////////
+                        // Move or Save
+                        ////////////////
+                        /*
+                        1. Make a hash-table of node files' unique ID in session/team-channel: id: path lookup 
+                        2. check this node uniqeu ID
+                        3. if this node is an existing node:
+                        4. remove the old path
+                        5. (re)save at the new path
+                        */
+                        
+                        
+                        // 3. Saving the File
+                        if let Err(e) = fs::write(
+                            &full_abs_nodefilepath, 
+                            &extacted_clearsigned_data
+                        ) {
+                            debug_log!("HLOD-InTray: Failed to write message file: {:?}", e);
+                            // Consider returning an error here instead of continuing the loop
+                            return Err(ThisProjectError::from(e));
+                        }
+                    }  
+                    
+                    
+                    
                     debug_log!("7.3 HLOD-InTray: Instant message file saved to: {:?}", message_path);
 
                       /////////////
