@@ -97,6 +97,7 @@ use std::fs::{
     write,
     remove_dir_all,
     read_dir,
+    DirEntry,
 };
 use toml;
 use toml::Value;
@@ -4488,6 +4489,102 @@ fn create_node_id_to_path_lookup(
     Ok(node_lookup)
 }
 
+// use std::collections::HashMap;
+// use std::fs::{self, DirEntry, File};  // Import DirEntry and File
+// use std::io;
+// use std::path::{Path, PathBuf};
+// use toml::Value; // Import the Value type
+// // ... other imports (e.g., for your tiny_tui)
+/// t is for task
+fn display_task_browser(current_node_path: &Path) -> bool {
+    let task_browser_dir = current_node_path.join("task_browser");
+
+    let mut columns: HashMap<String, HashMap<u32, PathBuf>> = HashMap::new();
+    let mut column_entries: Vec<DirEntry> = Vec::new(); // Correct type
+
+    // 1. Column Discovery and Default Creation
+    if let Ok(entries) = fs::read_dir(&task_browser_dir) {
+        for entry in entries.flatten() {
+            if entry.path().is_dir() && entry.file_name().to_string_lossy().starts_with("#_") {
+                column_entries.push(entry);
+            }
+        }
+    }
+
+
+    // Create default columns if none exist:  Create DirEntry objects
+    if column_entries.is_empty() {
+        for default_col in ["#_plan", "#_started", "#_done"] {
+            let path = task_browser_dir.join(default_col);
+            fs::create_dir_all(&path).expect("Failed to create default column directory");
+
+            // Manually create DirEntry (workaround for read_dir not returning defaults immediately after creation):
+            let entry = fs::read_dir(&task_browser_dir).unwrap().find(|entry| {
+                entry.as_ref().unwrap().file_name().to_string_lossy() == default_col
+            }).unwrap(); // safe unwrap inside this specific context.
+
+            // column_entries.push(entry);
+            column_entries.push(entry.expect("REASON"));
+            
+        }
+    }
+
+    column_entries.sort_by_key(|entry| entry.file_name());
+
+    // Create HashMap and populate task data
+    for entry in column_entries {
+        let column_name = entry.file_name().to_string_lossy()[2..].to_string(); // Remove "#_"
+        let column_dir = task_browser_dir.join(entry.file_name()); // For task iteration inside this column
+        let mut task_map: HashMap<u32, PathBuf> = HashMap::new();
+        let mut task_counter = 1;
+
+        // Load tasks for this column:
+        if let Ok(task_entries) = fs::read_dir(column_dir) { 
+            for task_entry in task_entries.flatten() {
+                if task_entry.path().is_dir() { // tasks are directories, not files
+                    let task_path = task_entry.path(); 
+                    task_map.insert(task_counter, task_path);
+                    task_counter += 1;
+                }
+            }
+        }
+
+        columns.insert(column_name, task_map);
+    }
+
+    // 3. Display and Interaction
+    // ... (Use tiny_tui or other method to display columns and tasks)
+
+    loop {
+        // ... (Display the task browser TUI using the 'columns' HashMap) ...
+        let input = tiny_tui::get_input().expect("Failed to get input");
+
+        if let Ok(task_number) = input.parse::<u32>() {
+            // Find the task based on number:
+            for (column_name, task_map) in &columns {
+                if let Some(task_path) = task_map.get(&task_number) {
+
+                    //Example: View Task Details
+                    let node_toml_path = task_path.join("node.toml");
+                    let toml_string = fs::read_to_string(node_toml_path).expect("Failed to read TOML");
+                    let toml_value: Value = toml::from_str(&toml_string).expect("Failed to parse TOML");
+                    println!("Task Details:\n{:#?}", toml_value);  //Use {:#?} for pretty print                    
+                    
+                    // ... (Handle other task interactions: edit, move, etc.)...
+                    break; // Task found, exit inner loop
+                }
+            }
+
+
+        } else if input.to_lowercase() == "q" || input.to_lowercase() == "quit" {
+             break; //Exit the task browser loop
+        } else {
+            // Handle other commands or invalid input
+             println!("Invalid command or task number.");
+        }
+    }
+    return false;
+}
 
 
 /// ## State, Initialization & Network
@@ -5268,8 +5365,36 @@ fn handle_command(
                     app.current_path
                 ); 
                 
+                // Enter Browser of Messages
                 app.load_im_messages();
             }
+            "t" | "task" | "tasks" => {
+                debug_log("t selected: task browser launching");
+                debug_log(&format!("app.current_path {:?}", app.current_path)); 
+                app.input_mode = InputMode::InsertText;
+
+                // TODO Assuming you have a way to get the current node's name:
+                let current_node_name = app.current_path.file_name().unwrap().to_string_lossy().to_string();
+
+                app.current_path = app.current_path.join("task_browser");
+
+                debug_log!(
+                    "app.current_path after joining 'task_browser': {:?}",
+                    app.current_path
+                ); 
+
+                // Enter Browser of Tasks
+                // display_task_browser(&app.current_path);
+                if display_task_browser(&app.current_path) { // Assuming it returns true to quit. Check value returned by `display_task_browser()`
+                    // Task browser exited, refresh the main TUI (team channel list):
+                    app.input_mode = InputMode::Command;
+                    app.update_directory_list()?; // Refresh the directory list (add error handling) 
+                } // no else needed, stay in task loop.
+                
+            }
+            
+            
+            
             "q" | "quit" | "exit" => {
                 debug_log("quit");
                 no_restart_set_hard_reset_flag_to_false();
