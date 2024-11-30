@@ -8668,7 +8668,7 @@ fn handle_local_owner_desk(
                         let new_full_abs_node_directory_path = PathBuf::from(node_file_path);
                         
                         // make sure path exists
-                        fs::create_dir_all(new_full_abs_node_directory_path)?;
+                        fs::create_dir_all(&new_full_abs_node_directory_path)?;
                         
                         debug_log!(
                             "HLOD 7.2 got-made new_full_abs_node_directory_path -> {:?}",
@@ -8774,19 +8774,19 @@ fn handle_local_owner_desk(
                                     // 3.2 replace (delete the old) node.toml file (file, not directory)
                                     // Write the received data to the OLD node.toml location, replacing it:
                                     if let Err(e) = fs::write(&oldfile_node_toml_file_path, &extracted_clearsigned_file_data) {
-                                        debug_log!("Error writing node.toml: {:?} - {}", oldfile_node_toml_file_path, e);
+                                        debug_log!("Error writing node.toml: {:?} - {}", &oldfile_node_toml_file_path, e);
                                         return Err(ThisProjectError::from(e));
                                     }
 
                                     // 3.3 Move old node directory (not remove/delete) (directory, not file)
                                     // TODO HERE HERE
                                     // from olddir_abs_node_directory_path to new_full_abs_node_directory_path
-                                    if let Err(error) = move_directory__from_path_to_path(olddir_abs_node_directory_path, new_full_abs_node_directory_path) {
+                                    if let Err(error) = move_directory__from_path_to_path(&olddir_abs_node_directory_path, &new_full_abs_node_directory_path) {
                                         debug_log!("An error occurred: {}", error);
                                     }
                                     
-                                    debug_log!("7.3 HLOD-InTray: moved file moved from: {:?}", olddir_abs_node_directory_path);
-                                    debug_log!("7.3 HLOD-InTray: moved-new file saved to: {:?}", new_full_abs_node_directory_path);
+                                    debug_log!("7.3 HLOD-InTray: moved file moved from: {:?}", &olddir_abs_node_directory_path);
+                                    debug_log!("7.3 HLOD-InTray: moved-new file saved to: {:?}", &new_full_abs_node_directory_path);
 
                                 } else {
                                     // Node is new, save it:
