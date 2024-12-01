@@ -11629,10 +11629,14 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                 debug_log("InputMode::MainCommand => tiny_tui::render_list(&app.tui_directory_list, &app.current_path)");
                 
             }
-            InputMode::TaskCommand => {
-                tiny_tui::render_list(&app.tui_directory_list, &app.current_path);
-                debug_log("InputMode::TaskCommand => tiny_tui::render_list(&app.tui_directory_list, &app.current_path)");
+            // InputMode::TaskCommand => {
+            //     tiny_tui::render_list(&app.tui_directory_list, &app.current_path);
+            //     debug_log("InputMode::TaskCommand => tiny_tui::render_list(&app.tui_directory_list, &app.current_path)");
                 
+            // }
+            InputMode::TaskCommand => {
+                // The table is already printed in load_tasks, so NO TUI rendering needed here.
+                 debug_log("InputMode::TaskCommand. Table displayed.  No further rendering needed here."); 
             }
             // TODO why is theis here? tui_textmessage_list is not the only option
             InputMode::InsertText => {
