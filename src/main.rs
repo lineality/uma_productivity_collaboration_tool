@@ -3108,7 +3108,7 @@ struct CollaboratorTomlData {
 impl CollaboratorTomlData {
     fn new(
         user_name: String, 
-        user_salt_list: Vec<u128>,
+        user_salt_list: Vec<u128>, // Take ownership of user_salt_list
         ipv4_addresses: Option<Vec<Ipv4Addr>>,
         ipv6_addresses: Option<Vec<Ipv6Addr>>,
         gpg_publickey_id: String,
@@ -3116,6 +3116,7 @@ impl CollaboratorTomlData {
         sync_interval: u64,
         updated_at_timestamp: u64,
     ) -> CollaboratorTomlData {
+        debug_log!("CollaboratorTomlData.new: user_salt_list {:?}", user_salt_list);
         CollaboratorTomlData {
             user_name,
             user_salt_list, 
@@ -3144,7 +3145,7 @@ fn add_collaborator_setup_file(
     debug_log("Starting: fn add_collaborator_setup_file( ...cupa tea?");
     
     debug_log!("user_name {:?}", user_name);
-    debug_log!("user_salt_list {:?}", user_salt_list);
+    debug_log!("user_salt_list {:?}", &user_salt_list);
     debug_log!("ipv4_addresses {:?}", ipv4_addresses);
     debug_log!("ipv6_addresses {:?}", ipv6_addresses);
     debug_log!("gpg_publickey_id {:?}", gpg_publickey_id);
@@ -3168,7 +3169,7 @@ fn add_collaborator_setup_file(
         sync_interval,                   // 0 for sync_interval
         updated_at_timestamp,                   // 0 for updated_at_timestamp
     );
-    debug_log!("collaborator: {:?}", collaborator);
+    debug_log!("printing collaborator: {:?}", collaborator);
     
     // let collaborator = CollaboratorTomlData::new(
     //     user_name, 
