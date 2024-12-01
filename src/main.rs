@@ -4138,6 +4138,10 @@ impl CoreNode {
 
         // 2. Construct the full file path for the node.toml file.
         let file_path = self.directory_path.join("node.toml");
+        
+        debug_log!("file_path in save_node_to_file {:?}",
+            file_path,
+        );
 
         // 3. Create the directory if it doesn't exist. 
         if let Some(parent_dir) = file_path.parent() {
@@ -4292,54 +4296,152 @@ impl InstantMessageFile {
     }
 }
 
-/// Creates a new team-channel directory and its associated metadata.
-/// 
-/// This function sets up the basic directory structure and files for a new team channel
-/// within the UMA project graph. It creates the necessary subdirectories and initializes
-/// the `node.toml` file with default values.
+// /// Broken
+// /// Creates a new team-channel directory and its associated metadata.
+// /// 
+// /// This function sets up the basic directory structure and files for a new team channel
+// /// within the UMA project graph. It creates the necessary subdirectories and initializes
+// /// the `node.toml` file with default values.
+// ///
+// /// # Arguments
+// ///
+// /// * `team_channel_name` - The name of the team channel to be created. This name will be used
+// ///   for the directory name and in the `node.toml` metadata.
+// /// * `owner` - The username of the owner of the team channel.
+// ///
+// /// TODO: where is the port node system setup here?
+// fn create_team_channel(team_channel_name: String, owner: String) {
+//     let team_channels_dir = Path::new("project_graph_data/team_channels");
+//     let new_channel_path = team_channels_dir.join(&team_channel_name);
+
+//     // 1. Create the team channel directory and subdirectories
+//     if !new_channel_path.exists() {
+//         fs::create_dir_all(new_channel_path.join("instant_message_browser"))
+//             .expect("Failed to create team channel and subdirectories");
+
+//         // 2. Create 0.toml for instant_message_browser with default metadata
+//         let metadata_path = new_channel_path.join("instant_message_browser").join("0.toml");
+//         let metadata = NodeInstMsgBrowserMetadata::new(&team_channel_name, owner.clone());
+//         save_toml_to_file(&metadata, &metadata_path).expect("Failed to create 0.toml"); 
+//     }
+//     //     /*
+//     //     fn new(
+//     // TODO update this
+//     //     ) -> Node {
+//     //     */
+    
+    
+//     // thread 'main' panicked at src/main.rs:4341:14:
+//     // REASON: IoError(Os { code: 2, kind: NotFound, message: "No such file or directory" })
+//     // 
+//     // 3. Create node.toml with initial data for the team channel
+//     let new_node = CoreNode::new(
+//         team_channel_name.clone(),
+//         team_channel_name.clone(),
+//         new_channel_path.clone(),
+//         // 5,  // depricated
+//         // NodePriority::Medium,  // depricated
+//         owner,
+//         Vec::new(), // Empty collaborators list for a new channel
+//         HashMap::new(), // Empty collaborator ports map for a new channel
+//     );
+
+//     // new_node.save_node_to_file().expect("Failed to save initial node data"); 
+//     new_node.expect("REASON").save_node_to_file().expect("Failed to save initial node data"); 
+    
+// }
+
+
+/// Creates a new team-channel directory, subdirectories, and metadata files.
+/// Handles errors and returns a Result to indicate success or failure.
 ///
 /// # Arguments
 ///
-/// * `team_channel_name` - The name of the team channel to be created. This name will be used
-///   for the directory name and in the `node.toml` metadata.
-/// * `owner` - The username of the owner of the team channel.
+/// * `team_channel_name` - The name of the new team channel.
+/// * `owner` - The username of the channel owner.
 ///
-/// TODO: where is the port node system setup here?
-fn create_team_channel(team_channel_name: String, owner: String) {
+/// # Returns
+///
+/// * `Result<(), ThisProjectError>` - `Ok(())` on success, or a `ThisProjectError`
+///   describing the error.
+fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), ThisProjectError> {
     let team_channels_dir = Path::new("project_graph_data/team_channels");
     let new_channel_path = team_channels_dir.join(&team_channel_name);
 
-    // 1. Create the team channel directory and subdirectories
-    if !new_channel_path.exists() {
-        fs::create_dir_all(new_channel_path.join("instant_message_browser"))
-            .expect("Failed to create team channel and subdirectories");
+    // 1. Create Directory Structure (with error handling)
+    fs::create_dir_all(new_channel_path.join("instant_message_browser"))?; // Propagate errors with ?
+    fs::create_dir_all(new_channel_path.join("task_browser"))?; // task browser directory
+    for i in 1..=3 { // Using numbers
+        let col_name = format!("{}_col{}", i, i);
+        let col_path = new_channel_path.join("task_browser").join(col_name);
+        fs::create_dir_all(&col_path)?; // Create default task browser column directories for new channel
+    }    
 
-        // 2. Create 0.toml for instant_message_browser with default metadata
-        let metadata_path = new_channel_path.join("instant_message_browser").join("0.toml");
-        let metadata = NodeInstMsgBrowserMetadata::new(&team_channel_name, owner.clone());
-        save_toml_to_file(&metadata, &metadata_path).expect("Failed to create 0.toml"); 
-    }
-    //     /*
-    //     fn new(
-    // TODO update this
-    //     ) -> Node {
-    //     */
-    
-    // 3. Create node.toml with initial data for the team channel
-    let new_node = CoreNode::new(
-        team_channel_name.clone(),
-        team_channel_name.clone(),
-        new_channel_path.clone(),
-        // 5,  // depricated
-        // NodePriority::Medium,  // depricated
-        owner,
-        Vec::new(), // Empty collaborators list for a new channel
-        HashMap::new(), // Empty collaborator ports map for a new channel
+    // 2. Create and Save 0.toml Metadata (with error handling)
+    let metadata_path = new_channel_path.join("instant_message_browser/0.toml"); // Simplified path
+    let metadata = NodeInstMsgBrowserMetadata::new(&team_channel_name, owner.clone());
+    save_toml_to_file(&metadata, &metadata_path)?; // Use ? for error propagation
+
+    // Generate collaborator port assignments (simplified):
+    let mut abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>> = HashMap::new();    
+
+    // Add owner to collaborators list and port assignments:
+    // This makes it possible to create CoreNode and ensures the owner has port assignments
+    let mut collaborators = Vec::new();
+    collaborators.push(owner.clone());
+    debug_log!("create_team_channel(): owner 'added' to collaborators");
+
+    // let mut rng = rand::thread_rng(); // Move RNG outside the loop for fewer calls
+
+    // Load the owner's data
+    let owner_data = read_one_collaborator_setup_toml(&owner)?;
+
+    // Simplified port generation (move rng outside loop):
+    // Assign random ports to owner:  Only owner for new channel.
+    let mut rng = rand::thread_rng(); // Move RNG instantiation outside the loop
+    let ready_port = rng.gen_range(40000..60000) as u16; // Adjust range if needed
+    let tray_port = rng.gen_range(40000..60000) as u16; // Random u16 port number
+    let gotit_port = rng.gen_range(40000..60000) as u16; // Random u16 port number
+    let abstract_ports_data = AbstractTeamchannelNodeTomlPortsData {
+        user_name: owner.clone(), 
+        ready_port,
+        intray_port: tray_port,
+        gotit_port,
+    };    
+    debug_log!("create_team_channel(): owner's abstract_ports_data created");
+
+
+    // Store in the HashMap with "owner_owner" key. If more than one user this key can become unique.
+    abstract_collaborator_port_assignments.insert(
+        format!("{}_{}", owner.clone(), owner), // Key derived from collaborator names
+        vec![ReadTeamchannelCollaboratorPortsToml { collaborator_ports: vec![abstract_ports_data] }],
     );
+    debug_log!("create_team_channel(): owner 'added' to abstract_collaborator_port_assignments");
 
-    // new_node.save_node_to_file().expect("Failed to save initial node data"); 
-    new_node.expect("REASON").save_node_to_file().expect("Failed to save initial node data"); 
+
+    // 3. Create and Save CoreNode (handling Result)
+    // node.toml file should be created after the directory structure is in place
+    // This is done during first-time initialization so there should be salt list for the owner user (if not exit!)
+    let new_node_result = CoreNode::new(
+        team_channel_name.clone(),         // node_name
+        team_channel_name,                 // description_for_tui
+        new_channel_path.clone(),          // directory_path
+        owner,                             // owner
+        collaborators,                    // teamchannel_collaborators_with_access
+        abstract_collaborator_port_assignments, // ports
+    );
     
+    match new_node_result {  // Handle result of CoreNode::new
+        Ok(new_node) => {
+            new_node.save_node_to_file()?; // Then save the node
+            Ok(()) // Return Ok(()) to indicate success
+        }
+        Err(e) => {
+             debug_log!("Error creating CoreNode: {}", e);
+            Err(e) // Return the error if CoreNode creation fails
+        }
+    }
+
 }
 
 /// Recursively moves all contents from the source directory to the destination directory.
