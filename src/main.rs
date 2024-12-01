@@ -162,6 +162,8 @@ const EMPTY_IPV_4: Ipv4Addr = Ipv4Addr::new(127, 0, 0, 1); // == = 127.0.0.1
 const EMPTY_IPV_6: Ipv6Addr = Ipv6Addr::UNSPECIFIED; // Correct way to represent an unspecified IPv6 address
 
 // use std::sync::mpsc;
+// use std::fmt::Write as StdFmtWrite;
+
 use std::io;
 use std::io::{
     Error,
@@ -3093,6 +3095,50 @@ struct RawProtoDataToml {
     updated_at_timestamp: u64,
 }
 
+
+
+// /// Serializes collaborator data to a TOML string, handling the `user_salt_list` manually.
+// ///
+// /// This function serializes a `CollaboratorTomlData` instance to a TOML-formatted string.
+// /// It handles the `user_salt_list` field manually to ensure the correct hexadecimal string
+// /// representation with "0x" prefixes and enclosing double quotes.  It uses the `toml` crate
+// /// for serializing other fields.
+// ///
+// /// # Arguments
+// ///
+// /// * `collaborator`: A reference to the `CollaboratorTomlData` instance to serialize.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<String, ThisProjectError>`:  The serialized TOML string on success, or a
+// ///    `ThisProjectError` if an error occurs (e.g., during formatting or TOML serialization
+// ///     of other fields).
+// ///
+// fn serialize_collaborator_to_toml(collaborator: &CollaboratorTomlData) -> Result<String, ThisProjectError> {
+//     let mut toml_string = String::new();
+
+//     // Manually serialize user_name:
+//     toml_string.push_str(&format!("user_name = \"{}\"\n", collaborator.user_name));
+
+//     // Custom serialization for user_salt_list:
+//     toml_string.push_str("user_salt_list = [\n");
+//     for salt in &collaborator.user_salt_list {
+//         StdFmtWrite!(toml_string, "    \"0x{:x}\",\n", salt).map_err(|_| ThisProjectError::InvalidData("Formatting error".into()))?;
+//     }
+//     toml_string.push_str("]\n");
+
+//     // Use toml crate for other fields (assuming they serialize correctly):
+//     // ipv4_addresses and ipv6_addresses need special handling within the toml crate.
+//     serialize_ip_addresses(&mut toml_string, "ipv4_addresses", &collaborator.ipv4_addresses)?;
+//     serialize_ip_addresses(&mut toml_string, "ipv6_addresses", &collaborator.ipv6_addresses)?;
+//     toml_string.push_str(&format!("gpg_publickey_id = \"{}\"\n", collaborator.gpg_publickey_id));
+//     toml_string.push_str(&format!("gpg_key_public = \"{}\"\n", collaborator.gpg_key_public));
+//     toml_string.push_str(&format!("sync_interval = {}\n", collaborator.sync_interval));
+//     toml_string.push_str(&format!("updated_at_timestamp = {}\n", collaborator.updated_at_timestamp));
+
+//     Ok(toml_string)
+// }
+
 #[derive(Debug, Deserialize, serde::Serialize, Clone)]
 struct CollaboratorTomlData {
     user_name: String,
@@ -3182,58 +3228,67 @@ fn add_collaborator_setup_file(
     //     updated_at_timestamp,
     // );
     
-    // this does not print
     debug_log!("collaborator {:?}", collaborator);
 
     // Serialize the data:
-    let toml_string = toml::to_string(&collaborator).map_err(|e| {
-        std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("TOML serialization error: {}", e),
-        )
-    })?;
+    // let toml_string = toml::to_string(&collaborator).map_err(|e| {
+    //     std::io::Error::new(
+    //         std::io::ErrorKind::Other,
+    //         format!("TOML serialization error: {}", e),
+    //     )
+    // })?;
     
-    // this does not print
-    debug_log!("toml_string {:?}", toml_string);
-
-    // Construct the file path:
-    let file_path = Path::new("project_graph_data/collaborator_files_address_book")
-        .join(format!("{}__collaborator.toml", collaborator.user_name));
-
-    // Log the constructed file path:
-    debug_log!("Attempting to write collaborator file to: {:?}", file_path); 
     
-    // Create the file and write the data:
-    let mut file = File::create(file_path.clone())?;
-    file.write_all(toml_string.as_bytes())?;
+    
+    match serialize_collaborator_to_toml(&collaborator) {
+        Ok(toml_string) => {
+            println!("Serialized TOML:\n{}", toml_string);
 
-     // Log the constructed file path:
+            // Write the TOML string to a file (example file path)
+            // match write_toml_to_file("collaborator_data.toml", &toml_string) {
+            //     Ok(_) => println!("TOML data written to file successfully."),
+            //     Err(e) => println!("Error writing to file: {}", e),
+            // }
+            debug_log!("toml_string {:?}", toml_string);
+        
+            // Construct the file path:
+            let file_path = Path::new("project_graph_data/collaborator_files_address_book")
+                .join(format!("{}__collaborator.toml", collaborator.user_name));
+        
+            // Log the constructed file path:
+            debug_log!("Attempting to write collaborator file to: {:?}", file_path); 
+            
+            // Create the file and write the data:
+            let mut file = File::create(file_path.clone())?;
+            file.write_all(toml_string.as_bytes())?;
 
+        }
+        Err(e) => println!("Error serializing to TOML: {}", e),
+    }
+    
+     // // Check for potential errors during file creation:
+     // match File::create(&file_path) {
+     //     Ok(mut file) => {
+     //         debug_log!("File creation succeeded.");
 
-
-     // Check for potential errors during file creation:
-     match File::create(&file_path) {
-         Ok(mut file) => {
-             debug_log!("File creation succeeded.");
-
-             // Check for errors while writing to the file: 
-             match file.write_all(toml_string.as_bytes()) {
-                 Ok(_) => { 
-                     debug_log!("Collaborator file written successfully."); 
-                 },
-                 Err(err) => {
-                     debug_log!("Error writing data to collaborator file: {:?}", err);
-                     // Consider returning the error here for more explicit error handling
-                     // return Err(err);
-                 }
-             } 
-         },
-         Err(err) => {
-             debug_log!("Error creating collaborator file: {:?}", err);
-             // Return the error here to propagate it
-             return Err(err); 
-         }
-     } 
+     //         // Check for errors while writing to the file: 
+     //         match file.write_all(toml_string.as_bytes()) {
+     //             Ok(_) => { 
+     //                 debug_log!("Collaborator file written successfully."); 
+     //             },
+     //             Err(err) => {
+     //                 debug_log!("Error writing data to collaborator file: {:?}", err);
+     //                 // Consider returning the error here for more explicit error handling
+     //                 // return Err(err);
+     //             }
+     //         } 
+     //     },
+     //     Err(err) => {
+     //         debug_log!("Error creating collaborator file: {:?}", err);
+     //         // Return the error here to propagate it
+     //         return Err(err); 
+     //     }
+     // } 
     
     Ok(()) 
 }
