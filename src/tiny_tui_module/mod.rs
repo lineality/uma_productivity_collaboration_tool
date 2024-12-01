@@ -10,6 +10,7 @@ pub mod tiny_tui {
         }; 
 
     pub fn render_list(list: &Vec<String>, current_path: &Path) {
+            
         // 1. Get the path components
         let path_components: Vec<_> = current_path.components().collect();
 
@@ -32,6 +33,7 @@ pub mod tiny_tui {
     
     pub fn render_tasks_list(headers: &[String], data: &[Vec<String>], current_path: &Path) {
         // 1. Display Current Path
+        print!("\x1B[2J\x1B[1;1H"); // Clear the screen
         println!("Current Path: {}", current_path.display());
     
         // 2. Display Table (reuse display_table from tiny_tui_module)
