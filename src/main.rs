@@ -2514,74 +2514,86 @@ impl App {
     
     fn enter_task_browser(&mut self) {
         if self.current_path.exists() {
-            // if self.current_path.join("task_browser").exists() {
-            // self.current_path.push("task_browser");
             self.load_tasks();
-            self.input_mode = InputMode::MainCommand; // Or perhaps a dedicated TaskInputMode
+            self.input_mode = InputMode::TaskCommand;
         } else {
             debug_log!("'task_browser' directory not found in current node.");
-            // Potentially display an error in the TUI.
+
         }
     }
-
     fn handle_task_action(&mut self, input: &str) -> bool { // Return true to exit, false to continue
         if input == "q" || input == "quit" {
             return true; // Exit task mode
         } else if let Ok(selection) = input.parse::<usize>() {
+            if self.is_at_task_browser_root() { // COLUMN Navigation
+                // ... (Handle column selection as before)
+            } else { // TASK Navigation (within a column)
+                // ... (Handle task selection logic)
+            }
 
-            if self.is_at_task_browser_root() { // COLUMN Navigation (if at root)
-                if selection > 0 && selection <= self.tui_directory_list.len() {
-                    let column_index = selection - 1;
-                    let column_name = &self.tui_directory_list[column_index];
-                    self.current_path.push(column_name); // Navigate INTO column directory.
-                    self.load_tasks(); // Refresh to show tasks within column
-                    return false; // Stay in task mode, now within a column
-
-                } else {
-                   debug_log!("Invalid column selection."); 
-                   return false; // Stay in task mode (invalid input)
-                }
-            } else { // TASK Navigation (if within a column)
-                if selection > 0 && selection <= self.tui_file_list.len() {  //Task selection
-                    // Get full task path (within current column)
-                    let task_index = selection - 1; //0-indexed
-
-                    //More robust task name extraction:
-                    let task_name = if let Some(task_entry) = self.tui_file_list.get(task_index) {
-                        task_entry[3..].trim().to_string() // Extract name, handling potential panics.
-                    } else {
-                        String::new() // Handle invalid index gracefully
-                    };
-                    
-                    if !task_name.is_empty() { // Only proceed if task_name is valid
-                        let task_path = self.current_path.join(&task_name); 
-                        self.current_path = task_path; // Set as the new current path
-
-                        let node_toml_path = self.current_path.join("node.toml"); //For viewing task details:
-                        if let Ok(toml_string) = fs::read_to_string(node_toml_path) {
-                            if let Ok(toml_value) = toml::from_str::<Value>(&toml_string) {
-                                debug_log!("Task Details:\n{:#?}", toml_value);
-                            }
-                        }
-                        return true; // Exit task mode to view selected task.
-                    } else {
-                         debug_log!("Invalid task index or name.");
-                        return false; // Stay in task mode.
-                    }
-                } else {
-                    debug_log!("Invalid task selection.");
-                    return false; // Stay in task mode.
-                }
-            } // End of TASK Navigation Block (added)
-        } else if input.starts_with('m') {  // ...  (Message Owner Logic)
-            // ... (your existing message owner logic)
         }
-        false // Stay in task mode (no recognized input)
-    } // End of handle_task_action (added)
+        // ... handle other task-related commands
+        false  // Don't exit task mode by default
+
+    }
+    // fn handle_task_action(&mut self, input: &str) -> bool { // Return true to exit, false to continue
+    //     if input == "q" || input == "quit" {
+    //         return true; // Exit task mode
+    //     } else if let Ok(selection) = input.parse::<usize>() {
+
+    //         if self.is_at_task_browser_root() { // COLUMN Navigation (if at root)
+    //             if selection > 0 && selection <= self.tui_directory_list.len() {
+    //                 let column_index = selection - 1;
+    //                 let column_name = &self.tui_directory_list[column_index];
+    //                 self.current_path.push(column_name); // Navigate INTO column directory.
+    //                 self.load_tasks(); // Refresh to show tasks within column
+    //                 return false; // Stay in task mode, now within a column
+
+    //             } else {
+    //                debug_log!("Invalid column selection."); 
+    //                return false; // Stay in task mode (invalid input)
+    //             }
+    //         } else { // TASK Navigation (if within a column)
+    //             if selection > 0 && selection <= self.tui_file_list.len() {  //Task selection
+    //                 // Get full task path (within current column)
+    //                 let task_index = selection - 1; //0-indexed
+
+    //                 //More robust task name extraction:
+    //                 let task_name = if let Some(task_entry) = self.tui_file_list.get(task_index) {
+    //                     task_entry[3..].trim().to_string() // Extract name, handling potential panics.
+    //                 } else {
+    //                     String::new() // Handle invalid index gracefully
+    //                 };
+                    
+    //                 if !task_name.is_empty() { // Only proceed if task_name is valid
+    //                     let task_path = self.current_path.join(&task_name); 
+    //                     self.current_path = task_path; // Set as the new current path
+
+    //                     let node_toml_path = self.current_path.join("node.toml"); //For viewing task details:
+    //                     if let Ok(toml_string) = fs::read_to_string(node_toml_path) {
+    //                         if let Ok(toml_value) = toml::from_str::<Value>(&toml_string) {
+    //                             debug_log!("Task Details:\n{:#?}", toml_value);
+    //                         }
+    //                     }
+    //                     return true; // Exit task mode to view selected task.
+    //                 } else {
+    //                      debug_log!("Invalid task index or name.");
+    //                     return false; // Stay in task mode.
+    //                 }
+    //             } else {
+    //                 debug_log!("Invalid task selection.");
+    //                 return false; // Stay in task mode.
+    //             }
+    //         } // End of TASK Navigation Block (added)
+    //     } else if input.starts_with('m') {  // ...  (Message Owner Logic)
+    //         // ... (your existing message owner logic)
+    //     }
+    //     false // Stay in task mode (no recognized input)
+    // } // End of handle_task_action (added)
     
     
-    fn is_at_task_browser_root(&self) -> bool { // New helper function
-        self.current_path.ends_with("task_browser") && self.tui_file_list.is_empty() // At root if no tasks are loaded.
+    fn is_at_task_browser_root(&self) -> bool {
+        self.current_path.ends_with("task_browser") && self.tui_file_list.is_empty()
     }
 
     fn get_current_column_name(&self) -> Option<String> {
@@ -2689,38 +2701,117 @@ impl App {
     // }
 
 
+    // fn load_tasks(&mut self) {
+    //     self.tui_directory_list.clear();
+    //     self.tui_file_list.clear();
 
-    fn load_tasks(&mut self) {
+    //     let task_browser_dir = &self.current_path;
+
+    //     // 1. Load COLUMNs if at task_browser root:
+    //     if task_browser_dir.ends_with("task_browser") {
+    //         if let Ok(entries) = fs::read_dir(task_browser_dir) {
+    //             for (i, entry) in entries.flatten().enumerate() {
+    //                 if entry.path().is_dir() && entry.file_name().to_string_lossy().starts_with("#_") {
+    //                     let column_name = entry.file_name().to_string_lossy().to_string();
+    //                     self.tui_directory_list.push(format!("{}. {}", i + 1, column_name[2..].to_string())); // Numbered and without "#_"
+    //                 }
+    //             }
+    //         }
+    //     } else { // 2. Load TASKs if inside a column directory:
+    //         if let Ok(entries) = fs::read_dir(task_browser_dir) {
+    //             for (i, entry) in entries.flatten().enumerate() {
+    //                 if entry.path().is_dir() { // Tasks are directories
+    //                     let task_name = entry.file_name().to_string_lossy().to_string();
+    //                     self.tui_file_list.push(format!("{}. {}", i + 1, task_name)); // Numbered tasks
+    //                 }
+    //             }
+    //         }
+    //     }
+    //     // Always sort for consistency:
+    //     self.tui_directory_list.sort();
+    //     self.tui_file_list.sort();
+    // }
+
+fn load_tasks(&mut self) {
         self.tui_directory_list.clear();
-        self.tui_file_list.clear(); // Clear previous content
+        self.tui_file_list.clear();
 
         let task_browser_dir = &self.current_path;
 
-        // 1. Load COLUMNs First:
-        if let Ok(entries) = fs::read_dir(task_browser_dir) {
-            for entry in entries.flatten() {
-                if entry.path().is_dir() && entry.file_name().to_string_lossy().starts_with("#_") {
-                    let column_name = entry.file_name().to_string_lossy().to_string();
-                    self.tui_directory_list.push(column_name);
-                }
-            }
-        }
-        self.tui_directory_list.sort(); // Ensure consistent order
-
-
-        // 2. If inside a COLUMN, load TASKs:
-        if let Some(current_column_name) = self.get_current_column_name() {
-            let column_dir = task_browser_dir.join(current_column_name); //Path to the specific column's directory.
-            if let Ok(task_entries) = fs::read_dir(column_dir) {
-                for (i, task_entry) in task_entries.flatten().enumerate() {
-                    if task_entry.path().is_dir() { // Tasks are directories
-                        let task_name = task_entry.file_name().to_string_lossy().to_string();
-                        self.tui_file_list.push(format!("{}. {}", i + 1, task_name)); // Number the tasks
+        if self.is_at_task_browser_root() {  // Column display at root
+            let mut column_names = Vec::new(); // Now Vec<String>
+            if let Ok(entries) = fs::read_dir(task_browser_dir) {
+                for (i, entry) in entries.flatten().enumerate() {
+                    if entry.path().is_dir() && entry.file_name().to_string_lossy().starts_with("#_") {
+                        column_names.push(format!("{}. {}", i + 1, entry.file_name().to_string_lossy()[2..].to_string())); // Formatted column names
                     }
                 }
             }
+            self.display_table(&column_names); // Use display_table()
+
+        } else {  // Task display within a column (Corrected logic and formatting)
+            if let Ok(entries) = fs::read_dir(task_browser_dir) {
+                for (i, entry) in entries.flatten().enumerate() {
+                    if entry.path().is_dir() {
+                        self.tui_file_list.push(format!("{}. {}", i + 1, entry.file_name().to_string_lossy().to_string()));
+                    }
+                }
+            }
+            self.display_table(&self.tui_file_list); // Corrected to use tui_file_list
         }
-    }    
+    }
+
+
+    // Helper function to display a table (can be reused)
+    fn display_table(&self, items: &Vec<String>) {
+        let item_count = items.len();
+        let column_width = 20;  // Adjust as needed
+        let separator = "-".repeat(2 * column_width); //Separator for column view
+
+
+        if self.is_at_task_browser_root() { // Column headers 
+            for (i, item) in items.iter().enumerate() {
+                print!("{:<width$}", item, width = column_width);
+                if i < item_count - 1 { print!("|"); } // Column separator
+            }            
+            println!("\n{}", separator); // Column separator line
+        } else {  //Tasks under a column
+            for item in items {
+                println!("{}", item);
+            }
+        }
+    }
+    // fn load_tasks(&mut self) {
+    //     self.tui_directory_list.clear();
+    //     self.tui_file_list.clear(); // Clear previous content
+
+    //     let task_browser_dir = &self.current_path;
+
+    //     // 1. Load COLUMNs First:
+    //     if let Ok(entries) = fs::read_dir(task_browser_dir) {
+    //         for entry in entries.flatten() {
+    //             if entry.path().is_dir() && entry.file_name().to_string_lossy().starts_with("#_") {
+    //                 let column_name = entry.file_name().to_string_lossy().to_string();
+    //                 self.tui_directory_list.push(column_name);
+    //             }
+    //         }
+    //     }
+    //     self.tui_directory_list.sort(); // Ensure consistent order
+
+
+    //     // 2. If inside a COLUMN, load TASKs:
+    //     if let Some(current_column_name) = self.get_current_column_name() {
+    //         let column_dir = task_browser_dir.join(current_column_name); //Path to the specific column's directory.
+    //         if let Ok(task_entries) = fs::read_dir(column_dir) {
+    //             for (i, task_entry) in task_entries.flatten().enumerate() {
+    //                 if task_entry.path().is_dir() { // Tasks are directories
+    //                     let task_name = task_entry.file_name().to_string_lossy().to_string();
+    //                     self.tui_file_list.push(format!("{}. {}", i + 1, task_name)); // Number the tasks
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }    
 
     fn next(&mut self) {
         if self.tui_focus < self.tui_file_list.len() - 1 {
@@ -3633,6 +3724,35 @@ fn update_collaborator_sendqueue_timestamp_log(
 }
 
 
+/*
+fn main() {
+    let headers = &["Column 1", "Column 2", "Column 3"];
+    let data = &[
+        &["Data A", "Data B", "Data C"],
+        &["Data D", "Data E", "Data F"],
+    ];
+    display_simple_table(headers, data);
+}
+*/
+/// table view TUI
+fn display_simple_table(headers: &[&str], data: &[&[&str]]) {
+    // Print headers
+    for header in headers {
+        print!("{:<15} ", header); // Left-align with padding
+    }
+    println!();
+
+    // Print separator
+    println!("{}", "-".repeat(headers.len() * 15));
+
+    // Print data rows
+    for row in data {
+        for item in *row {
+            print!("{:<15} ", item);
+        }
+        println!();
+    }
+}
 
 
 // /// Loads CollaboratorData from a TOML file.
