@@ -3142,6 +3142,16 @@ fn add_collaborator_setup_file(
     updated_at_timestamp: u64,
 ) -> Result<(), std::io::Error> {
     debug_log("Starting: fn add_collaborator_setup_file( ...cupa tea?");
+    
+    debug_log!("user_name {:?}", user_name);
+    debug_log!("user_salt_list {:?}", user_salt_list);
+    debug_log!("ipv4_addresses {:?}", ipv4_addresses);
+    debug_log!("ipv6_addresses {:?}", ipv6_addresses);
+    debug_log!("gpg_publickey_id {:?}", gpg_publickey_id);
+    debug_log!("gpg_key_public {:?}", gpg_key_public);
+    debug_log!("sync_interval {:?}", sync_interval);   
+    debug_log!("updated_at_timestamp {:?}", updated_at_timestamp); 
+            
     // Create the CollaboratorTomlData instance using the existing new() method:
     let collaborator = CollaboratorTomlData::new(
         user_name, 
@@ -5484,7 +5494,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         }
     
         println!("GPG key entered:\n{}", gpg_key_public); // Confirmation (remove in production)
-        
+        debug_log("GPG key entered");
         
         // let mut gpg_key_public = String::new();
         // io::stdin().read_line(&mut gpg_key_public).unwrap();
@@ -5522,7 +5532,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         };
         
         println!("Using salts: {:?}", new_usersalt_list);
-        
+        debug_log!("Using salts: {:?}", new_usersalt_list);
         
         
         // // Add a new user to Uma file system
@@ -5541,6 +5551,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         // let toml_data = toml::to_string(&collaborator_list).expect("Failed to serialize collaborator list");
         // fs::write(collaborator_list_file, toml_data).expect("Failed to write collaborator list file");
 
+        debug_log("User added successfully!");
         println!("User added successfully!");
     }
 
