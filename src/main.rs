@@ -2732,24 +2732,83 @@ impl App {
     //     self.tui_file_list.sort();
     // }
 
-fn load_tasks(&mut self) {
+
+    /// headers/columns = directories with names starting with int and underscore such as 1_plan 2_started 3_done
+    /// the number and underscore should be removed
+    /// the number should be used as the header/column number
+    /// for MVP each directory-name in side each column-directory becomes a row-item in that column
+    /// e.g. if 1_plan contains a directory called "report" then given report a sequential number
+    /// and list it under the header "plan" 
+    /// results sent to display_table() as function or as method
+    
+    
+    
+    
+    // fn load_tasks(&mut self) {
+    //         self.tui_directory_list.clear();
+    //         self.tui_file_list.clear();
+
+    //         let task_browser_dir = &self.current_path;
+
+    //         if self.is_at_task_browser_root() {  // Column display at root
+    //             let mut column_names = Vec::new(); // Now Vec<String>
+    //             if let Ok(entries) = fs::read_dir(task_browser_dir) {
+    //                 for (i, entry) in entries.flatten().enumerate() {
+    //                     if entry.path().is_dir() && entry.file_name().to_string_lossy().starts_with("#_") {
+    //                         column_names.push(format!("{}. {}", i + 1, entry.file_name().to_string_lossy()[2..].to_string())); // Formatted column names
+    //                     }
+    //                 }
+    //             }
+    //             // display_table(&column_names); // Use display_table()
+
+    //         } else {  // Task display within a column (Corrected logic and formatting)
+    //             if let Ok(entries) = fs::read_dir(task_browser_dir) {
+    //                 for (i, entry) in entries.flatten().enumerate() {
+    //                     if entry.path().is_dir() {
+    //                         self.tui_file_list.push(format!("{}. {}", i + 1, entry.file_name().to_string_lossy().to_string()));
+    //                     }
+    //                 }
+    //             }
+    //             // self.display_table(&self.tui_file_list); // Corrected to use tui_file_list
+    //         }
+    //     }
+
+    fn load_tasks(&mut self) {
         self.tui_directory_list.clear();
         self.tui_file_list.clear();
 
         let task_browser_dir = &self.current_path;
 
-        if self.is_at_task_browser_root() {  // Column display at root
-            let mut column_names = Vec::new(); // Now Vec<String>
+        if self.is_at_task_browser_root() {
+            // Column display at root
+            let mut column_names = Vec::new();
+            let mut column_data = Vec::new();
+
             if let Ok(entries) = fs::read_dir(task_browser_dir) {
-                for (i, entry) in entries.flatten().enumerate() {
+                for entry in entries.flatten() {
                     if entry.path().is_dir() && entry.file_name().to_string_lossy().starts_with("#_") {
-                        column_names.push(format!("{}. {}", i + 1, entry.file_name().to_string_lossy()[2..].to_string())); // Formatted column names
+                        let column_name = entry.file_name().to_string_lossy()[2..].to_string();
+                        column_names.push(column_name.clone());
+
+                        let mut column_tasks = Vec::new();
+                        if let Ok(tasks) = fs::read_dir(entry.path()) {
+                            for (i, task) in tasks.flatten().enumerate() {
+                                if task.path().is_dir() {
+                                    column_tasks.push(format!("{}. {}", i + 1, task.file_name().to_string_lossy().to_string()));
+                                }
+                            }
+                        }
+                        column_data.push(column_tasks);
                     }
                 }
             }
-            self.display_table(&column_names); // Use display_table()
+            tiny_tui::display_table(
+                &column_names.iter().map(String::as_str).collect::<Vec<&str>>(),
+                &column_data.iter().map(|v| v.iter().map(String::as_str).collect()).collect::<Vec<Vec<&str>>>()
+            );
 
-        } else {  // Task display within a column (Corrected logic and formatting)
+        } else {
+            // Task display within a column
             if let Ok(entries) = fs::read_dir(task_browser_dir) {
                 for (i, entry) in entries.flatten().enumerate() {
                     if entry.path().is_dir() {
@@ -2757,38 +2816,14 @@ fn load_tasks(&mut self) {
                     }
                 }
             }
-            self.display_table(&self.tui_file_list); // Corrected to use tui_file_list
+            tiny_tui::display_table(
+                &["Tasks"],
+                &[self.tui_file_list.iter().map(String::as_str).collect()]
+            );
         }
     }
 
 
-    // fn main() {
-    //     let headers = vec!["Column 1", "Column 2", "Column 3"];
-    //     let data = vec![
-    //         vec!["Data A", "Data B", "Data C"],
-    //         vec!["Data D", "Data E", "Data F"],
-    //     ];
-    //     display_table(&headers, &data);
-    // }
-    // Helper function to display a table (can be reused)
-    fn display_table(headers: &[&str], data: &[Vec<&str>]) {
-        // Print headers
-        for header in headers {
-            print!("{:<15} ", header); // Left-align with padding
-        }
-        println!();
-    
-        // Print separator
-        println!("{}", "-".repeat(headers.len() * 15));
-    
-        // Print data rows
-        for row in data {
-            for item in row {
-                print!("{:<15} ", item);
-            }
-            println!();
-        }
-    }    
 
 
     // fn load_tasks(&mut self) {
@@ -3547,6 +3582,9 @@ struct CoreNode {
     teamchannel_collaborators_with_access: Vec<String>,
     /// A map containing port assignments for each collaborator associated with the node.
     abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
+    scope: String,
+    goals: Vec<String>, // Vec<String>,?
+    schedule: Vec<u64>, // Vec<u64>,?
 }
 
 /// Calculates Pearson hashes for the provided CoreNode fields and salts.
@@ -3825,6 +3863,11 @@ fn load_core_node_from_toml_file(file_path: &Path) -> Result<CoreNode, String> {
         // children: Vec::new(), // You might need to load children recursively
         teamchannel_collaborators_with_access: toml_value.get("teamchannel_collaborators_with_access").and_then(Value::as_array).map(|arr| arr.iter().filter_map(Value::as_str).map(String::from).collect()).unwrap_or_default(),
         abstract_collaborator_port_assignments: HashMap::new(),
+        scope: toml_value.get("scope").and_then(Value::as_str).unwrap_or("").to_string(),
+        goals: toml_value.get("goals").and_then(|v| v.as_array()).unwrap_or(&vec![]).iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect(),
+        schedule: toml_value.get("updated_at_timestamp").and_then(|v| v.as_array()).unwrap_or(&vec![]).iter().filter_map(|v| v.as_integer()).map(|i| i as u64).collect(),
+        
+
     };
 
     // // 4. Handle abstract_collaborator_port_assignments
@@ -3950,6 +3993,10 @@ impl CoreNode {
             updated_at_timestamp,        // u64
             &salt_list,                 // &[u128]
         )?;
+        
+        let scope: String = "".to_string();
+        let goals: Vec<String> = [].to_vec();
+        let schedule: Vec<u64> = [].to_vec();
 
         // 3. Create the CoreNode instance (all fields now available):
         Ok(CoreNode {
@@ -3961,7 +4008,10 @@ impl CoreNode {
             updated_at_timestamp,
             expires_at,
             teamchannel_collaborators_with_access,        
-            abstract_collaborator_port_assignments, 
+            abstract_collaborator_port_assignments,
+            scope,
+            goals,
+            schedule, 
         })
     }
 
