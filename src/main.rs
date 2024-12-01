@@ -25,8 +25,15 @@ https://docs.rs/getifaddrs/latest/getifaddrs/
 
 
 // tiny_tui_module.rs
+
 pub mod tiny_tui {
     use std::path::Path;
+    use crate::{ // Import from the main module
+        DEBUG_FLAG,
+        debug_log,
+        OpenOptions,
+        Write,
+        }; 
 
     pub fn render_list(list: &Vec<String>, current_path: &Path) {
         // 1. Get the path components
@@ -47,14 +54,103 @@ pub mod tiny_tui {
         for (i, item) in list.iter().enumerate() {
             println!("{}. {}", i + 1, item);
         }
-    }
+    }    
+    
+    // pub fn render_list(list: &Vec<String>, current_path: &Path) {
+    //     println!("Current Path: {}", current_path.display());
+    //     for (i, item) in list.iter().enumerate() {
+    //         println!("{}. {}", i + 1, item);
+    //     }
+    // }
 
     pub fn get_input() -> Result<String, std::io::Error> {
         let mut input = String::new();
         std::io::stdin().read_line(&mut input)?;
         Ok(input.trim().to_string())
     }
+    
+    pub fn display_table(headers: &[String], data: &[Vec<String>]) {  // Changed header type
+        debug_log("tui module: task-mode: start: display_table()");
+        debug_log!(
+            "tui module: display_table: headers -> {:?} data -> {:?}",
+            headers,
+            data,
+        );
+        
+        // Print headers
+        for header in headers {
+            print!("{:<15} ", header);
+        }
+        println!();
+
+        // Print separator (optional)
+        println!("{}", "-".repeat(headers.len() * 15));
+
+
+        // Print rows:  Handle potentially uneven row lengths
+        // Find the maximum number of columns for formatting:
+        let max_columns = headers.len();
+
+        for row in data {
+            for (i, item) in row.iter().enumerate() {
+                if i < max_columns { // Ensure we don't exceed the header count.
+                    print!("{:<15} ", item); 
+                }
+            }
+            println!();
+        }
+    }
+    
+    // pub fn display_table(headers: &[&str], data: &[Vec<&str>]) {
+    //     // Print headers
+    //     for header in headers {
+    //         print!("{:<15} ", header); // Left-align with padding
+    //     }
+    //     println!();
+    
+    //     // Print separator
+    //     println!("{}", "-".repeat(headers.len() * 15));
+    
+    //     // Print data rows
+    //     for row in data {
+    //         for item in row {
+    //             print!("{:<15} ", item);
+    //         }
+    //         println!();
+    //     }
+    // }
+    // // fn main() {
+    // //     let headers = vec!["Column 1", "Column 2", "Column 3"];
+    // //     let data = vec![
+    // //         vec!["Data A", "Data B", "Data C"],
+    // //         vec!["Data D", "Data E", "Data F"],
+    // //     ];
+    // //     display_table(&headers, &data);
+    // // }
+    
+    // Helper function to transpose the table data
+    pub fn transpose_table_data(data: &[Vec<String>]) -> Vec<Vec<String>> {
+        debug_log("tui module: task-mode: start: transpose_table_data()");
+        if data.is_empty() {
+            return Vec::new();
+        }
+    
+        let num_rows = data.iter().map(|col| col.len()).max().unwrap_or(0);  // Or 0 for an empty table
+        let num_cols = data.len();
+        let mut transposed_data = vec![vec![String::new(); num_cols]; num_rows];
+    
+        for (j, col) in data.iter().enumerate() {
+            for (i, item) in col.iter().enumerate() {
+                transposed_data[i][j] = item.clone();
+            }
+        }
+    
+        transposed_data
+    }
+
 }
+
+
 
 */
 
@@ -139,6 +235,7 @@ use std::net::{
 use getifaddrs::{getifaddrs, InterfaceFlags};
 
 // For TUI
+#[macro_use]
 mod tiny_tui_module;
 use tiny_tui_module::tiny_tui;
 
@@ -1867,7 +1964,8 @@ fn get_toml_file_updated_at_timestamp(file_path: &Path) -> Result<u64, ThisProje
     Ok(timestamp)
 }
 
-// alpha testing
+// dubug_log! macro for f-string printing variables
+// #[macro_use]
 #[macro_export] 
 macro_rules! debug_log {
     ($($arg:tt)*) => (
@@ -2513,6 +2611,7 @@ impl App {
    
     
     fn enter_task_browser(&mut self) {
+        debug_log!("task-mode: starting: enter_task_browser");
         if self.current_path.exists() {
             self.load_tasks();
             self.input_mode = InputMode::TaskCommand;
@@ -2665,74 +2764,6 @@ impl App {
 
     }
 
-    // fn load_tasks(&mut self) {
-    //     self.tui_directory_list.clear();
-    //     self.tui_file_list.clear();
-
-    //     let task_browser_dir = &self.current_path; // Use current path
-
-    //     // Column discovery and default creation
-    //     for default_col in ["#_plan", "#_started", "#_done"] {
-    //         let path = task_browser_dir.join(default_col);
-    //         if !path.exists() { // Only create if they don't exist.
-    //             create_dir_all(&path).expect("Failed to create directory");
-    //         }
-    //         self.tui_directory_list.push(default_col.to_string());
-    //     }
-
-    //     // Sorting isn't strictly necessary, but helps maintain visual consistency.
-    //     self.tui_directory_list.sort();
-
-    //     for (i, column_dir_name) in self.tui_directory_list.iter().enumerate() {
-    //         let column_dir = task_browser_dir.join(column_dir_name);
-    //         let mut task_counter = 1;
-
-    //         if let Ok(task_entries) = fs::read_dir(&column_dir) {
-    //             for task_entry in task_entries.flatten() {
-    //                 if task_entry.path().is_dir() {
-    //                     // Assuming task data is in node.toml within task directories
-    //                     let task_name = task_entry.file_name().to_string_lossy().to_string(); // Extract task name
-    //                     self.tui_file_list.push(format!("{} {}. {}", column_dir_name, i + 1, task_name)); // Numbered and with column name                        
-    //                     task_counter += 1;
-    //                 }
-    //             }
-    //         }
-    //     }
-    // }
-
-
-    // fn load_tasks(&mut self) {
-    //     self.tui_directory_list.clear();
-    //     self.tui_file_list.clear();
-
-    //     let task_browser_dir = &self.current_path;
-
-    //     // 1. Load COLUMNs if at task_browser root:
-    //     if task_browser_dir.ends_with("task_browser") {
-    //         if let Ok(entries) = fs::read_dir(task_browser_dir) {
-    //             for (i, entry) in entries.flatten().enumerate() {
-    //                 if entry.path().is_dir() && entry.file_name().to_string_lossy().starts_with("#_") {
-    //                     let column_name = entry.file_name().to_string_lossy().to_string();
-    //                     self.tui_directory_list.push(format!("{}. {}", i + 1, column_name[2..].to_string())); // Numbered and without "#_"
-    //                 }
-    //             }
-    //         }
-    //     } else { // 2. Load TASKs if inside a column directory:
-    //         if let Ok(entries) = fs::read_dir(task_browser_dir) {
-    //             for (i, entry) in entries.flatten().enumerate() {
-    //                 if entry.path().is_dir() { // Tasks are directories
-    //                     let task_name = entry.file_name().to_string_lossy().to_string();
-    //                     self.tui_file_list.push(format!("{}. {}", i + 1, task_name)); // Numbered tasks
-    //                 }
-    //             }
-    //         }
-    //     }
-    //     // Always sort for consistency:
-    //     self.tui_directory_list.sort();
-    //     self.tui_file_list.sort();
-    // }
-
-
     /// headers/columns = directories with names starting with int and underscore such as 1_plan 2_started 3_done
     /// the number and underscore should be removed
     /// the number should be used as the header/column number
@@ -2740,124 +2771,141 @@ impl App {
     /// e.g. if 1_plan contains a directory called "report" then given report a sequential number
     /// and list it under the header "plan" 
     /// results sent to display_table() as function or as method
-    
-    
-    
-    
-    // fn load_tasks(&mut self) {
-    //         self.tui_directory_list.clear();
-    //         self.tui_file_list.clear();
-
-    //         let task_browser_dir = &self.current_path;
-
-    //         if self.is_at_task_browser_root() {  // Column display at root
-    //             let mut column_names = Vec::new(); // Now Vec<String>
-    //             if let Ok(entries) = fs::read_dir(task_browser_dir) {
-    //                 for (i, entry) in entries.flatten().enumerate() {
-    //                     if entry.path().is_dir() && entry.file_name().to_string_lossy().starts_with("#_") {
-    //                         column_names.push(format!("{}. {}", i + 1, entry.file_name().to_string_lossy()[2..].to_string())); // Formatted column names
-    //                     }
-    //                 }
-    //             }
-    //             // display_table(&column_names); // Use display_table()
-
-    //         } else {  // Task display within a column (Corrected logic and formatting)
-    //             if let Ok(entries) = fs::read_dir(task_browser_dir) {
-    //                 for (i, entry) in entries.flatten().enumerate() {
-    //                     if entry.path().is_dir() {
-    //                         self.tui_file_list.push(format!("{}. {}", i + 1, entry.file_name().to_string_lossy().to_string()));
-    //                     }
-    //                 }
-    //             }
-    //             // self.display_table(&self.tui_file_list); // Corrected to use tui_file_list
-    //         }
-    //     }
-
     fn load_tasks(&mut self) {
-        self.tui_directory_list.clear();
-        self.tui_file_list.clear();
+        debug_log!("task-mode: starting: tasks app: load_tasks");
+        self.tui_directory_list.clear(); // Clear directories
+        self.tui_file_list.clear();  // Clear files
 
         let task_browser_dir = &self.current_path;
 
         if self.is_at_task_browser_root() {
-            // Column display at root
+            // Column display at root (corrected logic)
             let mut column_names = Vec::new();
             let mut column_data = Vec::new();
 
+            // read and use dir, not make new dir
             if let Ok(entries) = fs::read_dir(task_browser_dir) {
+                let mut numbered_entries = Vec::new();  //Corrected type
+                // Find numbered task directories first:
                 for entry in entries.flatten() {
-                    if entry.path().is_dir() && entry.file_name().to_string_lossy().starts_with("#_") {
-                        let column_name = entry.file_name().to_string_lossy()[2..].to_string();
-                        column_names.push(column_name.clone());
+                    if entry.path().is_dir() && entry.file_name().to_string_lossy().starts_with(|c: char| c.is_ascii_digit()) {  // Numbered directories
+                        numbered_entries.push(entry);
+                    }
+                }
 
-                        let mut column_tasks = Vec::new();
-                        if let Ok(tasks) = fs::read_dir(entry.path()) {
-                            for (i, task) in tasks.flatten().enumerate() {
-                                if task.path().is_dir() {
-                                    column_tasks.push(format!("{}. {}", i + 1, task.file_name().to_string_lossy().to_string()));
-                                }
+                // Sort the directory entries by their leading number to ensure they are processed in the correct order
+                numbered_entries.sort_by_key(|entry| {
+                    // Attempt to parse the filename as an integer, or use 0 if the filename cannot be parsed correctly.
+                    entry.file_name().to_string_lossy().chars().next().and_then(|c| c.to_digit(10)).unwrap_or(0) as u32
+                });
+                
+                for entry in numbered_entries {
+                    let column_name = entry.file_name().to_string_lossy().to_string();  // Keep the full column name
+                    debug_log!(
+                        "task-mode: starting: tasks app: load_tasks: this_col_name -> {:?}", 
+                        column_name
+                    );                    
+                    column_names.push(column_name.clone());  //Corrected to push strings
+
+                    let mut column_tasks = Vec::new();                    
+                    if let Ok(tasks) = fs::read_dir(entry.path()) {
+                        for task in tasks.flatten() {
+                            if task.path().is_dir() { // Tasks are directories inside columns
+                                debug_log!(
+                                    "task-mode: starting: tasks app: load_tasks: load_tasks this_task_name -> {:?}", 
+                                    task.file_name().to_string_lossy(),
+                                );                    
+                                column_tasks.push(task.file_name().to_string_lossy().to_string()); //Correct type here
                             }
                         }
-                        column_data.push(column_tasks);
                     }
-                }
+                    column_data.push(column_tasks); 
+                }                
+            } else {
+                 debug_log!("'task_browser' directory not found."); // Add a more specific debug log message.
             }
-            tiny_tui::display_table(
-                &column_names.iter().map(String::as_str).collect::<Vec<&str>>(),
-                &column_data.iter().map(|v| v.iter().map(String::as_str).collect()).collect::<Vec<Vec<&str>>>()
-            );
+            // Transpose the data for display_table:
+            debug_log!(
+                "task-mode: starting: tasks app: load_tasks: column_data -> {:?}", 
+                column_data
+            );            
+            debug_log!("task-mode: starting: tasks app: load_tasks: column_names -> {:?}", column_names);
+            let transposed_data = tiny_tui::transpose_table_data(&column_data);
 
-        } else {
-            // Task display within a column
-            if let Ok(entries) = fs::read_dir(task_browser_dir) {
+            debug_log!("task-mode: starting: tasks app: load_tasks: column_names -> {:?}", column_names);
+
+            tiny_tui::display_table(
+                &column_names, // Now pushing correct String values
+                &transposed_data,
+            );            
+        } else { // Inside a column
+             // ... (task display within a column remains the same)
+            let mut file_list = Vec::new();
+
+            //Iterate through tasks and add to file_list (no column header)
+            if let Ok(entries) = read_dir(task_browser_dir) {
                 for (i, entry) in entries.flatten().enumerate() {
-                    if entry.path().is_dir() {
-                        self.tui_file_list.push(format!("{}. {}", i + 1, entry.file_name().to_string_lossy().to_string()));
+                    if entry.file_type().unwrap().is_dir() {  // Check for directories
+                        file_list.push(format!("{}. {}", i + 1, entry.file_name().to_string_lossy().to_string())); //Corrected type here
                     }
                 }
+            } else {
+                // ... handle errors
             }
-            tiny_tui::display_table(
-                &["Tasks"],
-                &[self.tui_file_list.iter().map(String::as_str).collect()]
-            );
+
+            // Render the list using the correct parameters:
+            tiny_tui::render_list(
+                &file_list,      // Pass the file list
+                &self.current_path, //Pass the current path
+            );             
         }
-    }
-
-
-
-
+    }    
     // fn load_tasks(&mut self) {
+    //     debug_log("task-mode: starting: tasks app: load_tasks");
     //     self.tui_directory_list.clear();
-    //     self.tui_file_list.clear(); // Clear previous content
+    //     self.tui_file_list.clear();
 
     //     let task_browser_dir = &self.current_path;
 
-    //     // 1. Load COLUMNs First:
-    //     if let Ok(entries) = fs::read_dir(task_browser_dir) {
-    //         for entry in entries.flatten() {
-    //             if entry.path().is_dir() && entry.file_name().to_string_lossy().starts_with("#_") {
-    //                 let column_name = entry.file_name().to_string_lossy().to_string();
-    //                 self.tui_directory_list.push(column_name);
-    //             }
-    //         }
-    //     }
-    //     self.tui_directory_list.sort(); // Ensure consistent order
+    //     if self.is_at_task_browser_root() {
+    //         // Column display at root
+    //         let mut column_names = Vec::new();
+    //         let mut column_data = Vec::new();
 
+    //         if let Ok(entries) = fs::read_dir(task_browser_dir) {
+    //             for entry in entries.flatten() {
+    //                 if entry.path().is_dir() && entry.file_name().to_string_lossy().starts_with("#_") {
+    //                     let column_name = entry.file_name().to_string_lossy()[2..].to_string();
+    //                     column_names.push(column_name.clone());
 
-    //     // 2. If inside a COLUMN, load TASKs:
-    //     if let Some(current_column_name) = self.get_current_column_name() {
-    //         let column_dir = task_browser_dir.join(current_column_name); //Path to the specific column's directory.
-    //         if let Ok(task_entries) = fs::read_dir(column_dir) {
-    //             for (i, task_entry) in task_entries.flatten().enumerate() {
-    //                 if task_entry.path().is_dir() { // Tasks are directories
-    //                     let task_name = task_entry.file_name().to_string_lossy().to_string();
-    //                     self.tui_file_list.push(format!("{}. {}", i + 1, task_name)); // Number the tasks
+    //                     let mut column_tasks = Vec::new();
+    //                     if let Ok(tasks) = fs::read_dir(entry.path()) {
+    //                         for task in tasks.flatten() { // No need for enumerate here
+    //                             if task.path().is_dir() {
+    //                                 column_tasks.push(task.file_name().to_string_lossy().to_string());
+    //                             }
+    //                         }
+    //                     }
+    //                     column_data.push(column_tasks);
     //                 }
     //             }
     //         }
-    //     }
-    // }    
+    //         // Transpose the data for display_table:
+    //         debug_log!(
+    //             "task-mode: starting: tasks app: load_tasks: column_data -> {:?}", 
+    //             column_data
+    //         );
+    //         let transposed_data = tiny_tui::transpose_table_data(&column_data);
 
+    //         tiny_tui::display_table(
+    //             &column_names, // No need for iter().map()... here
+    //             &transposed_data,
+    //         );
+    //     } else {
+    //         // ... (task display within a column remains the same)
+    //     }
+    // }
+    
     fn next(&mut self) {
         if self.tui_focus < self.tui_file_list.len() - 1 {
             self.tui_focus += 1;
