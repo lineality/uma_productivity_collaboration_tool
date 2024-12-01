@@ -3165,8 +3165,8 @@ fn add_collaborator_setup_file(
         None,                // None for ipv6_addresses
         "".to_string(),      // Empty string for gpg_publickey_id
         "".to_string(),      // Empty String for gpg_key_public
-        0,                   // 0 for sync_interval
-        0,                   // 0 for updated_at_timestamp
+        sync_interval,                   // 0 for sync_interval
+        updated_at_timestamp,                   // 0 for updated_at_timestamp
     );
     debug_log!("collaborator: {:?}", collaborator);
     
