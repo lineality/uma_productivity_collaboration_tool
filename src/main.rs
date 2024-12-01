@@ -113,7 +113,7 @@ use std::collections::HashSet;
 // use std::sync::mpsc::channel;
 // use std::sync::mpsc::Sender;
 
-use std::process::Command;
+use std::process::Command as StdCommand;
 // use std::sync::mpsc;
 
 // For Sync
@@ -1782,7 +1782,7 @@ fn get_ipv6_addresses() -> Result<Option<Vec<Ipv6Addr>>, io::Error> {
 }
 
 // pub fn sign_toml_file(file_path: &Path) -> Result<(), Error> {
-//     let output = Command::new("gpg")
+//     let output = MainStdCommand::new("gpg")
 //         .arg("--clearsign") 
 //         .arg(file_path)
 //         .output() 
@@ -1799,7 +1799,7 @@ fn get_ipv6_addresses() -> Result<Option<Vec<Ipv6Addr>>, io::Error> {
 // }
 
 pub fn verify_toml_signature(file_path: &Path) -> Result<(), Error> {
-    let output = Command::new("gpg") 
+    let output = StdCommand::new("gpg") 
         .arg("--verify") 
         .arg(file_path) 
         .output()
@@ -2064,7 +2064,7 @@ fn translate_port_assignments(
 /// * `Result<Vec<u8>, ThisProjectError>`:  A `Result` containing the encrypted data as a `Vec<u8>` on success,
 ///   or a `ThisProjectError` on failure.
 fn encrypt_with_gpg(data: &[u8], recipient_public_key: &str) -> Result<Vec<u8>, ThisProjectError> {
-    let mut child = Command::new("gpg")
+    let mut child = StdCommand::new("gpg")
         .arg("--encrypt")
         .arg("--recipient")
         .arg(recipient_public_key)
@@ -2317,12 +2317,13 @@ enum CompressionAlgorithm {
 /// is interpreted and handled. 
 #[derive(PartialEq)]
 enum InputMode {
-    /// Command Mode:  The default mode. The user can type commands (e.g., "help", "quit", "m") 
+    /// MainCommand Mode:  The default mode. The user can type commands (e.g., "help", "quit", "m") 
     /// to navigate the project graph or interact with UMA features.
-    Command,
+    MainCommand,
     /// Insert Text Mode:  Used for entering text, such as instant messages. In this mode, 
     /// user input is treated as text to be added to the current context.
     InsertText,
+    TaskCommand,
 }
 
 struct App {
@@ -2350,7 +2351,7 @@ impl App {
         App {
             tui_focus: 0,
             current_path: PathBuf::from("project_graph_data/team_channels"),
-            input_mode: InputMode::Command, 
+            input_mode: InputMode::MainCommand, 
             tui_file_list: Vec::new(), // Initialize files
             tui_directory_list: Vec::new(), // Initialize files
             tui_textmessage_list: Vec::new(), // Initialize files
@@ -2512,57 +2513,127 @@ impl App {
    
     
     fn enter_task_browser(&mut self) {
-        if self.current_path.join("task_browser").exists() {
-            self.current_path.push("task_browser");
+        if self.current_path.exists() {
+            // if self.current_path.join("task_browser").exists() {
+            // self.current_path.push("task_browser");
             self.load_tasks();
-            self.input_mode = InputMode::Command; // Or perhaps a dedicated TaskInputMode
+            self.input_mode = InputMode::MainCommand; // Or perhaps a dedicated TaskInputMode
         } else {
             debug_log!("'task_browser' directory not found in current node.");
             // Potentially display an error in the TUI.
         }
     }
 
-    fn handle_task_action(&mut self, input: &str) -> bool {  //Returns true to exit Task Mode
+    fn handle_task_action(&mut self, input: &str) -> bool { // Return true to exit, false to continue
         if input == "q" || input == "quit" {
-            return true; //Exit task mode
+            return true; // Exit task mode
         } else if let Ok(selection) = input.parse::<usize>() {
-            if selection > 0 && selection <= self.tui_file_list.len() { // Use file_list for tasks now:
-                let task_index = selection - 1;
-                let full_task_path = self.get_full_task_path(task_index);
-                if let Some(path) = full_task_path {
-                    // Go to selected task node:  Update current_path
-                    // Note: you'll likely need to update GraphNavigationInstanceState as well to reflect this navigation change.
-                    // For simplicity here, we'll just print task details.
-                    self.current_path = path.clone();
-                    let node_toml_path = path.join("node.toml");
-                    if let Ok(toml_string) = fs::read_to_string(node_toml_path) {
-                        if let Ok(toml_value) = toml::from_str::<Value>(&toml_string) {
-                            debug_log!("Task Details:\n{:#?}", toml_value); //View task details for now.
-                            // TODO: Actual node navigation and state update here. 
-                        }
-                    }
-                    return true; // Exit task mode to view the task node. 
-                }
-            } else {
-                debug_log!("Invalid task number selection."); // Stay in task mode
-            }
 
-        }  else if input.starts_with('m') {
-            // Message owner, etc... (other task actions)
-            if let Some(task_number_str) = input.get(1..) {
-                if let Ok(task_number) = task_number_str.parse::<usize>() {
-                    // TODO: Implement message owner logic here (using task_number)
-                    debug_log!("Message owner of task {} (not implemented yet).", task_number);
+            if self.is_at_task_browser_root() { // COLUMN Navigation (if at root)
+                if selection > 0 && selection <= self.tui_directory_list.len() {
+                    let column_index = selection - 1;
+                    let column_name = &self.tui_directory_list[column_index];
+                    self.current_path.push(column_name); // Navigate INTO column directory.
+                    self.load_tasks(); // Refresh to show tasks within column
+                    return false; // Stay in task mode, now within a column
+
                 } else {
-                     debug_log!("Invalid task number for message command.");
+                   debug_log!("Invalid column selection."); 
+                   return false; // Stay in task mode (invalid input)
                 }
-            } else {
-                 debug_log!("Invalid message command format.");
-            }            
-        }
+            } else { // TASK Navigation (if within a column)
+                if selection > 0 && selection <= self.tui_file_list.len() {  //Task selection
+                    // Get full task path (within current column)
+                    let task_index = selection - 1; //0-indexed
 
-        false // Stay in task mode by default
+                    //More robust task name extraction:
+                    let task_name = if let Some(task_entry) = self.tui_file_list.get(task_index) {
+                        task_entry[3..].trim().to_string() // Extract name, handling potential panics.
+                    } else {
+                        String::new() // Handle invalid index gracefully
+                    };
+                    
+                    if !task_name.is_empty() { // Only proceed if task_name is valid
+                        let task_path = self.current_path.join(&task_name); 
+                        self.current_path = task_path; // Set as the new current path
+
+                        let node_toml_path = self.current_path.join("node.toml"); //For viewing task details:
+                        if let Ok(toml_string) = fs::read_to_string(node_toml_path) {
+                            if let Ok(toml_value) = toml::from_str::<Value>(&toml_string) {
+                                debug_log!("Task Details:\n{:#?}", toml_value);
+                            }
+                        }
+                        return true; // Exit task mode to view selected task.
+                    } else {
+                         debug_log!("Invalid task index or name.");
+                        return false; // Stay in task mode.
+                    }
+                } else {
+                    debug_log!("Invalid task selection.");
+                    return false; // Stay in task mode.
+                }
+            } // End of TASK Navigation Block (added)
+        } else if input.starts_with('m') {  // ...  (Message Owner Logic)
+            // ... (your existing message owner logic)
+        }
+        false // Stay in task mode (no recognized input)
+    } // End of handle_task_action (added)
+    
+    
+    fn is_at_task_browser_root(&self) -> bool { // New helper function
+        self.current_path.ends_with("task_browser") && self.tui_file_list.is_empty() // At root if no tasks are loaded.
     }
+
+    fn get_current_column_name(&self) -> Option<String> {
+        let last_section = extract_last_path_section(&self.current_path);
+        if let Some(name) = last_section {
+            if name.starts_with('#') {
+                Some(name)
+            } else { None }
+        } else { None }
+    }
+    
+    // fn handle_task_action(&mut self, input: &str) -> bool {  //Returns true to exit Task Mode
+    //     if input == "q" || input == "quit" {
+    //         return true; //Exit task mode
+    //     } else if let Ok(selection) = input.parse::<usize>() {
+    //         if selection > 0 && selection <= self.tui_file_list.len() { // Use file_list for tasks now:
+    //             let task_index = selection - 1;
+    //             let full_task_path = self.get_full_task_path(task_index);
+    //             if let Some(path) = full_task_path {
+    //                 // Go to selected task node:  Update current_path
+    //                 // Note: you'll likely need to update GraphNavigationInstanceState as well to reflect this navigation change.
+    //                 // For simplicity here, we'll just print task details.
+    //                 self.current_path = path.clone();
+    //                 let node_toml_path = path.join("node.toml");
+    //                 if let Ok(toml_string) = fs::read_to_string(node_toml_path) {
+    //                     if let Ok(toml_value) = toml::from_str::<Value>(&toml_string) {
+    //                         debug_log!("Task Details:\n{:#?}", toml_value); //View task details for now.
+    //                         // TODO: Actual node navigation and state update here. 
+    //                     }
+    //                 }
+    //                 return true; // Exit task mode to view the task node. 
+    //             }
+    //         } else {
+    //             debug_log!("Invalid task number selection."); // Stay in task mode
+    //         }
+
+    //     }  else if input.starts_with('m') {
+    //         // Message owner, etc... (other task actions)
+    //         if let Some(task_number_str) = input.get(1..) {
+    //             if let Ok(task_number) = task_number_str.parse::<usize>() {
+    //                 // TODO: Implement message owner logic here (using task_number)
+    //                 debug_log!("Message owner of task {} (not implemented yet).", task_number);
+    //             } else {
+    //                  debug_log!("Invalid task number for message command.");
+    //             }
+    //         } else {
+    //              debug_log!("Invalid message command format.");
+    //         }            
+    //     }
+
+    //     false // Stay in task mode by default
+    // }
 
 
     fn get_full_task_path(&self, task_index: usize) -> Option<PathBuf> { 
@@ -2582,42 +2653,75 @@ impl App {
 
     }
 
+    // fn load_tasks(&mut self) {
+    //     self.tui_directory_list.clear();
+    //     self.tui_file_list.clear();
+
+    //     let task_browser_dir = &self.current_path; // Use current path
+
+    //     // Column discovery and default creation
+    //     for default_col in ["#_plan", "#_started", "#_done"] {
+    //         let path = task_browser_dir.join(default_col);
+    //         if !path.exists() { // Only create if they don't exist.
+    //             create_dir_all(&path).expect("Failed to create directory");
+    //         }
+    //         self.tui_directory_list.push(default_col.to_string());
+    //     }
+
+    //     // Sorting isn't strictly necessary, but helps maintain visual consistency.
+    //     self.tui_directory_list.sort();
+
+    //     for (i, column_dir_name) in self.tui_directory_list.iter().enumerate() {
+    //         let column_dir = task_browser_dir.join(column_dir_name);
+    //         let mut task_counter = 1;
+
+    //         if let Ok(task_entries) = fs::read_dir(&column_dir) {
+    //             for task_entry in task_entries.flatten() {
+    //                 if task_entry.path().is_dir() {
+    //                     // Assuming task data is in node.toml within task directories
+    //                     let task_name = task_entry.file_name().to_string_lossy().to_string(); // Extract task name
+    //                     self.tui_file_list.push(format!("{} {}. {}", column_dir_name, i + 1, task_name)); // Numbered and with column name                        
+    //                     task_counter += 1;
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
+
+
+
     fn load_tasks(&mut self) {
         self.tui_directory_list.clear();
-        self.tui_file_list.clear();
+        self.tui_file_list.clear(); // Clear previous content
 
-        let task_browser_dir = &self.current_path; // Use current path
+        let task_browser_dir = &self.current_path;
 
-        // Column discovery and default creation
-        for default_col in ["#_plan", "#_started", "#_done"] {
-            let path = task_browser_dir.join(default_col);
-            if !path.exists() { // Only create if they don't exist.
-                create_dir_all(&path).expect("Failed to create directory");
+        // 1. Load COLUMNs First:
+        if let Ok(entries) = fs::read_dir(task_browser_dir) {
+            for entry in entries.flatten() {
+                if entry.path().is_dir() && entry.file_name().to_string_lossy().starts_with("#_") {
+                    let column_name = entry.file_name().to_string_lossy().to_string();
+                    self.tui_directory_list.push(column_name);
+                }
             }
-            self.tui_directory_list.push(default_col.to_string());
         }
+        self.tui_directory_list.sort(); // Ensure consistent order
 
-        // Sorting isn't strictly necessary, but helps maintain visual consistency.
-        self.tui_directory_list.sort();
 
-        for (i, column_dir_name) in self.tui_directory_list.iter().enumerate() {
-            let column_dir = task_browser_dir.join(column_dir_name);
-            let mut task_counter = 1;
-
-            if let Ok(task_entries) = fs::read_dir(&column_dir) {
-                for task_entry in task_entries.flatten() {
-                    if task_entry.path().is_dir() {
-                        // Assuming task data is in node.toml within task directories
-                        let task_name = task_entry.file_name().to_string_lossy().to_string(); // Extract task name
-                        self.tui_file_list.push(format!("{} {}. {}", column_dir_name, i + 1, task_name)); // Numbered and with column name                        
-                        task_counter += 1;
+        // 2. If inside a COLUMN, load TASKs:
+        if let Some(current_column_name) = self.get_current_column_name() {
+            let column_dir = task_browser_dir.join(current_column_name); //Path to the specific column's directory.
+            if let Ok(task_entries) = fs::read_dir(column_dir) {
+                for (i, task_entry) in task_entries.flatten().enumerate() {
+                    if task_entry.path().is_dir() { // Tasks are directories
+                        let task_name = task_entry.file_name().to_string_lossy().to_string();
+                        self.tui_file_list.push(format!("{}. {}", i + 1, task_name)); // Number the tasks
                     }
                 }
             }
         }
-    }
+    }    
 
-    
     fn next(&mut self) {
         if self.tui_focus < self.tui_file_list.len() - 1 {
             self.tui_focus += 1;
@@ -4016,7 +4120,7 @@ fn gpg_clearsign_file_to_sendbytes(
     fs::copy(file_path, &temp_dir)?;
 
     // 3. Clearsign the temporary file, capturing the output.  Redirect stderr for error handling.
-    let clearsign_output = Command::new("gpg")
+    let clearsign_output = StdCommand::new("gpg")
         .arg("--clearsign")
         .arg("--output")
         .arg("-") // Redirect to stdout
@@ -4061,7 +4165,7 @@ fn gpg_encrypt_to_bytes(data: &[u8], recipient_public_key: &str) -> Result<Vec<u
     debug_log!("(inHRCD) gpg_encrypt_to_bytes() temp_key_file path {:?}", temp_key_file);
     
     // 2. GPG encrypt, reading the recipient key from the temporary file.
-    let mut gpg = Command::new("gpg")
+    let mut gpg = StdCommand::new("gpg")
         .arg("--encrypt")
         .arg("--recipient-file")
         .arg(&temp_key_file)
@@ -4167,7 +4271,7 @@ fn gpg_decrypt_from_bytes(data: &[u8], your_gpg_key: &str) -> Result<Vec<u8>, Th
     fs::write(&temp_encrypted_file, data)?;
 
     // 2. Run GPG decryption
-    let mut child = Command::new("gpg")
+    let mut child = StdCommand::new("gpg")
         .arg("--decrypt")
         .arg("--batch")  // Non-interactive mode
         .arg("--yes")    // Assume yes to prompts
@@ -5528,6 +5632,70 @@ fn handle_command(
     debug_log("end fn handle_command()");
     return Ok(false); // Don't exit by default
 }
+
+
+fn task_mode_handle_commands(
+    input: &str, 
+    app: &mut App, 
+    graph_navigation_instance_state: &GraphNavigationInstanceState
+) -> Result<bool, io::Error> {
+    /*
+    For input command mode
+    quit
+    command-list/legend
+    */
+
+    debug_log(&format!("fn task_mode_handle_commands(), input->{:?}", input));
+    
+    let parts: Vec<&str> = input.trim().split_whitespace().collect();
+    if let Some(command) = parts.first() {
+        match command.to_lowercase().as_str() {
+            "h" | "help" => {
+                debug_log("Help!");
+                // Display help information
+            }
+            
+            "bigger" | "big" | "bg" => {
+                app.tui_height = (app.tui_height + 1).max(1);  // Height cannot be less than 1
+                app.tui_width = (app.tui_width + 1).max(1);  // Width cannot be less than 1
+                // ... re-render
+            }
+    
+            "smaller" | "small" | "sm" => {
+                app.tui_height = (app.tui_height - 1).max(1);  
+                app.tui_width = (app.tui_width - 1).max(1);  
+                // ... re-render 
+            }
+            
+            "home" => {
+                /*
+                For a clean reset, 'home' quits and restarts,
+                ensuring all processes are clean.
+                */
+                debug_log("Home command received.");
+                quit_set_continue_uma_to_false();
+            }
+
+            "q" | "quit" | "exit" => {
+                debug_log("quit");
+                no_restart_set_hard_reset_flag_to_false();
+                quit_set_continue_uma_to_false();
+                
+                return Ok(true); // Signal to exit the loop
+            }
+            _ => {
+                // Display error message (e.g., "Invalid command")
+                debug_log(" 'other' commend? _ => {...");
+
+            }
+            // ... (handle other commands)
+            
+        }
+    }
+    debug_log("end fn task_mode_handle_commands()");
+    return Ok(false); // Don't exit by default
+}
+
 
 fn extract_last_path_section(current_path: &PathBuf) -> Option<String> {
     current_path.file_name().and_then(|os_str| os_str.to_str().map(|s| s.to_string()))
@@ -11190,8 +11358,8 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
     // Create App instance
     let mut app = App::new(graph_navigation_instance_state.clone()); // Pass graph_navigation_instance_state
     
-    // -- Start in Command Mode --- 
-    app.input_mode = InputMode::Command; // Initialize app in command mode
+    // -- Start in MainCommand Mode --- 
+    app.input_mode = InputMode::MainCommand; // Initialize app in command mode
 
     // -- Here: save first version of starting 'state'
     
@@ -11223,8 +11391,8 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         print!("\x1B[2J\x1B[1;1H");
 
         // Update the directory list (if in command mode)
-        if app.input_mode == InputMode::Command {
-             debug_log(" if app.input_mode == InputMode::Command");
+        if app.input_mode == InputMode::MainCommand {
+             debug_log(" if app.input_mode == InputMode::MainCommand");
             app.update_directory_list()?; 
         }
 
@@ -11232,15 +11400,20 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         // TODO this 2nd input is a legacy kludge, but is needed to show TUI for now
         // TODO this is most likely VERY wrong and will not work for task-browser
         match app.input_mode {
-            InputMode::Command => {
+            InputMode::MainCommand => {
                 tiny_tui::render_list(&app.tui_directory_list, &app.current_path);
-                debug_log("tiny_tui::render_list(&app.tui_directory_list, &app.current_path)");
+                debug_log("InputMode::MainCommand => tiny_tui::render_list(&app.tui_directory_list, &app.current_path)");
+                
+            }
+            InputMode::TaskCommand => {
+                tiny_tui::render_list(&app.tui_directory_list, &app.current_path);
+                debug_log("InputMode::TaskCommand => tiny_tui::render_list(&app.tui_directory_list, &app.current_path)");
                 
             }
             // TODO why is theis here? tui_textmessage_list is not the only option
             InputMode::InsertText => {
                 tiny_tui::render_list(&app.tui_textmessage_list, &app.current_path);
-                debug_log("tiny_tui::render_list(&app.tui_textmessage_list, &app.current_path);");
+                debug_log("InputMode::InsertText => tiny_tui::render_list(&app.tui_textmessage_list, &app.current_path);");
             }
         }
 
@@ -11249,7 +11422,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
 
         // Handle the input based on the mode
         match app.input_mode {
-            InputMode::Command => {
+            InputMode::MainCommand => {
                 
                 // Handle commands (including 'm')
                 // if handle_command(&input, &mut app, &mut graph_navigation_instance_state) {
@@ -11322,13 +11495,90 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                 }
             }
 
+            
+            InputMode::TaskCommand => {
+                
+                // Handle commands (including 'm')
+                // if handle_command(&input, &mut app, &mut graph_navigation_instance_state) {
+                if task_mode_handle_commands(&input, &mut app, &mut graph_navigation_instance_state)? {
+                    debug_log("QUIT");
+                    break; // Exit the loop if handle_command returns true (e.g., for "q")
+                } else if let Ok(index) = input.parse::<usize>() {
+                    let item_index = index - 1; // Adjust for 0-based indexing
+                    if item_index < app.tui_directory_list.len() {
+                        debug_log("main: if item_index < app.tui_directory_list.len()");
+                        debug_log!(
+                            "main: app.tui_directory_list: {:?}",
+                            app.tui_directory_list
+                        );
+                        
+                        ////////////////////////////
+                        // Handle channel selection
+                        ////////////////////////////
+                        
+                        // app.handle_tui_action(); // Remove the extra argument here
+
+                        debug_log("handle_tui_action() started in we_love_projects_loop()");
+                        
+                        if app.current_path.display().to_string() == "project_graph_data/team_channels".to_string() {
+                            debug_log("app.current_path == project_graph_data/team_channels");
+                            debug_log(&format!("current_path: {:?}", app.current_path));
+
+                            let input = tiny_tui::get_input()?; // Get input here
+                            if let Ok(index) = input.parse::<usize>() { 
+                                let item_index = index - 1; // Adjust for 0-based indexing
+                                if item_index < app.tui_directory_list.len() {
+                                    let selected_channel = &app.tui_directory_list[item_index];
+                                    debug_log(&format!("Selected channel: {}", selected_channel)); // Log the selected channel name
+
+                                    
+                                    //////////////////////////
+                                    // Enable sync flag here!
+                                    //////////////////////////
+                                    debug_log("About to set sync flag to true!");
+                                    set_sync_start_ok_flag_to_true();  //TODO turn on to use sync !!! (off for testing)
+                                    
+                                    
+                                    app.current_path = app.current_path.join(selected_channel);
+                                    
+                                    debug_log(&format!("New current_path: {:?}", app.current_path)); // Log the updated current path
+                                    
+                                    app.graph_navigation_instance_state.current_full_file_path = app.current_path.clone();
+                                    
+                                    // flag to start sync is set INSIDE look_read_node_toml() if a team_channel is entered
+                                    app.graph_navigation_instance_state.look_read_node_toml(); 
+
+                                    // Log the state after loading node.toml
+                                    debug_log(&format!("we_love_projects_loop() State after look_read_node_toml: {:?}", app.graph_navigation_instance_state));
+                                    
+                                    // ... enter IM browser or other features ...
+                                } else {
+                                    debug_log("Invalid index.");
+                                }
+                            } 
+                        } else if app.is_in_instant_message_browser_directory() {
+                            // ... handle other TUI actions ...
+                            debug_log("else if self.is_in_instant_message_browser_directory()");
+                            
+                            
+                        }
+                        debug_log("end handle_tui_action()");
+                    } else {
+                        debug_log("Invalid index.");
+                    }
+                }
+            }
+
+            
+            
+            
             InputMode::InsertText => {
                 
                 debug_log("handle_insert_text_input");
                 // if input == "esc" { 
                 if input == "q" {
                     debug_log("esc toggled");
-                    app.input_mode = InputMode::Command; // Access input_mode using self
+                    app.input_mode = InputMode::MainCommand; // Access input_mode using self
                     app.current_path.pop(); // Go back to the parent directory
                 } else if !input.is_empty() {
                     // TODO
