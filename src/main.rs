@@ -2620,21 +2620,21 @@ impl App {
 
         }
     }
-    fn handle_task_action(&mut self, input: &str) -> bool { // Return true to exit, false to continue
-        if input == "q" || input == "quit" {
-            return true; // Exit task mode
-        } else if let Ok(selection) = input.parse::<usize>() {
-            if self.is_at_task_browser_root() { // COLUMN Navigation
-                // ... (Handle column selection as before)
-            } else { // TASK Navigation (within a column)
-                // ... (Handle task selection logic)
-            }
+    // fn handle_task_action(&mut self, input: &str) -> bool { // Return true to exit, false to continue
+    //     if input == "q" || input == "quit" {
+    //         return true; // Exit task mode
+    //     } else if let Ok(selection) = input.parse::<usize>() {
+    //         if self.is_at_task_browser_root() { // COLUMN Navigation
+    //             // ... (Handle column selection as before)
+    //         } else { // TASK Navigation (within a column)
+    //             // ... (Handle task selection logic)
+    //         }
 
-        }
-        // ... handle other task-related commands
-        false  // Don't exit task mode by default
+    //     }
+    //     // ... handle other task-related commands
+    //     false  // Don't exit task mode by default
 
-    }
+    // }
     // fn handle_task_action(&mut self, input: &str) -> bool { // Return true to exit, false to continue
     //     if input == "q" || input == "quit" {
     //         return true; // Exit task mode
@@ -2764,6 +2764,53 @@ impl App {
 
     }
 
+fn handle_task_action(&mut self, input: &str) -> bool { // Return true to exit task mode
+        if input == "q" || input == "quit" {
+            self.input_mode = InputMode::MainCommand; //Switch back to MainCommand mode
+            self.current_path.pop(); // Go back to parent directory ("task_browser")
+            self.load_tasks();        //Refresh task view at the previous parent level. 
+            return false;             // Stay in the main loop (don't exit Uma)
+
+        } else if let Ok(selection) = input.parse::<usize>() {
+            // ... (Logic for task number handling - See detailed code below)
+        } else {
+            debug_log!("Invalid task command.");
+            // (Optional) Display error message in TUI
+        }
+        false // Don't exit task mode by default for other commands
+    }
+
+    // still under construction
+    fn handle_task_number_selection(&mut self, selection: usize) -> bool {
+            if selection > 0 && selection <= self.tui_file_list.len() {
+                let task_index = selection - 1;
+                if let Some(task_name) = self.tui_file_list.get(task_index) {
+                    let task_path = self.current_path.join(task_name);
+                    self.current_path = task_path;
+    
+                    if self.current_path.join("node.toml").exists() {
+                        // Correctly handle the Result from load_core_node_from_toml_file:
+                        match load_core_node_from_toml_file(&self.current_path.join("node.toml")) {
+                            Ok(this_node_data) => {
+                                debug_log!("Node data loaded:\n{:#?}", this_node_data); // Or display in TUI
+                                // ... (Code to display node data in a dedicated view)...
+                            }
+                            Err(e) => {
+                                debug_log!("Error loading node data: {}", e);
+                                // ... (Error handling, e.g., display error message in TUI) ...
+                            }
+                        }
+                    }
+                    return true; // Exit task mode to view/edit task
+                } else {
+                    debug_log!("Invalid task number.");
+                }
+            }
+            false // Stay in task mode if invalid input
+        }
+    
+    
+    
     /// headers/columns = directories with names starting with int and underscore such as 1_plan 2_started 3_done
     /// the number and underscore should be removed
     /// the number should be used as the header/column number
@@ -11730,76 +11777,91 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
             
             InputMode::TaskCommand => {
                 
-                // Handle commands (including 'm')
-                // if handle_command(&input, &mut app, &mut graph_navigation_instance_state) {
-                if task_mode_handle_commands(&input, &mut app, &mut graph_navigation_instance_state)? {
-                    debug_log("QUIT");
-                    break; // Exit the loop if handle_command returns true (e.g., for "q")
-                } else if let Ok(index) = input.parse::<usize>() {
-                    let item_index = index - 1; // Adjust for 0-based indexing
-                    if item_index < app.tui_directory_list.len() {
-                        debug_log("main: if item_index < app.tui_directory_list.len()");
-                        debug_log!(
-                            "main: app.tui_directory_list: {:?}",
-                            app.tui_directory_list
-                        );
-                        
-                        ////////////////////////////
-                        // Handle channel selection
-                        ////////////////////////////
-                        
-                        // app.handle_tui_action(); // Remove the extra argument here
-
-                        debug_log("handle_tui_action() started in we_love_projects_loop()");
-                        
-                        if app.current_path.display().to_string() == "project_graph_data/team_channels".to_string() {
-                            debug_log("app.current_path == project_graph_data/team_channels");
-                            debug_log(&format!("current_path: {:?}", app.current_path));
-
-                            let input = tiny_tui::get_input()?; // Get input here
-                            if let Ok(index) = input.parse::<usize>() { 
-                                let item_index = index - 1; // Adjust for 0-based indexing
-                                if item_index < app.tui_directory_list.len() {
-                                    let selected_channel = &app.tui_directory_list[item_index];
-                                    debug_log(&format!("Selected channel: {}", selected_channel)); // Log the selected channel name
-
-                                    
-                                    //////////////////////////
-                                    // Enable sync flag here!
-                                    //////////////////////////
-                                    debug_log("About to set sync flag to true!");
-                                    set_sync_start_ok_flag_to_true();  //TODO turn on to use sync !!! (off for testing)
-                                    
-                                    
-                                    app.current_path = app.current_path.join(selected_channel);
-                                    
-                                    debug_log(&format!("New current_path: {:?}", app.current_path)); // Log the updated current path
-                                    
-                                    app.graph_navigation_instance_state.current_full_file_path = app.current_path.clone();
-                                    
-                                    // flag to start sync is set INSIDE look_read_node_toml() if a team_channel is entered
-                                    app.graph_navigation_instance_state.look_read_node_toml(); 
-
-                                    // Log the state after loading node.toml
-                                    debug_log(&format!("we_love_projects_loop() State after look_read_node_toml: {:?}", app.graph_navigation_instance_state));
-                                    
-                                    // ... enter IM browser or other features ...
-                                } else {
-                                    debug_log("Invalid index.");
-                                }
-                            } 
-                        } else if app.is_in_instant_message_browser_directory() {
-                            // ... handle other TUI actions ...
-                            debug_log("else if self.is_in_instant_message_browser_directory()");
-                            
-                            
-                        }
-                        debug_log("end handle_tui_action()");
+                // Handle Task commands (including 'm')
+                if let Ok(num_input) = input.trim().parse::<usize>() { // Check for number first
+                    debug_log!("Task number input: {}", num_input);
+                    
+                    if app.handle_task_number_selection(num_input) { // Exit task mode if selection is valid
+                        app.input_mode = InputMode::MainCommand; // Reset mode, return to previous context
                     } else {
-                        debug_log("Invalid index.");
+                        app.load_tasks(); // If invalid selection, refresh task list, stay in TaskCommand mode.
+                    }                    
+                } else if handle_command(&input, &mut app, &graph_navigation_instance_state)? { // Handle other commands, like "q"
+                        break; // Pass to main command handler, quit if it returns true, staying in main loop otherwise.
                     }
-                }
-            }
+                                    
+            } // end TaskCommand case
+                
+                
+            //     // if handle_command(&input, &mut app, &mut graph_navigation_instance_state) {
+            //     if task_mode_handle_commands(&input, &mut app, &mut graph_navigation_instance_state)? {
+            //         debug_log("QUIT");
+            //         break; // Exit the loop if handle_command returns true (e.g., for "q")
+            //     } else if let Ok(index) = input.parse::<usize>() {
+            //         let item_index = index - 1; // Adjust for 0-based indexing
+            //         if item_index < app.tui_directory_list.len() {
+            //             debug_log("main: if item_index < app.tui_directory_list.len()");
+            //             debug_log!(
+            //                 "main: app.tui_directory_list: {:?}",
+            //                 app.tui_directory_list
+            //             );
+                        
+            //             ////////////////////////////
+            //             // Handle channel selection
+            //             ////////////////////////////
+                        
+            //             // app.handle_tui_action(); // Remove the extra argument here
+
+            //             debug_log("handle_tui_action() started in we_love_projects_loop()");
+                        
+            //             if app.current_path.display().to_string() == "project_graph_data/team_channels".to_string() {
+            //                 debug_log("app.current_path == project_graph_data/team_channels");
+            //                 debug_log(&format!("current_path: {:?}", app.current_path));
+
+            //                 let input = tiny_tui::get_input()?; // Get input here
+            //                 if let Ok(index) = input.parse::<usize>() { 
+            //                     let item_index = index - 1; // Adjust for 0-based indexing
+            //                     if item_index < app.tui_directory_list.len() {
+            //                         let selected_channel = &app.tui_directory_list[item_index];
+            //                         debug_log(&format!("Selected channel: {}", selected_channel)); // Log the selected channel name
+
+                                    
+            //                         //////////////////////////
+            //                         // Enable sync flag here!
+            //                         //////////////////////////
+            //                         debug_log("About to set sync flag to true!");
+            //                         set_sync_start_ok_flag_to_true();  //TODO turn on to use sync !!! (off for testing)
+                                    
+                                    
+            //                         app.current_path = app.current_path.join(selected_channel);
+                                    
+            //                         debug_log(&format!("New current_path: {:?}", app.current_path)); // Log the updated current path
+                                    
+            //                         app.graph_navigation_instance_state.current_full_file_path = app.current_path.clone();
+                                    
+            //                         // flag to start sync is set INSIDE look_read_node_toml() if a team_channel is entered
+            //                         app.graph_navigation_instance_state.look_read_node_toml(); 
+
+            //                         // Log the state after loading node.toml
+            //                         debug_log(&format!("we_love_projects_loop() State after look_read_node_toml: {:?}", app.graph_navigation_instance_state));
+                                    
+            //                         // ... enter IM browser or other features ...
+            //                     } else {
+            //                         debug_log("Invalid index.");
+            //                     }
+            //                 } 
+            //             } else if app.is_in_instant_message_browser_directory() {
+            //                 // ... handle other TUI actions ...
+            //                 debug_log("else if self.is_in_instant_message_browser_directory()");
+                            
+                            
+            //             }
+            //             debug_log("end handle_tui_action()");
+            //         } else {
+            //             debug_log("Invalid index.");
+            //         }
+            //     }
+            // }
 
             
             
