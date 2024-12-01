@@ -3080,10 +3080,11 @@ fn get_team_member_collaborator_salt(collaborator_name: &str) -> Result<u8, This
     Ok(user_salt)
 }
 
+/// for an intermediate step in converting data types
 #[derive(Debug, Deserialize, serde::Serialize, Clone)]
-struct CollaboratorTomlData {
+struct RawProtoDataToml {
     user_name: String,
-    user_salt_list: Vec<u128>,
+    user_salt_list: Vec<String>,
     ipv4_addresses: Option<Vec<Ipv4Addr>>,
     ipv6_addresses: Option<Vec<Ipv6Addr>>,
     gpg_publickey_id: String,
@@ -3092,11 +3093,10 @@ struct CollaboratorTomlData {
     updated_at_timestamp: u64,
 }
 
-/// for an intermediate step in converting data types
 #[derive(Debug, Deserialize, serde::Serialize, Clone)]
-struct RawProtoDataToml {
+struct CollaboratorTomlData {
     user_name: String,
-    user_salt_list: Vec<String>,
+    user_salt_list: Vec<u128>,
     ipv4_addresses: Option<Vec<Ipv4Addr>>,
     ipv6_addresses: Option<Vec<Ipv6Addr>>,
     gpg_publickey_id: String,
@@ -3151,26 +3151,39 @@ fn add_collaborator_setup_file(
     debug_log!("gpg_key_public {:?}", gpg_key_public);
     debug_log!("sync_interval {:?}", sync_interval);   
     debug_log!("updated_at_timestamp {:?}", updated_at_timestamp); 
-            
+    
+    // print-log stops here.
+    // so maybe let collaborator = CollaboratorTomlData::new( is failing
+    
+    // likely failing
     // Create the CollaboratorTomlData instance using the existing new() method:
+    
     let collaborator = CollaboratorTomlData::new(
         user_name, 
-        user_salt_list,
-        ipv4_addresses,
-        ipv6_addresses,
-        gpg_publickey_id,
-        gpg_key_public,
-        sync_interval,
-        updated_at_timestamp,
+        Vec::new(),          // Empty vector for user_salt_list
+        None,                // None for ipv4_addresses
+        None,                // None for ipv6_addresses
+        "".to_string(),      // Empty string for gpg_publickey_id
+        "".to_string(),      // Empty String for gpg_key_public
+        0,                   // 0 for sync_interval
+        0,                   // 0 for updated_at_timestamp
     );
+    debug_log!("collaborator: {:?}", collaborator);
+    
+    // let collaborator = CollaboratorTomlData::new(
+    //     user_name, 
+    //     user_salt_list,
+    //     ipv4_addresses,
+    //     ipv6_addresses,
+    //     gpg_publickey_id,
+    //     gpg_key_public,
+    //     sync_interval,
+    //     updated_at_timestamp,
+    // );
+    
+    // this does not print
+    debug_log!("collaborator {:?}", collaborator);
 
-    // maybe not needed as salts are required input
-    // // Generate 4 random u128 salts
-    // let user_salt_list: Vec<u128> = (0..4)
-    //     .map(|_| rand::thread_rng().gen())
-    //     .collect();
-    
-    
     // Serialize the data:
     let toml_string = toml::to_string(&collaborator).map_err(|e| {
         std::io::Error::new(
@@ -3178,13 +3191,16 @@ fn add_collaborator_setup_file(
             format!("TOML serialization error: {}", e),
         )
     })?;
+    
+    // this does not print
+    debug_log!("toml_string {:?}", toml_string);
 
     // Construct the file path:
     let file_path = Path::new("project_graph_data/collaborator_files_address_book")
         .join(format!("{}__collaborator.toml", collaborator.user_name));
 
-     // Log the constructed file path:
-     debug_log!("Attempting to write collaborator file to: {:?}", file_path); 
+    // Log the constructed file path:
+    debug_log!("Attempting to write collaborator file to: {:?}", file_path); 
     
     // Create the file and write the data:
     let mut file = File::create(file_path.clone())?;
