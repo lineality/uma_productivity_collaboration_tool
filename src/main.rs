@@ -5462,10 +5462,33 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         let gpg_publickey_id = gpg_publickey_id.trim().to_string();
         
         // Prompt the user to enter a GPG key
-        println!("Enter an ascii armored public GPG key:  // Posix? $gpg --list-keys");
+        println!("Enter your ascii-armored public GPG key line by line.");
+        println!("Then Type 'END'+Enter/Return when finished:");
+        println!("get with -> Posix: $ gpg --armor --export YOURKEYID");
         let mut gpg_key_public = String::new();
-        io::stdin().read_line(&mut gpg_key_public).unwrap();
-        let gpg_key_public = gpg_key_public.trim().to_string();
+        loop {
+            let mut line = String::new();
+            io::stdin().read_line(&mut line).expect("Failed to read line");
+            let line = line.trim();
+    
+            if line == "END" {
+                break;
+            }
+            gpg_key_public.push_str(line);
+            gpg_key_public.push('\n'); // Add newline character back
+        }
+    
+        // Remove the trailing newline if it exists
+        if gpg_key_public.ends_with('\n') {
+            gpg_key_public.pop();
+        }
+    
+        println!("GPG key entered:\n{}", gpg_key_public); // Confirmation (remove in production)
+        
+        
+        // let mut gpg_key_public = String::new();
+        // io::stdin().read_line(&mut gpg_key_public).unwrap();
+        // let gpg_key_public = gpg_key_public.trim().to_string();
 
         // // load names of current collaborators to check for collisions: TODO
         // if check_collaborator_name_collision();
