@@ -1296,7 +1296,7 @@ fn serialize_collaborator_to_toml(collaborator: &CollaboratorTomlData) -> Result
     toml_string.push_str(&format!("gpg_publickey_id = \"{}\"\n", collaborator.gpg_publickey_id));
     
     // Add gpg_key_public
-    toml_string.push_str(&format!("gpg_key_public = \"{}\"\n", collaborator.gpg_key_public));
+    toml_string.push_str(&format!("gpg_key_public = \"\"\"{}\"\"\"\n", collaborator.gpg_key_public));
 
     // Add sync_interval
     toml_string.push_str(&format!("sync_interval = {}\n", collaborator.sync_interval));
