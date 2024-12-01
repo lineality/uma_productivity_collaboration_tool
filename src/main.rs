@@ -2834,10 +2834,11 @@ impl App {
 
             debug_log!("task-mode: starting: tasks app: load_tasks: column_names -> {:?}", column_names);
 
-            tiny_tui::display_table(
-                &column_names, // Now pushing correct String values
-                &transposed_data,
-            );            
+            // tiny_tui::display_table(
+            //     &column_names, // Now pushing correct String values
+            //     &transposed_data,
+            // );
+            tiny_tui::render_tasks_list(&column_names, &transposed_data, &self.current_path);
         } else { // Inside a column
              // ... (task display within a column remains the same)
             let mut file_list = Vec::new();
@@ -2857,7 +2858,7 @@ impl App {
             tiny_tui::render_list(
                 &file_list,      // Pass the file list
                 &self.current_path, //Pass the current path
-            );             
+            );
         }
     }    
     // fn load_tasks(&mut self) {
@@ -11635,9 +11636,12 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                 
             // }
             InputMode::TaskCommand => {
-                // The table is already printed in load_tasks, so NO TUI rendering needed here.
-                 debug_log("InputMode::TaskCommand. Table displayed.  No further rendering needed here."); 
-            }
+                // Now render the task list using the TUI
+                // app.load_tasks(); // This is already called in handle_command("t", ...)
+                // The table is already rendered within load_tasks, using the new tiny_tui::render_tasks_list
+                 debug_log!("InputMode::TaskCommand. render_tasks_list now used. ");  // Clear the screen
+                
+            },
             // TODO why is theis here? tui_textmessage_list is not the only option
             InputMode::InsertText => {
                 tiny_tui::render_list(&app.tui_textmessage_list, &app.current_path);

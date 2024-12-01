@@ -21,7 +21,7 @@ pub mod tiny_tui {
                 .join("/");
             println!("Current Path: /{}", relevant_path); 
         } else {
-            println!("Select a Team-Channel (by number):"); // Home directory (root) 
+            println!("Select a Team-Channel (by number):"); 
         }
 
         // 3. Display the list items as before
@@ -29,6 +29,19 @@ pub mod tiny_tui {
             println!("{}. {}", i + 1, item);
         }
     }    
+    
+    pub fn render_tasks_list(headers: &[String], data: &[Vec<String>], current_path: &Path) {
+        // 1. Display Current Path
+        println!("Current Path: {}", current_path.display());
+    
+        // 2. Display Table (reuse display_table from tiny_tui_module)
+        display_table(headers, data);
+    
+        // 3. (Optional) Display any other task-specific information or instructions.
+        println!("Select a Task (by number):"); 
+    }
+        
+    
     
     // pub fn render_list(list: &Vec<String>, current_path: &Path) {
     //     println!("Current Path: {}", current_path.display());
