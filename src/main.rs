@@ -3161,7 +3161,7 @@ fn add_collaborator_setup_file(
     let collaborator = CollaboratorTomlData::new(
         user_name, 
         Vec::new(),          // Empty vector for user_salt_list
-        None,                // None for ipv4_addresses
+        ipv4_addresses,                // None for ipv4_addresses
         None,                // None for ipv6_addresses
         "".to_string(),      // Empty string for gpg_publickey_id
         "".to_string(),      // Empty String for gpg_key_public
