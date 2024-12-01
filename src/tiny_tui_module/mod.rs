@@ -37,3 +37,30 @@ pub mod tiny_tui {
         Ok(input.trim().to_string())
     }
 }
+
+fn display_table(headers: &[&str], data: &[Vec<&str>]) {
+    // Print headers
+    for header in headers {
+        print!("{:<15} ", header); // Left-align with padding
+    }
+    println!();
+
+    // Print separator
+    println!("{}", "-".repeat(headers.len() * 15));
+
+    // Print data rows
+    for row in data {
+        for item in row {
+            print!("{:<15} ", item);
+        }
+        println!();
+    }
+}
+// fn main() {
+//     let headers = vec!["Column 1", "Column 2", "Column 3"];
+//     let data = vec![
+//         vec!["Data A", "Data B", "Data C"],
+//         vec!["Data D", "Data E", "Data F"],
+//     ];
+//     display_table(&headers, &data);
+// }

@@ -2762,25 +2762,35 @@ fn load_tasks(&mut self) {
     }
 
 
+    // fn main() {
+    //     let headers = vec!["Column 1", "Column 2", "Column 3"];
+    //     let data = vec![
+    //         vec!["Data A", "Data B", "Data C"],
+    //         vec!["Data D", "Data E", "Data F"],
+    //     ];
+    //     display_table(&headers, &data);
+    // }
     // Helper function to display a table (can be reused)
-    fn display_table(&self, items: &Vec<String>) {
-        let item_count = items.len();
-        let column_width = 20;  // Adjust as needed
-        let separator = "-".repeat(2 * column_width); //Separator for column view
-
-
-        if self.is_at_task_browser_root() { // Column headers 
-            for (i, item) in items.iter().enumerate() {
-                print!("{:<width$}", item, width = column_width);
-                if i < item_count - 1 { print!("|"); } // Column separator
-            }            
-            println!("\n{}", separator); // Column separator line
-        } else {  //Tasks under a column
-            for item in items {
-                println!("{}", item);
-            }
+    fn display_table(headers: &[&str], data: &[Vec<&str>]) {
+        // Print headers
+        for header in headers {
+            print!("{:<15} ", header); // Left-align with padding
         }
-    }
+        println!();
+    
+        // Print separator
+        println!("{}", "-".repeat(headers.len() * 15));
+    
+        // Print data rows
+        for row in data {
+            for item in row {
+                print!("{:<15} ", item);
+            }
+            println!();
+        }
+    }    
+
+
     // fn load_tasks(&mut self) {
     //     self.tui_directory_list.clear();
     //     self.tui_file_list.clear(); // Clear previous content
@@ -3723,19 +3733,7 @@ fn update_collaborator_sendqueue_timestamp_log(
     Ok(back_of_queue_timestamp)
 }
 
-
-/*
-fn main() {
-    let headers = &["Column 1", "Column 2", "Column 3"];
-    let data = &[
-        &["Data A", "Data B", "Data C"],
-        &["Data D", "Data E", "Data F"],
-    ];
-    display_simple_table(headers, data);
-}
-*/
-/// table view TUI
-fn display_simple_table(headers: &[&str], data: &[&[&str]]) {
+fn display_simple_tui_table(headers: &[&str], data: &[Vec<&str>]) {
     // Print headers
     for header in headers {
         print!("{:<15} ", header); // Left-align with padding
@@ -3747,12 +3745,20 @@ fn display_simple_table(headers: &[&str], data: &[&[&str]]) {
 
     // Print data rows
     for row in data {
-        for item in *row {
+        for item in row {
             print!("{:<15} ", item);
         }
         println!();
     }
 }
+// fn main() {
+//     let headers = vec!["Column 1", "Column 2", "Column 3"];
+//     let data = vec![
+//         vec!["Data A", "Data B", "Data C"],
+//         vec!["Data D", "Data E", "Data F"],
+//     ];
+//     display_table(&headers, &data);
+// }
 
 
 // /// Loads CollaboratorData from a TOML file.
