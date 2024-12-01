@@ -3194,8 +3194,8 @@ fn add_collaborator_setup_file(
     debug_log!("user_salt_list {:?}", &user_salt_list);
     debug_log!("ipv4_addresses {:?}", ipv4_addresses);
     debug_log!("ipv6_addresses {:?}", ipv6_addresses);
-    debug_log!("gpg_publickey_id {:?}", gpg_publickey_id);
-    debug_log!("gpg_key_public {:?}", gpg_key_public);
+    debug_log!("gpg_publickey_id {:?}", &gpg_publickey_id);
+    debug_log!("gpg_key_public {:?}", &gpg_key_public);
     debug_log!("sync_interval {:?}", sync_interval);   
     debug_log!("updated_at_timestamp {:?}", updated_at_timestamp); 
     
@@ -3205,28 +3205,28 @@ fn add_collaborator_setup_file(
     // likely failing
     // Create the CollaboratorTomlData instance using the existing new() method:
     
-    let collaborator = CollaboratorTomlData::new(
-        user_name, 
-        user_salt_list,          // Empty vector for user_salt_list
-        ipv4_addresses,                // None for ipv4_addresses
-        None,                // None for ipv6_addresses
-        "".to_string(),      // Empty string for gpg_publickey_id
-        "".to_string(),      // Empty String for gpg_key_public
-        sync_interval,                   // 0 for sync_interval
-        updated_at_timestamp,                   // 0 for updated_at_timestamp
-    );
-    debug_log!("printing collaborator: {:?}", collaborator);
-    
     // let collaborator = CollaboratorTomlData::new(
     //     user_name, 
-    //     user_salt_list,
-    //     ipv4_addresses,
-    //     ipv6_addresses,
-    //     gpg_publickey_id,
-    //     gpg_key_public,
-    //     sync_interval,
-    //     updated_at_timestamp,
+    //     user_salt_list,          // Empty vector for user_salt_list
+    //     ipv4_addresses,                // None for ipv4_addresses
+    //     None,                // None for ipv6_addresses
+    //     "".to_string(),      // Empty string for gpg_publickey_id
+    //     "".to_string(),      // Empty String for gpg_key_public
+    //     sync_interval,                   // 0 for sync_interval
+    //     updated_at_timestamp,                   // 0 for updated_at_timestamp
     // );
+    // debug_log!("printing collaborator: {:?}", collaborator);
+    
+    let collaborator = CollaboratorTomlData::new(
+        user_name, 
+        user_salt_list,
+        ipv4_addresses,
+        ipv6_addresses,
+        gpg_publickey_id,
+        gpg_key_public,
+        sync_interval,
+        updated_at_timestamp,
+    );
     
     debug_log!("collaborator {:?}", collaborator);
 
