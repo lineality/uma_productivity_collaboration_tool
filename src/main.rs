@@ -2610,7 +2610,7 @@ impl App {
             }
         }
 
-        // Render the message list (assuming this is implemented in tiny_tui_module)
+        // Render the message list
         tiny_tui::render_list(&self.tui_textmessage_list, &self.current_path); 
     } 
    
