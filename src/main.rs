@@ -384,7 +384,7 @@ impl std::fmt::Display for ThisProjectError {
             ThisProjectError::WalkDirError(ref err) => write!(f, "WalkDir Error: {}", err), // Add this arm
             ThisProjectError::ParseIntError(ref err) => write!(f, "ParseInt Error: {}", err), // Add this arm
             ThisProjectError::ParseIntError(ref err) => write!(f, "ParseInt Error: {}", err),
-            ThisProjectError::GpgError(_) => todo!(), // Add this arm
+            ThisProjectError::GpgError(ref err) => write!(f, "GPG Error: {}", err), // Add this arm
             // ... add formatting for other error types
         }
     }
@@ -2190,6 +2190,9 @@ fn encrypt_with_gpg(data: &[u8], recipient_public_key: &str) -> Result<Vec<u8>, 
         Err(ThisProjectError::NetworkError(format!("GPG encryption failed: {}", stderr)))
     }
 }
+
+
+
 
 // // Helper function for translate_port_assignments
 // // to construct the meeting room key
@@ -5256,6 +5259,119 @@ fn create_node_id_to_path_lookup(
 //     return false;
 // }
 
+/// Finds the path to a GPG public key file (`.asc` extension) in the specified directory.
+///
+/// Returns `Ok(Some(path))` if a `.asc` file is found, `Ok(None)` if no `.asc` file is found,
+/// and `Err(_)` if there's an error reading the directory.
+fn find_gpg_public_key_file(directory: &Path) -> Result<Option<PathBuf>, ThisProjectError> {
+    let entries = fs::read_dir(directory)?;
+
+    for entry in entries {
+        let entry = entry?; // Handle potential errors during directory iteration
+        let path = entry.path();
+        if path.is_file() && path.extension().map_or(false, |ext| ext == "asc") {
+            return Ok(Some(path));
+        }
+    }
+
+    Ok(None) // No .asc file found
+}
+
+// fn get_local_owner_user_name() -> String {
+//     let uma_toml_path = Path::new("uma.toml");
+//     // let user_metadata = toml::from_str::<toml::Value>(&std::fs::read_to_string(uma_toml_path)?)?; 
+//     let user_metadata = toml::from_str::<toml::Value>(&std::fs::read_to_string(uma_toml_path)?)
+//     .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("TOML deserialization error: {}", e)))?;
+//     let local_owner_username = user_metadata["uma_local_owner_user"].as_str().unwrap().to_string();
+    
+//     local_owner_username
+// }
+fn get_local_owner_username() -> String {  // Returns String directly
+    let uma_toml_path = Path::new("uma.toml");
+
+    let toml_string = read_to_string(uma_toml_path).unwrap_or_else(|e| {
+        eprintln!("Error reading uma.toml: {}", e); // Log the error
+        std::process::exit(1); // Or handle differently, but exit if no config is a show stopper.
+    });
+
+    let toml_value: toml::Value = toml::from_str(&toml_string).unwrap_or_else(|e| {
+        eprintln!("Error parsing uma.toml: {}", e);
+        std::process::exit(1);  // If your application cannot continue without a username...
+    });
+
+    toml_value["uma_local_owner_user"]
+        .as_str()
+        .unwrap_or_else(|| {
+            eprintln!("'uma_local_owner_user' not found in uma.toml"); // Handle the error
+            std::process::exit(1);
+        })
+        .to_string()
+}
+
+fn export_addressbook() -> Result<(), ThisProjectError> {
+    debug_log("start export_addressbook()");
+
+    // 1. Get local owner's username
+    // 1. Get local owner's username
+    // Read uma_local_owner_user from uma.toml
+    // maybe add gpg and make this a separate function TODO
+    // Load UMA configuration from uma.toml
+    let uma_toml_path = Path::new("uma.toml");
+    // let user_metadata = toml::from_str::<toml::Value>(&std::fs::read_to_string(uma_toml_path)?)?; 
+    let user_metadata = toml::from_str::<toml::Value>(&std::fs::read_to_string(uma_toml_path)?)
+    .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("TOML deserialization error: {}", e)))?;
+    let local_owner_username = user_metadata["uma_local_owner_user"].as_str().unwrap().to_string();
+
+    // 2. Construct paths
+    let address_book_export_dir = PathBuf::from("import_export_invites/addressbook_invite/export");
+    let key_file_path = address_book_export_dir.join("key.asc");
+    let collaborator_file_path = PathBuf::from("project_graph_data/collaborator_files_address_book")
+        .join(format!("{}__collaborator.toml", local_owner_username));
+
+    // 3. Read public key (early return on error).  Handles NotFound.
+    let public_key_string = match read_to_string(&key_file_path) {
+        Ok(key) => key,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            debug_log!("Public key file ('key.asc') not found. Skipping address book export.");
+            return Ok(()); // Return Ok if the file isn't found, not continuing.
+        },
+        Err(e) => return Err(ThisProjectError::IoError(e)),
+    };
+
+    // 4. Clearsign collaborator file
+    let clearsign_output = StdCommand::new("gpg")
+        .arg("--sign")
+        .arg(&collaborator_file_path)
+        .output()?;
+
+
+    // Error handling: (exit early on error)
+    if !clearsign_output.status.success() {
+        let stderr = String::from_utf8_lossy(&clearsign_output.stderr);
+        return Err(ThisProjectError::GpgError(format!("GPG clearsign failed: {}", stderr)));
+    }
+    let clearsigned_data = clearsign_output.stdout;
+
+    // 5. Encrypt clearsigned data
+    let encrypted_data = encrypt_with_gpg(&clearsigned_data, &public_key_string)?;
+
+    // 6. Create export directory if it doesn't exist
+    let export_dir = PathBuf::from("import_export_invites/addressbook_invite/export");
+    create_dir_all(&export_dir)?;
+
+    // 7. Write encrypted data to file. Use a timestamp to avoid overwriting.
+    let export_file_path = export_dir.join(format!(
+        "{}_addressbook_{}.gpg",
+        local_owner_username,
+        get_current_unix_timestamp() // Or use a UUID
+    ));
+    let mut file = File::create(&export_file_path)?;
+    file.write_all(&encrypted_data)?;
+    
+    debug_log("export complete");
+
+    Ok(())
+}
 
 /// ## State, Initialization & Network
 /// If as a vignette, let's look at a brief walkthrough of Alice starting up Uma as she embarks on a build with Bob. 
@@ -5362,6 +5478,51 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
     }
 
 
+    // // Check if the data directory exists
+    // let invite_parent_folder = Path::new("import_export_invites");
+    // if !invite_parent_folder.exists() {
+    //     // If the directory does not exist, create it
+    //     fs::create_dir_all(invite_parent_folder).expect("Failed to create import_export_invites directory");
+    // }
+
+    // Check if the data directory exists
+    let addressbook_invite = Path::new("import_export_invites/addressbook_invite/import");
+    if !addressbook_invite.exists() {
+        // If the directory does not exist, create it
+        fs::create_dir_all(addressbook_invite).expect("Failed to create addressbook_invite directory");
+    }
+
+    // Check if the data directory exists
+    let addressbook_invite = Path::new("import_export_invites/addressbook_invite/export");
+    if !addressbook_invite.exists() {
+        // If the directory does not exist, create it
+        fs::create_dir_all(addressbook_invite).expect("Failed to create addressbook_invite directory");
+    }
+    
+    // Check if the data directory exists
+    let teamchannel_invites = Path::new("import_export_invites/teamchannel_invites/import");
+    if !teamchannel_invites.exists() {
+        // If the directory does not exist, create it
+        fs::create_dir_all(teamchannel_invites).expect("Failed to create teamchannel_invites directory");
+    }
+    
+    // Check if the data directory exists
+    let teamchannel_invites = Path::new("import_export_invites/teamchannel_invites/export");
+    if !teamchannel_invites.exists() {
+        // If the directory does not exist, create it
+        fs::create_dir_all(teamchannel_invites).expect("Failed to create teamchannel_invites directory");
+    }
+    
+    // not yet working
+    // export_addressbook()?;
+    
+    
+    // TODO
+    // look for a file in import_export_invites/addressbook_invite/export
+    // try to read it as a gpg key
+    // export your addressbook file clearsigned by you and encrypted with the public gpg key in that file
+    
+    
     // Check if the sync_data directory exists,
     // and recursively erase all old files.
     // This is 'session' state for sync which must
