@@ -11911,13 +11911,6 @@ fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn update_current_path_and_state(app: &mut App, selected_channel: &str) {
-    app.current_path = app.current_path.join(selected_channel);
-    app.graph_navigation_instance_state.current_full_file_path = app.current_path.clone();
-    app.graph_navigation_instance_state.look_read_node_toml(); 
-    debug_log!("Updated path and state. New path: {:?}", app.current_path);
-}
-
 // Proverbial Main()
 fn we_love_projects_loop() -> Result<(), io::Error> {
     /*
@@ -12012,7 +12005,6 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
     // -- Here: save first version of starting 'state'
     
     loop {
-        
         // 1. Read the 'continue_uma.txt' file 
         let file_content = match fs::read_to_string(CONTINUE_UMA_PATH) {
             Ok(content) => content,
@@ -12045,174 +12037,204 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
             app.update_directory_list()?; 
         }
 
-        // SOLUTION 1 & 2: Combined TUI rendering and input handling in a single loop
-        match app.input_mode { // Determine what to display *before* input.
-            InputMode::MainCommand => tiny_tui::render_list(&app.tui_directory_list, &app.current_path),
-            InputMode::TaskCommand => app.load_tasks(), // load_tasks renders the table internally.
-            InputMode::InsertText => tiny_tui::render_list(&app.tui_textmessage_list, &app.current_path),
-        };
-
-        let input = tiny_tui::get_input()?;
-
+        // Render the appropriate list based on the mode
+        // TODO this 2nd input is a legacy kludge, but is needed to show TUI for now
+        // TODO this is most likely VERY wrong and will not work for task-browser
         match app.input_mode {
             InputMode::MainCommand => {
-                // SOLUTION 4:  No special case for initial channel selection
-                if handle_command(&input, &mut app, &graph_navigation_instance_state)? {  // Handle all commands here
-                    break;
-                } else if let Ok(index) = input.parse::<usize>() { // Handles numeric input *only*.
-                    // SOLUTION 3: Centralized Navigation Logic.
-                    let selected_index = index - 1;
-                    if selected_index < app.tui_directory_list.len() {
-                        let selected_item = &app.tui_directory_list[selected_index].clone();;
+                tiny_tui::render_list(&app.tui_directory_list, &app.current_path);
+                debug_log("InputMode::MainCommand => tiny_tui::render_list(&app.tui_directory_list, &app.current_path)");
+                
+            }
+            // InputMode::TaskCommand => {
+            //     tiny_tui::render_list(&app.tui_directory_list, &app.current_path);
+            //     debug_log("InputMode::TaskCommand => tiny_tui::render_list(&app.tui_directory_list, &app.current_path)");
+                
+            // }
+            InputMode::TaskCommand => {
+                // Now render the task list using the TUI
+                // app.load_tasks(); // This is already called in handle_command("t", ...)
+                // The table is already rendered within load_tasks, using the new tiny_tui::render_tasks_list
+                 debug_log!("InputMode::TaskCommand. render_tasks_list now used. ");  // Clear the screen
+                
+            },
+            // TODO why is theis here? tui_textmessage_list is not the only option
+            InputMode::InsertText => {
+                tiny_tui::render_list(&app.tui_textmessage_list, &app.current_path);
+                debug_log("InputMode::InsertText => tiny_tui::render_list(&app.tui_textmessage_list, &app.current_path);");
+            }
+        }
 
-                        update_current_path_and_state(&mut app, selected_item);
+        // Read user inputs
+        let input = tiny_tui::get_input()?;
 
-                        if app.is_in_team_channel_list() {
-                            set_sync_start_ok_flag_to_true();
+        // Handle the input based on the mode
+        match app.input_mode {
+            InputMode::MainCommand => {
+                
+                // Handle commands (including 'm')
+                // if handle_command(&input, &mut app, &mut graph_navigation_instance_state) {
+                if handle_command(&input, &mut app, &mut graph_navigation_instance_state)? {
+                    debug_log("QUIT");
+                    break; // Exit the loop if handle_command returns true (e.g., for "q")
+                } else if let Ok(index) = input.parse::<usize>() {
+                    let item_index = index - 1; // Adjust for 0-based indexing
+                    if item_index < app.tui_directory_list.len() {
+                        debug_log("main: if item_index < app.tui_directory_list.len()");
+                        debug_log!(
+                            "main: app.tui_directory_list: {:?}",
+                            app.tui_directory_list
+                        );
+                        
+                        ////////////////////////////
+                        // Handle channel selection
+                        ////////////////////////////
+                        
+                        // app.handle_tui_action(); // Remove the extra argument here
+
+                        debug_log("handle_tui_action() started in we_love_projects_loop()");
+                        
+                        if app.current_path.display().to_string() == "project_graph_data/team_channels".to_string() {
+                            debug_log("app.current_path == project_graph_data/team_channels");
+                            debug_log(&format!("current_path: {:?}", app.current_path));
+
+                            let input = tiny_tui::get_input()?; // Get input here
+                            if let Ok(index) = input.parse::<usize>() { 
+                                let item_index = index - 1; // Adjust for 0-based indexing
+                                if item_index < app.tui_directory_list.len() {
+                                    let selected_channel = &app.tui_directory_list[item_index];
+                                    debug_log(&format!("Selected channel: {}", selected_channel)); // Log the selected channel name
+
+                                    
+                                    //////////////////////////
+                                    // Enable sync flag here!
+                                    //////////////////////////
+                                    debug_log("About to set sync flag to true!");
+                                    set_sync_start_ok_flag_to_true();  //TODO turn on to use sync !!! (off for testing)
+                                    
+                                    
+                                    app.current_path = app.current_path.join(selected_channel);
+                                    
+                                    debug_log(&format!("New current_path: {:?}", app.current_path)); // Log the updated current path
+                                    
+                                    app.graph_navigation_instance_state.current_full_file_path = app.current_path.clone();
+                                    
+                                    // flag to start sync is set INSIDE look_read_node_toml() if a team_channel is entered
+                                    app.graph_navigation_instance_state.look_read_node_toml(); 
+
+                                    // Log the state after loading node.toml
+                                    debug_log(&format!("we_love_projects_loop() State after look_read_node_toml: {:?}", app.graph_navigation_instance_state));
+                                    
+                                    // ... enter IM browser or other features ...
+                                } else {
+                                    debug_log("Invalid index.");
+                                }
+                            } 
+                        } else if app.is_in_instant_message_browser_directory() {
+                            // ... handle other TUI actions ...
+                            debug_log("else if self.is_in_instant_message_browser_directory()");
+                            
+                            
                         }
-
-                        // SOLUTION 3: Refresh TUI after navigation
-                        app.update_directory_list()?;  //Update after potential path changes.
-                        tiny_tui::render_list(&app.tui_directory_list, &app.current_path); 
-
+                        debug_log("end handle_tui_action()");
                     } else {
-                        app.display_error("Invalid index");
+                        debug_log("Invalid index.");
                     }
                 }
-            },
-            InputMode::TaskCommand => { // SOLUTION 5
-                 if let Ok(selection) = input.parse::<usize>() {
-                     if app.handle_task_number_selection(selection) { // Exit task mode if successful
-                        app.input_mode = InputMode::MainCommand; // Return to MainCommand mode
-                        app.current_path.pop(); // Go back to the parent directory
-                        app.load_tasks(); // Refresh task view
-                     }
-                 } else if handle_command(&input, &mut app, &graph_navigation_instance_state)? { // Handle other commands
-                    break;
-                 }
             }
-        // // Render the appropriate list based on the mode
-        // // TODO this 2nd input is a legacy kludge, but is needed to show TUI for now
-        // // TODO this is most likely VERY wrong and will not work for task-browser
-        // match app.input_mode {
-        //     InputMode::MainCommand => {
-        //         tiny_tui::render_list(&app.tui_directory_list, &app.current_path);
-        //         debug_log("InputMode::MainCommand => tiny_tui::render_list(&app.tui_directory_list, &app.current_path)");
+
+            
+            InputMode::TaskCommand => {
                 
-        //     }
-        //     // InputMode::TaskCommand => {
-        //     //     tiny_tui::render_list(&app.tui_directory_list, &app.current_path);
-        //     //     debug_log("InputMode::TaskCommand => tiny_tui::render_list(&app.tui_directory_list, &app.current_path)");
-                
-        //     // }
-        //     InputMode::TaskCommand => {
-        //         // Now render the task list using the TUI
-        //         // app.load_tasks(); // This is already called in handle_command("t", ...)
-        //         // The table is already rendered within load_tasks, using the new tiny_tui::render_tasks_list
-        //          debug_log!("InputMode::TaskCommand. render_tasks_list now used. ");  // Clear the screen
-                
-        //     },
-        //     // TODO why is theis here? tui_textmessage_list is not the only option
-        //     InputMode::InsertText => {
-        //         tiny_tui::render_list(&app.tui_textmessage_list, &app.current_path);
-        //         debug_log("InputMode::InsertText => tiny_tui::render_list(&app.tui_textmessage_list, &app.current_path);");
-        //     }
-        // }
-
-        // // Read user inputs
-        // let input = tiny_tui::get_input()?;
-
-        // // Handle the input based on the mode
-        // match app.input_mode {
-        //     InputMode::MainCommand => {
-                
-        //         // Handle commands (including 'm')
-        //         // if handle_command(&input, &mut app, &mut graph_navigation_instance_state) {
-        //         if handle_command(&input, &mut app, &mut graph_navigation_instance_state)? {
-        //             debug_log("QUIT");
-        //             break; // Exit the loop if handle_command returns true (e.g., for "q")
-        //         } else if let Ok(index) = input.parse::<usize>() {
-        //             let item_index = index - 1; // Adjust for 0-based indexing
-        //             if item_index < app.tui_directory_list.len() {
-        //                 debug_log("main: if item_index < app.tui_directory_list.len()");
-        //                 debug_log!(
-        //                     "main: app.tui_directory_list: {:?}",
-        //                     app.tui_directory_list
-        //                 );
-                        
-        //                 ////////////////////////////
-        //                 // Handle channel selection
-        //                 ////////////////////////////
-                        
-        //                 // app.handle_tui_action(); // Remove the extra argument here
-
-        //                 debug_log("handle_tui_action() started in we_love_projects_loop()");
-                        
-        //                 if app.current_path.display().to_string() == "project_graph_data/team_channels".to_string() {
-        //                     debug_log("app.current_path == project_graph_data/team_channels");
-        //                     debug_log(&format!("current_path: {:?}", app.current_path));
-
-        //                     let input = tiny_tui::get_input()?; // Get input here
-        //                     if let Ok(index) = input.parse::<usize>() { 
-        //                         let item_index = index - 1; // Adjust for 0-based indexing
-        //                         if item_index < app.tui_directory_list.len() {
-        //                             let selected_channel = &app.tui_directory_list[item_index];
-        //                             debug_log(&format!("Selected channel: {}", selected_channel)); // Log the selected channel name
-
-        //                             //////////////////////////
-        //                             // Enable sync flag here!
-        //                             //////////////////////////
-        //                             debug_log("About to set sync flag to true!");
-        //                             set_sync_start_ok_flag_to_true();  //TODO turn on to use sync !!! (off for testing)
-                                    
-        //                             app.current_path = app.current_path.join(selected_channel);
-                                    
-        //                             debug_log(&format!("New current_path: {:?}", app.current_path)); // Log the updated current path
-                                    
-        //                             app.graph_navigation_instance_state.current_full_file_path = app.current_path.clone();
-                                    
-        //                             // flag to start sync is set INSIDE look_read_node_toml() if a team_channel is entered
-        //                             app.graph_navigation_instance_state.look_read_node_toml(); 
-
-        //                             // Log the state after loading node.toml
-        //                             debug_log(&format!("we_love_projects_loop() State after look_read_node_toml: {:?}", app.graph_navigation_instance_state));
-                                    
-        //                             // ... enter IM browser or other features ...
-        //                         } else {
-        //                             debug_log("Invalid index.");
-        //                         }
-        //                     } 
-        //                 } else if app.is_in_instant_message_browser_directory() {
-        //                     // ... handle other TUI actions ...
-        //                     debug_log("else if self.is_in_instant_message_browser_directory()");
-                            
-                            
-        //                 }
-        //                 debug_log("end handle_tui_action()");
-        //             } else {
-        //                 debug_log("Invalid index.");
-        //             }
-        //         }
-        //     }
-
-        //     InputMode::TaskCommand => {
-                
-        //         // Handle Task commands (including 'm')
-        //         if let Ok(num_input) = input.trim().parse::<usize>() { // Check for number first
-        //             debug_log!("Task number input: {}", num_input);
+                // Handle Task commands (including 'm')
+                if let Ok(num_input) = input.trim().parse::<usize>() { // Check for number first
+                    debug_log!("Task number input: {}", num_input);
                     
-        //             if app.handle_task_number_selection(num_input) { // Exit task mode if selection is valid
-        //                 app.input_mode = InputMode::MainCommand; // Reset mode, return to previous context
-        //             } else {
-        //                 app.load_tasks(); // If invalid selection, refresh task list, stay in TaskCommand mode.
-        //             }                    
-        //         } else if handle_command(&input, &mut app, &graph_navigation_instance_state)? { // Handle other commands, like "q"
-        //                 break; // Pass to main command handler, quit if it returns true, staying in main loop otherwise.
-        //             }
+                    if app.handle_task_number_selection(num_input) { // Exit task mode if selection is valid
+                        app.input_mode = InputMode::MainCommand; // Reset mode, return to previous context
+                    } else {
+                        app.load_tasks(); // If invalid selection, refresh task list, stay in TaskCommand mode.
+                    }                    
+                } else if handle_command(&input, &mut app, &graph_navigation_instance_state)? { // Handle other commands, like "q"
+                        break; // Pass to main command handler, quit if it returns true, staying in main loop otherwise.
+                    }
                                     
-        //     } // end TaskCommand case
+            } // end TaskCommand case
                 
+                
+            //     // if handle_command(&input, &mut app, &mut graph_navigation_instance_state) {
+            //     if task_mode_handle_commands(&input, &mut app, &mut graph_navigation_instance_state)? {
+            //         debug_log("QUIT");
+            //         break; // Exit the loop if handle_command returns true (e.g., for "q")
+            //     } else if let Ok(index) = input.parse::<usize>() {
+            //         let item_index = index - 1; // Adjust for 0-based indexing
+            //         if item_index < app.tui_directory_list.len() {
+            //             debug_log("main: if item_index < app.tui_directory_list.len()");
+            //             debug_log!(
+            //                 "main: app.tui_directory_list: {:?}",
+            //                 app.tui_directory_list
+            //             );
+                        
+            //             ////////////////////////////
+            //             // Handle channel selection
+            //             ////////////////////////////
+                        
+            //             // app.handle_tui_action(); // Remove the extra argument here
 
+            //             debug_log("handle_tui_action() started in we_love_projects_loop()");
+                        
+            //             if app.current_path.display().to_string() == "project_graph_data/team_channels".to_string() {
+            //                 debug_log("app.current_path == project_graph_data/team_channels");
+            //                 debug_log(&format!("current_path: {:?}", app.current_path));
+
+            //                 let input = tiny_tui::get_input()?; // Get input here
+            //                 if let Ok(index) = input.parse::<usize>() { 
+            //                     let item_index = index - 1; // Adjust for 0-based indexing
+            //                     if item_index < app.tui_directory_list.len() {
+            //                         let selected_channel = &app.tui_directory_list[item_index];
+            //                         debug_log(&format!("Selected channel: {}", selected_channel)); // Log the selected channel name
+
+                                    
+            //                         //////////////////////////
+            //                         // Enable sync flag here!
+            //                         //////////////////////////
+            //                         debug_log("About to set sync flag to true!");
+            //                         set_sync_start_ok_flag_to_true();  //TODO turn on to use sync !!! (off for testing)
+                                    
+                                    
+            //                         app.current_path = app.current_path.join(selected_channel);
+                                    
+            //                         debug_log(&format!("New current_path: {:?}", app.current_path)); // Log the updated current path
+                                    
+            //                         app.graph_navigation_instance_state.current_full_file_path = app.current_path.clone();
+                                    
+            //                         // flag to start sync is set INSIDE look_read_node_toml() if a team_channel is entered
+            //                         app.graph_navigation_instance_state.look_read_node_toml(); 
+
+            //                         // Log the state after loading node.toml
+            //                         debug_log(&format!("we_love_projects_loop() State after look_read_node_toml: {:?}", app.graph_navigation_instance_state));
+                                    
+            //                         // ... enter IM browser or other features ...
+            //                     } else {
+            //                         debug_log("Invalid index.");
+            //                     }
+            //                 } 
+            //             } else if app.is_in_instant_message_browser_directory() {
+            //                 // ... handle other TUI actions ...
+            //                 debug_log("else if self.is_in_instant_message_browser_directory()");
+                            
+                            
+            //             }
+            //             debug_log("end handle_tui_action()");
+            //         } else {
+            //             debug_log("Invalid index.");
+            //         }
+            //     }
+            // }
+
+            
+            
+            
             InputMode::InsertText => {
                 
                 debug_log("handle_insert_text_input");
@@ -12230,6 +12252,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                     to be used for 'howler'
                     selected rc 
                     and expiration dates
+                    
                     */
                     
                     debug_log("!input.is_empty()");
@@ -12254,11 +12277,18 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                         None => "XYZ".to_string(),
                     }; 
                     
+                    // depricated
+                    // // save_updateflag_path_for_sendqueue
+                    // save_updateflag_path_for_sendqueue(
+                    //     &this_team_channelname,
+                    //     &incoming_file_path, // Take PathBuf directly
+                    // );
+
                     app.load_im_messages(); // Access using self
                 }
             }
         }
-    } // end of main loop
+    }
     debug_log("Finish: we love project loop.");
     debug_log(">*< Halt signal received. Exiting The Uma. Closing... we_love_projects_loop() |o|");
     
