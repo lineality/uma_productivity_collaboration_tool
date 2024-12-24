@@ -2522,7 +2522,7 @@ impl App {
     } 
 
     fn load_im_messages(&mut self) {
-        debug_log("load_im_messages called"); 
+        debug_log("starting: load_im_messages called"); 
         debug_log(&format!("self.current_path  {:?}", self.current_path));
         self.tui_textmessage_list.clear(); 
 
@@ -12222,6 +12222,39 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         }
 
         // 3. Render TUI *before* input:
+        if app.input_mode == InputMode::InsertText {
+
+            debug_log("we love projects: handle_insert_text_input");
+            
+            if input == "m" {
+                // pass
+
+            } else if input == "q" {
+                debug_log("escape toggled");
+                app.input_mode = InputMode::MainCommand; // Access input_mode using self
+                app.current_path.pop(); // Go back to the parent directory
+            } else if !input.is_empty() {
+                debug_log("!input.is_empty()");
+
+                let local_owner_user = &app.graph_navigation_instance_state.local_owner_user; // Access using self
+
+                // 1. final path name (.toml)
+                let message_path = get_next_message_file_path(&app.current_path, local_owner_user); 
+                debug_log(&format!("Next message path: {:?}", message_path)); // Log the calculated message path
+
+                // 2. make message file
+                add_im_message(
+                    &message_path,
+                    local_owner_user,
+                    input.trim(), 
+                    None,
+                    &app.graph_navigation_instance_state, // Pass using self
+                ).expect("handle_insert_text_input: Failed to add message");
+
+                app.load_im_messages(); // Access using self
+            }
+        }
+        
         
         // Clear the screen
         print!("\x1B[2J\x1B[1;1H");
