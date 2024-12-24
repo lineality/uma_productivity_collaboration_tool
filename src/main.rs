@@ -6200,18 +6200,21 @@ fn handle_command(
                 debug_log("storyboard");
                 // Display help information
             }
-            // "home" => {
-            //     debug_log("home");
-                
-            //     // // Posix
-            //     // app.current_path = PathBuf::from("project_graph_data/team_channels");
-                
-            //     // any file system compiled, safe path posix or other os
-            //     let mut app_data_dir = PathBuf::from("project_graph_data");
-            //     app_data_dir.push("team_channels");
-            //     app.current_path = app_data_dir;
-            //     // Update TUI display
-            // }
+            
+            "b" | "back" => {
+                debug_log("back");
+                if app.current_path != PathBuf::from("project_graph_data/team_channels") {
+                     // Only move back if not at the root of project_graph_data/team_channels
+                    app.current_path.pop();
+                    app.graph_navigation_instance_state.current_full_file_path = app.current_path.clone(); // Update full path after popping.
+                    app.graph_navigation_instance_state.look_read_node_toml(); // Update internal state too.
+                    tiny_tui::render_list(&app.tui_directory_list, &app.current_path);
+                   
+                } else {
+                  debug_log("back, but at root!");
+                }
+            }
+
             "home" => {
                 /*
                 For a clean reset, 'home' quits and restarts,
