@@ -2418,7 +2418,7 @@ enum CompressionAlgorithm {
 ///
 /// The TUI can be in one of these modes at a time, determining how user input 
 /// is interpreted and handled. 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Debug)]
 enum InputMode {
     /// MainCommand Mode:  The default mode. The user can type commands (e.g., "help", "quit", "m") 
     /// to navigate the project graph or interact with UMA features.
@@ -2770,6 +2770,8 @@ impl App {
     }
 
 fn handle_task_action(&mut self, input: &str) -> bool { // Return true to exit task mode
+        // TODO handle 'b' back
+        
         if input == "q" || input == "quit" {
             self.input_mode = InputMode::MainCommand; //Switch back to MainCommand mode
             self.current_path.pop(); // Go back to parent directory ("task_browser")
@@ -5891,7 +5893,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
 //     Ok(false)
 // }
 
-fn handle_command(
+fn handle_main_command_mode(
     input: &str, 
     app: &mut App, 
     graph_navigation_instance_state: &GraphNavigationInstanceState
@@ -5902,7 +5904,7 @@ fn handle_command(
     command-list/legend
     */
 
-    debug_log(&format!("fn handle_command(), input->{:?}", input));
+    debug_log(&format!("fn handle_main_command_mode(), input->{:?}", input));
     // First, try to handle numeric input
     if let Ok(index) = input.trim().parse::<usize>() {
         let item_index = index - 1; // Adjust for 0-based indexing
@@ -6202,7 +6204,10 @@ fn handle_command(
             }
             
             "b" | "back" => {
-                debug_log("back");
+                debug_log("back mode started");
+                app.input_mode = InputMode::MainCommand;
+                debug_log("changed to command mode");
+                
                 if app.current_path != PathBuf::from("project_graph_data/team_channels") {
                      // Only move back if not at the root of project_graph_data/team_channels
                     app.current_path.pop();
@@ -6227,7 +6232,7 @@ fn handle_command(
                 // //////////////////////////
                 // // Enable sync flag here!
                 // //////////////////////////
-                // debug_log("About to set sync flag to true! (handle_command(), home)");
+                // debug_log("About to set sync flag to true! (handle_main_command_mode(), home)");
                 // initialize_ok_to_start_sync_flag_to_false();  //TODO turn on to use sync !!! (off for testing)
                 
                 // // 1. Reset the current path
@@ -6331,12 +6336,12 @@ fn handle_command(
             
         }
     }
-    debug_log("end fn handle_command()");
+    debug_log("end fn handle_main_command_mode()");
     return Ok(false); // Don't exit by default
 }
 
 
-fn task_mode_handle_commands(
+fn task_mode_handle__commands(
     input: &str, 
     app: &mut App, 
     graph_navigation_instance_state: &GraphNavigationInstanceState
@@ -6347,7 +6352,7 @@ fn task_mode_handle_commands(
     command-list/legend
     */
 
-    debug_log(&format!("fn task_mode_handle_commands(), input->{:?}", input));
+    debug_log(&format!("fn task_mode_handle__commands(), input->{:?}", input));
     
     let parts: Vec<&str> = input.trim().split_whitespace().collect();
     if let Some(command) = parts.first() {
@@ -6394,7 +6399,7 @@ fn task_mode_handle_commands(
             
         }
     }
-    debug_log("end fn task_mode_handle_commands()");
+    debug_log("end fn task_mode_handle__commands()");
     return Ok(false); // Don't exit by default
 }
 
@@ -12147,7 +12152,6 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                 continue; // Skip to the next loop iteration
             }
         };
-    
         // break loop if continue=0
         if file_content.trim() == "0" {
             debug_log("'continue_uma.txt' is 0. we_love_projects_loop() Exiting loop.");
@@ -12156,7 +12160,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         
         // Update GraphNavigationInstanceState based on the current path
         debug_log("start loop: we_love_projects_loop()");
-        // debug_log(&format!("app.input_mode {:?}", &app.input_mode)); 
+        debug_log!("app.input_mode {:?}", &app.input_mode); 
   
         // -- Here: this function reads state and adds current graph-node-location data
         // graph_navigation_instance_state.look_read_node_toml();
@@ -12206,20 +12210,24 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         let input = tiny_tui::get_input()?; 
         
         // 2. handle input/command
-        if handle_command(&input, &mut app, &graph_navigation_instance_state)? { 
-             return Ok(()); 
+        // If in main command mode, handle main commands:
+        // ?. Update directory list (only in MainCommand mode) - MOVE THIS
+        if app.input_mode == InputMode::MainCommand {
+            if handle_main_command_mode(&input, &mut app, &graph_navigation_instance_state)? { 
+                return Ok(()); 
+            }
+            app.update_directory_list()?;
+            
         }
+        
         // 2. handle input/command
-        // if handle_command(&input, &mut app, &graph_navigation_instance_state)? {
+        // if handle_main_command_mode(&input, &mut app, &graph_navigation_instance_state)? {
         //     return Ok(());
         // } else if app.input_mode == InputMode::MainCommand {
         //     handle_numeric_input(&input, &mut app, &graph_navigation_instance_state)?;
         // }
         
-        // ?. Update directory list (only in MainCommand mode) - MOVE THIS
-        if app.input_mode == InputMode::MainCommand {
-            app.update_directory_list()?;
-        }
+
 
         // 3. Render TUI *before* input:
         if app.input_mode == InputMode::InsertText {
@@ -12229,7 +12237,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
             if input == "m" {
                 // pass
 
-            } else if input == "q" {
+            } else if input == "back" {
                 debug_log("escape toggled");
                 app.input_mode = InputMode::MainCommand; // Access input_mode using self
                 app.current_path.pop(); // Go back to the parent directory
@@ -12290,7 +12298,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
 
         // match app.input_mode {
         //     InputMode::MainCommand => {
-        //         if handle_command(&input, &mut app, &graph_navigation_instance_state)? {
+        //         if handle_main_command_mode(&input, &mut app, &graph_navigation_instance_state)? {
         //             break;
         //         } else if let Ok(index) = input.parse::<usize>() {
         //             // ... (Directory selection logic - see below)
@@ -12305,13 +12313,13 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         //             } else {  //Stay in task browser: If invalid selection, refresh task list
         //                 app.load_tasks(); // Stay in TaskCommand mode.
         //             }
-        //         } else if handle_command(&input, &mut app, &graph_navigation_instance_state)? { // Handle commands like 'q'
+        //         } else if handle_main_command_mode(&input, &mut app, &graph_navigation_instance_state)? { // Handle commands like "q"
         //             // Refresh list after leaving task browser (if exiting Uma or team channel)
         //             app.load_tasks(); // Refresh task view.
         //         }
         //     },
         //     InputMode::MainCommand => {
-        //         if handle_command(&input, &mut app, &graph_navigation_instance_state)? {
+        //         if handle_main_command_mode(&input, &mut app, &graph_navigation_instance_state)? {
         //             break;
         //         } else if let Ok(index) = input.parse::<usize>() {
         //             // ... (Directory selection logic - see below)
@@ -12346,7 +12354,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         //     // }
         //     InputMode::TaskCommand => {
         //         // Now render the task list using the TUI
-        //         // app.load_tasks(); // This is already called in handle_command("t", ...)
+        //         // app.load_tasks(); // This is already called in handle_main_command_mode("t", ...)
         //         // The table is already rendered within load_tasks, using the new tiny_tui::render_tasks_list
         //          debug_log!("InputMode::TaskCommand. render_tasks_list now used. ");  // Clear the screen
                 
@@ -12367,10 +12375,10 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
             // InputMode::MainCommand => {
                 
             //     // Handle commands (including 'm')s
-            //     // if handle_command(&input, &mut app, &mut graph_navigation_instance_state) {
-            //     if handle_command(&input, &mut app, &mut graph_navigation_instance_state)? {
+            //     // if handle_main_command_mode(&input, &mut app, &mut graph_navigation_instance_state) {
+            //     if handle_main_command_mode(&input, &mut app, &mut graph_navigation_instance_state)? {
             //         debug_log("QUIT");
-            //         break; // Exit the loop if handle_command returns true (e.g., for "q")
+            //         break; // Exit the loop if handle_main_command_mode returns true (e.g., for "q")
             //     } else if let Ok(index) = input.parse::<usize>() {
             //         let item_index = index - 1; // Adjust for 0-based indexing
             //         if item_index < app.tui_directory_list.len() {
@@ -12448,7 +12456,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
             //         } else {
             //             app.load_tasks(); // If invalid selection, refresh task list, stay in TaskCommand mode.
             //         }                    
-            //     } else if handle_command(&input, &mut app, &graph_navigation_instance_state)? { // Handle other commands, like "q"
+            //     } else if handle_main_command_mode(&input, &mut app, &graph_navigation_instance_state)? { // Handle other commands, like "q"
             //             break; // Pass to main command handler, quit if it returns true, staying in main loop otherwise.
             //         }
                                     
