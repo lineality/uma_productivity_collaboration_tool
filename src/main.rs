@@ -952,7 +952,7 @@ fn hlod_udp_handshake__rc_network_type_rc_ip_addr(
     
 
     // setup: Get Team Channel Name
-    let team_channel_name = get_current_team_channel_name()
+    let team_channel_name = get_current_team_channel_name_from_cwd()
         .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
 
     // setup: Construct Path to check for a ready signal received from the rc (remote collaborator)
@@ -3461,7 +3461,7 @@ fn check_team_channel_collision(channel_name: &str) -> bool {
 struct GraphNavigationInstanceState {
     local_owner_user: String, // Store the local user data here
     // local_owner_hash_list: Vec<u8>,
-    active_team_channel: String,  // TODO new
+    active_team_channel: String, 
     default_im_messages_expiration_days: u64,
     default_task_nodes_expiration_days: u64,
     tui_height: u8,
@@ -3538,10 +3538,17 @@ impl GraphNavigationInstanceState {
     /// and that code to extract team-channel connection data (such as port-assignments) is never attempted used in other
     /// nodes such as non-team-channel nodes within that team-channel (nearly ~everything is a node, only a few are team-channels)
     fn look_read_node_toml(&mut self) {
-        debug_log(&format!("fn look_read_node_toml() self.current_full_file_path -> {:?}", self.current_full_file_path)); 
+        
+        debug_log!(
+            "start n look_read_node_toml() self.current_full_file_path -> {:?}, self.active_team_channel.clone() -> {:?}", 
+            self.current_full_file_path.clone(),
+            self.active_team_channel.clone(),
+        );
+        
+        
 
         let node_toml_path = self.current_full_file_path.join("node.toml");
-        debug_log!("node_toml_path -> {:?}", node_toml_path);
+        debug_log!("node_toml_path -> {:?}", node_toml_path.clone());
 
         // 2. Check if node.toml exists 
         if node_toml_path.exists() { 
@@ -3555,26 +3562,28 @@ impl GraphNavigationInstanceState {
             ) {
                 debug_log!("Error writing team channel directory path to file: {}", e);
                 // Handle the error appropriately (e.g., display an error message)
-            }
+        }
 
-            // 1. Handle File Existence Error
-            if !node_toml_path.exists() {
-                debug_log!("ERROR: node.toml not found at {:?}. This directory is not a node.", node_toml_path);
+        // 1. Handle File Existence Error
+        if !node_toml_path.exists() {
+            debug_log!("ERROR: node.toml not found at {:?}. This directory is not a node.", node_toml_path);
+            return; 
+        }
+
+        // 2. Handle TOML Parsing Error
+        let this_node = match load_core_node_from_toml_file(&node_toml_path) { 
+            Ok(node) => node,
+            Err(e) => {
+                debug_log!("ERROR: Failed to load node.toml: {}", e); 
                 return; 
             }
-
-            // 2. Handle TOML Parsing Error
-            let this_node = match load_core_node_from_toml_file(&node_toml_path) { 
-                Ok(node) => node,
-                Err(e) => {
-                    debug_log!("ERROR: Failed to load node.toml: {}", e); 
-                    return; 
-                }
-            };
+        };
 
             // 3. Check if this is a Team Channel Node 
             // TODO maybe also check for a node.toml file
             let path_components: Vec<_> = self.current_full_file_path.components().collect();
+            
+            
             if path_components.len() >= 2 
                 && path_components[path_components.len() - 2].as_os_str() == "team_channels" 
             {
@@ -3593,30 +3602,13 @@ impl GraphNavigationInstanceState {
                 // Note: `current_node_members` appears to be unused, consider removing it
                 
             }
+            
+        } else {
+            debug_log("not a node, no updateS");
         } // End of Team Channel Node Handling
 
         // ... (Rest of your logic for handling other node types) ...
     }    
-
-    fn bootstrap_uma_session_network(state: &mut GraphNavigationInstanceState, app: &mut App) {
-        // 1. Display list of available team-channels (using the TUI)
-        // ... (You'll need to adapt your TUI code for this) ...
-    
-        // 2. Get user input (team-channel selection)
-        // ...
-    
-        // 3. Load the selected team-channel's node.toml 
-        // ...
-    
-        // 4. Establish sync state
-        // ... (Follow the steps outlined in my previous response for establishing sync state) ... 
-    
-        // 5. Update app.current_path to the selected team-channel directory 
-        // ...
-    
-        // 6. (Optional) Trigger an initial sync
-        // ...
-    }
 
     fn save_to_session_items(&self) -> Result<(), io::Error> {
             let session_items_path = Path::new("project_graph_data/session_state_items");
@@ -3890,7 +3882,7 @@ fn update_collaborator_sendqueue_timestamp_log(
     let mut back_of_queue_timestamp = 0;
 
     // // 1. Read team channel name using correct function
-    // let this_teamchannel_name = match get_current_team_channel_name() { 
+    // let this_teamchannel_name = match get_current_team_channel_name_from_cwd() { 
     //     Some(name) => name,
     //     None => {
     //         debug_log!("Error: Could not get current channel name in update_collaborator_sendqueue_timestamp_log(). Returning early. Skipping."); // Add log
@@ -4848,7 +4840,7 @@ fn remove_non_alphanumeric(s: &str) -> String {
 //     recipients_list: Vec<String>,
 //     file_path: Path,
 // ) {
-//     team_channel_name = get_current_team_channel_name();
+//     team_channel_name = get_current_team_channel_name_from_cwd();
 //     // e.g. sync_data/teamtest/new_file_path_flags/bob}
     
 //     // // maybe iterate through recipients_list
@@ -4880,7 +4872,7 @@ fn write_newfile_sendq_flag(
     recipients_list: &[String], // Use a slice for efficiency
     file_path: &Path, // Use a reference to avoid unnecessary cloning
 ) -> Result<(), ThisProjectError> {
-    let team_channel_name = get_current_team_channel_name()
+    let team_channel_name = get_current_team_channel_name_from_cwd()
         .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
 
     let timestamp_flagfile_name = get_current_unix_timestamp();
@@ -5462,6 +5454,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
     };
 
     
+    
     // // --- 3. CHECK FOR PORT COLLISIONS ---
     // // You can now safely access user_metadata.uma_local_owner_user if needed
     // if let Err(e) = check_all_ports_in_team_channels() {
@@ -5766,11 +5759,10 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
                 .map(|_| rand::thread_rng().gen())
                 .collect()
         };
-        
+
         println!("Using salts: {:?}", new_usersalt_list);
         debug_log!("Using salts: {:?}", new_usersalt_list);
-        
-        
+
         // // Add a new user to Uma file system
         add_collaborator_setup_file(
             username, 
@@ -7847,7 +7839,7 @@ fn hex_string_to_bytes(hex_string: &str) -> Result<Vec<u8>, ThisProjectError> {
 ///   or a `ThisProjectError` if an error occurs (e.g., during directory reading).
 fn get_active_collaborator_names() -> Result<Vec<String>, ThisProjectError> {
     // 1. Get the team channel name
-    let team_channel_name = match get_current_team_channel_name() {
+    let team_channel_name = match get_current_team_channel_name_from_cwd() {
         Some(name) => name,
         None => {
             debug_log!("Error: Could not get current channel name in get_active_collaborator_names. Skipping.");
@@ -8069,7 +8061,7 @@ fn hash_checker_for_sendfile_struct(
 // ) -> Result<(), ThisProjectError> {
 //     // let doc_id = docid__hash_array_to_hex_string(hash_array);
     
-//     let team_channel_name = get_current_team_channel_name()
+//     let team_channel_name = get_current_team_channel_name_from_cwd()
 //         .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
 
 //     let mut file_path = PathBuf::from("sync_data"); // Use PathBuf not format!()
@@ -8174,7 +8166,7 @@ fn set_prefail_flag_rt_timestamp__for_sendfile(
         rt_timestamp = 1;
     }
 
-    let team_channel_name = get_current_team_channel_name()
+    let team_channel_name = get_current_team_channel_name_from_cwd()
         .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
 
     let mut flag_file_path = PathBuf::from("sync_data")
@@ -8221,7 +8213,7 @@ fn get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(
     let mut oldest_timestamp = 0u64;
     let mut oldest_file_path: Option<PathBuf> = None; // Store path to the oldest file
 
-    let team_channel_name = get_current_team_channel_name()
+    let team_channel_name = get_current_team_channel_name_from_cwd()
         .ok_or(ThisProjectError::InvalidData("get_oldest prefail... Unable to get team channel name".into()))?;
 
     let prefail_directory = PathBuf::from("sync_data")
@@ -8381,7 +8373,7 @@ fn remove_one_prefail_flag__for_sendfile(
 fn remove_prefail_flags__for_sendfile(
     remote_collaborator_name: &str,
 ) -> Result<(), ThisProjectError> {
-    let team_channel_name = get_current_team_channel_name()
+    let team_channel_name = get_current_team_channel_name_from_cwd()
         .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
 
     let directory = PathBuf::from("sync_data")
@@ -9249,7 +9241,7 @@ fn handle_local_owner_desk(
         }
 
         // --- Get team channel name ---
-        let team_channel_name = match get_current_team_channel_name() {
+        let team_channel_name = match get_current_team_channel_name_from_cwd() {
             Some(name) => name,
             None => {
                 debug_log!("Error: Could not get current channel name. Skipping.");
@@ -9692,7 +9684,7 @@ fn handle_local_owner_desk(
                     
                     let mut incoming_file_path: PathBuf = PathBuf::from("project_graph_data/team_channels");
                     
-                    let team_channel_name = get_current_team_channel_name()
+                    let team_channel_name = get_current_team_channel_name_from_cwd()
                         .ok_or(ThisProjectError::InvalidData(
                             "Unable to get team channel name".into())
                         )?;
@@ -10738,7 +10730,7 @@ fn get_latest_received_from_rc_in_teamchannel_file_timestamp_filecrawl(
         last_timestamp
     ); 
 
-    let team_channel_name = get_current_team_channel_name()
+    let team_channel_name = get_current_team_channel_name_from_cwd()
         .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
     
     // update state: latest received timestamp
@@ -10872,7 +10864,7 @@ fn get_rc_band_ready_gotit_socketaddrses_hrcd(
                 let gotit_socket_addr = SocketAddr::new(rc_ip, room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip);  // Correct port from room_sync_input
 
                 // --- Write/Save Received Band Data ---
-                let team_channel_name = match get_current_team_channel_name() {
+                let team_channel_name = match get_current_team_channel_name_from_cwd() {
                     Some(name) => name,
                     None => {
                         debug_log!("Error: get_rc_band_ Could not get current channel name. Skipping set_as_active.");
@@ -11092,7 +11084,7 @@ fn handle_remote_collaborator_meetingroom_desk(
         
         // TODO
         // setup: Get Team Channel Name
-        let team_channel_name = get_current_team_channel_name()
+        let team_channel_name = get_current_team_channel_name_from_cwd()
             .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
             
         // 1.2 Get Remote Collaborator's IP and Network Type
@@ -11449,7 +11441,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                     //////////////////////////////
 
                     // --- 3.3 Get / Make Send-Queue ---
-                    let this_team_channelname = match get_current_team_channel_name() {
+                    let this_team_channelname = match get_current_team_channel_name_from_cwd() {
                         Some(name) => name,
                         None => {
                             debug_log("HRCD 3.3: Error: Could not get current channel name. Skipping send queue creation.");
@@ -11768,55 +11760,125 @@ enum SyncResult {
     Failure(ThisProjectError), // Contains an error if sync failed 
 }
 
-/// Extracts the channel name from a team channel directory path, with retry logic.
+/// Extracts the team channel name from the current working directory path.
 /// 
-/// This function attempts to read the channel directory path from the 
-/// "project_graph_data/session_state_items/current_node_directory_path.txt" file.  
-/// If the file read fails, it retries up to 3 times with a 2-second pause between each retry.
-/// It assumes the path format is "project_graph_data/team_channels/channel_name" 
-/// and returns the "channel_name" part.
+/// Looks for the pattern "project_graph_data/team_channels/[CHANNEL_NAME]" in the absolute path
+/// and returns the CHANNEL_NAME if found.
 ///
 /// # Returns
-/// 
-/// * `Option<String>`: The channel name if successfully extracted, 
-///   `None` if the file read fails after multiple retries or the path is invalid.
-fn get_current_team_channel_name() -> Option<String> {
-    let mut retries = FILE_READWRITE_N_RETRIES;
-    let pause_duration = Duration::from_secs(FILE_READWRITE_RETRY_SEC_PAUSE_MIN);
+/// * `Some(String)` - The team channel name if found
+/// * `None` - If no channel name could be extracted (invalid path, missing markers, etc.)
+///
+/// # Example
+/// ```
+/// match get_current_team_channel_name_from_cwd() {
+///     Some(channel) => println!("Found channel: {}", channel),
+///     None => println!("No channel found"),
+/// }
+/// ```
+fn get_current_team_channel_name_from_cwd() -> Option<String> {
+    debug_log!("Starting: get_current_team_channel_name_from_cwd()");
 
-    loop {
-        let channel_dir_path_str_result = read_state_string("current_node_directory_path.txt");
+    // Get absolute path from current directory
+    let absolute_path = match PathBuf::from(".").canonicalize() {
+        Ok(path) => path,
+        Err(e) => {
+            debug_log!("Failed to get absolute path: {}", e);
+            return None;
+        }
+    };
 
-        match channel_dir_path_str_result {
-            Ok(channel_dir_path_str) => {
-                debug_log!("1. Channel directory path (from session state): {:?}", channel_dir_path_str); // Log the path
+    debug_log!("Absolute path: {:?}", absolute_path);
 
-                let path = Path::new(&channel_dir_path_str);
-                // Improved path validation:
-                if let Some(file_name) = path.file_name().and_then(|name| name.to_str()).map(String::from) {
-                    return Some(file_name);  // Return the valid channel name
-                } else {
-                    debug_log!("Invalid path format (no file name)"); 
-                    return None;
-                }
-            }
-            Err(e) => {
-                if retries > 0 {
-                    retries -= 1;
-                    debug_log!(
-                        "Error reading channel path: {}. Retrying in {:?}... ({} retries remaining)",
-                        e, pause_duration, retries
-                    );
-                    thread::sleep(pause_duration);
-                    continue;
-                } else {
-                    debug_log!("Failed to read channel path after multiple retries: {}", e);
-                    return None;
-                }
-            }
+    // Convert path to string
+    let path_str = absolute_path.to_string_lossy();
+    
+    // Define the marker we're looking for
+    let marker = "project_graph_data/team_channels/";
+    
+    // Find marker position
+    let position = match path_str.find(marker) {
+        Some(pos) => pos,
+        None => {
+            debug_log!("Marker '{}' not found in path", marker);
+            return None;
+        }
+    };
+
+    // Extract everything after the marker
+    let after_marker = &path_str[position + marker.len()..];
+    debug_log!("Path after marker: {:?}", after_marker);
+
+    // Get the first component after the marker
+    let team_channel = after_marker
+        .split(std::path::MAIN_SEPARATOR)
+        .next()
+        .map(String::from);
+
+    // Validate and return
+    match team_channel {
+        Some(channel) if !channel.is_empty() => {
+            debug_log!("Found team channel: {}", channel);
+            Some(channel)
+        }
+        _ => {
+            debug_log!("No valid team channel found");
+            None
         }
     }
 }
+
+
+
+// /// Extracts the channel name from a team channel directory path, with retry logic.
+// /// 
+// /// This function attempts to read the channel directory path from the 
+// /// "project_graph_data/session_state_items/current_node_directory_path.txt" file.  
+// /// If the file read fails, it retries up to 3 times with a 2-second pause between each retry.
+// /// It assumes the path format is "project_graph_data/team_channels/channel_name" 
+// /// and returns the "channel_name" part.
+// ///
+// /// # Returns
+// /// 
+// /// * `Option<String>`: The channel name if successfully extracted, 
+// ///   `None` if the file read fails after multiple retries or the path is invalid.
+// fn get_current_team_channel_name_from_cwd() -> Option<String> {
+//     let mut retries = FILE_READWRITE_N_RETRIES;
+//     let pause_duration = Duration::from_secs(FILE_READWRITE_RETRY_SEC_PAUSE_MIN);
+
+//     loop {
+//         let channel_dir_path_str_result = read_state_string("current_node_directory_path.txt");
+
+//         match channel_dir_path_str_result {
+//             Ok(channel_dir_path_str) => {
+//                 debug_log!("1. Channel directory path (from session state): {:?}", channel_dir_path_str); // Log the path
+
+//                 let path = Path::new(&channel_dir_path_str);
+//                 // Improved path validation:
+//                 if let Some(file_name) = path.file_name().and_then(|name| name.to_str()).map(String::from) {
+//                     return Some(file_name);  // Return the valid channel name
+//                 } else {
+//                     debug_log!("Invalid path format (no file name)"); 
+//                     return None;
+//                 }
+//             }
+//             Err(e) => {
+//                 if retries > 0 {
+//                     retries -= 1;
+//                     debug_log!(
+//                         "get_current_team_channel_name_from_cwd() Error reading channel path: {}. Retrying in {:?}... ({} retries remaining)",
+//                         e, pause_duration, retries
+//                     );
+//                     thread::sleep(pause_duration);
+//                     continue;
+//                 } else {
+//                     debug_log!("Failed to read channel path after multiple retries: {}", e);
+//                     return None;
+//                 }
+//             }
+//         }
+//     }
+// }
 
 /// for normal mode, updates graph-navigation location and graph-state for both
 /// 1. the struct
@@ -12161,7 +12223,11 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         // Update GraphNavigationInstanceState based on the current path
         debug_log("start loop: we_love_projects_loop()");
         debug_log!("app.input_mode {:?}", &app.input_mode); 
-  
+        debug_log!(
+            "app.next_path_lookup_table {:?}", 
+            &app.graph_navigation_instance_state.next_path_lookup_table
+        ); 
+        
         // -- Here: this function reads state and adds current graph-node-location data
         // graph_navigation_instance_state.look_read_node_toml();
         
@@ -12297,7 +12363,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                 //     &app.graph_navigation_instance_state, // Pass using self
                 // ).expect("handle_insert_text_input: Failed to add message");
 
-                app.load_im_messages(); // Access using self
+                // app.load_im_messages(); // Access using self
             }
         }
         
@@ -12538,7 +12604,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
             //             &app.graph_navigation_instance_state, // Pass using self
             //         ).expect("handle_insert_text_input: Failed to add message");
                     
-            //         let this_team_channelname = match get_current_team_channel_name() {
+            //         let this_team_channelname = match get_current_team_channel_name_from_cwd() {
             //             Some(name) => name,
             //             None => "XYZ".to_string(),
             //         }; 
@@ -12605,7 +12671,7 @@ fn initialize_ok_to_start_sync_flag_to_false() {
 /// use std::path::PathBuf;
 fn set_as_active(collaborator_name: &str) -> Result<(), ThisProjectError> {
     // 1. Get team channel name (replace with your actual implementation)
-    let team_channel_name = match get_current_team_channel_name() {
+    let team_channel_name = match get_current_team_channel_name_from_cwd() {
         Some(name) => name,
         None => {
             debug_log!("Error: Could not get current channel name. Skipping set_as_active.");
