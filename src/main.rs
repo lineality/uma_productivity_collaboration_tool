@@ -2450,6 +2450,41 @@ impl App {
     /*
 
     */
+    fn update_next_path_lookup_table(&mut self) {
+
+        debug_log("Starting update_next_path_lookup_table ");
+        
+        // Clear previous entries.
+        self.graph_navigation_instance_state.next_path_lookup_table.clear();
+
+        match self.input_mode {
+            InputMode::MainCommand => {
+                for (i, item) in self.tui_directory_list.iter().enumerate() {
+                    let next_path = self.current_path.join(item);
+                    self.graph_navigation_instance_state.next_path_lookup_table.insert(i + 1, next_path);
+                }
+                }
+            InputMode::TaskCommand => {
+                if self.is_at_task_browser_root() { // COLUMN Navigation (if at root)
+                    for (i, column) in self.tui_directory_list.iter().enumerate() {
+                        let next_path = self.current_path.join(column);
+                        self.graph_navigation_instance_state.next_path_lookup_table.insert(i + 1, next_path);
+                    }
+                } else { //TASK Navigation if within a column
+                    for (i, item) in self.tui_file_list.iter().enumerate() {
+                        if let Some(task_path) = self.get_full_task_path(i){
+                        self.graph_navigation_instance_state.next_path_lookup_table.insert(i + 1, task_path);
+                        }
+                    }
+                }
+            }
+            InputMode::InsertText => {
+                // Do nothing, as no file-system based paths are used for inputting messages.
+            }
+            }
+    }
+
+    
     fn new(graph_navigation_instance_state: GraphNavigationInstanceState) -> App {
         App {
             tui_focus: 0,
@@ -2471,6 +2506,13 @@ impl App {
     fn handle_tui_action(&mut self) -> Result<(), io::Error> { // Now returns Result
         debug_log("app fn handle_tui_action() started");
         
+        self.update_next_path_lookup_table();
+
+        debug_log!(
+            "handle_tui_action() &self.graph_navigation_instance_state.next_path_lookup_table {:?}", 
+            &self.graph_navigation_instance_state.next_path_lookup_table,
+        );
+                                      
         if self.is_in_team_channel_list() {
             debug_log("is_in_team_channel_list");
             debug_log(&format!("current_path: {:?}", self.current_path));
@@ -11830,55 +11872,6 @@ fn get_current_team_channel_name_from_cwd() -> Option<String> {
 
 
 
-// /// Extracts the channel name from a team channel directory path, with retry logic.
-// /// 
-// /// This function attempts to read the channel directory path from the 
-// /// "project_graph_data/session_state_items/current_node_directory_path.txt" file.  
-// /// If the file read fails, it retries up to 3 times with a 2-second pause between each retry.
-// /// It assumes the path format is "project_graph_data/team_channels/channel_name" 
-// /// and returns the "channel_name" part.
-// ///
-// /// # Returns
-// /// 
-// /// * `Option<String>`: The channel name if successfully extracted, 
-// ///   `None` if the file read fails after multiple retries or the path is invalid.
-// fn get_current_team_channel_name_from_cwd() -> Option<String> {
-//     let mut retries = FILE_READWRITE_N_RETRIES;
-//     let pause_duration = Duration::from_secs(FILE_READWRITE_RETRY_SEC_PAUSE_MIN);
-
-//     loop {
-//         let channel_dir_path_str_result = read_state_string("current_node_directory_path.txt");
-
-//         match channel_dir_path_str_result {
-//             Ok(channel_dir_path_str) => {
-//                 debug_log!("1. Channel directory path (from session state): {:?}", channel_dir_path_str); // Log the path
-
-//                 let path = Path::new(&channel_dir_path_str);
-//                 // Improved path validation:
-//                 if let Some(file_name) = path.file_name().and_then(|name| name.to_str()).map(String::from) {
-//                     return Some(file_name);  // Return the valid channel name
-//                 } else {
-//                     debug_log!("Invalid path format (no file name)"); 
-//                     return None;
-//                 }
-//             }
-//             Err(e) => {
-//                 if retries > 0 {
-//                     retries -= 1;
-//                     debug_log!(
-//                         "get_current_team_channel_name_from_cwd() Error reading channel path: {}. Retrying in {:?}... ({} retries remaining)",
-//                         e, pause_duration, retries
-//                     );
-//                     thread::sleep(pause_duration);
-//                     continue;
-//                 } else {
-//                     debug_log!("Failed to read channel path after multiple retries: {}", e);
-//                     return None;
-//                 }
-//             }
-//         }
-//     }
-// }
 
 /// for normal mode, updates graph-navigation location and graph-state for both
 /// 1. the struct
@@ -12224,7 +12217,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         debug_log("start loop: we_love_projects_loop()");
         debug_log!("app.input_mode {:?}", &app.input_mode); 
         debug_log!(
-            "app.next_path_lookup_table {:?}", 
+            "&app.graph_navigation_instance_state.next_path_lookup_table {:?}", 
             &app.graph_navigation_instance_state.next_path_lookup_table
         ); 
         
@@ -12334,6 +12327,12 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         if app.input_mode == InputMode::TaskCommand {
 
             debug_log("we love projects: task mode");
+            
+
+            app.handle_tui_action(); // Remove the extra argument here
+
+            debug_log("handle_tui_action() started in we_love_projects_loop()");
+
             
             if input == "t" {
                 // pass
