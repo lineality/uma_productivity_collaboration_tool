@@ -6304,6 +6304,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
 //     Ok(false)
 // }
 
+
 fn handle_main_command_mode(
     input: &str, 
     app: &mut App, 
@@ -12709,6 +12710,24 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         if app.input_mode == InputMode::TaskCommand {
 
             debug_log("we love projects: task mode");
+            
+
+            // First, try to handle numeric input
+            if let Ok(index) = input.trim().parse::<usize>() {
+                // Check if the index exists in the path lookup table
+                if let Some(target_path) = app.next_path_lookup_table.get(&index) {
+                    debug_log(&format!("Selected path from lookup table: {:?}", target_path));
+                    
+                    // Regular directory navigation
+                    app.current_path = target_path.clone();
+                    app.input_mode = InputMode::MainCommand; // Access input_mode using self
+
+                } else {
+                    debug_log(&format!("Invalid index: {} not found in path lookup table", index));
+                }
+            }
+            
+            
             
             // app.update_task_display()?;
             let (headers, data) = app.update_task_display()?;
