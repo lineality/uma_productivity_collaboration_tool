@@ -12465,8 +12465,13 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         debug_log("start loop: we_love_projects_loop()");
         debug_log!("app.input_mode {:?}", &app.input_mode); 
         debug_log!(
-            "&app.next_path_lookup_table {:?}", 
+            "&app.next_path_lookup_table -> {:?}", 
             &app.next_path_lookup_table
+        ); 
+        
+        debug_log!(
+            "&app.task_display_table -> {:?}", 
+            &app.task_display_table
         ); 
         
         // -- Here: this function reads state and adds current graph-node-location data
