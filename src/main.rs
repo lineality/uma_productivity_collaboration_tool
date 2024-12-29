@@ -4,7 +4,12 @@ Uma
 RUST_BACKTRACE=full cargo run
 
 Uma Productivity Collaboration Tools for Project-Alignment 
-https://github.com/lineality/uma_productivity_collaboration_tool
+~ "Read the old books."
+- MIT license 
+- https://github.com/lineality/uma_productivity_collaboration_tool 
+- https://github.com/lineality/definition_behavior_studies
+- https://github.com/lineality/Online_Voting_Using_One_Time_Pads
+- https://github.com/lineality/object_relationship_spaces_ai_ml 
 In memory of Eleanor Th. Vadala 1923-2023: aviator, astronomer, engineer, pioneer, leader, friend. 
 
 cargo.toml ->
