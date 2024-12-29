@@ -2444,6 +2444,7 @@ struct App {
     current_text_input: Option<String>,
     graph_navigation_instance_state: GraphNavigationInstanceState,
     
+    // For Task Display
     next_path_lookup_table: HashMap<usize, PathBuf>,
     ordered_task_column_list: Vec<String>,
     task_display_table: Vec<String>, // ?
@@ -2454,6 +2455,7 @@ struct App {
 impl App {
     /*
 
+    
     */
     fn update_next_path_lookup_table(&mut self) {
 
@@ -3044,7 +3046,7 @@ fn handle_task_action(&mut self, input: &str) -> bool { // Return true to exit t
         if input == "q" || input == "quit" {
             self.input_mode = InputMode::MainCommand; //Switch back to MainCommand mode
             self.current_path.pop(); // Go back to parent directory ("task_browser")
-            self.load_tasks();        //Refresh task view at the previous parent level. 
+            self.load_tasks();        //Refresh task view at the previous parent level.
             return false;             // Stay in the main loop (don't exit Uma)
 
         } else if let Ok(selection) = input.parse::<usize>() {
@@ -12588,7 +12590,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
             debug_log!(
                 "we_love_projects_loop() app.next_path_lookup_table {:?}", 
                  app.next_path_lookup_table,
-        );
+            );
 
             debug_log("handle_tui_action() started in we_love_projects_loop()");
 
@@ -12623,9 +12625,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                 // app.load_im_messages(); // Access using self
             }
         }
-        
-        
-        
+
         // Clear the screen
         print!("\x1B[2J\x1B[1;1H");
         

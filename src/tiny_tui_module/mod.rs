@@ -32,6 +32,7 @@ pub mod tiny_tui {
     }    
     
     pub fn render_tasks_list(headers: &[String], data: &[Vec<String>], current_path: &Path) {
+        debug_log("starting: render_tasks_list");
         // 1. Display Current Path
         print!("\x1B[2J\x1B[1;1H"); // Clear the screen
         println!("Current Path: {}", current_path.display());
@@ -61,7 +62,7 @@ pub mod tiny_tui {
     pub fn display_table(headers: &[String], data: &[Vec<String>]) {  // Changed header type
         debug_log("tui module: task-mode: start: display_table()");
         debug_log!(
-            "tui module: display_table: headers -> {:?} data -> {:?}",
+            "tui module: display_table(): headers -> {:?} data -> {:?}",
             headers,
             data,
         );
