@@ -3,6 +3,14 @@ Uma
 2024.09-11
 RUST_BACKTRACE=full cargo run
 
+# Uma: Coordination, Productivity, Hygiene
+```
+4_|
+/ \
+```
+A distributed project graph database MCU (Multipoint Conferencing Unit) with cli TUI, instant messenger, Kanban Task Manager, and other Agile Kahneman-Tversky project, productivity, coordination, collaboration features
+
+
 Uma Productivity Collaboration Tools for Project-Alignment 
 ~ "Read the old books."
 - MIT license 
