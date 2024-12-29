@@ -4241,9 +4241,12 @@ struct CoreNode {
     teamchannel_collaborators_with_access: Vec<String>,
     /// A map containing port assignments for each collaborator associated with the node.
     abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
+    
+    // project module items as task-ish thing
+    agenda_process: String,
+    goals_features_subfeatures_tools_targets: String,
     scope: String,
-    goals: Vec<String>, // Vec<String>,?
-    schedule: Vec<u64>, // Vec<u64>,?
+    schedule_duration_start_end: Vec<u64>, // Vec<u64>,?
 }
 
 /// Calculates Pearson hashes for the provided CoreNode fields and salts.
@@ -4522,9 +4525,29 @@ fn load_core_node_from_toml_file(file_path: &Path) -> Result<CoreNode, String> {
         // children: Vec::new(), // You might need to load children recursively
         teamchannel_collaborators_with_access: toml_value.get("teamchannel_collaborators_with_access").and_then(Value::as_array).map(|arr| arr.iter().filter_map(Value::as_str).map(String::from).collect()).unwrap_or_default(),
         abstract_collaborator_port_assignments: HashMap::new(),
-        scope: toml_value.get("scope").and_then(Value::as_str).unwrap_or("").to_string(),
-        goals: toml_value.get("goals").and_then(|v| v.as_array()).unwrap_or(&vec![]).iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect(),
-        schedule: toml_value.get("updated_at_timestamp").and_then(|v| v.as_array()).unwrap_or(&vec![]).iter().filter_map(|v| v.as_integer()).map(|i| i as u64).collect(),
+        
+        agenda_process: toml_value.get("agenda_process")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string(),
+
+        goals_features_subfeatures_tools_targets: toml_value.get("goals_features_subfeatures_tools_targets")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string(),
+
+        scope: toml_value.get("scope")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string(),
+
+        schedule_duration_start_end: toml_value.get("schedule_duration_start_end")
+            .and_then(|v| v.as_array())
+            .unwrap_or(&vec![])
+            .iter()
+            .filter_map(|v| v.as_integer())
+            .map(|i| i as u64)
+            .collect(),
         
 
     };
@@ -4653,9 +4676,10 @@ impl CoreNode {
             &salt_list,                 // &[u128]
         )?;
         
+        let agenda_process: String = "".to_string();
+        let goals_features_subfeatures_tools_targets: String = "".to_string();
         let scope: String = "".to_string();
-        let goals: Vec<String> = [].to_vec();
-        let schedule: Vec<u64> = [].to_vec();
+        let schedule_duration_start_end: Vec<u64> = [].to_vec();
 
         // 3. Create the CoreNode instance (all fields now available):
         Ok(CoreNode {
@@ -4668,9 +4692,10 @@ impl CoreNode {
             expires_at,
             teamchannel_collaborators_with_access,        
             abstract_collaborator_port_assignments,
+            agenda_process,
+            goals_features_subfeatures_tools_targets,
             scope,
-            goals,
-            schedule, 
+            schedule_duration_start_end,
         })
     }
 
