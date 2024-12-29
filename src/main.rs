@@ -2578,45 +2578,183 @@ impl App {
     
     */
 
-/// Updates the task display components based on the current directory
-pub fn update_task_display(&mut self) -> std::io::Result<()> {
-    // Reset display components
-    self.next_path_lookup_table.clear();
-    self.ordered_task_column_list.clear();
-    self.task_display_table.clear();
+    // /// Updates the task display components based on the current directory
+    // pub fn update_task_display(&mut self) -> std::io::Result<()> {
+    //     // Reset display components
+    //     self.next_path_lookup_table.clear();
+    //     self.ordered_task_column_list.clear();
+    //     self.task_display_table.clear();
 
-    let mut sequence_counter: usize = 1;
-    
-    // Clone the PathBuf to avoid borrowing issues
-    // Get absolute path from current directory
-    let channel_dir_path = self.current_path.clone();
-    debug_log!(
-        "update_task_display, channel_dir_path -> {:?}",
-        channel_dir_path
-    );
-    
-    
-    // // A. Print the absolute path of the channel directory
-    // match channel_dir_path.canonicalize() {
-    //     Ok(abs_path) => debug_log!("update_task_display. Absolute channel directory path: {:?}", abs_path),
-    //     Err(e) => debug_log!("Error update_task_display. getting absolute path of channel directory: {}", e),
+    //     let mut sequence_counter: usize = 1;
+        
+    //     // Clone the PathBuf to avoid borrowing issues
+    //     // Get absolute path from current directory
+    //     let channel_dir_path = self.current_path.clone();
+    //     debug_log!(
+    //         "update_task_display, channel_dir_path -> {:?}",
+    //         channel_dir_path
+    //     );
+        
+        
+    //     // // A. Print the absolute path of the channel directory
+    //     // match channel_dir_path.canonicalize() {
+    //     //     Ok(abs_path) => debug_log!("update_task_display. Absolute channel directory path: {:?}", abs_path),
+    //     //     Err(e) => debug_log!("Error update_task_display. getting absolute path of channel directory: {}", e),
+    //     // }
+
+    //     // Process columns
+    //     self.process_columns(&channel_dir_path, &mut sequence_counter)?;
+        
+    //     // Process tasks in each column
+    //     self.process_tasks(&mut sequence_counter)?;
+
+    //     Ok(())
     // }
 
-    // Process columns
-    self.process_columns(&channel_dir_path, &mut sequence_counter)?;
-    
-    // Process tasks in each column
-    self.process_tasks(&mut sequence_counter)?;
+    //     /// Process column directories and create headers
+    //     fn process_columns(&mut self, channel_dir_path: &Path, sequence_counter: &mut usize) -> std::io::Result<()> {
+    //         let mut columns: Vec<(usize, String, PathBuf)> = Vec::new();
 
-    Ok(())
-}
+    //         // Collect and parse column directories
+    //         for entry in fs::read_dir(channel_dir_path)? {
+    //             let entry = entry?;
+    //             let path = entry.path();
+    //             if path.is_dir() {
+    //                 if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+    //                     if let Some((seq, display_name)) = parse_directory_name(name) {
+    //                         columns.push((seq, display_name.to_string(), path));
+    //                         *sequence_counter = (*sequence_counter).max(seq + 1);
+    //                     }
+    //                 }
+    //             }
+    //         }
 
-    /// Process column directories and create headers
-    fn process_columns(&mut self, channel_dir_path: &Path, sequence_counter: &mut usize) -> std::io::Result<()> {
+    //         // Sort columns by sequence number
+    //         columns.sort_by_key(|(seq, _, _)| *seq);
+
+    //         // Create header row
+    //         let mut header_row = String::new();
+    //         for (seq, display_name, path) in &columns {
+    //             // Add to path lookup
+    //         self.next_path_lookup_table.insert(*seq, path.clone());
+                
+                
+    //             // Add to ordered column list
+    //             self.ordered_task_column_list.push(path.to_string_lossy().to_string());
+                
+    //             // Add to display table header
+    //             let truncated_name = truncate_string(&display_name, 
+    //                 (self.tui_width as usize / columns.len()).saturating_sub(5));
+    //             header_row.push_str(&format!("{:3} {:<20} ", seq, truncated_name));
+    //         }
+
+    //         self.task_display_table.push(header_row);
+    //         Ok(())
+    //     }
+
+    //     /// Process tasks within each column
+    //     fn process_tasks(&mut self, sequence_counter: &mut usize) -> std::io::Result<()> {
+    //         let max_rows = self.get_max_tasks_count()?;
+    //         let column_count = self.ordered_task_column_list.len();
+
+    //         // Initialize rows
+    //         for _ in 0..max_rows {
+    //             let mut row = String::new();
+    //             for _ in 0..column_count {
+    //                 row.push_str(&" ".repeat(25)); // Adjust spacing based on your needs
+    //             }
+    //             self.task_display_table.push(row);
+    //         }
+
+    //         // Process each column
+    //         for (col_idx, column_path_str) in self.ordered_task_column_list.iter().enumerate() {
+    //             let column_path = Path::new(column_path_str);
+    //             let mut tasks: Vec<(String, PathBuf)> = Vec::new();
+
+    //             // Collect tasks in current column
+    //             for entry in fs::read_dir(column_path)? {
+    //                 let entry = entry?;
+    //                 let path = entry.path();
+    //                 if path.is_dir() {
+    //                     if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+    //                         tasks.push((name.to_string(), path));
+    //                     }
+    //                 }
+    //             }
+
+    //             // Sort tasks
+    //             tasks.sort_by(|(a, _), (b, _)| a.cmp(b));
+
+    //             // Process each task
+    //             for (row_idx, (task_name, task_path)) in tasks.iter().enumerate() {
+    //                 if row_idx + 1 >= self.task_display_table.len() {
+    //                     break;
+    //                 }
+
+    //                 // Add to path lookup
+    //                 self.next_path_lookup_table.insert(*sequence_counter, task_path.clone());
+
+    //                 // Update display table
+    //                 let display_text = format!("{:3} {}", sequence_counter, 
+    //                     truncate_string(task_name, 20));
+                    
+    //                 // Update the specific position in the row
+    //                 let row = &mut self.task_display_table[row_idx + 1];
+    //                 let start_pos = col_idx * 25;
+    //                 let end_pos = start_pos + display_text.len().min(25);
+    //                 if start_pos < row.len() {
+    //                     let mut new_row = row[..start_pos].to_string();
+    //                     new_row.push_str(&display_text);
+    //                     new_row.push_str(&row[end_pos..]);
+    //                     self.task_display_table[row_idx + 1] = new_row;
+    //                 }
+
+    //                 *sequence_counter += 1;
+    //             }
+    //         }
+
+    //         Ok(())
+    //     }
+
+    /// Updates the task display components and returns formatted headers and data
+    pub fn update_task_display(&mut self) -> std::io::Result<(Vec<String>, Vec<Vec<String>>)> {
+        // Reset display components
+        self.next_path_lookup_table.clear();
+        self.ordered_task_column_list.clear();
+        self.task_display_table.clear();
+
+        let mut sequence_counter: usize = 1;
+        // Clone the PathBuf to avoid borrowing issues
+        // Get absolute path from current directory
+        let channel_dir_path = self.current_path.clone();
+        debug_log!(
+            "update_task_display, channel_dir_path -> {:?}",
+            channel_dir_path
+        );
+
+        // Initialize vectors for headers and data
+        let mut headers: Vec<String> = Vec::new();
+        let mut data: Vec<Vec<String>> = Vec::new();
+
+        // Process columns and collect headers
+        self.process_columns(&channel_dir_path, &mut sequence_counter, &mut headers)?;
+        
+        // Process tasks and collect data
+        self.process_tasks(&mut sequence_counter, &headers, &mut data)?;
+
+        Ok((headers, data))
+    }
+
+    fn process_columns(
+        &mut self, 
+        current_dir: &Path, 
+        sequence_counter: &mut usize,
+        headers: &mut Vec<String>
+    ) -> std::io::Result<()> {
         let mut columns: Vec<(usize, String, PathBuf)> = Vec::new();
 
         // Collect and parse column directories
-        for entry in fs::read_dir(channel_dir_path)? {
+        for entry in fs::read_dir(current_dir)? {
             let entry = entry?;
             let path = entry.path();
             if path.is_dir() {
@@ -2632,38 +2770,33 @@ pub fn update_task_display(&mut self) -> std::io::Result<()> {
         // Sort columns by sequence number
         columns.sort_by_key(|(seq, _, _)| *seq);
 
-        // Create header row
-        let mut header_row = String::new();
-        for (seq, display_name, path) in &columns {
+        // Process columns
+        for (seq, display_name, path) in columns {
             // Add to path lookup
-        self.next_path_lookup_table.insert(*seq, path.clone());
-            
+            self.next_path_lookup_table.insert(seq, path.clone());
             
             // Add to ordered column list
             self.ordered_task_column_list.push(path.to_string_lossy().to_string());
             
-            // Add to display table header
-            let truncated_name = truncate_string(&display_name, 
-                (self.tui_width as usize / columns.len()).saturating_sub(5));
-            header_row.push_str(&format!("{:3} {:<20} ", seq, truncated_name));
+            // Add to headers
+            let truncated_name = truncate_string(&display_name, 12);
+            headers.push(format!("{:3} {}", seq, truncated_name));
         }
 
-        self.task_display_table.push(header_row);
         Ok(())
     }
 
-    /// Process tasks within each column
-    fn process_tasks(&mut self, sequence_counter: &mut usize) -> std::io::Result<()> {
+    fn process_tasks(
+        &mut self, 
+        sequence_counter: &mut usize,
+        headers: &[String],
+        data: &mut Vec<Vec<String>>
+    ) -> std::io::Result<()> {
         let max_rows = self.get_max_tasks_count()?;
-        let column_count = self.ordered_task_column_list.len();
-
-        // Initialize rows
+        
+        // Initialize data rows
         for _ in 0..max_rows {
-            let mut row = String::new();
-            for _ in 0..column_count {
-                row.push_str(&" ".repeat(25)); // Adjust spacing based on your needs
-            }
-            self.task_display_table.push(row);
+            data.push(vec![String::new(); headers.len()]);
         }
 
         // Process each column
@@ -2687,27 +2820,20 @@ pub fn update_task_display(&mut self) -> std::io::Result<()> {
 
             // Process each task
             for (row_idx, (task_name, task_path)) in tasks.iter().enumerate() {
-                if row_idx + 1 >= self.task_display_table.len() {
+                if row_idx >= data.len() {
                     break;
                 }
 
                 // Add to path lookup
                 self.next_path_lookup_table.insert(*sequence_counter, task_path.clone());
 
-                // Update display table
-                let display_text = format!("{:3} {}", sequence_counter, 
-                    truncate_string(task_name, 20));
+                // Add to data matrix
+                let display_text = format!("{:3} {}", 
+                    sequence_counter,
+                    truncate_string(task_name, 12)
+                );
                 
-                // Update the specific position in the row
-                let row = &mut self.task_display_table[row_idx + 1];
-                let start_pos = col_idx * 25;
-                let end_pos = start_pos + display_text.len().min(25);
-                if start_pos < row.len() {
-                    let mut new_row = row[..start_pos].to_string();
-                    new_row.push_str(&display_text);
-                    new_row.push_str(&row[end_pos..]);
-                    self.task_display_table[row_idx + 1] = new_row;
-                }
+                data[row_idx][col_idx] = display_text;
 
                 *sequence_counter += 1;
             }
@@ -2716,6 +2842,7 @@ pub fn update_task_display(&mut self) -> std::io::Result<()> {
         Ok(())
     }
 
+    
     /// Gets the maximum number of tasks across all columns
     fn get_max_tasks_count(&self) -> std::io::Result<usize> {
         let mut max_count = 0;
@@ -12583,7 +12710,14 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
 
             debug_log("we love projects: task mode");
             
-            app.update_task_display()?;
+            // app.update_task_display()?;
+            let (headers, data) = app.update_task_display()?;
+            debug_log!(
+                "headers -> {:?} data -> {:?}", 
+                 headers,
+                 data,
+            );
+            tiny_tui::display_table(&headers, &data);
 
             // app.handle_tui_action(); // Remove the extra argument here
             
