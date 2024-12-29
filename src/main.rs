@@ -2443,6 +2443,11 @@ struct App {
     current_command_input: Option<String>,
     current_text_input: Option<String>,
     graph_navigation_instance_state: GraphNavigationInstanceState,
+    
+    next_path_lookup_table: HashMap<usize, PathBuf>,
+    ordered_task_column_list: Vec<String>,
+    task_display_table: Vec<String>, // ?
+    
 }
 
 
@@ -2455,25 +2460,25 @@ impl App {
         debug_log("Starting update_next_path_lookup_table ");
         
         // Clear previous entries.
-        self.graph_navigation_instance_state.next_path_lookup_table.clear();
+        self.next_path_lookup_table.clear();
 
         match self.input_mode {
             InputMode::MainCommand => {
                 for (i, item) in self.tui_directory_list.iter().enumerate() {
                     let next_path = self.current_path.join(item);
-                    self.graph_navigation_instance_state.next_path_lookup_table.insert(i + 1, next_path);
+                    self.next_path_lookup_table.insert(i + 1, next_path);
                 }
                 }
             InputMode::TaskCommand => {
                 if self.is_at_task_browser_root() { // COLUMN Navigation (if at root)
                     for (i, column) in self.tui_directory_list.iter().enumerate() {
                         let next_path = self.current_path.join(column);
-                        self.graph_navigation_instance_state.next_path_lookup_table.insert(i + 1, next_path);
+                        self.next_path_lookup_table.insert(i + 1, next_path);
                     }
                 } else { //TASK Navigation if within a column
                     for (i, item) in self.tui_file_list.iter().enumerate() {
                         if let Some(task_path) = self.get_full_task_path(i){
-                        self.graph_navigation_instance_state.next_path_lookup_table.insert(i + 1, task_path);
+                        self.next_path_lookup_table.insert(i + 1, task_path);
                         }
                     }
                 }
@@ -2500,18 +2505,240 @@ impl App {
             current_text_input: None,
             graph_navigation_instance_state, // Initialize the field
             
+            next_path_lookup_table: HashMap::new(),
+            ordered_task_column_list: Vec::new(),
+            task_display_table: Vec::new(),
         }
     }
+    /*
+
+    ## Task Display
+
+    struct GraphNavigationInstanceState {
+        local_owner_user: String, // Store the local user data here
+        // local_owner_hash_list: Vec<u8>,
+        active_team_channel: String, 
+        default_im_messages_expiration_days: u64,
+        default_task_nodes_expiration_days: u64,
+        tui_height: u8,
+        tui_width: u8,
+        current_full_file_path: PathBuf,
+        current_node_teamchannel_collaborators_with_access: Vec<String>,
+        current_node_name: String,
+        current_node_owner: String,
+        current_node_description_for_tui: String,
+        current_node_directory_path: PathBuf,
+        current_node_unique_id: Vec<u8>,
+        current_node_members: Vec<String>,
+        home_square_one: bool,
+        
+        next_path_lookup_table: HashMap<usize, PathBuf>,
+        ordered_task_column_list: Vec<String>, // not needed here?
+        task_display_table: Vec<String>, // ?
+        }
+
+    impl GraphNavigationInstanceState {
+        maybe populate the next_path_lookup_table and task_display_table
+        using functions here
+    }
+
+    note: columns are (node) directories with a formatted directory name:
+    int underscore string: sequence number left to right, underscore, and display name
+    to be systematically processed.
+
+    note: the TUI display table should have int space string for the columns and for the tasks
+
+    ### Task Display Parts:
+    1. a sequence counter (to mostly increment)
+    2. an ordered list of column paths
+    3. display table: maybe array of strings (for the TUI to show as a simple table)
+    4. path lookup dictionary: a {int:path} path lookup dictionary (for the user-interface to select next path)
+
+    ### Column-item Steps: columns are (node) directories
+    1. Preset/Reset the Task Display Parts (see above)
+    2. read the "#_str" column names, start the sequence counter after the highest
+    3. add column names and numbers (from #_str") to the path lookup dict (these are the column headers)
+    4. add column numbers and names to display table (maybe truncate list name depending on display size if name is too long)
+    5. add column path to ordered column path list
+
+    ### Task-item Steps: tasks are (node) directories
+    1. tasks: iterate through the ordered column path list (in order), for each column:
+    2. simple sort the tasks (directories) in the column (directory), alphanumeric
+    3. use and increment sequence counter. use the current sequence int and when done increment
+    4. add task names and numbers (from #_str") to the path lookup dict: add as rows in the current column
+    5. add task number and name to path lookup dictionary
+
+
+    // example
+    let mut graph_state = GraphNavigationInstanceState { /* initialize fields */ };
+    graph_state.update_task_display()?;
+    graph_state.print_task_display(); // For debugging
+    
+    */
+
+/// Updates the task display components based on the current directory
+pub fn update_task_display(&mut self) -> std::io::Result<()> {
+    // Reset display components
+    self.next_path_lookup_table.clear();
+    self.ordered_task_column_list.clear();
+    self.task_display_table.clear();
+
+    let mut sequence_counter: usize = 1;
+    
+    // Clone the PathBuf to avoid borrowing issues
+    // Get absolute path from current directory
+    let channel_dir_path = self.current_path.clone();
+    debug_log!(
+        "update_task_display, channel_dir_path -> {:?}",
+        channel_dir_path
+    );
+    
+    
+    // // A. Print the absolute path of the channel directory
+    // match channel_dir_path.canonicalize() {
+    //     Ok(abs_path) => debug_log!("update_task_display. Absolute channel directory path: {:?}", abs_path),
+    //     Err(e) => debug_log!("Error update_task_display. getting absolute path of channel directory: {}", e),
+    // }
+
+    // Process columns
+    self.process_columns(&channel_dir_path, &mut sequence_counter)?;
+    
+    // Process tasks in each column
+    self.process_tasks(&mut sequence_counter)?;
+
+    Ok(())
+}
+
+    /// Process column directories and create headers
+    fn process_columns(&mut self, channel_dir_path: &Path, sequence_counter: &mut usize) -> std::io::Result<()> {
+        let mut columns: Vec<(usize, String, PathBuf)> = Vec::new();
+
+        // Collect and parse column directories
+        for entry in fs::read_dir(channel_dir_path)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_dir() {
+                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                    if let Some((seq, display_name)) = parse_directory_name(name) {
+                        columns.push((seq, display_name.to_string(), path));
+                        *sequence_counter = (*sequence_counter).max(seq + 1);
+                    }
+                }
+            }
+        }
+
+        // Sort columns by sequence number
+        columns.sort_by_key(|(seq, _, _)| *seq);
+
+        // Create header row
+        let mut header_row = String::new();
+        for (seq, display_name, path) in &columns {
+            // Add to path lookup
+        self.next_path_lookup_table.insert(*seq, path.clone());
+            
+            
+            // Add to ordered column list
+            self.ordered_task_column_list.push(path.to_string_lossy().to_string());
+            
+            // Add to display table header
+            let truncated_name = truncate_string(&display_name, 
+                (self.tui_width as usize / columns.len()).saturating_sub(5));
+            header_row.push_str(&format!("{:3} {:<20} ", seq, truncated_name));
+        }
+
+        self.task_display_table.push(header_row);
+        Ok(())
+    }
+
+    /// Process tasks within each column
+    fn process_tasks(&mut self, sequence_counter: &mut usize) -> std::io::Result<()> {
+        let max_rows = self.get_max_tasks_count()?;
+        let column_count = self.ordered_task_column_list.len();
+
+        // Initialize rows
+        for _ in 0..max_rows {
+            let mut row = String::new();
+            for _ in 0..column_count {
+                row.push_str(&" ".repeat(25)); // Adjust spacing based on your needs
+            }
+            self.task_display_table.push(row);
+        }
+
+        // Process each column
+        for (col_idx, column_path_str) in self.ordered_task_column_list.iter().enumerate() {
+            let column_path = Path::new(column_path_str);
+            let mut tasks: Vec<(String, PathBuf)> = Vec::new();
+
+            // Collect tasks in current column
+            for entry in fs::read_dir(column_path)? {
+                let entry = entry?;
+                let path = entry.path();
+                if path.is_dir() {
+                    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                        tasks.push((name.to_string(), path));
+                    }
+                }
+            }
+
+            // Sort tasks
+            tasks.sort_by(|(a, _), (b, _)| a.cmp(b));
+
+            // Process each task
+            for (row_idx, (task_name, task_path)) in tasks.iter().enumerate() {
+                if row_idx + 1 >= self.task_display_table.len() {
+                    break;
+                }
+
+                // Add to path lookup
+                self.next_path_lookup_table.insert(*sequence_counter, task_path.clone());
+
+                // Update display table
+                let display_text = format!("{:3} {}", sequence_counter, 
+                    truncate_string(task_name, 20));
+                
+                // Update the specific position in the row
+                let row = &mut self.task_display_table[row_idx + 1];
+                let start_pos = col_idx * 25;
+                let end_pos = start_pos + display_text.len().min(25);
+                if start_pos < row.len() {
+                    let mut new_row = row[..start_pos].to_string();
+                    new_row.push_str(&display_text);
+                    new_row.push_str(&row[end_pos..]);
+                    self.task_display_table[row_idx + 1] = new_row;
+                }
+
+                *sequence_counter += 1;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Gets the maximum number of tasks across all columns
+    fn get_max_tasks_count(&self) -> std::io::Result<usize> {
+        let mut max_count = 0;
+        for column_path_str in &self.ordered_task_column_list {
+            let count = fs::read_dir(column_path_str)?
+                .filter_map(|entry| entry.ok())
+                .filter(|entry| entry.path().is_dir())
+                .count();
+            max_count = max_count.max(count);
+        }
+        Ok(max_count)
+    }
+
+    /// Prints the current task display (for debugging)
+    pub fn print_task_display(&self) {
+        for row in &self.task_display_table {
+            println!("{}", row);
+        }
+    }
+
 
     fn handle_tui_action(&mut self) -> Result<(), io::Error> { // Now returns Result
         debug_log("app fn handle_tui_action() started");
         
-        self.update_next_path_lookup_table();
-
-        debug_log!(
-            "handle_tui_action() &self.graph_navigation_instance_state.next_path_lookup_table {:?}", 
-            &self.graph_navigation_instance_state.next_path_lookup_table,
-        );
+        // self.update_next_path_lookup_table();
                                       
         if self.is_in_team_channel_list() {
             debug_log("is_in_team_channel_list");
@@ -3517,7 +3744,9 @@ struct GraphNavigationInstanceState {
     current_node_unique_id: Vec<u8>,
     current_node_members: Vec<String>,
     home_square_one: bool,
-    next_path_lookup_table: HashMap<usize, PathBuf>,
+    
+
+    
     
     // app.&App,  // TODO really?
 }
@@ -3692,7 +3921,26 @@ impl GraphNavigationInstanceState {
             Ok(())
     }
 }
-    
+
+/// Helper function to parse directory name in format "number_name"
+fn parse_directory_name(name: &str) -> Option<(usize, &str)> {
+    let parts: Vec<&str> = name.splitn(2, '_').collect();
+    if parts.len() == 2 {
+        if let Ok(num) = parts[0].parse::<usize>() {
+            return Some((num, parts[1]));
+        }
+    }
+    None
+}
+
+/// Helper function to truncate string to specified length
+fn truncate_string(s: &str, max_len: usize) -> String {
+    if s.len() <= max_len {
+        s.to_string()
+    } else {
+        format!("{}...", &s[..max_len.saturating_sub(3)])
+    }
+}    
 
 //e.g.
 // // Load active_team_channel:
@@ -12048,12 +12296,12 @@ fn update_current_path_and_state(app: &mut App, selected_item: String, input_mod
     // }
     
     // Populate next_path_lookup_table:
-    app.graph_navigation_instance_state.next_path_lookup_table.clear(); // Clear previous entries.
+    app.next_path_lookup_table.clear(); // Clear previous entries.
 
     if input_mode == InputMode::MainCommand  {
         for (i, item) in app.tui_directory_list.iter().enumerate() {
             let next_path = app.current_path.join(item);
-            app.graph_navigation_instance_state.next_path_lookup_table.insert(i + 1, next_path);
+            app.next_path_lookup_table.insert(i + 1, next_path);
         }    
     }
 
@@ -12179,7 +12427,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         current_node_unique_id: Vec::new(),
         current_node_members: Vec::new(),
         home_square_one: true,
-        next_path_lookup_table: HashMap::new(),
+
     };
 
     // if !verify_gpg_signature(&local_user) {
@@ -12217,8 +12465,8 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         debug_log("start loop: we_love_projects_loop()");
         debug_log!("app.input_mode {:?}", &app.input_mode); 
         debug_log!(
-            "&app.graph_navigation_instance_state.next_path_lookup_table {:?}", 
-            &app.graph_navigation_instance_state.next_path_lookup_table
+            "&app.next_path_lookup_table {:?}", 
+            &app.next_path_lookup_table
         ); 
         
         // -- Here: this function reads state and adds current graph-node-location data
@@ -12279,7 +12527,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
             
         }
         
-        // 2. handle input/command
+        // // 2. handle input/command
         // if handle_main_command_mode(&input, &mut app, &graph_navigation_instance_state)? {
         //     return Ok(());
         // } else if app.input_mode == InputMode::MainCommand {
@@ -12328,12 +12576,17 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
 
             debug_log("we love projects: task mode");
             
+            app.update_task_display()?;
 
-            app.handle_tui_action(); // Remove the extra argument here
+            // app.handle_tui_action(); // Remove the extra argument here
+            
+            debug_log!(
+                "we_love_projects_loop() app.next_path_lookup_table {:?}", 
+                 app.next_path_lookup_table,
+        );
 
             debug_log("handle_tui_action() started in we_love_projects_loop()");
 
-            
             if input == "t" {
                 // pass
 
