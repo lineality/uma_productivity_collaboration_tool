@@ -2,6 +2,10 @@
 
 pub mod tiny_tui {
     use std::path::Path;
+    use std::time::{
+        Duration, 
+        UNIX_EPOCH
+        };
     use crate::{ // Import from the main module
         DEBUG_FLAG,
         debug_log,
@@ -9,20 +13,45 @@ pub mod tiny_tui {
         Write,
         }; 
 
-    pub fn render_list(list: &Vec<String>, current_path: &Path) {
-            
+    pub fn render_list(
+        list: &Vec<String>,
+        current_path: &Path,
+        agenda_process: &str,
+        goals_features: &str,
+        scope: &str,
+        schedule_duration_start_end: &Vec<u64>,
+    ) {
         // 1. Get the path components
         let path_components: Vec<_> = current_path.components().collect();
 
-        // 2. Display the path, skipping the first two components 
+        // 2. Display the path, skipping the first two components
         if path_components.len() > 2 {
             let relevant_path = path_components[2..].iter()
-                .map(|c| c.as_os_str().to_string_lossy()) 
+                .map(|c| c.as_os_str().to_string_lossy())
                 .collect::<Vec<_>>()
                 .join("/");
-            println!("Current Path: /{}", relevant_path); 
+            println!("Current Path: /{}", relevant_path);
         } else {
-            println!("Select a Team-Channel (by number):"); 
+            println!("Select a Team-Channel (by number):");
+        }
+
+        // 2b. Display added core node fields
+        println!("Agenda/Process: {}", agenda_process);
+        println!("Goals/Features: {}", goals_features);
+        println!("Scope: {}", scope);
+
+        if schedule_duration_start_end.len() == 2 {
+            let start_time = schedule_duration_start_end[0];
+            let end_time = schedule_duration_start_end[1];
+            let duration_days = (end_time - start_time) / (60 * 60 * 24); 
+
+            let start_date = format_timestamp_to_date(start_time);
+            let end_date = format_timestamp_to_date(end_time);
+            println!("Schedule: {} - {} ({} days)", start_date, end_date, duration_days);
+
+        }
+        else {
+            println!("Schedule: (no schedule)");
         }
 
         // 3. Display the list items as before
@@ -30,7 +59,62 @@ pub mod tiny_tui {
             println!("{}. {}", i + 1, item);
         }
     }    
+        
+    // pub fn render_list(list: &Vec<String>, current_path: &Path) {
+            
+    //     // 1. Get the path components
+    //     let path_components: Vec<_> = current_path.components().collect();
+
+    //     // 2. Display the path, skipping the first two components 
+    //     if path_components.len() > 2 {
+    //         let relevant_path = path_components[2..].iter()
+    //             .map(|c| c.as_os_str().to_string_lossy()) 
+    //             .collect::<Vec<_>>()
+    //             .join("/");
+    //         println!("Current Path: /{}", relevant_path); 
+    //     } else {
+    //         println!("Select a Team-Channel (by number):"); 
+    //     }
+
+    //     // 3. Display the list items as before
+    //     for (i, item) in list.iter().enumerate() {
+    //         println!("{}. {}", i + 1, item);
+    //     }
+    // }    
     
+    
+
+/// Converts a Unix timestamp (seconds since 1970-01-01 00:00:00 UTC) to a YYYY-MM-DD formatted date string
+///
+/// # Arguments
+/// * `timestamp` - Unix timestamp in seconds
+///
+/// # Returns
+/// * `String` - Date in "YYYY-MM-DD" format, or "Invalid Date" if the timestamp cannot be converted
+///
+/// # Examples
+/// ```
+/// let timestamp = 1672531200; // 2023-01-01 00:00:00 UTC
+/// assert_eq!(format_timestamp_to_date(timestamp), "2023-01-01");
+/// ```
+/// use -> use std::time::{Duration, UNIX_EPOCH};
+fn format_timestamp_to_date(timestamp: u64) -> String {
+    UNIX_EPOCH
+        .checked_add(Duration::from_secs(timestamp))
+        .and_then(|datetime| datetime.duration_since(UNIX_EPOCH).ok())
+        .map(|duration| {
+            let secs = duration.as_secs();
+            let year = 1970 + (secs / 31_557_600); // Approximate years (365.25 days)
+            let remaining_secs = secs % 31_557_600;
+            let month = 1 + (remaining_secs / 2_629_800); // Approximate months (30.44 days)
+            let day = 1 + ((remaining_secs % 2_629_800) / 86_400); // Days (24 hours)
+            
+            format!("{:04}-{:02}-{:02}", year, month, day)
+        })
+        .unwrap_or_else(|| "Invalid Date".to_string())
+}
+    
+        
     pub fn render_tasks_list(headers: &[String], data: &[Vec<String>], current_path: &Path) {
         debug_log("starting: render_tasks_list");
         // 1. Display Current Path

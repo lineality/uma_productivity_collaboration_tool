@@ -3022,7 +3022,14 @@ impl App {
         }
 
         // Render the message list
-        tiny_tui::render_list(&self.tui_textmessage_list, &self.current_path); 
+        tiny_tui::render_list(
+            &self.tui_textmessage_list, 
+            &self.current_path,
+            &self.graph_navigation_instance_state.agenda_process,
+            &self.graph_navigation_instance_state.goals_features_subfeatures_tools_targets,
+            &self.graph_navigation_instance_state.scope,
+            &self.graph_navigation_instance_state.schedule_duration_start_end,
+        ); 
     } 
    
     
@@ -3198,34 +3205,34 @@ fn handle_task_action(&mut self, input: &str) -> bool { // Return true to exit t
         false // Don't exit task mode by default for other commands
     }
 
-    // still under construction
-    fn handle_task_number_selection(&mut self, selection: usize) -> bool {
-            if selection > 0 && selection <= self.tui_file_list.len() {
-                let task_index = selection - 1;
-                if let Some(task_name) = self.tui_file_list.get(task_index) {
-                    let task_path = self.current_path.join(task_name);
-                    self.current_path = task_path;
+    // // still under construction
+    // fn handle_task_number_selection(&mut self, selection: usize) -> bool {
+    //         if selection > 0 && selection <= self.tui_file_list.len() {
+    //             let task_index = selection - 1;
+    //             if let Some(task_name) = self.tui_file_list.get(task_index) {
+    //                 let task_path = self.current_path.join(task_name);
+    //                 self.current_path = task_path;
     
-                    if self.current_path.join("node.toml").exists() {
-                        // Correctly handle the Result from load_core_node_from_toml_file:
-                        match load_core_node_from_toml_file(&self.current_path.join("node.toml")) {
-                            Ok(this_node_data) => {
-                                debug_log!("Node data loaded:\n{:#?}", this_node_data); // Or display in TUI
-                                // ... (Code to display node data in a dedicated view)...
-                            }
-                            Err(e) => {
-                                debug_log!("Error loading node data: {}", e);
-                                // ... (Error handling, e.g., display error message in TUI) ...
-                            }
-                        }
-                    }
-                    return true; // Exit task mode to view/edit task
-                } else {
-                    debug_log!("Invalid task number.");
-                }
-            }
-            false // Stay in task mode if invalid input
-        }
+    //                 if self.current_path.join("node.toml").exists() {
+    //                     // Correctly handle the Result from load_core_node_from_toml_file:
+    //                     match load_core_node_from_toml_file(&self.current_path.join("node.toml")) {
+    //                         Ok(this_node_data) => {
+    //                             debug_log!("Node data loaded:\n{:#?}", this_node_data); // Or display in TUI
+    //                             // ... (Code to display node data in a dedicated view)...
+    //                         }
+    //                         Err(e) => {
+    //                             debug_log!("Error loading node data: {}", e);
+    //                             // ... (Error handling, e.g., display error message in TUI) ...
+    //                         }
+    //                     }
+    //                 }
+    //                 return true; // Exit task mode to view/edit task
+    //             } else {
+    //                 debug_log!("Invalid task number.");
+    //             }
+    //         }
+    //         false // Stay in task mode if invalid input
+    //     }
     
     
     
@@ -3372,6 +3379,10 @@ fn handle_task_action(&mut self, input: &str) -> bool { // Return true to exit t
             tiny_tui::render_list(
                 &file_list,      // Pass the file list
                 &self.current_path, //Pass the current path
+                &self.graph_navigation_instance_state.agenda_process,
+                &self.graph_navigation_instance_state.goals_features_subfeatures_tools_targets,
+                &self.graph_navigation_instance_state.scope,
+                &self.graph_navigation_instance_state.schedule_duration_start_end,
             );
         }
     }
@@ -3910,6 +3921,7 @@ fn check_team_channel_collision(channel_name: &str) -> bool {
      channel_path.exists() 
 }
 
+
 /// Represents the current state of a user's navigation within the UMA project graph.
 ///
 /// This struct holds information about the currently active team channel, the current node,
@@ -3937,6 +3949,13 @@ struct GraphNavigationInstanceState {
     current_node_unique_id: Vec<u8>,
     current_node_members: Vec<String>,
     home_square_one: bool,
+    // from task fields:
+    // project module items as task-ish thing
+    agenda_process: String,
+    goals_features_subfeatures_tools_targets: String,
+    scope: String,
+    schedule_duration_start_end: Vec<u64>, // Vec<u64>,?
+
     
 
     
@@ -4064,6 +4083,12 @@ impl GraphNavigationInstanceState {
                 self.current_node_unique_id = this_node.node_unique_id;
                 self.home_square_one = false;
                 // Note: `current_node_members` appears to be unused, consider removing it
+                self.agenda_process = this_node.agenda_process;
+                self.goals_features_subfeatures_tools_targets = this_node.goals_features_subfeatures_tools_targets;
+                self.scope = this_node.scope;
+                self.schedule_duration_start_end = this_node.schedule_duration_start_end;
+                
+                
                 
             }
             
@@ -4548,8 +4573,6 @@ fn load_core_node_from_toml_file(file_path: &Path) -> Result<CoreNode, String> {
             .filter_map(|v| v.as_integer())
             .map(|i| i as u64)
             .collect(),
-        
-
     };
 
     // // 4. Handle abstract_collaborator_port_assignments
@@ -6714,7 +6737,14 @@ fn handle_main_command_mode(
                     app.current_path.pop();
                     app.graph_navigation_instance_state.current_full_file_path = app.current_path.clone(); // Update full path after popping.
                     app.graph_navigation_instance_state.look_read_node_toml(); // Update internal state too.
-                    tiny_tui::render_list(&app.tui_directory_list, &app.current_path);
+                    tiny_tui::render_list(
+                        &app.tui_directory_list, 
+                        &app.current_path,
+                        &app.graph_navigation_instance_state.agenda_process,
+                        &app.graph_navigation_instance_state.goals_features_subfeatures_tools_targets,
+                        &app.graph_navigation_instance_state.scope,
+                        &app.graph_navigation_instance_state.schedule_duration_start_end,
+                        );
                    
                 } else {
                   debug_log("back, but at root!");
@@ -12646,7 +12676,12 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         current_node_unique_id: Vec::new(),
         current_node_members: Vec::new(),
         home_square_one: true,
-
+        agenda_process: String::new(),
+        goals_features_subfeatures_tools_targets: String::new(),
+        scope: String::new(),
+        schedule_duration_start_end: Vec::new(), // Vec<u64>,?
+            
+    
     };
 
     // if !verify_gpg_signature(&local_user) {
@@ -12662,7 +12697,14 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
 
     // Bootstrap TUI display: TODO not yet working to display first options
     print!("\x1B[2J\x1B[1;1H"); // Clear the screen
-    tiny_tui::render_list(&app.tui_directory_list, &app.current_path);
+    tiny_tui::render_list(
+        &app.tui_directory_list, 
+        &app.current_path,
+        &app.graph_navigation_instance_state.agenda_process,
+        &app.graph_navigation_instance_state.goals_features_subfeatures_tools_targets,
+        &app.graph_navigation_instance_state.scope,
+        &app.graph_navigation_instance_state.schedule_duration_start_end,
+    );
 
     // Start 
     loop {
@@ -12840,7 +12882,14 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                 app.input_mode = InputMode::MainCommand; // Access input_mode using self
                 app.current_path.pop(); // Go back to the parent directory
 
-                tiny_tui::render_list(&app.tui_directory_list, &app.current_path);
+                tiny_tui::render_list(
+                    &app.tui_directory_list, 
+                    &app.current_path,
+                    &app.graph_navigation_instance_state.agenda_process,
+                    &app.graph_navigation_instance_state.goals_features_subfeatures_tools_targets,
+                    &app.graph_navigation_instance_state.scope,
+                    &app.graph_navigation_instance_state.schedule_duration_start_end,
+                );
 
             } else if !input.is_empty() {
                 debug_log("!input.is_empty()");
@@ -12868,9 +12917,23 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         print!("\x1B[2J\x1B[1;1H");
 
         match app.input_mode {
-            InputMode::MainCommand => tiny_tui::render_list(&app.tui_directory_list, &app.current_path),
+            InputMode::MainCommand => tiny_tui::render_list(
+                &app.tui_directory_list, 
+                &app.current_path,
+                &app.graph_navigation_instance_state.agenda_process,
+                &app.graph_navigation_instance_state.goals_features_subfeatures_tools_targets,
+                &app.graph_navigation_instance_state.scope,
+                &app.graph_navigation_instance_state.schedule_duration_start_end,
+            ),
             InputMode::TaskCommand => { /* Task list rendering logic */ },
-            InputMode::InsertText => tiny_tui::render_list(&app.tui_textmessage_list, &app.current_path),
+            InputMode::InsertText => tiny_tui::render_list(
+                &app.tui_textmessage_list, 
+                &app.current_path,
+                &app.graph_navigation_instance_state.agenda_process,
+                &app.graph_navigation_instance_state.goals_features_subfeatures_tools_targets,
+                &app.graph_navigation_instance_state.scope,
+                &app.graph_navigation_instance_state.schedule_duration_start_end,
+            ),
         };
 
     } // end of main loop
