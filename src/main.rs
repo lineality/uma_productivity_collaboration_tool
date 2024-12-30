@@ -6823,13 +6823,10 @@ fn handle_main_command_mode(
                     // }
                 }
             }
-
-            
            "storyboard" | "mudd" => {
                 debug_log("storyboard");
                 // Display help information
             }
-            
             "b" | "back" => {
                 debug_log("back mode started");
                 app.input_mode = InputMode::MainCommand;
@@ -6848,12 +6845,12 @@ fn handle_main_command_mode(
                         &app.graph_navigation_instance_state.scope,
                         &app.graph_navigation_instance_state.schedule_duration_start_end,
                         );
+                    app.update_directory_list()?;
                    
                 } else {
                   debug_log("back, but at root!");
                 }
             }
-
             "home" => {
                 /*
                 For a clean reset, 'home' quits and restarts,
@@ -6894,17 +6891,10 @@ fn handle_main_command_mode(
                 // ... (Your TUI refresh logic) ...
                 // debug_log("TUI refresh triggered (if implemented).");
             }
-            // "u" | "updated" => {
+            // "u" | "manually_updated" => {
             //     debug_log("updated selected");
             //     // TODO: update the updated_at_timestamp filed in the node.toml
             // }
-            // "m" | "message" => {
-                //  debug_log("m selected");
-                
-                // app.input_mode = InputMode::InsertText;
-                // app.current_path = app.current_path.join("instant_message_browser"); // Update path here
-                // app.load_im_messages(); // Load messages for the selected channel
-                // // Update input box title
             "m" | "message" => {
                 debug_log("m selected");
                 debug_log(&format!("app.current_path {:?}", app.current_path)); 
@@ -6942,9 +6932,6 @@ fn handle_main_command_mode(
                 app.enter_task_browser();
                 
             }
-            
-            
-            
             "q" | "quit" | "exit" => {
                 debug_log("quit");
                 no_restart_set_hard_reset_flag_to_false();
@@ -12795,19 +12782,19 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
     // Create App instance
     let mut app = App::new(graph_navigation_instance_state.clone()); // Pass graph_navigation_instance_state
     
-    // -- Start in MainCommand Mode --- 
+    // -- bootstrap: Start in MainCommand Mode --- 
     app.input_mode = InputMode::MainCommand; // Initialize app in command mode
+    
+    // bootstrap: load team-channels
+    app.update_directory_list()?;
 
-    // Bootstrap TUI display: TODO not yet working to display first options
+    // bootstrap: TUI display: TODO not yet working to display first options
     print!("\x1B[2J\x1B[1;1H"); // Clear the screen
-    tiny_tui::render_list(
+    tiny_tui::simple_render_list(
         &app.tui_directory_list, 
         &app.current_path,
-        &app.graph_navigation_instance_state.agenda_process,
-        &app.graph_navigation_instance_state.goals_features_subfeatures_tools_targets,
-        &app.graph_navigation_instance_state.scope,
-        &app.graph_navigation_instance_state.schedule_duration_start_end,
     );
+    
 
     // Start 
     loop {
@@ -12917,6 +12904,12 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                 debug_log("escape toggled");
                 app.input_mode = InputMode::MainCommand; // Access input_mode using self
                 app.current_path.pop(); // Go back to the parent directory
+                app.update_directory_list()?;
+            } else if input == "q" {
+                debug_log("escape toggled");
+                app.input_mode = InputMode::MainCommand; // Access input_mode using self
+                app.current_path.pop(); // Go back to the parent directory
+                app.update_directory_list()?;  // refresh to current cwd display items
             } else if !input.is_empty() {
                 debug_log("!input.is_empty()");
 
@@ -12984,7 +12977,6 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                 debug_log("escape toggled");
                 app.input_mode = InputMode::MainCommand; // Access input_mode using self
                 app.current_path.pop(); // Go back to the parent directory
-
                 tiny_tui::render_list(
                     &app.tui_directory_list, 
                     &app.current_path,
@@ -12993,7 +12985,22 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                     &app.graph_navigation_instance_state.scope,
                     &app.graph_navigation_instance_state.schedule_duration_start_end,
                 );
-
+                app.update_directory_list()?;  // refresh to current cwd display items
+                
+            } else if input == "q" {
+                debug_log("escape toggled");
+                app.input_mode = InputMode::MainCommand; // Access input_mode using self
+                app.current_path.pop(); // Go back to the parent directory
+                tiny_tui::render_list(
+                    &app.tui_directory_list, 
+                    &app.current_path,
+                    &app.graph_navigation_instance_state.agenda_process,
+                    &app.graph_navigation_instance_state.goals_features_subfeatures_tools_targets,
+                    &app.graph_navigation_instance_state.scope,
+                    &app.graph_navigation_instance_state.schedule_duration_start_end,
+                );
+                app.update_directory_list()?;  // refresh to current cwd display items
+            
             } else if !input.is_empty() {
                 debug_log("!input.is_empty()");
 
