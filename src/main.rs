@@ -4377,6 +4377,187 @@ struct CoreNode {
     schedule_duration_start_end: Vec<u64>, // Vec<u64>,?
 }
 
+
+
+/// Creates a new `CoreNode` instance.
+///
+/// # Arguments
+///
+/// * `node_name` - The name of the node.
+/// * `description_for_tui` - A description for display in the TUI.
+/// * `directory_path` - The path to the node's directory.
+/// * `order_number` - The order number for the node.
+/// * `priority` - The priority of the node.
+/// * `owner` - The username of the node's owner.
+/// * `collaborators` - An ordered vector of collaborator usernames.
+/// * `abstract_collaborator_port_assignments` - A map of collaborator port assignments.
+///
+/// # Returns
+///
+/// * A new `CoreNode` instance with the given attributes.
+///
+/// The name of the node. This is used for display and identification.
+/// node_name: String,
+/// A description of the node, intended for display in the TUI.
+/// description_for_tui: String,
+/// A unique identifier for the node, generated using a timestamp at node creation.
+/// node_unique_id: u64,
+/// The path to the directory on the file system where the node's data is stored.
+/// directory_path: PathBuf,
+/// An order number used to define the node's position within a list or hierarchy.
+/// order_number: u32,
+/// The priority of the node, which can be High, Medium, or Low.
+/// priority: NodePriority,
+/// The username of the owner of the node.
+/// owner: String,
+/// The Unix timestamp representing when the node was last updated.
+/// updated_at_timestamp: u64,
+/// The Unix timestamp representing when the node will expire.
+/// expires_at: u64,
+/// A vector of `CoreNode` structs representing the child nodes of this node.
+/// children: Vec<CoreNode>,
+/// An ordered vector of collaborator usernames associated with this node.
+/// teamchannel_collaborators_with_access: Vec<String>,
+/// A map containing port assignments for each collaborator associated with the node.
+/// abstract_collaborator_port_assignments: HashMap<String, CollaboratorPorts>,
+///
+impl CoreNode {
+
+    fn new(
+        node_name: String,
+        description_for_tui: String,
+        directory_path: PathBuf,
+        owner: String,
+        teamchannel_collaborators_with_access: Vec<String>,
+        abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
+    ) -> Result<CoreNode, ThisProjectError> {
+        let expires_at = get_current_unix_timestamp() + 11111111111; // Expires in 352 years
+        let updated_at_timestamp = get_current_unix_timestamp();
+
+        // 1. Get the salt list, handling potential errors:
+        let salt_list = get_saltlist_for_collaborator(&owner)?; // Use the ? operator to propagate errors
+
+        // 2. *Now* calculate the hash, using the retrieved salt list:
+        let node_unique_id = calculate_corenode_hashes(
+            &node_name,                 // &str
+            &description_for_tui,      // &str
+            updated_at_timestamp,        // u64
+            &salt_list,                 // &[u128]
+        )?;
+        
+        // Project State
+        let agenda_process: String = "".to_string();
+        let goals_features_subfeatures_tools_targets: String = "".to_string();
+        let scope: String = "".to_string();
+        let schedule_duration_start_end: Vec<u64> = [].to_vec();
+
+        // 3. Create the CoreNode instance (all fields now available):
+        Ok(CoreNode {
+            node_name,
+            description_for_tui,
+            node_unique_id,
+            directory_path,
+            owner,
+            updated_at_timestamp,
+            expires_at,
+            teamchannel_collaborators_with_access,        
+            abstract_collaborator_port_assignments,
+            agenda_process,
+            goals_features_subfeatures_tools_targets,
+            scope,
+            schedule_duration_start_end,
+        })
+    }
+
+    /// Saves the `CoreNode` data to a `node.toml` file.
+    ///
+    /// This function serializes the `CoreNode` struct into TOML format and writes 
+    /// it to a file at the path specified by the `directory_path` field, creating
+    /// the directory if it doesn't exist.
+    ///
+    /// # Error Handling
+    /// 
+    /// Returns a `Result<(), io::Error>` to handle potential errors during:
+    ///  - TOML serialization.
+    ///  - Directory creation. 
+    ///  - File writing.
+    ///
+    /// If any error occurs, an `io::Error` is returned, containing information 
+    /// about the error. 
+    /// 
+    fn save_node_to_file(&self) -> Result<(), io::Error> {
+        // 1. Serialize the CoreNode struct to a TOML string.
+        let toml_string = toml::to_string(&self).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("TOML serialization error: {}", e),
+            )
+        })?;
+
+        // 2. Construct the full file path for the node.toml file.
+        let file_path = self.directory_path.join("node.toml");
+        
+        debug_log!("file_path in save_node_to_file {:?}",
+            file_path,
+        );
+
+        // 3. Create the directory if it doesn't exist. 
+        if let Some(parent_dir) = file_path.parent() {
+            fs::create_dir_all(parent_dir)?;
+        }
+
+        // 4. Write the TOML data to the file.
+        fs::write(file_path, toml_string)?;
+
+        // 5. Return Ok(()) if the save was successful.
+        Ok(()) 
+    }
+   
+    /// Adds a new child node to the current node's `children` vector.
+    ///
+    /// # Arguments
+    ///
+    /// * `collaborators` - An ordered vector of usernames for collaborators who have access to this child node.
+    /// * `abstract_collaborator_port_assignments` - A HashMap mapping collaborator usernames to their respective `CollaboratorPorts` struct, containing port assignments for synchronization.
+    /// * `owner` - The username of the owner of this child node.
+    /// * `description_for_tui` - A description of the child node, intended for display in the TUI.
+    /// * `directory_path` - The file path where the child node's data will be stored.
+    /// * `order_number` - The order number of the child node, determining its position within a list or hierarchy.
+    /// * `priority` - The priority level of the child node (High, Medium, or Low).
+    // TODO maybe use for something else
+    // fn add_child(
+    //     &mut self,
+    //     teamchannel_collaborators_with_access: Vec<String>, 
+    //     abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
+    //     owner: String,
+    //     description_for_tui: String,
+    //     directory_path: PathBuf,
+    // ) {
+    //     let child = CoreNode::new(
+    //         self.node_name.clone(),
+    //         description_for_tui,
+    //         directory_path,
+    //         owner,
+    //         teamchannel_collaborators_with_access,        
+    //         abstract_collaborator_port_assignments,   
+    //     );
+
+    // }
+    
+    fn update_updated_at_timestamp(&mut self) {
+        self.updated_at_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+    }
+
+    fn load_node_from_file(path: &Path) -> Result<CoreNode, io::Error> {
+        let toml_string = fs::read_to_string(path)?;
+        let node: CoreNode = toml::from_str(&toml_string).map_err(|e| {
+            io::Error::new(io::ErrorKind::Other, format!("TOML deserialization error: {}", e))
+        })?; 
+        Ok(node)
+    }
+}
+
+
 /// Calculates Pearson hashes for the provided CoreNode fields and salts.
 /// This function is now external to CoreNode, taking individual fields as arguments.
 ///
@@ -4736,183 +4917,6 @@ fn load_core_node_from_toml_file(file_path: &Path) -> Result<CoreNode, String> {
 }
 
 
-/// Creates a new `CoreNode` instance.
-///
-/// # Arguments
-///
-/// * `node_name` - The name of the node.
-/// * `description_for_tui` - A description for display in the TUI.
-/// * `directory_path` - The path to the node's directory.
-/// * `order_number` - The order number for the node.
-/// * `priority` - The priority of the node.
-/// * `owner` - The username of the node's owner.
-/// * `collaborators` - An ordered vector of collaborator usernames.
-/// * `abstract_collaborator_port_assignments` - A map of collaborator port assignments.
-///
-/// # Returns
-///
-/// * A new `CoreNode` instance with the given attributes.
-///
-/// The name of the node. This is used for display and identification.
-/// node_name: String,
-/// A description of the node, intended for display in the TUI.
-/// description_for_tui: String,
-/// A unique identifier for the node, generated using a timestamp at node creation.
-/// node_unique_id: u64,
-/// The path to the directory on the file system where the node's data is stored.
-/// directory_path: PathBuf,
-/// An order number used to define the node's position within a list or hierarchy.
-/// order_number: u32,
-/// The priority of the node, which can be High, Medium, or Low.
-/// priority: NodePriority,
-/// The username of the owner of the node.
-/// owner: String,
-/// The Unix timestamp representing when the node was last updated.
-/// updated_at_timestamp: u64,
-/// The Unix timestamp representing when the node will expire.
-/// expires_at: u64,
-/// A vector of `CoreNode` structs representing the child nodes of this node.
-/// children: Vec<CoreNode>,
-/// An ordered vector of collaborator usernames associated with this node.
-/// teamchannel_collaborators_with_access: Vec<String>,
-/// A map containing port assignments for each collaborator associated with the node.
-/// abstract_collaborator_port_assignments: HashMap<String, CollaboratorPorts>,
-///
-impl CoreNode {
-
-    fn new(
-        node_name: String,
-        description_for_tui: String,
-        directory_path: PathBuf,
-        owner: String,
-        teamchannel_collaborators_with_access: Vec<String>,
-        abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
-    ) -> Result<CoreNode, ThisProjectError> {
-        let expires_at = get_current_unix_timestamp() + 11111111111; // Expires in 352 years
-        let updated_at_timestamp = get_current_unix_timestamp();
-
-        // 1. Get the salt list, handling potential errors:
-        let salt_list = get_saltlist_for_collaborator(&owner)?; // Use the ? operator to propagate errors
-
-        // 2. *Now* calculate the hash, using the retrieved salt list:
-        let node_unique_id = calculate_corenode_hashes(
-            &node_name,                 // &str
-            &description_for_tui,      // &str
-            updated_at_timestamp,        // u64
-            &salt_list,                 // &[u128]
-        )?;
-        
-        let agenda_process: String = "".to_string();
-        let goals_features_subfeatures_tools_targets: String = "".to_string();
-        let scope: String = "".to_string();
-        let schedule_duration_start_end: Vec<u64> = [].to_vec();
-
-        // 3. Create the CoreNode instance (all fields now available):
-        Ok(CoreNode {
-            node_name,
-            description_for_tui,
-            node_unique_id,
-            directory_path,
-            owner,
-            updated_at_timestamp,
-            expires_at,
-            teamchannel_collaborators_with_access,        
-            abstract_collaborator_port_assignments,
-            agenda_process,
-            goals_features_subfeatures_tools_targets,
-            scope,
-            schedule_duration_start_end,
-        })
-    }
-
-    /// Saves the `CoreNode` data to a `node.toml` file.
-    ///
-    /// This function serializes the `CoreNode` struct into TOML format and writes 
-    /// it to a file at the path specified by the `directory_path` field, creating
-    /// the directory if it doesn't exist.
-    ///
-    /// # Error Handling
-    /// 
-    /// Returns a `Result<(), io::Error>` to handle potential errors during:
-    ///  - TOML serialization.
-    ///  - Directory creation. 
-    ///  - File writing.
-    ///
-    /// If any error occurs, an `io::Error` is returned, containing information 
-    /// about the error. 
-    /// 
-    fn save_node_to_file(&self) -> Result<(), io::Error> {
-        // 1. Serialize the CoreNode struct to a TOML string.
-        let toml_string = toml::to_string(&self).map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("TOML serialization error: {}", e),
-            )
-        })?;
-
-        // 2. Construct the full file path for the node.toml file.
-        let file_path = self.directory_path.join("node.toml");
-        
-        debug_log!("file_path in save_node_to_file {:?}",
-            file_path,
-        );
-
-        // 3. Create the directory if it doesn't exist. 
-        if let Some(parent_dir) = file_path.parent() {
-            fs::create_dir_all(parent_dir)?;
-        }
-
-        // 4. Write the TOML data to the file.
-        fs::write(file_path, toml_string)?;
-
-        // 5. Return Ok(()) if the save was successful.
-        Ok(()) 
-    }
-   
-    /// Adds a new child node to the current node's `children` vector.
-    ///
-    /// # Arguments
-    ///
-    /// * `collaborators` - An ordered vector of usernames for collaborators who have access to this child node.
-    /// * `abstract_collaborator_port_assignments` - A HashMap mapping collaborator usernames to their respective `CollaboratorPorts` struct, containing port assignments for synchronization.
-    /// * `owner` - The username of the owner of this child node.
-    /// * `description_for_tui` - A description of the child node, intended for display in the TUI.
-    /// * `directory_path` - The file path where the child node's data will be stored.
-    /// * `order_number` - The order number of the child node, determining its position within a list or hierarchy.
-    /// * `priority` - The priority level of the child node (High, Medium, or Low).
-    // TODO maybe use for something else
-    // fn add_child(
-    //     &mut self,
-    //     teamchannel_collaborators_with_access: Vec<String>, 
-    //     abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
-    //     owner: String,
-    //     description_for_tui: String,
-    //     directory_path: PathBuf,
-    // ) {
-    //     let child = CoreNode::new(
-    //         self.node_name.clone(),
-    //         description_for_tui,
-    //         directory_path,
-    //         owner,
-    //         teamchannel_collaborators_with_access,        
-    //         abstract_collaborator_port_assignments,   
-    //     );
-
-    // }
-    
-    fn update_updated_at_timestamp(&mut self) {
-        self.updated_at_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-    }
-
-    fn load_node_from_file(path: &Path) -> Result<CoreNode, io::Error> {
-        let toml_string = fs::read_to_string(path)?;
-        let node: CoreNode = toml::from_str(&toml_string).map_err(|e| {
-            io::Error::new(io::ErrorKind::Other, format!("TOML deserialization error: {}", e))
-        })?; 
-        Ok(node)
-    }
-}
-
 // Generic function to save any serializable data to a TOML file
 pub fn save_toml_to_file<T: Serialize>(data: &T, file_path: &Path) -> Result<(), Error> {
     let toml_string = toml::to_string(data).map_err(|e| {
@@ -5085,12 +5089,24 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
     // 1. Create Directory Structure (with error handling)
     fs::create_dir_all(new_channel_path.join("instant_message_browser"))?; // Propagate errors with ?
     fs::create_dir_all(new_channel_path.join("task_browser"))?; // task browser directory
-    for i in 1..=3 { // Using numbers
-        let col_name = format!("{}_col{}", i, i);
-        let col_path = new_channel_path.join("task_browser").join(col_name);
-        fs::create_dir_all(&col_path)?; // Create default task browser column directories for new channel
-    }    
+    // for i in 1..=3 { // Using numbers
+    //     let col_name = format!("{}_col{}", i, i);
+    //     let col_path = new_channel_path.join("task_browser").join(col_name);
+    //     fs::create_dir_all(&col_path)?; // Create default task browser column directories for new channel
+    // }    
+    let col_name = "1_planning";
+    let col_path = new_channel_path.join("task_browser").join(col_name);
+    fs::create_dir_all(&col_path)?; // Create default task browser column directories for new channel
 
+    let col_name = "1_started";
+    let col_path = new_channel_path.join("task_browser").join(col_name);
+    fs::create_dir_all(&col_path)?; // Create default task browser column directories for new channel
+
+    let col_name = "3_done";
+    let col_path = new_channel_path.join("task_browser").join(col_name);
+    fs::create_dir_all(&col_path)?; // Create default task browser column directories for new channel
+
+    
     // 2. Create and Save 0.toml Metadata (with error handling)
     let metadata_path = new_channel_path.join("instant_message_browser/0.toml"); // Simplified path
     let metadata = NodeInstMsgBrowserMetadata::new(&team_channel_name, owner.clone());
@@ -5157,6 +5173,132 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
     }
 
 }
+
+
+/// Creates a new team-channel directory, subdirectories, and metadata files.
+/// Handles errors and returns a Result to indicate success or failure.
+///
+/// # Arguments
+///
+/// * `team_channel_name` - The name of the new team channel.
+/// * `owner` - The username of the channel owner.
+///
+/// # Returns
+///
+/// * `Result<(), ThisProjectError>` - `Ok(())` on success, or a `ThisProjectError`
+///   describing the error.
+fn create_core_node(
+    team_channel_name: String, 
+    owner: String, 
+    // nodepath: PathBuff,
+) -> Result<(), ThisProjectError> {
+    /*
+    TODO
+    integrate path
+    figure out how to handle or None the ports
+    Q&A for the planning fields
+    
+    
+    // project module items as task-ish thing
+    agenda_process: String,
+    goals_features_subfeatures_tools_targets: String,
+    scope: String,
+    schedule_duration_start_end: Vec<u64>, // Vec<u64>,?
+    
+    */
+    let team_channels_dir = Path::new("project_graph_data/team_channels");
+    let new_channel_path = team_channels_dir.join(&team_channel_name);
+
+    // 1. Create Directory Structure (with error handling)
+    fs::create_dir_all(new_channel_path.join("instant_message_browser"))?; // Propagate errors with ?
+    fs::create_dir_all(new_channel_path.join("task_browser"))?; // task browser directory
+    // for i in 1..=3 { // Using numbers
+    //     let col_name = format!("{}_col{}", i, i);
+    //     let col_path = new_channel_path.join("task_browser").join(col_name);
+    //     fs::create_dir_all(&col_path)?; // Create default task browser column directories for new channel
+    // }
+
+    let col_name = "1_planning";
+    let col_path = new_channel_path.join("task_browser").join(col_name);
+    fs::create_dir_all(&col_path)?; // Create default task browser column directories for new channel
+
+    let col_name = "1_started";
+    let col_path = new_channel_path.join("task_browser").join(col_name);
+    fs::create_dir_all(&col_path)?; // Create default task browser column directories for new channel
+
+    let col_name = "3_done";
+    let col_path = new_channel_path.join("task_browser").join(col_name);
+    fs::create_dir_all(&col_path)?; // Create default task browser column directories for new channel
+
+    
+    // 2. Create and Save 0.toml Metadata (with error handling)
+    let metadata_path = new_channel_path.join("instant_message_browser/0.toml"); // Simplified path
+    let metadata = NodeInstMsgBrowserMetadata::new(&team_channel_name, owner.clone());
+    save_toml_to_file(&metadata, &metadata_path)?; // Use ? for error propagation
+
+    // Generate collaborator port assignments (simplified):
+    let mut abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>> = HashMap::new();    
+
+    // Add owner to collaborators list and port assignments:
+    // This makes it possible to create CoreNode and ensures the owner has port assignments
+    let mut collaborators = Vec::new();
+    collaborators.push(owner.clone());
+    debug_log!("create_team_channel(): owner 'added' to collaborators");
+
+    // let mut rng = rand::thread_rng(); // Move RNG outside the loop for fewer calls
+
+    // Load the owner's data
+    let owner_data = read_one_collaborator_setup_toml(&owner)?;
+
+    // Simplified port generation (move rng outside loop):
+    // Assign random ports to owner:  Only owner for new channel.
+    let mut rng = rand::thread_rng(); // Move RNG instantiation outside the loop
+    
+    // let ready_port = rng.gen_range(40000..60000) as u16; // Adjust range if needed
+    // let tray_port = rng.gen_range(40000..60000) as u16; // Random u16 port number
+    // let gotit_port = rng.gen_range(40000..60000) as u16; // Random u16 port number
+    // let abstract_ports_data = AbstractTeamchannelNodeTomlPortsData {
+    //     user_name: owner.clone(), 
+    //     ready_port,
+    //     intray_port: tray_port,
+    //     gotit_port,
+    // };    
+    // debug_log!("create_team_channel(): owner's abstract_ports_data created");
+
+
+    // // Store in the HashMap with "owner_owner" key. If more than one user this key can become unique.
+    // abstract_collaborator_port_assignments.insert(
+    //     format!("{}_{}", owner.clone(), owner), // Key derived from collaborator names
+    //     vec![ReadTeamchannelCollaboratorPortsToml { collaborator_ports: vec![abstract_ports_data] }],
+    // );
+    // debug_log!("create_team_channel(): owner 'added' to abstract_collaborator_port_assignments");
+
+
+    // 3. Create and Save CoreNode (handling Result)
+    // node.toml file should be created after the directory structure is in place
+    // This is done during first-time initialization so there should be salt list for the owner user (if not exit!)
+    let new_node_result = CoreNode::new(
+        team_channel_name.clone(),         // node_name
+        team_channel_name,                 // description_for_tui
+        new_channel_path.clone(),          // directory_path
+        owner,                             // owner
+        collaborators,                    // teamchannel_collaborators_with_access
+        HashMap::new(), // for ports
+    );
+    
+    match new_node_result {  // Handle result of CoreNode::new
+        Ok(new_node) => {
+            new_node.save_node_to_file()?; // Then save the node
+            Ok(()) // Return Ok(()) to indicate success
+        }
+        Err(e) => {
+             debug_log!("Error creating CoreNode: {}", e);
+            Err(e) // Return the error if CoreNode creation fails
+        }
+    }
+
+}
+
 
 /// Recursively moves all contents from the source directory to the destination directory.
 /// Deletes the source directory if it is empty after moving all its contents.
