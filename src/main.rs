@@ -447,6 +447,7 @@ pub enum ThisProjectError {
     IoError(std::io::Error),
     TomlDeserializationError(toml::de::Error), // May be depricated along with serde-crate
     TomlVanillaDeserialStrError(String), // use without serede crate (good)
+    InvalidInput(String),
     InvalidData(String),
     PortCollision(String), 
     NetworkError(String),
@@ -495,10 +496,11 @@ impl std::fmt::Display for ThisProjectError {
             ThisProjectError::TomlDeserializationError(ref err) => write!(f, "TOML TomlDeserializationError  Error: {}", err),
             ThisProjectError::TomlVanillaDeserialStrError(ref err) => write!(f, "TomlVanillaDeserialStrError TOML Error: {}", err),
             ThisProjectError::InvalidData(ref msg) => write!(f, "Invalid Data: {}", msg),
+            ThisProjectError::InvalidInput(ref msg) => write!(f, "Invalid Input: {}", msg), 
             ThisProjectError::PortCollision(ref msg) => write!(f, "Port Collision: {}", msg),
             ThisProjectError::NetworkError(ref msg) => write!(f, "Network Error: {}", msg),
-            ThisProjectError::WalkDirError(ref err) => write!(f, "WalkDir Error: {}", err), // Add this arm
-            ThisProjectError::ParseIntError(ref err) => write!(f, "ParseInt Error: {}", err), // Add this arm
+            ThisProjectError::WalkDirError(ref err) => write!(f, "WalkDir Error: {}", err),
+            ThisProjectError::ParseIntError(ref err) => write!(f, "ParseInt Error: {}", err),
             ThisProjectError::ParseIntError(ref err) => write!(f, "ParseInt Error: {}", err),
             ThisProjectError::GpgError(ref err) => write!(f, "GPG Error: {}", err), // Add this arm
             // ... add formatting for other error types
@@ -513,6 +515,7 @@ impl From<ThisProjectError> for MyCustomError {
             ThisProjectError::IoError(e) => MyCustomError::IoError(e),
             ThisProjectError::TomlDeserializationError(e) => MyCustomError::TomlDeserializationError(e),
             ThisProjectError::InvalidData(msg) => MyCustomError::InvalidData(msg),
+            ThisProjectError::InvalidInput(msg) => MyCustomError::InvalidData(msg), 
             ThisProjectError::PortCollision(msg) => MyCustomError::PortCollision(msg),
             // ... add other conversions for your variants ...
             _ => MyCustomError::InvalidData("Unknown error".to_string()), // Default case
@@ -4374,7 +4377,7 @@ struct CoreNode {
     agenda_process: String,
     goals_features_subfeatures_tools_targets: String,
     scope: String,
-    schedule_duration_start_end: Vec<u64>, // Vec<u64>,?
+    schedule_duration_start_end: Vec<u64>, 
 }
 
 
@@ -4430,6 +4433,11 @@ impl CoreNode {
         owner: String,
         teamchannel_collaborators_with_access: Vec<String>,
         abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
+        // project state task items
+        agenda_process: String,
+        goals_features_subfeatures_tools_targets: String,
+        scope: String,
+        schedule_duration_start_end: Vec<u64>, 
     ) -> Result<CoreNode, ThisProjectError> {
         let expires_at = get_current_unix_timestamp() + 11111111111; // Expires in 352 years
         let updated_at_timestamp = get_current_unix_timestamp();
@@ -4445,11 +4453,11 @@ impl CoreNode {
             &salt_list,                 // &[u128]
         )?;
         
-        // Project State
-        let agenda_process: String = "".to_string();
-        let goals_features_subfeatures_tools_targets: String = "".to_string();
-        let scope: String = "".to_string();
-        let schedule_duration_start_end: Vec<u64> = [].to_vec();
+        // // Project State
+        // let agenda_process: String = "".to_string();
+        // let goals_features_subfeatures_tools_targets: String = "".to_string();
+        // let scope: String = "".to_string();
+        // let schedule_duration_start_end: Vec<u64> = [].to_vec();
 
         // 3. Create the CoreNode instance (all fields now available):
         Ok(CoreNode {
@@ -5148,7 +5156,12 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
     );
     debug_log!("create_team_channel(): owner 'added' to abstract_collaborator_port_assignments");
 
-
+    // // Project State
+    let agenda_process = get_agenda_process()?;
+    let features = get_features_and_goals()?;
+    let scope = get_project_scope()?;
+    let schedule = get_schedule_info()?;
+            
     // 3. Create and Save CoreNode (handling Result)
     // node.toml file should be created after the directory structure is in place
     // This is done during first-time initialization so there should be salt list for the owner user (if not exit!)
@@ -5157,8 +5170,13 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
         team_channel_name,                 // description_for_tui
         new_channel_path.clone(),          // directory_path
         owner,                             // owner
-        collaborators,                    // teamchannel_collaborators_with_access
+        collaborators,                     // teamchannel_collaborators_with_access
         abstract_collaborator_port_assignments, // ports
+        // project state task items
+        agenda_process,                    // new field: agenda process
+        features,                          // new field: features and goals
+        scope,                             // new field: project scope
+        schedule,                          // new field: schedule 
     );
     
     match new_node_result {  // Handle result of CoreNode::new
@@ -5175,129 +5193,329 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
 }
 
 
-/// Creates a new team-channel directory, subdirectories, and metadata files.
+/// Creates a new (core)Node directory, subdirectories, and metadata files.
 /// Handles errors and returns a Result to indicate success or failure.
 ///
-/// # Arguments
+/// # Arguments 
 ///
-/// * `team_channel_name` - The name of the new team channel.
-/// * `owner` - The username of the channel owner.
+/// * `path_to_node` 
+/// * 'teamchannel_collaborators_with_access' from Graph nav struct
 ///
 /// # Returns
 ///
 /// * `Result<(), ThisProjectError>` - `Ok(())` on success, or a `ThisProjectError`
-///   describing the error.
 fn create_core_node(
-    team_channel_name: String, 
-    owner: String, 
-    // nodepath: PathBuff,
+    node_path: PathBuf,
+    teamchannel_collaborators_with_access: Vec<String>,
 ) -> Result<(), ThisProjectError> {
-    /*
-    TODO
-    integrate path
-    figure out how to handle or None the ports
-    Q&A for the planning fields
+    // Get user input for planning fields
+    let agenda_process = get_agenda_process()?;
+    let features = get_features_and_goals()?;
+    let scope = get_project_scope()?;
+    let schedule = get_schedule_info()?;
+    let owner = get_local_owner_username();
     
+    // Get user input for description and planning fields
+    println!("Enter project description:");
+    let mut description = String::new();
+    io::stdin().read_line(&mut description)?;
+    let description = description.trim().to_string();    
     
-    // project module items as task-ish thing
-    agenda_process: String,
-    goals_features_subfeatures_tools_targets: String,
-    scope: String,
-    schedule_duration_start_end: Vec<u64>, // Vec<u64>,?
-    
-    */
-    let team_channels_dir = Path::new("project_graph_data/team_channels");
-    let new_channel_path = team_channels_dir.join(&team_channel_name);
+    let team_channel_name = match get_current_team_channel_name_from_cwd() {
+        Some(name) => name,
+        None => {
+            debug_log!("Error: Could not get current channel name. Skipping set_as_active.");
+            return Err(ThisProjectError::InvalidData("Could not get team channel name".into()));
+        },
+    };
 
-    // 1. Create Directory Structure (with error handling)
-    fs::create_dir_all(new_channel_path.join("instant_message_browser"))?; // Propagate errors with ?
-    fs::create_dir_all(new_channel_path.join("task_browser"))?; // task browser directory
-    // for i in 1..=3 { // Using numbers
-    //     let col_name = format!("{}_col{}", i, i);
-    //     let col_path = new_channel_path.join("task_browser").join(col_name);
-    //     fs::create_dir_all(&col_path)?; // Create default task browser column directories for new channel
-    // }
+    // Create directory structure at the specified path
+    fs::create_dir_all(&node_path.join("instant_message_browser"))?;
+    fs::create_dir_all(&node_path.join("task_browser"))?;
 
     let col_name = "1_planning";
-    let col_path = new_channel_path.join("task_browser").join(col_name);
-    fs::create_dir_all(&col_path)?; // Create default task browser column directories for new channel
+    let col_path = node_path.join("task_browser").join(col_name);
+    fs::create_dir_all(&col_path)?;
 
-    let col_name = "1_started";
-    let col_path = new_channel_path.join("task_browser").join(col_name);
-    fs::create_dir_all(&col_path)?; // Create default task browser column directories for new channel
+    let col_name = "2_started";
+    let col_path = node_path.join("task_browser").join(col_name);
+    fs::create_dir_all(&col_path)?;
 
     let col_name = "3_done";
-    let col_path = new_channel_path.join("task_browser").join(col_name);
-    fs::create_dir_all(&col_path)?; // Create default task browser column directories for new channel
+    let col_path = node_path.join("task_browser").join(col_name);
+    fs::create_dir_all(&col_path)?;
 
-    
     // 2. Create and Save 0.toml Metadata (with error handling)
-    let metadata_path = new_channel_path.join("instant_message_browser/0.toml"); // Simplified path
+    let metadata_path = node_path.join("instant_message_browser/0.toml");
     let metadata = NodeInstMsgBrowserMetadata::new(&team_channel_name, owner.clone());
-    save_toml_to_file(&metadata, &metadata_path)?; // Use ? for error propagation
+    save_toml_to_file(&metadata, &metadata_path)?;
 
-    // Generate collaborator port assignments (simplified):
-    let mut abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>> = HashMap::new();    
-
-    // Add owner to collaborators list and port assignments:
-    // This makes it possible to create CoreNode and ensures the owner has port assignments
-    let mut collaborators = Vec::new();
-    collaborators.push(owner.clone());
-    debug_log!("create_team_channel(): owner 'added' to collaborators");
-
-    // let mut rng = rand::thread_rng(); // Move RNG outside the loop for fewer calls
+    // empty array
+    let abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>> = HashMap::new();
 
     // Load the owner's data
     let owner_data = read_one_collaborator_setup_toml(&owner)?;
 
-    // Simplified port generation (move rng outside loop):
-    // Assign random ports to owner:  Only owner for new channel.
-    let mut rng = rand::thread_rng(); // Move RNG instantiation outside the loop
-    
-    // let ready_port = rng.gen_range(40000..60000) as u16; // Adjust range if needed
-    // let tray_port = rng.gen_range(40000..60000) as u16; // Random u16 port number
-    // let gotit_port = rng.gen_range(40000..60000) as u16; // Random u16 port number
-    // let abstract_ports_data = AbstractTeamchannelNodeTomlPortsData {
-    //     user_name: owner.clone(), 
-    //     ready_port,
-    //     intray_port: tray_port,
-    //     gotit_port,
-    // };    
-    // debug_log!("create_team_channel(): owner's abstract_ports_data created");
-
-
-    // // Store in the HashMap with "owner_owner" key. If more than one user this key can become unique.
-    // abstract_collaborator_port_assignments.insert(
-    //     format!("{}_{}", owner.clone(), owner), // Key derived from collaborator names
-    //     vec![ReadTeamchannelCollaboratorPortsToml { collaborator_ports: vec![abstract_ports_data] }],
-    // );
-    // debug_log!("create_team_channel(): owner 'added' to abstract_collaborator_port_assignments");
-
+    let mut rng = rand::thread_rng();
 
     // 3. Create and Save CoreNode (handling Result)
-    // node.toml file should be created after the directory structure is in place
-    // This is done during first-time initialization so there should be salt list for the owner user (if not exit!)
     let new_node_result = CoreNode::new(
         team_channel_name.clone(),         // node_name
         team_channel_name,                 // description_for_tui
-        new_channel_path.clone(),          // directory_path
+        node_path.clone(),                 // directory_path
         owner,                             // owner
-        collaborators,                    // teamchannel_collaborators_with_access
-        HashMap::new(), // for ports
+        teamchannel_collaborators_with_access, 
+        HashMap::new(),                    // for ports
+        // project state task items
+        agenda_process,                    // new field: agenda process
+        features,                          // new field: features and goals
+        scope,                             // new field: project scope
+        schedule,                          // new field: schedule information
     );
     
-    match new_node_result {  // Handle result of CoreNode::new
+    match new_node_result {
         Ok(new_node) => {
-            new_node.save_node_to_file()?; // Then save the node
-            Ok(()) // Return Ok(()) to indicate success
+            new_node.save_node_to_file()?;
+            Ok(())
         }
         Err(e) => {
-             debug_log!("Error creating CoreNode: {}", e);
-            Err(e) // Return the error if CoreNode creation fails
+            debug_log!("Error creating CoreNode: {}", e);
+            Err(e)
         }
     }
-
 }
+
+/// Gets user input for agenda process selection of create_core_node()
+fn get_agenda_process() -> Result<String, ThisProjectError> {
+    println!("Enter agenda process (default options: Agile, Kahneman-Tversky, Definition-Studies):");
+    let mut input = String::new();
+    io::stdout().flush()?;
+    io::stdin().read_line(&mut input)?;
+    
+    let input = input.trim();
+    if input.is_empty() {
+        return Err(ThisProjectError::InvalidInput("Agenda process cannot be empty".into()));
+    }
+    
+    Ok(input.to_string())
+}
+
+/// Gets user input for features and goals of create_core_node()
+fn get_features_and_goals() -> Result<String, ThisProjectError> {
+    println!("Enter project features (comma-separated):");
+    let mut features = String::new();
+    io::stdin().read_line(&mut features)?;
+
+    println!("Enter user tools needed:");
+    let mut tools = String::new();
+    io::stdin().read_line(&mut tools)?;
+
+    println!("Enter sub-feature goals:");
+    let mut goals = String::new();
+    io::stdin().read_line(&mut goals)?;
+
+    Ok(format!("Features: {}\nTools: {}\nGoals: {}", 
+        features.trim(), tools.trim(), goals.trim()))
+}
+
+/// Gets project scope information of create_core_node()
+fn get_project_scope() -> Result<String, ThisProjectError> {
+    println!("Is this a stand-alone project or part of larger project? (S/L):");
+    let mut project_type = String::new();
+    io::stdin().read_line(&mut project_type)?;
+
+    println!("Enter MVP goals:");
+    let mut mvp_goals = String::new();
+    io::stdin().read_line(&mut mvp_goals)?;
+
+    Ok(format!("Project Type: {}\nMVP Goals: {}", 
+        project_type.trim(), mvp_goals.trim()))
+}
+
+/// Gets schedule information and converts 
+/// to required format of create_core_node()
+fn get_schedule_info() -> Result<Vec<u64>, ThisProjectError> {
+    println!("Enter project duration in days:");
+    let mut days = String::new();
+    io::stdin().read_line(&mut days)?;
+    let days: u64 = days.trim().parse().map_err(|_| 
+        ThisProjectError::InvalidInput("Invalid number of days".into()))?;
+
+    println!("Enter start year (YYYY):");
+    let mut year = String::new();
+    io::stdin().read_line(&mut year)?;
+    let year: u64 = year.trim().parse().map_err(|_| 
+        ThisProjectError::InvalidInput("Invalid year".into()))?;
+
+    println!("Enter start month (1-12):");
+    let mut month = String::new();
+    io::stdin().read_line(&mut month)?;
+    let month: u64 = month.trim().parse().map_err(|_| 
+        ThisProjectError::InvalidInput("Invalid month".into()))?;
+
+    println!("Enter start day (1-31):");
+    let mut day = String::new();
+    io::stdin().read_line(&mut day)?;
+    let day: u64 = day.trim().parse().map_err(|_| 
+        ThisProjectError::InvalidInput("Invalid day".into()))?;
+
+    let seconds_per_day: u64 = 24 * 60 * 60;
+    let days_since_epoch = (year - 1970) * 365 + ((month - 1) * 30) + (day - 1);
+    let start_timestamp = days_since_epoch * seconds_per_day;
+    
+    let duration_seconds = days * seconds_per_day;
+    let end_timestamp = start_timestamp + duration_seconds;
+
+    Ok(vec![
+        start_timestamp,
+        end_timestamp,
+        duration_seconds
+    ])
+}
+
+// // TODO Under Construction
+// /// Creates a new (core)Node directory, subdirectories, and metadata files.
+// /// Handles errors and returns a Result to indicate success or failure.
+// ///
+// /// # Arguments 
+// ///
+// /// * `team_channel_name` - The name of the new team channel.
+// /// * `owner` - The username of the channel owner.
+// /// * 'path_to_node' - ?
+// ///
+// /// # Returns
+// ///
+// /// * `Result<(), ThisProjectError>` - `Ok(())` on success, or a `ThisProjectError`
+// ///   describing the error.
+// fn create_core_node(
+//     team_channel_name: String, 
+//     owner: String, 
+//     // nodepath: PathBuff,
+// ) -> Result<(), ThisProjectError> {
+//     /*
+//     TODO
+//     1. integrate path
+//     2. 
+//     3. Q&A for the planning fields
+//     - allow default agenda-process-policy to be:
+//     "Agile, Kahneman-Tversky, Definiition-Studies"
+//     - ask for user-features, speicifc user-tools,
+//     and sub-feature goals
+//     - scope...
+//     1. stand-alone or part of larger project
+//     2. MVP goals
+//     3. 
+//     - ask person for 'days' convert that duration
+//     to seconds 
+//     - ask person for start perhaps year month day
+//     (could be three questions) convert that
+//     to posix time and use duration to get the
+//     finish-date
+//     4. add planning fields to corenode new impl fn
+//         impl CoreNode {
+        
+//             fn new(
+            
+            
+//     // project module items as task-ish thing
+//     agenda_process: String,
+//     goals_features_subfeatures_tools_targets: String,
+//     scope: String,
+//     schedule_duration_start_end: Vec<u64>, // Vec<u64>,?
+    
+//     */
+//     let team_channels_dir = Path::new("project_graph_data/team_channels");
+//     let new_channel_path = team_channels_dir.join(&team_channel_name);
+
+//     // 1. Create Directory Structure (with error handling)
+//     fs::create_dir_all(new_channel_path.join("instant_message_browser"))?; // Propagate errors with ?
+//     fs::create_dir_all(new_channel_path.join("task_browser"))?; // task browser directory
+//     // for i in 1..=3 { // Using numbers
+//     //     let col_name = format!("{}_col{}", i, i);
+//     //     let col_path = new_channel_path.join("task_browser").join(col_name);
+//     //     fs::create_dir_all(&col_path)?; // Create default task browser column directories for new channel
+//     // }
+
+//     let col_name = "1_planning";
+//     let col_path = new_channel_path.join("task_browser").join(col_name);
+//     fs::create_dir_all(&col_path)?; // Create default task browser column directories for new channel
+
+//     let col_name = "1_started";
+//     let col_path = new_channel_path.join("task_browser").join(col_name);
+//     fs::create_dir_all(&col_path)?; // Create default task browser column directories for new channel
+
+//     let col_name = "3_done";
+//     let col_path = new_channel_path.join("task_browser").join(col_name);
+//     fs::create_dir_all(&col_path)?; // Create default task browser column directories for new channel
+
+    
+//     // 2. Create and Save 0.toml Metadata (with error handling)
+//     let metadata_path = new_channel_path.join("instant_message_browser/0.toml"); // Simplified path
+//     let metadata = NodeInstMsgBrowserMetadata::new(&team_channel_name, owner.clone());
+//     save_toml_to_file(&metadata, &metadata_path)?; // Use ? for error propagation
+
+//     // Generate collaborator port assignments (simplified):
+//     let mut abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>> = HashMap::new();    
+
+//     // Add owner to collaborators list and port assignments:
+//     // This makes it possible to create CoreNode and ensures the owner has port assignments
+//     let mut collaborators = Vec::new();
+//     collaborators.push(owner.clone());
+//     debug_log!("create_team_channel(): owner 'added' to collaborators");
+
+//     // let mut rng = rand::thread_rng(); // Move RNG outside the loop for fewer calls
+
+//     // Load the owner's data
+//     let owner_data = read_one_collaborator_setup_toml(&owner)?;
+
+//     // Simplified port generation (move rng outside loop):
+//     // Assign random ports to owner:  Only owner for new channel.
+//     let mut rng = rand::thread_rng(); // Move RNG instantiation outside the loop
+    
+//     // let ready_port = rng.gen_range(40000..60000) as u16; // Adjust range if needed
+//     // let tray_port = rng.gen_range(40000..60000) as u16; // Random u16 port number
+//     // let gotit_port = rng.gen_range(40000..60000) as u16; // Random u16 port number
+//     // let abstract_ports_data = AbstractTeamchannelNodeTomlPortsData {
+//     //     user_name: owner.clone(), 
+//     //     ready_port,
+//     //     intray_port: tray_port,
+//     //     gotit_port,
+//     // };    
+//     // debug_log!("create_team_channel(): owner's abstract_ports_data created");
+
+
+//     // // Store in the HashMap with "owner_owner" key. If more than one user this key can become unique.
+//     // abstract_collaborator_port_assignments.insert(
+//     //     format!("{}_{}", owner.clone(), owner), // Key derived from collaborator names
+//     //     vec![ReadTeamchannelCollaboratorPortsToml { collaborator_ports: vec![abstract_ports_data] }],
+//     // );
+//     // debug_log!("create_team_channel(): owner 'added' to abstract_collaborator_port_assignments");
+
+
+//     // 3. Create and Save CoreNode (handling Result)
+//     // node.toml file should be created after the directory structure is in place
+//     // This is done during first-time initialization so there should be salt list for the owner user (if not exit!)
+//     let new_node_result = CoreNode::new(
+//         team_channel_name.clone(),         // node_name
+//         team_channel_name,                 // description_for_tui
+//         new_channel_path.clone(),          // directory_path
+//         owner,                             // owner
+//         collaborators,                    // teamchannel_collaborators_with_access
+//         HashMap::new(), // for ports
+//     );
+    
+//     match new_node_result {  // Handle result of CoreNode::new
+//         Ok(new_node) => {
+//             new_node.save_node_to_file()?; // Then save the node
+//             Ok(()) // Return Ok(()) to indicate success
+//         }
+//         Err(e) => {
+//              debug_log!("Error creating CoreNode: {}", e);
+//             Err(e) // Return the error if CoreNode creation fails
+//         }
+//     }
+
+// }
 
 
 /// Recursively moves all contents from the source directory to the destination directory.
@@ -12547,6 +12765,14 @@ enum SyncResult {
 ///     None => println!("No channel found"),
 /// }
 /// ```
+/// or:
+/// let team_channel_name = match get_current_team_channel_name_from_cwd() {
+///     Some(name) => name,
+///     None => {
+///         debug_log!("Error: Could not get current channel name. Skipping set_as_active.");
+///         return Err(ThisProjectError::InvalidData("Could not get team channel name".into()));
+///     },
+/// };
 fn get_current_team_channel_name_from_cwd() -> Option<String> {
     debug_log!("Starting: get_current_team_channel_name_from_cwd()");
 
