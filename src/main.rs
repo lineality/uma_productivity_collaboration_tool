@@ -311,7 +311,7 @@ use std::fs::{
     write,
     remove_dir_all,
     read_dir,
-    DirEntry,
+    // DirEntry,
 };
 use toml;
 use toml::Value;
@@ -6923,6 +6923,16 @@ fn handle_main_command_mode(
             "h" | "help" => {
                 debug_log("Help!");
                 // Display help information
+            }
+            
+            "addnode" | "add_node" => {
+                debug_log("Add Node");
+                
+                create_core_node(
+                    app.current_path.clone(), // node_path: PathBuf,
+                    app.graph_navigation_instance_state.current_node_teamchannel_collaborators_with_access.clone()  // teamchannel_collaborators_with_access: Vec<String>,
+                );
+                
             }
             
             "bigger" | "big" | "bg" => {
