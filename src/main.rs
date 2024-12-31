@@ -4439,12 +4439,14 @@ impl CoreNode {
         scope: String,
         schedule_duration_start_end: Vec<u64>, 
     ) -> Result<CoreNode, ThisProjectError> {
+        debug_log("Starting CoreNode::new");
         let expires_at = get_current_unix_timestamp() + 11111111111; // Expires in 352 years
         let updated_at_timestamp = get_current_unix_timestamp();
 
         // 1. Get the salt list, handling potential errors:
         let salt_list = get_saltlist_for_collaborator(&owner)?; // Use the ? operator to propagate errors
 
+        debug_log("starting make node-unique-id");
         // 2. *Now* calculate the hash, using the retrieved salt list:
         let node_unique_id = calculate_corenode_hashes(
             &node_name,                 // &str
@@ -4452,6 +4454,11 @@ impl CoreNode {
             updated_at_timestamp,        // u64
             &salt_list,                 // &[u128]
         )?;
+        
+        debug_log!(
+            "CoreNode::new, node_unique_id{:?}",
+            node_unique_id
+        );
         
         // // Project State
         // let agenda_process: String = "".to_string();
@@ -5091,6 +5098,7 @@ impl InstantMessageFile {
 /// * `Result<(), ThisProjectError>` - `Ok(())` on success, or a `ThisProjectError`
 ///   describing the error.
 fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), ThisProjectError> {
+    debug_log("starting create_team_channel()");
     let team_channels_dir = Path::new("project_graph_data/team_channels");
     let new_channel_path = team_channels_dir.join(&team_channel_name);
 
@@ -5287,15 +5295,16 @@ fn create_core_node(
 
 /// Gets user input for agenda process selection of create_core_node()
 fn get_agenda_process() -> Result<String, ThisProjectError> {
-    println!("Enter agenda process (default options: Agile, Kahneman-Tversky, Definition-Studies):");
+    println!("Enter agenda process (default option: Agile, Kahneman-Tversky, Definition-Studies):");
     let mut input = String::new();
     io::stdout().flush()?;
     io::stdin().read_line(&mut input)?;
     
     let input = input.trim();
     if input.is_empty() {
-        return Err(ThisProjectError::InvalidInput("Agenda process cannot be empty".into()));
+        let input: String = "Agile, Kahneman-Tversky, Definition-Studies".to_string();
     }
+    
     
     Ok(input.to_string())
 }
