@@ -1561,7 +1561,7 @@ Seri_Deseri Deserialize From .toml Start
 /// user_salt_list = ["0x11111111111111111111111111111111", "0x11111111111111111111111111111112"]
 /// ipv4_addresses = ["192.168.1.1", "10.0.0.1"]
 /// ipv6_addresses = ["fe80::1", "::1"]
-/// gpg_key_public = "-----BEGIN PGP PUBLIC KEY BLOCK----- ..."
+/// gpg_key_public = """-----BEGIN PGP PUBLIC KEY BLOCK----- ..."""
 /// sync_interval = 60
 /// updated_at_timestamp = 1728307160
 /// ```
@@ -1594,6 +1594,7 @@ Seri_Deseri Deserialize From .toml Start
 ///     }
 /// }
 fn read_one_collaborator_setup_toml(collaborator_name: &str) -> Result<CollaboratorTomlData, ThisProjectError> {
+    debug_log("Starting read_one_collaborator_setup_toml()");
 
     // 1. Construct File Path
     let file_path = Path::new("project_graph_data/collaborator_files_address_book")
@@ -2085,7 +2086,7 @@ fn get_toml_file_updated_at_timestamp(file_path: &Path) -> Result<u64, ThisProje
     Ok(timestamp)
 }
 
-// dubug_log! macro for f-string printing variables
+// debug_log! macro for f-string printing variables
 // #[macro_use]
 #[macro_export] 
 macro_rules! debug_log {
@@ -4129,7 +4130,7 @@ impl GraphNavigationInstanceState {
     fn look_read_node_toml(&mut self) {
         
         debug_log!(
-            "start n look_read_node_toml() self.current_full_file_path -> {:?}, self.active_team_channel.clone() -> {:?}", 
+            "starting look_read_node_toml() self.current_full_file_path -> {:?}, self.active_team_channel.clone() -> {:?}", 
             self.current_full_file_path.clone(),
             self.active_team_channel.clone(),
         );
@@ -4137,11 +4138,11 @@ impl GraphNavigationInstanceState {
         
 
         let node_toml_path = self.current_full_file_path.join("node.toml");
-        debug_log!("node_toml_path -> {:?}", node_toml_path.clone());
+        debug_log!("look_read_node_toml() node_toml_path -> {:?}", node_toml_path.clone());
 
         // 2. Check if node.toml exists 
         if node_toml_path.exists() { 
-            debug_log!("node.toml found at: {:?}", node_toml_path);
+            debug_log!("look_read_node_toml() node.toml found at: {:?}", node_toml_path);
 
             // --- UPDATE current_node_directory_path.txt HERE ---
             let team_channel_dir_path = self.current_full_file_path.clone(); 
@@ -4149,13 +4150,13 @@ impl GraphNavigationInstanceState {
                 "project_graph_data/session_state_items/current_node_directory_path.txt", 
                 team_channel_dir_path.to_string_lossy().as_bytes(), // Convert to byte slice
             ) {
-                debug_log!("Error writing team channel directory path to file: {}", e);
+                debug_log!("Error look_read_node_toml() writing team channel directory path to file: {}", e);
                 // Handle the error appropriately (e.g., display an error message)
         }
 
         // 1. Handle File Existence Error
         if !node_toml_path.exists() {
-            debug_log!("ERROR: node.toml not found at {:?}. This directory is not a node.", node_toml_path);
+            debug_log!("ERROR: look_read_node_toml() node.toml not found at {:?}. This directory is not a node.", node_toml_path);
             return; 
         }
 
@@ -4163,7 +4164,7 @@ impl GraphNavigationInstanceState {
         let this_node = match load_core_node_from_toml_file(&node_toml_path) { 
             Ok(node) => node,
             Err(e) => {
-                debug_log!("ERROR: Failed to load node.toml: {}", e); 
+                debug_log!("ERROR: look_read_node_toml() Failed to load node.toml: {}", e); 
                 return; 
             }
         };
@@ -4425,7 +4426,6 @@ struct CoreNode {
 /// abstract_collaborator_port_assignments: HashMap<String, CollaboratorPorts>,
 ///
 impl CoreNode {
-
     fn new(
         node_name: String,
         description_for_tui: String,
@@ -4433,41 +4433,57 @@ impl CoreNode {
         owner: String,
         teamchannel_collaborators_with_access: Vec<String>,
         abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
-        // project state task items
         agenda_process: String,
         goals_features_subfeatures_tools_targets: String,
         scope: String,
         schedule_duration_start_end: Vec<u64>, 
     ) -> Result<CoreNode, ThisProjectError> {
-        debug_log("Starting CoreNode::new");
-        let expires_at = get_current_unix_timestamp() + 11111111111; // Expires in 352 years
+        debug_log!("Starting CoreNode::new");
+        debug_log!("Directory path received: {:?}", directory_path);
+        debug_log!("Checking if directory exists: {}", directory_path.exists());
+        debug_log!("Absolute path: {:?}", directory_path.canonicalize().unwrap_or(directory_path.clone()));
+
+        debug_log!("About to get current timestamp");
+        let expires_at = get_current_unix_timestamp() + 11111111111;
         let updated_at_timestamp = get_current_unix_timestamp();
+        debug_log!("Got timestamps");
 
-        // 1. Get the salt list, handling potential errors:
-        let salt_list = get_saltlist_for_collaborator(&owner)?; // Use the ? operator to propagate errors
+        // 1. Get the salt list using the correct function
+        debug_log!("About to get address book data for owner: {}", owner);
+        let owner_data = match get_addressbook_file_by_username(&owner) {
+            Ok(data) => {
+                debug_log!("Successfully got address book data");
+                data
+            },
+            Err(e) => {
+                debug_log!("Error getting address book data: {:?}", e);
+                return Err(e);
+            }
+        };
+        let salt_list = owner_data.user_salt_list;
 
-        debug_log("starting make node-unique-id");
-        // 2. *Now* calculate the hash, using the retrieved salt list:
-        let node_unique_id = calculate_corenode_hashes(
-            &node_name,                 // &str
-            &description_for_tui,      // &str
-            updated_at_timestamp,        // u64
-            &salt_list,                 // &[u128]
-        )?;
+        debug_log!("About to calculate node_unique_id");
+        // 2. Calculate the hash
+        // TODO add new fields
+        let node_unique_id = match calculate_corenode_hashes(
+            &node_name,
+            &description_for_tui,
+            updated_at_timestamp,
+            &salt_list,
+        ) {
+            Ok(id) => {
+                debug_log!("Successfully calculated node_unique_id");
+                id
+            },
+            Err(e) => {
+                debug_log!("Error calculating node_unique_id: {:?}", e);
+                return Err(e);
+            }
+        };
         
-        debug_log!(
-            "CoreNode::new, node_unique_id{:?}",
-            node_unique_id
-        );
-        
-        // // Project State
-        // let agenda_process: String = "".to_string();
-        // let goals_features_subfeatures_tools_targets: String = "".to_string();
-        // let scope: String = "".to_string();
-        // let schedule_duration_start_end: Vec<u64> = [].to_vec();
-
-        // 3. Create the CoreNode instance (all fields now available):
-        Ok(CoreNode {
+        debug_log!("About to create CoreNode instance");
+        // 3. Create the CoreNode instance
+        let node = CoreNode {
             node_name,
             description_for_tui,
             node_unique_id,
@@ -4481,9 +4497,180 @@ impl CoreNode {
             goals_features_subfeatures_tools_targets,
             scope,
             schedule_duration_start_end,
-        })
-    }
+        };
+        debug_log!("Successfully created CoreNode instance");
 
+        Ok(node)
+    }
+// }
+    
+    // fn new(
+    //     node_name: String,
+    //     description_for_tui: String,
+    //     directory_path: PathBuf,
+    //     owner: String,
+    //     teamchannel_collaborators_with_access: Vec<String>,
+    //     abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
+    //     agenda_process: String,
+    //     goals_features_subfeatures_tools_targets: String,
+    //     scope: String,
+    //     schedule_duration_start_end: Vec<u64>, 
+    // ) -> Result<CoreNode, ThisProjectError> {
+    //     debug_log!("Starting CoreNode::new");
+    //     debug_log!("Directory path received: {:?}", directory_path);
+    //     debug_log!("Checking if directory exists: {}", directory_path.exists());
+    //     debug_log!("Absolute path: {:?}", directory_path.canonicalize().unwrap_or(directory_path.clone()));
+
+    //     // Log all input parameters
+    //     debug_log!("input dump: {:?}{:?}{:?}{:?}{:?}{:?}{:?}{:?}{:?}{:?}",
+    //         node_name,
+    //         description_for_tui,
+    //         directory_path,
+    //         owner,
+    //         teamchannel_collaborators_with_access,
+    //         abstract_collaborator_port_assignments,
+    //         agenda_process,
+    //         goals_features_subfeatures_tools_targets,
+    //         scope,
+    //         schedule_duration_start_end
+    //     );
+
+    //     debug_log!("About to get current timestamp");
+    //     let expires_at = get_current_unix_timestamp() + 11111111111; // Expires in 352 years
+    //     let updated_at_timestamp = get_current_unix_timestamp();
+    //     debug_log!("Got timestamps");
+
+    //     // 1. Get the salt list, handling potential errors:
+    //     debug_log!("About to get salt list for owner: {}", owner);
+    //     let salt_list = match get_saltlist_for_collaborator(&owner) {
+    //         Ok(list) => {
+    //             debug_log!("Successfully got salt list");
+    //             list
+    //         },
+    //         Err(e) => {
+    //             debug_log!("Error getting salt list: {:?}", e);
+    //             return Err(ThisProjectError::IoError(
+    //                 std::io::Error::new(std::io::ErrorKind::NotFound, "Failed to get salt list")
+    //             ));
+    //         }
+    //     };
+
+    //     debug_log!("About to calculate node_unique_id");
+    //     // 2. Calculate the hash, using the retrieved salt list:
+    //     let node_unique_id = match calculate_corenode_hashes(
+    //         &node_name,
+    //         &description_for_tui,
+    //         updated_at_timestamp,
+    //         &salt_list,
+    //     ) {
+    //         Ok(id) => {
+    //             debug_log!("Successfully calculated node_unique_id");
+    //             id
+    //         },
+    //         Err(e) => {
+    //             debug_log!("Error calculating node_unique_id: {:?}", e);
+    //             return Err(e);
+    //         }
+    //     };
+        
+    //     debug_log!("About to create CoreNode instance");
+    //     // 3. Create the CoreNode instance:
+    //     let node = CoreNode {
+    //         node_name,
+    //         description_for_tui,
+    //         node_unique_id,
+    //         directory_path,
+    //         owner,
+    //         updated_at_timestamp,
+    //         expires_at,
+    //         teamchannel_collaborators_with_access,        
+    //         abstract_collaborator_port_assignments,
+    //         agenda_process,
+    //         goals_features_subfeatures_tools_targets,
+    //         scope,
+    //         schedule_duration_start_end,
+    //     };
+    //     debug_log!("Successfully created CoreNode instance");
+
+    //     Ok(node)
+    //     }
+    
+    // fn new(
+    //     node_name: String,
+    //     description_for_tui: String,
+    //     directory_path: PathBuf,
+    //     owner: String,
+    //     teamchannel_collaborators_with_access: Vec<String>,
+    //     abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
+    //     // project state task items
+    //     agenda_process: String,
+    //     goals_features_subfeatures_tools_targets: String,
+    //     scope: String,
+    //     schedule_duration_start_end: Vec<u64>, 
+    // ) -> Result<CoreNode, ThisProjectError> {
+    //     debug_log("Starting CoreNode::new");
+    //     debug_log!("Directory path received: {:?}", directory_path);
+    //     debug_log!("Checking if directory exists: {}", directory_path.exists());
+    //     debug_log!("Absolute path: {:?}", directory_path.canonicalize().unwrap_or(directory_path.clone()));
+        
+        
+    //     debug_log!(
+    //         "input dump: {:?}{:?}{:?}{:?}{:?}{:?}{:?}{:?}{:?}{:?}",
+    //         node_name,
+    //         description_for_tui,
+    //         directory_path,
+    //         owner,
+    //         teamchannel_collaborators_with_access,
+    //         abstract_collaborator_port_assignments,
+    //         agenda_process,
+    //         goals_features_subfeatures_tools_targets,
+    //         scope,
+    //         schedule_duration_start_end
+    //         );
+    //     let expires_at = get_current_unix_timestamp() + 11111111111; // Expires in 352 years
+    //     let updated_at_timestamp = get_current_unix_timestamp();
+
+    //     // 1. Get the salt list, handling potential errors:
+    //     let salt_list = get_saltlist_for_collaborator(&owner)?; // Use the ? operator to propagate errors
+
+    //     debug_log("starting make node-unique-id");
+    //     // 2. *Now* calculate the hash, using the retrieved salt list:
+    //     let node_unique_id = calculate_corenode_hashes(
+    //         &node_name,            // &str
+    //         &description_for_tui,  // &str
+    //         updated_at_timestamp,  // u64
+    //         &salt_list,            // &[u128]
+    //     )?;
+        
+    //     debug_log!(
+    //         "CoreNode::new, node_unique_id{:?}",
+    //         node_unique_id
+    //     );
+        
+    //     // // Project State
+    //     // let agenda_process: String = "".to_string();
+    //     // let goals_features_subfeatures_tools_targets: String = "".to_string();
+    //     // let scope: String = "".to_string();
+    //     // let schedule_duration_start_end: Vec<u64> = [].to_vec();
+
+    //     // 3. Create the CoreNode instance (all fields now available):
+    //     Ok(CoreNode {
+    //         node_name,
+    //         description_for_tui,
+    //         node_unique_id,
+    //         directory_path,
+    //         owner,
+    //         updated_at_timestamp,
+    //         expires_at,
+    //         teamchannel_collaborators_with_access,        
+    //         abstract_collaborator_port_assignments,
+    //         agenda_process,
+    //         goals_features_subfeatures_tools_targets,
+    //         scope,
+    //         schedule_duration_start_end,
+    //     })
+    // }
+    
     /// Saves the `CoreNode` data to a `node.toml` file.
     ///
     /// This function serializes the `CoreNode` struct into TOML format and writes 
@@ -4493,40 +4680,208 @@ impl CoreNode {
     /// # Error Handling
     /// 
     /// Returns a `Result<(), io::Error>` to handle potential errors during:
-    ///  - TOML serialization.
-    ///  - Directory creation. 
-    ///  - File writing.
-    ///
-    /// If any error occurs, an `io::Error` is returned, containing information 
-    /// about the error. 
-    /// 
+    ///  - TOML serialization
+    ///  - Directory creation
+    ///  - File writing
     fn save_node_to_file(&self) -> Result<(), io::Error> {
-        // 1. Serialize the CoreNode struct to a TOML string.
+        // Debug logging for initial state
+        debug_log!("Starting save_node_to_file");
+        debug_log!("Current working directory: {:?}", std::env::current_dir()?);
+        debug_log!("Target directory path: {:?}", self.directory_path);
+        
+        // 1. Verify and create directory structure
+        if !self.directory_path.exists() {
+            debug_log!("Directory doesn't exist, creating it");
+            fs::create_dir_all(&self.directory_path)?;
+        }
+        debug_log!("Directory now exists: {}", self.directory_path.exists());
+        
+        // 2. Verify directory is actually a directory
+        if !self.directory_path.is_dir() {
+            debug_log!("Path exists but is not a directory!");
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "Path exists but is not a directory"
+            ));
+        }
+        
+        // 3. Serialize the CoreNode struct to a TOML string
         let toml_string = toml::to_string(&self).map_err(|e| {
+            debug_log!("TOML serialization error: {}", e);
             io::Error::new(
                 io::ErrorKind::Other,
                 format!("TOML serialization error: {}", e),
             )
         })?;
+        debug_log!("Successfully serialized CoreNode to TOML");
 
-        // 2. Construct the full file path for the node.toml file.
+        // 4. Construct and verify the file path
         let file_path = self.directory_path.join("node.toml");
+        debug_log!("Full file path for node.toml: {:?}", file_path);
         
-        debug_log!("file_path in save_node_to_file {:?}",
-            file_path,
-        );
-
-        // 3. Create the directory if it doesn't exist. 
-        if let Some(parent_dir) = file_path.parent() {
-            fs::create_dir_all(parent_dir)?;
+        // 5. Verify parent directory one more time
+        if let Some(parent) = file_path.parent() {
+            if !parent.exists() {
+                debug_log!("Parent directory missing, creating: {:?}", parent);
+                fs::create_dir_all(parent)?;
+            }
         }
 
-        // 4. Write the TOML data to the file.
-        fs::write(file_path, toml_string)?;
+        // 6. Write the TOML data to the file
+        debug_log!("Writing TOML data to file...");
+        fs::write(&file_path, &toml_string)?;
+        
+        // 7. Verify the file was created
+        if file_path.exists() {
+            debug_log!("Successfully created node.toml at: {:?}", file_path);
+        } else {
+            debug_log!("Warning: File write succeeded but file doesn't exist!");
+        }
 
-        // 5. Return Ok(()) if the save was successful.
-        Ok(()) 
+        Ok(())
     }
+        
+    // /// Saves the `CoreNode` data to a `node.toml` file.
+    // ///
+    // /// This function serializes the `CoreNode` struct into TOML format and writes 
+    // /// it to a file at the path specified by the `directory_path` field, creating
+    // /// the directory if it doesn't exist.
+    // ///
+    // /// # Error Handling
+    // /// 
+    // /// Returns a `Result<(), io::Error>` to handle potential errors during:
+    // ///  - TOML serialization
+    // ///  - Directory creation
+    // ///  - File writing
+    // fn save_node_to_file(&self) -> Result<(), io::Error> {
+    //     debug_log!("Starting save_node_to_file");
+    //     debug_log!("Current directory: {:?}", std::env::current_dir()?);
+    //     debug_log!("Target directory path: {:?}", self.directory_path);
+    //     debug_log!("Directory exists: {}", self.directory_path.exists());
+
+    //     // 1. Ensure the directory exists first
+    //     // Create all parent directories first
+    //     fs::create_dir_all(&self.directory_path)?;
+    //     debug_log!("Created directory structure: {:?}", self.directory_path);
+
+
+    //     // 2. Serialize the CoreNode struct to a TOML string
+    //     let toml_string = toml::to_string(&self).map_err(|e| {
+    //         io::Error::new(
+    //             io::ErrorKind::Other,
+    //             format!("TOML serialization error: {}", e),
+    //         )
+    //     })?;
+
+    //     // 3. Construct the full file path for the node.toml file
+    //     let file_path = self.directory_path.join("node.toml");
+    //     debug_log!("Attempting to save to file path: {:?}", file_path);
+
+    //     // 4. Write the TOML data to the file
+    //     fs::write(&file_path, toml_string)?;
+
+    //     debug_log!("Successfully saved node.toml file");
+    //     Ok(())
+    // }
+
+    // /// Saves the `CoreNode` data to a `node.toml` file.
+    // ///
+    // /// This function serializes the `CoreNode` struct into TOML format and writes 
+    // /// it to a file at the path specified by the `directory_path` field, creating
+    // /// the directory if it doesn't exist.
+    // ///
+    // /// # Error Handling
+    // /// 
+    // /// Returns a `Result<(), io::Error>` to handle potential errors during:
+    // ///  - TOML serialization
+    // ///  - Directory creation
+    // ///  - File writing
+    // fn save_node_to_file(&self) -> Result<(), io::Error> {
+    //     debug_log!("Starting save_node_to_file");
+    //     debug_log!("Directory path: {:?}", self.directory_path);
+
+    //     // 1. Ensure the directory exists first
+    //     fs::create_dir_all(&self.directory_path).map_err(|e| {
+    //         debug_log!("Failed to create directory: {:?}", e);
+    //         e
+    //     })?;
+
+    //     // 2. Serialize the CoreNode struct to a TOML string
+    //     let toml_string = toml::to_string(&self).map_err(|e| {
+    //         debug_log!("TOML serialization error: {}", e);
+    //         io::Error::new(
+    //             io::ErrorKind::Other,
+    //             format!("TOML serialization error: {}", e),
+    //         )
+    //     })?;
+
+    //     // 3. Construct the full file path for the node.toml file
+    //     let file_path = self.directory_path.join("node.toml");
+    //     debug_log!("Attempting to save to file path: {:?}", file_path);
+
+    //     // 4. Write the TOML data to the file
+    //     fs::write(&file_path, toml_string).map_err(|e| {
+    //         debug_log!("Failed to write file: {:?}", e);
+    //         e
+    //     })?;
+
+    //     debug_log!("Successfully saved node.toml file");
+    //     Ok(())
+    // }
+        
+        
+        
+        
+    // /// Saves the `CoreNode` data to a `node.toml` file.
+    // ///
+    // /// This function serializes the `CoreNode` struct into TOML format and writes 
+    // /// it to a file at the path specified by the `directory_path` field, creating
+    // /// the directory if it doesn't exist.
+    // ///
+    // /// # Error Handling
+    // /// 
+    // /// Returns a `Result<(), io::Error>` to handle potential errors during:
+    // ///  - TOML serialization.
+    // ///  - Directory creation. 
+    // ///  - File writing.
+    // ///
+    // /// If any error occurs, an `io::Error` is returned, containing information 
+    // /// about the error. 
+    // /// 
+    // fn save_node_to_file(&self) -> Result<(), io::Error> {
+    //     debug_log!("Starting save_node_to_file()");
+
+    //     debug_log!("save_node_to_file(), Directory path: {:?}", self.directory_path);
+    //     // 1. Serialize the CoreNode struct to a TOML string.
+    //     let toml_string = toml::to_string(&self).map_err(|e| {
+    //         io::Error::new(
+    //             io::ErrorKind::Other,
+    //             format!("TOML serialization error: {}", e),
+    //         )
+    //     })?;
+
+    //     // 2. Construct the full file path for the node.toml file.
+    //     let file_path = self.directory_path.join("node.toml");
+        
+    //     debug_log!("save_node_to_file(), file_path in save_node_to_file {:?}",
+    //         file_path,
+    //     );
+
+    //     // 3. Create the directory if it doesn't exist. 
+    //     if let Some(parent_dir) = file_path.parent() {
+    //         fs::create_dir_all(parent_dir)?;
+    //     }
+
+    //     // 4. Write the TOML data to the file.
+    //     fs::write(&file_path, toml_string).map_err(|e| {
+    //         debug_log!("Failed to write file: {:?}", e);
+    //         e
+    //     })?;
+
+    //     // 5. Return Ok(()) if the save was successful.
+    //     debug_log!("Successfully saved node.toml file");
+    //     Ok(()) 
+    // }
    
     /// Adds a new child node to the current node's `children` vector.
     ///
@@ -5135,12 +5490,15 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
     // This makes it possible to create CoreNode and ensures the owner has port assignments
     let mut collaborators = Vec::new();
     collaborators.push(owner.clone());
-    debug_log!("create_team_channel(): owner 'added' to collaborators");
+    debug_log!(
+        "create_team_channel(): owner 'added' to collaborators {:?}",
+        collaborators,
+        );
 
     // let mut rng = rand::thread_rng(); // Move RNG outside the loop for fewer calls
 
     // Load the owner's data
-    let owner_data = read_one_collaborator_setup_toml(&owner)?;
+    // let owner_data = read_one_collaborator_setup_toml(&owner)?;
 
     // Simplified port generation (move rng outside loop):
     // Assign random ports to owner:  Only owner for new channel.
@@ -5154,60 +5512,127 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
         intray_port: tray_port,
         gotit_port,
     };    
-    debug_log!("create_team_channel(): owner's abstract_ports_data created");
-
+    debug_log!(
+        "create_team_channel(): owner's abstract_ports_data created {:?}",
+        abstract_ports_data
+        );
 
     // Store in the HashMap with "owner_owner" key. If more than one user this key can become unique.
+    // abstract_collaborator_port_assignments.insert(
+    //     format!("{}_{}", owner.clone(), owner), // Key derived from collaborator names
+    //     vec![ReadTeamchannelCollaboratorPortsToml { collaborator_ports: vec![abstract_ports_data] }],
+    // );
+    // debug_log!("create_team_channel(): owner 'added' to abstract_collaborator_port_assignments");
+
+    // // // Project State
+    // let agenda_process = get_agenda_process()?;
+    // let features = get_features_and_goals()?;
+    // let scope = get_project_scope()?;
+    // let schedule = get_schedule_info()?;
+            
+// Store in the HashMap with "owner_owner" key. If more than one user this key can become unique.
     abstract_collaborator_port_assignments.insert(
         format!("{}_{}", owner.clone(), owner), // Key derived from collaborator names
         vec![ReadTeamchannelCollaboratorPortsToml { collaborator_ports: vec![abstract_ports_data] }],
     );
     debug_log!("create_team_channel(): owner 'added' to abstract_collaborator_port_assignments");
 
-    // // Project State
+    // Add debug logs for Project State retrieval
+    debug_log!("create_team_channel(): About to get agenda_process");
     let agenda_process = get_agenda_process()?;
+    debug_log!("create_team_channel(): Got agenda_process");
+
+    debug_log!("create_team_channel(): About to get features_and_goals");
     let features = get_features_and_goals()?;
+    debug_log!("create_team_channel(): Got features_and_goals");
+
+    debug_log!("create_team_channel(): About to get project_scope");
     let scope = get_project_scope()?;
+    debug_log!("create_team_channel(): Got project_scope");
+
+    debug_log!("create_team_channel(): About to get schedule_info");
     let schedule = get_schedule_info()?;
+    debug_log!("create_team_channel(): Got schedule_info");
+
+    debug_log!("create_team_channel(): About to create CoreNode");
             
     // 3. Create and Save CoreNode (handling Result)
     // node.toml file should be created after the directory structure is in place
     // This is done during first-time initialization so there should be salt list for the owner user (if not exit!)
+    debug_log("create_team_channel(): Next is let new_node_result = CoreNode::new");
+    
+    
+    // let new_node_result = CoreNode::new(
+    //     team_channel_name.clone(),         // node_name
+    //     team_channel_name,                 // description_for_tui
+    //     new_channel_path.clone(),          // directory_path
+    //     owner,                             // owner
+    //     collaborators,                     // teamchannel_collaborators_with_access
+    //     abstract_collaborator_port_assignments, // ports
+    //     // project state task items
+    //     agenda_process,                    // new field: agenda process
+    //     features,                          // new field: features and goals
+    //     scope,                             // new field: project scope
+    //     schedule,                          // new field: schedule 
+    // );
+    
+
+    // 3. Create and Save CoreNode (handling Result)
     let new_node_result = CoreNode::new(
-        team_channel_name.clone(),         // node_name
-        team_channel_name,                 // description_for_tui
-        new_channel_path.clone(),          // directory_path
-        owner,                             // owner
-        collaborators,                     // teamchannel_collaborators_with_access
-        abstract_collaborator_port_assignments, // ports
-        // project state task items
-        agenda_process,                    // new field: agenda process
-        features,                          // new field: features and goals
-        scope,                             // new field: project scope
-        schedule,                          // new field: schedule 
+        team_channel_name.clone(),
+        team_channel_name,
+        new_channel_path.clone(),
+        owner,
+        collaborators,
+        abstract_collaborator_port_assignments,
+        agenda_process,
+        features,
+        scope,
+        schedule,
     );
     
-    match new_node_result {  // Handle result of CoreNode::new
+    debug_log!(
+        "create_team_channel(): next trying save_node_to_file with new_node_result -> {:?}",
+        new_node_result);
+    
+    // Handle the result
+    match new_node_result {
         Ok(new_node) => {
-            new_node.save_node_to_file()?; // Then save the node
-            Ok(()) // Return Ok(()) to indicate success
+            debug_log!("CoreNode created successfully, attempting to save...");
+            new_node.save_node_to_file().map_err(|e| ThisProjectError::IoError(e))?;
+            debug_log!("Node saved successfully");
+            Ok(())
         }
         Err(e) => {
-             debug_log!("Error creating CoreNode: {}", e);
-            Err(e) // Return the error if CoreNode creation fails
+            debug_log!("Error creating CoreNode: {}", e);
+            Err(e)
         }
     }
+    
+
+        
+        
+    // match new_node_result {  // Handle result of CoreNode::new
+    //     Ok(new_node) => {
+    //         new_node.save_node_to_file()?; // Then save the node
+    //         Ok(()) // Return Ok(()) to indicate success
+    //     }
+    //     Err(e) => {
+    //          debug_log!("Error creating CoreNode: {}", e);
+    //         Err(e) // Return the error if CoreNode creation fails
+    //     }
+    // }
 
 }
-
 
 /// Creates a new (core)Node directory, subdirectories, and metadata files.
 /// Handles errors and returns a Result to indicate success or failure.
 ///
 /// # Arguments 
 ///
-/// * `path_to_node` 
-/// * 'teamchannel_collaborators_with_access' from Graph nav struct
+/// * `path_to_node` - Base path where the node will be created
+/// * `teamchannel_collaborators_with_access` - List of collaborators
+/// * `team_channel_name` - Name of the team channel
 ///
 /// # Returns
 ///
@@ -5215,75 +5640,75 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
 fn create_core_node(
     node_path: PathBuf,
     teamchannel_collaborators_with_access: Vec<String>,
+    team_channel_name: String,
 ) -> Result<(), ThisProjectError> {
+    debug_log!("start create_core_node(), node_path -> {:?}", node_path);
+    
+    // Get user input for node name
+    println!("Enter node name:");
+    let mut node_name = String::new();
+    io::stdin().read_line(&mut node_name)?;
+    let node_name = node_name.trim().to_string();
+
+    // Get user input for description
+    println!("Enter project description:");
+    let mut description = String::new();
+    io::stdin().read_line(&mut description)?;
+    let description = description.trim().to_string();    
+    
+    // Create the specific node directory path
+    let node_specific_path = node_path.join(&node_name);
+    debug_log!("Creating node at specific path: {:?}", node_specific_path);
+
+    // Create the main node directory
+    fs::create_dir_all(&node_specific_path)?;
+
     // Get user input for planning fields
     let agenda_process = get_agenda_process()?;
     let features = get_features_and_goals()?;
     let scope = get_project_scope()?;
     let schedule = get_schedule_info()?;
     let owner = get_local_owner_username();
+
+    // Create subdirectories within the node directory
+    let message_dir = node_specific_path.join("instant_message_browser");
+    let task_browser_dir = node_specific_path.join("task_browser");
     
-    // Get user input for description and planning fields
-    println!("Enter project description:");
-    let mut description = String::new();
-    io::stdin().read_line(&mut description)?;
-    let description = description.trim().to_string();    
-    
-    let team_channel_name = match get_current_team_channel_name_from_cwd() {
-        Some(name) => name,
-        None => {
-            debug_log!("Error: Could not get current channel name. Skipping set_as_active.");
-            return Err(ThisProjectError::InvalidData("Could not get team channel name".into()));
-        },
-    };
+    fs::create_dir_all(&message_dir)?;
+    fs::create_dir_all(&task_browser_dir)?;
 
-    // Create directory structure at the specified path
-    fs::create_dir_all(&node_path.join("instant_message_browser"))?;
-    fs::create_dir_all(&node_path.join("task_browser"))?;
+    // Create task browser columns
+    for col_name in ["1_planning", "2_started", "3_done"].iter() {
+        let col_path = task_browser_dir.join(col_name);
+        fs::create_dir_all(&col_path)?;
+        // TODO: Create column nodes (recursive call for later)
+        // create_core_node(col_path, teamchannel_collaborators_with_access.clone(), format!("{}_{}", node_name, col_name))?;
+    }
 
-    let col_name = "1_planning";
-    let col_path = node_path.join("task_browser").join(col_name);
-    fs::create_dir_all(&col_path)?;
-
-    let col_name = "2_started";
-    let col_path = node_path.join("task_browser").join(col_name);
-    fs::create_dir_all(&col_path)?;
-
-    let col_name = "3_done";
-    let col_path = node_path.join("task_browser").join(col_name);
-    fs::create_dir_all(&col_path)?;
-
-    // 2. Create and Save 0.toml Metadata (with error handling)
-    let metadata_path = node_path.join("instant_message_browser/0.toml");
-    let metadata = NodeInstMsgBrowserMetadata::new(&team_channel_name, owner.clone());
+    // Create and Save metadata
+    let metadata_path = message_dir.join("0.toml");
+    let metadata = NodeInstMsgBrowserMetadata::new(&node_name, owner.clone());
     save_toml_to_file(&metadata, &metadata_path)?;
 
-    // empty array
-    let abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>> = HashMap::new();
-
-    // Load the owner's data
-    let owner_data = read_one_collaborator_setup_toml(&owner)?;
-
-    let mut rng = rand::thread_rng();
-
-    // 3. Create and Save CoreNode (handling Result)
+    // Create CoreNode instance
     let new_node_result = CoreNode::new(
-        team_channel_name.clone(),         // node_name
-        team_channel_name,                 // description_for_tui
-        node_path.clone(),                 // directory_path
+        node_name.clone(),                 // node_name
+        description,                       // description_for_tui
+        node_specific_path.clone(),        // directory_path
         owner,                             // owner
         teamchannel_collaborators_with_access, 
         HashMap::new(),                    // for ports
-        // project state task items
-        agenda_process,                    // new field: agenda process
-        features,                          // new field: features and goals
-        scope,                             // new field: project scope
-        schedule,                          // new field: schedule information
+        agenda_process,                    // agenda process
+        features,                          // features and goals
+        scope,                             // project scope
+        schedule,                          // schedule information
     );
     
     match new_node_result {
         Ok(new_node) => {
+            // Save node.toml in the specific node directory
             new_node.save_node_to_file()?;
+            debug_log!("Successfully created node: {:?}", node_specific_path);
             Ok(())
         }
         Err(e) => {
@@ -5292,6 +5717,102 @@ fn create_core_node(
         }
     }
 }
+
+// /// Creates a new (core)Node directory, subdirectories, and metadata files.
+// /// Handles errors and returns a Result to indicate success or failure.
+// ///
+// /// # Arguments 
+// ///
+// /// * `path_to_node` 
+// /// * 'teamchannel_collaborators_with_access' from Graph nav struct
+// ///
+// /// # Returns
+// ///
+// /// * `Result<(), ThisProjectError>` - `Ok(())` on success, or a `ThisProjectError`
+// fn create_core_node(
+//     node_path: PathBuf,
+//     teamchannel_collaborators_with_access: Vec<String>,
+//     team_channel_name: String,
+// ) -> Result<(), ThisProjectError> {
+//     debug_log!("start create_core_node(), node_path -> {:?}", node_path);
+    
+//     // Get user input for planning fields
+//     let agenda_process = get_agenda_process()?;
+//     let features = get_features_and_goals()?;
+//     let scope = get_project_scope()?;
+//     let schedule = get_schedule_info()?;
+//     let owner = get_local_owner_username();
+    
+//     // Get user input for description and planning fields
+//     println!("Enter project description:");
+//     let mut description = String::new();
+//     io::stdin().read_line(&mut description)?;
+//     let description = description.trim().to_string();    
+    
+//     // TODO not working, gets uma root only
+//     // let team_channel_name = match get_current_team_channel_name_from_cwd() {
+//     //     Some(name) => name,
+//     //     None => {
+//     //         debug_log!("Error: create_core_node(), Could not get current channel name. Skipping.");
+//     //         return Err(ThisProjectError::InvalidData("Error: create_core_node(), Could not get team channel name".into()));
+//     //     },
+//     // };
+
+//     // Create directory structure at the specified path
+//     fs::create_dir_all(&node_path.join("instant_message_browser"))?;
+//     fs::create_dir_all(&node_path.join("task_browser"))?;
+
+//     let col_name = "1_planning";
+//     let col_path = node_path.join("task_browser").join(col_name);
+//     fs::create_dir_all(&col_path)?;
+
+//     let col_name = "2_started";
+//     let col_path = node_path.join("task_browser").join(col_name);
+//     fs::create_dir_all(&col_path)?;
+
+//     let col_name = "3_done";
+//     let col_path = node_path.join("task_browser").join(col_name);
+//     fs::create_dir_all(&col_path)?;
+
+//     // 2. Create and Save 0.toml Metadata (with error handling)
+//     let metadata_path = node_path.join("instant_message_browser/0.toml");
+//     let metadata = NodeInstMsgBrowserMetadata::new(&team_channel_name, owner.clone());
+//     save_toml_to_file(&metadata, &metadata_path)?;
+
+//     // empty array
+//     let abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>> = HashMap::new();
+
+//     // Load the owner's data
+//     let owner_data = read_one_collaborator_setup_toml(&owner)?;
+
+//     let mut rng = rand::thread_rng();
+
+//     // 3. Create and Save CoreNode (handling Result)
+//     let new_node_result = CoreNode::new(
+//         team_channel_name.clone(),         // node_name
+//         team_channel_name,                 // description_for_tui
+//         node_path.clone(),                 // directory_path
+//         owner,                             // owner
+//         teamchannel_collaborators_with_access, 
+//         HashMap::new(),                    // for ports
+//         // project state task items
+//         agenda_process,                    // new field: agenda process
+//         features,                          // new field: features and goals
+//         scope,                             // new field: project scope
+//         schedule,                          // new field: schedule information
+//     );
+    
+//     match new_node_result {
+//         Ok(new_node) => {
+//             new_node.save_node_to_file()?;
+//             Ok(())
+//         }
+//         Err(e) => {
+//             debug_log!("Error creating CoreNode: {}", e);
+//             Err(e)
+//         }
+//     }
+// }
 
 /// Gets user input for agenda process selection of create_core_node()
 fn get_agenda_process() -> Result<String, ThisProjectError> {
@@ -5341,45 +5862,128 @@ fn get_project_scope() -> Result<String, ThisProjectError> {
         project_type.trim(), mvp_goals.trim()))
 }
 
+// /// Gets schedule information and converts 
+// /// to required format of create_core_node()
+// fn get_schedule_info() -> Result<Vec<u64>, ThisProjectError> {
+//     debug_log("starting get_schedule_info()")
+//     println!("Enter project duration in days:");
+//     let mut days = String::new();
+//     io::stdin().read_line(&mut days)?;
+//     let days: u64 = days.trim().parse().map_err(|_| 
+//         ThisProjectError::InvalidInput("Invalid number of days".into()))?;
+
+//     println!("Enter start year (YYYY):");
+//     let mut year = String::new();
+//     io::stdin().read_line(&mut year)?;
+//     let year: u64 = year.trim().parse().map_err(|_| 
+//         ThisProjectError::InvalidInput("Invalid year".into()))?;
+
+//     println!("Enter start month (1-12):");
+//     let mut month = String::new();
+//     io::stdin().read_line(&mut month)?;
+//     let month: u64 = month.trim().parse().map_err(|_| 
+//         ThisProjectError::InvalidInput("Invalid month".into()))?;
+
+//     println!("Enter start day (1-31):");
+//     let mut day = String::new();
+//     io::stdin().read_line(&mut day)?;
+//     let day: u64 = day.trim().parse().map_err(|_| 
+//         ThisProjectError::InvalidInput("Invalid day".into()))?;
+
+//     let seconds_per_day: u64 = 24 * 60 * 60;
+//     let days_since_epoch = (year - 1970) * 365 + ((month - 1) * 30) + (day - 1);
+//     let start_timestamp = days_since_epoch * seconds_per_day;
+    
+//     let duration_seconds = days * seconds_per_day;
+//     let end_timestamp = start_timestamp + duration_seconds;
+
+//     Ok(vec![
+//         start_timestamp,
+//         end_timestamp,
+//         duration_seconds
+//     ])
+// }
+
 /// Gets schedule information and converts 
 /// to required format of create_core_node()
 fn get_schedule_info() -> Result<Vec<u64>, ThisProjectError> {
+    debug_log("starting get_schedule_info()");
+
+    // Duration input and validation
     println!("Enter project duration in days:");
     let mut days = String::new();
     io::stdin().read_line(&mut days)?;
     let days: u64 = days.trim().parse().map_err(|_| 
         ThisProjectError::InvalidInput("Invalid number of days".into()))?;
+    debug_log!("Parsed days: {}", days);
+    
+    if days == 0 || days > 3650 { // 10 years max
+        return Err(ThisProjectError::InvalidInput("Duration must be between 1 and 3650 days".into()));
+    }
 
+    // Year input and validation
     println!("Enter start year (YYYY):");
     let mut year = String::new();
     io::stdin().read_line(&mut year)?;
     let year: u64 = year.trim().parse().map_err(|_| 
         ThisProjectError::InvalidInput("Invalid year".into()))?;
+    debug_log!("Parsed year: {}", year);
 
+    if year < 2023 || year > 2100 {
+        return Err(ThisProjectError::InvalidInput("Year must be between 2023 and 2100".into()));
+    }
+
+    // Month input and validation
     println!("Enter start month (1-12):");
     let mut month = String::new();
     io::stdin().read_line(&mut month)?;
     let month: u64 = month.trim().parse().map_err(|_| 
         ThisProjectError::InvalidInput("Invalid month".into()))?;
+    debug_log!("Parsed month: {}", month);
 
+    if month < 1 || month > 12 {
+        return Err(ThisProjectError::InvalidInput("Month must be between 1 and 12".into()));
+    }
+
+    // Day input and validation
     println!("Enter start day (1-31):");
     let mut day = String::new();
     io::stdin().read_line(&mut day)?;
     let day: u64 = day.trim().parse().map_err(|_| 
         ThisProjectError::InvalidInput("Invalid day".into()))?;
+    debug_log!("Parsed day: {}", day);
 
+    if day < 1 || day > 31 {
+        return Err(ThisProjectError::InvalidInput("Day must be between 1 and 31".into()));
+    }
+
+    // Time calculations
     let seconds_per_day: u64 = 24 * 60 * 60;
     let days_since_epoch = (year - 1970) * 365 + ((month - 1) * 30) + (day - 1);
+    debug_log!("Calculated days since epoch: {}", days_since_epoch);
+
     let start_timestamp = days_since_epoch * seconds_per_day;
+    debug_log!("Calculated start timestamp: {}", start_timestamp);
     
     let duration_seconds = days * seconds_per_day;
-    let end_timestamp = start_timestamp + duration_seconds;
+    debug_log!("Calculated duration in seconds: {}", duration_seconds);
 
-    Ok(vec![
+    let end_timestamp = start_timestamp + duration_seconds;
+    debug_log!("Calculated end timestamp: {}", end_timestamp);
+
+    // Final validation
+    if end_timestamp < start_timestamp {
+        return Err(ThisProjectError::InvalidInput("End time cannot be before start time".into()));
+    }
+
+    let result = vec![
         start_timestamp,
         end_timestamp,
         duration_seconds
-    ])
+    ];
+    debug_log!("Returning schedule info: {:?}", result);
+
+    Ok(result)
 }
 
 // // TODO Under Construction
@@ -6285,6 +6889,7 @@ fn find_gpg_public_key_file(directory: &Path) -> Result<Option<PathBuf>, ThisPro
 //     local_owner_username
 // }
 fn get_local_owner_username() -> String {  // Returns String directly
+    debug_log("starting get_local_owner_username()");
     let uma_toml_path = Path::new("uma.toml");
 
     let toml_string = read_to_string(uma_toml_path).unwrap_or_else(|e| {
@@ -6417,6 +7022,8 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         println!("Welcome to the Uma Collaboration Tools. Please enter your username (this will be the owner for this Uma 'instance'):");
         let mut owner_input = String::new();
         io::stdin().read_line(&mut owner_input).unwrap();
+        // remove this unwrap
+        
         let owner = owner_input.trim().to_string();
 
         let local_user_metadata = LocalUserUma::new(owner); // Create LocalUserUma
@@ -6611,44 +7218,10 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
 
     // Check if there are any directories in project_graph_data/team_channels
     debug_log("let number_of_team_channels = fs::read_dir(&team_channels_dir)");
-    let number_of_team_channels = fs::read_dir(&team_channels_dir)
-        .unwrap()
-        .filter(|entry| entry.as_ref().unwrap().path().is_dir())
-        .count();
-
-    if number_of_team_channels == 0 {
-        // If no team channels exist, create the first one
-        println!("There are no existing team channels. Let's create one.");
-        println!("Enter a name for the team channel:");
-
-        let mut team_channel_name = String::new();
-        io::stdin().read_line(&mut team_channel_name).unwrap();
-        let team_channel_name = team_channel_name.trim().to_string();
-
-
-    // TUI Setup, TODO
-    /*
-    If there is an umi.toml,
-    and it has tui_height/tui_height that are not 80/24
-    use those new values (from umi.toml) for 
-    tui_height = 
-    tui_width = 
-
-    or maybe this gets done in the project-manager-thread (not the sink thread)    
-    */
-
-    
-    
-    // // In initialize_uma_application, when creating the first channel:
-    // // Get the owner from somewhere (e.g., user input or instance metadata)
-    // let owner = "initial_owner".to_string(); // Replace with actual owner
-
-    create_team_channel(team_channel_name, uma_local_owner_user.clone());
-    }
-    
 
     // if !dir_at_path_is_empty_returns_false("project_graph_data/collaborator_files_address_book") {
     debug_log("if !dir_at_path_is_empty_returns_false(Path::new(project_graph_data/collaborator_files_address_book)) { ");
+
     if !dir_at_path_is_empty_returns_false(Path::new("project_graph_data/collaborator_files_address_book")) { 
         // If there are no existing users, prompt the user to add a new user
         println!("Welcome to the application!");
@@ -6740,28 +7313,37 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         // let updated_at_timestamp = get_current_unix_timestamp()
         
 
-        // Salt List!
-        println!("Salt List: Press Enter for random, or type 'manual' for manual input");
-        let mut new_usersalt_list_input = String::new();
-        io::stdin().read_line(&mut new_usersalt_list_input)?;
-        let new_usersalt_list_input = new_usersalt_list_input.trim().to_string();
+        // // Salt List!
+        debug_log("Salt List");
+        // Generate salt list (4 random u128 values)
+        let new_usersalt_list: Vec<u128> = (0..4)
+            .map(|_| rand::thread_rng().gen())
+            .collect();
+        
+        // println!("Salt List: Press Enter for random, or type 'manual' for manual input");
+        // let mut new_usersalt_list_input = String::new();
+        // io::stdin().read_line(&mut new_usersalt_list_input)?;
+        // let new_usersalt_list_input = new_usersalt_list_input.trim().to_string();
     
-        let new_usersalt_list: Vec<u128> = if new_usersalt_list_input == "manual" {
-            let mut salts = Vec::new();
-            for i in 1..=4 {
-                println!("Enter salt {} (u128):", i);
-                let mut salt_input = String::new();
-                io::stdin().read_line(&mut salt_input)?;
-                let salt: u128 = salt_input.trim().parse().expect("Invalid input, so using u128 input for salt");
-                salts.push(salt);
-            }
-            salts
-        } else {
-            // Generate 4 random u128 salts
-            (0..4)
-                .map(|_| rand::thread_rng().gen())
-                .collect()
-        };
+        
+
+            
+        // let new_usersalt_list: Vec<u128> = if new_usersalt_list_input == "manual" {
+        //     let mut salts = Vec::new();
+        //     for i in 1..=4 {
+        //         println!("Enter salt {} (u128):", i);
+        //         let mut salt_input = String::new();
+        //         io::stdin().read_line(&mut salt_input)?;
+        //         let salt: u128 = salt_input.trim().parse().expect("Invalid input, so using u128 input for salt");
+        //         salts.push(salt);
+        //     }
+        //     salts
+        // } else {
+        //     // Generate 4 random u128 salts
+        //     (0..4)
+        //         .map(|_| rand::thread_rng().gen())
+        //         .collect()
+        // };
 
         println!("Using salts: {:?}", new_usersalt_list);
         debug_log!("Using salts: {:?}", new_usersalt_list);
@@ -6786,6 +7368,47 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         println!("User added successfully!");
     }
 
+    /////////////////////////////
+    // Check & Make Team Channel
+    /////////////////////////////
+    let number_of_team_channels = fs::read_dir(&team_channels_dir)
+        .unwrap()
+        .filter(|entry| entry.as_ref().unwrap().path().is_dir())
+        .count();
+
+    if number_of_team_channels == 0 {
+        // If no team channels exist, create the first one
+        println!("There are no existing team channels. Let's create one.");
+        println!("Enter a name for the team channel:");
+
+        let mut team_channel_name = String::new();
+        io::stdin().read_line(&mut team_channel_name).unwrap();
+        let team_channel_name = team_channel_name.trim().to_string();
+
+        // TUI Setup, TODO
+        /*
+        If there is an umi.toml,
+        and it has tui_height/tui_height that are not 80/24
+        use those new values (from umi.toml) for 
+        tui_height = 
+        tui_width = 
+    
+        or maybe this gets done in the project-manager-thread (not the sink thread)    
+        */
+
+        // // In initialize_uma_application, when creating the first channel:
+        // // Get the owner from somewhere (e.g., user input or instance metadata)
+        // let owner = "initial_owner".to_string(); // Replace with actual owner
+
+        create_team_channel(team_channel_name, uma_local_owner_user.clone());
+        }
+        
+        // TODO
+        // maybe check for node file made?
+
+        debug_log("after create_team_channel()");
+
+    
     ////////////////////////////////////////////////////////////////////////// 
     // --- Band: Network Band Finder: IP Validity Check and Flag Setting ---
     /////////////////////////////////////////////////////////////////////////  
@@ -6934,12 +7557,15 @@ fn handle_main_command_mode(
                 // Display help information
             }
             
-            "addnode" | "add_node" => {
-                debug_log("Add Node");
+            "addnode" | "add_node" | "newnode" => {
+                debug_log("Command: Add Node");
+                
+                debug_log!("app.current_path {:?}", app.current_path);
                 
                 create_core_node(
                     app.current_path.clone(), // node_path: PathBuf,
-                    app.graph_navigation_instance_state.current_node_teamchannel_collaborators_with_access.clone()  // teamchannel_collaborators_with_access: Vec<String>,
+                    app.graph_navigation_instance_state.current_node_teamchannel_collaborators_with_access.clone(),  // teamchannel_collaborators_with_access: Vec<String>,
+                    app.graph_navigation_instance_state.active_team_channel.clone(),
                 );
                 
             }
@@ -7479,7 +8105,35 @@ fn get_next_message_file_path(current_path: &Path, username: &str) -> PathBuf {
 /// ```
 fn get_addressbook_file_by_username(username: &str) -> Result<CollaboratorTomlData, ThisProjectError> {
     debug_log!("Starting get_addressbook_file_by_username(username),  for -> '{}'", username);
+    // debug_log!("Starting get_addressbook_file_by_username(username),  for -> '{}'", username);
+    
+    // Debug the directory structure
+    let base_dir = Path::new("project_graph_data/collaborator_files_address_book");
+    debug_log!("Base directory path: {:?}", base_dir);
+    debug_log!("Base directory exists: {}", base_dir.exists());
+    
+    // Check current working directory
+    debug_log!("Current working directory: {:?}", std::env::current_dir()?);
+    
+    // Construct and check the specific file path
+    let file_path = base_dir.join(format!("{}__collaborator.toml", username));
+    debug_log!("Looking for file at: {:?}", file_path);
+    debug_log!("File exists: {}", file_path.exists());
 
+    // Try to list files in the directory if it exists
+    if base_dir.exists() {
+        debug_log!("Contents of collaborator_files_address_book directory:");
+        match std::fs::read_dir(base_dir) {
+            Ok(entries) => {
+                for entry in entries {
+                    if let Ok(entry) = entry {
+                        debug_log!("Found file: {:?}", entry.path());
+                    }
+                }
+            },
+            Err(e) => debug_log!("Could not read directory contents: {}", e),
+        }
+    }
     // Use read_one_collaborator_setup_toml to read and deserialize the data
     match read_one_collaborator_setup_toml(username) {
         Ok(loaded_collaborator) => {
