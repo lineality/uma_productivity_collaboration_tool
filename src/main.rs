@@ -2525,6 +2525,10 @@ pub fn validate_state_string(value: &str) -> bool {
     !value.is_empty()
 }
 
+
+
+
+
 // Compression Algorithm Enum
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 enum CompressionAlgorithm {
@@ -8151,6 +8155,132 @@ fn generate_random_salt() -> String {
     let mut rng = rand::thread_rng();
     let salt: u128 = rng.gen(); // Generate a random u128
     format!("0x{:X}", salt) // Convert to hexadecimal string with "0x" prefix
+}
+
+
+/// Moves a task (node) from one column to another in the task browser.
+/// Updates all relevant paths in node.toml files.
+///
+/// # Arguments
+///
+/// * `path_lookup_table` - HashMap containing path lookups by number
+///
+/// # Returns
+///
+/// * `Result<(), ThisProjectError>` - Success or error status
+fn move_task(
+    path_lookup_table: &HashMap<usize, PathBuf>
+) -> Result<(), ThisProjectError> {
+    // 1. Get source task number
+    println!("Enter task number to move:");
+    let task_num = get_user_input_number()?;
+    
+    // Get source path from lookup
+    let source_path = match path_lookup_table.get(&task_num) {
+        Some(path) => path.clone(),
+        None => return Err(ThisProjectError::InvalidData(
+            format!("Task number {} not found", task_num)
+        )),
+    };
+    debug_log!("Source path: {:?}", source_path);
+
+    // 2. Get destination column number
+    println!("Enter destination column number:");
+    let dest_num = get_user_input_number()?;
+    
+    // Get destination path from lookup
+    let dest_path = match path_lookup_table.get(&dest_num) {
+        Some(path) => path.clone(),
+        None => return Err(ThisProjectError::InvalidData(
+            format!("Destination column {} not found", dest_num)
+        )),
+    };
+    debug_log!("Destination path: {:?}", dest_path);
+
+    // 3. Perform the move operation
+    move_node_directory(source_path, dest_path)?;
+
+    Ok(())
+}
+
+/// Helper function to get numeric input from user
+fn get_user_input_number() -> Result<usize, ThisProjectError> {
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+    input.trim().parse::<usize>().map_err(|_| 
+        ThisProjectError::InvalidData("Invalid number".into())
+    )
+}
+
+/// Moves a node directory and updates all internal paths
+fn move_node_directory(
+    source_path: PathBuf,
+    dest_path: PathBuf
+) -> Result<(), ThisProjectError> {
+    debug_log!("Moving node from {:?} to {:?}", source_path, dest_path);
+
+    // 1. Read the source node.toml
+    let node_toml_path = source_path.join("node.toml");
+    let mut node = load_core_node_from_toml_file(&node_toml_path)
+        .map_err(|e| ThisProjectError::InvalidData(e))?;
+
+    // 2. Update the node's directory path
+    node.directory_path = dest_path.clone();
+
+    // 3. Create the new directory
+    let new_node_path = dest_path.join(source_path.file_name().unwrap());
+    fs::create_dir_all(&new_node_path)?;
+
+    // 4. Move the directory contents
+    move_directory_contents(&source_path, &new_node_path)?;
+
+    // 5. Update paths in all nested node.toml files
+    update_nested_node_paths(&new_node_path)?;
+
+    // 6. Remove the old directory
+    fs::remove_dir_all(source_path)?;
+
+    Ok(())
+}
+
+/// Updates paths in all nested node.toml files
+fn update_nested_node_paths(
+    dir_path: &Path
+) -> Result<(), ThisProjectError> {
+    for entry in fs::read_dir(dir_path)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if path.is_dir() {
+            update_nested_node_paths(&path)?;
+        } else if path.file_name().unwrap() == "node.toml" {
+            let mut node = load_core_node_from_toml_file(&path)
+                .map_err(|e| ThisProjectError::InvalidData(e))?;
+            node.directory_path = path.parent().unwrap().to_path_buf();
+            save_toml_to_file(&node, &path)?;
+        }
+    }
+    Ok(())
+}
+
+/// Recursively moves directory contents
+fn move_directory_contents(
+    from: &Path,
+    to: &Path
+) -> Result<(), ThisProjectError> {
+    for entry in fs::read_dir(from)? {
+        let entry = entry?;
+        let path = entry.path();
+        let destination = to.join(path.file_name().unwrap());
+
+        if path.is_dir() {
+            fs::create_dir_all(&destination)?;
+            move_directory_contents(&path, &destination)?;
+        } else {
+            fs::copy(&path, &destination)?;
+        }
+    }
+    Ok(())
 }
 
 /// Loads connection data for members of the currently active team channel.
