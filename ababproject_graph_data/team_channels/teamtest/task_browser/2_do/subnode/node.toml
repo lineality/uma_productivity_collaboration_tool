@@ -1,0 +1,19 @@
+node_name = "subnode"
+description_for_tui = "ggg"
+node_unique_id = [210, 221, 132, 199]
+directory_path = "project_graph_data/team_channels/teamtest/task_browser/2_do/subnode"
+owner = "alice"
+updated_at_timestamp = 1735689037
+expires_at = 12846800148
+teamchannel_collaborators_with_access = []
+agenda_process = "b"
+goals_features_subfeatures_tools_targets = """
+Features: b
+Tools: b
+Goals: b"""
+scope = """
+Project Type: b
+MVP Goals: b"""
+schedule_duration_start_end = [1732406400, 1732579200, 172800]
+
+[abstract_collaborator_port_assignments]

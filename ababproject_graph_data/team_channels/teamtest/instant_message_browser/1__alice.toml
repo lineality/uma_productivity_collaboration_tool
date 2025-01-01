@@ -1,0 +1,8 @@
+owner = "alice"
+teamchannel_collaborators_with_access = []
+updated_at_timestamp = 1735074691
+expires_at = 1737493891
+node_name = "teamplace"
+filepath_in_node = "/instant_message_browser"
+text_message = "Hotsauce is a very important name."
+links = []

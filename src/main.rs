@@ -3463,9 +3463,6 @@ fn handle_task_action(&mut self, input: &str) -> bool { // Return true to exit t
                     );
                 }
             }
-                        
-            
-            
 
         } else { // Inside a column
              // ... (task display within a column remains the same)
@@ -5469,7 +5466,7 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
     let col_path = new_channel_path.join("task_browser").join(col_name);
     fs::create_dir_all(&col_path)?; // Create default task browser column directories for new channel
 
-    let col_name = "1_started";
+    let col_name = "2_started";
     let col_path = new_channel_path.join("task_browser").join(col_name);
     fs::create_dir_all(&col_path)?; // Create default task browser column directories for new channel
 

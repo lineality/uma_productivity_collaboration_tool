@@ -1,0 +1,8 @@
+owner = "alice"
+teamchannel_collaborators_with_access = []
+updated_at_timestamp = 1735588193
+expires_at = 1738007393
+node_name = "teamplace"
+filepath_in_node = "/instant_message_browser"
+text_message = "house"
+links = []
