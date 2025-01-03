@@ -1,8 +1,0 @@
-owner = "alice"
-teamchannel_collaborators_with_access = []
-updated_at_timestamp = 1735694356
-expires_at = 1738113556
-node_name = "tofu"
-filepath_in_node = "/instant_message_browser"
-text_message = "hello!"
-links = []
