@@ -14619,13 +14619,13 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                     &app.graph_navigation_instance_state.schedule_duration_start_end,
                 ),
                 InputMode::TaskCommand => { /* Task list rendering logic */ },
-                InputMode::InsertText => tiny_tui::render_list(
+                InputMode::InsertText => tiny_tui::simple_render_list(
                     &app.tui_textmessage_list, 
                     &app.current_path,
-                    &app.graph_navigation_instance_state.agenda_process,
-                    &app.graph_navigation_instance_state.goals_features_subfeatures_tools_targets,
-                    &app.graph_navigation_instance_state.scope,
-                    &app.graph_navigation_instance_state.schedule_duration_start_end,
+                    // &app.graph_navigation_instance_state.agenda_process,
+                    // &app.graph_navigation_instance_state.goals_features_subfeatures_tools_targets,
+                    // &app.graph_navigation_instance_state.scope,
+                    // &app.graph_navigation_instance_state.schedule_duration_start_end,
                 ),
             };
         }
