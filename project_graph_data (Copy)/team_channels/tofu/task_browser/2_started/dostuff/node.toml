@@ -1,0 +1,19 @@
+node_name = "dostuff"
+description_for_tui = "stuff"
+node_unique_id = [36, 48, 52, 52]
+directory_path = "project_graph_data/team_channels/tofu/task_browser/2_started/dostuff"
+owner = "alice"
+updated_at_timestamp = 1735690616
+expires_at = 12846801727
+teamchannel_collaborators_with_access = []
+agenda_process = "d"
+goals_features_subfeatures_tools_targets = """
+Features: d
+Tools: d
+Goals: d"""
+scope = """
+Project Type: d
+MVP Goals: d"""
+schedule_duration_start_end = [1732406400, 1732579200, 172800]
+
+[abstract_collaborator_port_assignments]

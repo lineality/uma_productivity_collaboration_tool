@@ -4072,6 +4072,8 @@ struct GraphNavigationInstanceState {
 }
 
 impl GraphNavigationInstanceState {
+    
+    /// See if you want to use load_core_node_from_toml_file() instead.
     /// Loads and updates the `GraphNavigationInstanceState` based on the `current_full_file_path`.
     ///
     /// This method is called whenever the user navigates to a new directory within the 
@@ -4135,8 +4137,6 @@ impl GraphNavigationInstanceState {
             self.current_full_file_path.clone(),
             self.active_team_channel.clone(),
         );
-        
-        
 
         let node_toml_path = self.current_full_file_path.join("node.toml");
         debug_log!("look_read_node_toml() node_toml_path -> {:?}", node_toml_path.clone());
@@ -4173,8 +4173,7 @@ impl GraphNavigationInstanceState {
             // 3. Check if this is a Team Channel Node 
             // TODO maybe also check for a node.toml file
             let path_components: Vec<_> = self.current_full_file_path.components().collect();
-            
-            
+
             if path_components.len() >= 2 
                 && path_components[path_components.len() - 2].as_os_str() == "team_channels" 
             {
@@ -4203,6 +4202,9 @@ impl GraphNavigationInstanceState {
         } else {
             debug_log("not a node, no updateS");
         } // End of Team Channel Node Handling
+        
+        debug_log!(
+            "ending look_read_node_toml()");
 
         // ... (Rest of your logic for handling other node types) ...
     }    
@@ -5183,7 +5185,7 @@ fn load_core_node_from_toml_file(file_path: &Path) -> Result<CoreNode, String> {
     // 3. Extract node_unique_id as hex string and decode using your function:
     let node_unique_id = match toml_value.get("node_unique_id").and_then(Value::as_str) {
         Some(hex_string) => hex_string_to_pearson_hash(hex_string)?, // Use your function. Propagate error with ?.
-        None => return Err("Missing node_unique_id".to_string()),
+        None => return Err("error: load_core_node_from_toml_file(), Missing node_unique_id".to_string()),
     };
     
     // 3. Deserialize into CoreNode Struct (Manually)
@@ -8157,7 +8159,6 @@ fn generate_random_salt() -> String {
     format!("0x{:X}", salt) // Convert to hexadecimal string with "0x" prefix
 }
 
-
 /// Moves a task (node) from one column to another in the task browser.
 /// Updates all relevant paths in node.toml files.
 ///
@@ -8169,37 +8170,40 @@ fn generate_random_salt() -> String {
 ///
 /// * `Result<(), ThisProjectError>` - Success or error status
 fn move_task(
-    path_lookup_table: &HashMap<usize, PathBuf>
+    next_path_lookup_table: &HashMap<usize, PathBuf>
 ) -> Result<(), ThisProjectError> {
+    debug_log("starting move_task()");
     // 1. Get source task number
     println!("Enter task number to move:");
     let task_num = get_user_input_number()?;
     
     // Get source path from lookup
-    let source_path = match path_lookup_table.get(&task_num) {
+    let source_path = match next_path_lookup_table.get(&task_num) {
         Some(path) => path.clone(),
         None => return Err(ThisProjectError::InvalidData(
             format!("Task number {} not found", task_num)
         )),
     };
-    debug_log!("Source path: {:?}", source_path);
+    debug_log!("move_task(), Source path: {:?}", source_path);
 
     // 2. Get destination column number
     println!("Enter destination column number:");
     let dest_num = get_user_input_number()?;
     
     // Get destination path from lookup
-    let dest_path = match path_lookup_table.get(&dest_num) {
+    let dest_path = match next_path_lookup_table.get(&dest_num) {
         Some(path) => path.clone(),
         None => return Err(ThisProjectError::InvalidData(
             format!("Destination column {} not found", dest_num)
         )),
     };
-    debug_log!("Destination path: {:?}", dest_path);
+    debug_log!("move_task(), Destination path: {:?}", dest_path);
 
     // 3. Perform the move operation
     move_node_directory(source_path, dest_path)?;
-
+    debug_log!(
+        "ending move_task()"
+        );
     Ok(())
 }
 
@@ -8212,55 +8216,436 @@ fn get_user_input_number() -> Result<usize, ThisProjectError> {
     )
 }
 
-/// Moves a node directory and updates all internal paths
+// /*
+// This may be garbage:
+// For Task Mode:
+// 1. Link to tasks: view node 2nd layer deep using links in graph nav struct
+
+// 2. Move task(node) to new directory
+// Maybe use the lookup-number directory to get the path of the item to move.
+
+// - command "move"
+// - a Q&A interface:
+// Q: Move what task?
+// A: int
+// (maybe get path from next-path lookup dict)
+
+// Q: move to what column?
+// A: int
+// (this can also be from the lookup path dict)
+
+
+// Moving a task involves:
+// 1. move_from_path = (from next path lookup table)
+// 2. move_to_directory_path = (from next path lookup table)
+// 3. in move_from_path directory, change "directory_path" node.toml field to be move_to_directory_path 
+// 4. recursively move the whole directory to the new location...
+// (note: internal nodes? local path? full path?)
+// 5. resetting the file paths of all nested nodes (unless those are relative...)
+// - iterate through new directory path recursively
+// - look for node.toml files
+// - set node_path to that absolute path
+
+// why is this reading the file BEFORE the move?
+
+// Why is the using path recorded IN the file,
+// instead of the literal path to that file?
+
+// Why is there no doc-string?
+// */
+// /// Moves a node directory and updates all internal paths
+// fn move_node_directory(
+//     source_path: PathBuf,
+//     dest_path: PathBuf
+// ) -> Result<(), ThisProjectError> {
+//     debug_log("Starting move_node_directory()");
+    
+//     debug_log!("Moving node from {:?} to {:?}", source_path, dest_path);
+
+//     // 1. Read the source node.toml
+//     let node_toml_path = source_path.join("node.toml");
+//     let mut node = load_core_node_from_toml_file(&node_toml_path)
+//         .map_err(|e| ThisProjectError::InvalidData(e))?;
+
+//     // 2. Update the node's directory path
+//     node.directory_path = dest_path.clone();
+
+//     // 3. Create the new directory
+//     let new_node_path = dest_path.join(source_path.file_name().unwrap());
+//     fs::create_dir_all(&new_node_path)?;
+
+//     // 4. Move the directory contents
+//     move_directory_contents(&source_path, &new_node_path)?;
+
+//     // 5. Update paths in all nested node.toml files
+//     update_nested_node_paths(&new_node_path)?;
+
+//     // 6. Remove the old directory
+//     fs::remove_dir_all(source_path)?;
+
+//     Ok(())
+// }
+
+// /// Updates paths in all nested node.toml files
+// fn update_nested_node_paths(
+//     dir_path: &Path
+// ) -> Result<(), ThisProjectError> {
+//     debug_log("starting update_nested_node_paths()");
+//     for entry in fs::read_dir(dir_path)? {
+//         let entry = entry?;
+//         let path = entry.path();
+
+//         if path.is_dir() {
+//             update_nested_node_paths(&path)?;
+//         } else if path.file_name().unwrap() == "node.toml" {
+//             let mut node = load_core_node_from_toml_file(&path)
+//                 .map_err(|e| ThisProjectError::InvalidData(e))?;
+//             node.directory_path = path.parent().unwrap().to_path_buf();
+//             save_toml_to_file(&node, &path)?;
+//         }
+//     }
+//     Ok(())
+// }
+
+// /// Recursively moves directory contents
+// fn move_directory_contents(
+//     from: &Path,
+//     to: &Path
+// ) -> Result<(), ThisProjectError> {
+//     debug_log("starting move_directory_contents()");
+//     for entry in fs::read_dir(from)? {
+//         let entry = entry?;
+//         let path = entry.path();
+//         let destination = to.join(path.file_name().unwrap());
+
+//         if path.is_dir() {
+//             fs::create_dir_all(&destination)?;
+//             move_directory_contents(&path, &destination)?;
+//         } else {
+//             fs::copy(&path, &destination)?;
+//         }
+//     }
+//     Ok(())
+// }
+
+// /// Moves a node directory and updates its metadata.
+// ///
+// /// This function moves a node's directory from the `source_path` to the `dest_path`.
+// /// It updates the `directory_path` field in the node's `node.toml` file to reflect
+// /// the new location. The function uses the `source_path`, not path within the struct.
+// /// It handles directory creation, moving, and file updates efficiently.
+// ///
+// /// # Arguments
+// ///
+// /// * `source_path`: The current path to the node's directory.
+// /// * `dest_path`: The intended path for the moved node's directory.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<(), ThisProjectError>`: `Ok(())` if the move is successful; otherwise, a `ThisProjectError` is returned.
+// fn move_node_directory(
+//     source_path: PathBuf,
+//     dest_path: PathBuf,
+// ) -> Result<(), ThisProjectError> {
+//     debug_log!("Starting move_node_directory()");
+//     debug_log!("Moving node from {:?} to {:?}", source_path, dest_path);
+
+//     // 1. Construct the new node path (where the moved node will be located).
+//     let new_node_path = dest_path.join(source_path.file_name().unwrap());
+//     debug_log!("move_node_directory: new_node_path is: {:?}", new_node_path);
+
+//     // 2. Create the new directory, including all parents.
+//     fs::create_dir_all(&new_node_path)?;
+//     debug_log!("move_node_directory: created new_node_path: {:?}", new_node_path);
+
+//     // 3. Recursively move the source directory's contents to the new directory.
+//     move_directory_contents(&source_path, &new_node_path)?;
+//     debug_log!("move_node_directory: contents moved to: {:?}", new_node_path);
+
+//     // 4. Update node.toml (use full path)
+//     // (The old path is already deleted by move_directory_contents)
+//     update_node_path_in_toml(&new_node_path)?;
+//     debug_log!("move_node_directory: updated node.toml paths");
+    
+//     // 5. Remove the old directory.
+//     fs::remove_dir_all(source_path.clone())?;
+//     // fs::remove_dir_all(source_path)?;
+//     debug_log!("move_node_directory: removed source_path at : {:?}", source_path);
+    
+//     Ok(())
+// }
+
+
+// /// Updates the directory_path in node.toml
+// /// Does NOT attempt to move anything
+// fn update_node_path_in_toml(new_node_path: &Path) -> Result<(), ThisProjectError> {
+//     debug_log!("starting update_node_path_in_toml(), for path: {:?}", new_node_path);
+
+//     let node_toml_path = new_node_path.join("node.toml");
+
+//     // 1. Read node.toml file:
+//     let mut node = load_core_node_from_toml_file(&node_toml_path)
+//         .map_err(|e| ThisProjectError::InvalidData(e))?;
+    
+//     // 2. Check if directory path is already the new path:
+//     if node.directory_path == new_node_path {
+//         debug_log!(
+//             "skipping: update_node_path_in_toml(): node_toml.directory_path is already = {:?}, so no change required",
+//             node.directory_path
+//         );
+//         return Ok(());
+//     }
+    
+//     debug_log!("update_node_path_in_toml: old-node.directory_path: {:?}", node.directory_path);
+
+//     // 3. Set new node.directory_path:
+//     node.directory_path = new_node_path.to_path_buf();
+//     debug_log!("update_node_path_in_toml: new-node.directory_path: {:?}", node.directory_path);
+        
+//     // 4. Write node.toml file:
+//     save_toml_to_file(&node, &node_toml_path)?; // No need to use new_node_path again
+
+//     debug_log!("Successfully updated node.toml directory path.");
+//     Ok(())
+// }
+
+// /// Recursively moves directory contents
+// fn move_directory_contents(
+//     from: &Path,
+//     to: &Path
+// ) -> Result<(), ThisProjectError> {
+//     debug_log("starting move_directory_contents()");
+//     for entry in fs::read_dir(from)? {
+//         let entry = entry?;
+//         let path = entry.path();
+//         let destination = to.join(path.file_name().unwrap());
+
+//         if path.is_dir() {
+//             fs::create_dir_all(&destination)?;
+//             move_directory_contents(&path, &destination)?;
+//         } else {
+//             fs::copy(&path, &destination)?;
+//         }
+//     }
+//     Ok(())
+// }
+
+/// Moves a node directory and updates its metadata.
+///
+/// This function moves a node's directory from the `source_path` to the `dest_path`.
+/// It updates the `directory_path` field in the node's `node.toml` file to reflect
+/// the new location. The function uses the `source_path`, not path within the struct.
+/// It handles directory creation, moving, and file updates efficiently.
+///
+/// # Arguments
+///
+/// * `source_path`: The current path to the node's directory.
+/// * `dest_path`: The intended path for the moved node's directory.
+///
+/// # Returns
+///
+/// * `Result<(), ThisProjectError>`: `Ok(())` if the move is successful; otherwise, a `ThisProjectError` is returned.
 fn move_node_directory(
     source_path: PathBuf,
-    dest_path: PathBuf
+    dest_path: PathBuf,
 ) -> Result<(), ThisProjectError> {
+    debug_log!("Starting move_node_directory()");
     debug_log!("Moving node from {:?} to {:?}", source_path, dest_path);
 
-    // 1. Read the source node.toml
-    let node_toml_path = source_path.join("node.toml");
-    let mut node = load_core_node_from_toml_file(&node_toml_path)
-        .map_err(|e| ThisProjectError::InvalidData(e))?;
-
-    // 2. Update the node's directory path
-    node.directory_path = dest_path.clone();
-
-    // 3. Create the new directory
+    // 1. Construct the new node path (where the moved node will be located).
     let new_node_path = dest_path.join(source_path.file_name().unwrap());
+    debug_log!("move_node_directory: new_node_path is: {:?}", new_node_path);
+
+    // 2. Create the new directory, including all parents.
     fs::create_dir_all(&new_node_path)?;
+    debug_log!("move_node_directory: created new_node_path: {:?}", new_node_path);
 
-    // 4. Move the directory contents
+
+    // let original_node_toml_path = new_node_path.push("node.toml");
+    let mut original_node_toml_path = source_path.clone();
+    original_node_toml_path.push("node.toml");
+    
+    // 3. Update node.toml (use full path)
+    // Option 1: Using to_string_lossy() (safest for paths that might contain non-UTF-8 characters)    
+    let mut new_node_path_string = dest_path.to_string_lossy().into_owned();    
+    
+    debug_log!(
+        "next: match safe_update_toml_field(\n{:?},\n{:?},\n{:?},\n)",
+        &original_node_toml_path,   // path to .toml
+        &new_node_path_string, // new value
+        "directory_path",      // name of field
+    );
+
+    match safe_update_toml_field(
+        &original_node_toml_path,        // path to .toml
+        &new_node_path_string, // new value
+        "directory_path",     // name of field
+    ) {
+        Ok(_) => println!("Successfully updated TOML file"),
+        Err(e) => eprintln!("Error: {}", e)
+    }    
+    
+    
+    // 4. Recursively move the source directory's contents to the new directory.
     move_directory_contents(&source_path, &new_node_path)?;
+    debug_log!("move_node_directory: contents moved to: {:?}", new_node_path);
 
-    // 5. Update paths in all nested node.toml files
-    update_nested_node_paths(&new_node_path)?;
 
-    // 6. Remove the old directory
-    fs::remove_dir_all(source_path)?;
 
+    
+    debug_log!("move_node_directory: updated node.toml paths");
+    
+    // 5. Remove the old directory.
+    fs::remove_dir_all(source_path.clone())?;
+    debug_log!("move_node_directory: removed source_path at : {:?}", source_path);
+    
     Ok(())
 }
 
-/// Updates paths in all nested node.toml files
-fn update_nested_node_paths(
-    dir_path: &Path
-) -> Result<(), ThisProjectError> {
-    for entry in fs::read_dir(dir_path)? {
-        let entry = entry?;
-        let path = entry.path();
+/// Updates the directory_path in node.toml
+/// Does NOT attempt to move anything
+fn update_node_path_in_toml(new_node_path: &Path) -> Result<(), ThisProjectError> {
+    debug_log!("starting update_node_path_in_toml(), for path: {:?}", new_node_path);
 
-        if path.is_dir() {
-            update_nested_node_paths(&path)?;
-        } else if path.file_name().unwrap() == "node.toml" {
-            let mut node = load_core_node_from_toml_file(&path)
-                .map_err(|e| ThisProjectError::InvalidData(e))?;
-            node.directory_path = path.parent().unwrap().to_path_buf();
-            save_toml_to_file(&node, &path)?;
+    let node_toml_path = new_node_path.join("node.toml");
+
+    // 1. Read node.toml file:
+    let mut node = load_core_node_from_toml_file(&node_toml_path)
+        .map_err(|e| ThisProjectError::InvalidData(e))?;
+    
+    // 2. Check if directory path is already the new path:
+    if node.directory_path == new_node_path {
+        debug_log!(
+            "skipping: update_node_path_in_toml(): node_toml.directory_path is already = {:?}, so no change required",
+            node.directory_path
+        );
+        return Ok(());
+    }
+    
+    debug_log!("update_node_path_in_toml: old-node.directory_path: {:?}", node.directory_path);
+
+    // 3. Set new node.directory_path:
+    node.directory_path = new_node_path.to_path_buf();
+    debug_log!("update_node_path_in_toml: new-node.directory_path: {:?}", node.directory_path);
+        
+    // 4. Write node.toml file:
+    save_toml_to_file(&node, &node_toml_path)?; // No need to use new_node_path again
+
+    debug_log!("Successfully updated node.toml directory path.");
+    Ok(())
+}
+
+
+/// Updates a specified field in a TOML file with a new value.
+/// 
+/// # Arguments
+/// 
+/// * `path` - A PathBuf containing the path to the TOML file
+/// * `new_string` - A string slice containing the new value to be set
+/// * `field` - A string slice containing the name of the field to update
+/// 
+/// # Returns
+/// 
+/// * `io::Result<()>` - Ok(()) on success, or an error if the operation fails
+/// 
+/// # Example
+/// 
+/// ```
+/// # use std::fs;
+/// # use std::path::PathBuf;
+/// # fs::write("example.toml", "field = \"old_value\"").unwrap();
+/// let path = PathBuf::from("example.toml");
+/// let result = update_toml_field(&path, "new_value", "field");
+/// # fs::remove_file("example.toml").unwrap();
+/// ```
+pub fn update_toml_field(
+    path: &PathBuf, 
+    new_string: &str, 
+    field: &str
+) -> io::Result<()> {
+    // Read the entire file content using PathBuf's as_path() method
+    let content = fs::read_to_string(path.as_path())?;
+    
+    // Create a temporary file with the same name plus .tmp
+    let temp_path = path.with_extension("tmp");
+    let mut temp_file = File::create(&temp_path)?;
+    
+    let mut field_found = false;
+    
+    // Process each line
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with(field) && trimmed.contains('=') {
+            // Write the new line for the matching field
+            writeln!(temp_file, "{} = \"{}\"", field, new_string)?;
+            field_found = true;
+        } else {
+            // Write the original line
+            writeln!(temp_file, "{}", line)?;
         }
     }
+    
+    // If field wasn't found, append it
+    if !field_found {
+        writeln!(temp_file, "{} = \"{}\"", field, new_string)?;
+    }
+    
+    // Ensure all data is written
+    temp_file.flush()?;
+    
+    // Replace the original file with the temporary file
+    fs::rename(temp_path, path)?;
+    
     Ok(())
+}
+
+/// A safer wrapper function that includes additional error checking.
+/// 
+/// # Arguments
+/// 
+/// * `path` - A PathBuf containing the path to the TOML file
+/// * `new_string` - A string slice containing the new value to be set
+/// * `field` - A string slice containing the name of the field to update
+/// 
+/// # Returns
+/// 
+/// * `Result<(), String>` - Ok(()) on success, or an error message if the operation fails
+///
+/// Example Use:
+/// ```
+/// use std::path::PathBuf;
+/// let config_path = PathBuf::from("config.toml");
+/// match safe_update_toml_field(&config_path, "alice", "user_name") {
+///     Ok(_) => println!("Successfully updated TOML file"),
+///     Err(e) => eprintln!("Error: {}", e)
+/// }
+/// ```
+pub fn safe_update_toml_field(
+    path: &PathBuf, 
+    new_string: &str, 
+    field: &str
+) -> Result<(), String> {
+    
+    debug_log("starting safe_update_toml_field()");
+
+    debug_log!(
+        "in safe_update_toml_field(\n{:?},\n{:?},\n{:?},\n)",
+        &path,   // path to .toml
+        &new_string, // new value
+        "field",      // name of field
+    );    
+    
+    // Validate inputs
+    if field.is_empty() {
+        return Err("Error: safe_update_toml_field() Field name cannot be empty".to_string());
+    }
+    
+    if !path.exists() {
+        return Err(format!("Error: safe_update_toml_field() File not found: {}", path.display()));
+    }
+    
+    update_toml_field(path, new_string, field)
+        .map_err(|e| format!("Error: safe_update_toml_field() Failed to update TOML file: {}", e))
 }
 
 /// Recursively moves directory contents
@@ -8268,6 +8653,7 @@ fn move_directory_contents(
     from: &Path,
     to: &Path
 ) -> Result<(), ThisProjectError> {
+    debug_log("starting move_directory_contents()");
     for entry in fs::read_dir(from)? {
         let entry = entry?;
         let path = entry.path();
@@ -8277,7 +8663,8 @@ fn move_directory_contents(
             fs::create_dir_all(&destination)?;
             move_directory_contents(&path, &destination)?;
         } else {
-            fs::copy(&path, &destination)?;
+            // Now, move the file instead of copying it
+            fs::rename(&path, &destination)?;
         }
     }
     Ok(())
@@ -8751,6 +9138,8 @@ fn pearson_hash_to_hex_string(hash: &[u8]) -> String {
 ///
 /// * `Result<Vec<u8>, String>`: The Pearson hash as a `Vec<u8>`, or an error message.
 fn hex_string_to_pearson_hash(hex_string: &str) -> Result<Vec<u8>, String> {
+    debug_log("starting hex_string_to_pearson_hash()");
+    
     if hex_string.len() % 2 != 0 {
         return Err("Invalid hex string: Length must be even".to_string());
     }
@@ -8763,6 +9152,7 @@ fn hex_string_to_pearson_hash(hex_string: &str) -> Result<Vec<u8>, String> {
             Err(_) => return Err(format!("Invalid hex string: Invalid byte: {}", hex_byte)),
         }
     }
+    debug_log("end of hex_string_to_pearson_hash");
     Ok(hash)
 }
 
@@ -14139,7 +14529,14 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
             debug_log("handle_tui_action() started in we_love_projects_loop()");
 
             if input == "t" {
-                // pass
+                
+                // pass (no additional action if task mode entered)
+            
+            } else if input == "move" {
+                move_task(
+                    &app.next_path_lookup_table,
+                );
+                
 
             } else if input == "back" {
                 debug_log("escape toggled");

@@ -1,0 +1,9 @@
+owner = "alice"
+teamchannel_collaborators_with_access = []
+updated_at_timestamp = 1735690049
+expires_at = 1735690049
+node_name = "tofu"
+path_in_node = "/instant_message_browser"
+expiration_period_days = 30
+max_message_size_char = 4096
+total_max_size_mb = 512
