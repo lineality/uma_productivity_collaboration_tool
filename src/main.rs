@@ -2995,7 +2995,7 @@ impl App {
                                       
         if self.is_in_team_channel_list() {
             debug_log("is_in_team_channel_list");
-            debug_log(&format!("current_path: {:?}", self.current_path));
+            debug_log(&format!("handle_tui_action() current_path: {:?}", self.current_path));
             
             let input = tiny_tui::get_input()?; // Get input here
             if let Ok(index) = input.parse::<usize>() { 
@@ -3006,13 +3006,13 @@ impl App {
                     
                     self.current_path = self.current_path.join(selected_channel);
                     
-                    debug_log(&format!("New current_path: {:?}", self.current_path)); // Log the updated current path
+                    debug_log(&format!("handle_tui_action() New current_path: {:?}", self.current_path)); // Log the updated current path
                     
                     self.graph_navigation_instance_state.current_full_file_path = self.current_path.clone();
-                    self.graph_navigation_instance_state.look_read_node_toml(); 
+                    self.graph_navigation_instance_state.nav_graph_look_read_node_toml(); 
 
                     // Log the state after loading node.toml
-                    debug_log(&format!("handle_tui_action() State after look_read_node_toml: {:?}", self.graph_navigation_instance_state));
+                    debug_log(&format!("handle_tui_action() State after nav_graph_look_read_node_toml: {:?}", self.graph_navigation_instance_state));
                     
                     // ... enter IM browser or other features ...
                 } else {
@@ -3281,7 +3281,8 @@ impl App {
     // }
 
 
-    fn get_full_task_path(&self, task_index: usize) -> Option<PathBuf> { 
+    fn get_full_task_path(&self, task_index: usize) -> Option<PathBuf> {
+        debug_log("starting get_full_task_path()");
         // Extract data to form a path:
         if let Some(task_entry) = self.tui_file_list.get(task_index) {
             let parts: Vec<&str> = task_entry.split('.').collect(); // Corrected split and collect
@@ -4073,7 +4074,8 @@ struct GraphNavigationInstanceState {
 
 impl GraphNavigationInstanceState {
     
-    /// See if you want to use load_core_node_from_toml_file() instead.
+    /// To read a node toml: See if you want to use load_core_node_from_toml_file() instead.
+    ///
     /// Loads and updates the `GraphNavigationInstanceState` based on the `current_full_file_path`.
     ///
     /// This method is called whenever the user navigates to a new directory within the 
@@ -4130,125 +4132,269 @@ impl GraphNavigationInstanceState {
     /// Note: it is crutial that he source of truth for whether a node is a team-channel node be the file-structure itself
     /// and that code to extract team-channel connection data (such as port-assignments) is never attempted used in other
     /// nodes such as non-team-channel nodes within that team-channel (nearly ~everything is a node, only a few are team-channels)
-    fn look_read_node_toml(&mut self) {
-        
+    fn nav_graph_look_read_node_toml(&mut self) {
         debug_log!(
-            "starting look_read_node_toml() self.current_full_file_path -> {:?}, self.active_team_channel.clone() -> {:?}", 
+            "starting nav_graph_look_read_node_toml() self.current_full_file_path -> {:?}, self.active_team_channel.clone() -> {:?}", 
+            
             self.current_full_file_path.clone(),
             self.active_team_channel.clone(),
         );
 
         let node_toml_path = self.current_full_file_path.join("node.toml");
-        debug_log!("look_read_node_toml() node_toml_path -> {:?}", node_toml_path.clone());
-
-        // 2. Check if node.toml exists 
-        if node_toml_path.exists() { 
-            debug_log!("look_read_node_toml() node.toml found at: {:?}", node_toml_path);
-
-            // --- UPDATE current_node_directory_path.txt HERE ---
-            let team_channel_dir_path = self.current_full_file_path.clone(); 
-            if let Err(e) = fs::write(
-                "project_graph_data/session_state_items/current_node_directory_path.txt", 
-                team_channel_dir_path.to_string_lossy().as_bytes(), // Convert to byte slice
-            ) {
-                debug_log!("Error look_read_node_toml() writing team channel directory path to file: {}", e);
-                // Handle the error appropriately (e.g., display an error message)
-        }
-
-        // 1. Handle File Existence Error
-        if !node_toml_path.exists() {
-            debug_log!("ERROR: look_read_node_toml() node.toml not found at {:?}. This directory is not a node.", node_toml_path);
-            return; 
-        }
-
-        // 2. Handle TOML Parsing Error
-        let this_node = match load_core_node_from_toml_file(&node_toml_path) { 
-            Ok(node) => node,
-            Err(e) => {
-                debug_log!("ERROR: look_read_node_toml() Failed to load node.toml: {}", e); 
-                return; 
-            }
-        };
-
-            // 3. Check if this is a Team Channel Node 
-            // TODO maybe also check for a node.toml file
-            let path_components: Vec<_> = self.current_full_file_path.components().collect();
-
-            if path_components.len() >= 2 
-                && path_components[path_components.len() - 2].as_os_str() == "team_channels" 
-            {
-                self.active_team_channel = this_node.node_name.clone();
-
-                //maybe also check for a node.toml file
-                
-                // 5. Update GraphNavigationInstanceState with node.toml data (for Team Channel Nodes)
-                self.current_node_teamchannel_collaborators_with_access = this_node.teamchannel_collaborators_with_access.clone();
-                self.current_node_name = this_node.node_name.clone();
-                self.current_node_owner = this_node.owner.clone();
-                self.current_node_description_for_tui = this_node.description_for_tui.clone();
-                self.current_node_directory_path = this_node.directory_path.clone();
-                self.current_node_unique_id = this_node.node_unique_id;
-                self.home_square_one = false;
-                // Note: `current_node_members` appears to be unused, consider removing it
-                self.agenda_process = this_node.agenda_process;
-                self.goals_features_subfeatures_tools_targets = this_node.goals_features_subfeatures_tools_targets;
-                self.scope = this_node.scope;
-                self.schedule_duration_start_end = this_node.schedule_duration_start_end;
-                
-                
-                
-            }
-            
-        } else {
-            debug_log("not a node, no updateS");
-        } // End of Team Channel Node Handling
         
         debug_log!(
-            "ending look_read_node_toml()");
+            "nav_graph_look_read_node_toml() node_toml_path -> {:?}",
+            node_toml_path.clone()
+        );
 
-        // ... (Rest of your logic for handling other node types) ...
-    }    
-
-    fn save_to_session_items(&self) -> Result<(), io::Error> {
-            let session_items_path = Path::new("project_graph_data/session_state_items");
-
-            // 1. Save simple string values as plain text:
-            fs::write(session_items_path.join("local_owner_user.txt"), &self.local_owner_user)?;
-            fs::write(session_items_path.join("active_team_channel.txt"), &self.active_team_channel)?;
-            // ... (save other simple string values)
-
-            // 2. Save u64 values as plain text:
-            fs::write(session_items_path.join("default_im_messages_expiration_days.txt"), self.default_im_messages_expiration_days.to_string())?;
-            fs::write(session_items_path.join("default_task_nodes_expiration_days.txt"), self.default_task_nodes_expiration_days.to_string())?;
-            fs::write(session_items_path.join("current_node_unique_id.txt"), pearson_hash_to_hex_string(&self.current_node_unique_id))?;
-
-            // 3. Save PathBuf as plain text:
-            // fs::write(session_items_path.join("current_full_file_path.txt"), self.current_full_file_path.to_string_lossy())?;
-            // fs::write(session_items_path.join("current_node_directory_path.txt"), self.current_node_directory_path.to_string_lossy())?;
-            fs::write(
-                session_items_path.join("current_full_file_path.txt"), 
-                self.current_full_file_path.as_os_str().to_string_lossy().as_bytes(), 
-            )?;
+        debug_log!(
+            "nav_graph_look_read_node_toml() node_toml_path -> {:?}",
+            node_toml_path.clone()
+        );
         
-            fs::write(
-                session_items_path.join("current_node_directory_path.txt"), 
-                self.current_node_directory_path.as_os_str().to_string_lossy().as_bytes(), 
-            )?; 
-            
-            // 4. Save Vec<String> as TOML:
-            let collaborators_toml = toml::to_string(&self.current_node_teamchannel_collaborators_with_access).map_err(|e| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("Failed to serialize collaborators to TOML: {}", e),
-                )
-            })?;
-            fs::write(session_items_path.join("current_node_teamchannel_collaborators_with_access.toml"), collaborators_toml)?;
-            
-            // ... (save other Vec<String> values similarly)
+        // Add more detailed existence checking
+        debug_log!("Checking if path exists: {:?}", node_toml_path.exists());
+        debug_log!("Checking if path is file: {:?}", node_toml_path.is_file());
+        
+        // Try to read the file metadata
+        match fs::metadata(&node_toml_path) {
+            Ok(metadata) => {
+                debug_log!("File metadata found: is_file={}, size={}", metadata.is_file(), metadata.len());
+            },
+            Err(e) => {
+                debug_log!("Error reading file metadata: {}", e);
+            }
+        }
 
-            Ok(())
-    }
-}
+        // Try to open and read the file
+        match fs::read_to_string(&node_toml_path) {
+            Ok(contents) => {
+                debug_log!("Successfully read file, content length: {}", contents.len());
+                
+                // Load and parse the node.toml file
+                let this_node = match load_core_node_from_toml_file(&node_toml_path) { 
+                    Ok(node) => node,
+                    Err(e) => {
+                        debug_log!("ERROR: nav_graph_look_read_node_toml() Failed to load node.toml: {}", e); 
+                        return; 
+                    }
+                };
+                
+                debug_log!("nav_graph_look_read_node_toml(), this_node -> {:?}", this_node);
+
+                // Check if this is a Team Channel Node using path components
+                let is_team_channel = self.current_full_file_path
+                    .components()
+                    .any(|component| component.as_os_str() == "team_channels");
+
+                if is_team_channel {
+                    // Update state for team channel node
+                    self.active_team_channel = this_node.node_name.clone();
+                    self.current_node_teamchannel_collaborators_with_access = this_node.teamchannel_collaborators_with_access.clone();
+                    self.current_node_name = this_node.node_name.clone();
+                    self.current_node_owner = this_node.owner.clone();
+                    self.current_node_description_for_tui = this_node.description_for_tui.clone();
+                    self.current_node_directory_path = this_node.directory_path.clone();
+                    self.current_node_unique_id = this_node.node_unique_id;
+                    self.home_square_one = false;
+                    self.agenda_process = this_node.agenda_process;
+                    self.goals_features_subfeatures_tools_targets = this_node.goals_features_subfeatures_tools_targets;
+                    self.scope = this_node.scope;
+                    self.schedule_duration_start_end = this_node.schedule_duration_start_end;
+                } else {
+                    debug_log!("nav_graph_look_read_node_toml(), not a team channel node");
+                }
+            },
+            Err(e) => {
+                debug_log!("Error reading file: {}", e);
+                debug_log!("This directory is not a node. nav_graph_look_read_node_toml() node.toml not found at {:?}. ", node_toml_path);
+                return;
+            }
+        }
+
+        debug_log!("ending: nav_graph_look_read_node_toml()");
+}    
+    
+    // fn nav_graph_look_read_node_toml(&mut self) {
+    // debug_log!(
+    //     "starting nav_graph_look_read_node_toml() self.current_full_file_path -> {:?}, self.active_team_channel.clone() -> {:?}", 
+    //     self.current_full_file_path.clone(),
+    //     self.active_team_channel.clone(),
+    // );
+
+    // let node_toml_path = self.current_full_file_path.join("node.toml");
+    // debug_log!("nav_graph_look_read_node_toml() node_toml_path -> {:?}", node_toml_path.clone());
+
+    // // Check if node.toml exists (do this check only once)
+    // if !node_toml_path.exists() {
+    //     debug_log!("This directory is not a node. nav_graph_look_read_node_toml() node.toml not found at {:?}. ", node_toml_path);
+    //     return;
+    // }
+
+    // debug_log!("nav_graph_look_read_node_toml() node.toml found at: {:?}", node_toml_path);
+
+    // // Load and parse the node.toml file
+    // let this_node = match load_core_node_from_toml_file(&node_toml_path) { 
+    //     Ok(node) => node,
+    //     Err(e) => {
+    //         debug_log!("ERROR: nav_graph_look_read_node_toml() Failed to load node.toml: {}", e); 
+    //         return; 
+    //     }
+    // };
+    
+    // debug_log!("nav_graph_look_read_node_toml(), this_node -> {:?}", this_node);
+
+    // // Update current_node_directory_path.txt
+    // if let Err(e) = fs::write(
+    //     "project_graph_data/session_state_items/current_node_directory_path.txt", 
+    //     self.current_full_file_path.to_string_lossy().as_bytes(),
+    // ) {
+    //     debug_log!("Error nav_graph_look_read_node_toml() writing team channel directory path to file: {}", e);
+    // }
+
+    // // Check if this is a Team Channel Node using path components
+    // let is_team_channel = self.current_full_file_path
+    //     .components()
+    //     .any(|component| component.as_os_str() == "team_channels");
+
+    // if is_team_channel {
+    //     // Update state for team channel node
+    //     self.active_team_channel = this_node.node_name.clone();
+    //     self.current_node_teamchannel_collaborators_with_access = this_node.teamchannel_collaborators_with_access.clone();
+    //     self.current_node_name = this_node.node_name.clone();
+    //     self.current_node_owner = this_node.owner.clone();
+    //     self.current_node_description_for_tui = this_node.description_for_tui.clone();
+    //     self.current_node_directory_path = this_node.directory_path.clone();
+    //     self.current_node_unique_id = this_node.node_unique_id;
+    //     self.home_square_one = false;
+    //     self.agenda_process = this_node.agenda_process;
+    //     self.goals_features_subfeatures_tools_targets = this_node.goals_features_subfeatures_tools_targets;
+    //     self.scope = this_node.scope;
+    //     self.schedule_duration_start_end = this_node.schedule_duration_start_end;
+    // } else {
+    //     debug_log!("nav_graph_look_read_node_toml(), not a team channel node");
+    // }
+
+    // debug_log!("ending: nav_graph_look_read_node_toml()");
+    // }
+        
+//     fn nav_graph_look_read_node_toml(&mut self) {
+        
+//         debug_log!(
+//             "starting nav_graph_look_read_node_toml() self.current_full_file_path -> {:?}, self.active_team_channel.clone() -> {:?}", 
+//             self.current_full_file_path.clone(),
+//             self.active_team_channel.clone(),
+//         );
+
+//         let node_toml_path = self.current_full_file_path.join("node.toml");
+//         debug_log!("nav_graph_look_read_node_toml() node_toml_path -> {:?}", node_toml_path.clone());
+
+//         // 2. Check if node.toml exists 
+//         if node_toml_path.exists() { 
+//             debug_log!("nav_graph_look_read_node_toml() node.toml found at: {:?}", node_toml_path);
+
+//             // --- UPDATE current_node_directory_path.txt HERE ---
+//             let team_channel_dir_path = self.current_full_file_path.clone(); 
+//             if let Err(e) = fs::write(
+//                 "project_graph_data/session_state_items/current_node_directory_path.txt", 
+//                 team_channel_dir_path.to_string_lossy().as_bytes(), // Convert to byte slice
+//             ) {
+//                 debug_log!("Error nav_graph_look_read_node_toml() writing team channel directory path to file: {}", e);
+//                 // Handle the error appropriately (e.g., display an error message)
+//             }
+
+//             // 1. Handle File Existence Error
+//             if !node_toml_path.exists() {
+//                 debug_log!("This directory is not a node. nav_graph_look_read_node_toml() node.toml not found at {:?}. ", node_toml_path);
+//                 return; 
+//             }
+
+//             // 2. Handle TOML Parsing Error
+//             let this_node = match load_core_node_from_toml_file(&node_toml_path) { 
+//                 Ok(node) => node,
+//                 Err(e) => {
+//                     debug_log!("ERROR: nav_graph_look_read_node_toml() Failed to load node.toml: {}", e); 
+//                     return; 
+//                 }
+//             };
+            
+//             debug_log!("nav_graph_look_read_node_toml(), this_node -> {:?}", this_node);
+
+//             // 3. Check if this is a Team Channel Node 
+//             // TODO maybe also check for a node.toml file
+//             let path_components: Vec<_> = self.current_full_file_path.components().collect();
+
+//             if path_components.len() >= 2 
+//                 && path_components[path_components.len() - 2].as_os_str() == "team_channels" 
+//             {
+//                 self.active_team_channel = this_node.node_name.clone();
+
+//                 //maybe also check for a node.toml file
+                
+//                 // 5. Update GraphNavigationInstanceState with node.toml data (for Team Channel Nodes)
+//                 self.current_node_teamchannel_collaborators_with_access = this_node.teamchannel_collaborators_with_access.clone();
+//                 self.current_node_name = this_node.node_name.clone();
+//                 self.current_node_owner = this_node.owner.clone();
+//                 self.current_node_description_for_tui = this_node.description_for_tui.clone();
+//                 self.current_node_directory_path = this_node.directory_path.clone();
+//                 self.current_node_unique_id = this_node.node_unique_id;
+//                 self.home_square_one = false;
+//                 // Note: `current_node_members` appears to be unused, consider removing it
+//                 self.agenda_process = this_node.agenda_process;
+//                 self.goals_features_subfeatures_tools_targets = this_node.goals_features_subfeatures_tools_targets;
+//                 self.scope = this_node.scope;
+//                 self.schedule_duration_start_end = this_node.schedule_duration_start_end;
+//             } // end of if path_components.len() >= 2 
+        
+//         } else {
+//             debug_log("nav_graph_look_read_node_toml(), not a node, no updates");
+//         } // End of Team Channel Node Handling
+        
+//         debug_log!(
+//             "ending: nav_graph_look_read_node_toml()");
+//     }    
+
+//     fn save_to_session_items(&self) -> Result<(), io::Error> {
+//             let session_items_path = Path::new("project_graph_data/session_state_items");
+
+//             // 1. Save simple string values as plain text:
+//             fs::write(session_items_path.join("local_owner_user.txt"), &self.local_owner_user)?;
+//             fs::write(session_items_path.join("active_team_channel.txt"), &self.active_team_channel)?;
+//             // ... (save other simple string values)
+
+//             // 2. Save u64 values as plain text:
+//             fs::write(session_items_path.join("default_im_messages_expiration_days.txt"), self.default_im_messages_expiration_days.to_string())?;
+//             fs::write(session_items_path.join("default_task_nodes_expiration_days.txt"), self.default_task_nodes_expiration_days.to_string())?;
+//             fs::write(session_items_path.join("current_node_unique_id.txt"), pearson_hash_to_hex_string(&self.current_node_unique_id))?;
+
+//             // 3. Save PathBuf as plain text:
+//             // fs::write(session_items_path.join("current_full_file_path.txt"), self.current_full_file_path.to_string_lossy())?;
+//             // fs::write(session_items_path.join("current_node_directory_path.txt"), self.current_node_directory_path.to_string_lossy())?;
+//             fs::write(
+//                 session_items_path.join("current_full_file_path.txt"), 
+//                 self.current_full_file_path.as_os_str().to_string_lossy().as_bytes(), 
+//             )?;
+        
+//             fs::write(
+//                 session_items_path.join("current_node_directory_path.txt"), 
+//                 self.current_node_directory_path.as_os_str().to_string_lossy().as_bytes(), 
+//             )?; 
+            
+//             // 4. Save Vec<String> as TOML:
+//             let collaborators_toml = toml::to_string(&self.current_node_teamchannel_collaborators_with_access).map_err(|e| {
+//                 io::Error::new(
+//                     io::ErrorKind::Other,
+//                     format!("Failed to serialize collaborators to TOML: {}", e),
+//                 )
+//             })?;
+//             fs::write(session_items_path.join("current_node_teamchannel_collaborators_with_access.toml"), collaborators_toml)?;
+            
+//             // ... (save other Vec<String> values similarly)
+
+//             Ok(())
+//     }
+
+}  // end of impl GraphNav... 
 
 /// Helper function to parse directory name in format "number_name"
 fn parse_directory_name(name: &str) -> Option<(usize, &str)> {
@@ -5047,8 +5193,6 @@ fn update_collaborator_sendqueue_timestamp_log(
         .join(collaborator_name);
     fs::create_dir_all(&sync_data_dir)?;
 
-    let mut back_of_queue_timestamp = 0;
-
     // // 1. Read team channel name using correct function
     // let this_teamchannel_name = match get_current_team_channel_name_from_cwd() { 
     //     Some(name) => name,
@@ -5074,8 +5218,7 @@ fn update_collaborator_sendqueue_timestamp_log(
 
     let mut back_of_queue_timestamp = 0;
     let team_channel_path = PathBuf::from("project_graph_data").join(team_channel_name);  // Use the read name
-    
-    
+
     // 3. Crawl through the team channel directory tree
     for entry in WalkDir::new(team_channel_path) {
         let entry = entry?;
@@ -5142,7 +5285,6 @@ fn display_simple_tui_table(headers: &[&str], data: &[Vec<&str>]) {
 //     display_table(&headers, &data);
 // }
 
-
 // /// Loads CollaboratorData from a TOML file.
 // ///
 // /// # Arguments
@@ -5170,68 +5312,79 @@ fn display_simple_tui_table(headers: &[&str], data: &[Vec<&str>]) {
 /// * `Result<CoreNode, String>` - `Ok(CoreNode)` if the node is successfully loaded,
 ///    `Err(String)` containing an error message if an error occurs. 
 fn load_core_node_from_toml_file(file_path: &Path) -> Result<CoreNode, String> {
+    
+    debug_log!(
+        "Starting: load_core_node_from_toml_file(), file_path -> {:?}",
+        file_path,
+        );
     // 1. Read File Contents 
     let toml_string = match fs::read_to_string(file_path) {
         Ok(content) => content,
-        Err(e) => return Err(format!("Error reading file: {} in load_core_node_from_toml_file", e)),
+        Err(e) => return Err(format!("Error lcnftf reading file: {} in load_core_node_from_toml_file", e)),
     };
 
     // 2. Parse TOML String 
     let toml_value: Value = match toml_string.parse() {
         Ok(value) => value,
-        Err(e) => return Err(format!("Error parsing TOML in load_core_node_from_toml_file: {}", e)),
+        Err(e) => return Err(format!("Error lcnftf parsing TOML in load_core_node_from_toml_file: {}", e)),
     };
 
     // 3. Extract node_unique_id as hex string and decode using your function:
-    let node_unique_id = match toml_value.get("node_unique_id").and_then(Value::as_str) {
-        Some(hex_string) => hex_string_to_pearson_hash(hex_string)?, // Use your function. Propagate error with ?.
-        None => return Err("error: load_core_node_from_toml_file(), Missing node_unique_id".to_string()),
+    // let node_unique_id = match toml_value.get("node_unique_id").and_then(Value::as_str) {
+    //     Some(hex_string) => hex_string_to_pearson_hash(hex_string)?, // Use your function. Propagate error with ?.
+    //     None => return Err("error: load_core_node_from_toml_file(), Missing node_unique_id".to_string()),
+    // };
+    
+    // 3. Extract node_unique_id as array
+    let node_unique_id = match toml_value.get("node_unique_id").and_then(Value::as_array) {
+        Some(array) => {
+            let mut vec = Vec::new();
+            for value in array {
+                if let Some(num) = value.as_integer() {
+                    if num >= 0 && num <= 255 {
+                        vec.push(num as u8);
+                    } else {
+                        return Err("Invalid byte value in node_unique_id".to_string());
+                    }
+                } else {
+                    return Err("Invalid value in node_unique_id array".to_string());
+                }
+            }
+            vec
+        },
+        None => return Err("Missing or invalid node_unique_id".to_string()),
     };
     
-    // 3. Deserialize into CoreNode Struct (Manually)
-    let mut core_node = CoreNode {
-        node_name: toml_value.get("node_name").and_then(Value::as_str).unwrap_or("").to_string(),
-        description_for_tui: toml_value.get("description_for_tui").and_then(Value::as_str).unwrap_or("").to_string(),
-        node_unique_id: node_unique_id,
-        directory_path: PathBuf::from(toml_value.get("directory_path").and_then(Value::as_str).unwrap_or("")),
-        // order_number: toml_value.get("order_number").and_then(Value::as_integer).unwrap_or(0) as u32,
-        // priority: match toml_value.get("priority").and_then(Value::as_str).unwrap_or("Medium") {
-        //     "High" => NodePriority::High,
-        //     "Medium" => NodePriority::Medium,
-        //     "Low" => NodePriority::Low,
-        //     _ => NodePriority::Medium,
-        // },
-        owner: toml_value.get("owner").and_then(Value::as_str).unwrap_or("").to_string(),
-        updated_at_timestamp: toml_value.get("updated_at_timestamp").and_then(Value::as_integer).unwrap_or(0) as u64,
-        expires_at: toml_value.get("expires_at").and_then(Value::as_integer).unwrap_or(0) as u64,
-        // children: Vec::new(), // You might need to load children recursively
-        teamchannel_collaborators_with_access: toml_value.get("teamchannel_collaborators_with_access").and_then(Value::as_array).map(|arr| arr.iter().filter_map(Value::as_str).map(String::from).collect()).unwrap_or_default(),
-        abstract_collaborator_port_assignments: HashMap::new(),
-        
-        agenda_process: toml_value.get("agenda_process")
-            .and_then(Value::as_str)
-            .unwrap_or("")
-            .to_string(),
+    // 4. Task Items
+    let agenda_process = toml_value
+        .get("agenda_process")
+        .and_then(Value::as_str)
+        .ok_or("Missing or invalid agenda_process")?
+        .to_string();
 
-        goals_features_subfeatures_tools_targets: toml_value.get("goals_features_subfeatures_tools_targets")
-            .and_then(Value::as_str)
-            .unwrap_or("")
-            .to_string(),
+    let goals_features = toml_value
+        .get("goals_features_subfeatures_tools_targets")
+        .and_then(Value::as_str)
+        .ok_or("Missing or invalid goals_features_subfeatures_tools_targets")?
+        .to_string();
 
-        scope: toml_value.get("scope")
-            .and_then(Value::as_str)
-            .unwrap_or("")
-            .to_string(),
+    let scope = toml_value
+        .get("scope")
+        .and_then(Value::as_str)
+        .ok_or("Missing or invalid scope")?
+        .to_string();
 
-        schedule_duration_start_end: toml_value.get("schedule_duration_start_end")
-            .and_then(|v| v.as_array())
-            .unwrap_or(&vec![])
-            .iter()
-            .filter_map(|v| v.as_integer())
-            .map(|i| i as u64)
-            .collect(),
-    };
-
+    let schedule_duration = toml_value
+        .get("schedule_duration_start_end")
+        .and_then(Value::as_array)
+        .ok_or("Missing or invalid schedule_duration_start_end")?
+        .iter()
+        .map(|v| v.as_integer().ok_or("Invalid integer in schedule_duration"))
+        .collect::<Result<Vec<i64>, &str>>()?
+        .into_iter()
+        .map(|i| i as u64)
+        .collect();
+    
     // // 4. Handle abstract_collaborator_port_assignments
     // if let Some(collaborator_assignments_table) = toml_value.get("abstract_collaborator_port_assignments").and_then(Value::as_table) {
     //     for (pair_name, pair_data) in collaborator_assignments_table {
@@ -5259,6 +5412,35 @@ fn load_core_node_from_toml_file(file_path: &Path) -> Result<CoreNode, String> {
     //         }
     //     }
     // }
+
+    // 5. Deserialize into CoreNode Struct (Manually)
+    let mut core_node = CoreNode {
+        node_name: toml_value.get("node_name").and_then(Value::as_str).unwrap_or("").to_string(),
+        description_for_tui: toml_value.get("description_for_tui").and_then(Value::as_str).unwrap_or("").to_string(),
+        node_unique_id: node_unique_id,
+        directory_path: PathBuf::from(toml_value.get("directory_path").and_then(Value::as_str).unwrap_or("")),
+        // order_number: toml_value.get("order_number").and_then(Value::as_integer).unwrap_or(0) as u32,
+        // priority: match toml_value.get("priority").and_then(Value::as_str).unwrap_or("Medium") {
+        //     "High" => NodePriority::High,
+        //     "Medium" => NodePriority::Medium,
+        //     "Low" => NodePriority::Low,
+        //     _ => NodePriority::Medium,
+        // },
+        owner: toml_value.get("owner").and_then(Value::as_str).unwrap_or("").to_string(),
+        updated_at_timestamp: toml_value.get("updated_at_timestamp").and_then(Value::as_integer).unwrap_or(0) as u64,
+        expires_at: toml_value.get("expires_at").and_then(Value::as_integer).unwrap_or(0) as u64,
+        // children: Vec::new(), // You might need to load children recursively
+        teamchannel_collaborators_with_access: toml_value.get("teamchannel_collaborators_with_access").and_then(Value::as_array).map(|arr| arr.iter().filter_map(Value::as_str).map(String::from).collect()).unwrap_or_default(),
+        abstract_collaborator_port_assignments: HashMap::new(),
+        agenda_process,
+        goals_features_subfeatures_tools_targets: goals_features,
+        scope,
+        schedule_duration_start_end: schedule_duration,
+    };
+    
+    
+    
+    // 6. collaborators
     // Inside load_core_node_from_toml_file
     // if let Some(collaborator_assignments_table) = toml_value.get("abstract_collaborator_port_assignments").and_then(Value::as_table) {
     if let Some(collaborator_assignments_table) = toml_value.get("collaborator_port_assignments").and_then(Value::as_table) {
@@ -7502,7 +7684,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
 //                 app.graph_navigation_instance_state.current_full_file_path = app.current_path.clone();
                 
 //                 // Update navigation state
-//                 app.graph_navigation_instance_state.look_read_node_toml();
+//                 app.graph_navigation_instance_state.nav_graph_look_read_node_toml();
 //             }
 //             // Handle regular directory navigation
 //             else {
@@ -7542,7 +7724,7 @@ fn handle_main_command_mode(
                 app.graph_navigation_instance_state.current_full_file_path = app.current_path.clone();
                 
                 // Simply call the method without trying to handle its result
-                app.graph_navigation_instance_state.look_read_node_toml();
+                app.graph_navigation_instance_state.nav_graph_look_read_node_toml();
             } else {
                 // Regular directory navigation
                 app.current_path = app.current_path.join(&app.tui_directory_list[item_index]);
@@ -7560,7 +7742,7 @@ fn handle_main_command_mode(
                 // Display help information
             }
             
-            "addnode" | "add_node" | "newnode" => {
+            "addnode" | "add_node" | "newnode" | "new" | "node" | "task" | "addtask" | "add_task" => {
                 debug_log("Command: Add Node");
                 
                 debug_log!("app.current_path {:?}", app.current_path);
@@ -7844,7 +8026,7 @@ fn handle_main_command_mode(
                      // Only move back if not at the root of project_graph_data/team_channels
                     app.current_path.pop();
                     app.graph_navigation_instance_state.current_full_file_path = app.current_path.clone(); // Update full path after popping.
-                    app.graph_navigation_instance_state.look_read_node_toml(); // Update internal state too.
+                    app.graph_navigation_instance_state.nav_graph_look_read_node_toml(); // Update internal state too.
                     tiny_tui::render_list(
                         &app.tui_directory_list, 
                         &app.current_path,
@@ -14180,7 +14362,7 @@ fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
 // fn update_current_path_and_state(app: &mut App, selected_channel: &str) {
 //     app.current_path = app.current_path.join(selected_channel);
 //     app.graph_navigation_instance_state.current_full_file_path = app.current_path.clone();
-//     app.graph_navigation_instance_state.look_read_node_toml(); 
+//     app.graph_navigation_instance_state.nav_graph_look_read_node_toml(); 
 //     debug_log!("Updated path and state. New path: {:?}", app.current_path);
 // }
 
@@ -14203,7 +14385,7 @@ fn update_current_path_and_state(app: &mut App, selected_item: String, input_mod
     }
 
     app.graph_navigation_instance_state.current_full_file_path = app.current_path.clone();
-    app.graph_navigation_instance_state.look_read_node_toml(); // Always call to update state.
+    app.graph_navigation_instance_state.nav_graph_look_read_node_toml(); // Always call to update state.
     debug_log!("Updated path and state. New path: {:?}", app.current_path);
 }
 
@@ -14217,7 +14399,7 @@ fn handle_task_selection(app: &mut App, selection: usize) -> Result<bool, io::Er
             update_current_path_and_state(app, selected_column.clone(), app.input_mode.clone());  //FIX 1
             app.load_tasks(); // Refresh task browser to show tasks within the column
         } else { // Invalid selection
-            app.display_error("Invalid column selection.");
+            app.display_error("hts Invalid column selection.");
             app.load_tasks(); //Refresh view
             return Ok(false); //Stay in task mode
         }
@@ -14225,13 +14407,25 @@ fn handle_task_selection(app: &mut App, selection: usize) -> Result<bool, io::Er
     } else { //Task selection
         if let Some(full_task_path) = app.get_full_task_path(selection - 1) {
             // No need to push here (current_path is already inside a column directory):
+            debug_log!(
+                "hts app.current_path: {:?}", app.current_path
+            );
+            debug_log!(
+                "hts full_task_path: {:?}", full_task_path
+            );
             app.current_path = full_task_path.clone(); // Update current_path directly
             app.graph_navigation_instance_state.current_full_file_path = full_task_path;
-            app.graph_navigation_instance_state.look_read_node_toml();
+            
+            debug_log!(
+                "hts  app.graph_navigation_instance_state.current_full_file_path: {:?}",
+                app.graph_navigation_instance_state.current_full_file_path
+            );
+            
+            app.graph_navigation_instance_state.nav_graph_look_read_node_toml();
             return Ok(true); // Return true to signal exiting task mode
 
         } else {
-            app.display_error("Invalid task number");
+            app.display_error("hts Invalid task number");
             app.load_tasks();
             return Ok(false); //Stay in task mode
         }
@@ -14360,31 +14554,51 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         let file_content = match fs::read_to_string(CONTINUE_UMA_PATH) {
             Ok(content) => content,
             Err(_) => {
-                println!("Error reading 'continue_uma.txt'. Continuing..."); // Handle the error (e.g., log it) but continue for now
+                debug_log!("Error reading 'continue_uma.txt'. Continuing..."); // Handle the error (e.g., log it) but continue for now
                 continue; // Skip to the next loop iteration
             }
         };
         // break loop if continue=0
         if file_content.trim() == "0" {
-            debug_log("'continue_uma.txt' is 0. we_love_projects_loop() Exiting loop.");
+            debug_log("wlpl 'continue_uma.txt' is 0. we_love_projects_loop() Exiting loop.");
             break; 
         }
         
         // Update GraphNavigationInstanceState based on the current path
         debug_log("start loop: we_love_projects_loop()");
-        debug_log!("app.input_mode {:?}", &app.input_mode); 
         debug_log!(
-            "&app.next_path_lookup_table -> {:?}", 
+            "wlpl &app.current_path -> {:?}", 
+            &app.current_path,
+        ); 
+        
+        debug_log!("wlpl app.input_mode {:?}", &app.input_mode); 
+        
+        debug_log!(
+            "wlpl &app.next_path_lookup_table -> {:?}", 
             &app.next_path_lookup_table
         ); 
         
         debug_log!(
-            "&app.task_display_table -> {:?}", 
+            "wlpl &app.task_display_table -> {:?}", 
             &app.task_display_table
         ); 
         
+        
+        app.graph_navigation_instance_state.current_full_file_path = app.current_path.clone();
+        
+        
+        debug_log!(
+            "wlpl app.current_path.clone(); -> {:?}", 
+            &app.current_path.clone(),
+        ); 
+        
+        debug_log!(
+            "wlpl &app.graph_navigation_instance_state.current_full_file_path -> {:?}", 
+            &app.graph_navigation_instance_state.current_full_file_path,
+        ); 
+        
         // -- Here: this function reads state and adds current graph-node-location data
-        // graph_navigation_instance_state.look_read_node_toml();
+        app.graph_navigation_instance_state.nav_graph_look_read_node_toml();
         
         // --- this is or maybe should be part of the TUI (no state record)
         
@@ -14771,11 +14985,11 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                                     
             //                         app.graph_navigation_instance_state.current_full_file_path = app.current_path.clone();
                                     
-            //                         // flag to start sync is set INSIDE look_read_node_toml() if a team_channel is entered
-            //                         app.graph_navigation_instance_state.look_read_node_toml(); 
+            //                         // flag to start sync is set INSIDE nav_graph_look_read_node_toml() if a team_channel is entered
+            //                         app.graph_navigation_instance_state.nav_graph_look_read_node_toml(); 
 
             //                         // Log the state after loading node.toml
-            //                         debug_log(&format!("we_love_projects_loop() State after look_read_node_toml: {:?}", app.graph_navigation_instance_state));
+            //                         debug_log(&format!("we_love_projects_loop() State after nav_graph_look_read_node_toml: {:?}", app.graph_navigation_instance_state));
                                     
             //                         // ... enter IM browser or other features ...
             //                     } else {
