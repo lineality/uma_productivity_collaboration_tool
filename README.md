@@ -1,13 +1,13 @@
 ### uma_productivity_collaboration_tool
 
 # Very Early Development Still
-
-Documentatation and features hopefully coming within 2024
+- Basic message, task, features implimented by end of 2024
+- Alpha release hopefully coming within 2025.
 
 ## cli tui messenger planner
 - Distributed Multi-point Conferencing Unit 
 
-# very under construction still (oct, 2024)
+# very under construction still (Jan, 2025)
 ```
 4_|
 / \
