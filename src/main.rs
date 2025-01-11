@@ -7728,6 +7728,8 @@ fn handle_main_command_mode(
             } else {
                 // Regular directory navigation
                 app.current_path = app.current_path.join(&app.tui_directory_list[item_index]);
+                app.graph_navigation_instance_state.current_full_file_path = app.current_path.clone();
+                app.graph_navigation_instance_state.nav_graph_look_read_node_toml(); // ???
             }
             return Ok(false);  // Continue main loop
         }
@@ -8023,8 +8025,18 @@ fn handle_main_command_mode(
                 debug_log("changed to command mode");
                 
                 if app.current_path != PathBuf::from("project_graph_data/team_channels") {
-                     // Only move back if not at the root of project_graph_data/team_channels
+                    // Only move back if not at the root of project_graph_data/team_channels
+                    debug_log!(
+                        "before pop handle_main_command_mode(), app.current_path {:?}",
+                        &app.current_path
+                    );
+                     
                     app.current_path.pop();
+                    debug_log!(
+                        "after pop handle_main_command_mode(), app.current_path {:?}",
+                        &app.current_path
+                    );
+                    
                     app.graph_navigation_instance_state.current_full_file_path = app.current_path.clone(); // Update full path after popping.
                     app.graph_navigation_instance_state.nav_graph_look_read_node_toml(); // Update internal state too.
                     tiny_tui::render_list(
@@ -8112,7 +8124,9 @@ fn handle_main_command_mode(
                 let current_node_name = app.current_path.file_name().unwrap().to_string_lossy().to_string();
 
                 app.current_path = app.current_path.join("task_browser");
-
+                app.graph_navigation_instance_state.current_full_file_path = app.current_path.clone();
+                app.graph_navigation_instance_state.nav_graph_look_read_node_toml(); // ???
+                
                 debug_log!(
                     "app.current_path after joining 'task_browser': {:?}",
                     app.current_path
@@ -14583,9 +14597,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
             &app.task_display_table
         ); 
         
-        
         app.graph_navigation_instance_state.current_full_file_path = app.current_path.clone();
-        
         
         debug_log!(
             "wlpl app.current_path.clone(); -> {:?}", 
@@ -14674,9 +14686,29 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
 
             } else if input == "back" {
                 debug_log("escape toggled");
+                // app.input_mode = InputMode::MainCommand; // Access input_mode using self
+                // app.current_path.pop(); // Go back to the parent directory
+                // app.graph_navigation_instance_state.current_full_file_path = app.current_path.clone(); // Update full path after popping.                
+                // app.graph_navigation_instance_state.nav_graph_look_read_node_toml(); // ???
+                
+                // app.update_directory_list()?;
+                
                 app.input_mode = InputMode::MainCommand; // Access input_mode using self
                 app.current_path.pop(); // Go back to the parent directory
-                app.update_directory_list()?;
+                app.graph_navigation_instance_state.current_full_file_path = app.current_path.clone(); // Update full path after popping.
+                app.graph_navigation_instance_state.nav_graph_look_read_node_toml(); // ???
+                                
+                tiny_tui::render_list(
+                    &app.tui_directory_list, 
+                    &app.current_path,
+                    &app.graph_navigation_instance_state.agenda_process,
+                    &app.graph_navigation_instance_state.goals_features_subfeatures_tools_targets,
+                    &app.graph_navigation_instance_state.scope,
+                    &app.graph_navigation_instance_state.schedule_duration_start_end,
+                );
+                app.update_directory_list()?;  // refresh to current cwd display items
+                
+                
             } else if input == "q" {
                 debug_log("escape toggled");
                 app.input_mode = InputMode::MainCommand; // Access input_mode using self
@@ -14715,7 +14747,10 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                 if let Some(target_path) = app.next_path_lookup_table.get(&index) {
                     debug_log(&format!("Selected path from lookup table: {:?}", target_path));          
                     // Regular directory navigation
-                    app.current_path = target_path.clone();
+                    app.current_path = target_path.clone();              
+                    app.graph_navigation_instance_state.current_full_file_path = app.current_path.clone(); 
+                    app.graph_navigation_instance_state.nav_graph_look_read_node_toml(); // ???
+
                     app.input_mode = InputMode::MainCommand; // Access input_mode using self
 
                 } else {
@@ -14756,6 +14791,9 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                 debug_log("escape toggled");
                 app.input_mode = InputMode::MainCommand; // Access input_mode using self
                 app.current_path.pop(); // Go back to the parent directory
+                app.graph_navigation_instance_state.current_full_file_path = app.current_path.clone(); // Update full path after popping.
+                app.graph_navigation_instance_state.nav_graph_look_read_node_toml(); // ???
+                                
                 tiny_tui::render_list(
                     &app.tui_directory_list, 
                     &app.current_path,
