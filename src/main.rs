@@ -7276,29 +7276,52 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
     //     fs::create_dir_all(invite_parent_folder).expect("Failed to create import_export_invites directory");
     // }
 
-    // Check if the data directory exists
-    let addressbook_invite = Path::new("import_export_invites/addressbook_invite/import");
-    if !addressbook_invite.exists() {
-        // If the directory does not exist, create it
-        fs::create_dir_all(addressbook_invite).expect("Failed to create addressbook_invite directory");
-    }
 
     // Check if the data directory exists
-    let addressbook_invite = Path::new("import_export_invites/addressbook_invite/export");
+    let library_clearsign = Path::new("library_clearsign");
+    if !library_clearsign.exists() {
+        // If the directory does not exist, create it
+        fs::create_dir_all(library_clearsign).expect("Failed to create library_clearsign directory");
+    }
+    
+    // Check if the data directory exists
+    let library_clearsignteam_channels = Path::new("library_clearsign/team_channels");
+    if !library_clearsignteam_channels.exists() {
+        // If the directory does not exist, create it
+        fs::create_dir_all(library_clearsignteam_channels).expect("Failed to create library_clearsignteam_channels directory");
+    }
+    
+    // Check if the data directory exists
+    let library_clearsignaddressbook = Path::new("library_clearsign/addressbook");
+    if !library_clearsignaddressbook.exists() {
+        // If the directory does not exist, create it
+        fs::create_dir_all(library_clearsignaddressbook).expect("Failed to create library_clearsignaddressbook directory");
+    }
+    
+    // Check if the data directory exists
+    let library_clearsign = Path::new("library_clearsign");
+    if !library_clearsign.exists() {
+        // If the directory does not exist, create it
+        fs::create_dir_all(library_clearsign).expect("Failed to create library_clearsign directory");
+    }
+    
+    
+    // Check if the data directory exists
+    let addressbook_invite = Path::new("invites/addressbook_invite/import");
     if !addressbook_invite.exists() {
         // If the directory does not exist, create it
         fs::create_dir_all(addressbook_invite).expect("Failed to create addressbook_invite directory");
     }
     
     // Check if the data directory exists
-    let teamchannel_invites = Path::new("import_export_invites/teamchannel_invites/import");
+    let teamchannel_invites = Path::new("invites/teamchannel_invites/import");
     if !teamchannel_invites.exists() {
         // If the directory does not exist, create it
         fs::create_dir_all(teamchannel_invites).expect("Failed to create teamchannel_invites directory");
     }
     
     // Check if the data directory exists
-    let teamchannel_invites = Path::new("import_export_invites/teamchannel_invites/export");
+    let teamchannel_invites = Path::new("invites/teamchannel_invites/export");
     if !teamchannel_invites.exists() {
         // If the directory does not exist, create it
         fs::create_dir_all(teamchannel_invites).expect("Failed to create teamchannel_invites directory");
