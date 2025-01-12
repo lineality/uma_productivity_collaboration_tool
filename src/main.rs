@@ -7715,8 +7715,153 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
 //     Ok(false)
 // }
 
+use std::process::Command;
+/// Exports the user's public GPG key to a specified location for sharing
+/// 
+/// # Arguments
+/// * `config_path` - Path to the uma.toml configuration file
+/// * `output_directory` - Directory where the exported key should be saved
+/// 
+/// # Returns
+/// * `Result<String, ThisProjectError>` - Returns the path to the exported key file or an error
+pub fn export_public_gpg_key(
+    config_path: &Path,
+    output_directory: &Path,
+) -> Result<String, ThisProjectError> {
+    // Step 1: Get username from uma.toml
+    let config_path_str = config_path.to_str()
+        .ok_or_else(|| ThisProjectError::InvalidInput("Invalid path".to_string()))?;
+    let username = read_field_from_toml(config_path_str, "uma_local_owner_user");
 
-fn handle_main_command_mode(
+    // Step 2: Construct path to user's config file
+    let user_config_path = Path::new("project_graph_data/collaborator_files_address_book")
+        .join(format!("{}__collaborator.toml", username));
+
+    // Step 3: Get GPG key ID from user's config file
+    let user_config_path_str = user_config_path.to_str()
+        .ok_or_else(|| ThisProjectError::InvalidInput("Invalid user config path".to_string()))?;
+    let gpg_key_id = read_field_from_toml(user_config_path_str, "gpg_publickey_id");
+
+    // Create the output directory if it doesn't exist
+    fs::create_dir_all(output_directory)
+        .map_err(|e| ThisProjectError::IoError(e))?;
+
+    // Generate the output file path
+    let output_file = output_directory.join("key.asc");
+    
+    // Export the GPG key
+    let output = Command::new("gpg")
+        .arg("--armor")
+        .arg("--export")
+        .arg(&gpg_key_id)
+        .output()
+        .map_err(|e| ThisProjectError::IoError(e))?;
+
+    // Check if the command was successful
+    if !output.status.success() {
+        let error_message = String::from_utf8_lossy(&output.stderr);
+        return Err(ThisProjectError::GpgError(error_message.to_string()));
+    }
+
+    // Write the output to a file
+    fs::write(&output_file, output.stdout)
+        .map_err(|e| ThisProjectError::IoError(e))?;
+
+    // Return the path to the exported key file
+    Ok(output_file.to_string_lossy().into_owned())
+}
+
+
+// /// Exports the user's public GPG key to a specified location for sharing
+// /// 
+// /// # Arguments
+// /// * `config_path` - Path to the uma.toml configuration file
+// /// * `output_directory` - Directory where the exported key should be saved
+// /// 
+// /// # Returns
+// /// * `Result<String, ThisProjectError>` - Returns the path to the exported key file or an error
+// pub fn export_public_gpg_key(
+//     config_path: &Path,
+//     output_directory: &Path,
+// ) -> Result<String, ThisProjectError> {
+//     // Convert Path to &str for read_field_from_toml
+//     let config_path_str = config_path.to_str()
+//         .ok_or_else(|| ThisProjectError::InvalidInput("Invalid path".to_string()))?;
+
+//     // Read the GPG key ID from the configuration
+//     let key_id = read_field_from_toml(config_path_str, "uma_local_owner_user");
+
+//     // Create the output directory if it doesn't exist
+//     fs::create_dir_all(output_directory)
+//         .map_err(|e| ThisProjectError::IoError(e))?;
+
+//     // Generate the output file path
+//     let output_file = output_directory.join("key.asc");
+    
+//     // Construct the GPG command
+//     let output = Command::new("gpg")
+//         .arg("--armor")
+//         .arg("--export")
+//         .arg(&key_id)
+//         .output()
+//         .map_err(|e| ThisProjectError::IoError(e))?;
+
+//     // Check if the command was successful
+//     if !output.status.success() {
+//         let error_message = String::from_utf8_lossy(&output.stderr);
+//         return Err(ThisProjectError::GpgError(error_message.to_string()));
+//     }
+
+//     // Write the output to a file
+//     fs::write(&output_file, output.stdout)
+//         .map_err(|e| ThisProjectError::IoError(e))?;
+
+//     // Return the path to the exported key file
+//     Ok(output_file.to_string_lossy().into_owned())
+// }
+// /// Exports the user's public GPG key to a specified location for sharing
+// /// 
+// /// # Arguments
+// /// * `config_path` - Path to the uma.toml configuration file
+// /// * `output_directory` - Directory where the exported key should be saved
+// /// 
+// /// # Returns
+// /// * `Result<String, Box<dyn Error>>` - Returns the path to the exported key file or an error
+// pub fn export_public_gpg_key(
+//     config_path: &Path,
+//     output_directory: &Path,
+// ) -> Result<String, Box<dyn Error>> {
+//     // Read the GPG key ID from the configuration
+//     let key_id = read_field_from_toml(config_path, "uma_local_owner_user")?;
+
+//     // Create the output directory if it doesn't exist
+//     fs::create_dir_all(output_directory)?;
+
+//     // Generate the output file path
+//     let output_file = output_directory.join("key.asc");
+    
+//     // Construct the GPG command
+//     let output = Command::new("gpg")
+//         .arg("--armor")
+//         .arg("--export")
+//         .arg(&key_id)
+//         .output()?;
+
+//     // Check if the command was successful
+//     if !output.status.success() {
+//         let error_message = String::from_utf8_lossy(&output.stderr);
+//         return Err(format!("GPG key export failed: {}", error_message).into());
+//     }
+
+//     // Write the output to a file
+//     fs::write(&output_file, output.stdout)?;
+
+//     // Return the path to the exported key file
+//     Ok(output_file.to_string_lossy().into_owned())
+// }
+
+
+fn handle_command_main_mode(
     input: &str, 
     app: &mut App, 
     graph_navigation_instance_state: &GraphNavigationInstanceState
@@ -7727,7 +7872,7 @@ fn handle_main_command_mode(
     command-list/legend
     */
 
-    debug_log(&format!("fn handle_main_command_mode(), input->{:?}", input));
+    debug_log(&format!("fun handle_command_main_mode(), input->{:?}", input));
     // First, try to handle numeric input
     if let Ok(index) = input.trim().parse::<usize>() {
         let item_index = index - 1; // Adjust for 0-based indexing
@@ -7762,6 +7907,20 @@ fn handle_main_command_mode(
                 debug_log("Help!");
                 // Display help information
             }
+            
+            "sharegpg" | "exportgpg" | "requestinvite" => {
+                debug_log("Export public GPG Command:");
+                // Display help information
+                let uma_config_path = Path::new("uma.toml");
+                let output_dir = Path::new("invites/outgoing");
+                
+                match export_public_gpg_key(&uma_config_path, &output_dir) {
+                    Ok(key_path) => println!("GPG key exported successfully to: {}", key_path),
+                    Err(e) => eprintln!("Failed to export GPG key: {}", e),
+                }
+                
+            }
+            
             
             "addnode" | "add_node" | "newnode" | "new" | "node" | "task" | "addtask" | "add_task" => {
                 debug_log("Command: Add Node");
@@ -8046,13 +8205,13 @@ fn handle_main_command_mode(
                 if app.current_path != PathBuf::from("project_graph_data/team_channels") {
                     // Only move back if not at the root of project_graph_data/team_channels
                     debug_log!(
-                        "before pop handle_main_command_mode(), app.current_path {:?}",
+                        "before pop handle_command_main_mode(), app.current_path {:?}",
                         &app.current_path
                     );
                      
                     app.current_path.pop();
                     debug_log!(
-                        "after pop handle_main_command_mode(), app.current_path {:?}",
+                        "after pop handle_command_main_mode(), app.current_path {:?}",
                         &app.current_path
                     );
                     
@@ -8084,7 +8243,7 @@ fn handle_main_command_mode(
                 // //////////////////////////
                 // // Enable sync flag here!
                 // //////////////////////////
-                // debug_log("About to set sync flag to true! (handle_main_command_mode(), home)");
+                // debug_log("About to set sync flag to true! (handle_command_main_mode(), home)");
                 // initialize_ok_to_start_sync_flag_to_false();  //TODO turn on to use sync !!! (off for testing)
                 
                 // // 1. Reset the current path
@@ -8180,7 +8339,7 @@ fn handle_main_command_mode(
             
         }
     }
-    debug_log("end fn handle_main_command_mode()");
+    debug_log("end handle_command_main_mode()");
     return Ok(false); // Don't exit by default
 }
 
@@ -14805,7 +14964,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         // If in main command mode, handle main commands:
         // ?. Update directory list (only in MainCommand mode) - MOVE THIS
         if app.input_mode == InputMode::MainCommand {
-            if handle_main_command_mode(&input, &mut app, &graph_navigation_instance_state)? { 
+            if handle_command_main_mode(&input, &mut app, &graph_navigation_instance_state)? { 
                 return Ok(()); 
             }
             app.update_directory_list()?;
@@ -14813,7 +14972,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         }
         
         // // 2. handle input/command
-        // if handle_main_command_mode(&input, &mut app, &graph_navigation_instance_state)? {
+        // if handle_command_main_mode(&input, &mut app, &graph_navigation_instance_state)? {
         //     return Ok(());
         // } else if app.input_mode == InputMode::MainCommand {
         //     handle_numeric_input(&input, &mut app, &graph_navigation_instance_state)?;
@@ -15045,7 +15204,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
 
         // match app.input_mode {
         //     InputMode::MainCommand => {
-        //         if handle_main_command_mode(&input, &mut app, &graph_navigation_instance_state)? {
+        //         if handle_command_main_mode(&input, &mut app, &graph_navigation_instance_state)? {
         //             break;
         //         } else if let Ok(index) = input.parse::<usize>() {
         //             // ... (Directory selection logic - see below)
@@ -15060,13 +15219,13 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         //             } else {  //Stay in task browser: If invalid selection, refresh task list
         //                 app.load_tasks(); // Stay in TaskCommand mode.
         //             }
-        //         } else if handle_main_command_mode(&input, &mut app, &graph_navigation_instance_state)? { // Handle commands like "q"
+        //         } else if handle_command_main_mode(&input, &mut app, &graph_navigation_instance_state)? { // Handle commands like "q"
         //             // Refresh list after leaving task browser (if exiting Uma or team channel)
         //             app.load_tasks(); // Refresh task view.
         //         }
         //     },
         //     InputMode::MainCommand => {
-        //         if handle_main_command_mode(&input, &mut app, &graph_navigation_instance_state)? {
+        //         if handle_command_main_mode(&input, &mut app, &graph_navigation_instance_state)? {
         //             break;
         //         } else if let Ok(index) = input.parse::<usize>() {
         //             // ... (Directory selection logic - see below)
@@ -15101,7 +15260,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         //     // }
         //     InputMode::TaskCommand => {
         //         // Now render the task list using the TUI
-        //         // app.load_tasks(); // This is already called in handle_main_command_mode("t", ...)
+        //         // app.load_tasks(); // This is already called in handle_command_main_mode("t", ...)
         //         // The table is already rendered within load_tasks, using the new tiny_tui::render_tasks_list
         //          debug_log!("InputMode::TaskCommand. render_tasks_list now used. ");  // Clear the screen
                 
@@ -15122,10 +15281,10 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
             // InputMode::MainCommand => {
                 
             //     // Handle commands (including 'm')s
-            //     // if handle_main_command_mode(&input, &mut app, &mut graph_navigation_instance_state) {
-            //     if handle_main_command_mode(&input, &mut app, &mut graph_navigation_instance_state)? {
+            //     // if handle_command_main_mode(&input, &mut app, &mut graph_navigation_instance_state) {
+            //     if handle_command_main_mode(&input, &mut app, &mut graph_navigation_instance_state)? {
             //         debug_log("QUIT");
-            //         break; // Exit the loop if handle_main_command_mode returns true (e.g., for "q")
+            //         break; // Exit the loop if handle_command_main_mode returns true (e.g., for "q")
             //     } else if let Ok(index) = input.parse::<usize>() {
             //         let item_index = index - 1; // Adjust for 0-based indexing
             //         if item_index < app.tui_directory_list.len() {
@@ -15203,7 +15362,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
             //         } else {
             //             app.load_tasks(); // If invalid selection, refresh task list, stay in TaskCommand mode.
             //         }                    
-            //     } else if handle_main_command_mode(&input, &mut app, &graph_navigation_instance_state)? { // Handle other commands, like "q"
+            //     } else if handle_command_main_mode(&input, &mut app, &graph_navigation_instance_state)? { // Handle other commands, like "q"
             //             break; // Pass to main command handler, quit if it returns true, staying in main loop otherwise.
             //         }
                                     
