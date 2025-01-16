@@ -6350,6 +6350,59 @@ fn move_directory__from_path_to_path<SourceDirectory: AsRef<Path>, DestinationDi
     Ok(())
 }
 
+
+/// gpg get public key long from public key-id
+/// use std::process::Command;
+/// use std::io::{self, Write};
+fn get_gpg_armored_public_key_with_key_id(key_id: &str) -> io::Result<String> {
+    /*
+   // Prompt the user for the key ID
+    print!("Enter the GPG key ID: ");
+    if let Err(e) = io::stdout().flush() {
+        eprintln!("Failed to flush stdout: {}", e);
+        return;
+    }
+
+    let mut key_id = String::new();
+    if let Err(e) = io::stdin().read_line(&mut key_id) {
+        eprintln!("Failed to read line: {}", e);
+        return;
+    }
+
+    let key_id = key_id.trim(); // Remove any trailing newline or whitespace
+
+    match get_gpg_armored_public_key_with_key_id(key_id) {
+        Ok(armored_key) => {
+            println!("Armored Public Key:\n{}", armored_key);
+        }
+        Err(e) => {
+            eprintln!("Error: {}", e);
+        }
+    }
+    
+    */
+    // Construct the GPG command to export the public key in armored format
+    let output = Command::new("gpg")
+        .arg("--armor")
+        .arg("--export")
+        .arg(key_id)
+        .output()?;
+
+    // Check if the command was successful
+    if output.status.success() {
+        // Convert the output to a string
+        let armored_key = String::from_utf8_lossy(&output.stdout).to_string();
+        Ok(armored_key)
+    } else {
+        // If the command failed, return an error
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            format!("Failed to export public key: {}", String::from_utf8_lossy(&output.stderr)),
+        ))
+    }
+}
+
+
 fn gpg_clearsign_file_to_sendbytes(
     file_path: &Path,
 ) -> Result<Vec<u8>, ThisProjectError> {
@@ -7479,28 +7532,42 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         let mut gpg_publickey_id = String::new();
         io::stdin().read_line(&mut gpg_publickey_id).unwrap();
         let gpg_publickey_id = gpg_publickey_id.trim().to_string();
-        
-        // Prompt the user to enter a GPG key
-        println!("Enter your ascii-armored public GPG key line by line.");
-        println!("Then Type 'END'+Enter/Return when finished:");
-        println!("get with -> Posix: $ gpg --armor --export YOURKEYID");
+
+        // Get armored public key, using key-id
         let mut gpg_key_public = String::new();
-        loop {
-            let mut line = String::new();
-            io::stdin().read_line(&mut line).expect("Failed to read line");
-            let line = line.trim();
-    
-            if line == "END" {
-                break;
+        match get_gpg_armored_public_key_with_key_id(&gpg_publickey_id) {
+            Ok(armored_key) => {
+                println!("Armored Public Key:\n{}", armored_key);
+                gpg_key_public = armored_key;
             }
-            gpg_key_public.push_str(line);
-            gpg_key_public.push('\n'); // Add newline character back
+            Err(e) => {
+                eprintln!("Error: {}", e);
+            }
         }
+            
+            
+        
+        // // Prompt the user to enter a GPG key
+        // println!("Enter your ascii-armored public GPG key line by line.");
+        // println!("Then Type 'END'+Enter/Return when finished:");
+        // println!("get with -> Posix: $ gpg --armor --export YOURKEYID");
+        // let mut gpg_key_public = String::new();
+        // loop {
+        //     let mut line = String::new();
+        //     io::stdin().read_line(&mut line).expect("Failed to read line");
+        //     let line = line.trim();
     
-        // Remove the trailing newline if it exists
-        if gpg_key_public.ends_with('\n') {
-            gpg_key_public.pop();
-        }
+        //     if line == "END" {
+        //         break;
+        //     }
+        //     gpg_key_public.push_str(line);
+        //     gpg_key_public.push('\n'); // Add newline character back
+        // }
+    
+        // // Remove the trailing newline if it exists
+        // if gpg_key_public.ends_with('\n') {
+        //     gpg_key_public.pop();
+        // }
     
         println!("GPG key entered:\n{}", gpg_key_public); // Confirmation (remove in production)
         debug_log("GPG key entered");
