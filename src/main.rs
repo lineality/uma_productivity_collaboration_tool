@@ -7833,6 +7833,28 @@ pub fn export_public_gpg_key(
     // Write the output to a file
     fs::write(&output_file, output.stdout)
         .map_err(|e| ThisProjectError::IoError(e))?;
+        
+        
+        
+    /*
+    Check for invitation:
+    for share key... just give instructions?
+    
+    look here fn export_addressbook()
+    encrypt with theirs and clearsign wtih theirs?
+    ?
+    use tomlclearsign files??? yes...
+    
+    1. is there a key in invtes_updates/incoming/gpg_key_for_invites_here
+    2. if so:
+    (look for an invite function or command with some of this code...)
+    3. get current owner user name
+    4. get current owner user addressbook path
+    5. get key-id for current owner user? or not need clearsign?
+    6. use key in folder to encrypt file at path step 4
+    6. put the result in outgoing named whateer .asc 
+    
+    */
 
     // Return the path to the exported key file
     Ok(output_file.to_string_lossy().into_owned())
@@ -7973,6 +7995,7 @@ fn handle_command_main_mode(
             "h" | "help" => {
                 debug_log("Help!");
                 // Display help information
+                // TODO help wizard or blurb?
             }
             
             "sharegpg" | "exportgpg" | "requestinvite" => {
@@ -7988,9 +8011,19 @@ fn handle_command_main_mode(
                 
             }
             
+            "invite" | "update" => {
+                debug_log("invite / update wizard");
+                /*
+                
+                */
+                
+                
+            }
             
-            "addnode" | "add_node" | "newnode" | "new" | "node" | "task" | "addtask" | "add_task" => {
+            
+            "addnode" | "add_node" | "newnode" | "new" | "node" | "task" | "addtask" | "add_task" | "add" => {
                 debug_log("Command: Add Node");
+                // TODO trim down excess terms above
                 
                 debug_log!("app.current_path {:?}", app.current_path);
                 
