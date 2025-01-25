@@ -7950,6 +7950,50 @@ pub fn export_public_gpg_key(
 // }
 
 
+// use std::path::Path;
+// use std::io;
+
+fn invite_wizard() {
+    println!("There are three steps...");
+    println!("1. share gpg");
+    println!("2. share address-book file");
+    println!("3. share team-channel (if you own it)");
+
+    println!("Q: Which are you doing?");
+
+    let mut input = String::new();
+    io::stdin().read_line(&mut input).expect("Failed to read line");
+
+    let choice: u32 = match input.trim().parse() {
+        Ok(num) => num,
+        Err(_) => {
+            println!("Please type a number.");
+            return;
+        }
+    };
+
+    match choice {
+        1 => {
+            let uma_config_path = Path::new("uma.toml");
+            let output_dir = Path::new("invites_updates/outgoing");
+
+            match export_public_gpg_key(&uma_config_path, &output_dir) {
+                Ok(key_path) => println!("GPG key exported successfully to: {}", key_path),
+                Err(e) => eprintln!("Failed to export GPG key: {}", e),
+            }
+        },
+        2 => {
+            // Add code to share address-book file here
+        },
+        3 => {
+            // Add code to share team-channel here
+        },
+        _ => println!("Invalid choice."),
+    }
+}
+
+
+
 fn handle_command_main_mode(
     input: &str, 
     app: &mut App, 
@@ -8002,7 +8046,7 @@ fn handle_command_main_mode(
                 debug_log("Export public GPG Command:");
                 // Display help information
                 let uma_config_path = Path::new("uma.toml");
-                let output_dir = Path::new("invites/outgoing");
+                let output_dir = Path::new("invites_updates/outgoing");
                 
                 match export_public_gpg_key(&uma_config_path, &output_dir) {
                     Ok(key_path) => println!("GPG key exported successfully to: {}", key_path),
@@ -8015,8 +8059,9 @@ fn handle_command_main_mode(
                 debug_log("invite / update wizard");
                 /*
                 
-                */
                 
+                */
+                invite_wizard();
                 
             }
             
