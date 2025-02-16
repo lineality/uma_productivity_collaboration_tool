@@ -8550,121 +8550,130 @@ fn handle_command_main_mode(
             //     app.load_im_messages();
         // }
                 
-                // debug_log("m selected");
-                // let current_path = app.current_path.to_string_lossy().to_string();
                 
-                // /////////////////
-                // // Passive View 
-                // /////////////////
-                // // Launch passive message viewer in new terminal
-                // // let current_path = app.current_path.to_string_lossy().to_string();
-                // // let uma_path = env::current_exe()?;
-                
-                
-                // // #[cfg(target_os = "linux")]
-                // // StdCommand::new("gnome-terminal")
-                // //     .arg("--")  // Marks the end of terminal options
-                // //     .arg(uma_path.to_str().unwrap())  // The command to run
-                // //     .arg("--passive_message_mode")     // Arguments to our command
-                // //     .arg(&current_path)
-                // //     .spawn()?;
-                // let mut message_path = app.current_path.clone();
-                // message_path.push("instant_message_browser");
-
-                // // Check if directory exists
-                // if !message_path.exists() {
-                //     println!("Message directory not found!");
-                //     return Ok(());
-                // }
-                
-                // message_path = message_path.to_string_lossy().to_string();
-                // let uma_path = env::current_exe()?;
-                
-                // #[cfg(target_os = "linux")]
-                // {
-                //     let command = format!(
-                //         "{} --passive_message_mode \"{}\"",
-                //         uma_path.to_str().unwrap(),
-                //         message_path
-                //     );
-                //     launch_terminal_command(&command)?;
-                // }
-                
-                
-                
-                // debug_log(&format!("app.current_path {:?}", app.current_path)); 
-                // app.input_mode = InputMode::InsertText;
-
-                // // TODO Assuming you have a way to get the current node's name:
-                // let current_node_name = app.current_path.file_name().unwrap().to_string_lossy().to_string();
-
-                // app.current_path = app.current_path.join("instant_message_browser");
-
-                // debug_log!(
-                //     "app.current_path after joining 'instant_message_browser': {:?}",
-                //     app.current_path
-                // ); 
-                
-                // // Enter Browser of Messages
-                // app.load_im_messages();
-            // }
-            
-            // "m" | "message" => {
-            //     debug_log("m selected");
-            //     let current_path = app.current_path.to_string_lossy().to_string();
-                
-            //     /////////////////
-            //     // Passive View 
-            //     /////////////////
-            //     let mut message_path = app.current_path.clone();
-            //     message_path.push("instant_message_browser");
-
-            //     // Check if directory exists
-            //     if !message_path.exists() {
-            //         println!("Message directory not found!");
-            //         return Ok(true);  // Fixed to return Result
-            //     }
-                
-            //     let message_path_str = message_path.to_string_lossy().to_string();
-            //     let uma_path = env::current_exe()?;
-                
-            //     #[cfg(target_os = "linux")]
-            //     {
-            //         // Safely handle the path conversion
-            //         let uma_path_str = uma_path.to_string_lossy();
-                    
-            //         StdCommand::new("gnome-terminal")
-            //             .arg("--")  // Marks the end of terminal options
-            //             .arg(&uma_path_str)  // Safe conversion of path
-            //             .arg("--passive_message_mode")     
-            //             .arg(&message_path_str)
-            //             .spawn()?;
-            //     }
-                
-            //     debug_log(&format!("app.current_path {:?}", app.current_path)); 
-            //     app.input_mode = InputMode::InsertText;
-
-            //     // Safely get the current node's name
-            //     let current_node_name = app.current_path
-            //         .file_name()
-            //         .map(|name| name.to_string_lossy().to_string())
-            //         .unwrap_or_else(|| String::from("unknown"));  // Provide a default value
-
-            //     app.current_path = app.current_path.join("instant_message_browser");
-
-            //     debug_log!(
-            //         "app.current_path after joining 'instant_message_browser': {:?}",
-            //         app.current_path
-            //     ); 
-                
-            //     // Enter Browser of Messages
-            //     app.load_im_messages();
-                
-            //     Ok(true)
-            // }
+            /// Message Mode Handler: Dual-Interface Message Viewing System
+            /// 
+            /// This handler serves two primary functions:
+            /// 1. Launches a separate passive-view terminal for real-time message monitoring
+            /// 2. Enters the interactive message browsing mode in the main terminal
+            ///
+            /// # Process Flow:
+            /// 1. Path Handling:
+            ///    - Clones current directory path
+            ///    - Appends "instant_message_browser" subdirectory
+            ///    - Validates directory existence (returns Ok(false) if not found)
+            ///
+            /// 2. Passive View Terminal Launch (Linux):
+            ///    - Creates a new gnome-terminal instance
+            ///    - Passes the current Uma executable path and message directory
+            ///    - Uses format: "gnome-terminal -- [uma_path] --passive_message_mode [message_dir]"
+            ///    - Launches independently (non-blocking)
+            ///
+            /// 3. Main Terminal Setup:
+            ///    - Sets input mode to InsertText
+            ///    - Updates current path to message browser directory
+            ///    - Initializes message browser interface
+            ///
+            /// # Directory Structure:
+            /// ```text
+            /// current_path/
+            /// └── instant_message_browser/
+            ///     ├── 0.toml (metadata)
+            ///     ├── 1__user1.toml (messages)
+            ///     └── 2__user2.toml (messages)
+            /// ```
+            ///
+            /// # Error Handling:
+            /// - Checks for message directory existence
+            /// - Safely handles executable path conversion
+            /// - Uses Result for error propagation
+            ///
+            /// # Platform Support:
+            /// - Linux: Uses gnome-terminal for passive view
+            /// - Other platforms: TBD
+            ///
+            /// # Dependencies:
+            /// - std::process::Command for terminal launching
+            /// - std::env for executable path
+            /// - PathBuf for path manipulation
+            ///
+            /// # Safety:
+            /// - No unwrap() calls
+            /// - Safe string conversions via to_string_lossy()
+            /// - Proper error propagation
+            ///
+            /// # Notes:
+            /// - Passive view terminal operates independently
+            /// - Main terminal maintains interactive mode
+            /// - Message directory must exist before operation
+            ///
+            ///
+            /// Passive Message View Mode
+            /// 
+            /// This code implements a separate terminal-window passive message viewer
+            /// that runs independently from the main Uma application.
+            ///
+            /// # Launch Process:
+            /// 1. Triggered when user enters "m" in main Uma application
+            /// 2. Creates new terminal window running a separate Uma process
+            /// 3. New process runs in passive-view mode (--passive_message_mode)
+            ///
+            /// # Implementation Details:
+            /// ```rust
+            /// // Main Process (Original Uma Terminal):
+            /// // Launches new terminal for passive view, then continues normal operation
+            /// let mut message_path = app.current_path.clone();
+            /// message_path.push("instant_message_browser");
+            /// 
+            /// // New terminal command structure:
+            /// StdCommand::new("gnome-terminal")
+            ///     .arg("--")
+            ///     .arg(uma_path_str)               // Path to Uma executable
+            ///     .arg("--passive_message_mode")   // Tells Uma to run in passive mode
+            ///     .arg(&message_path_str)          // Path to message directory
+            ///     .spawn()?;
+            /// ```
+            ///
+            /// # Key Components:
+            /// 1. Directory Validation:
+            ///    - Checks if message directory exists before launching
+            ///    - Returns Ok(false) if directory not found
+            ///
+            /// 2. Path Handling:
+            ///    - Clones and modifies current path
+            ///    - Adds "instant_message_browser" subdirectory
+            ///    - Converts paths to strings safely using to_string_lossy()
+            ///
+            /// 3. Process Launch:
+            ///    - Uses gnome-terminal on Linux
+            ///    - Launches Uma in new process with --passive_message_mode flag
+            ///    - New process is independent (non-blocking)
+            ///
+            /// # Command Line Arguments:
+            /// When launched in passive mode, Uma receives:
+            /// 1. --passive_message_mode flag
+            /// 2. Path to message directory
+            ///
+            /// # Safety & Error Handling:
+            /// - Safe path conversions
+            /// - No unwrap() calls
+            /// - Proper error propagation with Result
+            /// - Directory existence validation
+            ///
+            /// # Operational Flow:
+            /// 1. User enters "m" in main Uma
+            /// 2. New terminal launches with Uma in passive mode
+            /// 3. Original Uma continues with normal message operations
+            /// 4. New terminal operates independently for message viewing
+            ///
+            /// # Important Notes:
+            /// - This is a view-only mode
+            /// - No connection maintained between terminals
+            /// - Original Uma process continues independently
+            /// - Passive view must be manually closed when done
             "m" | "message" => {
                 debug_log("m selected");
-                
+
                 /////////////////
                 // Passive View 
                 /////////////////
@@ -8704,8 +8713,6 @@ fn handle_command_main_mode(
                 
                 // Enter Browser of Messages
                 app.load_im_messages();
-                
-                // Ok(true)  // Return success as bool in Result
             }
                         
             "t" | "task" | "tasks" => {
