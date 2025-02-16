@@ -59,7 +59,7 @@ pub mod tiny_tui {
             println!("{}. {}", i + 1, item);
         }
     }    
-        
+    
     pub fn simple_render_list(list: &Vec<String>, current_path: &Path) {
             
         // 1. Get the path components
@@ -80,7 +80,25 @@ pub mod tiny_tui {
         for (i, item) in list.iter().enumerate() {
             println!("{}. {}", i + 1, item);
         }
-    }    
+    }
+        
+    /// for passive view mode
+    pub fn simple_render_list_passive(list: &Vec<String>, current_path: &Path) {
+        // Display path
+        let path_components: Vec<_> = current_path.components().collect();
+        if path_components.len() > 2 {
+            let relevant_path = path_components[2..].iter()
+                .map(|c| c.as_os_str().to_string_lossy())
+                .collect::<Vec<_>>()
+                .join("/");
+            println!("Current Path: /{}", relevant_path);
+        }
+
+        // Display messages
+        for (i, item) in list.iter().enumerate() {
+            println!("{}. {}", i + 1, item);
+        }
+    }
     
     
 

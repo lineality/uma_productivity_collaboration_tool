@@ -277,6 +277,12 @@ const MAX_NETWORK_TYPE_LENGTH: usize = 1024; // Example: 1KB limit
 const EMPTY_IPV_4: Ipv4Addr = Ipv4Addr::new(127, 0, 0, 1); // == = 127.0.0.1
 const EMPTY_IPV_6: Ipv6Addr = Ipv6Addr::UNSPECIFIED; // Correct way to represent an unspecified IPv6 address
 
+use std::env;
+use std::hash::{
+    Hash,
+    DefaultHasher,
+    Hasher,
+};
 use std::io::{
     self,
     Error,
@@ -285,7 +291,11 @@ use std::io::{
     BufRead,
 };
 // use std::str::FromStr; 
-use std::process::Stdio;
+use std::process::{
+    self,
+    Command as StdCommand,
+    Stdio,
+};
 use std::error::Error as StdError; 
 use walkdir::WalkDir;
 use std::path::Path;
@@ -324,7 +334,7 @@ use std::collections::HashSet;
 // use std::sync::mpsc::channel;
 // use std::sync::mpsc::Sender;
 
-use std::process::Command as StdCommand;
+
 // use std::sync::mpsc;
 
 // For Sync
@@ -2611,7 +2621,6 @@ impl App {
             }
     }
 
-    
     fn new(graph_navigation_instance_state: GraphNavigationInstanceState) -> App {
         App {
             tui_focus: 0,
@@ -3128,15 +3137,15 @@ impl App {
             }
         }
 
-        // Render the message list
-        tiny_tui::render_list(
-            &self.tui_textmessage_list, 
-            &self.current_path,
-            &self.graph_navigation_instance_state.agenda_process,
-            &self.graph_navigation_instance_state.goals_features_subfeatures_tools_targets,
-            &self.graph_navigation_instance_state.scope,
-            &self.graph_navigation_instance_state.schedule_duration_start_end,
-        ); 
+        // // Render the message list
+        // tiny_tui::render_list(
+        //     &self.tui_textmessage_list, 
+        //     &self.current_path,
+        //     &self.graph_navigation_instance_state.agenda_process,
+        //     &self.graph_navigation_instance_state.goals_features_subfeatures_tools_targets,
+        //     &self.graph_navigation_instance_state.scope,
+        //     &self.graph_navigation_instance_state.schedule_duration_start_end,
+        // ); 
     } 
    
     
@@ -5995,6 +6004,75 @@ fn create_core_node(
 //     }
 // }
 
+/// for passive view mode 
+fn run_passive_message_mode(path: &Path) -> io::Result<()> {
+    debug_log("Starting passive message mode...");
+    
+    // 1. Read refresh rate from uma.toml (similar to log mode)
+    // let refresh_rate = get_refresh_rate()?;
+    let refresh_rate: f32 = 5.0;
+    
+    // 2. Initialize last known state
+    let mut last_directory_state = get_directory_hash(path)?;
+    
+    // 3. Initial display
+    display_messages(path)?;
+
+    // 4. Enter refresh loop
+    loop {
+        let current_directory_state = get_directory_hash(path)?;
+        
+        if current_directory_state != last_directory_state {
+            print!("\x1B[2J\x1B[1;1H"); // Clear screen
+            display_messages(path)?;
+            last_directory_state = current_directory_state;
+        }
+        
+        thread::sleep(Duration::from_secs_f32(refresh_rate));
+    }
+}
+
+/// for passive view mode
+fn display_messages(path: &Path) -> io::Result<()> {
+    let mut message_list = Vec::new();
+    
+    // Walk directory and collect messages
+    for entry in WalkDir::new(path).max_depth(1) {
+        let entry = entry?;
+        if entry.path().is_file() {
+            let file_name = entry.file_name().to_string_lossy();
+            if file_name != "0.toml" {
+                if let Ok(contents) = fs::read_to_string(entry.path()) {
+                    if let Ok(message) = toml::from_str::<InstantMessageFile>(&contents) {
+                        message_list.push(format!("{}: {}", message.owner, message.text_message));
+                    }
+                }
+            }
+        }
+    }
+    
+    // Display using modified version of simple_render_list
+    tiny_tui::simple_render_list_passive(&message_list, path);
+    Ok(())
+}
+
+/// for passive view mode
+fn get_directory_hash(path: &Path) -> io::Result<u64> {
+    let mut hasher = DefaultHasher::new();
+    
+    for entry in WalkDir::new(path).max_depth(1) {
+        let entry = entry?;
+        if entry.path().is_file() {
+            let metadata = entry.metadata()?;
+            metadata.modified()?.hash(&mut hasher);
+            metadata.len().hash(&mut hasher);
+        }
+    }
+    
+    Ok(hasher.finish())
+}
+
+
 /// Gets user input for agenda process selection of create_core_node()
 fn get_agenda_process() -> Result<String, ThisProjectError> {
     println!("Enter agenda process (default option: Agile, Kahneman-Tversky, Definition-Studies):");
@@ -6382,7 +6460,7 @@ fn get_gpg_armored_public_key_with_key_id(key_id: &str) -> io::Result<String> {
     
     */
     // Construct the GPG command to export the public key in armored format
-    let output = Command::new("gpg")
+    let output = StdCommand::new("gpg")
         .arg("--armor")
         .arg("--export")
         .arg(key_id)
@@ -7782,7 +7860,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
 //     Ok(false)
 // }
 
-use std::process::Command;
+// use std::process::Command;
 /// Exports the user's public GPG key to a specified location for sharing
 /// 
 /// # Arguments
@@ -7817,7 +7895,7 @@ pub fn export_public_gpg_key(
     let output_file = output_directory.join("key.asc");
     
     // Export the GPG key
-    let output = Command::new("gpg")
+    let output = StdCommand::new("gpg")
         .arg("--armor")
         .arg("--export")
         .arg(&gpg_key_id)
@@ -8420,14 +8498,203 @@ fn handle_command_main_mode(
             //     debug_log("updated selected");
             //     // TODO: update the updated_at_timestamp filed in the node.toml
             // }
+            
+            
+            // "m" | "message" => {
+
+            //     debug_log("m selected");
+            //     let current_path = app.current_path.to_string_lossy().to_string();
+                
+            //     /////////////////
+            //     // Passive View 
+            //     /////////////////
+            //     let mut message_path = app.current_path.clone();
+            //     message_path.push("instant_message_browser");
+
+            //     // Check if directory exists
+            //     if !message_path.exists() {
+            //         println!("Message directory not found!");
+            //         return true;  // Changed from Ok(()) to match your return type
+            //     }
+                
+            //     let message_path_str = message_path.to_string_lossy().to_string();
+            //     let uma_path = env::current_exe()?;
+                
+            //     #[cfg(target_os = "linux")]
+            //     {
+            //         StdCommand::new("gnome-terminal")
+            //             .arg("--")  // Marks the end of terminal options
+            //             .arg(uma_path.to_str().unwrap())  // The command to run
+            //             .arg("--passive_message_mode")     // Arguments to our command
+            //             .arg(&message_path_str)
+            //             .spawn()?;
+            //     }
+                
+            //     debug_log(&format!("app.current_path {:?}", app.current_path)); 
+            //     app.input_mode = InputMode::InsertText;
+
+            //     // TODO Assuming you have a way to get the current node's name:
+            //     let current_node_name = app.current_path.file_name()
+            //         .unwrap()
+            //         .to_string_lossy()
+            //         .to_string();
+
+            //     app.current_path = app.current_path.join("instant_message_browser");
+
+            //     debug_log!(
+            //         "app.current_path after joining 'instant_message_browser': {:?}",
+            //         app.current_path
+            //     ); 
+                
+            //     // Enter Browser of Messages
+            //     app.load_im_messages();
+        // }
+                
+                // debug_log("m selected");
+                // let current_path = app.current_path.to_string_lossy().to_string();
+                
+                // /////////////////
+                // // Passive View 
+                // /////////////////
+                // // Launch passive message viewer in new terminal
+                // // let current_path = app.current_path.to_string_lossy().to_string();
+                // // let uma_path = env::current_exe()?;
+                
+                
+                // // #[cfg(target_os = "linux")]
+                // // StdCommand::new("gnome-terminal")
+                // //     .arg("--")  // Marks the end of terminal options
+                // //     .arg(uma_path.to_str().unwrap())  // The command to run
+                // //     .arg("--passive_message_mode")     // Arguments to our command
+                // //     .arg(&current_path)
+                // //     .spawn()?;
+                // let mut message_path = app.current_path.clone();
+                // message_path.push("instant_message_browser");
+
+                // // Check if directory exists
+                // if !message_path.exists() {
+                //     println!("Message directory not found!");
+                //     return Ok(());
+                // }
+                
+                // message_path = message_path.to_string_lossy().to_string();
+                // let uma_path = env::current_exe()?;
+                
+                // #[cfg(target_os = "linux")]
+                // {
+                //     let command = format!(
+                //         "{} --passive_message_mode \"{}\"",
+                //         uma_path.to_str().unwrap(),
+                //         message_path
+                //     );
+                //     launch_terminal_command(&command)?;
+                // }
+                
+                
+                
+                // debug_log(&format!("app.current_path {:?}", app.current_path)); 
+                // app.input_mode = InputMode::InsertText;
+
+                // // TODO Assuming you have a way to get the current node's name:
+                // let current_node_name = app.current_path.file_name().unwrap().to_string_lossy().to_string();
+
+                // app.current_path = app.current_path.join("instant_message_browser");
+
+                // debug_log!(
+                //     "app.current_path after joining 'instant_message_browser': {:?}",
+                //     app.current_path
+                // ); 
+                
+                // // Enter Browser of Messages
+                // app.load_im_messages();
+            // }
+            
+            // "m" | "message" => {
+            //     debug_log("m selected");
+            //     let current_path = app.current_path.to_string_lossy().to_string();
+                
+            //     /////////////////
+            //     // Passive View 
+            //     /////////////////
+            //     let mut message_path = app.current_path.clone();
+            //     message_path.push("instant_message_browser");
+
+            //     // Check if directory exists
+            //     if !message_path.exists() {
+            //         println!("Message directory not found!");
+            //         return Ok(true);  // Fixed to return Result
+            //     }
+                
+            //     let message_path_str = message_path.to_string_lossy().to_string();
+            //     let uma_path = env::current_exe()?;
+                
+            //     #[cfg(target_os = "linux")]
+            //     {
+            //         // Safely handle the path conversion
+            //         let uma_path_str = uma_path.to_string_lossy();
+                    
+            //         StdCommand::new("gnome-terminal")
+            //             .arg("--")  // Marks the end of terminal options
+            //             .arg(&uma_path_str)  // Safe conversion of path
+            //             .arg("--passive_message_mode")     
+            //             .arg(&message_path_str)
+            //             .spawn()?;
+            //     }
+                
+            //     debug_log(&format!("app.current_path {:?}", app.current_path)); 
+            //     app.input_mode = InputMode::InsertText;
+
+            //     // Safely get the current node's name
+            //     let current_node_name = app.current_path
+            //         .file_name()
+            //         .map(|name| name.to_string_lossy().to_string())
+            //         .unwrap_or_else(|| String::from("unknown"));  // Provide a default value
+
+            //     app.current_path = app.current_path.join("instant_message_browser");
+
+            //     debug_log!(
+            //         "app.current_path after joining 'instant_message_browser': {:?}",
+            //         app.current_path
+            //     ); 
+                
+            //     // Enter Browser of Messages
+            //     app.load_im_messages();
+                
+            //     Ok(true)
+            // }
             "m" | "message" => {
                 debug_log("m selected");
+                
+                /////////////////
+                // Passive View 
+                /////////////////
+                let mut message_path = app.current_path.clone();
+                message_path.push("instant_message_browser");
+
+                // Check if directory exists
+                if !message_path.exists() {
+                    println!("Message directory not found!");
+                    return Ok(false);  // Changed to match expected return type
+                }
+                
+                let message_path_str = message_path.to_string_lossy().into_owned();
+                
+                #[cfg(target_os = "linux")]
+                {
+                    if let Ok(uma_path) = env::current_exe() {
+                        if let Some(uma_path_str) = uma_path.to_str() {
+                            StdCommand::new("gnome-terminal")
+                                .arg("--")
+                                .arg(uma_path_str)
+                                .arg("--passive_message_mode")     
+                                .arg(&message_path_str)
+                                .spawn()?;
+                        }
+                    }
+                }
+                
                 debug_log(&format!("app.current_path {:?}", app.current_path)); 
                 app.input_mode = InputMode::InsertText;
-
-                // TODO Assuming you have a way to get the current node's name:
-                let current_node_name = app.current_path.file_name().unwrap().to_string_lossy().to_string();
-
                 app.current_path = app.current_path.join("instant_message_browser");
 
                 debug_log!(
@@ -8437,7 +8704,10 @@ fn handle_command_main_mode(
                 
                 // Enter Browser of Messages
                 app.load_im_messages();
+                
+                // Ok(true)  // Return success as bool in Result
             }
+                        
             "t" | "task" | "tasks" => {
                 debug_log("t selected: task browser launching");
                 debug_log(&format!("app.current_path {:?}", app.current_path)); 
@@ -15727,7 +15997,20 @@ An Appropriately Svelt Mainland:
 /// and just as reliable in this context.
 ///
 /// This also allows the user to manually set the halt signal.
-fn main() {    
+fn main() {
+    // Get command line arguments
+    let args: Vec<String> = env::args().collect();
+
+    // Check for passive message mode
+    if args.len() >= 3 && args[1] == "--passive_message_mode" {
+        let path = Path::new(&args[2]);
+        if let Err(e) = run_passive_message_mode(path) {
+            eprintln!("Error in passive message mode: {}", e);
+            process::exit(1);
+        }
+        return;
+    }    
+
     initialize_continue_uma_signal(); // set boolean flag for loops to hault
     initialize_hard_restart_signal(); // set boolean flag for uma restart
 
