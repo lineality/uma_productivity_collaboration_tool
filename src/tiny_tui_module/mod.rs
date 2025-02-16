@@ -1,6 +1,10 @@
 // tiny_tui_module.rs
 
 pub mod tiny_tui {
+    use std::io;
+    use std::fs;
+    use walkdir::WalkDir;
+    use std::fs::read_dir;
     use std::path::Path;
     use std::time::{
         Duration, 
@@ -11,6 +15,7 @@ pub mod tiny_tui {
         debug_log,
         OpenOptions,
         Write,
+        InstantMessageFile,
         }; 
 
     pub fn render_list(
@@ -100,54 +105,83 @@ pub mod tiny_tui {
         }
     }
     
-    
-
-/// Converts a Unix timestamp (seconds since 1970-01-01 00:00:00 UTC) to a YYYY-MM-DD formatted date string
-///
-/// # Arguments
-/// * `timestamp` - Unix timestamp in seconds
-///
-/// # Returns
-/// * `String` - Date in "YYYY-MM-DD" format, or "Invalid Date" if the timestamp cannot be converted
-///
-/// # Examples
-/// ```
-/// let timestamp = 1672531200; // 2023-01-01 00:00:00 UTC
-/// assert_eq!(format_timestamp_to_date(timestamp), "2023-01-01");
-/// ```
-/// use -> use std::time::{Duration, UNIX_EPOCH};
-fn format_timestamp_to_date(timestamp: u64) -> String {
-    UNIX_EPOCH
-        .checked_add(Duration::from_secs(timestamp))
-        .and_then(|datetime| datetime.duration_since(UNIX_EPOCH).ok())
-        .map(|duration| {
-            let secs = duration.as_secs();
-            let year = 1970 + (secs / 31_557_600); // Approximate years (365.25 days)
-            let remaining_secs = secs % 31_557_600;
-            let month = 1 + (remaining_secs / 2_629_800); // Approximate months (30.44 days)
-            let day = 1 + ((remaining_secs % 2_629_800) / 86_400); // Days (24 hours)
-            
-            format!("{:04}-{:02}-{:02}", year, month, day)
-        })
-        .unwrap_or_else(|| "Invalid Date".to_string())
-}
-    
         
-    pub fn render_tasks_list(headers: &[String], data: &[Vec<String>], current_path: &Path) {
+
+    /// Converts a Unix timestamp (seconds since 1970-01-01 00:00:00 UTC) to a YYYY-MM-DD formatted date string
+    ///
+    /// # Arguments
+    /// * `timestamp` - Unix timestamp in seconds
+    ///
+    /// # Returns
+    /// * `String` - Date in "YYYY-MM-DD" format, or "Invalid Date" if the timestamp cannot be converted
+    ///
+    /// # Examples
+    /// ```
+    /// let timestamp = 1672531200; // 2023-01-01 00:00:00 UTC
+    /// assert_eq!(format_timestamp_to_date(timestamp), "2023-01-01");
+    /// ```
+    /// use -> use std::time::{Duration, UNIX_EPOCH};
+    fn format_timestamp_to_date(timestamp: u64) -> String {
+        UNIX_EPOCH
+            .checked_add(Duration::from_secs(timestamp))
+            .and_then(|datetime| datetime.duration_since(UNIX_EPOCH).ok())
+            .map(|duration| {
+                let secs = duration.as_secs();
+                let year = 1970 + (secs / 31_557_600); // Approximate years (365.25 days)
+                let remaining_secs = secs % 31_557_600;
+                let month = 1 + (remaining_secs / 2_629_800); // Approximate months (30.44 days)
+                let day = 1 + ((remaining_secs % 2_629_800) / 86_400); // Days (24 hours)
+                
+                format!("{:04}-{:02}-{:02}", year, month, day)
+            })
+            .unwrap_or_else(|| "Invalid Date".to_string())
+    }
+
+
+    /// for passive view mode
+    pub fn passive_display_messages(path: &Path) -> io::Result<()> {
+        let mut message_list = Vec::new();
+        
+        // Walk directory and collect messages
+        for entry in WalkDir::new(path).max_depth(1) {
+            let entry = entry?;
+            if entry.path().is_file() {
+                let file_name = entry.file_name().to_string_lossy();
+                if file_name != "0.toml" {
+                    if let Ok(contents) = fs::read_to_string(entry.path()) {
+                        if let Ok(message) = toml::from_str::<InstantMessageFile>(&contents) {
+                            message_list.push(format!("{}: {}", message.owner, message.text_message));
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Display using modified version of simple_render_list
+        simple_render_list_passive(&message_list, path);
+        Ok(())
+    }
+
+
+
+        
+    //////////////////
+    // Tables, Tasks
+    //////////////////
+
+    pub fn render_tasks_table(headers: &[String], data: &[Vec<String>], current_path: &Path) {
         debug_log("starting: render_tasks_list");
         // 1. Display Current Path
         print!("\x1B[2J\x1B[1;1H"); // Clear the screen
         println!("Current Path: {}", current_path.display());
     
-        // 2. Display Table (reuse display_table from tiny_tui_module)
-        display_table(headers, data);
+        // 2. Display Table (reuse display_tasks_table from tiny_tui_module)
+        display_tasks_table(headers, data);
     
         // 3. (Optional) Display any other task-specific information or instructions.
         println!("Select a Task (by number):"); 
     }
         
-    
-    
     // pub fn render_list(list: &Vec<String>, current_path: &Path) {
     //     println!("Current Path: {}", current_path.display());
     //     for (i, item) in list.iter().enumerate() {
@@ -161,10 +195,10 @@ fn format_timestamp_to_date(timestamp: u64) -> String {
         Ok(input.trim().to_string())
     }
     
-    pub fn display_table(headers: &[String], data: &[Vec<String>]) {  // Changed header type
-        debug_log("tui module: task-mode: start: display_table()");
+    pub fn display_tasks_table(headers: &[String], data: &[Vec<String>]) {  // Changed header type
+        debug_log("tui module: task-mode: start: display_tasks_table()");
         debug_log!(
-            "tui module: display_table(): headers -> {:?} data -> {:?}",
+            "tui module: display_tasks_table(): headers -> {:?} data -> {:?}",
             headers,
             data,
         );
@@ -193,33 +227,6 @@ fn format_timestamp_to_date(timestamp: u64) -> String {
         }
     }
     
-    // pub fn display_table(headers: &[&str], data: &[Vec<&str>]) {
-    //     // Print headers
-    //     for header in headers {
-    //         print!("{:<15} ", header); // Left-align with padding
-    //     }
-    //     println!();
-    
-    //     // Print separator
-    //     println!("{}", "-".repeat(headers.len() * 15));
-    
-    //     // Print data rows
-    //     for row in data {
-    //         for item in row {
-    //             print!("{:<15} ", item);
-    //         }
-    //         println!();
-    //     }
-    // }
-    // // fn main() {
-    // //     let headers = vec!["Column 1", "Column 2", "Column 3"];
-    // //     let data = vec![
-    // //         vec!["Data A", "Data B", "Data C"],
-    // //         vec!["Data D", "Data E", "Data F"],
-    // //     ];
-    // //     display_table(&headers, &data);
-    // // }
-    
     // Helper function to transpose the table data
     pub fn transpose_table_data(data: &[Vec<String>]) -> Vec<Vec<String>> {
         debug_log("tui module: task-mode: start: transpose_table_data()");
@@ -240,5 +247,107 @@ fn format_timestamp_to_date(timestamp: u64) -> String {
         transposed_data
     }
 
-}
+    /// Render tasks table for passive view mode
+    /// Similar to render_tasks_table but without input prompts
+    pub fn render_tasks_table_passive(headers: &[String], data: &[Vec<String>], current_path: &Path) {
+        debug_log("starting: render_tasks_table_passive");
+        // 1. Display Current Path
+        print!("\x1B[2J\x1B[1;1H"); // Clear the screen
+        println!("Current Path: {}", current_path.display());
 
+        // 2. Display Table (reuse existing display_tasks_table)
+        display_tasks_table(headers, data);
+
+        // 3. No input prompt for passive view
+        println!("\nPassive View Mode - Updates Automatically"); 
+    }
+
+    /// Display tasks in passive view mode using the existing table infrastructure
+    pub fn passive_display_tasks(path: &Path) -> io::Result<()> {
+        debug_log!("passive-task-mode: starting passive task display");
+
+        // Use existing update_task_display logic but without app state
+        match update_passive_task_display(path) {
+            Ok((headers, data)) => {
+                if headers.is_empty() {
+                    debug_log("Warning: No headers found in passive task display");
+                    // tiny_tui::render_tasks_table_passive(
+                    render_tasks_table_passive(
+                        &["No Tasks".to_string()], 
+                        &Vec::new(),
+                        path,
+                    );
+                } else {
+                    // tiny_tui::render_tasks_table_passive(
+                    render_tasks_table_passive(
+                        &headers, 
+                        &data, 
+                        path,
+                    );
+                }
+                Ok(())
+            },
+            Err(e) => {
+                debug_log(&format!("Error updating passive task display: {}", e));
+                // tiny_tui::render_tasks_table_passive(
+                render_tasks_table_passive(
+                    &["Error".to_string()],
+                    &vec![vec![format!("Failed to load tasks: {}", e)]],
+                    path
+                );
+                Err(e)
+            }
+        }
+    }
+
+
+    /// Update task display data for passive view
+    /// Returns headers and data for task table display
+    fn update_passive_task_display(path: &Path) -> io::Result<(Vec<String>, Vec<Vec<String>>)> {
+        let mut headers = Vec::new();
+        let mut task_columns = Vec::new();
+
+        // Read directory entries
+        for entry in read_dir(path)? {
+            let entry = entry?;
+            let file_name = entry.file_name().to_string_lossy().into_owned();
+            
+            // Parse column directories (e.g., "1_plan") using string operations
+            if entry.file_type()?.is_dir() {
+                // Split on first underscore
+                if let Some(underscore_pos) = file_name.find('_') {
+                    if let Ok(column_num) = file_name[..underscore_pos].parse::<usize>() {
+                        let header = file_name[underscore_pos + 1..].to_string();
+                        
+                        // Collect tasks in this column
+                        let mut tasks = Vec::new();
+                        if let Ok(task_entries) = read_dir(entry.path()) {
+                            for (i, task_entry) in task_entries.flatten().enumerate() {
+                                if task_entry.file_type()?.is_dir() {
+                                    tasks.push(format!("{}. {}", 
+                                        i + 1,
+                                        task_entry.file_name().to_string_lossy()
+                                    ));
+                                }
+                            }
+                        }
+
+                        // Ensure we have space in our vectors
+                        while headers.len() <= column_num {
+                            headers.push(String::new());
+                            task_columns.push(Vec::new());
+                        }
+                        
+                        headers[column_num] = header;
+                        task_columns[column_num] = tasks;
+                    }
+                }
+            }
+        }
+
+        // Convert to table format
+        let data = transpose_table_data(&task_columns);
+        
+        Ok((headers, data))
+    }
+}

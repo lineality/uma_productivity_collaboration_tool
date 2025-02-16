@@ -156,8 +156,8 @@ fn format_timestamp_to_date(timestamp: u64) -> String {
 }
     
         
-    pub fn render_tasks_list(headers: &[String], data: &[Vec<String>], current_path: &Path) {
-        debug_log("starting: render_tasks_list");
+    pub fn render_tasks_table(headers: &[String], data: &[Vec<String>], current_path: &Path) {
+        debug_log("starting: render_tasks_table");
         // 1. Display Current Path
         print!("\x1B[2J\x1B[1;1H"); // Clear the screen
         println!("Current Path: {}", current_path.display());
@@ -3307,7 +3307,7 @@ impl App {
 fn handle_task_action(&mut self, input: &str) -> bool { // Return true to exit task mode
         // TODO handle 'b' back
         
-        if input == "q" || input == "quit" {
+        if input == "q" || input == "quit" || input == "b" || input == "back" {
             self.input_mode = InputMode::MainCommand; //Switch back to MainCommand mode
             self.current_path.pop(); // Go back to parent directory ("task_browser")
             self.load_tasks();        //Refresh task view at the previous parent level.
@@ -3322,37 +3322,6 @@ fn handle_task_action(&mut self, input: &str) -> bool { // Return true to exit t
         false // Don't exit task mode by default for other commands
     }
 
-    // // still under construction
-    // fn handle_task_number_selection(&mut self, selection: usize) -> bool {
-    //         if selection > 0 && selection <= self.tui_file_list.len() {
-    //             let task_index = selection - 1;
-    //             if let Some(task_name) = self.tui_file_list.get(task_index) {
-    //                 let task_path = self.current_path.join(task_name);
-    //                 self.current_path = task_path;
-    
-    //                 if self.current_path.join("node.toml").exists() {
-    //                     // Correctly handle the Result from load_core_node_from_toml_file:
-    //                     match load_core_node_from_toml_file(&self.current_path.join("node.toml")) {
-    //                         Ok(this_node_data) => {
-    //                             debug_log!("Node data loaded:\n{:#?}", this_node_data); // Or display in TUI
-    //                             // ... (Code to display node data in a dedicated view)...
-    //                         }
-    //                         Err(e) => {
-    //                             debug_log!("Error loading node data: {}", e);
-    //                             // ... (Error handling, e.g., display error message in TUI) ...
-    //                         }
-    //                     }
-    //                 }
-    //                 return true; // Exit task mode to view/edit task
-    //             } else {
-    //                 debug_log!("Invalid task number.");
-    //             }
-    //         }
-    //         false // Stay in task mode if invalid input
-    //     }
-    
-    
-    
     /// headers/columns = directories with names starting with int and underscore such as 1_plan 2_started 3_done
     /// the number and underscore should be removed
     /// the number should be used as the header/column number
@@ -3369,92 +3338,19 @@ fn handle_task_action(&mut self, input: &str) -> bool { // Return true to exit t
 
         if self.is_at_task_browser_root() {
             
-
-            // // app.update_task_display()?;
-            // let (headers, data) = self.update_task_display()?;
-            // debug_log!(
-            //     "headers -> {:?} data -> {:?}", 
-            //      headers,
-            //      data,
-            // );
-            // tiny_tui::display_table(&headers, &data);
-            
-            
-            // // Column display at root (corrected logic)
-            // let mut column_names = Vec::new();
-            // let mut column_data = Vec::new();
-
-            // // read and use dir, not make new dir
-            // if let Ok(entries) = fs::read_dir(task_browser_dir) {
-            //     let mut numbered_entries = Vec::new();  //Corrected type
-            //     // Find numbered task directories first:
-            //     for entry in entries.flatten() {
-            //         if entry.path().is_dir() && entry.file_name().to_string_lossy().starts_with(|c: char| c.is_ascii_digit()) {  // Numbered directories
-            //             numbered_entries.push(entry);
-            //         }
-            //     }
-
-            //     // Sort the directory entries by their leading number to ensure they are processed in the correct order
-            //     numbered_entries.sort_by_key(|entry| {
-            //         // Attempt to parse the filename as an integer, or use 0 if the filename cannot be parsed correctly.
-            //         entry.file_name().to_string_lossy().chars().next().and_then(|c| c.to_digit(10)).unwrap_or(0) as u32
-            //     });
-                
-            //     for entry in numbered_entries {
-            //         let column_name = entry.file_name().to_string_lossy().to_string();  // Keep the full column name
-            //         debug_log!(
-            //             "task-mode: starting: tasks app: load_tasks: this_col_name -> {:?}", 
-            //             column_name
-            //         );                    
-            //         column_names.push(column_name.clone());  //Corrected to push strings
-
-            //         let mut column_tasks = Vec::new();                    
-            //         if let Ok(tasks) = fs::read_dir(entry.path()) {
-            //             for task in tasks.flatten() {
-            //                 if task.path().is_dir() { // Tasks are directories inside columns
-            //                     debug_log!(
-            //                         "task-mode: starting: tasks app: load_tasks: load_tasks this_task_name -> {:?}", 
-            //                         task.file_name().to_string_lossy(),
-            //                     );                    
-            //                     column_tasks.push(task.file_name().to_string_lossy().to_string()); //Correct type here
-            //                 }
-            //             }
-            //         }
-            //         column_data.push(column_tasks); 
-            //     }                
-            // } else {
-            //      debug_log!("'task_browser' directory not found."); // Add a more specific debug log message.
-            // }
-            // // Transpose the data for display_table:
-            // debug_log!(
-            //     "task-mode: starting: tasks app: load_tasks: column_data -> {:?}", 
-            //     column_data
-            // );            
-            // debug_log!("task-mode: starting: tasks app: load_tasks: column_names -> {:?}", column_names);
-            // let transposed_data = tiny_tui::transpose_table_data(&column_data);
-
-            // debug_log!("task-mode: starting: tasks app: load_tasks: column_names -> {:?}", column_names);
-
-            // // tiny_tui::display_table(
-            // //     &column_names, // Now pushing correct String values
-            // //     &transposed_data,
-            // // );
-            
-            
-
             // Version 2: More detailed error handling
             match self.update_task_display() {
                 Ok((headers, data)) => {
                     if headers.is_empty() {
                         debug_log("Warning: No headers found in task display");
-                        tiny_tui::render_tasks_list(
+                        tiny_tui::render_tasks_table(
                             &["No Tasks".to_string()], 
                             &Vec::new(),
                             &self.current_path,
                         );
                     } else {
-                        // pub fn render_tasks_list(headers: &[String], data: &[Vec<String>], current_path: &Path) {
-                        tiny_tui::render_tasks_list(
+                        // pub fn render_tasks_table(headers: &[String], data: &[Vec<String>], current_path: &Path) {
+                        tiny_tui::render_tasks_table(
                             &headers, 
                             &data, 
                             &self.current_path,
@@ -3466,7 +3362,7 @@ fn handle_task_action(&mut self, input: &str) -> bool { // Return true to exit t
                 Err(e) => {
                     debug_log(&format!("Error updating task display: {}", e));
                     // Show error message in table format
-                    tiny_tui::render_tasks_list(
+                    tiny_tui::render_tasks_table(
                         &["Error".to_string()],
                         &vec![vec![format!("Failed to load tasks: {}", e)]],
                         &self.current_path
@@ -3500,53 +3396,6 @@ fn handle_task_action(&mut self, input: &str) -> bool { // Return true to exit t
             );
         }
     }
-    
-
-    // fn load_tasks(&mut self) {
-    //     debug_log("task-mode: starting: tasks app: load_tasks");
-    //     self.tui_directory_list.clear();
-    //     self.tui_file_list.clear();
-
-    //     let task_browser_dir = &self.current_path;
-
-    //     if self.is_at_task_browser_root() {
-    //         // Column display at root
-    //         let mut column_names = Vec::new();
-    //         let mut column_data = Vec::new();
-
-    //         if let Ok(entries) = fs::read_dir(task_browser_dir) {
-    //             for entry in entries.flatten() {
-    //                 if entry.path().is_dir() && entry.file_name().to_string_lossy().starts_with("#_") {
-    //                     let column_name = entry.file_name().to_string_lossy()[2..].to_string();
-    //                     column_names.push(column_name.clone());
-
-    //                     let mut column_tasks = Vec::new();
-    //                     if let Ok(tasks) = fs::read_dir(entry.path()) {
-    //                         for task in tasks.flatten() { // No need for enumerate here
-    //                             if task.path().is_dir() {
-    //                                 column_tasks.push(task.file_name().to_string_lossy().to_string());
-    //                             }
-    //                         }
-    //                     }
-    //                     column_data.push(column_tasks);
-    //                 }
-    //             }
-    //         }
-    //         // Transpose the data for display_table:
-    //         debug_log!(
-    //             "task-mode: starting: tasks app: load_tasks: column_data -> {:?}", 
-    //             column_data
-    //         );
-    //         let transposed_data = tiny_tui::transpose_table_data(&column_data);
-
-    //         tiny_tui::display_table(
-    //             &column_names, // No need for iter().map()... here
-    //             &transposed_data,
-    //         );
-    //     } else {
-    //         // ... (task display within a column remains the same)
-    //     }
-    // }
     
     fn next(&mut self) {
         if self.tui_focus < self.tui_file_list.len() - 1 {
@@ -6005,6 +5854,126 @@ fn create_core_node(
 // }
 
 /// for passive view mode 
+fn run_passive_task_mode(path: &Path) -> io::Result<()> {
+    debug_log("Starting passive message mode...");
+    
+    // 1. Read refresh rate from uma.toml (similar to log mode)
+    // let refresh_rate = get_refresh_rate()?;
+    let refresh_rate: f32 = 10.0;
+    
+    // 2. Initialize last known state
+    let mut last_directory_state = get_directory_hash(path)?;
+    
+    // 3. Initial display
+    tiny_tui::passive_display_tasks(path)?;
+
+    // 4. Enter refresh loop
+    loop {
+        let current_directory_state = get_directory_hash(path)?;
+        
+        if current_directory_state != last_directory_state {
+            print!("\x1B[2J\x1B[1;1H"); // Clear screen
+            tiny_tui::passive_display_tasks(path)?;
+            last_directory_state = current_directory_state;
+        }
+        
+        thread::sleep(Duration::from_secs_f32(refresh_rate));
+    }
+}
+
+
+/// for passive view mode 
+/// Passive Message View Mode Implementation
+/// 
+/// This function implements the core loop for the passive message viewer terminal,
+/// which runs as a separate process from the main Uma application.
+///
+/// # System Architecture:
+/// 1. Main Uma Application:
+///    - User enters "m" command
+///    - Launches new terminal with --passive_message_mode flag
+///    - Continues with normal operation
+///
+/// 2. Passive View Process (this function):
+///    - Runs in separate terminal
+///    - Monitors message directory
+///    - Updates display when changes detected
+///
+/// # Command Line Launch:
+/// Launched via: uma --passive_message_mode [path_to_message_dir]
+/// Example: uma --passive_message_mode /home/user/team1/channel1/instant_message_browser
+///
+/// # Operational Flow:
+/// 1. Directory Monitoring:
+///    - Calculates hash of directory state
+///    - Detects changes by comparing hashes
+///    - Refresh rate set by uma.toml (default: 5.0 seconds)
+///
+/// 2. Display Updates:
+///    - Clears screen when changes detected
+///    - Reads all message files
+///    - Formats and displays messages
+///    - Maintains chronological order
+///
+/// # Directory Structure Expected:
+/// ```text
+/// instant_message_browser/
+/// ├── 0.toml (metadata)
+/// ├── 1__user1.toml (message)
+/// ├── 2__user2.toml (message)
+/// └── 3__user1.toml (message)
+/// ```
+///
+/// # Message File Format:
+/// TOML files containing:
+/// - owner: String (username)
+/// - text_message: String (content)
+/// - timestamp: Optional<DateTime>
+///
+/// # Error Handling:
+/// - Returns io::Error for file system issues
+/// - Continues running on non-fatal errors
+/// - Logs errors for debugging
+///
+/// # Display Format:
+/// ```text
+/// Channel: team1/channel1
+/// 
+/// 1. user1: message content
+/// 2. user2: another message
+/// 3. user1: third message
+/// ```
+///
+/// # Important Notes:
+/// - View-only mode (no message creation/editing)
+/// - Independent process (no connection to main Uma)
+/// - Must be manually closed (Ctrl+C)
+/// - Does not maintain state between refreshes
+/// - All data read fresh from files each update
+///
+/// # Related Components:
+/// - get_directory_hash(): Generates state hash
+/// - passive_display_messages(): Renders message list
+/// - Main Uma's message mode launcher
+/// - Message file TOML structure
+///
+/// # Configuration:
+/// - Refresh rate from uma.toml
+/// - Default refresh: 5.0 seconds
+/// - Directory path from command line
+///
+/// # Dependencies:
+/// - std::path for path handling
+/// - std::fs for file operations
+/// - std::thread for sleep
+/// - std::io for error handling
+/// - toml for message file parsing
+///
+/// This implementation prioritizes:
+/// - Reliability over performance
+/// - Simple direct file reading over caching
+/// - Clear display over complex features
+/// - Independence from main Uma process
 fn run_passive_message_mode(path: &Path) -> io::Result<()> {
     debug_log("Starting passive message mode...");
     
@@ -6016,7 +5985,7 @@ fn run_passive_message_mode(path: &Path) -> io::Result<()> {
     let mut last_directory_state = get_directory_hash(path)?;
     
     // 3. Initial display
-    display_messages(path)?;
+    tiny_tui::passive_display_messages(path)?;
 
     // 4. Enter refresh loop
     loop {
@@ -6024,7 +5993,7 @@ fn run_passive_message_mode(path: &Path) -> io::Result<()> {
         
         if current_directory_state != last_directory_state {
             print!("\x1B[2J\x1B[1;1H"); // Clear screen
-            display_messages(path)?;
+            tiny_tui::passive_display_messages(path)?;
             last_directory_state = current_directory_state;
         }
         
@@ -6032,29 +6001,9 @@ fn run_passive_message_mode(path: &Path) -> io::Result<()> {
     }
 }
 
-/// for passive view mode
-fn display_messages(path: &Path) -> io::Result<()> {
-    let mut message_list = Vec::new();
-    
-    // Walk directory and collect messages
-    for entry in WalkDir::new(path).max_depth(1) {
-        let entry = entry?;
-        if entry.path().is_file() {
-            let file_name = entry.file_name().to_string_lossy();
-            if file_name != "0.toml" {
-                if let Ok(contents) = fs::read_to_string(entry.path()) {
-                    if let Ok(message) = toml::from_str::<InstantMessageFile>(&contents) {
-                        message_list.push(format!("{}: {}", message.owner, message.text_message));
-                    }
-                }
-            }
-        }
-    }
-    
-    // Display using modified version of simple_render_list
-    tiny_tui::simple_render_list_passive(&message_list, path);
-    Ok(())
-}
+
+
+
 
 /// for passive view mode
 fn get_directory_hash(path: &Path) -> io::Result<u64> {
@@ -8550,127 +8499,128 @@ fn handle_command_main_mode(
             //     app.load_im_messages();
         // }
                 
-                
-            /// Message Mode Handler: Dual-Interface Message Viewing System
-            /// 
-            /// This handler serves two primary functions:
-            /// 1. Launches a separate passive-view terminal for real-time message monitoring
-            /// 2. Enters the interactive message browsing mode in the main terminal
-            ///
-            /// # Process Flow:
-            /// 1. Path Handling:
-            ///    - Clones current directory path
-            ///    - Appends "instant_message_browser" subdirectory
-            ///    - Validates directory existence (returns Ok(false) if not found)
-            ///
-            /// 2. Passive View Terminal Launch (Linux):
-            ///    - Creates a new gnome-terminal instance
-            ///    - Passes the current Uma executable path and message directory
-            ///    - Uses format: "gnome-terminal -- [uma_path] --passive_message_mode [message_dir]"
-            ///    - Launches independently (non-blocking)
-            ///
-            /// 3. Main Terminal Setup:
-            ///    - Sets input mode to InsertText
-            ///    - Updates current path to message browser directory
-            ///    - Initializes message browser interface
-            ///
-            /// # Directory Structure:
-            /// ```text
-            /// current_path/
-            /// └── instant_message_browser/
-            ///     ├── 0.toml (metadata)
-            ///     ├── 1__user1.toml (messages)
-            ///     └── 2__user2.toml (messages)
-            /// ```
-            ///
-            /// # Error Handling:
-            /// - Checks for message directory existence
-            /// - Safely handles executable path conversion
-            /// - Uses Result for error propagation
-            ///
-            /// # Platform Support:
-            /// - Linux: Uses gnome-terminal for passive view
-            /// - Other platforms: TBD
-            ///
-            /// # Dependencies:
-            /// - std::process::Command for terminal launching
-            /// - std::env for executable path
-            /// - PathBuf for path manipulation
-            ///
-            /// # Safety:
-            /// - No unwrap() calls
-            /// - Safe string conversions via to_string_lossy()
-            /// - Proper error propagation
-            ///
-            /// # Notes:
-            /// - Passive view terminal operates independently
-            /// - Main terminal maintains interactive mode
-            /// - Message directory must exist before operation
-            ///
-            ///
-            /// Passive Message View Mode
-            /// 
-            /// This code implements a separate terminal-window passive message viewer
-            /// that runs independently from the main Uma application.
-            ///
-            /// # Launch Process:
-            /// 1. Triggered when user enters "m" in main Uma application
-            /// 2. Creates new terminal window running a separate Uma process
-            /// 3. New process runs in passive-view mode (--passive_message_mode)
-            ///
-            /// # Implementation Details:
-            /// ```rust
-            /// // Main Process (Original Uma Terminal):
-            /// // Launches new terminal for passive view, then continues normal operation
-            /// let mut message_path = app.current_path.clone();
-            /// message_path.push("instant_message_browser");
-            /// 
-            /// // New terminal command structure:
-            /// StdCommand::new("gnome-terminal")
-            ///     .arg("--")
-            ///     .arg(uma_path_str)               // Path to Uma executable
-            ///     .arg("--passive_message_mode")   // Tells Uma to run in passive mode
-            ///     .arg(&message_path_str)          // Path to message directory
-            ///     .spawn()?;
-            /// ```
-            ///
-            /// # Key Components:
-            /// 1. Directory Validation:
-            ///    - Checks if message directory exists before launching
-            ///    - Returns Ok(false) if directory not found
-            ///
-            /// 2. Path Handling:
-            ///    - Clones and modifies current path
-            ///    - Adds "instant_message_browser" subdirectory
-            ///    - Converts paths to strings safely using to_string_lossy()
-            ///
-            /// 3. Process Launch:
-            ///    - Uses gnome-terminal on Linux
-            ///    - Launches Uma in new process with --passive_message_mode flag
-            ///    - New process is independent (non-blocking)
-            ///
-            /// # Command Line Arguments:
-            /// When launched in passive mode, Uma receives:
-            /// 1. --passive_message_mode flag
-            /// 2. Path to message directory
-            ///
-            /// # Safety & Error Handling:
-            /// - Safe path conversions
-            /// - No unwrap() calls
-            /// - Proper error propagation with Result
-            /// - Directory existence validation
-            ///
-            /// # Operational Flow:
-            /// 1. User enters "m" in main Uma
-            /// 2. New terminal launches with Uma in passive mode
-            /// 3. Original Uma continues with normal message operations
-            /// 4. New terminal operates independently for message viewing
-            ///
-            /// # Important Notes:
-            /// - This is a view-only mode
-            /// - No connection maintained between terminals
-            /// - Original Uma process continues independently
-            /// - Passive view must be manually closed when done
+            /*
+            Message Mode Handler: Dual-Interface Message Viewing System
+            
+            This handler serves two primary functions:
+            1. Launches a separate passive-view terminal for real-time message monitoring
+            2. Enters the interactive message browsing mode in the main terminal
+            /
+            # Process Flow:
+            1. Path Handling:
+               - Clones current directory path
+               - Appends "instant_message_browser" subdirectory
+               - Validates directory existence (returns Ok(false) if not found)
+            /
+            2. Passive View Terminal Launch (Linux):
+               - Creates a new gnome-terminal instance
+               - Passes the current Uma executable path and message directory
+               - Uses format: "gnome-terminal -- [uma_path] --passive_message_mode [message_dir]"
+               - Launches independently (non-blocking)
+            /
+            3. Main Terminal Setup:
+               - Sets input mode to InsertText
+               - Updates current path to message browser directory
+               - Initializes message browser interface
+            /
+            # Directory Structure:
+            ```text
+            current_path/
+            └── instant_message_browser/
+                ├── 0.toml (metadata)
+                ├── 1__user1.toml (messages)
+                └── 2__user2.toml (messages)
+            ```
+            /
+            # Error Handling:
+            - Checks for message directory existence
+            - Safely handles executable path conversion
+            - Uses Result for error propagation
+            /
+            # Platform Support:
+            - Linux: Uses gnome-terminal for passive view
+            - Other platforms: TBD
+            /
+            # Dependencies:
+            - std::process::Command for terminal launching
+            - std::env for executable path
+            - PathBuf for path manipulation
+            /
+            # Safety:
+            - No unwrap() calls
+            - Safe string conversions via to_string_lossy()
+            - Proper error propagation
+            /
+            # Notes:
+            - Passive view terminal operates independently
+            - Main terminal maintains interactive mode
+            - Message directory must exist before operation
+            /
+            /
+            Passive Message View Mode
+            
+            This code implements a separate terminal-window passive message viewer
+            that runs independently from the main Uma application.
+            /
+            # Launch Process:
+            1. Triggered when user enters "m" in main Uma application
+            2. Creates new terminal window running a separate Uma process
+            3. New process runs in passive-view mode (--passive_message_mode)
+            /
+            # Implementation Details:
+            ```rust
+            // Main Process (Original Uma Terminal):
+            // Launches new terminal for passive view, then continues normal operation
+            let mut message_path = app.current_path.clone();
+            message_path.push("instant_message_browser");
+            
+            // New terminal command structure:
+            StdCommand::new("gnome-terminal")
+                .arg("--")
+                .arg(uma_path_str)               // Path to Uma executable
+                .arg("--passive_message_mode")   // Tells Uma to run in passive mode
+                .arg(&message_path_str)          // Path to message directory
+                .spawn()?;
+            ```
+            /
+            # Key Components:
+            1. Directory Validation:
+               - Checks if message directory exists before launching
+               - Returns Ok(false) if directory not found
+            /
+            2. Path Handling:
+               - Clones and modifies current path
+               - Adds "instant_message_browser" subdirectory
+               - Converts paths to strings safely using to_string_lossy()
+            /
+            3. Process Launch:
+               - Uses gnome-terminal on Linux
+               - Launches Uma in new process with --passive_message_mode flag
+               - New process is independent (non-blocking)
+            /
+            # Command Line Arguments:
+            When launched in passive mode, Uma receives:
+            1. --passive_message_mode flag
+            2. Path to message directory
+            /
+            # Safety & Error Handling:
+            - Safe path conversions
+            - No unwrap() calls
+            - Proper error propagation with Result
+            - Directory existence validation
+            /
+            # Operational Flow:
+            1. User enters "m" in main Uma
+            2. New terminal launches with Uma in passive mode
+            3. Original Uma continues with normal message operations
+            4. New terminal operates independently for message viewing
+            /
+            # Important Notes:
+            - This is a view-only mode
+            - No connection maintained between terminals
+            - Original Uma process continues independently
+            - Passive view must be manually closed when done
+            */
             "m" | "message" => {
                 debug_log("m selected");
 
@@ -8714,9 +8664,39 @@ fn handle_command_main_mode(
                 // Enter Browser of Messages
                 app.load_im_messages();
             }
-                        
+
             "t" | "task" | "tasks" => {
                 debug_log("t selected: task browser launching");
+                            
+                /////////////////
+                // Passive View 
+                /////////////////
+                let mut task_path = app.current_path.clone();
+                task_path.push("task_browser");
+
+                // Check if directory exists
+                if !task_path.exists() {
+                    println!("Task directory not found!");
+                    return Ok(false);
+                }
+                
+                let task_path_str = task_path.to_string_lossy().into_owned();
+                
+                #[cfg(target_os = "linux")]
+                {
+                    if let Ok(uma_path) = env::current_exe() {
+                        if let Some(uma_path_str) = uma_path.to_str() {
+                            StdCommand::new("gnome-terminal")
+                                .arg("--")
+                                .arg(uma_path_str)
+                                .arg("--passive_task_mode")     
+                                .arg(&task_path_str)
+                                .spawn()?;
+                        }
+                    }
+                }
+                
+                
                 debug_log(&format!("app.current_path {:?}", app.current_path)); 
                 app.input_mode = InputMode::InsertText;
 
@@ -15434,7 +15414,11 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                 );
                 app.update_directory_list()?;  // refresh to current cwd display items
                 
-                
+            } else if input == "b" {
+                debug_log("escape toggled");
+                app.input_mode = InputMode::MainCommand; // Access input_mode using self
+                app.current_path.pop(); // Go back to the parent directory
+                app.update_directory_list()?;  // refresh to current cwd display items 
             } else if input == "q" {
                 debug_log("escape toggled");
                 app.input_mode = InputMode::MainCommand; // Access input_mode using self
@@ -15683,8 +15667,8 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         //     InputMode::TaskCommand => {
         //         // Now render the task list using the TUI
         //         // app.load_tasks(); // This is already called in handle_command_main_mode("t", ...)
-        //         // The table is already rendered within load_tasks, using the new tiny_tui::render_tasks_list
-        //          debug_log!("InputMode::TaskCommand. render_tasks_list now used. ");  // Clear the screen
+        //         // The table is already rendered within load_tasks, using the new tiny_tui::render_tasks_table
+        //          debug_log!("InputMode::TaskCommand. render_tasks_table now used. ");  // Clear the screen
                 
         //     },
         //     // TODO why is theis here? tui_textmessage_list is not the only option
@@ -16017,6 +16001,17 @@ fn main() {
         }
         return;
     }    
+    
+    // Check for passive message mode
+    if args.len() >= 3 && args[1] == "--passive_task_mode" {
+        let path = Path::new(&args[2]);
+        if let Err(e) = run_passive_task_mode(path) {
+            eprintln!("Error in passive message mode: {}", e);
+            process::exit(1);
+        }
+        return;
+    }   
+    
 
     initialize_continue_uma_signal(); // set boolean flag for loops to hault
     initialize_hard_restart_signal(); // set boolean flag for uma restart
