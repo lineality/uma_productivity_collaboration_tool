@@ -60,7 +60,7 @@ pub mod tiny_tui {
         agenda_process: &str,
         goals_features: &str,
         scope: &str,
-        schedule_duration_start_end: &Vec<u64>,
+        pa2_schedule: &Vec<u64>,
     ) {
         // 1. Get the path components
         let path_components: Vec<_> = current_path.components().collect();
@@ -81,9 +81,9 @@ pub mod tiny_tui {
         println!("Goals/Features: {}", goals_features);
         println!("Scope: {}", scope);
 
-        if schedule_duration_start_end.len() == 2 {
-            let start_time = schedule_duration_start_end[0];
-            let end_time = schedule_duration_start_end[1];
+        if pa2_schedule.len() == 2 {
+            let start_time = pa2_schedule[0];
+            let end_time = pa2_schedule[1];
             let duration_days = (end_time - start_time) / (60 * 60 * 24); 
 
             let start_date = format_timestamp_to_date(start_time);
@@ -289,7 +289,9 @@ use std::io::{
     ErrorKind,
     Write,
     BufRead,
+    Read,
 };
+
 // use std::str::FromStr; 
 use std::process::{
     self,
@@ -2063,6 +2065,7 @@ fn debugpause(n: u64) {
     debug_log("...ok");
 }
 
+/// TODO this must be replaced
 /// read timestamps from .toml files, like you were born to do just that...on Mars!!
 fn get_toml_file_updated_at_timestamp(file_path: &Path) -> Result<u64, ThisProjectError> {
     debug_log!(
@@ -2379,6 +2382,121 @@ fn extract_ports_from_table(port_set: &toml::map::Map<String, Value>) -> Result<
             )))? as u16,
     })
 }
+
+/*
+maybe put these three into toml module
+*/
+
+
+
+/// Reads a single-line string field from a TOML file.
+/// 
+/// # Arguments
+/// * `path` - Path to the TOML file
+/// * `field_name` - Name of the field to read
+/// 
+/// # Returns
+/// * `Result<String, String>` - The field value or an error message
+pub fn read_toml_single_line_string(path: &str, field_name: &str) -> Result<String, String> {
+    let file = File::open(path)
+        .map_err(|e| format!("Failed to open file: {}", e))?;
+    
+    let reader = io::BufReader::new(file);
+    
+    for line in reader.lines() {
+        let line = line.map_err(|e| format!("Failed to read line: {}", e))?;
+        let trimmed = line.trim();
+        
+        if trimmed.starts_with(&format!("{} = ", field_name)) {
+            return Ok(trimmed
+                .splitn(2, '=')
+                .nth(1)
+                .unwrap_or("")
+                .trim()
+                .trim_matches('"')
+                .to_string());
+        }
+    }
+    
+    Err(format!("Field '{}' not found", field_name))
+}
+
+/// Reads a multi-line string field (triple-quoted) from a TOML file.
+/// 
+/// # Arguments
+/// * `path` - Path to the TOML file
+/// * `field_name` - Name of the field to read
+/// 
+/// # Returns
+/// * `Result<String, String>` - The concatenated multi-line value or an error message
+pub fn read_toml_multi_line_string(path: &str, field_name: &str) -> Result<String, String> {
+    let mut file = File::open(path)
+        .map_err(|e| format!("Failed to open file: {}", e))?;
+    
+    let mut content = String::new();
+    file.read_to_string(&mut content)
+        .map_err(|e| format!("Failed to read file: {}", e))?;
+
+    // Find the start of the field
+    let field_start = format!("{} = \"\"\"", field_name);
+    let start_pos = content.find(&field_start)
+        .ok_or_else(|| format!("Multi-line field '{}' not found", field_name))?;
+
+    // Find the end of the field (next """)
+    let content_after_start = &content[start_pos + field_start.len()..];
+    let end_pos = content_after_start.find("\"\"\"")
+        .ok_or_else(|| format!("Closing triple quotes not found for field '{}'", field_name))?;
+
+    // Extract the content between the triple quotes
+    let multi_line_content = &content_after_start[..end_pos];
+
+    // Clean up the content
+    Ok(multi_line_content
+        .lines()
+        .map(|line| line.trim())
+        .collect::<Vec<&str>>()
+        .join("\n")
+        .trim()
+        .to_string())
+}
+
+/// Reads an array of integers from a TOML file into a Vec<u64>.
+/// 
+/// # Arguments
+/// * `path` - Path to the TOML file
+/// * `field_name` - Name of the field to read
+/// 
+/// # Returns
+/// * `Result<Vec<u64>, String>` - The vector of integers or an error message
+pub fn read_toml_integer_array(path: &str, field_name: &str) -> Result<Vec<u64>, String> {
+    let file = File::open(path)
+        .map_err(|e| format!("Failed to open file: {}", e))?;
+    
+    let reader = io::BufReader::new(file);
+    
+    for line in reader.lines() {
+        let line = line.map_err(|e| format!("Failed to read line: {}", e))?;
+        let trimmed = line.trim();
+        
+        if trimmed.starts_with(&format!("{} = [", field_name)) {
+            let array_part = trimmed
+                .splitn(2, '=')
+                .nth(1)
+                .ok_or("Invalid array format")?
+                .trim()
+                .trim_matches(|c| c == '[' || c == ']');
+                
+            return array_part
+                .split(',')
+                .map(|s| s.trim().parse::<u64>()
+                    .map_err(|e| format!("Invalid integer: {}", e)))
+                .collect::<Result<Vec<u64>, String>>();
+        }
+    }
+    
+    Err(format!("Array field '{}' not found", field_name))
+}
+
 
 /// Extracts the list of collaborator names from a team channel's `node.toml` file.
 ///
@@ -3144,7 +3262,7 @@ impl App {
         //     &self.graph_navigation_instance_state.agenda_process,
         //     &self.graph_navigation_instance_state.goals_features_subfeatures_tools_targets,
         //     &self.graph_navigation_instance_state.scope,
-        //     &self.graph_navigation_instance_state.schedule_duration_start_end,
+        //     &self.graph_navigation_instance_state.pa2_schedule,
         // ); 
     } 
    
@@ -3389,10 +3507,12 @@ fn handle_task_action(&mut self, input: &str) -> bool { // Return true to exit t
             tiny_tui::render_list(
                 &file_list,      // Pass the file list
                 &self.current_path, //Pass the current path
-                &self.graph_navigation_instance_state.agenda_process,
-                &self.graph_navigation_instance_state.goals_features_subfeatures_tools_targets,
-                &self.graph_navigation_instance_state.scope,
-                &self.graph_navigation_instance_state.schedule_duration_start_end,
+                &self.graph_navigation_instance_state.pa1_process,
+                &self.graph_navigation_instance_state.pa2_schedule,
+                &self.graph_navigation_instance_state.pa3_users,
+                &self.graph_navigation_instance_state.pa4_features,
+                &self.graph_navigation_instance_state.pa5_mvp,
+                &self.graph_navigation_instance_state.pa6_feedback,
             );
         }
     }
@@ -3914,12 +4034,30 @@ struct GraphNavigationInstanceState {
     home_square_one: bool,
     // from task fields:
     // project module items as task-ish thing
-    agenda_process: String,
-    goals_features_subfeatures_tools_targets: String,
-    scope: String,
-    schedule_duration_start_end: Vec<u64>, // Vec<u64>,?
-
+    pa1_process: String,
+    pa2_schedule: Vec<u64>, // Vec<u64>,?
+    pa3_users: String,
+    // goals_features_subfeatures_tools_targets: String,
+    pa4_features: String,
+    pa5_mvp: String,
+    pa6_feedback: String,
+    /*
+    pa1_process
+    pa2_schedule
+    pa3_users
+    pa4_features
+    pa5_mvp
+    pa6_feedback
     
+    The project areas
+        pa1_process - Process: Values, Agenda, Methods, Coordinated Decisions (Data/System)Ecology: Collapse & Productivity
+        pa2_schedule - Schedule: (?; whole; this iteration)
+        pa3_users - Users: Stakeholders & Needs & Goals Evaluation (of users) 
+        pa4_features - Features: User-Features & Subfeatures (or hidden features) 
+        pa5_mvp - MVP: 'MVP's (Minimum Viable Products); Tools & 'Tool Stack / Tech Stack'
+        pa6_feedback - Feedback: Tests, Ecological Effects, Communication, Documentation & Iteration (~agile)
+    
+    */
 
     
     
@@ -4051,10 +4189,14 @@ impl GraphNavigationInstanceState {
                     self.current_node_directory_path = this_node.directory_path.clone();
                     self.current_node_unique_id = this_node.node_unique_id;
                     self.home_square_one = false;
-                    self.agenda_process = this_node.agenda_process;
-                    self.goals_features_subfeatures_tools_targets = this_node.goals_features_subfeatures_tools_targets;
-                    self.scope = this_node.scope;
-                    self.schedule_duration_start_end = this_node.schedule_duration_start_end;
+                    
+                    // Project Areas
+                    self.pa1_process = this_node.pa1_process;
+                    self.pa2_schedule = this_node.pa2_schedule;
+                    self.pa3_users = this_node.pa3_users;
+                    self.pa4_features = this_node.pa4_features;
+                    self.pa5_mvp = this_node.pa5_mvp;
+                    self.pa6_feedback = this_node.pa6_feedback;
                 } else {
                     debug_log!("nav_graph_look_read_node_toml(), not a team channel node");
                 }
@@ -4124,7 +4266,7 @@ impl GraphNavigationInstanceState {
     //     self.agenda_process = this_node.agenda_process;
     //     self.goals_features_subfeatures_tools_targets = this_node.goals_features_subfeatures_tools_targets;
     //     self.scope = this_node.scope;
-    //     self.schedule_duration_start_end = this_node.schedule_duration_start_end;
+    //     self.pa2_schedule = this_node.pa2_schedule;
     // } else {
     //     debug_log!("nav_graph_look_read_node_toml(), not a team channel node");
     // }
@@ -4197,7 +4339,7 @@ impl GraphNavigationInstanceState {
 //                 self.agenda_process = this_node.agenda_process;
 //                 self.goals_features_subfeatures_tools_targets = this_node.goals_features_subfeatures_tools_targets;
 //                 self.scope = this_node.scope;
-//                 self.schedule_duration_start_end = this_node.schedule_duration_start_end;
+//                 self.pa2_schedule = this_node.pa2_schedule;
 //             } // end of if path_components.len() >= 2 
         
 //         } else {
@@ -4376,12 +4518,13 @@ struct CoreNode {
     teamchannel_collaborators_with_access: Vec<String>,
     /// A map containing port assignments for each collaborator associated with the node.
     abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
-    
-    // project module items as task-ish thing
-    agenda_process: String,
-    goals_features_subfeatures_tools_targets: String,
-    scope: String,
-    schedule_duration_start_end: Vec<u64>, 
+    // project areas: project module items as task-ish thing
+    pa1_process: String,
+    pa2_schedule: Vec<u64>, 
+    pa3_users: String,
+    pa4_features: String,
+    pa5_mvp: String,
+    pa6_feedback: String,
 }
 
 
@@ -4436,10 +4579,13 @@ impl CoreNode {
         owner: String,
         teamchannel_collaborators_with_access: Vec<String>,
         abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
-        agenda_process: String,
-        goals_features_subfeatures_tools_targets: String,
-        scope: String,
-        schedule_duration_start_end: Vec<u64>, 
+        // Project Areas
+        pa1_process: String,
+        pa2_schedule: Vec<u64>, // Vec<u64>
+        pa3_users: String,
+        pa4_features: String,
+        pa5_mvp: String,
+        pa6_feedback: String,
     ) -> Result<CoreNode, ThisProjectError> {
         debug_log!("Starting CoreNode::new");
         debug_log!("Directory path received: {:?}", directory_path);
@@ -4496,10 +4642,13 @@ impl CoreNode {
             expires_at,
             teamchannel_collaborators_with_access,        
             abstract_collaborator_port_assignments,
-            agenda_process,
-            goals_features_subfeatures_tools_targets,
-            scope,
-            schedule_duration_start_end,
+            // Project Areas
+            pa1_process,
+            pa2_schedule, // Vec<u64>
+            pa3_users,
+            pa4_features,
+            pa5_mvp,
+            pa6_feedback,
         };
         debug_log!("Successfully created CoreNode instance");
 
@@ -4517,7 +4666,7 @@ impl CoreNode {
     //     agenda_process: String,
     //     goals_features_subfeatures_tools_targets: String,
     //     scope: String,
-    //     schedule_duration_start_end: Vec<u64>, 
+    //     pa2_schedule: Vec<u64>, 
     // ) -> Result<CoreNode, ThisProjectError> {
     //     debug_log!("Starting CoreNode::new");
     //     debug_log!("Directory path received: {:?}", directory_path);
@@ -4535,7 +4684,7 @@ impl CoreNode {
     //         agenda_process,
     //         goals_features_subfeatures_tools_targets,
     //         scope,
-    //         schedule_duration_start_end
+    //         pa2_schedule
     //     );
 
     //     debug_log!("About to get current timestamp");
@@ -4591,7 +4740,7 @@ impl CoreNode {
     //         agenda_process,
     //         goals_features_subfeatures_tools_targets,
     //         scope,
-    //         schedule_duration_start_end,
+    //         pa2_schedule,
     //     };
     //     debug_log!("Successfully created CoreNode instance");
 
@@ -4609,7 +4758,7 @@ impl CoreNode {
     //     agenda_process: String,
     //     goals_features_subfeatures_tools_targets: String,
     //     scope: String,
-    //     schedule_duration_start_end: Vec<u64>, 
+    //     pa2_schedule: Vec<u64>, 
     // ) -> Result<CoreNode, ThisProjectError> {
     //     debug_log("Starting CoreNode::new");
     //     debug_log!("Directory path received: {:?}", directory_path);
@@ -4628,7 +4777,7 @@ impl CoreNode {
     //         agenda_process,
     //         goals_features_subfeatures_tools_targets,
     //         scope,
-    //         schedule_duration_start_end
+    //         pa2_schedule
     //         );
     //     let expires_at = get_current_unix_timestamp() + 11111111111; // Expires in 352 years
     //     let updated_at_timestamp = get_current_unix_timestamp();
@@ -4654,7 +4803,7 @@ impl CoreNode {
     //     // let agenda_process: String = "".to_string();
     //     // let goals_features_subfeatures_tools_targets: String = "".to_string();
     //     // let scope: String = "".to_string();
-    //     // let schedule_duration_start_end: Vec<u64> = [].to_vec();
+    //     // let pa2_schedule: Vec<u64> = [].to_vec();
 
     //     // 3. Create the CoreNode instance (all fields now available):
     //     Ok(CoreNode {
@@ -4670,7 +4819,7 @@ impl CoreNode {
     //         agenda_process,
     //         goals_features_subfeatures_tools_targets,
     //         scope,
-    //         schedule_duration_start_end,
+    //         pa2_schedule,
     //     })
     // }
     
@@ -5208,36 +5357,58 @@ fn load_core_node_from_toml_file(file_path: &Path) -> Result<CoreNode, String> {
         },
         None => return Err("Missing or invalid node_unique_id".to_string()),
     };
+    // // Project Areas
+    // pa1_process
+    // pa2_schedule
+    // pa3_users
+    // pa4_features
+    // pa5_mvp
+    // pa6_feedback 
+
+    // TODO
     
     // 4. Task Items
-    let agenda_process = toml_value
-        .get("agenda_process")
+    let pa1_process = toml_value
+        .get("pa1_process")
         .and_then(Value::as_str)
-        .ok_or("Missing or invalid agenda_process")?
+        .ok_or("Missing or invalid pa1_process")?
         .to_string();
 
-    let goals_features = toml_value
-        .get("goals_features_subfeatures_tools_targets")
-        .and_then(Value::as_str)
-        .ok_or("Missing or invalid goals_features_subfeatures_tools_targets")?
-        .to_string();
-
-    let scope = toml_value
-        .get("scope")
-        .and_then(Value::as_str)
-        .ok_or("Missing or invalid scope")?
-        .to_string();
-
-    let schedule_duration = toml_value
-        .get("schedule_duration_start_end")
+    // schedule_duration
+    let pa2_schedule = toml_value
+        .get("pa2_schedule")
         .and_then(Value::as_array)
-        .ok_or("Missing or invalid schedule_duration_start_end")?
+        .ok_or("Missing or invalid pa2_schedule")?
         .iter()
-        .map(|v| v.as_integer().ok_or("Invalid integer in schedule_duration"))
+        .map(|v| v.as_integer().ok_or("Invalid integer in pa2_schedule"))
         .collect::<Result<Vec<i64>, &str>>()?
         .into_iter()
         .map(|i| i as u64)
         .collect();
+    
+    let pa3_users = toml_value
+        .get("pa3_users")
+        .and_then(Value::as_str)
+        .ok_or("Missing or invalid pa3_users")?
+        .to_string();
+
+    let pa4_features = toml_value
+        .get("pa4_features")
+        .and_then(Value::as_str)
+        .ok_or("Missing or invalid pa4_features")?
+        .to_string();
+
+    let pa5_mvp = toml_value
+        .get("pa5_mvp")
+        .and_then(Value::as_str)
+        .ok_or("Missing or invalid pa5_mvp")?
+        .to_string();
+    
+    let pa6_feedback = toml_value
+        .get("pa6_feedback")
+        .and_then(Value::as_str)
+        .ok_or("Missing or invalid pa6_feedback")?
+        .to_string();
     
     // // 4. Handle abstract_collaborator_port_assignments
     // if let Some(collaborator_assignments_table) = toml_value.get("abstract_collaborator_port_assignments").and_then(Value::as_table) {
@@ -5286,14 +5457,16 @@ fn load_core_node_from_toml_file(file_path: &Path) -> Result<CoreNode, String> {
         // children: Vec::new(), // You might need to load children recursively
         teamchannel_collaborators_with_access: toml_value.get("teamchannel_collaborators_with_access").and_then(Value::as_array).map(|arr| arr.iter().filter_map(Value::as_str).map(String::from).collect()).unwrap_or_default(),
         abstract_collaborator_port_assignments: HashMap::new(),
-        agenda_process,
-        goals_features_subfeatures_tools_targets: goals_features,
-        scope,
-        schedule_duration_start_end: schedule_duration,
+        
+        // Project Areas
+        pa1_process: pa1_process,
+        pa2_schedule: pa2_schedule, // schedule_duration,
+        pa3_users: pa3_users,
+        pa4_features: pa4_features, //, goals_features,
+        pa5_mvp: pa5_mvp,
+        pa6_feedback: pa6_feedback,
     };
-    
-    
-    
+
     // 6. collaborators
     // Inside load_core_node_from_toml_file
     // if let Some(collaborator_assignments_table) = toml_value.get("abstract_collaborator_port_assignments").and_then(Value::as_table) {
@@ -5569,30 +5742,46 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
     // let scope = get_project_scope()?;
     // let schedule = get_schedule_info()?;
             
-// Store in the HashMap with "owner_owner" key. If more than one user this key can become unique.
+    // Store in the HashMap with "owner_owner" key. If more than one user this key can become unique.
     abstract_collaborator_port_assignments.insert(
         format!("{}_{}", owner.clone(), owner), // Key derived from collaborator names
         vec![ReadTeamchannelCollaboratorPortsToml { collaborator_ports: vec![abstract_ports_data] }],
     );
     debug_log!("create_team_channel(): owner 'added' to abstract_collaborator_port_assignments");
 
+    /*
+    here here
+    Todo: likely needling to make a new toml reading function
+    to facilitate reading these types of fields.
+    also...new fields 12 fields now?
+    */
+    
     // Add debug logs for Project State retrieval
-    debug_log!("create_team_channel(): About to get agenda_process");
-    let agenda_process = get_agenda_process()?;
-    debug_log!("create_team_channel(): Got agenda_process");
+    // Project Areas
+    debug_log!("create_team_channel(): About to get faq_get_pa1_process");
+    let pa1_process = faq_get_pa1_process()?;
+    debug_log!("create_team_channel(): Got faq_get_pa1_process");
 
-    debug_log!("create_team_channel(): About to get features_and_goals");
-    let features = get_features_and_goals()?;
-    debug_log!("create_team_channel(): Got features_and_goals");
+    debug_log!("create_team_channel(): About to get faq_get_pa2_schedule");
+    let pa2_schedule = faq_get_pa2_schedule()?;
+    debug_log!("create_team_channel(): Got faq_get_pa2_schedule");
+    
+    debug_log!("create_team_channel(): About to get faq_get_pa3_users");
+    let pa3_users = faq_get_pa3_users()?;
+    debug_log!("create_team_channel(): Got faq_get_pa3_users");
 
-    debug_log!("create_team_channel(): About to get project_scope");
-    let scope = get_project_scope()?;
+    debug_log!("create_team_channel(): About to get faq_get_pa4_features");
+    let pa4_features = faq_get_pa4_features()?;
     debug_log!("create_team_channel(): Got project_scope");
 
-    debug_log!("create_team_channel(): About to get schedule_info");
-    let schedule = get_schedule_info()?;
-    debug_log!("create_team_channel(): Got schedule_info");
+    debug_log!("create_team_channel(): About to get faq_get_pa5_mvp");
+    let pa5_mvp = faq_get_pa5_mvp()?;
+    debug_log!("create_team_channel(): Got faq_get_pa5_mvp");
 
+    debug_log!("create_team_channel(): About to get faq_get_pf6");
+    let pa6_feedback = faq_get_pa6_feedback()?;
+    debug_log!("create_team_channel(): Got faq_get_pa6_feedback");
+    
     debug_log!("create_team_channel(): About to create CoreNode");
             
     // 3. Create and Save CoreNode (handling Result)
@@ -5624,10 +5813,17 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
         owner,
         collaborators,
         abstract_collaborator_port_assignments,
-        agenda_process,
-        features,
-        scope,
-        schedule,
+        // Project Areas TODO TODO
+        pa1_process,
+        pa2_schedule,
+        pa3_users,
+        pa4_features,
+        pa5_mvp,
+        pa6_feedback,    
+        // agenda_process,
+        // features,
+        // scope,
+        // schedule,
     );
     
     debug_log!(
@@ -5703,10 +5899,22 @@ fn create_core_node(
     fs::create_dir_all(&node_specific_path)?;
 
     // Get user input for planning fields
-    let agenda_process = get_agenda_process()?;
-    let features = get_features_and_goals()?;
-    let scope = get_project_scope()?;
-    let schedule = get_schedule_info()?;
+    
+    // Project Areas
+    // let agenda_process = get_agenda_process()?;
+    // let features = get_features_and_goals()?;
+    // let scope = get_project_scope()?;
+    // let schedule = get_schedule_info()?;
+    
+    
+    let pa1_process = faq_get_pa1_process()?;
+    let pa2_schedule = faq_get_pa2_schedule()?;
+    let pa3_users = faq_get_pa3_users()?;
+    let pa4_features = faq_get_pa4_features()?;
+    let pa5_mvp = faq_get_pa5_mvp()?;
+    let pa6_feedback = faq_get_pa6_feedback()?;
+    
+    
     let owner = get_local_owner_username();
 
     // Create subdirectories within the node directory
@@ -5737,10 +5945,14 @@ fn create_core_node(
         owner,                             // owner
         teamchannel_collaborators_with_access, 
         HashMap::new(),                    // for ports
-        agenda_process,                    // agenda process
-        features,                          // features and goals
-        scope,                             // project scope
-        schedule,                          // schedule information
+        
+        // Project Areas TODO TODO
+        pa1_process,
+        pa2_schedule,
+        pa3_users,
+        pa4_features,
+        pa5_mvp,
+        pa6_feedback,
     );
     
     match new_node_result {
@@ -6021,10 +6233,13 @@ fn get_directory_hash(path: &Path) -> io::Result<u64> {
     Ok(hasher.finish())
 }
 
+/*
+Q&A Functions for 6pa, 6 Project Areas 
+*/
 
 /// Gets user input for agenda process selection of create_core_node()
-fn get_agenda_process() -> Result<String, ThisProjectError> {
-    println!("Enter agenda process (default option: Agile, Kahneman-Tversky, Definition-Studies):");
+fn faq_get_pa1_process() -> Result<String, ThisProjectError> {
+    println!("Enter Process statement, Process: Values, Agenda, Methods, Coordinated Decisions (Data/System)Ecology: Collapse & Productivity (default option: Agile, Kahneman-Tversky, Definition-Studies):");
     let mut input = String::new();
     io::stdout().flush()?;
     io::stdin().read_line(&mut input)?;
@@ -6038,84 +6253,12 @@ fn get_agenda_process() -> Result<String, ThisProjectError> {
     Ok(input.to_string())
 }
 
-/// Gets user input for features and goals of create_core_node()
-fn get_features_and_goals() -> Result<String, ThisProjectError> {
-    println!("Enter project features (comma-separated):");
-    let mut features = String::new();
-    io::stdin().read_line(&mut features)?;
 
-    println!("Enter user tools needed:");
-    let mut tools = String::new();
-    io::stdin().read_line(&mut tools)?;
-
-    println!("Enter sub-feature goals:");
-    let mut goals = String::new();
-    io::stdin().read_line(&mut goals)?;
-
-    Ok(format!("Features: {}\nTools: {}\nGoals: {}", 
-        features.trim(), tools.trim(), goals.trim()))
-}
-
-/// Gets project scope information of create_core_node()
-fn get_project_scope() -> Result<String, ThisProjectError> {
-    println!("Is this a stand-alone project or part of larger project? (S/L):");
-    let mut project_type = String::new();
-    io::stdin().read_line(&mut project_type)?;
-
-    println!("Enter MVP goals:");
-    let mut mvp_goals = String::new();
-    io::stdin().read_line(&mut mvp_goals)?;
-
-    Ok(format!("Project Type: {}\nMVP Goals: {}", 
-        project_type.trim(), mvp_goals.trim()))
-}
-
-// /// Gets schedule information and converts 
-// /// to required format of create_core_node()
-// fn get_schedule_info() -> Result<Vec<u64>, ThisProjectError> {
-//     debug_log("starting get_schedule_info()")
-//     println!("Enter project duration in days:");
-//     let mut days = String::new();
-//     io::stdin().read_line(&mut days)?;
-//     let days: u64 = days.trim().parse().map_err(|_| 
-//         ThisProjectError::InvalidInput("Invalid number of days".into()))?;
-
-//     println!("Enter start year (YYYY):");
-//     let mut year = String::new();
-//     io::stdin().read_line(&mut year)?;
-//     let year: u64 = year.trim().parse().map_err(|_| 
-//         ThisProjectError::InvalidInput("Invalid year".into()))?;
-
-//     println!("Enter start month (1-12):");
-//     let mut month = String::new();
-//     io::stdin().read_line(&mut month)?;
-//     let month: u64 = month.trim().parse().map_err(|_| 
-//         ThisProjectError::InvalidInput("Invalid month".into()))?;
-
-//     println!("Enter start day (1-31):");
-//     let mut day = String::new();
-//     io::stdin().read_line(&mut day)?;
-//     let day: u64 = day.trim().parse().map_err(|_| 
-//         ThisProjectError::InvalidInput("Invalid day".into()))?;
-
-//     let seconds_per_day: u64 = 24 * 60 * 60;
-//     let days_since_epoch = (year - 1970) * 365 + ((month - 1) * 30) + (day - 1);
-//     let start_timestamp = days_since_epoch * seconds_per_day;
-    
-//     let duration_seconds = days * seconds_per_day;
-//     let end_timestamp = start_timestamp + duration_seconds;
-
-//     Ok(vec![
-//         start_timestamp,
-//         end_timestamp,
-//         duration_seconds
-//     ])
-// }
-
+/// badly named, this is a Q&A tool
 /// Gets schedule information and converts 
 /// to required format of create_core_node()
-fn get_schedule_info() -> Result<Vec<u64>, ThisProjectError> {
-    debug_log("starting get_schedule_info()");
+fn faq_get_pa2_schedule() -> Result<Vec<u64>, ThisProjectError> {
+    debug_log("starting faq_get_pa2_schedule()");
 
     // Duration input and validation
     println!("Enter project duration in days:");
@@ -6194,6 +6337,108 @@ fn get_schedule_info() -> Result<Vec<u64>, ThisProjectError> {
     Ok(result)
 }
 
+/// Gets user input for agenda process selection of create_core_node()
+fn faq_get_pa3_users() -> Result<String, ThisProjectError> {
+    println!("Enter User Statement, Users: Stakeholders & Needs & Goals Evaluation (of users): Who are users? What are their needs?");
+    let mut input = String::new();
+    io::stdout().flush()?;
+    io::stdin().read_line(&mut input)?;
+    
+    let input = input.trim();
+    if input.is_empty() {
+        let input: String = "Pending: Users & Stakeholder Needs & Goals Evaluation".to_string();
+    }
+
+    Ok(input.to_string())
+}
+
+/// Gets user input for agenda process selection of create_core_node()
+fn faq_get_pa4_features() -> Result<String, ThisProjectError> {
+    println!("Enter Feature Statement: Features: User-Features & Subfeatures/Under-The-Hood Features -> From a user-story standpoint, what is this project making? Under-the-hood, what is this projet making?");
+    let mut input = String::new();
+    io::stdout().flush()?;
+    io::stdin().read_line(&mut input)?;
+    
+    let input = input.trim();
+    if input.is_empty() {
+        let input: String = "Pending: User-Features & Subfeatures/Under-The-Hood Features".to_string();
+    }
+
+    Ok(input.to_string())
+}
+
+/// Gets user input for agenda process selection of create_core_node()
+fn faq_get_pa5_mvp() -> Result<String, ThisProjectError> {
+    println!("Enter MVP Statement: MVP: 'MVP's (Minimum Viable Products); Tools & 'Tool Stack / Tech Stack'");
+    let mut input = String::new();
+    io::stdout().flush()?;
+    io::stdin().read_line(&mut input)?;
+    
+    let input = input.trim();
+    if input.is_empty() {
+        let input: String = "Pending: MVP & Techstack".to_string();
+    }
+
+    Ok(input.to_string())
+}
+
+/// Gets user input for agenda process selection of create_core_node()
+fn faq_get_pa6_feedback() -> Result<String, ThisProjectError> {
+    println!("Enter Feedback Statement: Feedback: Tests, Communication, Signals, Documentation & Iteration, Organizational, System, and 'Ecological' Effects, (~agile) -> Based on what signals will you define failure and orient to measure productivity.");
+    let mut input = String::new();
+    io::stdout().flush()?;
+    io::stdin().read_line(&mut input)?;
+    
+    let input = input.trim();
+    if input.is_empty() {
+        let input: String = "Pending: MVP & Techstack".to_string();
+    }
+
+    Ok(input.to_string())
+}
+    
+// /// Gets schedule information and converts 
+// /// to required format of create_core_node()
+// fn get_schedule_info() -> Result<Vec<u64>, ThisProjectError> {
+//     debug_log("starting get_schedule_info()")
+//     println!("Enter project duration in days:");
+//     let mut days = String::new();
+//     io::stdin().read_line(&mut days)?;
+//     let days: u64 = days.trim().parse().map_err(|_| 
+//         ThisProjectError::InvalidInput("Invalid number of days".into()))?;
+
+//     println!("Enter start year (YYYY):");
+//     let mut year = String::new();
+//     io::stdin().read_line(&mut year)?;
+//     let year: u64 = year.trim().parse().map_err(|_| 
+//         ThisProjectError::InvalidInput("Invalid year".into()))?;
+
+//     println!("Enter start month (1-12):");
+//     let mut month = String::new();
+//     io::stdin().read_line(&mut month)?;
+//     let month: u64 = month.trim().parse().map_err(|_| 
+//         ThisProjectError::InvalidInput("Invalid month".into()))?;
+
+//     println!("Enter start day (1-31):");
+//     let mut day = String::new();
+//     io::stdin().read_line(&mut day)?;
+//     let day: u64 = day.trim().parse().map_err(|_| 
+//         ThisProjectError::InvalidInput("Invalid day".into()))?;
+
+//     let seconds_per_day: u64 = 24 * 60 * 60;
+//     let days_since_epoch = (year - 1970) * 365 + ((month - 1) * 30) + (day - 1);
+//     let start_timestamp = days_since_epoch * seconds_per_day;
+    
+//     let duration_seconds = days * seconds_per_day;
+//     let end_timestamp = start_timestamp + duration_seconds;
+
+//     Ok(vec![
+//         start_timestamp,
+//         end_timestamp,
+//         duration_seconds
+//     ])
+// }
+
 // // TODO Under Construction
 // /// Creates a new (core)Node directory, subdirectories, and metadata files.
 // /// Handles errors and returns a Result to indicate success or failure.
@@ -6242,7 +6487,7 @@ fn get_schedule_info() -> Result<Vec<u64>, ThisProjectError> {
 //     agenda_process: String,
 //     goals_features_subfeatures_tools_targets: String,
 //     scope: String,
-//     schedule_duration_start_end: Vec<u64>, // Vec<u64>,?
+//     pa2_schedule: Vec<u64>, // Vec<u64>,?
     
 //     */
 //     let team_channels_dir = Path::new("project_graph_data/team_channels");
@@ -8392,10 +8637,14 @@ fn handle_command_main_mode(
                     tiny_tui::render_list(
                         &app.tui_directory_list, 
                         &app.current_path,
-                        &app.graph_navigation_instance_state.agenda_process,
-                        &app.graph_navigation_instance_state.goals_features_subfeatures_tools_targets,
-                        &app.graph_navigation_instance_state.scope,
-                        &app.graph_navigation_instance_state.schedule_duration_start_end,
+                        // Projecpa1_process
+                        // Project Areas
+                        &app.graph_navigation_instance_state.pa1_process,
+                        &app.graph_navigation_instance_state.pa2_schedule,
+                        &app.graph_navigation_instance_state.pa3_users,
+                        &app.graph_navigation_instance_state.pa4_features,
+                        &app.graph_navigation_instance_state.pa5_mvp,
+                        &app.graph_navigation_instance_state.pa6_feedback,
                         );
                     app.update_directory_list()?;
                    
@@ -15238,12 +15487,13 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         current_node_unique_id: Vec::new(),
         current_node_members: Vec::new(),
         home_square_one: true,
-        agenda_process: String::new(),
-        goals_features_subfeatures_tools_targets: String::new(),
-        scope: String::new(),
-        schedule_duration_start_end: Vec::new(), // Vec<u64>,?
-            
-    
+        // Project Areas,
+        pa1_process: String::new(),
+        pa2_schedule: Vec::new(), // Vec<u64>,?
+        pa3_users: String::new(),
+        pa4_features: String::new(),
+        pa5_mvp: String::new(),
+        pa6_feedback: String::new(),
     };
 
     // if !verify_gpg_signature(&local_user) {
@@ -15407,10 +15657,13 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                 tiny_tui::render_list(
                     &app.tui_directory_list, 
                     &app.current_path,
-                    &app.graph_navigation_instance_state.agenda_process,
-                    &app.graph_navigation_instance_state.goals_features_subfeatures_tools_targets,
-                    &app.graph_navigation_instance_state.scope,
-                    &app.graph_navigation_instance_state.schedule_duration_start_end,
+                    // Project Areas
+                    &app.graph_navigation_instance_state.pa1_process,
+                    &app.graph_navigation_instance_state.pa2_schedule,  // str? vec<u64>?
+                    &app.graph_navigation_instance_state.pa3_users,
+                    &app.graph_navigation_instance_state.pa4_features,
+                    &app.graph_navigation_instance_state.pa5_mvp,
+                    &app.graph_navigation_instance_state.pa6_feedback,
                 );
                 app.update_directory_list()?;  // refresh to current cwd display items
                 
@@ -15507,10 +15760,13 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                 tiny_tui::render_list(
                     &app.tui_directory_list, 
                     &app.current_path,
-                    &app.graph_navigation_instance_state.agenda_process,
-                    &app.graph_navigation_instance_state.goals_features_subfeatures_tools_targets,
-                    &app.graph_navigation_instance_state.scope,
-                    &app.graph_navigation_instance_state.schedule_duration_start_end,
+                    // Project Areas
+                    &app.graph_navigation_instance_state.pa1_process,
+                    &app.graph_navigation_instance_state.pa2_schedule,
+                    &app.graph_navigation_instance_state.pa3_users,
+                    &app.graph_navigation_instance_state.pa4_features,
+                    &app.graph_navigation_instance_state.pa5_mvp,
+                    &app.graph_navigation_instance_state.pa6_feedback,
                 );
                 app.update_directory_list()?;  // refresh to current cwd display items
                 
@@ -15521,13 +15777,16 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                 tiny_tui::render_list(
                     &app.tui_directory_list, 
                     &app.current_path,
-                    &app.graph_navigation_instance_state.agenda_process,
-                    &app.graph_navigation_instance_state.goals_features_subfeatures_tools_targets,
-                    &app.graph_navigation_instance_state.scope,
-                    &app.graph_navigation_instance_state.schedule_duration_start_end,
+                    // Project Areas
+                    &app.graph_navigation_instance_state.pa1_process,
+                    &app.graph_navigation_instance_state.pa2_schedule,
+                    &app.graph_navigation_instance_state.pa3_users,
+                    &app.graph_navigation_instance_state.pa4_features,
+                    &app.graph_navigation_instance_state.pa5_mvp,
+                    &app.graph_navigation_instance_state.pa6_feedback,
                 );
                 app.update_directory_list()?;  // refresh to current cwd display items
-            
+
             } else if !input.is_empty() {
                 debug_log("!input.is_empty()");
 
@@ -15575,10 +15834,13 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                 InputMode::MainCommand => tiny_tui::render_list(
                     &app.tui_directory_list, 
                     &app.current_path,
-                    &app.graph_navigation_instance_state.agenda_process,
-                    &app.graph_navigation_instance_state.goals_features_subfeatures_tools_targets,
-                    &app.graph_navigation_instance_state.scope,
-                    &app.graph_navigation_instance_state.schedule_duration_start_end,
+                    // Project Areas
+                    &app.graph_navigation_instance_state.pa1_process,
+                    &app.graph_navigation_instance_state.pa2_schedule,
+                    &app.graph_navigation_instance_state.pa3_users,
+                    &app.graph_navigation_instance_state.pa4_features,
+                    &app.graph_navigation_instance_state.pa5_mvp,
+                    &app.graph_navigation_instance_state.pa6_feedback,
                 ),
                 InputMode::TaskCommand => { /* Task list rendering logic */ },
                 InputMode::InsertText => tiny_tui::simple_render_list(
@@ -15587,7 +15849,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                     // &app.graph_navigation_instance_state.agenda_process,
                     // &app.graph_navigation_instance_state.goals_features_subfeatures_tools_targets,
                     // &app.graph_navigation_instance_state.scope,
-                    // &app.graph_navigation_instance_state.schedule_duration_start_end,
+                    // &app.graph_navigation_instance_state.pa2_schedule,
                 ),
             };
         }

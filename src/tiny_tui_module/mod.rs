@@ -21,10 +21,18 @@ pub mod tiny_tui {
     pub fn render_list(
         list: &Vec<String>,
         current_path: &Path,
-        agenda_process: &str,
-        goals_features: &str,
-        scope: &str,
-        schedule_duration_start_end: &Vec<u64>,
+        // 
+        // agenda_process: &str,
+        // goals_features: &str,
+        // scope: &str,
+        // schedule_duration_start_end: &Vec<u64>,
+        //
+        pa1_process: &str,
+        pa2_schedule: &Vec<u64>,
+        pa3_users: &str,
+        pa4_features: &str,
+        pa5_mvp: &str,
+        pa6_feedback: &str,
     ) {
         // 1. Get the path components
         let path_components: Vec<_> = current_path.components().collect();
@@ -40,14 +48,17 @@ pub mod tiny_tui {
             println!("Select a Team-Channel (by number):");
         }
 
+        // 3. Display the list items as before
+        for (i, item) in list.iter().enumerate() {
+            println!("{}. {}", i + 1, item);
+        }
+        
         // 2b. Display added core node fields
-        println!("Agenda/Process: {}", agenda_process);
-        println!("Goals/Features: {}", goals_features);
-        println!("Scope: {}", scope);
+        println!("\nProcess: {}", pa1_process);
 
-        if schedule_duration_start_end.len() == 2 {
-            let start_time = schedule_duration_start_end[0];
-            let end_time = schedule_duration_start_end[1];
+        if pa2_schedule.len() == 2 {
+            let start_time = pa2_schedule[0];
+            let end_time = pa2_schedule[1];
             let duration_days = (end_time - start_time) / (60 * 60 * 24); 
 
             let start_date = format_timestamp_to_date(start_time);
@@ -59,10 +70,10 @@ pub mod tiny_tui {
             println!("Schedule: (no schedule)");
         }
 
-        // 3. Display the list items as before
-        for (i, item) in list.iter().enumerate() {
-            println!("{}. {}", i + 1, item);
-        }
+        println!("Users: {}", pa3_users);
+        println!("Features: {}", pa4_features);
+        println!("MVP: {}", pa5_mvp);
+        println!("Feedback: {}", pa6_feedback);
     }    
     
     pub fn simple_render_list(list: &Vec<String>, current_path: &Path) {
