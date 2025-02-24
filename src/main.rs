@@ -6239,7 +6239,8 @@ Q&A Functions for 6pa, 6 Project Areas
 
 /// Gets user input for agenda process selection of create_core_node()
 fn faq_get_pa1_process() -> Result<String, ThisProjectError> {
-    println!("Enter Process statement, Process: Values, Agenda, Methods, Coordinated Decisions (Data/System)Ecology: Collapse & Productivity (default option: Agile, Kahneman-Tversky, Definition-Studies):");
+    println!("Enter Process statement: Project Process: Workflow Type, STEM Integration, Values, Agenda, Methods, Coordinated Decisions, (Data/System)Ecology: Collapse & Productivity (default option: Agile, Kahneman-Tversky, Definition-Studies)
+:");
     let mut input = String::new();
     io::stdout().flush()?;
     io::stdin().read_line(&mut input)?;
@@ -6261,7 +6262,7 @@ fn faq_get_pa2_schedule() -> Result<Vec<u64>, ThisProjectError> {
     debug_log("starting faq_get_pa2_schedule()");
 
     // Duration input and validation
-    println!("Enter project duration in days:");
+    println!("Project Schedule: Enter project duration in days:");
     let mut days = String::new();
     io::stdin().read_line(&mut days)?;
     let days: u64 = days.trim().parse().map_err(|_| 
@@ -8225,7 +8226,94 @@ pub fn export_public_gpg_key(
 // use std::path::Path;
 // use std::io;
 
-fn invite_wizard() {
+/// Process address book sharing for a specific recipient
+/// 
+/// # Arguments
+/// * `recipient_name` - Name of the recipient to share with
+/// 
+/// # Returns
+/// * `Ok(())` if the operation succeeds
+/// * `Err(GpgError)` if any operation fails
+fn share_address_book(recipient_name: &str) -> Result<(), GpgError> {
+    println!("\nProcessing address book share for recipient: {}", recipient_name);
+    
+    // Path to your address book
+    let address_book_path = Path::new("address_book.toml");
+    
+    // Your GPG signing key ID (in production, this would come from config)
+    println!("\nTo get your signing key ID, run: $ gpg --list-keys --keyid-format=long");
+    print!("Enter your GPG signing key ID: ");
+    io::stdout().flush()
+        .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
+    
+    let mut signing_key_id = String::new();
+    io::stdin()
+        .read_line(&mut signing_key_id)
+        .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
+    let signing_key_id = signing_key_id.trim();
+
+    // Validate signing key
+    if signing_key_id.is_empty() {
+        return Err(GpgError::ValidationError("No signing key ID provided".to_string()));
+    }
+
+    // PLACEHOLDER: In production, this would look up the recipient's public key
+    // from your address book using recipient_name
+    println!("\nEnter path to recipient's public key file:");
+    let mut recipient_key_path_str = String::new();
+    io::stdin()
+        .read_line(&mut recipient_key_path_str)
+        .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
+    let recipient_public_key_path = Path::new(recipient_key_path_str.trim());
+
+    // Verify the public key file exists
+    if !recipient_public_key_path.exists() {
+        return Err(GpgError::PathError(format!(
+            "Recipient's public key not found at: {}", 
+            recipient_public_key_path.display()
+        )));
+    }
+
+    println!("\nProcessing with:");
+    println!("Your signing key ID: {}", signing_key_id);
+    println!("Recipient's public key: {}", recipient_public_key_path.display());
+    println!("Address book file: {}", address_book_path.display());
+
+    // Use our existing function to clearsign and encrypt the address book
+    clearsign_and_encrypt_file_for_recipient(
+        address_book_path,
+        signing_key_id,
+        recipient_public_key_path
+    )?;
+
+    println!("\nAddress book has been clearsigned and encrypted for {}!", recipient_name);
+    println!("The encrypted file is in: invites_updates/outgoing/address_book.toml.gpg");
+    
+    Ok(())
+}
+
+
+mod handle_gpg;  // This declares the module and tells Rust to look for handle_gpg.rs
+use crate::handle_gpg::{
+    GpgError, 
+    clearsign_and_encrypt_file_for_recipient, 
+    decrypt_and_validate_file,
+}; 
+
+pub fn invite_wizard() -> Result<(), GpgError> {
+    /*
+    1. Export your public gpg key to share [Done]
+    2. make clearsigned version of your own addressbook .toml
+       get user name
+       use user name to get their gpg key from their addressbook file
+       gpg encrypt the clearsign file
+       A. new remote collaborator: separate gpg file
+       B. existing addressbook file for them
+    3. make clearsigned version of this team-channel if you are owner
+       get user name
+       use user name to get their gpg key from their addressbook file
+       gpg encrypt the clearsign file
+    */
     println!("There are three steps...");
     println!("1. share gpg");
     println!("2. share address-book file");
@@ -8240,7 +8328,7 @@ fn invite_wizard() {
         Ok(num) => num,
         Err(_) => {
             println!("Please type a number.");
-            return;
+            return Ok(());
         }
     };
 
@@ -8254,16 +8342,45 @@ fn invite_wizard() {
                 Err(e) => eprintln!("Failed to export GPG key: {}", e),
             }
         },
+        // 2 => {
+        //     // Add code to share address-book file here
+        //     /*
+        //     2. make clearsigned version of your own addressbook .toml
+        //     get user name
+        //     use user name to get their 
+        //     */
+        // },
+        // 3 => {
+        //     // Add code to share team-channel here
+        //     /*
+        //     3. make clearsigned version of this team-channel if you are owner
+        //     get user name
+        //     use user name to get their gpg key from their addressbook file
+        //     gpg encrypt the clearsign file
+        //     */
+        // },
         2 => {
-            // Add code to share address-book file here
+            println!("\nEnter recipient's name:");
+            let mut recipient_name = String::new();
+            io::stdin()
+                .read_line(&mut recipient_name)
+                .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
+            
+            share_address_book(recipient_name.trim())?;
         },
         3 => {
-            // Add code to share team-channel here
+            println!("Team channel sharing - Not implemented yet");
+            // Similar implementation to share_address_book() but with team channel file
+            // Would use the same clearsign_and_encrypt_file_for_recipient() function
         },
+        _ => {
+            return Err(GpgError::GpgOperationError("Invalid choice".to_string()));
+        }
+    // }
         _ => println!("Invalid choice."),
     }
+    Ok(())
 }
-
 
 
 fn handle_command_main_mode(
