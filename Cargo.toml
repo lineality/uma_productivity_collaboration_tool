@@ -1,11 +1,12 @@
 [package]
 name = "uma"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
+# edition = "2021"
 
 [dependencies]
 walkdir = "2.5.0"
 toml = "0.8.19"
 serde = { version = "1.0.210", features = ["derive"] }
-rand = "0.8.5"
+rand = "0.9"
 getifaddrs = "0.1.4"

@@ -401,7 +401,8 @@ enum MyCustomError {
 impl PartialEq for MyCustomError {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (MyCustomError::IoError(ref e1), MyCustomError::IoError(ref e2)) => {
+            // (MyCustomError::IoError(ref e1), MyCustomError::IoError(ref e2)) => {
+            (MyCustomError::IoError(e1), MyCustomError::IoError(e2)) => {
                 e1.kind() == e2.kind() // Compare the ErrorKind
                 // Or you can use:
                 // e1.to_string() == e2.to_string() 
@@ -3895,7 +3896,7 @@ fn add_collaborator_qa(
     } else {
         // Generate 4 random u128 salts
         (0..4)
-            .map(|_| rand::thread_rng().gen())
+            .map(|_| rand::thread_rng().random())
             .collect()
     };
     
@@ -7861,7 +7862,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         debug_log("Salt List");
         // Generate salt list (4 random u128 values)
         let new_usersalt_list: Vec<u128> = (0..4)
-            .map(|_| rand::thread_rng().gen())
+            .map(|_| rand::thread_rng().random())
             .collect();
         
         // println!("Salt List: Press Enter for random, or type 'manual' for manual input");
@@ -7885,7 +7886,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         // } else {
         //     // Generate 4 random u128 salts
         //     (0..4)
-        //         .map(|_| rand::thread_rng().gen())
+        //         .map(|_| rand::thread_rng().random())
         //         .collect()
         // };
 
@@ -9297,7 +9298,7 @@ fn get_addressbook_file_by_username(username: &str) -> Result<CollaboratorTomlDa
 /// in the toml file as hex-string
 fn generate_random_salt() -> String {
     let mut rng = rand::thread_rng();
-    let salt: u128 = rng.gen(); // Generate a random u128
+    let salt: u128 = rng.random(); // Generate a random u128
     format!("0x{:X}", salt) // Convert to hexadecimal string with "0x" prefix
 }
 
