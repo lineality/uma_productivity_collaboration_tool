@@ -266,7 +266,10 @@ fn format_timestamp_to_date(timestamp: u64) -> String {
 }
 
 
-
+# See: 
+src/manage_absolute_executable_directory_relative_paths.rs
+src/read_toml_field.rs
+src/read_toml_field.rs
 
 */
 
@@ -360,6 +363,39 @@ use std::net::{
 // https://docs.rs/getifaddrs/latest/getifaddrs/
 use getifaddrs::{getifaddrs, InterfaceFlags};
 
+/*
+To eventually replace any 3rd party 
+toml crates
+*/
+// For toml and clearsigntoml
+mod read_toml_field;
+use crate::read_toml_field::{
+    // read_field_from_toml,
+    // read_basename_fields_from_toml,
+    read_single_line_string_field_from_toml,
+    read_multi_line_toml_string,
+    read_integer_array,
+    read_singleline_string_from_clearsigntoml,
+    read_multiline_string_from_clearsigntoml,
+}; 
+
+mod handle_gpg;  // This declares the module and tells Rust to look for handle_gpg.rs
+use crate::handle_gpg::{
+    GpgError, 
+    clearsign_and_encrypt_file_for_recipient, 
+    decrypt_and_validate_file,
+}; 
+
+// for managing file paths
+mod manage_absolute_executable_directory_relative_paths;
+use manage_absolute_executable_directory_relative_paths::{
+    make_input_path_name_abs_executabledirectoryrelative_nocheck,
+make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error,
+ make_file_path_abs_executabledirectoryrelative_canonicalized_or_error,
+    
+    };
+
+
 // For TUI
 #[macro_use]
 mod tiny_tui_module;
@@ -372,7 +408,7 @@ const FILE_READWRITE_RETRY_SEC_PAUSE_MAX: u64 = 6;
 const CONTINUE_UMA_PATH: &str = "project_graph_data/session_state_items/continue_uma.txt";
 const HARD_RESTART_FLAG_PATH: &str = "project_graph_data/session_state_items/yes_hard_restart_flag.txt";
 const SYNC_START_OK_FLAG_PATH: &str = "project_graph_data/session_state_items/ok_to_start_sync_flag.txt";
-
+const PATH_TO_INCOMING_PUBLICGPG_KEYASC: &str = "invites_updates/incoming/key.asc";
 
 pub enum SyncError {
     ConnectionError(std::io::Error),
@@ -6628,7 +6664,7 @@ fn move_directory__from_path_to_path<SourceDirectory: AsRef<Path>, DestinationDi
 /// gpg get public key long from public key-id
 /// use std::process::Command;
 /// use std::io::{self, Write};
-fn get_gpg_armored_public_key_with_key_id(key_id: &str) -> io::Result<String> {
+fn get_gpg_armored_public_key_via_key_id(key_id: &str) -> io::Result<String> {
     /*
    // Prompt the user for the key ID
     print!("Enter the GPG key ID: ");
@@ -6645,7 +6681,7 @@ fn get_gpg_armored_public_key_with_key_id(key_id: &str) -> io::Result<String> {
 
     let key_id = key_id.trim(); // Remove any trailing newline or whitespace
 
-    match get_gpg_armored_public_key_with_key_id(key_id) {
+    match get_gpg_armored_public_key_via_key_id(key_id) {
         Ok(armored_key) => {
             println!("Armored Public Key:\n{}", armored_key);
         }
@@ -7396,6 +7432,7 @@ fn find_gpg_public_key_file(directory: &Path) -> Result<Option<PathBuf>, ThisPro
     
 //     local_owner_username
 // }
+
 fn get_local_owner_username() -> String {  // Returns String directly
     debug_log("starting get_local_owner_username()");
     let uma_toml_path = Path::new("uma.toml");
@@ -7434,7 +7471,7 @@ fn export_addressbook() -> Result<(), ThisProjectError> {
     let local_owner_username = user_metadata["uma_local_owner_user"].as_str().unwrap().to_string();
 
     // 2. Construct paths
-    let address_book_export_dir = PathBuf::from("import_export_invites/addressbook_invite/export");
+    let address_book_export_dir = PathBuf::from("invites_updates/addressbook_invite/export");
     let key_file_path = address_book_export_dir.join("key.asc");
     let collaborator_file_path = PathBuf::from("project_graph_data/collaborator_files_address_book")
         .join(format!("{}__collaborator.toml", local_owner_username));
@@ -7467,7 +7504,7 @@ fn export_addressbook() -> Result<(), ThisProjectError> {
     let encrypted_data = encrypt_with_gpg(&clearsigned_data, &public_key_string)?;
 
     // 6. Create export directory if it doesn't exist
-    let export_dir = PathBuf::from("import_export_invites/addressbook_invite/export");
+    let export_dir = PathBuf::from("invites_updates/addressbook_invite/export");
     create_dir_all(&export_dir)?;
 
     // 7. Write encrypted data to file. Use a timestamp to avoid overwriting.
@@ -7600,55 +7637,55 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
     // }
 
 
-    // Check if the data directory exists
-    let library_clearsign = Path::new("library_clearsign");
-    if !library_clearsign.exists() {
-        // If the directory does not exist, create it
-        fs::create_dir_all(library_clearsign).expect("Failed to create library_clearsign directory");
-    }
+    // // Check if the data directory exists
+    // let library_clearsign = Path::new("library_clearsign");
+    // if !library_clearsign.exists() {
+    //     // If the directory does not exist, create it
+    //     fs::create_dir_all(library_clearsign).expect("Failed to create library_clearsign directory");
+    // }
     
-    // Check if the data directory exists
-    let library_clearsignteam_channels = Path::new("library_clearsign/team_channels");
-    if !library_clearsignteam_channels.exists() {
-        // If the directory does not exist, create it
-        fs::create_dir_all(library_clearsignteam_channels).expect("Failed to create library_clearsignteam_channels directory");
-    }
+    // // Check if the data directory exists
+    // let library_clearsignteam_channels = Path::new("library_clearsign/team_channels");
+    // if !library_clearsignteam_channels.exists() {
+    //     // If the directory does not exist, create it
+    //     fs::create_dir_all(library_clearsignteam_channels).expect("Failed to create library_clearsignteam_channels directory");
+    // }
     
-    // Check if the data directory exists
-    let library_clearsignaddressbook = Path::new("library_clearsign/addressbook");
-    if !library_clearsignaddressbook.exists() {
-        // If the directory does not exist, create it
-        fs::create_dir_all(library_clearsignaddressbook).expect("Failed to create library_clearsignaddressbook directory");
-    }
+    // // Check if the data directory exists
+    // let library_clearsignaddressbook = Path::new("library_clearsign/addressbook");
+    // if !library_clearsignaddressbook.exists() {
+    //     // If the directory does not exist, create it
+    //     fs::create_dir_all(library_clearsignaddressbook).expect("Failed to create library_clearsignaddressbook directory");
+    // }
     
-    // Check if the data directory exists
-    let library_clearsign = Path::new("library_clearsign");
-    if !library_clearsign.exists() {
-        // If the directory does not exist, create it
-        fs::create_dir_all(library_clearsign).expect("Failed to create library_clearsign directory");
-    }
+    // // Check if the data directory exists
+    // let library_clearsign = Path::new("library_clearsign");
+    // if !library_clearsign.exists() {
+    //     // If the directory does not exist, create it
+    //     fs::create_dir_all(library_clearsign).expect("Failed to create library_clearsign directory");
+    // }
     
     
-    // Check if the data directory exists
-    let addressbook_invite = Path::new("invites/addressbook_invite/import");
-    if !addressbook_invite.exists() {
-        // If the directory does not exist, create it
-        fs::create_dir_all(addressbook_invite).expect("Failed to create addressbook_invite directory");
-    }
+    // // Check if the data directory exists
+    // let addressbook_invite = Path::new("invites_updates/addressbook_invites/import");
+    // if !addressbook_invite.exists() {
+    //     // If the directory does not exist, create it
+    //     fs::create_dir_all(addressbook_invite).expect("Failed to create addressbook_invite directory");
+    // }
     
-    // Check if the data directory exists
-    let teamchannel_invites = Path::new("invites/teamchannel_invites/import");
-    if !teamchannel_invites.exists() {
-        // If the directory does not exist, create it
-        fs::create_dir_all(teamchannel_invites).expect("Failed to create teamchannel_invites directory");
-    }
+    // // Check if the data directory exists
+    // let teamchannel_invites = Path::new("invites_updates/teamchannel_invites/import");
+    // if !teamchannel_invites.exists() {
+    //     // If the directory does not exist, create it
+    //     fs::create_dir_all(teamchannel_invites).expect("Failed to create teamchannel_invites directory");
+    // }
     
-    // Check if the data directory exists
-    let teamchannel_invites = Path::new("invites/teamchannel_invites/export");
-    if !teamchannel_invites.exists() {
-        // If the directory does not exist, create it
-        fs::create_dir_all(teamchannel_invites).expect("Failed to create teamchannel_invites directory");
-    }
+    // // Check if the data directory exists
+    // let teamchannel_invites = Path::new("invites_updates/teamchannel_invites/export");
+    // if !teamchannel_invites.exists() {
+    //     // If the directory does not exist, create it
+    //     fs::create_dir_all(teamchannel_invites).expect("Failed to create teamchannel_invites directory");
+    // }
     
     // not yet working
     // export_addressbook()?;
@@ -7809,7 +7846,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
 
         // Get armored public key, using key-id
         let mut gpg_key_public = String::new();
-        match get_gpg_armored_public_key_with_key_id(&gpg_publickey_id) {
+        match get_gpg_armored_public_key_via_key_id(&gpg_publickey_id) {
             Ok(armored_key) => {
                 println!("Armored Public Key:\n{}", armored_key);
                 gpg_key_public = armored_key;
@@ -8056,60 +8093,326 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
 //     Ok(false)
 // }
 
-// use std::process::Command;
-/// Exports the user's public GPG key to a specified location for sharing
+// // use std::process::Command;
+// /// Exports the user's public GPG key to a specified location for sharing
+// /// 
+// /// # Arguments
+// /// * `config_path` - Path to the uma.toml configuration file
+// /// * `output_directory` - Directory where the exported key should be saved
+// /// 
+// /// # Returns
+// /// * `Result<String, ThisProjectError>` - Returns the path to the exported key file or an error
+// pub fn export_public_gpg_key(
+//     config_path: &Path,
+//     output_directory: &Path,
+// ) -> Result<String, ThisProjectError> {
+//     // Step 1: Get username from uma.toml
+//     let config_path_str = config_path.to_str()
+//         .ok_or_else(|| ThisProjectError::InvalidInput("Invalid path".to_string()))?;
+    
+//     // TODO make uma.toml a clearsign toml probably
+//     // let username = read_field_from_toml(config_path_str, "uma_local_owner_user");
+//     let username = read_single_line_string_field_from_toml(config_path_str, "uma_local_owner_user");
+
+//     // Step 2: Construct path to user's config file
+//     let user_config_path = Path::new("project_graph_data/collaborator_files_address_book")
+//         .join(format!("{}__collaborator.toml", username));
+
+//     // Step 3: Get GPG key ID from user's config file
+//     let user_config_path_str = user_config_path.to_str()
+//         .ok_or_else(|| ThisProjectError::InvalidInput("Invalid user config path".to_string()))?;
+//     let gpg_key_id = read_singleline_string_from_clearsigntoml(user_config_path_str, "gpg_publickey_id");
+
+//     // Create the output directory if it doesn't exist
+//     fs::create_dir_all(output_directory)
+//         .map_err(|e| ThisProjectError::IoError(e))?;
+
+//     // Generate the output file path
+//     let output_file = output_directory.join("key.asc");
+    
+//     // Export the GPG key
+//     let output = StdCommand::new("gpg")
+//         .arg("--armor")
+//         .arg("--export")
+//         .arg(&gpg_key_id)
+//         .output()
+//         .map_err(|e| ThisProjectError::IoError(e))?;
+
+//     // Check if the command was successful
+//     if !output.status.success() {
+//         let error_message = String::from_utf8_lossy(&output.stderr);
+//         return Err(ThisProjectError::GpgError(error_message.to_string()));
+//     }
+
+//     // Write the output to a file
+//     fs::write(&output_file, output.stdout)
+//         .map_err(|e| ThisProjectError::IoError(e))?;
+        
+        
+        
+//     /*
+//     Check for invitation:
+//     for share key... just give instructions?
+    
+//     look here fn export_addressbook()
+//     encrypt with theirs and clearsign wtih theirs?
+//     ?
+//     use tomlclearsign files??? yes...
+    
+//     1. is there a key in invtes_updates/incoming/gpg_key_for_invites_here
+//     2. if so:
+//     (look for an invite function or command with some of this code...)
+//     3. get current owner user name
+//     4. get current owner user addressbook path
+//     5. get key-id for current owner user? or not need clearsign?
+//     6. use key in folder to encrypt file at path step 4
+//     6. put the result in outgoing named whateer .asc 
+    
+//     */
+
+//     // Return the path to the exported key file
+//     Ok(output_file.to_string_lossy().into_owned())
+// }
+
+
+// // use std::fs;
+// // use std::path::Path;
+// // use std::process::Command as StdCommand;
+
+// /// Exports the user's public GPG key to a specified location for sharing.
+// /// 
+// /// This function performs the following steps:
+// /// 1. Retrieves the username from the configuration file
+// /// 2. Locates the corresponding collaborator file for that user
+// /// 3. Extracts the GPG public key ID from the collaborator file
+// /// 4. Uses GPG to export the public key in ASCII-armored format
+// /// 5. Saves the exported key to the specified output directory
+// /// 
+// /// # Arguments
+// /// * `config_path` - Path to the uma.toml configuration file
+// /// * `output_directory` - Directory where the exported key should be saved
+// /// 
+// /// # Returns
+// /// * `Result<String, ThisProjectError>` - Returns the path to the exported key file on success,
+// ///   or an appropriate error if any step fails
+// /// 
+// /// # Errors
+// /// * `ThisProjectError::InvalidInput` - If paths cannot be converted to strings
+// /// * `ThisProjectError::TomlVanillaDeserialStrError` - If reading from TOML files fails
+// /// * `ThisProjectError::IoError` - If file operations fail
+// /// * `ThisProjectError::GpgError` - If the GPG key export operation fails
+// pub fn export_public_gpg_key(
+//     config_path: &Path,
+//     output_directory: &Path,
+// ) -> Result<String, ThisProjectError> {
+    
+//     debug_log("\n\nStarting -> fn export_public_gpg_key()");
+    
+//     // Convert config path to string for TOML reading functions
+//     let config_path_str = config_path.to_str()
+//         .ok_or_else(|| ThisProjectError::InvalidInput("Cannot convert config path to string".to_string()))?;
+    
+//     // Read username from the configuration file, mapping any reading errors to our error type
+//     let uma_localowneruser_username = read_single_line_string_field_from_toml(config_path_str, "uma_local_owner_user")
+//         .map_err(|error_message| ThisProjectError::TomlVanillaDeserialStrError(
+//             format!("Failed to read uma_localowneruser_username from config: {}", error_message)
+//         ))?;
+
+//     debug_log!("uma_localowneruser_username {}", uma_localowneruser_username);
+    
+//     // Construct the path to the user's collaborator file, which contains their GPG key ID
+//     let collaborator_files_directory = "project_graph_data/collaborator_files_address_book";
+//     let collaborator_filename = format!("{}__collaborator.toml", uma_localowneruser_username);
+//     let user_config_path = Path::new(collaborator_files_directory).join(collaborator_filename);
+    
+//     debug_log!("user_config_path {}", user_config_path.display());
+
+
+//     // Convert the collaborator file path to string for TOML reading
+//     let user_config_path_str = user_config_path.to_str()
+//         .ok_or_else(|| ThisProjectError::InvalidInput("Cannot convert collaborator file path to string".to_string()))?;
+    
+    
+//     debug_log!("user_config_path {}", user_config_path.display());
+    
+//     // Extract the GPG key ID from the collaborator file
+//     let gpg_key_id = read_singleline_string_from_clearsigntoml(user_config_path_str, "gpg_publickey_id")
+//         .map_err(|error_message| ThisProjectError::TomlVanillaDeserialStrError(
+//             format!("Failed to read GPG key ID from collaborator file: {}", error_message)
+//         ))?;
+
+//     // Ensure the output directory exists, creating it if necessary
+//     fs::create_dir_all(output_directory)
+//         .map_err(|io_error| ThisProjectError::IoError(io_error))?;
+
+//     // Define the output file path where the exported key will be saved
+//     let output_file_path = output_directory.join("key.asc");
+    
+//     debug_log!("output_file_path {}", output_file_path.display());
+    
+//     // Call GPG to export the public key in ASCII-armored format
+//     let gpg_export_result = StdCommand::new("gpg")
+//         .arg("--armor")           // ASCII-armored format for text-based sharing
+//         .arg("--export")          // Export operation
+//         .arg(&gpg_key_id)         // The key ID to export
+//         .output()
+//         .map_err(|io_error| ThisProjectError::IoError(io_error))?;
+
+//     debug_log!("gpg_export_result {:?}", gpg_export_result);
+    
+//     // Verify the GPG command executed successfully
+//     if !gpg_export_result.status.success() {
+//         // If GPG failed, extract the error message and return it
+//         let gpg_error_message = String::from_utf8_lossy(&gpg_export_result.stderr);
+//         return Err(ThisProjectError::GpgError(
+//             format!("GPG key export failed: {}", gpg_error_message)
+//         ));
+//     }
+
+//     // Write the exported key to the output file
+//     fs::write(&output_file_path, &gpg_export_result.stdout)
+//         .map_err(|io_error| ThisProjectError::IoError(io_error))?;
+//     /*
+//     Check for invitation:
+//     for share key... just give instructions?
+    
+//     look here fn export_addressbook()
+//     encrypt with theirs and clearsign wtih theirs?
+//     ?
+//     use tomlclearsign files??? yes...
+    
+//     1. is there a key in invtes_updates/incoming/gpg_key_for_invites_here
+//     2. if so:
+//     (look for an invite function or command with some of this code...)
+//     3. get current owner user name
+//     4. get current owner user addressbook path
+//     5. get key-id for current owner user? or not need clearsign?
+//     6. use key in folder to encrypt file at path step 4
+//     6. put the result in outgoing named whateer .asc 
+    
+//     */
+        
+        
+//     // Return the path to the exported key file as a string
+//     let result_path = output_file_path.to_string_lossy().into_owned();
+    
+//     debug_log!("\n\n Ending -> fn export_public_gpg_key(), result_path -> {:?}", &result_path);    
+    
+//     Ok(result_path)
+// }
+
+/// Exports the user's public GPG key to a specified location for sharing.
+/// 
+/// This function performs the following steps:
+/// 1. Retrieves the username from the configuration file
+/// 2. Locates the corresponding collaborator file for that user
+/// 3. Extracts the GPG public key ID from the collaborator file
+/// 4. Uses GPG to export the public key in ASCII-armored format
+/// 5. Saves the exported key to the specified output directory
+/// 
+/// # Path Handling
+/// IMPORTANT: Both the config_path and output_directory parameters are treated as paths 
+/// relative to the executable's directory location, NOT the current working directory.
+/// They will be automatically converted to absolute paths based on the executable's location.
+/// This ensures consistent behavior regardless of where the program is executed from.
 /// 
 /// # Arguments
-/// * `config_path` - Path to the uma.toml configuration file
-/// * `output_directory` - Directory where the exported key should be saved
+/// * `config_path` - Path to the uma.toml configuration file (relative to executable directory)
+/// * `output_directory` - Directory where the exported key should be saved (relative to executable directory)
 /// 
 /// # Returns
-/// * `Result<String, ThisProjectError>` - Returns the path to the exported key file or an error
+/// * `Result<String, ThisProjectError>` - Returns the path to the exported key file on success,
+///   or an appropriate error if any step fails
+/// 
+/// # Errors
+/// * `ThisProjectError::InvalidInput` - If paths cannot be converted to strings
+/// * `ThisProjectError::TomlVanillaDeserialStrError` - If reading from TOML files fails
+/// * `ThisProjectError::IoError` - If file operations fail, including if required directories don't exist
+/// * `ThisProjectError::GpgError` - If the GPG key export operation fails
 pub fn export_public_gpg_key(
     config_path: &Path,
     output_directory: &Path,
 ) -> Result<String, ThisProjectError> {
-    // Step 1: Get username from uma.toml
-    let config_path_str = config_path.to_str()
-        .ok_or_else(|| ThisProjectError::InvalidInput("Invalid path".to_string()))?;
-    let username = read_field_from_toml(config_path_str, "uma_local_owner_user");
-
-    // Step 2: Construct path to user's config file
-    let user_config_path = Path::new("project_graph_data/collaborator_files_address_book")
-        .join(format!("{}__collaborator.toml", username));
-
-    // Step 3: Get GPG key ID from user's config file
-    let user_config_path_str = user_config_path.to_str()
-        .ok_or_else(|| ThisProjectError::InvalidInput("Invalid user config path".to_string()))?;
-    let gpg_key_id = read_field_from_toml(user_config_path_str, "gpg_publickey_id");
-
-    // Create the output directory if it doesn't exist
-    fs::create_dir_all(output_directory)
-        .map_err(|e| ThisProjectError::IoError(e))?;
-
-    // Generate the output file path
-    let output_file = output_directory.join("key.asc");
     
-    // Export the GPG key
-    let output = StdCommand::new("gpg")
-        .arg("--armor")
-        .arg("--export")
-        .arg(&gpg_key_id)
-        .output()
-        .map_err(|e| ThisProjectError::IoError(e))?;
+    debug_log("\n\nStarting -> fn export_public_gpg_key()");
+    
+    // Convert config_path to an absolute path relative to the executable directory
+    let absolute_config_path = make_file_path_abs_executabledirectoryrelative_canonicalized_or_error(config_path)
+        .map_err(|io_error| ThisProjectError::IoError(io_error))?;
+    
+    // Convert config path to string for TOML reading functions
+    let config_path_str = absolute_config_path.to_str()
+        .ok_or_else(|| ThisProjectError::InvalidInput("Cannot convert config path to string".to_string()))?;
+    
+    // Read username from the configuration file, mapping any reading errors to our error type
+    let uma_localowneruser_username = read_single_line_string_field_from_toml(config_path_str, "uma_local_owner_user")
+        .map_err(|error_message| ThisProjectError::TomlVanillaDeserialStrError(
+            format!("Failed to read uma_localowneruser_username from config: {}", error_message)
+        ))?;
 
-    // Check if the command was successful
-    if !output.status.success() {
-        let error_message = String::from_utf8_lossy(&output.stderr);
-        return Err(ThisProjectError::GpgError(error_message.to_string()));
+    debug_log!("uma_localowneruser_username {}", uma_localowneruser_username);
+    
+    // Convert the collaborator files directory to an absolute path based on the executable's location
+    // AND verify that the directory exists (returns error if not found or not a directory)
+    let collaborator_files_directory_relative = "project_graph_data/collaborator_files_address_book";
+    let collaborator_files_directory_absolute = make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(
+        collaborator_files_directory_relative
+    ).map_err(|io_error| ThisProjectError::IoError(io_error))?;
+    
+    // Construct the path to the user's collaborator file, which contains their GPG key ID
+    let collaborator_filename = format!("{}__collaborator.toml", uma_localowneruser_username);
+    let user_config_path = collaborator_files_directory_absolute.join(collaborator_filename);
+    
+    debug_log!("user_config_path {}", user_config_path.display());
+
+    // Convert the collaborator file path to string for TOML reading
+    let user_config_path_str = user_config_path.to_str()
+        .ok_or_else(|| ThisProjectError::InvalidInput("Cannot convert collaborator file path to string".to_string()))?;
+    
+    debug_log!("user_config_path {}", user_config_path.display());
+    
+    // Extract the GPG key ID from the collaborator file
+    let gpg_key_id = read_singleline_string_from_clearsigntoml(user_config_path_str, "gpg_publickey_id")
+        .map_err(|error_message| ThisProjectError::TomlVanillaDeserialStrError(
+            format!("Failed to read GPG key ID from collaborator file: {}", error_message)
+        ))?;
+
+    // Convert output_directory to an absolute path relative to the executable directory
+    // Create the directory if it doesn't exist
+    let absolute_output_directory = make_input_path_name_abs_executabledirectoryrelative_nocheck(output_directory)
+        .map_err(|io_error| ThisProjectError::IoError(io_error))?;
+    
+    // Ensure the output directory exists, creating it if necessary
+    fs::create_dir_all(&absolute_output_directory)
+        .map_err(|io_error| ThisProjectError::IoError(io_error))?;
+
+    // Define the output file path where the exported key will be saved
+    let output_file_path = absolute_output_directory.join("key.asc");
+    
+    debug_log!("output_file_path {}", output_file_path.display());
+    
+    // Call GPG to export the public key in ASCII-armored format
+    let gpg_export_result = StdCommand::new("gpg")
+        .arg("--armor")           // ASCII-armored format for text-based sharing
+        .arg("--export")          // Export operation
+        .arg(&gpg_key_id)         // The key ID to export
+        .output()
+        .map_err(|io_error| ThisProjectError::IoError(io_error))?;
+
+    debug_log!("gpg_export_result {:?}", gpg_export_result);
+    
+    // Verify the GPG command executed successfully
+    if !gpg_export_result.status.success() {
+        // If GPG failed, extract the error message and return it
+        let gpg_error_message = String::from_utf8_lossy(&gpg_export_result.stderr);
+        return Err(ThisProjectError::GpgError(
+            format!("GPG key export failed: {}", gpg_error_message)
+        ));
     }
 
-    // Write the output to a file
-    fs::write(&output_file, output.stdout)
-        .map_err(|e| ThisProjectError::IoError(e))?;
-        
-        
-        
+    // Write the exported key to the output file
+    fs::write(&output_file_path, &gpg_export_result.stdout)
+        .map_err(|io_error| ThisProjectError::IoError(io_error))?;
     /*
     Check for invitation:
     for share key... just give instructions?
@@ -8129,11 +8432,14 @@ pub fn export_public_gpg_key(
     6. put the result in outgoing named whateer .asc 
     
     */
-
-    // Return the path to the exported key file
-    Ok(output_file.to_string_lossy().into_owned())
+        
+    // Return the path to the exported key file as a string
+    let result_path = output_file_path.to_string_lossy().into_owned();
+    
+    debug_log!("\n\n Ending -> fn export_public_gpg_key(), result_path -> {:?}", &result_path);    
+    
+    Ok(result_path)
 }
-
 
 // /// Exports the user's public GPG key to a specified location for sharing
 // /// 
@@ -8227,6 +8533,8 @@ pub fn export_public_gpg_key(
 // use std::path::Path;
 // use std::io;
 
+
+// KEEP this for later
 /// Process address book sharing for a specific recipient
 /// 
 /// # Arguments
@@ -8235,7 +8543,7 @@ pub fn export_public_gpg_key(
 /// # Returns
 /// * `Ok(())` if the operation succeeds
 /// * `Err(GpgError)` if any operation fails
-fn share_address_book(recipient_name: &str) -> Result<(), GpgError> {
+fn generic_share_address_book(recipient_name: &str) -> Result<(), GpgError> {
     println!("\nProcessing address book share for recipient: {}", recipient_name);
     
     // Path to your address book
@@ -8293,14 +8601,761 @@ fn share_address_book(recipient_name: &str) -> Result<(), GpgError> {
     Ok(())
 }
 
+// /// Process address book sharing for a specific recipient
+// /// 
+// /// This function handles the process of sharing the local owner's address book with
+// /// an existing collaborator. It retrieves the necessary GPG key information,
+// /// clearsigns the address book with the owner's private key (using their key ID for reference), 
+// /// and then encrypts it with the recipient's public key.
+// /// 
+// /// # Arguments
+// /// * `recipient_name` - Name of the recipient to share with
+// /// 
+// /// # Returns
+// /// * `Ok(())` if the operation succeeds
+// /// * `Err(GpgError)` if any operation fails
+// /// 
+// /// # Process Flow
+// /// 1. Get local owner's username from configuration
+// /// 2. Locate the owner's GPG key ID from their collaborator file (for signing)
+// /// 3. Find the recipient's public GPG key from their collaborator file (for encryption)
+// /// 4. Clearsign the address book using the owner's key ID (referencing their private key)
+// /// 5. Encrypt the signed document with the recipient's public key
+// /// 6. Save the encrypted file to the outgoing directory
+// fn share_lou_address_book_with_existingcollaborator(recipient_name: &str) -> Result<(), GpgError> {
+//     println!("\nProcessing address book share for recipient: {}", recipient_name);
+    
+//     // Create output directory if it doesn't exist
+//     let output_dir = Path::new("invites_updates/outgoing");
+//     fs::create_dir_all(output_dir)
+//         .map_err(|e| GpgError::PathError(format!("Failed to create output directory: {}", e)))?;
+    
+//     // Get local owner username from configuration
+//     let local_owner_user_name = read_single_line_string("uma.toml", "local_owner_user")
+//         .map_err(|e| GpgError::ValidationError(format!("Failed to read local owner username: {}", e)))?;
+//     println!("Local owner username: {}", local_owner_user_name);
+    
+//     // Path to local owner's collaborator file
+//     path_to_localownerusers_addressbook_toml_share_this_file
+//     let path_to_localownerusers_addressbook_toml_share_this_fil = format!(
+//         "project_graph_data/collaborator_files_address_book/{}__collaborator.toml",
+//         local_owner_user_name
+//     );
+    
+//     // Get owner's GPG key ID - this is used to reference the private key for signing
+//     // The private key itself is securely stored in the GPG keyring, not in our files
+//     let owner_gpg_key_id = read_single_line_string(&path_to_localownerusers_addressbook_toml_share_this_fil, "gpg_key_id")
+//         .map_err(|e| GpgError::ValidationError(format!("Failed to read owner's GPG key ID: {}", e)))?;
+//     println!("Owner's GPG key ID: {}", owner_gpg_key_id);
+    
+//     // Path to recipient's collaborator file
+//     let recipient_collab_path = format!(
+//         "project_graph_data/collaborator_files_address_book/{}__collaborator.toml",
+//         recipient_name
+//     );
+    
+//     // Check if recipient's collaborator file exists
+//     if !Path::new(&recipient_collab_path).exists() {
+//         return Err(GpgError::PathError(format!(
+//             "Recipient's collaborator file not found at: {}", 
+//             recipient_collab_path
+//         )));
+//     }
+    
+//     // Get recipient's public GPG key - this is used for encryption
+//     // Public keys are safe to store and share
+//     let recipient_public_gpg_key = read_multi_line_string(&recipient_collab_path, "gpg_key_public")
+//         .map_err(|e| GpgError::ValidationError(format!("Failed to read recipient's public GPG key: {}", e)))?;
+    
+//     // Create a temporary file to store the recipient's public key
+//     let temp_key_path = Path::new(output_dir).join(format!("{}_pubkey.asc", recipient_name));
+//     fs::write(&temp_key_path, recipient_public_gpg_key)
+//         .map_err(|e| GpgError::PathError(format!("Failed to write temporary key file: {}", e)))?;
+    
+    
+//     // TODO 
+//     /*
+    
+//     The addressbook for the local-owner-user is found in the same place
+    
+//     println!("Local owner username: {}", local_owner_user_name);    
+//     // Path to local owner's collaborator file
+//     let owner_collab_path = format!(
+//         "project_graph_data/collaborator_files_address_book/{}__collaborator.toml",
+//         local_owner_user_name
+//     );
+//     as the addressbook for the remote collaborate: in the directory of addressbook files.
+    
+//     */
+//     // NO!
+//     // // Path to the address book file
+//     // let address_book_path = Path::new("address_book.toml");
+    
+//     // // Check if the address book file exists
+//     // if !address_book_path.exists() {
+//     //     return Err(GpgError::PathError(format!(
+//     //         "Address book file not found at: {}", 
+//     //         address_book_path.display()
+//     //     )));
+//     // }
+    
+//     // println!("\nProcessing with:");
+//     // println!("Your signing key ID (references your private key): {}", owner_gpg_key_id);
+//     // println!("Recipient's public key file: {}", temp_key_path.display());
+//     // println!("Address book file: {}", address_book_path.display());
+    
+//     // Use our existing function to clearsign and encrypt the address book
+//     // The owner's key ID is used to identify which private key to use for signing
+//     // The recipient's public key file is used for encryption
+//     clearsign_and_encrypt_file_for_recipient(
+//         path_to_localownerusers_addressbook_toml_share_this_file,
+//         &owner_gpg_key_id,
+//         &temp_key_path
+//     )?;
+    
+//     // Clean up the temporary key file
+//     if let Err(e) = fs::remove_file(&temp_key_path) {
+//         eprintln!("Warning: Failed to remove temporary key file: {}", e);
+//     }
+    
+//     println!("\nAddress book has been clearsigned and encrypted for {}!", recipient_name);
+//     println!("The encrypted file is in: invites_updates/outgoing/address_book.toml.gpg");
+    
+//     Ok(())
+// }
 
-mod handle_gpg;  // This declares the module and tells Rust to look for handle_gpg.rs
-use crate::handle_gpg::{
-    GpgError, 
-    clearsign_and_encrypt_file_for_recipient, 
-    decrypt_and_validate_file,
-}; 
 
+// /// Share the local owner user's address book with an existing collaborator
+// /// 
+// /// This function prepares the local owner's address book file for sharing with
+// /// an existing collaborator whose information is already in the system. The process:
+// /// 1. Identifies the local owner's address book file
+// /// 2. Clearsigns it with the owner's GPG key (proving authenticity)
+// /// 3. Encrypts it with the recipient's public key (ensuring only they can read it)
+// /// 
+// /// # Arguments
+// /// * `recipient_name` - Name of the existing collaborator to share with
+// /// 
+// /// # Returns
+// /// * `Ok(())` if the operation succeeds
+// /// * `Err(GpgError)` if any operation fails
+// fn share_local_owner_address_book_with_existing_collaborator(recipient_name: &str) -> Result<(), GpgError> {
+//     println!("\nSharing local owner's address book with existing collaborator: {}", recipient_name);
+    
+//     // Create output directory if it doesn't exist
+//     let output_dir = Path::new("invites_updates/outgoing");
+//     fs::create_dir_all(output_dir)
+//         .map_err(|e| GpgError::PathError(format!("Failed to create output directory: {}", e)))?;
+    
+//     // Get local owner username from configuration
+//     let local_owner_user_name = read_single_line_string("uma.toml", "local_owner_user")
+//         .map_err(|e| GpgError::ValidationError(format!("Failed to read local owner username: {}", e)))?;
+//     println!("Local owner username: {}", local_owner_user_name);
+    
+//     // Path to the local owner's address book file - THIS is the file we want to share
+//     let local_owner_address_book_path = format!(
+//         "project_graph_data/collaborator_files_address_book/{}__collaborator.toml",
+//         local_owner_user_name
+//     );
+    
+//     // Verify the address book file exists
+//     if !Path::new(&local_owner_address_book_path).exists() {
+//         return Err(GpgError::PathError(format!(
+//             "Local owner's address book file not found at: {}", 
+//             local_owner_address_book_path
+//         )));
+//     }
+    
+//     // Get owner's GPG key ID - this is used to reference the private key for signing
+//     let owner_gpg_key_id = read_singleline_string_from_clearsigntoml(&local_owner_address_book_path, "gpg_key_id")
+//         .map_err(|e| GpgError::ValidationError(format!("Failed to read owner's GPG key ID: {}", e)))?;
+//     println!("Owner's GPG key ID: {}", owner_gpg_key_id);
+    
+//     // Path to recipient's collaborator file
+//     let recipient_collab_path = format!(
+//         "project_graph_data/collaborator_files_address_book/{}__collaborator.toml",
+//         recipient_name
+//     );
+    
+//     // Check if recipient's collaborator file exists
+//     if !Path::new(&recipient_collab_path).exists() {
+//         return Err(GpgError::PathError(format!(
+//             "Recipient's collaborator file not found at: {}", 
+//             recipient_collab_path
+//         )));
+//     }
+    
+//     // Get recipient's public GPG key - this is used for encryption
+//     let recipient_public_gpg_key = read_singleline_string_from_clearsigntoml(&recipient_collab_path, "gpg_key_public")
+//         .map_err(|e| GpgError::ValidationError(format!("Failed to read recipient's public GPG key: {}", e)))?;
+    
+//     // Create a temporary file to store the recipient's public key
+//     let temp_key_path = Path::new(output_dir).join(format!("{}_pubkey.asc", recipient_name));
+//     fs::write(&temp_key_path, recipient_public_gpg_key)
+//         .map_err(|e| GpgError::PathError(format!("Failed to write temporary key file: {}", e)))?;
+    
+//     println!("\nProcessing with:");
+//     println!("Your signing key ID (references your private key): {}", owner_gpg_key_id);
+//     println!("Recipient's public key file: {}", temp_key_path.display());
+//     println!("Local owner's address book file: {}", local_owner_address_book_path);
+    
+//     // Use our existing function to clearsign and encrypt the LOCAL OWNER'S address book
+//     clearsign_and_encrypt_file_for_recipient(
+//         Path::new(&local_owner_address_book_path),
+//         &owner_gpg_key_id,
+//         &temp_key_path
+//     )?;
+    
+//     // Clean up the temporary key file
+//     if let Err(e) = fs::remove_file(&temp_key_path) {
+//         eprintln!("Warning: Failed to remove temporary key file: {}", e);
+//     }
+    
+//     println!("\nLocal owner's address book has been clearsigned and encrypted for {}!", recipient_name);
+//     println!("The encrypted file is in: invites_updates/outgoing/{}__collaborator.toml.gpg", 
+//              local_owner_user_name);
+    
+//     Ok(())
+// }
+
+/// Share the Local Owner User's (LOU) address book with an existing collaborator
+/// 
+/// This function handles the secure sharing of the LOCAL OWNER USER'S address book file
+/// with an existing collaborator whose information is already in the system.
+///
+/// Specifically, this function:
+/// 1. Identifies the local owner user's address book file (their collaborator.toml)
+/// 2. Retrieves the local owner user's GPG key ID for signing
+/// 3. Retrieves the recipient's public GPG key for encryption
+/// 4. Clearsigns the LOCAL OWNER USER'S address book file using the owner's GPG key
+/// 5. Encrypts this signed file with the recipient's public key
+/// 6. Saves the encrypted file to the outgoing directory for sharing
+///
+/// This enables secure sharing of contact information while ensuring:
+/// - The recipient can verify the file came from the claimed sender (via signature)
+/// - Only the intended recipient can decrypt the file (via their public key encryption)
+/// 
+/// # Arguments
+/// * `recipient_name` - Name of the existing collaborator to share the LOCAL OWNER USER'S address book with
+/// 
+/// # Returns
+/// * `Ok(())` if the operation succeeds
+/// * `Err(GpgError)` if any operation fails
+///
+/// # File Flow
+/// - Source file: project_graph_data/collaborator_files_address_book/{LOCAL_OWNER_USER}__collaborator.toml
+/// - Output file: invites_updates/outgoing/{LOCAL_OWNER_USER}__collaborator.toml.gpg
+///
+/// uses: constant Path to incoming public GPG key file
+/// const PATH_TO_INCOMING_PUBLICGPG_KEYASC: &str = "invites_updates/incoming/key.asc";
+///
+/// For safe tmml handling as 'clearsign_toml', singleline and multiline fields 
+/// from addressbook files are read with:
+/// read_singleline_string_from_clearsigntoml();
+/// read_multiline_string_from_clearsigntoml();
+fn share_lou_address_book_with_existingcollaborator(recipient_name: &str) -> Result<(), GpgError> {
+    debug_log("\nstarting -> fn share_lou_address_book_with_existingcollaborator()");
+    debug_log!("Sharing LOCAL OWNER USER'S address book with existing collaborator: {}", recipient_name);
+    
+    // Create output directory if it doesn't exist
+    // This is where the encrypted LOCAL OWNER USER'S address book will be saved
+    let output_dir = Path::new("invites_updates/outgoing");
+    
+    // absolute path
+    debug_log!("Output directory absolute path: {:?}", output_dir.canonicalize().unwrap_or_else(|_| output_dir.to_path_buf()));
+    
+    debug_log!("Output directory exists? {}", output_dir.exists());
+    
+    fs::create_dir_all(output_dir)
+        .map_err(|e| GpgError::PathError(format!("Failed to create output directory: {}", e)))?;
+
+    debug_log!("Output directory created successfully? {}", output_dir.exists());
+    
+    debug_log!("output_dir {}", &output_dir.display());
+    
+    let uma_toml_path = Path::new("uma.toml");
+    debug_log!("UMA TOML path: {:?}", uma_toml_path.canonicalize().unwrap_or_else(|_| uma_toml_path.to_path_buf()));
+    debug_log!("UMA TOML file exists: {}", uma_toml_path.exists());
+    
+    // This should be an aboslute file path going in, probably not only "uma.toml"
+    // Get local owner username from configuration
+    // This identifies WHICH address book we will be sharing (the LOCAL OWNER USER'S)
+    let local_owner_user_name = read_single_line_string_field_from_toml("uma.toml", "local_owner_user")
+        .map_err(|e| GpgError::ValidationError(format!("Failed to read local owner username: {}", e)))?;
+        
+    println!("Local owner username (whose address book we are sharing): {}", local_owner_user_name);
+    
+    debug_log!("local_owner_user_name {}", &local_owner_user_name);
+    // Path to the LOCAL OWNER USER'S address book file
+    // THIS IS THE EXACT FILE WE WANT TO SHARE - the local owner's own address book
+    let local_owner_address_book_path = format!(
+        "project_graph_data/collaborator_files_address_book/{}__collaborator.toml",
+        local_owner_user_name,
+    );
+    debug_log!("local_owner_address_book_path {}", &local_owner_address_book_path);
+    
+    
+    // Verify the LOCAL OWNER USER'S address book file exists
+    if !Path::new(&local_owner_address_book_path).exists() {
+        return Err(GpgError::PathError(format!(
+            "LOCAL OWNER USER'S address book file not found at: {}", 
+            local_owner_address_book_path
+        )));
+    } else {
+        debug_log("if !Path::new(&local_owner_address_book_path).exists() { return Err(GpgError::PathError(format!(");
+        
+    }
+    
+    // Get LOCAL OWNER USER'S GPG key ID - this is used to reference the private key for signing
+    // We are using the LOCAL OWNER USER'S key to sign THEIR OWN address book
+    let owner_gpg_key_id = read_singleline_string_from_clearsigntoml(&local_owner_address_book_path, "gpg_key_id")
+        .map_err(|e| GpgError::ValidationError(format!("Failed to read LOCAL OWNER USER'S GPG key ID: {}", e)))?;
+    println!("LOCAL OWNER USER'S GPG key ID (for signing their address book): {}", owner_gpg_key_id);
+    
+    // Path to recipient's collaborator file
+    // We need this to get their public key for encryption
+    let recipient_collab_path = format!(
+        "project_graph_data/collaborator_files_address_book/{}__collaborator.toml",
+        recipient_name
+    );
+    
+    // Check if recipient's collaborator file exists
+    if !Path::new(&recipient_collab_path).exists() {
+        return Err(GpgError::PathError(format!(
+            "Recipient's collaborator file not found at: {}", 
+            recipient_collab_path
+        )));
+    }
+    
+    // Get recipient's public GPG key - this is used for encryption
+    // We encrypt the LOCAL OWNER USER'S address book with the recipient's public key
+    // so only they can decrypt it
+    let recipient_public_gpg_key = read_multiline_string_from_clearsigntoml(&recipient_collab_path, "gpg_key_public")
+        .map_err(|e| GpgError::ValidationError(format!("Failed to read recipient's public GPG key: {}", e)))?;
+    
+    // Create a temporary file to store the recipient's public key
+    // This is used by the GPG encryption process
+    let temp_key_path = Path::new(output_dir).join(format!("{}_pubkey.asc", recipient_name));
+    fs::write(&temp_key_path, recipient_public_gpg_key)
+        .map_err(|e| GpgError::PathError(format!("Failed to write temporary key file: {}", e)))?;
+    
+    println!("\nProcessing with:");
+    println!("LOCAL OWNER USER'S signing key ID: {}", owner_gpg_key_id);
+    println!("Recipient's public key file: {}", temp_key_path.display());
+    println!("LOCAL OWNER USER'S address book file to be shared: {}", local_owner_address_book_path);
+    
+    // Use our existing function to clearsign and encrypt the LOCAL OWNER USER'S address book
+    // We are:
+    // 1. Taking the LOCAL OWNER USER'S address book file as input
+    // 2. Signing it with the LOCAL OWNER USER'S private key (via their key ID)
+    // 3. Encrypting it with the recipient's public key
+    clearsign_and_encrypt_file_for_recipient(
+        Path::new(&local_owner_address_book_path),  // THE LOCAL OWNER USER'S ADDRESS BOOK
+        &owner_gpg_key_id,                         // LOCAL OWNER USER'S KEY FOR SIGNING
+        &temp_key_path                             // RECIPIENT'S PUBLIC KEY FOR ENCRYPTION
+    )?;
+    
+    // Clean up the temporary key file
+    if let Err(e) = fs::remove_file(&temp_key_path) {
+        eprintln!("Warning: Failed to remove temporary key file: {}", e);
+    }
+    
+    println!("\nLOCAL OWNER USER'S address book has been clearsigned and encrypted for {}!", recipient_name);
+    println!("The encrypted LOCAL OWNER USER'S address book file is saved to:");
+    println!("invites_updates/outgoing/{}__collaborator.toml.gpg", local_owner_user_name);
+    
+    Ok(())
+}
+
+// /// Process address book sharing for a specific recipient
+// /// 
+// /// # Arguments
+// /// * `recipient_name` - Name of the recipient to share with
+// /// 
+// /// # Returns
+// /// * `Ok(())` if the operation succeeds
+// /// * `Err(GpgError)` if any operation fails
+// fn share_lou_address_book_with_existingcollaborator(recipient_name: &str) -> Result<(), GpgError> {
+//     println!("\nProcessing address book share for recipient: {}", recipient_name);
+//     /*
+//     get local_owner_user name from source
+    
+//     use read field from toml (maybe in future clearsigned)
+    
+    
+//     get key-id line from local owner user's addressbook file
+    
+    
+//     */
+    
+//     // // Path to your address book
+//     // let address_book_path = Path::new("address_book.toml");
+    
+//     // // Your GPG signing key ID (in production, this would come from config)
+//     // println!("\nTo get your signing key ID, run: $ gpg --list-keys --keyid-format=long");
+//     // print!("Enter your GPG signing key ID: ");
+//     // io::stdout().flush()
+//     //     .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
+    
+//     // let mut signing_key_id = String::new();
+//     // io::stdin()
+//     //     .read_line(&mut signing_key_id)
+//     //     .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
+//     // let signing_key_id = signing_key_id.trim();
+
+//     // // Validate signing key
+//     // if signing_key_id.is_empty() {
+//     //     return Err(GpgError::ValidationError("No signing key ID provided".to_string()));
+//     // }
+
+//     // PLACEHOLDER: In production, this would look up the recipient's public key
+//     // from your address book using recipient_name
+    
+//     // get local owner user name
+//     let local_owner_user_name = read_single_line_string("uma.toml", "local_owner_user")?;
+//     println!("Single line: {}", local_owner_user_name);
+    
+    
+//     // Combine using format!
+//     let lou_path = format!(
+//         "project_graph_data/collaborator_files_address_book/{}__collaborator.toml",
+//         local_owner_user_name
+//     );    
+
+//     let gpg_key_id = read_single_line_string(lou_path, "gpg_key_id")?;
+//     println!("Multi line: {}", multi_line);
+
+    
+//     // Combine using format!
+//     let lou_path = format!(
+//         "project_graph_data/collaborator_files_address_book/{}__collaborator.toml",
+//         local_owner_user_name
+//     );    
+
+//     let rc_gpgkey = read_multi_line_string(lou_path, "gpg_key_id")?;
+//     println!("Multi line: {}", multi_line);
+    
+//     TODO: get gpg key from 
+
+    
+//     use clearsigntoml read multiline field function
+    
+//     maybe also need to tmp save to tmp file to pass path to that
+//     along...
+    
+//     // println!("\nEnter path to recipient's public key file:");
+//     // let mut recipient_key_path_str = String::new();
+//     // io::stdin()
+//     //     .read_line(&mut recipient_key_path_str)
+//     //     .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
+//     // let recipient_public_key_path = Path::new(recipient_key_path_str.trim());
+
+//     // // Verify the public key file exists
+//     // if !recipient_public_key_path.exists() {
+//     //     return Err(GpgError::PathError(format!(
+//     //         "Recipient's public key not found at: {}", 
+//     //         recipient_public_key_path.display()
+//     //     )));
+//     // }
+
+//     println!("\nProcessing with:");
+//     println!("Your signing key ID: {}", signing_key_id);
+//     println!("Recipient's public key: {}", recipient_public_key_path.display());
+//     println!("Address book file: {}", address_book_path.display());
+
+//     // Use our existing function to clearsign and encrypt the address book
+//     clearsign_and_encrypt_file_for_recipient(
+//         address_book_path,
+//         signing_key_id,
+//         recipient_public_key_path
+//     )?;
+
+//     println!("\nAddress book has been clearsigned and encrypted for {}!", recipient_name);
+//     println!("The encrypted file is in: invites_updates/outgoing/address_book.toml.gpg");
+    
+//     Ok(())
+// }
+
+
+
+// /// Process address book sharing for a specific recipient
+// /// 
+// /// # Arguments
+// /// * `recipient_name` - Name of the recipient to share with
+// /// 
+// /// # Returns
+// /// * `Ok(())` if the operation succeeds
+// /// * `Err(GpgError)` if any operation fails
+// fn incomingkey_share_address_book(recipient_name: &str) -> Result<(), GpgError> {
+//     println!("\nProcessing address book share for recipient: {}", recipient_name);
+    
+//     TODO: local owner user's uma key
+//     // Path to your address book
+//     let address_book_path = Path::new("address_book.toml");
+    
+//     // Your GPG signing key ID (in production, this would come from config)
+//     println!("\nTo get your signing key ID, run: $ gpg --list-keys --keyid-format=long");
+//     print!("Enter your GPG signing key ID: ");
+//     io::stdout().flush()
+//         .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
+    
+//     let mut signing_key_id = String::new();
+//     io::stdin()
+//         .read_line(&mut signing_key_id)
+//         .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
+//     let signing_key_id = signing_key_id.trim();
+
+//     // Validate signing key
+//     if signing_key_id.is_empty() {
+//         return Err(GpgError::ValidationError("No signing key ID provided".to_string()));
+//     }
+
+//     // // PLACEHOLDER: In production, this would look up the recipient's public key
+//     // // from your address book using recipient_name
+//     // println!("\nEnter path to recipient's public key file:");
+//     // let mut recipient_key_path_str = String::new();
+//     // io::stdin()
+//     //     .read_line(&mut recipient_key_path_str)
+//     //     .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
+//     // let recipient_public_key_path = Path::new(recipient_key_path_str.trim());
+    
+    
+//     let recipient_public_key_path = "invites_updates/incoming/key.asc";
+
+//     // Verify the public key file exists
+//     if !recipient_public_key_path.exists() {
+//         return Err(GpgError::PathError(format!(
+//             "Recipient's public key not found at: {}", 
+//             recipient_public_key_path.display()
+//         )));
+//     }
+
+//     println!("\nProcessing with:");
+//     println!("Your signing key ID: {}", signing_key_id);
+//     println!("Recipient's public key: {}", recipient_public_key_path.display());
+//     println!("Address book file: {}", address_book_path.display());
+
+//     // Use our existing function to clearsign and encrypt the address book
+//     clearsign_and_encrypt_file_for_recipient(
+//         address_book_path,
+//         signing_key_id,
+//         recipient_public_key_path
+//     )?;
+
+//     println!("\nAddress book has been clearsigned and encrypted for {}!", recipient_name);
+//     println!("The encrypted file is in: invites_updates/outgoing/address_book.toml.gpg");
+    
+//     Ok(())
+// }
+
+
+
+// /// Process address book sharing for a recipient using their imported key file
+// /// 
+// /// This function handles the process of sharing the local owner's address book with
+// /// a recipient whose public key has been placed in a predetermined location.
+// /// It retrieves the necessary GPG key information for the local owner,
+// /// clearsigns the address book with the owner's private key (using their key ID for reference),
+// /// and then encrypts it with the recipient's public key found in the incoming directory.
+// /// 
+// /// This approach is typically used for new collaborators who haven't been added
+// /// to the local address book yet.
+// /// 
+// /// # Arguments
+// /// * `recipient_name` - Name of the recipient to share with (for labeling purposes)
+// /// 
+// /// # Returns
+// /// * `Ok(())` if the operation succeeds
+// /// * `Err(GpgError)` if any operation fails
+// /// 
+// /// # Process Flow
+// /// 1. Get local owner's username and GPG key ID from configuration
+// /// 2. Verify the recipient's public key exists in the incoming directory
+// /// 3. Clearsign the address book using the owner's key ID
+// /// 4. Encrypt the signed document with the recipient's public key
+// /// 5. Save the encrypted file to the outgoing directory
+// fn share_lou_addressbook_with_incomingkey(recipient_name: &str) -> Result<(), GpgError> {
+//     println!("\nProcessing address book share for recipient: {}", recipient_name);
+    
+//     // Create output directory if it doesn't exist
+//     let output_dir = Path::new("invites_updates/outgoing");
+//     fs::create_dir_all(output_dir)
+//         .map_err(|e| GpgError::PathError(format!("Failed to create output directory: {}", e)))?;
+    
+//     // Get local owner username from configuration
+//     let local_owner_user_name = read_single_line_string("uma.toml", "local_owner_user")
+//         .map_err(|e| GpgError::ValidationError(format!("Failed to read local owner username: {}", e)))?;
+//     println!("Local owner username: {}", local_owner_user_name);
+    
+//     // Path to local owner's collaborator file
+//     let owner_collab_path = format!(
+//         "project_graph_data/collaborator_files_address_book/{}__collaborator.toml",
+//         local_owner_user_name
+//     );
+    
+//     // Get owner's GPG key ID - this is used to reference the private key for signing
+//     let owner_gpg_key_id = read_single_line_string(&owner_collab_path, "gpg_key_id")
+//         .map_err(|e| GpgError::ValidationError(format!("Failed to read owner's GPG key ID: {}", e)))?;
+//     println!("Owner's GPG key ID: {}", owner_gpg_key_id);
+    
+//     // Path to the address book file
+//     let address_book_path = Path::new("address_book.toml");
+    
+//     // Check if the address book file exists
+//     if !address_book_path.exists() {
+//         return Err(GpgError::PathError(format!(
+//             "Address book file not found at: {}", 
+//             address_book_path.display()
+//         )));
+//     }
+    
+//     // Path to recipient's public key file
+//     let recipient_public_key_path = Path::new(PATH_TO_INCOMING_PUBLICGPG_KEYASC);
+
+//     // Verify the public key file exists
+//     if !recipient_public_key_path.exists() {
+//         return Err(GpgError::PathError(format!(
+//             "Recipient's public key not found at: {}", 
+//             recipient_public_key_path.display()
+//         )));
+//     }
+
+//     println!("\nProcessing with:");
+//     println!("Your signing key ID (references your private key): {}", owner_gpg_key_id);
+//     println!("Recipient's public key: {}", recipient_public_key_path.display());
+//     println!("Address book file: {}", address_book_path.display());
+
+//     // Use our existing function to clearsign and encrypt the address book
+//     clearsign_and_encrypt_file_for_recipient(
+//         address_book_path,
+//         &owner_gpg_key_id,
+//         recipient_public_key_path
+//     )?;
+
+//     println!("\nAddress book has been clearsigned and encrypted for {}!", recipient_name);
+//     println!("The encrypted file is in: invites_updates/outgoing/address_book.toml.gpg");
+    
+//     Ok(())
+// }
+
+// /// Path to incoming public GPG key file
+// const PATH_TO_INCOMING_PUBLICGPG_KEYASC: &str = "invites_updates/incoming/key.asc";
+
+/// Share the Local Owner User's (LOU) address book with a new collaborator using their incoming key
+/// 
+/// This function handles the secure sharing of the LOCAL OWNER USER'S address book file
+/// with a new collaborator whose public GPG key has been placed in the incoming directory.
+///
+/// Specifically, this function:
+/// 1. Identifies the local owner user's address book file (their collaborator.toml)
+/// 2. Retrieves the local owner user's GPG key ID for signing
+/// 3. Uses the recipient's public key from the incoming directory for encryption
+/// 4. Clearsigns the LOCAL OWNER USER'S address book file using the owner's GPG key
+/// 5. Encrypts this signed file with the recipient's public key
+/// 6. Saves the encrypted file to the outgoing directory for sharing
+///
+/// This process differs from sharing with an existing collaborator because it uses
+/// a public key file provided externally rather than one already in the address book.
+///
+/// This enables secure sharing of contact information while ensuring:
+/// - The recipient can verify the file came from the claimed sender (via signature)
+/// - Only the intended recipient can decrypt the file (via their public key encryption)
+/// 
+/// # Arguments
+/// * `recipient_name` - Name of the new collaborator to share the LOCAL OWNER USER'S address book with
+///                      (used for labeling purposes only, as their info isn't in the system yet)
+/// 
+/// # Returns
+/// * `Ok(())` if the operation succeeds
+/// * `Err(GpgError)` if any operation fails
+///
+/// # File Flow
+/// - Source file: project_graph_data/collaborator_files_address_book/{LOCAL_OWNER_USER}__collaborator.toml
+/// - Recipient key: invites_updates/incoming/key.asc (must be placed there before calling this function)
+/// - Output file: invites_updates/outgoing/{LOCAL_OWNER_USER}__collaborator.toml.gpg
+///
+/// # Dependencies
+/// - Uses constant PATH_TO_INCOMING_PUBLICGPG_KEYASC for the location of the incoming key
+/// - For safe toml handling as 'clearsign_toml', fields from addressbook files are read with:
+///   - read_singleline_string_from_clearsigntoml() for single-line fields
+///   - read_multiline_string_from_clearsigntoml() for multi-line fields
+fn share_lou_addressbook_with_incomingkey() -> Result<(), GpgError> {
+    println!("\nSharing LOCAL OWNER USER'S address book with new collaborator.");
+    println!("Using their public key from incoming directory");
+
+    // Create output directory if it doesn't exist
+    // This is where the encrypted LOCAL OWNER USER'S address book will be saved
+    let output_dir = Path::new("invites_updates/outgoing");
+    fs::create_dir_all(output_dir)
+        .map_err(|e| GpgError::PathError(format!("Failed to create output directory: {}", e)))?;
+    
+    // Get local owner username from configuration
+    // This identifies WHICH address book we will be sharing (the LOCAL OWNER USER'S)
+    let local_owner_user_name = read_single_line_string_field_from_toml("uma.toml", "local_owner_user")
+        .map_err(|e| GpgError::ValidationError(format!("Failed to read local owner username: {}", e)))?;
+    println!("Local owner username (whose address book we are sharing): {}", local_owner_user_name);
+    
+    // Path to the LOCAL OWNER USER'S address book file
+    // THIS IS THE EXACT FILE WE WANT TO SHARE - the local owner's own address book
+    let local_owner_address_book_path = format!(
+        "project_graph_data/collaborator_files_address_book/{}__collaborator.toml",
+        local_owner_user_name
+    );
+    
+    // Verify the LOCAL OWNER USER'S address book file exists
+    if !Path::new(&local_owner_address_book_path).exists() {
+        return Err(GpgError::PathError(format!(
+            "LOCAL OWNER USER'S address book file not found at: {}", 
+            local_owner_address_book_path
+        )));
+    }
+    
+    // Get LOCAL OWNER USER'S GPG key ID - this is used to reference the private key for signing
+    // We are using the LOCAL OWNER USER'S key to sign THEIR OWN address book
+    let owner_gpg_key_id = read_singleline_string_from_clearsigntoml(&local_owner_address_book_path, "gpg_key_id")
+        .map_err(|e| GpgError::ValidationError(format!("Failed to read LOCAL OWNER USER'S GPG key ID: {}", e)))?;
+    println!("LOCAL OWNER USER'S GPG key ID (for signing their address book): {}", owner_gpg_key_id);
+    
+    // Path to recipient's public key file in the incoming directory
+    // This key was placed here externally as this is a new collaborator
+    let recipient_public_key_path = Path::new(PATH_TO_INCOMING_PUBLICGPG_KEYASC);
+
+    // Verify the recipient's public key file exists in the incoming directory
+    if !recipient_public_key_path.exists() {
+        return Err(GpgError::PathError(format!(
+            "Recipient's public key not found at: {}", 
+            recipient_public_key_path.display()
+        )));
+    }
+
+    println!("\nProcessing with:");
+    println!("LOCAL OWNER USER'S signing key ID: {}", owner_gpg_key_id);
+    println!("Recipient's public key file: {}", recipient_public_key_path.display());
+    println!("LOCAL OWNER USER'S address book file to be shared: {}", local_owner_address_book_path);
+    
+    // Use our existing function to clearsign and encrypt the LOCAL OWNER USER'S address book
+    // We are:
+    // 1. Taking the LOCAL OWNER USER'S address book file as input
+    // 2. Signing it with the LOCAL OWNER USER'S private key (via their key ID)
+    // 3. Encrypting it with the recipient's public key from the incoming directory
+    clearsign_and_encrypt_file_for_recipient(
+        Path::new(&local_owner_address_book_path),  // THE LOCAL OWNER USER'S ADDRESS BOOK
+        &owner_gpg_key_id,                         // LOCAL OWNER USER'S KEY FOR SIGNING
+        recipient_public_key_path                  // RECIPIENT'S PUBLIC KEY FOR ENCRYPTION (from incoming dir)
+    )?;
+    
+    println!("\nLOCAL OWNER USER'S address book has been clearsigned and encrypted.");
+    println!("The encrypted LOCAL OWNER USER'S address book file is saved to:");
+    println!("invites_updates/outgoing/{}__collaborator.toml.gpg", local_owner_user_name);
+    
+    println!("\nImportant: After sending this file to the recipient, you may want to add them");
+    println!("to your address book using their public key from: {}", PATH_TO_INCOMING_PUBLICGPG_KEYASC);
+    
+    Ok(())
+}
+
+/// TODO needs extensive doc string
+/// 
 pub fn invite_wizard() -> Result<(), GpgError> {
     /*
     1. Export your public gpg key to share [Done]
@@ -8314,27 +9369,38 @@ pub fn invite_wizard() -> Result<(), GpgError> {
        get user name
        use user name to get their gpg key from their addressbook file
        gpg encrypt the clearsign file
+       
+       TODO:
+       maybe activate HOME reboot-uma command to keep 'out of band'
+       
+       
     */
-    println!("There are three steps...");
+    println!(">> Invite Update Wizard <<");    
+    println!("\nThere are three steps...");
     println!("1. share gpg");
     println!("2. share address-book file");
     println!("3. share team-channel (if you own it)");
 
-    println!("Q: Which are you doing?");
-
+    println!("\nQ: Which step do you want to do now?");
+    println!("(Enter: number + enter)");
     let mut input = String::new();
     io::stdin().read_line(&mut input).expect("Failed to read line");
 
-    let choice: u32 = match input.trim().parse() {
+    let mainchoice: u32 = match input.trim().parse() {
         Ok(num) => num,
         Err(_) => {
-            println!("Please type a number.");
+            // println!("\nThere are three steps...");
+            // println!("1. share gpg");
+            // println!("2. share address-book file");
+            // println!("3. share team-channel (if you own it)");
+            println!("Please try again entering a number.");
             return Ok(());
         }
     };
 
-    match choice {
+    match mainchoice {
         1 => {
+            println!("\n\n-- Option 1: share a public gpg key --");   
             let uma_config_path = Path::new("uma.toml");
             let output_dir = Path::new("invites_updates/outgoing");
 
@@ -8342,6 +9408,11 @@ pub fn invite_wizard() -> Result<(), GpgError> {
                 Ok(key_path) => println!("GPG key exported successfully to: {}", key_path),
                 Err(e) => eprintln!("Failed to export GPG key: {}", e),
             }
+            // Pause and wait for the user to press Enter
+            println!("\nHit enter to proceed...");
+            let mut input = String::new();
+            io::stdin().read_line(&mut input).expect("Failed to read line");
+
         },
         // 2 => {
         //     // Add code to share address-book file here
@@ -8361,13 +9432,119 @@ pub fn invite_wizard() -> Result<(), GpgError> {
         //     */
         // },
         2 => {
-            println!("\nEnter recipient's name:");
-            let mut recipient_name = String::new();
+            println!("\n\n-- Option 2: Sharing an Address-Book-File --");    
+            println!("\nAre you sharing your address book file with...");
+            println!(" 1. an existing remote-collaborator? or ");
+            println!(" 2. a new remote-collaborator?");
+            println!(" ");
+            println!("Or ");
+            println!(" 3. Do you want to import an address-book-file");
+            println!("    being shared with you (by a remote collaborator)?");
+            println!(" ");
+            println!("(Enter: number + enter)");
+
+            // Re-read another input for subchoice, kind of like... peanut butter...in a sand witch.
+            let mut sub_input = String::new();
             io::stdin()
-                .read_line(&mut recipient_name)
-                .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
-            
-            share_address_book(recipient_name.trim())?;
+                .read_line(&mut sub_input)
+                .map_err(|e| GpgError::GpgOperationError(format!("Failed to read subchoice: {}", e)))?;
+
+            let subchoice: u32 = match sub_input.trim().parse() {
+                Ok(num) => num,
+                Err(_) => {
+                    println!("Please try again entering a number.");
+                    return Ok(());
+                }
+            };
+        
+            match subchoice {
+                1 => {
+                    println!(" --- to existing remote collaborator --- ");
+                    println!("What is the user-name of the existing");
+                    println!("remote collaborator? (Enter: name + enter)");
+                    /*
+                        The file where the user's gpg key is located is found here:
+                        
+                        ```path
+                        project_graph_data/collaborator_files_address_book/USERNAMEHERE__collaborator.toml
+                        ```
+                        
+                        
+                        within the file, the gpg key (public) is found:
+                        gpg_key_public = """KEYHERE"""
+                        
+                        clearsign read toml?
+                        
+                    // For toml and clearsigntoml
+                    mod read_toml_field;
+                    use crate::read_toml_field::{
+                        read_field_from_toml,
+                        read_basename_fields_from_toml,
+                        read_single_line_string,
+                        read_multi_line_string, 
+                        read_integer_array,
+                        read_singleline_string_from_clearsigntoml,
+                    }; 
+                                            
+                    reading addressbook files ALW
+                    pub fn read_singleline_string_from_clearsigntoml(path_to_clearsigntoml_with_gpgkey: &str, field_name: &str) -> Result<String, String> {
+                    */
+                    let mut username_of_remote_collaborator = String::new();
+                    io::stdin()
+                        .read_line(&mut username_of_remote_collaborator)
+                        .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
+                    
+                    debug_log!("username_of_remote_collaborator -> {}", username_of_remote_collaborator);
+                    
+                    share_lou_address_book_with_existingcollaborator(username_of_remote_collaborator.trim())?;
+                    }
+                2 => {
+                    println!(" --- to new remote collaborator --- ");
+                    println!("Please put the remote collaborator's gpg key.asc file");
+                    println!(" in this path (in this directory) -> ");
+                    println!(" ");
+                    println!("```path ");
+                    println!("invites_updates/incoming/key.asc ");
+                    println!("``` ");
+                    println!(" ");
+                    println!("Then, press Enter when this is done.\n");
+                    let mut username_of_remote_collaborator = String::new();
+                    io::stdin()
+                        .read_line(&mut username_of_remote_collaborator)
+                        .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
+                    
+                    share_lou_addressbook_with_incomingkey()?;
+
+                    }
+                    /*
+                    ```path
+                    project_graph_data/collaborator_files_address_book/USERNAMEHERE__collaborator.toml
+                    ```
+                    */
+
+                3 => {
+                    println!(" --- FROM a remote collaborator, TO you --- ");
+                    println!("Please put their FILENAME.asc file in the");
+                    println!("```path");
+                    println!("invites_updates/incoming/ ");
+                    println!("```");
+                    println!("directory (folder)");
+                    println!("Press enter when this is done.");
+                    
+                    /*TODO logic to target that directory...
+                    1. look in that directory
+                    2. decrypt gpg file
+                    3. check clearsign of resulting file (should be a clearsign_toml file)
+                    4. likely: make a new utility function to self_check_clearsign_toml(path_to_clearsign_toml)
+                    */
+                    
+                    
+                    }
+                // Handle cases where subchoice is 0 or ≥ 4
+                _ => {
+                    println!("Invalid option. Please select 1, 2, or 3.");
+                }
+            }
         },
         3 => {
             println!("Team channel sharing - Not implemented yet");
@@ -8377,7 +9554,7 @@ pub fn invite_wizard() -> Result<(), GpgError> {
         _ => {
             return Err(GpgError::GpgOperationError("Invalid choice".to_string()));
         }
-    // }
+
         _ => println!("Invalid choice."),
     }
     Ok(())
@@ -8434,7 +9611,9 @@ fn handle_command_main_mode(
             
             "sharegpg" | "exportgpg" | "requestinvite" => {
                 debug_log("Export public GPG Command:");
-                // Display help information
+
+                // paths are always the same 
+                // TODO make paths constants
                 let uma_config_path = Path::new("uma.toml");
                 let output_dir = Path::new("invites_updates/outgoing");
                 
@@ -9676,133 +10855,6 @@ fn update_node_path_in_toml(new_node_path: &Path) -> Result<(), ThisProjectError
 
     debug_log!("Successfully updated node.toml directory path.");
     Ok(())
-}
-
-/// The function reads a single line from a TOML file that starts with a specified field name
-/// and ends with a value. The function returns an empty string if the field is not found, and
-/// does not panic or unwrap in case of errors. The function uses only standard Rust libraries
-/// and does not introduce unnecessary dependencies.
-///
-/// design:
-/// 0. start with an empty string to return by default
-/// 1. get file at path
-/// 2. open as text
-/// 3. iterate through rows
-/// 4. look for filed name as start of string the " = "
-/// 5. grab that whole row of text
-/// 6. remove "fieldname = " from the beginning
-/// 7. remove '" ' and trailing spaces from the end
-/// 8. return that string, if any
-/// by default, return an empty string, if anything goes wrong, 
-/// handle the error, and return an empty string
-///
-/// requires:
-/// use std::fs::File;
-/// use std::io::{self, BufRead};
-///
-/// example use:
-///     let value = read_field_from_toml("test.toml", "fieldname");
-///
-fn read_field_from_toml(path: &str, field_name: &str) -> String {
-    // Validate input parameters
-    if path.is_empty() || field_name.is_empty() {
-        println!("Error: Empty path or field name provided");
-        return String::new();
-    }
-
-    // Verify file extension
-    if !path.to_lowercase().ends_with(".toml") {
-        println!("Warning: File does not have .toml extension: {}", path);
-    }
-
-    // Debug print statement
-    println!("Attempting to open file at path: {}", path);
-
-    // Open the file at the specified path
-    let file = match File::open(path) {
-        Ok(file) => file,
-        Err(e) => {
-            // More detailed error reporting
-            println!("Failed to open file at path: {}. Error: {}", path, e);
-            return String::new();
-        },
-    };
-
-    // Debug print statement
-    println!("Successfully opened file at path: {}", path);
-
-    // Create a buffered reader to read the file line by line
-    let reader = io::BufReader::new(file);
-
-    // Keep track of line numbers for better error reporting
-    let mut line_number = 0;
-
-    // Iterate through each line in the file
-    for line_result in reader.lines() {
-        line_number += 1;
-
-        // Handle line reading errors
-        let line = match line_result {
-            Ok(line) => line,
-            Err(e) => {
-                println!("Error reading line {}: {}", line_number, e);
-                continue;
-            }
-        };
-
-        // Skip empty lines and comments
-        if line.trim().is_empty() || line.trim_start().starts_with('#') {
-            continue;
-        }
-
-        // Debug print statement
-        println!("Processing line {}: {}", line_number, line);
-
-        // Check if line starts with field name
-        if line.trim_start().starts_with(field_name) {
-            // Debug print statement
-            println!("Found field '{}' on line {}", field_name, line_number);
-
-            // Split the line by '=' and handle malformed lines
-            let parts: Vec<&str> = line.splitn(2, '=').collect();
-            if parts.len() != 2 {
-                println!("Malformed TOML line {} - missing '=': {}", line_number, line);
-                continue;
-            }
-
-            let key = parts[0].trim();
-            let value = parts[1].trim();
-
-            // Verify exact field name match (avoiding partial matches)
-            if key != field_name {
-                continue;
-            }
-
-            // Handle empty values
-            if value.is_empty() {
-                println!("Warning: Empty value found for field '{}'", field_name);
-                return String::new();
-            }
-
-            // Debug print statement
-            println!("Extracted value: {}", value);
-
-            // Clean up the value: remove quotes and trim spaces
-            let cleaned_value = value.trim().trim_matches('"').trim();
-            
-            // Verify the cleaned value isn't empty
-            if cleaned_value.is_empty() {
-                println!("Warning: Value became empty after cleaning for field '{}'", field_name);
-                return String::new();
-            }
-
-            return cleaned_value.to_string();
-        }
-    }
-
-    // If we get here, the field wasn't found
-    println!("Field '{}' not found in file", field_name);
-    String::new()
 }
 
 /// Updates a specified field in a TOML file with a new value.

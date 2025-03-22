@@ -13,7 +13,7 @@
 / \
 ```
 "A knight on the fifth rank is worth (at least) two pawns."
-~ Gary Kasparov (a favored quote of Hikaru Nakamura)
+~ Gary Kasparov (a favored quote as paraphrased by Hikaru Nakamura)
 
 ## Scope and Goals:
 Uma's primary goal is to provide simple, secure, and decentralized collaboration tools for small (maker, build, and research) teams collaborating on projects.
@@ -36,8 +36,8 @@ Accessible: Students, startups, and anyone with limited resources should still b
 - Data-STEM 
 - Productive 
 - Projects
-
-Many activities do not include these characteristics. That is fine. If a project does, Uma should be useful.  
+Uma is focused on this use-case specifically.
+Not all activities include these characteristics.
 
 # Best Practice
 ## Definition Behavior & System Collapse
