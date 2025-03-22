@@ -258,6 +258,10 @@ pub fn read_basename_fields_from_toml(path: &str, base_name: &str) -> Vec<String
 /// # Returns
 /// * `Result<String, String>` - The field value or an error message
 pub fn read_single_line_string_field_from_toml(path: &str, field_name: &str) -> Result<String, String> {
+    
+    // inspection prints
+    // println!("starting read_single_line_string_field_from_toml -> {:?}{:?}",&path, &field_name);
+    
     let file = File::open(path)
         .map_err(|e| format!("Failed to open file: {}", e))?;
     
