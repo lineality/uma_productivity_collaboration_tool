@@ -9454,6 +9454,119 @@ fn share_lou_address_book_with_existingcollaborator(recipient_name: &str) -> Res
 // /// Path to incoming public GPG key file
 // const PATH_TO_INCOMING_PUBLICGPG_KEYASC: &str = "invites_updates/incoming/key.asc";
 
+// /// Share the Local Owner User's (LOU) address book with a new collaborator using their incoming key
+// /// 
+// /// This function handles the secure sharing of the LOCAL OWNER USER'S address book file
+// /// with a new collaborator whose public GPG key has been placed in the incoming directory.
+// ///
+// /// Specifically, this function:
+// /// 1. Identifies the local owner user's address book file (their collaborator.toml)
+// /// 2. Retrieves the local owner user's GPG key ID for signing
+// /// 3. Uses the recipient's public key from the incoming directory for encryption
+// /// 4. Clearsigns the LOCAL OWNER USER'S address book file using the owner's GPG key
+// /// 5. Encrypts this signed file with the recipient's public key
+// /// 6. Saves the encrypted file to the outgoing directory for sharing
+// ///
+// /// This process differs from sharing with an existing collaborator because it uses
+// /// a public key file provided externally rather than one already in the address book.
+// ///
+// /// This enables secure sharing of contact information while ensuring:
+// /// - The recipient can verify the file came from the claimed sender (via signature)
+// /// - Only the intended recipient can decrypt the file (via their public key encryption)
+// /// 
+// /// # Arguments
+// /// * `recipient_name` - Name of the new collaborator to share the LOCAL OWNER USER'S address book with
+// ///                      (used for labeling purposes only, as their info isn't in the system yet)
+// /// 
+// /// # Returns
+// /// * `Ok(())` if the operation succeeds
+// /// * `Err(GpgError)` if any operation fails
+// ///
+// /// # File Flow
+// /// - Source file: project_graph_data/collaborator_files_address_book/{LOCAL_OWNER_USER}__collaborator.toml
+// /// - Recipient key: invites_updates/incoming/key.asc (must be placed there before calling this function)
+// /// - Output file: invites_updates/outgoing/{LOCAL_OWNER_USER}__collaborator.toml.gpg
+// ///
+// /// # Dependencies
+// /// - Uses constant PATH_TO_INCOMING_PUBLICGPG_KEYASC for the location of the incoming key
+// /// - For safe toml handling as 'clearsign_toml', fields from addressbook files are read with:
+// ///   - read_singleline_string_from_clearsigntoml() for single-line fields
+// ///   - read_multiline_string_from_clearsigntoml() for multi-line fields
+// fn share_lou_addressbook_with_incomingkey() -> Result<(), GpgError> {
+//     println!("\nSharing LOCAL OWNER USER'S address book with new collaborator.");
+//     println!("Using their public key from incoming directory");
+
+//     // Create output directory if it doesn't exist
+//     // This is where the encrypted LOCAL OWNER USER'S address book will be saved
+//     let output_dir = Path::new("invites_updates/outgoing");
+//     fs::create_dir_all(output_dir)
+//         .map_err(|e| GpgError::PathError(format!("Failed to create output directory: {}", e)))?;
+    
+//     // Get local owner username from configuration
+//     // This identifies WHICH address book we will be sharing (the LOCAL OWNER USER'S)
+//     let local_owner_user_name = read_single_line_string_field_from_toml("uma.toml", "uma_local_owner_user")
+//         .map_err(|e| GpgError::ValidationError(format!("Failed to read local owner username: {}", e)))?;
+//     println!("Local owner username (whose address book we are sharing): {}", local_owner_user_name);
+    
+//     // Path to the LOCAL OWNER USER'S address book file
+//     // THIS IS THE EXACT FILE WE WANT TO SHARE - the local owner's own address book
+//     let local_owner_address_book_path = format!(
+//         "project_graph_data/collaborator_files_address_book/{}__collaborator.toml",
+//         local_owner_user_name
+//     );
+    
+//     // Verify the LOCAL OWNER USER'S address book file exists
+//     if !Path::new(&local_owner_address_book_path).exists() {
+//         return Err(GpgError::PathError(format!(
+//             "LOCAL OWNER USER'S address book file not found at: {}", 
+//             local_owner_address_book_path
+//         )));
+//     }
+    
+//     // Get LOCAL OWNER USER'S GPG key ID - this is used to reference the private key for signing
+//     // We are using the LOCAL OWNER USER'S key to sign THEIR OWN address book
+//     let owner_gpg_key_id = read_singleline_string_from_clearsigntoml(&local_owner_address_book_path, "gpg_publickey_id")
+//         .map_err(|e| GpgError::ValidationError(format!("Failed to read LOCAL OWNER USER'S GPG key ID: {}", e)))?;
+//     println!("LOCAL OWNER USER'S GPG key ID (for signing their address book): {}", owner_gpg_key_id);
+    
+//     // Path to recipient's public key file in the incoming directory
+//     // This key was placed here externally as this is a new collaborator
+//     let recipient_public_key_path = Path::new(PATH_TO_INCOMING_PUBLICGPG_KEYASC);
+
+//     // Verify the recipient's public key file exists in the incoming directory
+//     if !recipient_public_key_path.exists() {
+//         return Err(GpgError::PathError(format!(
+//             "Recipient's public key not found at: {}", 
+//             recipient_public_key_path.display()
+//         )));
+//     }
+
+//     println!("\nProcessing with:");
+//     println!("LOCAL OWNER USER'S signing key ID: {}", owner_gpg_key_id);
+//     println!("Recipient's public key file: {}", recipient_public_key_path.display());
+//     println!("LOCAL OWNER USER'S address book file to be shared: {}", local_owner_address_book_path);
+    
+//     // Use our existing function to clearsign and encrypt the LOCAL OWNER USER'S address book
+//     // We are:
+//     // 1. Taking the LOCAL OWNER USER'S address book file as input
+//     // 2. Signing it with the LOCAL OWNER USER'S private key (via their key ID)
+//     // 3. Encrypting it with the recipient's public key from the incoming directory
+//     clearsign_and_encrypt_file_for_recipient(
+//         Path::new(&local_owner_address_book_path),  // THE LOCAL OWNER USER'S ADDRESS BOOK
+//         &owner_gpg_key_id,                         // LOCAL OWNER USER'S KEY FOR SIGNING
+//         recipient_public_key_path                  // RECIPIENT'S PUBLIC KEY FOR ENCRYPTION (from incoming dir)
+//     )?;
+    
+//     println!("\nLOCAL OWNER USER'S address book has been clearsigned and encrypted.");
+//     println!("The encrypted LOCAL OWNER USER'S address book file is saved to:");
+//     println!("invites_updates/outgoing/{}__collaborator.toml.gpg", local_owner_user_name);
+    
+//     println!("\nImportant: After sending this file to the recipient, you may want to add them");
+//     println!("to your address book using their public key from: {}", PATH_TO_INCOMING_PUBLICGPG_KEYASC);
+    
+//     Ok(())
+// }
+
 /// Share the Local Owner User's (LOU) address book with a new collaborator using their incoming key
 /// 
 /// This function handles the secure sharing of the LOCAL OWNER USER'S address book file
@@ -9466,6 +9579,14 @@ fn share_lou_address_book_with_existingcollaborator(recipient_name: &str) -> Res
 /// 4. Clearsigns the LOCAL OWNER USER'S address book file using the owner's GPG key
 /// 5. Encrypts this signed file with the recipient's public key
 /// 6. Saves the encrypted file to the outgoing directory for sharing
+///
+/// # Path Handling
+/// IMPORTANT: All file and directory paths in this function are resolved relative to the
+/// executable's directory location, NOT the current working directory. This ensures consistent
+/// behavior regardless of where the program is executed from.
+///
+/// The function automatically converts all paths to absolute paths based on the executable's
+/// location before performing any file operations.
 ///
 /// This process differs from sharing with an existing collaborator because it uses
 /// a public key file provided externally rather than one already in the address book.
@@ -9482,10 +9603,15 @@ fn share_lou_address_book_with_existingcollaborator(recipient_name: &str) -> Res
 /// * `Ok(())` if the operation succeeds
 /// * `Err(GpgError)` if any operation fails
 ///
+/// # Errors
+/// * `GpgError::PathError` - If required files/directories don't exist or can't be created
+/// * `GpgError::ValidationError` - If required data can't be read from configuration files
+/// * `GpgError::EncryptionError` - If GPG encryption operations fail
+///
 /// # File Flow
-/// - Source file: project_graph_data/collaborator_files_address_book/{LOCAL_OWNER_USER}__collaborator.toml
-/// - Recipient key: invites_updates/incoming/key.asc (must be placed there before calling this function)
-/// - Output file: invites_updates/outgoing/{LOCAL_OWNER_USER}__collaborator.toml.gpg
+/// - Source file: {EXECUTABLE_DIR}/project_graph_data/collaborator_files_address_book/{LOCAL_OWNER_USER}__collaborator.toml
+/// - Recipient key: {EXECUTABLE_DIR}/invites_updates/incoming/key.asc (must be placed there before calling this function)
+/// - Output file: {EXECUTABLE_DIR}/invites_updates/outgoing/{LOCAL_OWNER_USER}__collaborator.toml.gpg
 ///
 /// # Dependencies
 /// - Uses constant PATH_TO_INCOMING_PUBLICGPG_KEYASC for the location of the incoming key
@@ -9495,56 +9621,110 @@ fn share_lou_address_book_with_existingcollaborator(recipient_name: &str) -> Res
 fn share_lou_addressbook_with_incomingkey() -> Result<(), GpgError> {
     println!("\nSharing LOCAL OWNER USER'S address book with new collaborator.");
     println!("Using their public key from incoming directory");
+    debug_log("\nstarting -> SLABIK fn share_lou_addressbook_with_incomingkey()");
 
-    // Create output directory if it doesn't exist
-    // This is where the encrypted LOCAL OWNER USER'S address book will be saved
-    let output_dir = Path::new("invites_updates/outgoing");
-    fs::create_dir_all(output_dir)
+    // Create output directory using absolute path relative to executable
+    let relative_output_dir = "invites_updates/outgoing";
+    let absolute_output_dir = make_input_path_name_abs_executabledirectoryrelative_nocheck(relative_output_dir)
+        .map_err(|e| GpgError::PathError(format!("SLABIK Failed to resolve output directory path: {}", e)))?;
+    
+    debug_log!("SLABIK Output directory absolute path: {}", absolute_output_dir.display());
+    debug_log!("SLABIK Output directory exists? {}", absolute_output_dir.exists());
+    
+    // Create the output directory if it doesn't exist
+    fs::create_dir_all(&absolute_output_dir)
         .map_err(|e| GpgError::PathError(format!("Failed to create output directory: {}", e)))?;
     
-    // Get local owner username from configuration
-    // This identifies WHICH address book we will be sharing (the LOCAL OWNER USER'S)
-    let local_owner_user_name = read_single_line_string_field_from_toml("uma.toml", "local_owner_user")
-        .map_err(|e| GpgError::ValidationError(format!("Failed to read local owner username: {}", e)))?;
+    debug_log!("SLABIK Output directory created successfully? {}", absolute_output_dir.exists());
+    
+    // Get absolute path to uma.toml configuration file
+    let relative_uma_toml_path = "uma.toml";
+    let absolute_uma_toml_path = make_file_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_uma_toml_path)
+        .map_err(|e| GpgError::PathError(format!("SLABIK Failed to locate uma.toml configuration file: {}", e)))?;
+    
+    debug_log!("SLABIK UMA TOML absolute path: {}", absolute_uma_toml_path.display());
+    debug_log!("SLABIK UMA TOML file exists: {}", absolute_uma_toml_path.exists());
+    
+    // Get local owner username from configuration - REFACTORED FOR DEBUGGING
+    // Convert PathBuf to string first
+    let absolute_uma_toml_path_str = absolute_uma_toml_path
+        .to_str()
+        .ok_or_else(|| GpgError::PathError("SLABIK Unable to convert UMA TOML path to string".to_string()))?;
+
+    // Log the exact string that will be used by the TOML reader
+    debug_log!("SLABIK Attempting to read from UMA TOML file at path string: {}", absolute_uma_toml_path_str);
+
+    // Now attempt to read the actual field value
+    let local_owner_user_name = read_single_line_string_field_from_toml(
+        absolute_uma_toml_path_str, 
+        "uma_local_owner_user"
+    ).map_err(|e| GpgError::ValidationError(format!("Failed to read local owner username: {}", e)))?;
+
+    debug_log!("SLABIK Successfully read local_owner_user_name: {}", &local_owner_user_name);
     println!("Local owner username (whose address book we are sharing): {}", local_owner_user_name);
     
-    // Path to the LOCAL OWNER USER'S address book file
-    // THIS IS THE EXACT FILE WE WANT TO SHARE - the local owner's own address book
-    let local_owner_address_book_path = format!(
-        "project_graph_data/collaborator_files_address_book/{}__collaborator.toml",
-        local_owner_user_name
-    );
+    // Get absolute path to the collaborator files directory
+    let relative_collab_dir = "project_graph_data/collaborator_files_address_book";
+    let absolute_collab_dir = make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_collab_dir)
+        .map_err(|e| GpgError::PathError(format!("SLABIK Failed to locate collaborator files directory: {}", e)))?;
+    
+    debug_log!("SLABIK Collaborator directory absolute path: {}", absolute_collab_dir.display());
+    
+    // Path to the LOCAL OWNER USER'S address book file (absolute path)
+    let local_owner_address_book_filename = format!("{}__collaborator.toml", local_owner_user_name);
+    let absolute_local_owner_address_book_path = absolute_collab_dir.join(&local_owner_address_book_filename);
+    
+    debug_log!("SLABIK Absolute local owner address book path: {}", absolute_local_owner_address_book_path.display());
     
     // Verify the LOCAL OWNER USER'S address book file exists
-    if !Path::new(&local_owner_address_book_path).exists() {
+    if !absolute_local_owner_address_book_path.exists() {
         return Err(GpgError::PathError(format!(
             "LOCAL OWNER USER'S address book file not found at: {}", 
-            local_owner_address_book_path
+            absolute_local_owner_address_book_path.display()
         )));
     }
     
-    // Get LOCAL OWNER USER'S GPG key ID - this is used to reference the private key for signing
-    // We are using the LOCAL OWNER USER'S key to sign THEIR OWN address book
-    let owner_gpg_key_id = read_singleline_string_from_clearsigntoml(&local_owner_address_book_path, "gpg_key_id")
-        .map_err(|e| GpgError::ValidationError(format!("Failed to read LOCAL OWNER USER'S GPG key ID: {}", e)))?;
+    debug_log!("SLABIK LOCAL OWNER USER'S address book file exists: {}", absolute_local_owner_address_book_path.exists());
+    
+    // Get LOCAL OWNER USER'S GPG key ID - REFACTORED FOR DEBUGGING
+    // First convert the absolute path to a string
+    let absolute_local_owner_address_book_path_str = absolute_local_owner_address_book_path
+        .to_str()
+        .ok_or_else(|| GpgError::PathError(
+            format!("SLABIK Unable to convert local owner address book path to string: {}", 
+                    absolute_local_owner_address_book_path.display())
+        ))?;
+
+    // Log the exact path string being used for TOML reading
+    debug_log!("SLABIK Attempting to read GPG key ID from file at path: {}", absolute_local_owner_address_book_path_str);
+
+    // Now attempt to read the GPG key ID field
+    let owner_gpg_key_id = read_singleline_string_from_clearsigntoml(
+        absolute_local_owner_address_book_path_str, 
+        "gpg_publickey_id"
+    ).map_err(|e| {
+        debug_log!("ERROR: SLABIK Failed to read GPG key ID with field name 'gpg_publickey_id'");
+        GpgError::ValidationError(format!("SLABIK Failed to read LOCAL OWNER USER'S GPG key ID: {}", e))
+    })?;
+
+    debug_log!("SLABIK Successfully read owner_gpg_key_id: {}", &owner_gpg_key_id);
     println!("LOCAL OWNER USER'S GPG key ID (for signing their address book): {}", owner_gpg_key_id);
     
-    // Path to recipient's public key file in the incoming directory
-    // This key was placed here externally as this is a new collaborator
-    let recipient_public_key_path = Path::new(PATH_TO_INCOMING_PUBLICGPG_KEYASC);
+    // Path to recipient's public key file in the incoming directory with absolute path
+    let relative_incoming_key_path = PATH_TO_INCOMING_PUBLICGPG_KEYASC;
+    let absolute_recipient_public_key_path = make_file_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_incoming_key_path)
+        .map_err(|e| GpgError::PathError(format!(
+            "Recipient's public key not found at: {} - Error: {}", 
+            relative_incoming_key_path, e
+        )))?;
 
-    // Verify the recipient's public key file exists in the incoming directory
-    if !recipient_public_key_path.exists() {
-        return Err(GpgError::PathError(format!(
-            "Recipient's public key not found at: {}", 
-            recipient_public_key_path.display()
-        )));
-    }
+    debug_log!("SLABIK Absolute recipient public key path: {}", absolute_recipient_public_key_path.display());
+    debug_log!("SLABIK Recipient public key file exists: {}", absolute_recipient_public_key_path.exists());
 
     println!("\nProcessing with:");
     println!("LOCAL OWNER USER'S signing key ID: {}", owner_gpg_key_id);
-    println!("Recipient's public key file: {}", recipient_public_key_path.display());
-    println!("LOCAL OWNER USER'S address book file to be shared: {}", local_owner_address_book_path);
+    println!("Recipient's public key file: {}", absolute_recipient_public_key_path.display());
+    println!("LOCAL OWNER USER'S address book file to be shared: {}", absolute_local_owner_address_book_path.display());
     
     // Use our existing function to clearsign and encrypt the LOCAL OWNER USER'S address book
     // We are:
@@ -9552,18 +9732,22 @@ fn share_lou_addressbook_with_incomingkey() -> Result<(), GpgError> {
     // 2. Signing it with the LOCAL OWNER USER'S private key (via their key ID)
     // 3. Encrypting it with the recipient's public key from the incoming directory
     clearsign_and_encrypt_file_for_recipient(
-        Path::new(&local_owner_address_book_path),  // THE LOCAL OWNER USER'S ADDRESS BOOK
-        &owner_gpg_key_id,                         // LOCAL OWNER USER'S KEY FOR SIGNING
-        recipient_public_key_path                  // RECIPIENT'S PUBLIC KEY FOR ENCRYPTION (from incoming dir)
+        &absolute_local_owner_address_book_path,   // THE LOCAL OWNER USER'S ADDRESS BOOK (absolute path)
+        &owner_gpg_key_id,                        // LOCAL OWNER USER'S KEY FOR SIGNING
+        &absolute_recipient_public_key_path       // RECIPIENT'S PUBLIC KEY FOR ENCRYPTION (absolute path)
     )?;
+    
+    // Get the output file path for display
+    let absolute_output_file_path = absolute_output_dir.join(format!("{}__collaborator.toml.gpg", local_owner_user_name));
     
     println!("\nLOCAL OWNER USER'S address book has been clearsigned and encrypted.");
     println!("The encrypted LOCAL OWNER USER'S address book file is saved to:");
-    println!("invites_updates/outgoing/{}__collaborator.toml.gpg", local_owner_user_name);
+    println!("{}", absolute_output_file_path.display());
     
     println!("\nImportant: After sending this file to the recipient, you may want to add them");
-    println!("to your address book using their public key from: {}", PATH_TO_INCOMING_PUBLICGPG_KEYASC);
+    println!("to your address book using their public key from: {}", absolute_recipient_public_key_path.display());
     
+    debug_log!("\nSLABIK  Completed fn share_lou_addressbook_with_incomingkey() successfully");
     Ok(())
 }
 
