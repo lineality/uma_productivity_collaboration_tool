@@ -395,7 +395,8 @@ use manage_absolute_executable_directory_relative_paths::{
     make_input_path_name_abs_executabledirectoryrelative_nocheck,
 make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error,
  make_file_path_abs_executabledirectoryrelative_canonicalized_or_error,
-    
+    get_absolute_path_to_executable_parentdirectory,
+    abs_executable_directory_relative_exists,
     };
 
 
@@ -2880,10 +2881,40 @@ impl App {
             }
     }
 
-    fn new(graph_navigation_instance_state: GraphNavigationInstanceState) -> App {
-        App {
+    // fn new(graph_navigation_instance_state: GraphNavigationInstanceState) -> App {
+    //     App {
+    //         tui_focus: 0,
+    //         current_path: PathBuf::from("project_graph_data/team_channels"),
+            
+    /// Creates a new App instance with state initialized from executable-relative paths
+    ///
+    /// # Arguments
+    /// * `graph_navigation_instance_state` - Initial graph navigation state
+    ///
+    /// # Returns
+    /// * `Result<App, io::Error>` - A new App instance or an error if paths cannot be resolved
+    fn new(graph_navigation_instance_state: GraphNavigationInstanceState) -> Result<App, io::Error> {
+        // Get executable-relative path for project data
+        let executable_parent_directory = get_absolute_path_to_executable_parentdirectory()?;
+        let target_path = executable_parent_directory.join("project_graph_data/team_channels");
+        
+        // Verify the path exists
+        if !abs_executable_directory_relative_exists(&target_path)? {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("Required directory not found: {:?}", target_path)
+            ));
+        }
+        
+        // Canonicalize the path
+        let current_exe_dir_relative_abs_path_canonicalized = target_path.canonicalize()?;
+        
+        // Create and return the App instance
+        Ok(App {
             tui_focus: 0,
-            current_path: PathBuf::from("project_graph_data/team_channels"),
+            current_path: current_exe_dir_relative_abs_path_canonicalized,
+            // HERE HERE
+            
             input_mode: InputMode::MainCommand, 
             tui_file_list: Vec::new(), // Initialize files
             tui_directory_list: Vec::new(), // Initialize files
@@ -2898,7 +2929,7 @@ impl App {
             next_path_lookup_table: HashMap::new(),
             ordered_task_column_list: Vec::new(),
             task_display_table: Vec::new(),
-        }
+        })
     }
     /*
 
@@ -17785,9 +17816,82 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
     let user_metadata = toml::from_str::<toml::Value>(&std::fs::read_to_string(uma_toml_path)?)
     .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("TOML deserialization error: {}", e)))?;
 
-    // setting up absolute file path
-    let relative_path = PathBuf::from("project_graph_data/team_channels");
-    let abs_current_full_file_path = relative_path.canonicalize().unwrap(); // Handle errors
+    // // TODO executible-relative-absolute-file-paths!!!! 
+    // // abs_current_full_file_path -> current_executable_directory_relative_absolute_file_path_canonicalized
+    // // shorter: current_exe_dir_relative_abs_path_canonicalized
+    // // setting up absolute file path
+    // let relative_path = PathBuf::from("project_graph_data/team_channels");
+    // let abs_current_full_file_path = relative_path.canonicalize().unwrap(); // Handle errors  NOT UNWRAP!!!!!!!!
+    
+    
+    // // Updated code using the new module:
+    // let current_exe_dir_relative_abs_path_canonicalized = match make_input_path_name_abs_executabledirectoryrelative_nocheck("project_graph_data/team_channels") {
+    //     Ok(path) => path,
+    //     Err(e) => {
+    //         // Properly handle the error - either log it or return an error
+    //         debug_log(&format!("Error resolving path: {}", e));
+    //         return Err(io::Error::new(
+    //             io::ErrorKind::NotFound, 
+    //             format!("Failed to resolve project graph data path: {}", e)
+    //         ));
+    //     }
+    // };
+        
+    // Step 1: Get the absolute path to the executable's parent directory
+    let executable_parent_directory = match get_absolute_path_to_executable_parentdirectory() {
+        Ok(path) => path,
+        Err(e) => {
+            debug_log(&format!("Error getting executable directory: {}", e));
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound, 
+                format!("Failed to determine executable directory: {}", e)
+            ));
+        }
+    };
+
+    debug_log!("executable_parent_directory: {:?}", executable_parent_directory);
+
+    
+    // Step 2: Join the target path to the executable directory
+    let target_path = executable_parent_directory.join("project_graph_data/team_channels");
+
+    // Step 3: Verify the path exists
+    let path_exists = match abs_executable_directory_relative_exists(&target_path) {
+        Ok(exists) => exists,
+        Err(e) => {
+            debug_log(&format!("Error checking if path exists: {}", e));
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("Failed to check if path exists: {}", e)
+            ));
+        }
+    };
+
+    // Step 4: Canonicalize the path if it exists, otherwise error
+    let current_exe_dir_relative_abs_path_canonicalized = if path_exists {
+        match target_path.canonicalize() {
+            Ok(canonical_path) => canonical_path,
+            Err(e) => {
+                debug_log(&format!("Error canonicalizing path: {}", e));
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("Failed to canonicalize path: {}", e)
+                ));
+            }
+        }
+    } else {
+        debug_log(&format!("Path does not exist: {:?}", target_path));
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("Path does not exist: {:?}", target_path)
+        ));
+    };
+
+    debug_log!("Current executable-relative absolute path: {:?}", current_exe_dir_relative_abs_path_canonicalized);
+
+    debug_log!("Using project path: {:?}", current_exe_dir_relative_abs_path_canonicalized);
+        
+    debug_log!(" {:?}", current_exe_dir_relative_abs_path_canonicalized);
     
     // node-graph navigation 'state' initial setup
     let mut graph_navigation_instance_state = GraphNavigationInstanceState {
@@ -17812,7 +17916,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
             .map(|width| width as u8) // Convert to u8 if valid
             .unwrap_or(80), // Default to 80 if missing or invalid 
 
-        current_full_file_path: abs_current_full_file_path, // Set initial absolute path
+        current_full_file_path: current_exe_dir_relative_abs_path_canonicalized, // Set initial absolute path
         // Initialize other fields of GraphNavigationInstanceState
         current_node_teamchannel_collaborators_with_access: Vec::new(),
         current_node_name: String::new(),
@@ -17836,9 +17940,18 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
     //     return Err(io::Error::new(io::ErrorKind::Other, "GPG Verification Failed"));
     // }
     
+    // // Create App instance
+    // let mut app = App::new(graph_navigation_instance_state.clone()); // Pass graph_navigation_instance_state
+        
     // Create App instance
-    let mut app = App::new(graph_navigation_instance_state.clone()); // Pass graph_navigation_instance_state
-    
+    let mut app = match App::new(graph_navigation_instance_state.clone()) {
+        Ok(app) => app,
+        Err(e) => {
+            debug_log(&format!("Failed to initialize App: {}", e));
+            return Err(e); // Or handle the error in another appropriate way
+        }
+    };
+        
     // -- bootstrap: Start in MainCommand Mode --- 
     app.input_mode = InputMode::MainCommand; // Initialize app in command mode
     
