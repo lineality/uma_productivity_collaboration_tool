@@ -368,8 +368,8 @@ To eventually replace any 3rd party
 toml crates
 */
 // For toml and clearsigntoml
-mod read_toml_field;
-use crate::read_toml_field::{
+mod clearsign_toml_module;
+use crate::clearsign_toml_module::{
     // read_field_from_toml,
     // read_basename_fields_from_toml,
     read_single_line_string_field_from_toml,
@@ -377,6 +377,7 @@ use crate::read_toml_field::{
     read_integer_array,
     read_singleline_string_from_clearsigntoml,
     read_multiline_string_from_clearsigntoml,
+    extract_verify_store_gpg_encrypted_clearsign_toml,
 }; 
 
 mod handle_gpg;  // This declares the module and tells Rust to look for handle_gpg.rs
@@ -9012,6 +9013,7 @@ fn generic_share_address_book(recipient_name: &str) -> Result<(), GpgError> {
 /// read_singleline_string_from_clearsigntoml();
 /// read_multiline_string_from_clearsigntoml();
 fn share_lou_address_book_with_existingcollaborator(recipient_name: &str) -> Result<(), GpgError> {
+    // 'SLABE' is an achronym for this function to idenitfy this function in logs
     debug_log("\nstarting -> SLABE fn share_lou_address_book_with_existingcollaborator()");
     debug_log!("SLABE Sharing LOCAL OWNER USER'S address book with existing collaborator: {}", recipient_name);
     
@@ -9179,6 +9181,400 @@ fn share_lou_address_book_with_existingcollaborator(recipient_name: &str) -> Res
     
     Ok(())
 }
+
+/// Process an incoming encrypted collaborator addressbook file
+///
+/// This function handles the secure processing of a GPG-encrypted clearsigned file
+/// received from a collaborator. It performs the following steps:
+///
+/// 1. Reads the LOCAL OWNER USER's name from uma.toml
+/// 2. Locates the LOCAL OWNER USER's addressbook file to extract their GPG key ID
+/// 3. Finds the encrypted file in the incoming directory (must be a single .asc/.gpg file)
+/// 4. Decrypts the file using the LOCAL OWNER USER's private key (identified by the key ID)
+/// 5. Verifies the clearsign signature on the decrypted content
+/// 6. Extracts the remote collaborator's username from the verified content
+/// 7. Saves the verified clearsigned file to the collaborator addressbook directory
+/// 8. Moves the original encrypted file to the processed directory
+///
+/// # Key Workflow Details
+/// - The LOCAL OWNER USER's GPG key ID is read from their own addressbook file
+/// - This key ID is needed to identify which private key to use for decryption
+/// - Both decryption and signature verification must succeed for the process to complete
+///
+/// # Path Handling
+/// All file and directory paths are resolved relative to the executable's directory location,
+/// NOT the current working directory. This ensures consistent behavior regardless of where 
+/// the program is executed from.
+///
+/// # Returns
+/// * `Ok(())` if the operation succeeds
+/// * `Err(GpgError)` if any operation fails
+///
+/// # Errors
+/// * `GpgError::PathError` - If required files/directories don't exist or can't be accessed
+/// * `GpgError::ValidationError` - If signature verification fails or required data is missing
+/// * `GpgError::GpgOperationError` - If GPG decryption or verification operations fail
+///
+/// # File Flow
+/// - LOCAL OWNER USER's addressbook: {EXECUTABLE_DIR}/project_graph_data/collaborator_files_address_book/{LOCAL_OWNER_USER}__collaborator.toml
+/// - Source encrypted file: {EXECUTABLE_DIR}/invites_updates/incoming/*.asc or *.gpg
+/// - Output file: {EXECUTABLE_DIR}/project_graph_data/collaborator_files_address_book/{REMOTE_COLLABORATOR}__collaborator.toml
+/// - Moved original: {EXECUTABLE_DIR}/invites_updates/processed/{original_filename}
+pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgError> {
+    // 'PIECA' is an acronym for this function to identify it in logs
+    debug_log("\nstarting -> PIECA fn process_incoming_encrypted_collaborator_addressbook()");
+    
+    // STEP 1: Get LOCAL OWNER USER's name from uma.toml
+    // This identifies which addressbook file contains our GPG key ID
+    debug_log!("PIECA Step 1: Reading LOCAL OWNER USER's name from uma.toml");
+    
+    // Get absolute path to uma.toml configuration file
+    let relative_uma_toml_path = "uma.toml";
+    let absolute_uma_toml_path = make_file_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_uma_toml_path)
+        .map_err(|e| {
+            let error_msg = format!("PIECA Failed to locate uma.toml configuration file: {}", e);
+            println!("Error: {}", error_msg);
+            GpgError::PathError(error_msg)
+        })?;
+    
+    // Convert PathBuf to string for TOML reading
+    let absolute_uma_toml_path_str = absolute_uma_toml_path
+        .to_str()
+        .ok_or_else(|| {
+            let error_msg = "PIECA Unable to convert UMA TOML path to string".to_string();
+            println!("Error: {}", error_msg);
+            GpgError::PathError(error_msg)
+        })?;
+    
+    // Read LOCAL OWNER USER's name from uma.toml
+    let local_owner_user_name = read_single_line_string_field_from_toml(
+        absolute_uma_toml_path_str, 
+        "uma_local_owner_user"
+    ).map_err(|e| {
+        let error_msg = format!("PIECA Failed to read LOCAL OWNER USER's name: {}", e);
+        println!("Error: {}", error_msg);
+        GpgError::ValidationError(error_msg)
+    })?;
+    
+    debug_log!("PIECA LOCAL OWNER USER's name is: {}", local_owner_user_name);
+    println!("Processing as LOCAL OWNER USER: {}", local_owner_user_name);
+    
+    // STEP 2: Locate the LOCAL OWNER USER's addressbook file and extract their GPG key ID
+    debug_log!("PIECA Step 2: Locating LOCAL OWNER USER's addressbook file to get GPG key ID");
+    
+    // Get absolute path to the collaborator files directory
+    let relative_collab_dir = "project_graph_data/collaborator_files_address_book";
+    let absolute_collab_dir = make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_collab_dir)
+        .map_err(|e| {
+            let error_msg = format!("PIECA Failed to locate collaborator files directory: {}", e);
+            println!("Error: {}", error_msg);
+            GpgError::PathError(error_msg)
+        })?;
+    
+    // Path to the LOCAL OWNER USER's addressbook file (absolute path)
+    let local_owner_address_book_filename = format!("{}__collaborator.toml", local_owner_user_name);
+    let absolute_local_owner_address_book_path = absolute_collab_dir.join(&local_owner_address_book_filename);
+    
+    debug_log!("PIECA LOCAL OWNER USER's addressbook path: {}", absolute_local_owner_address_book_path.display());
+    
+    // Verify the LOCAL OWNER USER's addressbook file exists
+    if !absolute_local_owner_address_book_path.exists() {
+        let error_msg = format!(
+            "PIECA LOCAL OWNER USER's addressbook file not found at: {}", 
+            absolute_local_owner_address_book_path.display()
+        );
+        println!("Error: {}", error_msg);
+        return Err(GpgError::PathError(error_msg));
+    }
+    
+    debug_log!("PIECA LOCAL OWNER USER's addressbook file exists");
+    
+    // Convert the LOCAL OWNER USER's addressbook path to string for TOML reading
+    let absolute_local_owner_address_book_path_str = absolute_local_owner_address_book_path
+        .to_str()
+        .ok_or_else(|| {
+            let error_msg = format!(
+                "PIECA Unable to convert LOCAL OWNER USER's addressbook path to string: {}", 
+                absolute_local_owner_address_book_path.display()
+            );
+            println!("Error: {}", error_msg);
+            GpgError::PathError(error_msg)
+        })?;
+    
+    // Read the LOCAL OWNER USER's GPG key ID from their addressbook file
+    // This is the key ID needed to identify which private key to use for decryption
+    debug_log!("PIECA Attempting to read GPG key ID from LOCAL OWNER USER's addressbook file");
+    
+    let local_owner_gpg_key_id = read_singleline_string_from_clearsigntoml(
+        absolute_local_owner_address_book_path_str, 
+        "gpg_publickey_id"
+    ).map_err(|e| {
+        let error_msg = format!("PIECA Failed to read LOCAL OWNER USER's GPG key ID: {}", e);
+        debug_log!("ERROR: {}", error_msg);
+        println!("Error: {}", error_msg);
+        GpgError::ValidationError(error_msg)
+    })?;
+    
+    debug_log!("PIECA Successfully read LOCAL OWNER USER's GPG key ID: {}", local_owner_gpg_key_id);
+    
+    // STEP 3: Find the encrypted file in the incoming directory
+    debug_log!("PIECA Step 3: Locating encrypted file in incoming directory");
+    
+    // Resolve the incoming directory path (relative to executable)
+    let relative_incoming_dir = "invites_updates/incoming";
+    let absolute_incoming_dir = make_input_path_name_abs_executabledirectoryrelative_nocheck(relative_incoming_dir)
+        .map_err(|e| {
+            let error_msg = format!("PIECA Failed to resolve incoming directory path: {}", e);
+            println!("Error: {}", error_msg);
+            GpgError::PathError(error_msg)
+        })?;
+    
+    debug_log!("PIECA Scanning for encrypted files in: {}", absolute_incoming_dir.display());
+    
+    // Loop until we find exactly one .asc or .gpg file, or user cancels
+    let encrypted_file_path = loop {
+        // Scan the directory for .asc or .gpg files
+        let mut encrypted_files = Vec::new();
+        
+        match fs::read_dir(&absolute_incoming_dir) {
+            Ok(entries) => {
+                for entry in entries {
+                    if let Ok(entry) = entry {
+                        let path = entry.path();
+                        if path.is_file() {
+                            if let Some(extension) = path.extension() {
+                                if extension == "asc" || extension == "gpg" {
+                                    encrypted_files.push(path);
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            Err(e) => {
+                let error_msg = format!("PIECA Failed to read incoming directory: {}", e);
+                println!("Error: {}", error_msg);
+                return Err(GpgError::PathError(error_msg));
+            }
+        }
+        
+        // Process based on how many files were found
+        match encrypted_files.len() {
+            0 => {
+                println!("No encrypted files (.asc or .gpg) found in {}", absolute_incoming_dir.display());
+                println!("Please place the encrypted collaborator file in this directory.");
+                println!("Press Enter to try again, or type 'exit' to cancel.");
+                
+                let mut input = String::new();
+                if let Err(e) = io::stdin().read_line(&mut input) {
+                    let error_msg = format!("PIECA Failed to read user input: {}", e);
+                    println!("Error: {}", error_msg);
+                    return Err(GpgError::ValidationError(error_msg));
+                }
+                
+                if input.trim().to_lowercase() == "exit" {
+                    return Err(GpgError::ValidationError("Operation cancelled by user".to_string()));
+                }
+                
+                // Loop continues to check again
+            },
+            1 => {
+                // Exactly one file found, we can proceed
+                debug_log!("PIECA Found one encrypted file: {}", encrypted_files[0].display());
+                println!("Found encrypted file: {}", encrypted_files[0].display());
+                break encrypted_files[0].clone();
+            },
+            _ => {
+                println!("Multiple encrypted files found in {}:", absolute_incoming_dir.display());
+                for (index, file) in encrypted_files.iter().enumerate() {
+                    println!("  {}. {}", index + 1, file.file_name().unwrap_or_default().to_string_lossy());
+                }
+                println!("Please keep only the file you want to process and remove the others.");
+                println!("Press Enter to try again, or type 'exit' to cancel.");
+                
+                let mut input = String::new();
+                if let Err(e) = io::stdin().read_line(&mut input) {
+                    let error_msg = format!("PIECA Failed to read user input: {}", e);
+                    println!("Error: {}", error_msg);
+                    return Err(GpgError::ValidationError(error_msg));
+                }
+                
+                if input.trim().to_lowercase() == "exit" {
+                    return Err(GpgError::ValidationError("Operation cancelled by user".to_string()));
+                }
+                
+                // Loop continues to check again
+            }
+        }
+    };
+    
+    // Extract the filename for later use
+    let encrypted_filename = encrypted_file_path.file_name()
+        .ok_or_else(|| {
+            let error_msg = "PIECA Failed to extract filename from encrypted file path".to_string();
+            println!("Error: {}", error_msg);
+            GpgError::PathError(error_msg)
+        })?
+        .to_string_lossy()
+        .to_string();
+    
+    debug_log!("PIECA Processing encrypted file: {}", encrypted_filename);
+    
+    // STEP 4: Create processed directory for moving files after processing
+    debug_log!("PIECA Step 4: Setting up processed directory");
+    
+    let relative_processed_dir = "invites_updates/processed";
+    let absolute_processed_dir = make_input_path_name_abs_executabledirectoryrelative_nocheck(relative_processed_dir)
+        .map_err(|e| {
+            let error_msg = format!("PIECA Failed to resolve processed directory path: {}", e);
+            println!("Error: {}", error_msg);
+            GpgError::PathError(error_msg)
+        })?;
+    
+    // Create the processed directory if it doesn't exist
+    fs::create_dir_all(&absolute_processed_dir)
+        .map_err(|e| {
+            let error_msg = format!("PIECA Failed to create processed directory: {}", e);
+            println!("Error: {}", error_msg);
+            GpgError::PathError(error_msg)
+        })?;
+    
+    // STEP 5: Set up temporary directory for processing
+    debug_log!("PIECA Step 5: Setting up temporary directory for decryption and verification");
+    
+    let temp_dir = make_input_path_name_abs_executabledirectoryrelative_nocheck("temp_gpg_processing")
+        .map_err(|e| {
+            let error_msg = format!("PIECA Failed to create temp directory path: {}", e);
+            println!("Error: {}", error_msg);
+            GpgError::PathError(error_msg)
+        })?;
+    
+    fs::create_dir_all(&temp_dir)
+        .map_err(|e| {
+            let error_msg = format!("PIECA Failed to create temp directory: {}", e);
+            println!("Error: {}", error_msg);
+            GpgError::PathError(error_msg)
+        })?;
+    
+    // Temporary file to hold decrypted and clearsigned content
+    let temp_clearsigned_path = temp_dir.join("temp_clearsigned.toml");
+    
+    // STEP 6: Decrypt and verify the signature using the LOCAL OWNER USER's key
+    debug_log!("PIECA Step 6: Decrypting file and verifying signature");
+    println!("Decrypting file using LOCAL OWNER USER's key ID: {}", local_owner_gpg_key_id);
+    println!("and verifying signature...");
+    
+    // Call the function that does GPG decryption and verification
+    // This uses the LOCAL OWNER USER's key ID to identify which private key to use
+    let decrypt_result = extract_verify_store_gpg_encrypted_clearsign_toml(
+        &encrypted_file_path,
+        &local_owner_gpg_key_id,
+        &temp_clearsigned_path
+    );
+    
+    if let Err(e) = &decrypt_result {
+        let error_msg = format!("PIECA Failed to decrypt or verify file: {:?}", e);
+        println!("Error: {}", error_msg);
+        println!("This could mean:");
+        println!("1. The file is not properly encrypted or signed");
+        println!("2. The file wasn't encrypted for your GPG key");
+        println!("3. You don't have the sender's public key in your keyring");
+        
+        // Clean up temp directory before returning
+        if let Err(clean_err) = fs::remove_dir_all(&temp_dir) {
+            debug_log!("PIECA Warning: Failed to remove temporary directory: {}", clean_err);
+        }
+        
+        return Err(GpgError::GpgOperationError(error_msg));
+    }
+    
+    println!("File successfully decrypted and signature verified!");
+    debug_log!("PIECA Successfully decrypted and verified file");
+    
+    // STEP 7: Extract collaborator username from the verified content
+    debug_log!("PIECA Step 7: Extracting collaborator username from verified content");
+    
+    // Convert temporary file path to string for TOML reading
+    let temp_clearsigned_path_str = temp_clearsigned_path
+        .to_str()
+        .ok_or_else(|| {
+            let error_msg = "PIECA Unable to convert temp file path to string".to_string();
+            println!("Error: {}", error_msg);
+            GpgError::PathError(error_msg)
+        })?;
+    
+    // Read the username from the clearsigned TOML
+    // This is the remote collaborator whose addressbook we just received
+    let remote_collaborator_username = read_singleline_string_from_clearsigntoml(
+        temp_clearsigned_path_str,
+        "user_name"
+    ).map_err(|e| {
+        let error_msg = format!("PIECA Failed to read remote collaborator's username: {}", e);
+        println!("Error: {}", error_msg);
+        println!("The decrypted file doesn't contain a valid 'user_name' field.");
+        GpgError::ValidationError(error_msg)
+    })?;
+    
+    debug_log!("PIECA Extracted remote collaborator's username: {}", remote_collaborator_username);
+    println!("Received addressbook from collaborator: {}", remote_collaborator_username);
+    
+    // STEP 8: Save the verified clearsigned file to the collaborator directory
+    debug_log!("PIECA Step 8: Saving verified clearsigned file to collaborator directory");
+    
+    // Create the output filename using the extracted username
+    let output_filename = format!("{}__collaborator.toml", remote_collaborator_username);
+    let output_file_path = absolute_collab_dir.join(&output_filename);
+    
+    debug_log!("PIECA Saving verified clearsigned file to: {}", output_file_path.display());
+    
+    // Copy the verified clearsigned file to the collaborator directory
+    fs::copy(&temp_clearsigned_path, &output_file_path)
+        .map_err(|e| {
+            let error_msg = format!("PIECA Failed to save verified clearsigned file: {}", e);
+            println!("Error: {}", error_msg);
+            GpgError::GpgOperationError(error_msg)
+        })?;
+    
+    println!("Successfully saved collaborator addressbook to: {}", output_file_path.display());
+    
+    // STEP 9: Move the original encrypted file to the processed directory
+    debug_log!("PIECA Step 9: Moving original encrypted file to processed directory");
+    
+    let processed_file_path = absolute_processed_dir.join(&encrypted_filename);
+    
+    debug_log!("PIECA Moving original encrypted file to: {}", processed_file_path.display());
+    
+    // Use fs::rename to move the file
+    fs::rename(&encrypted_file_path, &processed_file_path)
+        .map_err(|e| {
+            let error_msg = format!("PIECA Failed to move original encrypted file: {}", e);
+            println!("Warning: {}", error_msg);
+            GpgError::GpgOperationError(error_msg)
+        })?;
+    
+    println!("Original encrypted file moved to: {}", processed_file_path.display());
+    
+    // STEP 10: Clean up the temporary directory
+    debug_log!("PIECA Step 10: Cleaning up temporary directory");
+    
+    if let Err(e) = fs::remove_dir_all(&temp_dir) {
+        debug_log!("PIECA Warning: Failed to remove temporary directory: {}", e);
+    }
+    
+    debug_log!("PIECA Successfully processed addressbook from collaborator: {}", remote_collaborator_username);
+    println!("Successfully processed addressbook from collaborator: {}", remote_collaborator_username);
+
+    println!("Press Enter to continue...");
+    
+    // this does nothing, press enter to proceed.
+    let mut input = String::new();
+    io::stdin()
+        .read_line(&mut input)
+        .map_err(|e| format!("Failed to read input: {:?}", e));
+    
+    Ok(())
+}
+
 
 // /// Process address book sharing for a specific recipient
 // /// 
@@ -9751,7 +10147,7 @@ fn share_lou_addressbook_with_incomingkey() -> Result<(), GpgError> {
     Ok(())
 }
 
-/// TODO needs extensive doc string
+/// TODO needs extensive doc string 
 /// TODO needs absolute file paths, see:  src/manage_absolute_executable_directory_relative_paths.rs
 /// 
 pub fn invite_wizard() -> Result<(), GpgError> {
@@ -9928,14 +10324,25 @@ pub fn invite_wizard() -> Result<(), GpgError> {
                     println!("```");
                     println!("directory (folder)");
                     println!("Press enter when this is done.");
+
+                    // this does nothing, press enter to proceed.
+                    let mut input = String::new();
+                    io::stdin()
+                        .read_line(&mut input)
+                        .map_err(|e| format!("Failed to read input: {:?}", e));
                     
-                    /*TODO logic to target that directory...
-                    1. look in that directory
-                    2. decrypt gpg file
-                    3. check clearsign of resulting file (should be a clearsign_toml file)
-                    4. likely: make a new utility function to self_check_clearsign_toml(path_to_clearsign_toml)
+                    /*
+                    logic to target that directory...
+                    // 1. Scans the incoming directory for .asc files
+                    // 2. If exactly one file is found, proceeds with processing
+                    // 3. If multiple files are found, prompts the user to clean up the directory
+                    // 4. Decrypts the file and verifies the clearsignature
+                    // 5. Extracts the collaborator's username from the clearsigned content
+                    // 6. Saves the validated clearsigned file to the collaborator address book directory
+                    // 7. Moves the original encrypted file to the processed directory
                     */
                     
+                    process_incoming_encrypted_collaborator_addressbook();
                     
                     }
                 // Handle cases where subchoice is 0 or ≥ 4
