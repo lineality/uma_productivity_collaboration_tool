@@ -1,4 +1,6 @@
 /*
+TODO add module reference code in text blurb
+
 Uma
 2024.09-11
 RUST_BACKTRACE=full cargo run
@@ -2688,7 +2690,108 @@ pub fn validate_state_string(value: &str) -> bool {
 }
 
 
+// use std::sync::mpmc::Sender;
+use std::sync::mpsc::{self, Sender, Receiver, TryRecvError};
 
+/// Thread message types for browser inter-thread communication
+///
+/// These messages are passed between the input thread, watch thread,
+/// and main thread to coordinate actions in the message browser.
+enum BrowserThreadMessage {
+    KeyInput(char),     // A character was typed
+    Backspace,          // Backspace key pressed
+    Enter,              // Enter key pressed
+    DirectoryChanged,   // Directory contents changed (new messages)
+    Exit,               // Request to exit browser
+}
+
+/// Modal message viewing states
+///
+/// Controls whether the browser updates with new messages
+/// or prioritizes uninterrupted user input.
+#[derive(PartialEq, Clone, Copy, Debug)]
+enum MessageViewMode {
+    Refresh, // Allow real-time updates, input may be interrupted
+    Insert,  // No updates, focus on uninterrupted input
+}
+
+/// Input thread function for message browser
+///
+/// Continuously reads keyboard input and sends appropriate messages
+/// to the main thread through the channel.
+fn run_message_browser_input_thread(sender: Sender<BrowserThreadMessage>) {
+    let mut stdin = io::stdin();
+    let mut buffer = [0; 1];
+    
+    loop {
+        if stdin.read_exact(&mut buffer).is_ok() {
+            let message = match buffer[0] {
+                b'\n' | b'\r' => BrowserThreadMessage::Enter,
+                8 | 127 => BrowserThreadMessage::Backspace,
+                b'q' => BrowserThreadMessage::Exit,
+                c => BrowserThreadMessage::KeyInput(c as char),
+            };
+            
+            // If send fails, the receiver has been dropped, so exit thread
+            if sender.send(message).is_err() {
+                break;
+            }
+        }
+        
+        thread::sleep(Duration::from_millis(10));
+    }
+}
+
+/// Directory watch thread for message browser
+///
+/// Periodically checks for changes in the message directory
+/// and notifies the main thread when changes are detected.
+fn run_message_browser_watch_thread(sender: Sender<BrowserThreadMessage>, path: PathBuf) {
+    let mut last_hash = 0;
+    
+    loop {
+        thread::sleep(Duration::from_millis(2000));
+
+        match calculate_message_directory_hash(&path) {
+            Ok(current_hash) => {
+                if current_hash != last_hash {
+                    last_hash = current_hash;
+                    
+                    // If send fails, the receiver has been dropped, so exit thread
+                    if sender.send(BrowserThreadMessage::DirectoryChanged).is_err() {
+                        break;
+                    }
+                }
+            },
+            Err(_) => {
+                // Error calculating hash - directory might be inaccessible
+                // Just continue and try again next cycle
+            }
+        }
+    }
+}
+
+/// Calculate a hash of the message directory contents
+///
+/// Used to efficiently detect when directory contents have changed
+/// without having to compare all files.
+fn calculate_message_directory_hash(path: &Path) -> io::Result<u64> {
+    let mut hasher = DefaultHasher::new();
+    
+    for entry in fs::read_dir(path)? {
+        let entry = entry?;
+        let metadata = entry.metadata()?;
+        
+        // Hash filename, size, and modification time
+        entry.file_name().hash(&mut hasher);
+        metadata.len().hash(&mut hasher);
+        if let Ok(modified) = metadata.modified() {
+            modified.hash(&mut hasher);
+        }
+    }
+    
+    Ok(hasher.finish())
+}
 
 
 // Compression Algorithm Enum
@@ -3195,14 +3298,267 @@ impl App {
         Some(self.current_path.join(channel_name))
     }
 
-    fn enter_instant_message_browser(&mut self, channel_path: PathBuf) { 
-        // Update the current path to the instant message browser directory within the selected channel
-        self.current_path = channel_path.join("instant_message_browser"); 
-        // Load the instant messages for this channel
-        self.load_im_messages(); // No need to pass any arguments 
-        // Reset the TUI focus to the beginning of the message list
-        self.tui_focus = 0;     
-    } 
+    // // TODO not being used
+    // fn enter_instant_message_browser(&mut self, channel_path: PathBuf) { 
+    //     // Update the current path to the instant message browser directory within the selected channel
+    //     self.current_path = channel_path.join("instant_message_browser"); 
+    //     // Load the instant messages for this channel
+    //     self.load_im_messages(); // No need to pass any arguments 
+    //     // Reset the TUI focus to the beginning of the message list
+    //     self.tui_focus = 0;     
+    // }  
+    
+    
+
+    /// Modal Interactive Message Browser with Dual Refresh/Insert Modes
+    ///
+    /// # Purpose
+    /// Provides a message viewing and composing interface that balances:
+    /// - Real-time message updates (in Refresh mode)
+    /// - Uninterrupted text input (in Insert mode)
+    ///
+    /// # Mode System
+    /// The function implements a modal interface with two states:
+    /// 1. REFRESH MODE: Terminal updates automatically when new messages arrive
+    ///    - Pros: Always shows latest messages
+    ///    - Cons: May interrupt typing
+    ///
+    /// 2. INSERT MODE: Terminal freezes updates to allow uninterrupted typing
+    ///    - Pros: User can type without interruption
+    ///    - Cons: May miss new messages until mode is toggled
+    ///
+    /// # User Experience
+    /// - Toggle between modes: Press ENTER with empty input
+    /// - Exit browser: Type 'q', 'quit', 'b', or 'back'
+    /// - Send message: Type message and press ENTER in either mode
+    ///
+    /// # Implementation Details
+    /// - Uses three concurrent threads:
+    ///   1. Main thread: Manages state and rendering
+    ///   2. Input thread: Captures user keystrokes
+    ///   3. Watch thread: Monitors directory for changes
+    ///
+    /// # Parameters
+    /// * `channel_path` - Path to the channel containing the instant_message_browser directory
+    ///
+    /// # Returns
+    /// * `io::Result<()>` - Success or IO error
+    ///
+    /// # Thread Safety
+    /// - Uses message passing (mpsc channels) between threads
+    /// - No shared mutable state between threads
+    /// - Safe shutdown of all threads on exit
+    ///
+    /// # State Management
+    /// - Updates App.current_path to message directory
+    /// - Sets App.input_mode appropriately
+    /// - Loads messages via App.load_im_messages()
+    /// - Restores previous path on exit
+    pub fn enter_modal_instant_message_browser(&mut self, channel_path: PathBuf) -> io::Result<()> {
+        debug_log("starting enter_modal_instant_message_browser()");
+        
+        // Store the original path for restoration on exit
+        let original_path = self.current_path.clone();
+        
+        // Update the current path to the instant message browser directory
+        self.current_path = channel_path.join("instant_message_browser");
+        
+        debug_log!(
+            "enter_modal_instant_message_browser() app.current_path after joining 'instant_message_browser': {:?}",
+            self.current_path
+        ); 
+        
+        // Verify directory exists
+        if !self.current_path.exists() {
+            println!("enter_modal_instant_message_browser Message directory not found!");
+            self.current_path = original_path; // Restore original path
+            return Ok(());
+        }
+        
+        // Load initial messages
+        self.load_im_messages();
+        
+        // Initialize the modal message browser state
+        let mut current_message_view_mode = MessageViewMode::Refresh;
+        let mut user_input_buffer = String::new();
+        let terminal_width = self.graph_navigation_instance_state.tui_width as u16;
+        let terminal_height = self.graph_navigation_instance_state.tui_height as u16;
+        
+        // Set up channel for thread communication
+        let (message_tx, message_rx): (Sender<BrowserThreadMessage>, Receiver<BrowserThreadMessage>) = mpsc::channel();
+        
+        // ----- SETUP INPUT THREAD -----
+        let input_thread_sender = message_tx.clone();
+        let input_thread = thread::spawn(move || {
+            run_message_browser_input_thread(input_thread_sender);
+        });
+        
+        // ----- SETUP DIRECTORY WATCH THREAD -----
+        let watch_thread_sender = message_tx.clone();
+        let watch_directory_path = self.current_path.clone();
+        let watch_thread = thread::spawn(move || {
+            run_message_browser_watch_thread(watch_thread_sender, watch_directory_path);
+        });
+        
+        // ----- MAIN BROWSER LOOP -----
+        let mut needs_display_refresh = true;
+        
+        // Initial render
+        self.render_message_browser_screen(&current_message_view_mode, &user_input_buffer, terminal_width, terminal_height)?;
+        
+        // Process events until exit
+        'browser_loop: loop {
+            match message_rx.try_recv() {
+                Ok(BrowserThreadMessage::KeyInput(c)) => {
+                    if current_message_view_mode == MessageViewMode::Insert || !needs_display_refresh {
+                        user_input_buffer.push(c);
+                        needs_display_refresh = true;
+                    }
+                },
+                Ok(BrowserThreadMessage::Backspace) => {
+                    user_input_buffer.pop();
+                    needs_display_refresh = true;
+                },
+                Ok(BrowserThreadMessage::Enter) => {
+                    if user_input_buffer.is_empty() {
+                        // Toggle between Refresh and Insert modes
+                        let previous_mode = current_message_view_mode;
+                        current_message_view_mode = match current_message_view_mode {
+                            MessageViewMode::Refresh => MessageViewMode::Insert,
+                            MessageViewMode::Insert => MessageViewMode::Refresh,
+                        };
+                        
+                        // If switching from Insert to Refresh, immediately refresh
+                        if previous_mode == MessageViewMode::Insert && current_message_view_mode == MessageViewMode::Refresh {
+                            self.load_im_messages();
+                        }
+                        
+                        needs_display_refresh = true;
+                    } else {
+                        // Process non-empty input (possibly a command or message)
+                        match user_input_buffer.as_str() {
+                            "q" | "quit" | "b" | "back" => {
+                                // Exit message browser
+                                break 'browser_loop;
+                            },
+                            _ => {
+                                // Send message
+                                self.add_new_message_from_input(&user_input_buffer)?;
+                                user_input_buffer.clear();
+                                self.load_im_messages();
+                                needs_display_refresh = true;
+                            }
+                        }
+                    }
+                },
+                Ok(BrowserThreadMessage::DirectoryChanged) => {
+                    if current_message_view_mode == MessageViewMode::Refresh {
+                        self.load_im_messages();
+                        needs_display_refresh = true;
+                    }
+                },
+                Ok(BrowserThreadMessage::Exit) => {
+                    // Exit due to quit command
+                    break 'browser_loop;
+                },
+                Err(TryRecvError::Empty) => {
+                    // No messages, continue
+                },
+                Err(TryRecvError::Disconnected) => {
+                    // Channel closed, exit
+                    break 'browser_loop;
+                }
+            }
+            
+            // Refresh display if needed
+            if needs_display_refresh {
+                self.render_message_browser_screen(&current_message_view_mode, &user_input_buffer, terminal_width, terminal_height)?;
+                needs_display_refresh = false;
+            }
+            
+            // Small sleep to prevent tight loop
+            thread::sleep(Duration::from_millis(10));
+        }
+        
+        // Clean up and exit
+        // No need to join threads as they'll be cleaned up when program exits
+        
+        // Restore original path and mode
+        self.current_path = original_path;
+        self.input_mode = InputMode::MainCommand;
+        
+        // Final update before returning to main app
+        self.update_directory_list()?;
+        
+        // Clear screen for clean transition
+        print!("\x1B[2J\x1B[1;1H");
+        io::stdout().flush()?;
+        
+        debug_log("ending: ender_modal...");
+        Ok(())
+    }
+    
+    /// Helper function to render the message browser screen
+    ///
+    /// Displays:
+    /// 1. Message list from tui_textmessage_list
+    /// 2. Mode indicator (Refresh/Insert)
+    /// 3. Input prompt with current buffer
+    fn render_message_browser_screen(
+        &self,
+        message_view_mode: &MessageViewMode,
+        input_buffer: &str,
+        terminal_width: u16,
+        terminal_height: u16
+    ) -> io::Result<()> {
+        // Clear screen
+        print!("\x1B[2J\x1B[1;1H");
+        
+        // 1. Display messages using existing function
+        tiny_tui::simple_render_list(&self.tui_textmessage_list, &self.current_path);
+        
+        // 2. Fill remaining space to position info bar correctly
+        let path_lines = 1; // Header line showing path
+        let message_count = self.tui_textmessage_list.len();
+        let info_bar_position = (terminal_height - 2) as usize;
+        
+        for _ in 0..info_bar_position.saturating_sub(path_lines + message_count) {
+            println!();
+        }
+        
+        // 3. Display mode info bar with clear instructions
+        match message_view_mode {
+            MessageViewMode::Refresh => println!("\\|/  Refresh Mode - - empty 'enter' to  insert mode"),
+            MessageViewMode::Insert => println!(">_  Insert Mode - empty 'enter' to toggle refresh-mode"),
+        }
+        
+        // 4. Display input prompt with current buffer
+        print!("> {}", input_buffer);
+        io::stdout().flush()
+    }
+    
+    /// Add a new message from user input
+    ///
+    /// Creates a new message file with the user's input as content
+    fn add_new_message_from_input(&mut self, input: &str) -> io::Result<()> {
+        let local_owner_user = &self.graph_navigation_instance_state.local_owner_user;
+        
+        // Generate the next available message filename
+        let message_path = get_next_message_file_path(&self.current_path, local_owner_user);
+        
+        // Add the message using existing function
+        add_im_message(
+            &message_path,
+            local_owner_user,
+            input.trim(),
+            None,
+            &self.graph_navigation_instance_state,
+        ).map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to add message: {}", e)))
+    }
+
+
+
+    
 
     fn load_im_messages(&mut self) {
         debug_log("starting: load_im_messages called"); 
@@ -3302,9 +3658,8 @@ impl App {
         //     &self.graph_navigation_instance_state.scope,
         //     &self.graph_navigation_instance_state.pa2_schedule,
         // ); 
-    } 
-   
-    
+    }
+
     fn enter_task_browser(&mut self) {
         debug_log!("task-mode: starting: enter_task_browser");
         if self.current_path.exists() {
@@ -10980,10 +11335,12 @@ fn handle_command_main_mode(
                 /////////////////
                 let mut message_path = app.current_path.clone();
                 message_path.push("instant_message_browser");
+                
+                debug_log!("message_path {:?}", message_path);
 
                 // Check if directory exists
                 if !message_path.exists() {
-                    println!("Message directory not found!");
+                    println!("handle comand 'm', Message directory not found!");
                     return Ok(false);  // Changed to match expected return type
                 }
                 
@@ -11003,17 +11360,20 @@ fn handle_command_main_mode(
                     }
                 }
                 
-                debug_log(&format!("app.current_path {:?}", app.current_path)); 
-                app.input_mode = InputMode::InsertText;
-                app.current_path = app.current_path.join("instant_message_browser");
+                debug_log(&format!("handle command 'm' app.current_path {:?}", app.current_path)); 
+                // app.input_mode = InputMode::InsertText;
+                // app.current_path = app.current_path.join("instant_message_browser");
 
-                debug_log!(
-                    "app.current_path after joining 'instant_message_browser': {:?}",
-                    app.current_path
-                ); 
+                // debug_log!(
+                //     "app.current_path after joining 'instant_message_browser': {:?}",
+                //     app.current_path
+                // ); 
                 
-                // Enter Browser of Messages
-                app.load_im_messages();
+                // // Enter Browser of Messages
+                // app.load_im_messages();
+                
+                // TODO experimental state refresh
+                app.enter_modal_instant_message_browser(app.current_path.clone())?;
             }
 
             "t" | "task" | "tasks" => {
@@ -17485,7 +17845,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
     // bootstrap: load team-channels
     app.update_directory_list()?;
 
-    // bootstrap: TUI display: TODO not yet working to display first options
+    // bootstrap: TUI display:
     print!("\x1B[2J\x1B[1;1H"); // Clear the screen
     tiny_tui::simple_render_list(
         &app.tui_directory_list, 

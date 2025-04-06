@@ -76,6 +76,15 @@ pub mod tiny_tui {
         println!("Feedback: {}", pa6_feedback);
     }    
     
+    /// doc strings needed
+    /// I thnk this is for message-mode view
+    /// which may work for various text line items
+    /// - instand messenger
+    /// - votes polls surveys
+    ///
+    /// switching to absolute paths...the system for getting the
+    /// path from home directory may need to change
+    /// 
     pub fn simple_render_list(list: &Vec<String>, current_path: &Path) {
             
         // 1. Get the path components
@@ -99,6 +108,7 @@ pub mod tiny_tui {
     }
         
     /// for passive view mode
+    /// this should contain some indication of passive-mode
     pub fn simple_render_list_passive(list: &Vec<String>, current_path: &Path) {
         // Display path
         let path_components: Vec<_> = current_path.components().collect();
