@@ -387,17 +387,18 @@ use crate::handle_gpg::{
     GpgError, 
     clearsign_and_encrypt_file_for_recipient, 
     decrypt_and_validate_file,
+    gpg_make_input_path_name_abs_executabledirectoryrelative_nocheck,
 }; 
 
 // for managing file paths
 mod manage_absolute_executable_directory_relative_paths;
 use manage_absolute_executable_directory_relative_paths::{
     make_input_path_name_abs_executabledirectoryrelative_nocheck,
-make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error,
- make_file_path_abs_executabledirectoryrelative_canonicalized_or_error,
+    make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error,
+    make_file_path_abs_executabledirectoryrelative_canonicalized_or_error,
     get_absolute_path_to_executable_parentdirectory,
     abs_executable_directory_relative_exists,
-    };
+};
 
 
 // For TUI
@@ -9354,6 +9355,290 @@ fn generic_share_address_book(recipient_name: &str) -> Result<(), GpgError> {
 //     Ok(())
 // }
 
+
+/// Share a team channel with an existing remote collaborator
+/// 
+/// This function securely shares a team channel file with a remote collaborator
+/// by clearsigning it with the local owner's GPG key and encrypting it with the
+/// remote collaborator's public GPG key.
+/// 
+/// The process follows these steps:
+/// 1. Locate the team channel's node.toml file
+/// 2. Read local owner username from uma.toml
+/// 3. Get local owner's GPG key ID from their address book file
+/// 4. Get remote collaborator's public GPG key from their address book file
+/// 5. Clearsign the team channel file with local owner's GPG key
+/// 6. Encrypt the clearsigned file with remote collaborator's public key
+/// 7. Save the resulting encrypted file to the outgoing directory
+/// 
+/// # Arguments
+/// * `remote_collaborator_username` - Username of the existing remote collaborator
+/// * `team_channel_name` - Name of the team channel to share
+/// 
+/// # Returns
+/// * `Ok(())` if the operation succeeds
+/// * `Err(GpgError)` if any step fails, with detailed error information
+/// 
+/// # File Paths
+/// * Team channel file: `{exe-parent}/project_graph_data/team_channels/{team-channel-name}/node.toml`
+/// * Local owner's address book: `{exe-parent}/project_graph_data/collaborator_files_address_book/{local-owner}__collaborator.toml`
+/// * Remote collaborator's address book: `{exe-parent}/project_graph_data/collaborator_files_address_book/{remote-collaborator}__collaborator.toml`
+/// * Output file: `{exe-parent}/invites_updates/outgoing/{team-channel-name}__team_channel__{remote-collaborator}.toml.gpg`
+fn share_team_channel_with_existing_collaborator(
+    remote_collaborator_username: &str,
+    team_channel_name: &str
+) -> Result<(), GpgError> {
+    // Start debug logging for this function
+    debug_log!("TCS: Starting team channel sharing process");
+    debug_log!("TCS: Remote collaborator username: {}", remote_collaborator_username);
+    debug_log!("TCS: Team channel name: {}", team_channel_name);
+    
+    // ======== STEP 1: Locate the team channel node.toml file ========
+    debug_log!("TCS: STEP 1 - Locating team channel node.toml file");
+    
+    // Get absolute path to the team channels directory
+    let relative_team_channels_directory_path = "project_graph_data/team_channels";
+    let absolute_team_channels_directory_path = gpg_make_input_path_name_abs_executabledirectoryrelative_nocheck(relative_team_channels_directory_path)
+        .map_err(|e| GpgError::PathError(format!(
+            "TCS: Failed to locate team channels directory: {}", e
+        )))?;
+    
+    debug_log!("TCS: Team channels directory absolute path: {}", 
+               absolute_team_channels_directory_path.display());
+    
+    // Create path to the specific team channel directory
+    let absolute_specific_team_channel_directory_path = absolute_team_channels_directory_path.join(team_channel_name);
+    
+    // Create path to the team channel's node.toml file
+    let absolute_team_channel_node_toml_path = absolute_specific_team_channel_directory_path.join("node.toml");
+    
+    debug_log!("TCS: Team channel node.toml path: {}", 
+               absolute_team_channel_node_toml_path.display());
+    
+    // Verify the team channel node.toml file exists
+    if !absolute_team_channel_node_toml_path.exists() {
+        return Err(GpgError::PathError(format!(
+            "TCS: Team channel node.toml file not found at: {}", 
+            absolute_team_channel_node_toml_path.display()
+        )));
+    }
+    
+    debug_log!("TCS: Successfully verified team channel node.toml file exists");
+    
+    // ======== STEP 2: Get local owner username from uma.toml ========
+    debug_log!("TCS: STEP 2 - Reading local owner username from uma.toml");
+    
+    // Get absolute path to uma.toml configuration file
+    let relative_uma_toml_path = "uma.toml";
+    let absolute_uma_toml_path = gpg_make_input_path_name_abs_executabledirectoryrelative_nocheck(relative_uma_toml_path)
+        .map_err(|e| GpgError::PathError(format!(
+            "TCS: Failed to locate uma.toml configuration file: {}", e
+        )))?;
+    
+    debug_log!("TCS: uma.toml absolute path: {}", 
+               absolute_uma_toml_path.display());
+    
+    // Convert PathBuf to string for TOML reading functions
+    let absolute_uma_toml_path_string = absolute_uma_toml_path
+        .to_str()
+        .ok_or_else(|| GpgError::PathError(
+            "TCS: Unable to convert uma.toml path to string".to_string()
+        ))?;
+    
+    // Read local owner username from uma.toml configuration
+    let local_owner_username = read_single_line_string_field_from_toml(
+        absolute_uma_toml_path_string, 
+        "uma_local_owner_user",
+    ).map_err(|e| GpgError::ValidationError(format!(
+        "TCS: Failed to read local owner username from uma.toml: {}", e
+    )))?;
+    
+    debug_log!("TCS: Successfully read local owner username: {}", local_owner_username);
+    
+    // ======== STEP 3: Locate collaborator files directory ========
+    debug_log!("TCS: STEP 3 - Locating collaborator files directory");
+    
+    // Get absolute path to collaborator files directory
+    let relative_collaborator_files_directory_path = "project_graph_data/collaborator_files_address_book";
+    let absolute_collaborator_files_directory_path = gpg_make_input_path_name_abs_executabledirectoryrelative_nocheck(relative_collaborator_files_directory_path)
+        .map_err(|e| GpgError::PathError(format!(
+            "TCS: Failed to locate collaborator files directory: {}", e
+        )))?;
+    
+    debug_log!("TCS: Collaborator files directory absolute path: {}", 
+               absolute_collaborator_files_directory_path.display());
+    
+    // ======== STEP 4: Get local owner's GPG key ID from their address book ========
+    debug_log!("TCS: STEP 4 - Getting local owner's GPG key ID");
+    
+    // Create path to local owner's address book file
+    let local_owner_address_book_filename = format!("{}__collaborator.toml", local_owner_username);
+    let absolute_local_owner_address_book_path = absolute_collaborator_files_directory_path.join(&local_owner_address_book_filename);
+    
+    debug_log!("TCS: Local owner's address book path: {}", 
+               absolute_local_owner_address_book_path.display());
+    
+    // Verify local owner's address book file exists
+    if !absolute_local_owner_address_book_path.exists() {
+        return Err(GpgError::PathError(format!(
+            "TCS: Local owner's address book file not found at: {}", 
+            absolute_local_owner_address_book_path.display()
+        )));
+    }
+    
+    // Convert PathBuf to string for TOML reading functions
+    let absolute_local_owner_address_book_path_string = absolute_local_owner_address_book_path
+        .to_str()
+        .ok_or_else(|| GpgError::PathError(format!(
+            "TCS: Unable to convert local owner's address book path to string: {}", 
+            absolute_local_owner_address_book_path.display()
+        )))?;
+    
+    // Read local owner's GPG key ID from their address book
+    let local_owner_gpg_key_id = read_singleline_string_from_clearsigntoml(
+        absolute_local_owner_address_book_path_string, 
+        "gpg_publickey_id"
+    ).map_err(|e| {
+        debug_log!("TCS: ERROR - Failed to read GPG key ID with field name 'gpg_publickey_id'");
+        GpgError::ValidationError(format!(
+            "TCS: Failed to read local owner's GPG key ID from address book: {}", e
+        ))
+    })?;
+    
+    debug_log!("TCS: Successfully read local owner's GPG key ID: {}", local_owner_gpg_key_id);
+    println!("Local owner's GPG key ID (for signing): {}", local_owner_gpg_key_id);
+    
+    // ======== STEP 5: Get remote collaborator's public GPG key ========
+    debug_log!("TCS: STEP 5 - Getting remote collaborator's public GPG key");
+    
+    // Create path to remote collaborator's address book file
+    let remote_collaborator_address_book_filename = format!("{}__collaborator.toml", remote_collaborator_username);
+    let absolute_remote_collaborator_address_book_path = absolute_collaborator_files_directory_path.join(&remote_collaborator_address_book_filename);
+    
+    debug_log!("TCS: Remote collaborator's address book path: {}", 
+               absolute_remote_collaborator_address_book_path.display());
+    
+    // Verify remote collaborator's address book file exists
+    if !absolute_remote_collaborator_address_book_path.exists() {
+        return Err(GpgError::PathError(format!(
+            "TCS: Remote collaborator's address book file not found at: {}", 
+            absolute_remote_collaborator_address_book_path.display()
+        )));
+    }
+    
+    // Convert PathBuf to string for TOML reading functions
+    let absolute_remote_collaborator_address_book_path_string = absolute_remote_collaborator_address_book_path
+        .to_str()
+        .ok_or_else(|| GpgError::PathError(format!(
+            "TCS: Unable to convert remote collaborator's address book path to string: {}", 
+            absolute_remote_collaborator_address_book_path.display()
+        )))?;
+    
+    // Read remote collaborator's public GPG key from their address book
+    let remote_collaborator_public_gpg_key = read_multiline_string_from_clearsigntoml(
+        absolute_remote_collaborator_address_book_path_string, 
+        "gpg_key_public"
+    ).map_err(|e| GpgError::ValidationError(format!(
+        "TCS: Failed to read remote collaborator's public GPG key from address book: {}", e
+    )))?;
+    
+    debug_log!("TCS: Successfully read remote collaborator's public GPG key");
+    
+    // ======== STEP 6: Prepare output directory ========
+    debug_log!("TCS: STEP 6 - Preparing output directory");
+    
+    // Get absolute path to output directory
+    let relative_output_directory_path = "invites_updates/outgoing";
+    let absolute_output_directory_path = gpg_make_input_path_name_abs_executabledirectoryrelative_nocheck(relative_output_directory_path)
+        .map_err(|e| GpgError::PathError(format!(
+            "TCS: Failed to locate output directory: {}", e
+        )))?;
+    
+    debug_log!("TCS: Output directory absolute path: {}", 
+               absolute_output_directory_path.display());
+    
+    // Create output directory if it doesn't exist
+    fs::create_dir_all(&absolute_output_directory_path)
+        .map_err(|e| GpgError::FileSystemError(e))?;
+    
+    debug_log!("TCS: Successfully created/verified output directory");
+    
+    // ======== STEP 7: Create temporary file for remote collaborator's public key ========
+    debug_log!("TCS: STEP 7 - Creating temporary file for remote collaborator's public key");
+    
+    // Create path for temporary public key file
+    let temporary_remote_collaborator_public_key_file_path = absolute_output_directory_path
+        .join(format!("{}_tmp_pubkey.asc", remote_collaborator_username));
+    
+    debug_log!("TCS: Temporary public key file path: {}", 
+               temporary_remote_collaborator_public_key_file_path.display());
+    
+    // Write remote collaborator's public key to temporary file
+    fs::write(&temporary_remote_collaborator_public_key_file_path, remote_collaborator_public_gpg_key)
+        .map_err(|e| GpgError::FileSystemError(e))?;
+    
+    debug_log!("TCS: Successfully wrote remote collaborator's public key to temporary file");
+    
+    // ======== STEP 8: Clearsign and encrypt team channel file ========
+    debug_log!("TCS: STEP 8 - Clearsigning and encrypting team channel file");
+    
+    // Display information about the process
+    println!("\nProcessing with the following parameters:");
+    println!("Team channel file: {}", absolute_team_channel_node_toml_path.display());
+    println!("Local owner's GPG key ID (for signing): {}", local_owner_gpg_key_id);
+    println!("Remote collaborator's public key file: {}", temporary_remote_collaborator_public_key_file_path.display());
+    println!("Encrypting team channel '{}' for user '{}'", team_channel_name, remote_collaborator_username);
+    
+    // Clearsign and encrypt the team channel node.toml file
+    clearsign_and_encrypt_file_for_recipient(
+        &absolute_team_channel_node_toml_path,
+        &local_owner_gpg_key_id,
+        &temporary_remote_collaborator_public_key_file_path
+    )?;
+    
+    debug_log!("TCS: Successfully clearsigned and encrypted team channel file");
+    
+    // Generate the expected output file path for user information
+    let expected_encrypted_output_filename = format!("{}__team_channel__{}.toml.gpg", 
+                                                  team_channel_name, 
+                                                  remote_collaborator_username);
+    let expected_encrypted_output_file_path = absolute_output_directory_path.join(&expected_encrypted_output_filename);
+    
+    // ======== STEP 9: Clean up temporary files ========
+    debug_log!("TCS: STEP 9 - Cleaning up temporary files");
+    
+    // Remove temporary public key file
+    if let Err(e) = fs::remove_file(&temporary_remote_collaborator_public_key_file_path) {
+        debug_log!("TCS: Warning - Failed to remove temporary public key file: {}", e);
+        eprintln!("Warning: Failed to remove temporary public key file: {}", e);
+        // Continue execution - this is not a critical error
+    } else {
+        debug_log!("TCS: Successfully removed temporary public key file");
+    }
+    
+    // ======== STEP 10: Confirm successful completion ========
+    debug_log!("TCS: STEP 10 - Confirming successful completion");
+    
+    // Verify output file exists (extra safety check)
+    if !expected_encrypted_output_file_path.exists() {
+        debug_log!("TCS: WARNING - Cannot find expected output file at: {}", 
+                   expected_encrypted_output_file_path.display());
+        println!("\nProcessing completed, but cannot verify output file location.");
+        println!("Please check the invites_updates/outgoing directory for the encrypted file.");
+    } else {
+        debug_log!("TCS: Successfully verified output file exists at: {}", 
+                   expected_encrypted_output_file_path.display());
+        println!("\nTeam channel '{}' has been successfully shared with '{}'!", 
+                 team_channel_name, remote_collaborator_username);
+        println!("The encrypted team channel file is saved to:");
+        println!("{}", expected_encrypted_output_file_path.display());
+    }
+    
+    debug_log!("TCS: Team channel sharing completed successfully");
+    
+    Ok(())
+}
+
 /// Share the Local Owner User's (LOU) address book with an existing collaborator
 /// 
 /// This function handles the secure sharing of the LOCAL OWNER USER'S address book file
@@ -10594,23 +10879,7 @@ pub fn invite_wizard() -> Result<(), GpgError> {
             io::stdin().read_line(&mut input).expect("Failed to read line");
 
         },
-        // 2 => {
-        //     // Add code to share address-book file here
-        //     /*
-        //     2. make clearsigned version of your own addressbook .toml
-        //     get user name
-        //     use user name to get their 
-        //     */
-        // },
-        // 3 => {
-        //     // Add code to share team-channel here
-        //     /*
-        //     3. make clearsigned version of this team-channel if you are owner
-        //     get user name
-        //     use user name to get their gpg key from their addressbook file
-        //     gpg encrypt the clearsign file
-        //     */
-        // },
+
         2 => {
             println!("\n\n-- Option 2: Sharing an Address-Book-File --");    
             println!("\nAre you sharing your address book file with...");
@@ -10727,7 +10996,6 @@ pub fn invite_wizard() -> Result<(), GpgError> {
                     // 6. Saves the validated clearsigned file to the collaborator address book directory
                     // 7. Moves the original encrypted file to the processed directory
                     */
-                    
                     process_incoming_encrypted_collaborator_addressbook();
                     
                     }
@@ -10738,7 +11006,178 @@ pub fn invite_wizard() -> Result<(), GpgError> {
             }
         },
         3 => {
+            /*
+            1. Team Channel files, clearsigned, and gpg encrypted.
+            ideally: channel_name...
+            just channel_name.toml?
+            gpg+clearsigned+toml
+            clearsigned with who's key?
+            get key from addressbook?
+            
+            team channel only read...at start?
+            
+            v1: plain toml...
+            simple_clearsign_gpgencrypt(path_in, path_out):
+            get file
+            clearsign with yours
+            gpg sign with theirs
+            put in outgoing
+            
+            new function: multi-file clearsign validate
+            multi-file clearsign read...fields
+
+            read_gpg_multifile_clearsign_stringline
+            read_gpg_multifile_clearsign_int_array
+            read_gpg_multifile_clearsign_multiline_string
+
+            read_gpg_multifile_clearsign_stringline
+            read_gpg_multifile_clearsign_int_array
+            read_gpg_multifile_clearsign_multiline_string
+            
+            and unpack file:
+            use your keyid
+            use their key: read and get public key...
+            make team-channel folder
+            make team-channel node.toml
+            
+            */
             println!("Team channel sharing - Not implemented yet");
+            println!("\n\n-- Option 3: Sharing a Team-Channel --");    
+            println!("\n 1. Do you wish to share a Team-Channel that you own");
+            println!("    with an existing remote-collaborator?");
+            println!(" ");
+            println!("Or ");
+            println!(" 2. Are you looking to import a Team-Channel");
+            println!("    being shared with you (by a remote collaborator/owner)?");
+            println!(" ");
+            println!("(Enter: number + enter)");
+
+            // Re-read another input for subchoice, kind of like... peanut butter...in a sand witch.
+            let mut sub_input = String::new();
+            io::stdin()
+                .read_line(&mut sub_input)
+                .map_err(|e| GpgError::GpgOperationError(format!("Failed to read subchoice: {}", e)))?;
+
+            let subchoice: u32 = match sub_input.trim().parse() {
+                Ok(num) => num,
+                Err(_) => {
+                    println!("Please try again entering a number.");
+                    return Ok(());
+                }
+            };
+            
+            match subchoice {
+                1 => {
+                    println!(" --- to existing remote collaborator --- ");
+                    println!("What is remote colaborator's name?");
+                    println!("(Enter: name + enter)");
+                    /*
+                        The file where the user's gpg key is located is found here:
+                        
+                        ```path
+                        project_graph_data/collaborator_files_address_book/USERNAMEHERE__collaborator.toml
+                        ```
+
+                        within the file, the gpg key (public) is found:
+                        gpg_key_public = """KEYHERE"""
+                        
+                        clearsign read toml?
+                        
+                    // For toml and clearsigntoml
+                    mod read_toml_field;
+                    use crate::read_toml_field::{
+                        read_field_from_toml,
+                        read_basename_fields_from_toml,
+                        read_single_line_string,
+                        read_multi_line_string, 
+                        read_integer_array,
+                        read_singleline_string_from_clearsigntoml,
+                    }; 
+              
+                    reading addressbook files ALW
+                    pub fn read_singleline_string_from_clearsigntoml(path_to_clearsigntoml_with_gpgkey: &str, field_name: &str) -> Result<String, String> {
+                    */
+                    let mut remotecollaborator_username_input = String::new();
+                    io::stdin()
+                        .read_line(&mut remotecollaborator_username_input)
+                        .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
+                    debug_log!("wiz: remote_collaborator_username -> {}", remotecollaborator_username_input);
+                    // share_lou_address_book_with_existingcollaborator(username_of_remote_collaborator.trim())?;
+                    // Ensure the team_channel_name is completely trimmed of all whitespace
+                    let remote_collaborator_username = remotecollaborator_username_input.trim().trim_end_matches(|c| c == '\n' || c == '\r');
+                    
+                    // TODO function here to get the remote collaborator's gpg key to finally gpg encrypt with
+                    debug_log!("remote_collaborator_username: '{}'", remote_collaborator_username);
+
+                    println!("What is the Team-Channel-Name?");
+                    println!("(Enter: name + enter)");
+
+                    let mut team_channel_name_input = String::new();
+                    io::stdin()
+                        .read_line(&mut team_channel_name_input)
+                        .map_err(|e| GpgError::GpgOperationError(format!("wiz: Failed to read input: {}", e)))?;
+
+                    
+                    // Ensure the team_channel_name is completely trimmed of all whitespace
+                    let team_channel_name = team_channel_name_input.trim().trim_end_matches(|c| c == '\n' || c == '\r');
+                    
+                    // Additional debug to check exact content
+                    debug_log!("Menu: Raw team channel name: '{}'", team_channel_name);
+                    debug_log!("Menu: Team channel name length: {}", team_channel_name.len());
+                    
+                    debug_log!("wiz: name_of_teamchannel -> {}", team_channel_name);
+                    
+                    /*
+                    1. make sure the node.toml file is at 
+                    {exe-parent}/project_graph_data/team_channels/{team-channel-name}/node.toml
+                    2. clearsign it with your own gpg-key-id 
+                    3. gpg encrypt the clearsign file with the reamote collaborators public key
+                    4. put the resulting file in 
+                    ```path
+                    exe-parent/invites_updates/incoming/
+                    ``` 
+                    */
+                    share_team_channel_with_existing_collaborator(
+                        &remote_collaborator_username,
+                        &team_channel_name,
+                    );
+
+                    }
+
+                2 => {
+                    println!(" --- FROM a remote-collaborator / team-channel-owner, TO you --- ");
+                    println!("Please put their FILENAME.asc file in the");
+                    println!("```path");
+                    println!("invites_updates/incoming/teamchannels ");
+                    println!("```");
+                    println!("directory (folder)");
+                    println!("Press enter when this is done.");
+
+                    // this does nothing, press enter to proceed.
+                    let mut input = String::new();
+                    io::stdin()
+                        .read_line(&mut input)
+                        .map_err(|e| format!("Failed to read input: {:?}", e));
+
+                    /*
+                    logic to target that directory...
+                    // 1. Scans the incoming directory for .asc files
+                    // 2. If exactly one file is found, proceeds with processing
+                    // 3. If multiple files are found, prompts the user to clean up the directory
+                    // 4. Decrypts the file and verifies the clearsignature
+                    // 5. Extracts the collaborator's username from the clearsigned content
+                    // 6. Saves the validated clearsigned file to the collaborator address book directory
+                    // 7. Moves the original encrypted file to the processed directory
+                    */
+                    process_incoming_encrypted_collaborator_addressbook();
+
+                    }
+                // Handle cases where subchoice is 0 or ≥ 4
+                _ => {
+                    println!("Invalid option. Please select 1, 2, or 3.");
+                }
+            }
+
             // Similar implementation to share_address_book() but with team channel file
             // Would use the same clearsign_and_encrypt_file_for_recipient() function
         },
@@ -10750,7 +11189,6 @@ pub fn invite_wizard() -> Result<(), GpgError> {
     }
     Ok(())
 }
-
 
 fn handle_command_main_mode(
     input: &str, 
@@ -10772,12 +11210,12 @@ fn handle_command_main_mode(
             if app.current_path.display().to_string() == "project_graph_data/team_channels".to_string() {
                 let selected_channel = app.tui_directory_list[item_index].clone();
                 debug_log(&format!("Selected channel: {}", selected_channel));
-                
+
                 set_sync_start_ok_flag_to_true();
-                
+
                 app.current_path = app.current_path.join(&selected_channel);
                 app.graph_navigation_instance_state.current_full_file_path = app.current_path.clone();
-                
+
                 // Simply call the method without trying to handle its result
                 app.graph_navigation_instance_state.nav_graph_look_read_node_toml();
             } else {
@@ -10799,7 +11237,7 @@ fn handle_command_main_mode(
                 // Display help information
                 // TODO help wizard or blurb?
             }
-            
+
             "sharegpg" | "exportgpg" | "requestinvite" => {
                 debug_log("Export public GPG Command:");
 
@@ -10807,37 +11245,32 @@ fn handle_command_main_mode(
                 // TODO make paths constants
                 let uma_config_path = Path::new("uma.toml");
                 let output_dir = Path::new("invites_updates/outgoing");
-                
+
                 match export_public_gpg_key(&uma_config_path, &output_dir) {
                     Ok(key_path) => println!("GPG key exported successfully to: {}", key_path),
                     Err(e) => eprintln!("Failed to export GPG key: {}", e),
                 }
-                
+
             }
-            
+
             "invite" | "update" => {
                 debug_log("invite / update wizard");
                 /*
-                
-                
                 */
                 invite_wizard();
-                
             }
-            
-            
+
             "addnode" | "add_node" | "newnode" | "new" | "node" | "task" | "addtask" | "add_task" | "add" => {
                 debug_log("Command: Add Node");
                 // TODO trim down excess terms above
-                
+
                 debug_log!("app.current_path {:?}", app.current_path);
-                
+
                 create_core_node(
                     app.current_path.clone(), // node_path: PathBuf,
                     app.graph_navigation_instance_state.current_node_teamchannel_collaborators_with_access.clone(),  // teamchannel_collaborators_with_access: Vec<String>,
                     app.graph_navigation_instance_state.active_team_channel.clone(),
                 );
-                
             }
             
             "bigger" | "big" | "bg" => {
@@ -10857,13 +11290,12 @@ fn handle_command_main_mode(
                 // Display help information
             }
             // "p" | "paralax" => {
-            //     debug_log("Vote!");
+            //     debug_log("!@#");
             //     // Display help information
             // }
             "collaborator" => {
                 debug_log("make node!");
                 add_collaborator_qa(&graph_navigation_instance_state);
-                
             }
             
             // "node" => {
@@ -10972,7 +11404,6 @@ fn handle_command_main_mode(
             //     }
             // }, // end of node match arm
 
-            
            "d" | "datalab" | "data" => {
                 debug_log("Help!");
                 // Display help information
@@ -10985,7 +11416,7 @@ fn handle_command_main_mode(
                 let uma_toml_path = Path::new("uma.toml");
                 let toml_data = toml::from_str::<toml::Value>(&fs::read_to_string(uma_toml_path)?)
                     .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?; // Convert toml::de::Error 
-                
+
                 // Use a default refresh rate if log_mode_refresh is not found or invalid.
                 // Use a default refresh rate if log_mode_refresh is not found or invalid.
                 // let log_mode_refresh = toml_data
@@ -11022,7 +11453,7 @@ fn handle_command_main_mode(
                 };
 
                 debug_log!("log_mode_refresh: {:?}", log_mode_refresh); 
-                
+
                 let mut last_log_file_size = fs::metadata("uma.log")
                     .map(|metadata| metadata.len())
                     .unwrap_or(0); // Get initial size, or 0 if error
@@ -11037,7 +11468,7 @@ fn handle_command_main_mode(
                         eprintln!("Failed to read uma.log: {}", e);
                     }
                 }
-                        
+
                 loop { // Enter the refresh loop
 
                     // Check for file size changes 
@@ -11045,7 +11476,7 @@ fn handle_command_main_mode(
                         .map(|metadata| metadata.len())
                         .unwrap_or(0);
                     if current_log_file_size != last_log_file_size {
-                        
+
                         // 1. Read and display the log contents.
                         // File size has changed, read and display new contents 
                         match fs::read_to_string("uma.log") {
@@ -11060,8 +11491,8 @@ fn handle_command_main_mode(
                             }
                         } 
                     } 
-                                        
-                                                            
+
+
                     // // 1. Read and display the log contents.
                     // match fs::read_to_string("uma.log") {
                     //     Ok(log_contents) => {
@@ -11071,7 +11502,7 @@ fn handle_command_main_mode(
                     //         eprintln!("Failed to read uma.log: {}", e);
                     //     }
                     // }
-                    
+
                     // // 1. Read the log_mode_refresh value from uma.toml.
                     // let uma_toml_path = Path::new("uma.toml");
                     // let user_metadata = match toml::from_str::<LocalUserUma>(&fs::read_to_string(uma_toml_path)?) {
@@ -11082,7 +11513,6 @@ fn handle_command_main_mode(
                     //         return Ok(false); // Or handle the error differently (e.g., use a default value)
                     //     }
                     // };
-                    
 
 
                     // 2. Sleep for a short duration.
