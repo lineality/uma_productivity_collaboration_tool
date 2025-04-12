@@ -372,6 +372,7 @@ toml crates
 // For toml and clearsigntoml
 mod clearsign_toml_module;
 use crate::clearsign_toml_module::{
+    GpgError,
     // read_field_from_toml,
     // read_basename_fields_from_toml,
     read_single_line_string_field_from_toml,
@@ -380,15 +381,22 @@ use crate::clearsign_toml_module::{
     read_singleline_string_from_clearsigntoml,
     read_multiline_string_from_clearsigntoml,
     extract_verify_store_gpg_encrypted_clearsign_toml,
-}; 
-
-mod handle_gpg;  // This declares the module and tells Rust to look for handle_gpg.rs
-use crate::handle_gpg::{
-    GpgError, 
-    clearsign_and_encrypt_file_for_recipient, 
+    verify_clearsigned_file_and_extract_content_to_output,
+    clearsign_and_encrypt_file_for_recipient,
     decrypt_and_validate_file,
     gpg_make_input_path_name_abs_executabledirectoryrelative_nocheck,
+    decrypt_gpg_file_to_output,
 }; 
+
+// // deprecated, code moved to new clearsign_toml_module
+// mod handle_gpg;  // This declares the module and tells Rust to look for handle_gpg.rs
+// use crate::handle_gpg::{
+//     , 
+//     , 
+//     ,
+//     ,
+//     ,
+// }; 
 
 // for managing file paths
 mod manage_absolute_executable_directory_relative_paths;
@@ -398,6 +406,7 @@ use manage_absolute_executable_directory_relative_paths::{
     make_file_path_abs_executabledirectoryrelative_canonicalized_or_error,
     get_absolute_path_to_executable_parentdirectory,
     abs_executable_directory_relative_exists,
+    prepare_file_parent_directories_abs_executabledirectoryrelative,
 };
 
 
@@ -4164,7 +4173,38 @@ impl CollaboratorTomlData {
     // Add any other methods you need here
 }
 
-fn add_collaborator_setup_file(
+
+/// Adds a new collaborator by creating a TOML configuration file in the executable-relative
+/// collaborator directory.
+///
+/// This function creates a `CollaboratorTomlData` instance from the provided parameters,
+/// serializes it to TOML format, and saves it to a file in the collaborator directory.
+/// The file path is determined relative to the executable location rather than the current
+/// working directory to ensure consistent path resolution regardless of where the program
+/// is executed from.
+///
+/// # Arguments
+///
+/// * `user_name` - The collaborator's username
+/// * `user_salt_list` - List of salt values used for this collaborator
+/// * `ipv4_addresses` - Optional list of IPv4 addresses associated with the collaborator
+/// * `ipv6_addresses` - Optional list of IPv6 addresses associated with the collaborator
+/// * `gpg_publickey_id` - The GPG public key ID for the collaborator
+/// * `gpg_key_public` - The GPG public key content for the collaborator
+/// * `sync_interval` - The synchronization interval in seconds
+/// * `updated_at_timestamp` - Unix timestamp of when this collaborator data was last updated
+///
+/// # Returns
+///
+/// * `Result<(), std::io::Error>` - Ok(()) if the operation succeeded, or an error if any step failed
+///
+/// # Errors
+///
+/// This function can return errors in the following cases:
+/// * If creating the collaborator directory fails
+/// * If serializing the collaborator data to TOML fails
+/// * If creating or writing to the file fails
+pub fn add_collaborator_setup_file(
     user_name: String,
     user_salt_list: Vec<u128>,
     ipv4_addresses: Option<Vec<Ipv4Addr>>,
@@ -4174,8 +4214,19 @@ fn add_collaborator_setup_file(
     sync_interval: u64,
     updated_at_timestamp: u64,
 ) -> Result<(), std::io::Error> {
-    debug_log("Starting: fn add_collaborator_setup_file( ...cupa tea?");
+    /*
+    use std::fs::File;
+    use std::io::Write;
+    use std::net::{Ipv4Addr, Ipv6Addr};
+    use std::path::Path;
+
+    // Import the path management module
+    use crate::manage_absolute_executable_directory_relative_paths::make_input_path_name_abs_executabledirectoryrelative_nocheck;
+    use crate::manage_absolute_executable_directory_relative_paths::prepare_file_parent_directories_abs_executabledirectoryrelative;
+    */
+    debug_log("Starting: fn add_collaborator_setup_file");
     
+    // Log function parameters for debugging
     debug_log!("user_name {:?}", user_name);
     debug_log!("user_salt_list {:?}", &user_salt_list);
     debug_log!("ipv4_addresses {:?}", ipv4_addresses);
@@ -4185,24 +4236,7 @@ fn add_collaborator_setup_file(
     debug_log!("sync_interval {:?}", sync_interval);   
     debug_log!("updated_at_timestamp {:?}", updated_at_timestamp); 
     
-    // print-log stops here.
-    // so maybe let collaborator = CollaboratorTomlData::new( is failing
-    
-    // likely failing
-    // Create the CollaboratorTomlData instance using the existing new() method:
-    
-    // let collaborator = CollaboratorTomlData::new(
-    //     user_name, 
-    //     user_salt_list,          // Empty vector for user_salt_list
-    //     ipv4_addresses,                // None for ipv4_addresses
-    //     None,                // None for ipv6_addresses
-    //     "".to_string(),      // Empty string for gpg_publickey_id
-    //     "".to_string(),      // Empty String for gpg_key_public
-    //     sync_interval,                   // 0 for sync_interval
-    //     updated_at_timestamp,                   // 0 for updated_at_timestamp
-    // );
-    // debug_log!("printing collaborator: {:?}", collaborator);
-    
+    // Create the CollaboratorTomlData instance
     let collaborator = CollaboratorTomlData::new(
         user_name, 
         user_salt_list,
@@ -4216,68 +4250,185 @@ fn add_collaborator_setup_file(
     
     debug_log!("collaborator {:?}", collaborator);
 
-    // Serialize the data:
-    // let toml_string = toml::to_string(&collaborator).map_err(|e| {
-    //     std::io::Error::new(
-    //         std::io::ErrorKind::Other,
-    //         format!("TOML serialization error: {}", e),
-    //     )
-    // })?;
-    
-    
-    
-    match serialize_collaborator_to_toml(&collaborator) {
-        Ok(toml_string) => {
-            println!("Serialized TOML:\n{}", toml_string);
-
-            // Write the TOML string to a file (example file path)
-            // match write_toml_to_file("collaborator_data.toml", &toml_string) {
-            //     Ok(_) => println!("TOML data written to file successfully."),
-            //     Err(e) => println!("Error writing to file: {}", e),
-            // }
-            debug_log!("toml_string {:?}", toml_string);
-        
-            // Construct the file path:
-            let file_path = Path::new("project_graph_data/collaborator_files_address_book")
-                .join(format!("{}__collaborator.toml", collaborator.user_name));
-        
-            // Log the constructed file path:
-            debug_log!("Attempting to write collaborator file to: {:?}", file_path); 
-            
-            // Create the file and write the data:
-            let mut file = File::create(file_path.clone())?;
-            file.write_all(toml_string.as_bytes())?;
-
+    // Serialize the collaborator to TOML format
+    let toml_string = match serialize_collaborator_to_toml(&collaborator) {
+        Ok(content) => {
+            debug_log!("Successfully serialized collaborator to TOML");
+            content
+        },
+        Err(e) => {
+            debug_log!("Error serializing to TOML: {}", e);
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("TOML serialization error: {}", e),
+            ));
         }
-        Err(e) => println!("Error serializing to TOML: {}", e),
+    };
+    
+    // Construct the relative path to the collaborator file
+    let relative_path = format!(
+        "project_graph_data/collaborator_files_address_book/{}__collaborator.toml", 
+        collaborator.user_name
+    );
+    
+    // Convert the relative path to an absolute path based on the executable's directory
+    let file_path = match make_input_path_name_abs_executabledirectoryrelative_nocheck(&relative_path) {
+        Ok(path) => path,
+        Err(e) => {
+            debug_log!("Error creating absolute path: {}", e);
+            return Err(e);
+        }
+    };
+    
+    // Ensure parent directories exist
+    let prepared_path = match prepare_file_parent_directories_abs_executabledirectoryrelative(&relative_path) {
+        Ok(path) => path,
+        Err(e) => {
+            debug_log!("Error preparing parent directories: {}", e);
+            return Err(e);
+        }
+    };
+    
+    // Log the constructed file path
+    debug_log!("Attempting to write collaborator file to: {:?}", prepared_path); 
+    
+    // Create the file and write the TOML data
+    let mut file = match File::create(&prepared_path) {
+        Ok(f) => f,
+        Err(e) => {
+            debug_log!("Error creating file: {}", e);
+            return Err(e);
+        }
+    };
+    
+    // Write the serialized TOML to the file
+    match file.write_all(toml_string.as_bytes()) {
+        Ok(_) => {
+            debug_log!("Successfully wrote collaborator file");
+            Ok(())
+        },
+        Err(e) => {
+            debug_log!("Error writing to file: {}", e);
+            Err(e)
+        }
     }
-    
-     // // Check for potential errors during file creation:
-     // match File::create(&file_path) {
-     //     Ok(mut file) => {
-     //         debug_log!("File creation succeeded.");
-
-     //         // Check for errors while writing to the file: 
-     //         match file.write_all(toml_string.as_bytes()) {
-     //             Ok(_) => { 
-     //                 debug_log!("Collaborator file written successfully."); 
-     //             },
-     //             Err(err) => {
-     //                 debug_log!("Error writing data to collaborator file: {:?}", err);
-     //                 // Consider returning the error here for more explicit error handling
-     //                 // return Err(err);
-     //             }
-     //         } 
-     //     },
-     //     Err(err) => {
-     //         debug_log!("Error creating collaborator file: {:?}", err);
-     //         // Return the error here to propagate it
-     //         return Err(err); 
-     //     }
-     // } 
-    
-    Ok(()) 
 }
+
+/// old relative path vesion
+// fn add_collaborator_setup_file(
+//     user_name: String,
+//     user_salt_list: Vec<u128>,
+//     ipv4_addresses: Option<Vec<Ipv4Addr>>,
+//     ipv6_addresses: Option<Vec<Ipv6Addr>>,
+//     gpg_publickey_id: String,
+//     gpg_key_public: String,
+//     sync_interval: u64,
+//     updated_at_timestamp: u64,
+// ) -> Result<(), std::io::Error> {
+//     debug_log("Starting: fn add_collaborator_setup_file( ...cupa tea?");
+    
+//     debug_log!("user_name {:?}", user_name);
+//     debug_log!("user_salt_list {:?}", &user_salt_list);
+//     debug_log!("ipv4_addresses {:?}", ipv4_addresses);
+//     debug_log!("ipv6_addresses {:?}", ipv6_addresses);
+//     debug_log!("gpg_publickey_id {:?}", &gpg_publickey_id);
+//     debug_log!("gpg_key_public {:?}", &gpg_key_public);
+//     debug_log!("sync_interval {:?}", sync_interval);   
+//     debug_log!("updated_at_timestamp {:?}", updated_at_timestamp); 
+    
+//     // print-log stops here.
+//     // so maybe let collaborator = CollaboratorTomlData::new( is failing
+    
+//     // likely failing
+//     // Create the CollaboratorTomlData instance using the existing new() method:
+    
+//     // let collaborator = CollaboratorTomlData::new(
+//     //     user_name, 
+//     //     user_salt_list,          // Empty vector for user_salt_list
+//     //     ipv4_addresses,                // None for ipv4_addresses
+//     //     None,                // None for ipv6_addresses
+//     //     "".to_string(),      // Empty string for gpg_publickey_id
+//     //     "".to_string(),      // Empty String for gpg_key_public
+//     //     sync_interval,                   // 0 for sync_interval
+//     //     updated_at_timestamp,                   // 0 for updated_at_timestamp
+//     // );
+//     // debug_log!("printing collaborator: {:?}", collaborator);
+    
+//     let collaborator = CollaboratorTomlData::new(
+//         user_name, 
+//         user_salt_list,
+//         ipv4_addresses,
+//         ipv6_addresses,
+//         gpg_publickey_id,
+//         gpg_key_public,
+//         sync_interval,
+//         updated_at_timestamp,
+//     );
+    
+//     debug_log!("collaborator {:?}", collaborator);
+
+//     // Serialize the data:
+//     // let toml_string = toml::to_string(&collaborator).map_err(|e| {
+//     //     std::io::Error::new(
+//     //         std::io::ErrorKind::Other,
+//     //         format!("TOML serialization error: {}", e),
+//     //     )
+//     // })?;
+    
+    
+    
+//     match serialize_collaborator_to_toml(&collaborator) {
+//         Ok(toml_string) => {
+//             println!("Serialized TOML:\n{}", toml_string);
+
+//             // Write the TOML string to a file (example file path)
+//             // match write_toml_to_file("collaborator_data.toml", &toml_string) {
+//             //     Ok(_) => println!("TOML data written to file successfully."),
+//             //     Err(e) => println!("Error writing to file: {}", e),
+//             // }
+//             debug_log!("toml_string {:?}", toml_string);
+        
+//             // Construct the file path:
+//             let file_path = Path::new("project_graph_data/collaborator_files_address_book")
+//                 .join(format!("{}__collaborator.toml", collaborator.user_name));
+        
+//             // Log the constructed file path:
+//             debug_log!("Attempting to write collaborator file to: {:?}", file_path); 
+            
+//             // Create the file and write the data:
+//             let mut file = File::create(file_path.clone())?;
+//             file.write_all(toml_string.as_bytes())?;
+
+//         }
+//         Err(e) => println!("Error serializing to TOML: {}", e),
+//     }
+    
+//      // // Check for potential errors during file creation:
+//      // match File::create(&file_path) {
+//      //     Ok(mut file) => {
+//      //         debug_log!("File creation succeeded.");
+
+//      //         // Check for errors while writing to the file: 
+//      //         match file.write_all(toml_string.as_bytes()) {
+//      //             Ok(_) => { 
+//      //                 debug_log!("Collaborator file written successfully."); 
+//      //             },
+//      //             Err(err) => {
+//      //                 debug_log!("Error writing data to collaborator file: {:?}", err);
+//      //                 // Consider returning the error here for more explicit error handling
+//      //                 // return Err(err);
+//      //             }
+//      //         } 
+//      //     },
+//      //     Err(err) => {
+//      //         debug_log!("Error creating collaborator file: {:?}", err);
+//      //         // Return the error here to propagate it
+//      //         return Err(err); 
+//      //     }
+//      // } 
+    
+//     Ok(()) 
+// }
 
 fn check_collaborator_collisions(
     new_collaborator: &CollaboratorTomlData, 
@@ -6078,7 +6229,24 @@ impl InstantMessageFile {
 
 
 /// Creates a new team-channel directory, subdirectories, and metadata files.
-/// Handles errors and returns a Result to indicate success or failure.
+/// 
+/// This function establishes the directory structure and configuration files needed for a new team
+/// channel. It creates all necessary directories, assigns ports to the owner, and initializes
+/// the channel with default settings. All paths are resolved relative to the executable location
+/// rather than the current working directory, ensuring consistent behavior regardless of where
+/// the program is executed from.
+///
+/// # Directory Structure Created
+/// 
+/// ```
+/// project_graph_data/team_channels/[team_channel_name]/
+/// ├── instant_message_browser/
+/// │   └── 0.toml (metadata file)
+/// └── task_browser/
+///     ├── 1_planning/
+///     ├── 2_started/
+///     └── 3_done/
+/// ```
 ///
 /// # Arguments
 ///
@@ -6089,201 +6257,430 @@ impl InstantMessageFile {
 ///
 /// * `Result<(), ThisProjectError>` - `Ok(())` on success, or a `ThisProjectError`
 ///   describing the error.
+///
+/// # Errors
+///
+/// This function can fail with a `ThisProjectError` in the following cases:
+/// * If creating any directory fails
+/// * If saving TOML files fails
+/// * If retrieving project area data fails
+/// * If creating or saving the CoreNode fails
 fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), ThisProjectError> {
-    debug_log("starting create_team_channel()");
-    let team_channels_dir = Path::new("project_graph_data/team_channels");
-    let new_channel_path = team_channels_dir.join(&team_channel_name);
+    /*
+    // uses
+    use std::collections::HashMap;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use rand::Rng;
+
+    // Import the path management module
+    use crate::manage_absolute_executable_directory_relative_paths::make_input_path_name_abs_executabledirectoryrelative_nocheck;
+    use crate::manage_absolute_executable_directory_relative_paths::prepare_file_parent_directories_abs_executabledirectoryrelative;
+    
+    */
+    debug_log("Starting create_team_channel()");
+    
+    // Get the base directory path relative to executable location
+    let team_channels_dir_path = match make_input_path_name_abs_executabledirectoryrelative_nocheck(
+        "project_graph_data/team_channels"
+    ) {
+        Ok(path) => path,
+        Err(e) => {
+            debug_log!("Error creating team_channels_dir path: {}", e);
+            return Err(ThisProjectError::IoError(e));
+        }
+    };
+    
+    let new_channel_path = team_channels_dir_path.join(&team_channel_name);
+    debug_log!("New channel path: {:?}", new_channel_path);
 
     // 1. Create Directory Structure (with error handling)
-    fs::create_dir_all(new_channel_path.join("instant_message_browser"))?; // Propagate errors with ?
-    fs::create_dir_all(new_channel_path.join("task_browser"))?; // task browser directory
-    // for i in 1..=3 { // Using numbers
-    //     let col_name = format!("{}_col{}", i, i);
-    //     let col_path = new_channel_path.join("task_browser").join(col_name);
-    //     fs::create_dir_all(&col_path)?; // Create default task browser column directories for new channel
-    // }    
-    let col_name = "1_planning";
-    let col_path = new_channel_path.join("task_browser").join(col_name);
-    fs::create_dir_all(&col_path)?; // Create default task browser column directories for new channel
-
-    let col_name = "2_started";
-    let col_path = new_channel_path.join("task_browser").join(col_name);
-    fs::create_dir_all(&col_path)?; // Create default task browser column directories for new channel
-
-    let col_name = "3_done";
-    let col_path = new_channel_path.join("task_browser").join(col_name);
-    fs::create_dir_all(&col_path)?; // Create default task browser column directories for new channel
-
+    // Create instant_message_browser directory
+    let instant_msg_path = new_channel_path.join("instant_message_browser");
+    match fs::create_dir_all(&instant_msg_path) {
+        Ok(_) => debug_log!("Created instant_message_browser directory"),
+        Err(e) => {
+            debug_log!("Error creating instant_message_browser directory: {}", e);
+            return Err(ThisProjectError::IoError(e));
+        }
+    }
+    
+    // Create task_browser directory
+    let task_browser_path = new_channel_path.join("task_browser");
+    match fs::create_dir_all(&task_browser_path) {
+        Ok(_) => debug_log!("Created task_browser directory"),
+        Err(e) => {
+            debug_log!("Error creating task_browser directory: {}", e);
+            return Err(ThisProjectError::IoError(e));
+        }
+    }
+    
+    // Create task browser columns
+    let column_names = ["1_planning", "2_started", "3_done"];
+    for col_name in column_names.iter() {
+        let col_path = task_browser_path.join(col_name);
+        match fs::create_dir_all(&col_path) {
+            Ok(_) => debug_log!("Created task column directory: {}", col_name),
+            Err(e) => {
+                debug_log!("Error creating task column directory {}: {}", col_name, e);
+                return Err(ThisProjectError::IoError(e));
+            }
+        }
+    }
     
     // 2. Create and Save 0.toml Metadata (with error handling)
-    let metadata_path = new_channel_path.join("instant_message_browser/0.toml"); // Simplified path
+    let metadata_path = instant_msg_path.join("0.toml");
     let metadata = NodeInstMsgBrowserMetadata::new(&team_channel_name, owner.clone());
-    save_toml_to_file(&metadata, &metadata_path)?; // Use ? for error propagation
+    
+    match save_toml_to_file(&metadata, &metadata_path) {
+        Ok(_) => debug_log!("Saved metadata to 0.toml"),
+        Err(e) => {
+            debug_log!("Error saving metadata: {}", e);
+            return Err(ThisProjectError::IoError(e));
+        }
+    }
 
-    // Generate collaborator port assignments (simplified):
+    // Generate collaborator port assignments
     let mut abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>> = HashMap::new();    
 
-    // Add owner to collaborators list and port assignments:
-    // This makes it possible to create CoreNode and ensures the owner has port assignments
+    // Add owner to collaborators list
     let mut collaborators = Vec::new();
     collaborators.push(owner.clone());
     debug_log!(
-        "create_team_channel(): owner 'added' to collaborators {:?}",
-        collaborators,
-        );
+        "create_team_channel(): owner '{}' added to collaborators",
+        owner
+    );
 
-    // let mut rng = rand::thread_rng(); // Move RNG outside the loop for fewer calls
-
-    // Load the owner's data
-    // let owner_data = read_one_collaborator_setup_toml(&owner)?;
-
-    // Simplified port generation (move rng outside loop):
-    // Assign random ports to owner:  Only owner for new channel.
-    let mut rng = rand::thread_rng(); // Move RNG instantiation outside the loop
-    let ready_port = rng.gen_range(40000..60000) as u16; // Adjust range if needed
-    let tray_port = rng.gen_range(40000..60000) as u16; // Random u16 port number
-    let gotit_port = rng.gen_range(40000..60000) as u16; // Random u16 port number
+    // Generate random ports for the owner
+    let mut rng = rand::thread_rng();
+    let ready_port = rng.gen_range(40000..60000) as u16;
+    let tray_port = rng.gen_range(40000..60000) as u16;
+    let gotit_port = rng.gen_range(40000..60000) as u16;
+    
     let abstract_ports_data = AbstractTeamchannelNodeTomlPortsData {
         user_name: owner.clone(), 
         ready_port,
         intray_port: tray_port,
         gotit_port,
     };    
+    
     debug_log!(
-        "create_team_channel(): owner's abstract_ports_data created {:?}",
-        abstract_ports_data
-        );
+        "create_team_channel(): owner's ports assigned - ready:{}, intray:{}, gotit:{}",
+        ready_port, tray_port, gotit_port
+    );
 
-    // Store in the HashMap with "owner_owner" key. If more than one user this key can become unique.
-    // abstract_collaborator_port_assignments.insert(
-    //     format!("{}_{}", owner.clone(), owner), // Key derived from collaborator names
-    //     vec![ReadTeamchannelCollaboratorPortsToml { collaborator_ports: vec![abstract_ports_data] }],
-    // );
-    // debug_log!("create_team_channel(): owner 'added' to abstract_collaborator_port_assignments");
-
-    // // // Project State
-    // let agenda_process = get_agenda_process()?;
-    // let features = get_features_and_goals()?;
-    // let scope = get_project_scope()?;
-    // let schedule = get_schedule_info()?;
-            
-    // Store in the HashMap with "owner_owner" key. If more than one user this key can become unique.
+    // Store in the HashMap with "owner_owner" key
     abstract_collaborator_port_assignments.insert(
-        format!("{}_{}", owner.clone(), owner), // Key derived from collaborator names
+        format!("{}_{}", owner.clone(), owner),
         vec![ReadTeamchannelCollaboratorPortsToml { collaborator_ports: vec![abstract_ports_data] }],
     );
-    debug_log!("create_team_channel(): owner 'added' to abstract_collaborator_port_assignments");
-
-    /*
-    here here
-    Todo: likely needling to make a new toml reading function
-    to facilitate reading these types of fields.
-    also...new fields 12 fields now?
-    */
     
-    // Add debug logs for Project State retrieval
-    // Project Areas
-    debug_log!("create_team_channel(): About to get faq_get_pa1_process");
-    let pa1_process = faq_get_pa1_process()?;
-    debug_log!("create_team_channel(): Got faq_get_pa1_process");
+    debug_log!("create_team_channel(): owner added to port assignments");
 
-    debug_log!("create_team_channel(): About to get faq_get_pa2_schedule");
-    let pa2_schedule = faq_get_pa2_schedule()?;
-    debug_log!("create_team_channel(): Got faq_get_pa2_schedule");
+    // Retrieve project area data
+    debug_log!("Retrieving project area data...");
     
-    debug_log!("create_team_channel(): About to get faq_get_pa3_users");
-    let pa3_users = faq_get_pa3_users()?;
-    debug_log!("create_team_channel(): Got faq_get_pa3_users");
-
-    debug_log!("create_team_channel(): About to get faq_get_pa4_features");
-    let pa4_features = faq_get_pa4_features()?;
-    debug_log!("create_team_channel(): Got project_scope");
-
-    debug_log!("create_team_channel(): About to get faq_get_pa5_mvp");
-    let pa5_mvp = faq_get_pa5_mvp()?;
-    debug_log!("create_team_channel(): Got faq_get_pa5_mvp");
-
-    debug_log!("create_team_channel(): About to get faq_get_pf6");
-    let pa6_feedback = faq_get_pa6_feedback()?;
-    debug_log!("create_team_channel(): Got faq_get_pa6_feedback");
+    let pa1_process = match faq_get_pa1_process() {
+        Ok(data) => data,
+        Err(e) => {
+            debug_log!("Error getting PA1 Process: {}", e);
+            return Err(e);
+        }
+    };
     
-    debug_log!("create_team_channel(): About to create CoreNode");
-            
-    // 3. Create and Save CoreNode (handling Result)
-    // node.toml file should be created after the directory structure is in place
-    // This is done during first-time initialization so there should be salt list for the owner user (if not exit!)
-    debug_log("create_team_channel(): Next is let new_node_result = CoreNode::new");
+    let pa2_schedule = match faq_get_pa2_schedule() {
+        Ok(data) => data,
+        Err(e) => {
+            debug_log!("Error getting PA2 Schedule: {}", e);
+            return Err(e);
+        }
+    };
     
+    let pa3_users = match faq_get_pa3_users() {
+        Ok(data) => data,
+        Err(e) => {
+            debug_log!("Error getting PA3 Users: {}", e);
+            return Err(e);
+        }
+    };
     
-    // let new_node_result = CoreNode::new(
-    //     team_channel_name.clone(),         // node_name
-    //     team_channel_name,                 // description_for_tui
-    //     new_channel_path.clone(),          // directory_path
-    //     owner,                             // owner
-    //     collaborators,                     // teamchannel_collaborators_with_access
-    //     abstract_collaborator_port_assignments, // ports
-    //     // project state task items
-    //     agenda_process,                    // new field: agenda process
-    //     features,                          // new field: features and goals
-    //     scope,                             // new field: project scope
-    //     schedule,                          // new field: schedule 
-    // );
+    let pa4_features = match faq_get_pa4_features() {
+        Ok(data) => data,
+        Err(e) => {
+            debug_log!("Error getting PA4 Features: {}", e);
+            return Err(e);
+        }
+    };
     
-
-    // 3. Create and Save CoreNode (handling Result)
+    let pa5_mvp = match faq_get_pa5_mvp() {
+        Ok(data) => data,
+        Err(e) => {
+            debug_log!("Error getting PA5 MVP: {}", e);
+            return Err(e);
+        }
+    };
+    
+    let pa6_feedback = match faq_get_pa6_feedback() {
+        Ok(data) => data,
+        Err(e) => {
+            debug_log!("Error getting PA6 Feedback: {}", e);
+            return Err(e);
+        }
+    };
+    
+    debug_log!("All project area data retrieved successfully");
+    
+    // 3. Create and Save CoreNode
+    debug_log!("Creating CoreNode...");
+    
     let new_node_result = CoreNode::new(
         team_channel_name.clone(),
         team_channel_name,
-        new_channel_path.clone(),
+        new_channel_path,
         owner,
         collaborators,
         abstract_collaborator_port_assignments,
-        // Project Areas TODO TODO
+        // Project Areas
         pa1_process,
         pa2_schedule,
         pa3_users,
         pa4_features,
         pa5_mvp,
-        pa6_feedback,    
-        // agenda_process,
-        // features,
-        // scope,
-        // schedule,
+        pa6_feedback,
     );
     
-    debug_log!(
-        "create_team_channel(): next trying save_node_to_file with new_node_result -> {:?}",
-        new_node_result);
+    debug_log!("CoreNode creation complete, saving...");
     
-    // Handle the result
+    // Handle the CoreNode creation result
     match new_node_result {
         Ok(new_node) => {
-            debug_log!("CoreNode created successfully, attempting to save...");
-            new_node.save_node_to_file().map_err(|e| ThisProjectError::IoError(e))?;
-            debug_log!("Node saved successfully");
-            Ok(())
-        }
+            debug_log!("CoreNode created successfully, saving to file...");
+            match new_node.save_node_to_file() {
+                Ok(_) => {
+                    debug_log!("CoreNode saved successfully");
+                    Ok(())
+                },
+                Err(e) => {
+                    debug_log!("Error saving CoreNode: {}", e);
+                    Err(ThisProjectError::IoError(e))
+                }
+            }
+        },
         Err(e) => {
             debug_log!("Error creating CoreNode: {}", e);
             Err(e)
         }
     }
+}
+
+// old relative path version
+// /// Creates a new team-channel directory, subdirectories, and metadata files.
+// /// Handles errors and returns a Result to indicate success or failure.
+// ///
+// /// # Arguments
+// ///
+// /// * `team_channel_name` - The name of the new team channel.
+// /// * `owner` - The username of the channel owner.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<(), ThisProjectError>` - `Ok(())` on success, or a `ThisProjectError`
+// ///   describing the error.
+// fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), ThisProjectError> {
+//     debug_log("starting create_team_channel()");
+//     let team_channels_dir = Path::new("project_graph_data/team_channels");
+//     let new_channel_path = team_channels_dir.join(&team_channel_name);
+
+//     // 1. Create Directory Structure (with error handling)
+//     fs::create_dir_all(new_channel_path.join("instant_message_browser"))?; // Propagate errors with ?
+//     fs::create_dir_all(new_channel_path.join("task_browser"))?; // task browser directory
+//     // for i in 1..=3 { // Using numbers
+//     //     let col_name = format!("{}_col{}", i, i);
+//     //     let col_path = new_channel_path.join("task_browser").join(col_name);
+//     //     fs::create_dir_all(&col_path)?; // Create default task browser column directories for new channel
+//     // }    
+//     let col_name = "1_planning";
+//     let col_path = new_channel_path.join("task_browser").join(col_name);
+//     fs::create_dir_all(&col_path)?; // Create default task browser column directories for new channel
+
+//     let col_name = "2_started";
+//     let col_path = new_channel_path.join("task_browser").join(col_name);
+//     fs::create_dir_all(&col_path)?; // Create default task browser column directories for new channel
+
+//     let col_name = "3_done";
+//     let col_path = new_channel_path.join("task_browser").join(col_name);
+//     fs::create_dir_all(&col_path)?; // Create default task browser column directories for new channel
+
+    
+//     // 2. Create and Save 0.toml Metadata (with error handling)
+//     let metadata_path = new_channel_path.join("instant_message_browser/0.toml"); // Simplified path
+//     let metadata = NodeInstMsgBrowserMetadata::new(&team_channel_name, owner.clone());
+//     save_toml_to_file(&metadata, &metadata_path)?; // Use ? for error propagation
+
+//     // Generate collaborator port assignments (simplified):
+//     let mut abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>> = HashMap::new();    
+
+//     // Add owner to collaborators list and port assignments:
+//     // This makes it possible to create CoreNode and ensures the owner has port assignments
+//     let mut collaborators = Vec::new();
+//     collaborators.push(owner.clone());
+//     debug_log!(
+//         "create_team_channel(): owner 'added' to collaborators {:?}",
+//         collaborators,
+//         );
+
+//     // let mut rng = rand::thread_rng(); // Move RNG outside the loop for fewer calls
+
+//     // Load the owner's data
+//     // let owner_data = read_one_collaborator_setup_toml(&owner)?;
+
+//     // Simplified port generation (move rng outside loop):
+//     // Assign random ports to owner:  Only owner for new channel.
+//     let mut rng = rand::thread_rng(); // Move RNG instantiation outside the loop
+//     let ready_port = rng.gen_range(40000..60000) as u16; // Adjust range if needed
+//     let tray_port = rng.gen_range(40000..60000) as u16; // Random u16 port number
+//     let gotit_port = rng.gen_range(40000..60000) as u16; // Random u16 port number
+//     let abstract_ports_data = AbstractTeamchannelNodeTomlPortsData {
+//         user_name: owner.clone(), 
+//         ready_port,
+//         intray_port: tray_port,
+//         gotit_port,
+//     };    
+//     debug_log!(
+//         "create_team_channel(): owner's abstract_ports_data created {:?}",
+//         abstract_ports_data
+//         );
+
+//     // Store in the HashMap with "owner_owner" key. If more than one user this key can become unique.
+//     // abstract_collaborator_port_assignments.insert(
+//     //     format!("{}_{}", owner.clone(), owner), // Key derived from collaborator names
+//     //     vec![ReadTeamchannelCollaboratorPortsToml { collaborator_ports: vec![abstract_ports_data] }],
+//     // );
+//     // debug_log!("create_team_channel(): owner 'added' to abstract_collaborator_port_assignments");
+
+//     // // // Project State
+//     // let agenda_process = get_agenda_process()?;
+//     // let features = get_features_and_goals()?;
+//     // let scope = get_project_scope()?;
+//     // let schedule = get_schedule_info()?;
+            
+//     // Store in the HashMap with "owner_owner" key. If more than one user this key can become unique.
+//     abstract_collaborator_port_assignments.insert(
+//         format!("{}_{}", owner.clone(), owner), // Key derived from collaborator names
+//         vec![ReadTeamchannelCollaboratorPortsToml { collaborator_ports: vec![abstract_ports_data] }],
+//     );
+//     debug_log!("create_team_channel(): owner 'added' to abstract_collaborator_port_assignments");
+
+//     /*
+//     here here
+//     Todo: likely needling to make a new toml reading function
+//     to facilitate reading these types of fields.
+//     also...new fields 12 fields now?
+//     */
+    
+//     // Add debug logs for Project State retrieval
+//     // Project Areas
+//     debug_log!("create_team_channel(): About to get faq_get_pa1_process");
+//     let pa1_process = faq_get_pa1_process()?;
+//     debug_log!("create_team_channel(): Got faq_get_pa1_process");
+
+//     debug_log!("create_team_channel(): About to get faq_get_pa2_schedule");
+//     let pa2_schedule = faq_get_pa2_schedule()?;
+//     debug_log!("create_team_channel(): Got faq_get_pa2_schedule");
+    
+//     debug_log!("create_team_channel(): About to get faq_get_pa3_users");
+//     let pa3_users = faq_get_pa3_users()?;
+//     debug_log!("create_team_channel(): Got faq_get_pa3_users");
+
+//     debug_log!("create_team_channel(): About to get faq_get_pa4_features");
+//     let pa4_features = faq_get_pa4_features()?;
+//     debug_log!("create_team_channel(): Got project_scope");
+
+//     debug_log!("create_team_channel(): About to get faq_get_pa5_mvp");
+//     let pa5_mvp = faq_get_pa5_mvp()?;
+//     debug_log!("create_team_channel(): Got faq_get_pa5_mvp");
+
+//     debug_log!("create_team_channel(): About to get faq_get_pf6");
+//     let pa6_feedback = faq_get_pa6_feedback()?;
+//     debug_log!("create_team_channel(): Got faq_get_pa6_feedback");
+    
+//     debug_log!("create_team_channel(): About to create CoreNode");
+            
+//     // 3. Create and Save CoreNode (handling Result)
+//     // node.toml file should be created after the directory structure is in place
+//     // This is done during first-time initialization so there should be salt list for the owner user (if not exit!)
+//     debug_log("create_team_channel(): Next is let new_node_result = CoreNode::new");
+    
+    
+//     // let new_node_result = CoreNode::new(
+//     //     team_channel_name.clone(),         // node_name
+//     //     team_channel_name,                 // description_for_tui
+//     //     new_channel_path.clone(),          // directory_path
+//     //     owner,                             // owner
+//     //     collaborators,                     // teamchannel_collaborators_with_access
+//     //     abstract_collaborator_port_assignments, // ports
+//     //     // project state task items
+//     //     agenda_process,                    // new field: agenda process
+//     //     features,                          // new field: features and goals
+//     //     scope,                             // new field: project scope
+//     //     schedule,                          // new field: schedule 
+//     // );
+    
+
+//     // 3. Create and Save CoreNode (handling Result)
+//     let new_node_result = CoreNode::new(
+//         team_channel_name.clone(),
+//         team_channel_name,
+//         new_channel_path.clone(),
+//         owner,
+//         collaborators,
+//         abstract_collaborator_port_assignments,
+//         // Project Areas TODO TODO
+//         pa1_process,
+//         pa2_schedule,
+//         pa3_users,
+//         pa4_features,
+//         pa5_mvp,
+//         pa6_feedback,    
+//         // agenda_process,
+//         // features,
+//         // scope,
+//         // schedule,
+//     );
+    
+//     debug_log!(
+//         "create_team_channel(): next trying save_node_to_file with new_node_result -> {:?}",
+//         new_node_result);
+    
+//     // Handle the result
+//     match new_node_result {
+//         Ok(new_node) => {
+//             debug_log!("CoreNode created successfully, attempting to save...");
+//             new_node.save_node_to_file().map_err(|e| ThisProjectError::IoError(e))?;
+//             debug_log!("Node saved successfully");
+//             Ok(())
+//         }
+//         Err(e) => {
+//             debug_log!("Error creating CoreNode: {}", e);
+//             Err(e)
+//         }
+//     }
     
 
         
         
-    // match new_node_result {  // Handle result of CoreNode::new
-    //     Ok(new_node) => {
-    //         new_node.save_node_to_file()?; // Then save the node
-    //         Ok(()) // Return Ok(()) to indicate success
-    //     }
-    //     Err(e) => {
-    //          debug_log!("Error creating CoreNode: {}", e);
-    //         Err(e) // Return the error if CoreNode creation fails
-    //     }
-    // }
+//     // match new_node_result {  // Handle result of CoreNode::new
+//     //     Ok(new_node) => {
+//     //         new_node.save_node_to_file()?; // Then save the node
+//     //         Ok(()) // Return Ok(()) to indicate success
+//     //     }
+//     //     Err(e) => {
+//     //          debug_log!("Error creating CoreNode: {}", e);
+//     //         Err(e) // Return the error if CoreNode creation fails
+//     //     }
+//     // }
 
-}
+// }
 
 /// Creates a new (core)Node directory, subdirectories, and metadata files.
 /// Handles errors and returns a Result to indicate success or failure.
@@ -10818,6 +11215,1241 @@ fn share_lou_addressbook_with_incomingkey() -> Result<(), GpgError> {
     Ok(())
 }
 
+// /// Process an incoming encrypted team channel file
+// ///
+// /// This function handles the secure processing of a GPG-encrypted clearsigned team channel file
+// /// received from a remote collaborator. It performs the following steps:
+// ///
+// /// 1. Reads the LOCAL OWNER USER's name from uma.toml
+// /// 2. Locates the LOCAL OWNER USER's addressbook file to extract their GPG key ID
+// /// 3. Finds the encrypted file in the incoming teamchannels directory (must be a single .asc/.gpg file)
+// /// 4. Decrypts the file using the LOCAL OWNER USER's private key (identified by the key ID)
+// /// 5. Extracts the team channel owner's name from the decrypted content
+// /// 6. Locates the team channel owner's addressbook file to extract their GPG public key
+// /// 7. Verifies the clearsign signature using the team channel owner's public key
+// /// 8. Extracts the team channel name from the verified content
+// /// 9. Creates the team channel directory structure and saves the verified files
+// /// 10. Moves the original encrypted file to the processed directory
+// ///
+// /// # Path Handling
+// /// All file and directory paths are resolved relative to the executable's directory location,
+// /// NOT the current working directory. This ensures consistent behavior regardless of where 
+// /// the program is executed from.
+// ///
+// /// # Returns
+// /// * `Ok(())` if the operation succeeds
+// /// * `Err(GpgError)` if any operation fails
+// ///
+// /// # Errors
+// /// * `GpgError::PathError` - If required files/directories don't exist or can't be accessed
+// /// * `GpgError::ValidationError` - If signature verification fails or required data is missing
+// /// * `GpgError::GpgOperationError` - If GPG decryption or verification operations fail
+// ///
+// /// # File Flow
+// /// - LOCAL OWNER USER's addressbook: {EXECUTABLE_DIR}/project_graph_data/collaborator_files_address_book/{LOCAL_OWNER_USER}__collaborator.toml
+// /// - Source encrypted file: {EXECUTABLE_DIR}/invites_updates/incoming/teamchannels/*.asc or *.gpg
+// /// - Team channel owner's addressbook: {EXECUTABLE_DIR}/project_graph_data/collaborator_files_address_book/{TEAM_CHANNEL_OWNER}__collaborator.toml
+// /// - Output team channel directory: {EXECUTABLE_DIR}/project_graph_data/team_channels/{TEAM_CHANNEL_NAME}/
+// /// - Output files: node.toml and node.gpg in the team channel directory
+// /// - Moved original: {EXECUTABLE_DIR}/invites_updates/processed/{original_filename}
+// pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
+//     // 'PIET' is an acronym for this function to identify it in logs
+//     debug_log!("\nStarting -> PIET fn process_incoming_encrypted_teamchannel()");
+    
+//     // STEP 1: Get LOCAL OWNER USER's name from uma.toml
+//     debug_log!("PIET Step 1: Reading LOCAL OWNER USER's name from uma.toml");
+    
+//     // Get absolute path to uma.toml configuration file
+//     let relative_uma_toml_path = "uma.toml";
+//     let absolute_uma_toml_path = make_file_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_uma_toml_path)
+//         .map_err(|e| {
+//             let error_msg = format!("PIET Failed to locate uma.toml configuration file: {}", e);
+//             println!("Error: {}", error_msg);
+//             GpgError::PathError(error_msg)
+//         })?;
+    
+//     // Convert PathBuf to string for TOML reading
+//     let absolute_uma_toml_path_str = absolute_uma_toml_path
+//         .to_str()
+//         .ok_or_else(|| {
+//             let error_msg = "PIET Unable to convert UMA TOML path to string".to_string();
+//             println!("Error: {}", error_msg);
+//             GpgError::PathError(error_msg)
+//         })?;
+    
+//     // Read LOCAL OWNER USER's name from uma.toml
+//     let local_owner_user_name = read_single_line_string_field_from_toml(
+//         absolute_uma_toml_path_str, 
+//         "uma_local_owner_user"
+//     ).map_err(|e| {
+//         let error_msg = format!("PIET Failed to read LOCAL OWNER USER's name: {}", e);
+//         println!("Error: {}", error_msg);
+//         GpgError::ValidationError(error_msg)
+//     })?;
+    
+//     debug_log!("PIET LOCAL OWNER USER's name is: {}", local_owner_user_name);
+//     println!("Processing as LOCAL OWNER USER: {}", local_owner_user_name);
+    
+//     // STEP 2: Locate the LOCAL OWNER USER's addressbook file and extract their GPG key ID
+//     debug_log!("PIET Step 2: Locating LOCAL OWNER USER's addressbook file to get GPG key ID");
+    
+//     // Get absolute path to the collaborator files directory
+//     let relative_collab_dir = "project_graph_data/collaborator_files_address_book";
+//     let absolute_collab_dir = make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_collab_dir)
+//         .map_err(|e| {
+//             let error_msg = format!("PIET Failed to locate collaborator files directory: {}", e);
+//             println!("Error: {}", error_msg);
+//             GpgError::PathError(error_msg)
+//         })?;
+    
+//     // Path to the LOCAL OWNER USER's addressbook file (absolute path)
+//     let local_owner_address_book_filename = format!("{}__collaborator.toml", local_owner_user_name);
+//     let absolute_local_owner_address_book_path = absolute_collab_dir.join(&local_owner_address_book_filename);
+    
+//     debug_log!("PIET LOCAL OWNER USER's addressbook path: {}", absolute_local_owner_address_book_path.display());
+    
+//     // Verify the LOCAL OWNER USER's addressbook file exists
+//     if !absolute_local_owner_address_book_path.exists() {
+//         let error_msg = format!(
+//             "PIET LOCAL OWNER USER's addressbook file not found at: {}", 
+//             absolute_local_owner_address_book_path.display()
+//         );
+//         println!("Error: {}", error_msg);
+//         return Err(GpgError::PathError(error_msg));
+//     }
+    
+//     debug_log!("PIET LOCAL OWNER USER's addressbook file exists");
+    
+//     // Convert the LOCAL OWNER USER's addressbook path to string for TOML reading
+//     let absolute_local_owner_address_book_path_str = absolute_local_owner_address_book_path
+//         .to_str()
+//         .ok_or_else(|| {
+//             let error_msg = format!(
+//                 "PIET Unable to convert LOCAL OWNER USER's addressbook path to string: {}", 
+//                 absolute_local_owner_address_book_path.display()
+//             );
+//             println!("Error: {}", error_msg);
+//             GpgError::PathError(error_msg)
+//         })?;
+    
+//     // Read the LOCAL OWNER USER's GPG key ID from their addressbook file
+//     debug_log!("PIET Attempting to read GPG key ID from LOCAL OWNER USER's addressbook file");
+    
+//     let local_owner_gpg_key_id = read_singleline_string_from_clearsigntoml(
+//         absolute_local_owner_address_book_path_str, 
+//         "gpg_publickey_id"
+//     ).map_err(|e| {
+//         let error_msg = format!("PIET Failed to read LOCAL OWNER USER's GPG key ID: {}", e);
+//         debug_log!("ERROR: {}", error_msg);
+//         println!("Error: {}", error_msg);
+//         GpgError::ValidationError(error_msg)
+//     })?;
+    
+//     debug_log!("PIET Successfully read LOCAL OWNER USER's GPG key ID: {}", local_owner_gpg_key_id);
+    
+//     // STEP 3: Find the encrypted file in the incoming teamchannels directory
+//     debug_log!("PIET Step 3: Locating encrypted file in incoming teamchannels directory");
+    
+//     // Resolve the incoming teamchannels directory path (relative to executable)
+//     let relative_incoming_dir = "invites_updates/incoming/teamchannels";
+//     let absolute_incoming_dir = make_input_path_name_abs_executabledirectoryrelative_nocheck(relative_incoming_dir)
+//         .map_err(|e| {
+//             let error_msg = format!("PIET Failed to resolve incoming teamchannels directory path: {}", e);
+//             println!("Error: {}", error_msg);
+//             GpgError::PathError(error_msg)
+//         })?;
+    
+//     // Create the directory if it doesn't exist
+//     fs::create_dir_all(&absolute_incoming_dir)
+//         .map_err(|e| {
+//             let error_msg = format!("PIET Failed to create incoming teamchannels directory: {}", e);
+//             println!("Error: {}", error_msg);
+//             GpgError::PathError(error_msg)
+//         })?;
+    
+//     debug_log!("PIET Scanning for encrypted files in: {}", absolute_incoming_dir.display());
+    
+//     // Loop until we find exactly one .asc or .gpg file, or user cancels
+//     let encrypted_file_path = loop {
+//         // Scan the directory for .asc or .gpg files
+//         let mut encrypted_files = Vec::new();
+        
+//         match fs::read_dir(&absolute_incoming_dir) {
+//             Ok(entries) => {
+//                 for entry in entries {
+//                     if let Ok(entry) = entry {
+//                         let path = entry.path();
+//                         if path.is_file() {
+//                             if let Some(extension) = path.extension() {
+//                                 if extension == "asc" || extension == "gpg" {
+//                                     encrypted_files.push(path);
+//                                 }
+//                             }
+//                         }
+//                     }
+//                 }
+//             },
+//             Err(e) => {
+//                 let error_msg = format!("PIET Failed to read incoming teamchannels directory: {}", e);
+//                 println!("Error: {}", error_msg);
+//                 return Err(GpgError::PathError(error_msg));
+//             }
+//         }
+        
+//         // Process based on how many files were found
+//         match encrypted_files.len() {
+//             0 => {
+//                 println!("No encrypted files (.asc or .gpg) found in {}", absolute_incoming_dir.display());
+//                 println!("Please place the encrypted team channel file in this directory.");
+//                 println!("Press Enter to try again, or type 'exit' to cancel.");
+                
+//                 let mut input = String::new();
+//                 if let Err(e) = io::stdin().read_line(&mut input) {
+//                     let error_msg = format!("PIET Failed to read user input: {}", e);
+//                     println!("Error: {}", error_msg);
+//                     return Err(GpgError::ValidationError(error_msg));
+//                 }
+                
+//                 if input.trim().to_lowercase() == "exit" {
+//                     return Err(GpgError::ValidationError("Operation cancelled by user".to_string()));
+//                 }
+                
+//                 // Loop continues to check again
+//             },
+//             1 => {
+//                 // Exactly one file found, we can proceed
+//                 debug_log!("PIET Found one encrypted file: {}", encrypted_files[0].display());
+//                 println!("Found encrypted file: {}", encrypted_files[0].display());
+//                 break encrypted_files[0].clone();
+//             },
+//             _ => {
+//                 println!("Multiple encrypted files found in {}:", absolute_incoming_dir.display());
+//                 for (index, file) in encrypted_files.iter().enumerate() {
+//                     println!("  {}. {}", index + 1, file.file_name().unwrap_or_default().to_string_lossy());
+//                 }
+//                 println!("Please keep only the file you want to process and remove the others.");
+//                 println!("Press Enter to try again, or type 'exit' to cancel.");
+                
+//                 let mut input = String::new();
+//                 if let Err(e) = io::stdin().read_line(&mut input) {
+//                     let error_msg = format!("PIET Failed to read user input: {}", e);
+//                     println!("Error: {}", error_msg);
+//                     return Err(GpgError::ValidationError(error_msg));
+//                 }
+                
+//                 if input.trim().to_lowercase() == "exit" {
+//                     return Err(GpgError::ValidationError("Operation cancelled by user".to_string()));
+//                 }
+                
+//                 // Loop continues to check again
+//             }
+//         }
+//     };
+    
+//     // Extract the filename for later use
+//     let encrypted_filename = encrypted_file_path.file_name()
+//         .ok_or_else(|| {
+//             let error_msg = "PIET Failed to extract filename from encrypted file path".to_string();
+//             println!("Error: {}", error_msg);
+//             GpgError::PathError(error_msg)
+//         })?
+//         .to_string_lossy()
+//         .to_string();
+    
+//     debug_log!("PIET Processing encrypted file: {}", encrypted_filename);
+    
+//     // STEP 4: Create processed directory for moving files after processing
+//     debug_log!("PIET Step 4: Setting up processed directory");
+    
+//     let relative_processed_dir = "invites_updates/processed";
+//     let absolute_processed_dir = make_input_path_name_abs_executabledirectoryrelative_nocheck(relative_processed_dir)
+//         .map_err(|e| {
+//             let error_msg = format!("PIET Failed to resolve processed directory path: {}", e);
+//             println!("Error: {}", error_msg);
+//             GpgError::PathError(error_msg)
+//         })?;
+    
+//     // Create the processed directory if it doesn't exist
+//     fs::create_dir_all(&absolute_processed_dir)
+//         .map_err(|e| {
+//             let error_msg = format!("PIET Failed to create processed directory: {}", e);
+//             println!("Error: {}", error_msg);
+//             GpgError::PathError(error_msg)
+//         })?;
+    
+//     // STEP 5: Set up temporary directory for processing
+//     debug_log!("PIET Step 5: Setting up temporary directory for decryption and verification");
+    
+//     let temp_dir = make_input_path_name_abs_executabledirectoryrelative_nocheck("temp_gpg_processing")
+//         .map_err(|e| {
+//             let error_msg = format!("PIET Failed to create temp directory path: {}", e);
+//             println!("Error: {}", error_msg);
+//             GpgError::PathError(error_msg)
+//         })?;
+    
+//     fs::create_dir_all(&temp_dir)
+//         .map_err(|e| {
+//             let error_msg = format!("PIET Failed to create temp directory: {}", e);
+//             println!("Error: {}", error_msg);
+//             GpgError::PathError(error_msg)
+//         })?;
+    
+//     // Temporary file to hold decrypted (but not yet verified) content
+//     let temp_decrypted_path = temp_dir.join("temp_decrypted.toml");
+    
+//     // STEP 6: Decrypt the file using the LOCAL OWNER USER's key
+//     debug_log!("PIET Step 6: Decrypting file using LOCAL OWNER USER's key");
+//     println!("Decrypting file using LOCAL OWNER USER's key ID: {}", local_owner_gpg_key_id);
+    
+//     // Decrypt the file without verification at this stage
+//     decrypt_gpg_file_to_output(&encrypted_file_path, &temp_decrypted_path)
+//         .map_err(|e| {
+//             let error_msg = format!("PIET Failed to decrypt file: {:?}", e);
+//             println!("Error: {}", error_msg);
+//             println!("This could mean:");
+//             println!("1. The file is not properly encrypted");
+//             println!("2. The file wasn't encrypted for your GPG key");
+            
+//             // Clean up temp directory before returning
+//             let _ = fs::remove_dir_all(&temp_dir);
+            
+//             GpgError::GpgOperationError(error_msg)
+//         })?;
+    
+//     debug_log!("PIET Successfully decrypted file");
+    
+//     // STEP 7: Extract team channel owner from decrypted (but not yet verified) content
+//     debug_log!("PIET Step 7: Extracting team channel owner from decrypted content");
+    
+//     // Convert temporary file path to string for TOML reading
+//     let temp_decrypted_path_str = temp_decrypted_path
+//         .to_str()
+//         .ok_or_else(|| {
+//             let error_msg = "PIET Unable to convert temp file path to string".to_string();
+//             println!("Error: {}", error_msg);
+            
+//             // Clean up temp directory before returning
+//             let _ = fs::remove_dir_all(&temp_dir);
+            
+//             GpgError::PathError(error_msg)
+//         })?;
+    
+//     // Read the team channel owner from the decrypted content
+//     // Note: Reading from unverified content, but we need it to find the right public key for verification
+//     let unverified_content = fs::read_to_string(&temp_decrypted_path)
+//         .map_err(|e| {
+//             let error_msg = format!("PIET Failed to read decrypted content: {}", e);
+//             println!("Error: {}", error_msg);
+            
+//             // Clean up temp directory before returning
+//             let _ = fs::remove_dir_all(&temp_dir);
+            
+//             GpgError::FileSystemError(error_msg)
+//         })?;
+
+//     // Parse to find the owner field in the clearsigned content
+//     let team_channel_owner = unverified_content.lines()
+//         .find_map(|line| {
+//             if line.trim().starts_with("owner =") {
+//                 let parts: Vec<&str> = line.split('=').collect();
+//                 if parts.len() >= 2 {
+//                     let value = parts[1].trim();
+//                     // Remove quotes if present
+//                     let clean_value = value.trim_matches('"').trim_matches('\'');
+//                     Some(clean_value.to_string())
+//                 } else {
+//                     None
+//                 }
+//             } else {
+//                 None
+//             }
+//         })
+//         .ok_or_else(|| {
+//             let error_msg = "PIET Failed to find owner field in decrypted content".to_string();
+//             println!("Error: {}", error_msg);
+            
+//             // Clean up temp directory before returning
+//             let _ = fs::remove_dir_all(&temp_dir);
+            
+//             GpgError::ValidationError(error_msg)
+//         })?;
+    
+//     debug_log!("PIET Extracted team channel owner: {}", team_channel_owner);
+//     println!("Team channel owned by: {}", team_channel_owner);
+    
+//     // STEP 8: Get team channel owner's public key for verification
+//     debug_log!("PIET Step 8: Getting team channel owner's public key for verification");
+    
+//     // Path to the team channel owner's addressbook file
+//     let team_channel_owner_address_book_filename = format!("{}__collaborator.toml", team_channel_owner);
+//     let absolute_team_channel_owner_address_book_path = absolute_collab_dir.join(&team_channel_owner_address_book_filename);
+    
+//     debug_log!("PIET Team channel owner's addressbook path: {}", absolute_team_channel_owner_address_book_path.display());
+    
+//     // Verify the team channel owner's addressbook file exists
+//     if !absolute_team_channel_owner_address_book_path.exists() {
+//         let error_msg = format!(
+//             "PIET Team channel owner's addressbook file not found at: {}", 
+//             absolute_team_channel_owner_address_book_path.display()
+//         );
+//         println!("Error: {}", error_msg);
+//         println!("You need to import the team channel owner's addressbook first.");
+        
+//         // Clean up temp directory before returning
+//         let _ = fs::remove_dir_all(&temp_dir);
+        
+//         return Err(GpgError::PathError(error_msg));
+//     }
+    
+//     // Convert the team channel owner's addressbook path to string for TOML reading
+//     let absolute_team_channel_owner_address_book_path_str = absolute_team_channel_owner_address_book_path
+//         .to_str()
+//         .ok_or_else(|| {
+//             let error_msg = format!(
+//                 "PIET Unable to convert team channel owner's addressbook path to string: {}", 
+//                 absolute_team_channel_owner_address_book_path.display()
+//             );
+//             println!("Error: {}", error_msg);
+            
+//             // Clean up temp directory before returning
+//             let _ = fs::remove_dir_all(&temp_dir);
+            
+//             GpgError::PathError(error_msg)
+//         })?;
+    
+//     // Read the team channel owner's public GPG key from their addressbook
+//     let team_channel_owner_public_key = read_multiline_string_from_clearsigntoml(
+//         absolute_team_channel_owner_address_book_path_str,
+//         "gpg_key_public"
+//     ).map_err(|e| {
+//         let error_msg = format!("PIET Failed to read team channel owner's public GPG key: {}", e);
+//         println!("Error: {}", error_msg);
+        
+//         // Clean up temp directory before returning
+//         let _ = fs::remove_dir_all(&temp_dir);
+        
+//         GpgError::ValidationError(error_msg)
+//     })?;
+    
+//     debug_log!("PIET Successfully read team channel owner's public GPG key");
+    
+//     // Create temporary file for the team channel owner's public key
+//     let temp_public_key_path = temp_dir.join("temp_public_key.asc");
+    
+//     // Write public key to temporary file
+//     fs::write(&temp_public_key_path, team_channel_owner_public_key)
+//         .map_err(|e| {
+//             let error_msg = format!("PIET Failed to write team channel owner's public key to temp file: {}", e);
+//             println!("Error: {}", error_msg);
+            
+//             // Clean up temp directory before returning
+//             let _ = fs::remove_dir_all(&temp_dir);
+            
+//             GpgError::FileSystemError(error_msg)
+//         })?;
+    
+//     // STEP 9: Verify the clearsign signature using team channel owner's public key
+//     debug_log!("PIET Step 9: Verifying clearsign signature using team channel owner's public key");
+//     println!("Verifying signature using team channel owner's public key...");
+    
+//     // Temporary file to hold verified content
+//     let temp_verified_path = temp_dir.join("temp_verified.toml");
+    
+//     // Verify the clearsign signature
+//     verify_clearsign_with_pubkey_file(&temp_decrypted_path, &temp_public_key_path, &temp_verified_path)
+//         .map_err(|e| {
+//             let error_msg = format!("PIET Failed to verify clearsign signature: {:?}", e);
+//             println!("Error: {}", error_msg);
+//             println!("The signature could not be verified with the team channel owner's public key.");
+            
+//             // Clean up temp directory before returning
+//             let _ = fs::remove_dir_all(&temp_dir);
+            
+//             GpgError::GpgOperationError(error_msg)
+//         })?;
+    
+//     println!("Signature successfully verified!");
+//     debug_log!("PIET Successfully verified clearsign signature");
+    
+//     // STEP 10: Extract team channel name from verified content
+//     debug_log!("PIET Step 10: Extracting team channel name from verified content");
+    
+//     // Convert verified file path to string for TOML reading
+//     let temp_verified_path_str = temp_verified_path
+//         .to_str()
+//         .ok_or_else(|| {
+//             let error_msg = "PIET Unable to convert verified file path to string".to_string();
+//             println!("Error: {}", error_msg);
+            
+//             // Clean up temp directory before returning
+//             let _ = fs::remove_dir_all(&temp_dir);
+            
+//             GpgError::PathError(error_msg)
+//         })?;
+    
+//     // Read the team channel name from the verified content
+//     let team_channel_name = read_single_line_string_field_from_toml(
+//         temp_verified_path_str,
+//         "team_channel_name"
+//     ).map_err(|e| {
+//         let error_msg = format!("PIET Failed to read team channel name from verified content: {}", e);
+//         println!("Error: {}", error_msg);
+//         println!("The verified file doesn't contain a valid 'team_channel_name' field.");
+        
+//         // Clean up temp directory before returning
+//         let _ = fs::remove_dir_all(&temp_dir);
+        
+//         GpgError::ValidationError(error_msg)
+//     })?;
+    
+//     debug_log!("PIET Extracted team channel name: {}", team_channel_name);
+//     println!("Imported team channel name: {}", team_channel_name);
+    
+//     // TODO: STEP 11: Check for port conflicts with existing team channels
+//     // This is intentionally left as a placeholder for future implementation
+//     debug_log!("PIET Step 11: TODO - Check for port conflicts with existing team channels");
+    
+//     // STEP 12: Create team channel directory structure
+//     debug_log!("PIET Step 12: Creating team channel directory structure");
+    
+//     // Get absolute path to team channels directory
+//     let relative_team_channels_dir = "project_graph_data/team_channels";
+//     let absolute_team_channels_dir = make_input_path_name_abs_executabledirectoryrelative_nocheck(relative_team_channels_dir)
+//         .map_err(|e| {
+//             let error_msg = format!("PIET Failed to resolve team channels directory path: {}", e);
+//             println!("Error: {}", error_msg);
+            
+//             // Clean up temp directory before returning
+//             let _ = fs::remove_dir_all(&temp_dir);
+            
+//             GpgError::PathError(error_msg)
+//         })?;
+    
+//     // Create the team channels directory if it doesn't exist
+//     fs::create_dir_all(&absolute_team_channels_dir)
+//         .map_err(|e| {
+//             let error_msg = format!("PIET Failed to create team channels directory: {}", e);
+//             println!("Error: {}", error_msg);
+            
+//             // Clean up temp directory before returning
+//             let _ = fs::remove_dir_all(&temp_dir);
+            
+//             GpgError::PathError(error_msg)
+//         })?;
+    
+//     // Create specific team channel directory
+//     let absolute_specific_team_channel_dir = absolute_team_channels_dir.join(&team_channel_name);
+    
+//     // Create the specific team channel directory if it doesn't exist
+//     fs::create_dir_all(&absolute_specific_team_channel_dir)
+//         .map_err(|e| {
+//             let error_msg = format!("PIET Failed to create specific team channel directory: {}", e);
+//             println!("Error: {}", error_msg);
+            
+//             // Clean up temp directory before returning
+//             let _ = fs::remove_dir_all(&temp_dir);
+            
+//             GpgError::PathError(error_msg)
+//         })?;
+    
+//     debug_log!("PIET Created team channel directory: {}", absolute_specific_team_channel_dir.display());
+    
+//     // Create paths for node.toml and node.gpg in the team channel directory
+//     let node_toml_path = absolute_specific_team_channel_dir.join("node.toml");
+//     let node_gpg_path = absolute_specific_team_channel_dir.join("node.gpg");
+    
+//     // STEP 13: Save verified content as node.toml
+//     debug_log!("PIET Step 13: Saving verified content as node.toml");
+    
+//     // Copy verified content to node.toml
+//     fs::copy(&temp_verified_path, &node_toml_path)
+//         .map_err(|e| {
+//             let error_msg = format!("PIET Failed to save node.toml: {}", e);
+//             println!("Error: {}", error_msg);
+            
+//             // Clean up temp directory before returning
+//             let _ = fs::remove_dir_all(&temp_dir);
+            
+//             GpgError::FileSystemError(error_msg)
+//         })?;
+    
+//     debug_log!("PIET Saved node.toml to: {}", node_toml_path.display());
+    
+//     // STEP 14: Save original encrypted file as node.gpg
+//     debug_log!("PIET Step 14: Saving original encrypted file as node.gpg");
+    
+//     // Copy original encrypted file to node.gpg
+//     fs::copy(&encrypted_file_path, &node_gpg_path)
+//         .map_err(|e| {
+//             let error_msg = format!("PIET Failed to save node.gpg: {}", e);
+//             println!("Error: {}", error_msg);
+            
+//             // Clean up temp directory before returning
+//             let _ = fs::remove_dir_all(&temp_dir);
+            
+//             GpgError::FileSystemError(error_msg)
+//         })?;
+    
+//     debug_log!("PIET Saved node.gpg to: {}", node_gpg_path.display());
+    
+//     // STEP 15: Move original encrypted file to processed directory
+//     debug_log!("PIET Step 15: Moving original encrypted file to processed directory");
+    
+//     let processed_file_path = absolute_processed_dir.join(&encrypted_filename);
+    
+//     // Move the original file to the processed directory
+//     fs::rename(&encrypted_file_path, &processed_file_path)
+//         .map_err(|e| {
+//             let error_msg = format!("PIET Failed to move original encrypted file: {}", e);
+//             println!("Warning: {}", error_msg);
+            
+//             // This is a non-critical error, so we'll just log it and continue
+//             debug_log!("PIET Warning: {}", error_msg);
+//         })?;
+    
+//     debug_log!("PIET Moved original encrypted file to: {}", processed_file_path.display());
+    
+//     // STEP 16: Clean up temporary directory
+//     debug_log!("PIET Step 16: Cleaning up temporary directory");
+    
+//     if let Err(e) = fs::remove_dir_all(&temp_dir) {
+//         debug_log!("PIET Warning: Failed to remove temporary directory: {}", e);
+//         println!("Warning: Failed to clean up temporary files: {}", e);
+//         // This is a non-critical error, so we'll just log it and continue
+//     }
+    
+//     // STEP 17: Report success to user
+//     debug_log!("PIET Step 17: Reporting success to user");
+//     println!("\nTeam channel successfully imported!");
+//     println!("Team channel name: {}", team_channel_name);
+//     println!("Team channel owner: {}", team_channel_owner);
+//     println!("Files saved to: {}", absolute_specific_team_channel_dir.display());
+    
+//     debug_log!("PIET Successfully completed team channel import process");
+    
+//     // Wait for user acknowledgment
+//     println!("\nPress Enter to continue...");
+//     let mut input = String::new();
+//     let _ = io::stdin().read_line(&mut input);
+    
+//     Ok(())
+// }
+
+/// Process an incoming encrypted team channel file
+///
+/// This function handles the secure processing of a GPG-encrypted clearsigned team channel file
+/// received from a remote collaborator. It performs the following steps:
+///
+/// 1. Reads the LOCAL OWNER USER's name from uma.toml
+/// 2. Locates the LOCAL OWNER USER's addressbook file to extract their GPG key ID
+/// 3. Finds the encrypted file in the incoming teamchannels directory (must be a single .asc/.gpg file)
+/// 4. Decrypts the file using the LOCAL OWNER USER's private key (identified by the key ID)
+/// 5. Extracts the team channel owner's name from the decrypted content
+/// 6. Locates the team channel owner's addressbook file to extract their GPG public key
+/// 7. Verifies the clearsign signature using the team channel owner's public key
+/// 8. Extracts the team channel name from the verified content
+/// 9. Creates the team channel directory structure and saves the verified files
+/// 10. Moves the original encrypted file to the processed directory
+///
+/// # Path Handling
+/// All file and directory paths are resolved relative to the executable's directory location,
+/// NOT the current working directory. This ensures consistent behavior regardless of where 
+/// the program is executed from.
+///
+/// # Returns
+/// * `Ok(())` if the operation succeeds
+/// * `Err(GpgError)` if any operation fails
+///
+/// # Errors
+/// * `GpgError::PathError` - If required files/directories don't exist or can't be accessed
+/// * `GpgError::ValidationError` - If signature verification fails or required data is missing
+/// * `GpgError::GpgOperationError` - If GPG decryption or verification operations fail
+pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
+    // 'PIET' is an acronym for this function to identify it in logs
+    debug_log!("\nStarting -> PIET fn process_incoming_encrypted_teamchannel()");
+    
+    // STEP 1: Get LOCAL OWNER USER's name from uma.toml
+    debug_log!("PIET Step 1: Reading LOCAL OWNER USER's name from uma.toml");
+    
+    // Get absolute path to uma.toml configuration file
+    let relative_uma_toml_path = "uma.toml";
+    let absolute_uma_toml_path = make_file_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_uma_toml_path)
+        .map_err(|e| {
+            let error_msg = format!("PIET Failed to locate uma.toml configuration file: {}", e);
+            println!("Error: {}", error_msg);
+            GpgError::PathError(error_msg)
+        })?;
+    
+    // Convert PathBuf to string for TOML reading
+    let absolute_uma_toml_path_str = absolute_uma_toml_path
+        .to_str()
+        .ok_or_else(|| {
+            let error_msg = "PIET Unable to convert UMA TOML path to string".to_string();
+            println!("Error: {}", error_msg);
+            GpgError::PathError(error_msg)
+        })?;
+    
+    // Read LOCAL OWNER USER's name from uma.toml
+    let local_owner_user_name = read_single_line_string_field_from_toml(
+        absolute_uma_toml_path_str, 
+        "uma_local_owner_user"
+    ).map_err(|e| {
+        let error_msg = format!("PIET Failed to read LOCAL OWNER USER's name: {}", e);
+        println!("Error: {}", error_msg);
+        GpgError::ValidationError(error_msg)
+    })?;
+    
+    debug_log!("PIET LOCAL OWNER USER's name is: {}", local_owner_user_name);
+    println!("Processing as LOCAL OWNER USER: {}", local_owner_user_name);
+    
+    // STEP 2: Locate the LOCAL OWNER USER's addressbook file and extract their GPG key ID
+    debug_log!("PIET Step 2: Locating LOCAL OWNER USER's addressbook file to get GPG key ID");
+    
+    // Get absolute path to the collaborator files directory
+    let relative_collab_dir = "project_graph_data/collaborator_files_address_book";
+    let absolute_collab_dir = make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_collab_dir)
+        .map_err(|e| {
+            let error_msg = format!("PIET Failed to locate collaborator files directory: {}", e);
+            println!("Error: {}", error_msg);
+            GpgError::PathError(error_msg)
+        })?;
+    
+    // Path to the LOCAL OWNER USER's addressbook file (absolute path)
+    let local_owner_address_book_filename = format!("{}__collaborator.toml", local_owner_user_name);
+    let absolute_local_owner_address_book_path = absolute_collab_dir.join(&local_owner_address_book_filename);
+    
+    debug_log!("PIET LOCAL OWNER USER's addressbook path: {}", absolute_local_owner_address_book_path.display());
+    
+    // Verify the LOCAL OWNER USER's addressbook file exists
+    if !absolute_local_owner_address_book_path.exists() {
+        let error_msg = format!(
+            "PIET LOCAL OWNER USER's addressbook file not found at: {}", 
+            absolute_local_owner_address_book_path.display()
+        );
+        println!("Error: {}", error_msg);
+        return Err(GpgError::PathError(error_msg));
+    }
+    
+    debug_log!("PIET LOCAL OWNER USER's addressbook file exists");
+    
+    // Convert the LOCAL OWNER USER's addressbook path to string for TOML reading
+    let absolute_local_owner_address_book_path_str = absolute_local_owner_address_book_path
+        .to_str()
+        .ok_or_else(|| {
+            let error_msg = format!(
+                "PIET Unable to convert LOCAL OWNER USER's addressbook path to string: {}", 
+                absolute_local_owner_address_book_path.display()
+            );
+            println!("Error: {}", error_msg);
+            GpgError::PathError(error_msg)
+        })?;
+    
+    // Read the LOCAL OWNER USER's GPG key ID from their addressbook file
+    debug_log!("PIET Attempting to read GPG key ID from LOCAL OWNER USER's addressbook file");
+    
+    let local_owner_gpg_key_id = read_singleline_string_from_clearsigntoml(
+        absolute_local_owner_address_book_path_str, 
+        "gpg_publickey_id"
+    ).map_err(|e| {
+        let error_msg = format!("PIET Failed to read LOCAL OWNER USER's GPG key ID: {}", e);
+        debug_log!("ERROR: {}", error_msg);
+        println!("Error: {}", error_msg);
+        GpgError::ValidationError(error_msg)
+    })?;
+    
+    debug_log!("PIET Successfully read LOCAL OWNER USER's GPG key ID: {}", local_owner_gpg_key_id);
+    
+    // STEP 3: Find the encrypted file in the incoming teamchannels directory
+    debug_log!("PIET Step 3: Locating encrypted file in incoming teamchannels directory");
+    
+    // Resolve the incoming teamchannels directory path (relative to executable)
+    let relative_incoming_dir = "invites_updates/incoming/teamchannels";
+    let absolute_incoming_dir = make_input_path_name_abs_executabledirectoryrelative_nocheck(relative_incoming_dir)
+        .map_err(|e| {
+            let error_msg = format!("PIET Failed to resolve incoming teamchannels directory path: {}", e);
+            println!("Error: {}", error_msg);
+            GpgError::PathError(error_msg)
+        })?;
+    
+    // Create the directory if it doesn't exist
+    if let Err(e) = fs::create_dir_all(&absolute_incoming_dir) {
+        let error_msg = format!("PIET Failed to create incoming teamchannels directory: {}", e);
+        println!("Error: {}", error_msg);
+        return Err(GpgError::GpgOperationError(error_msg));
+    }
+    
+    debug_log!("PIET Scanning for encrypted files in: {}", absolute_incoming_dir.display());
+    
+    // Loop until we find exactly one .asc or .gpg file, or user cancels
+    let encrypted_file_path = loop {
+        // Scan the directory for .asc or .gpg files
+        let mut encrypted_files = Vec::new();
+        
+        match fs::read_dir(&absolute_incoming_dir) {
+            Ok(entries) => {
+                for entry in entries {
+                    if let Ok(entry) = entry {
+                        let path = entry.path();
+                        if path.is_file() {
+                            if let Some(extension) = path.extension() {
+                                if extension == "asc" || extension == "gpg" {
+                                    encrypted_files.push(path);
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            Err(e) => {
+                let error_msg = format!("PIET Failed to read incoming teamchannels directory: {}", e);
+                println!("Error: {}", error_msg);
+                return Err(GpgError::GpgOperationError(error_msg));
+            }
+        }
+        
+        // Process based on how many files were found
+        match encrypted_files.len() {
+            0 => {
+                println!("No encrypted files (.asc or .gpg) found in {}", absolute_incoming_dir.display());
+                println!("Please place the encrypted team channel file in this directory.");
+                println!("Press Enter to try again, or type 'exit' to cancel.");
+                
+                let mut input = String::new();
+                if let Err(e) = io::stdin().read_line(&mut input) {
+                    let error_msg = format!("PIET Failed to read user input: {}", e);
+                    println!("Error: {}", error_msg);
+                    return Err(GpgError::ValidationError(error_msg));
+                }
+                
+                if input.trim().to_lowercase() == "exit" {
+                    return Err(GpgError::ValidationError("Operation cancelled by user".to_string()));
+                }
+                
+                // Loop continues to check again
+            },
+            1 => {
+                // Exactly one file found, we can proceed
+                debug_log!("PIET Found one encrypted file: {}", encrypted_files[0].display());
+                println!("Found encrypted file: {}", encrypted_files[0].display());
+                break encrypted_files[0].clone();
+            },
+            _ => {
+                println!("Multiple encrypted files found in {}:", absolute_incoming_dir.display());
+                for (index, file) in encrypted_files.iter().enumerate() {
+                    println!("  {}. {}", index + 1, file.file_name().unwrap_or_default().to_string_lossy());
+                }
+                println!("Please keep only the file you want to process and remove the others.");
+                println!("Press Enter to try again, or type 'exit' to cancel.");
+                
+                let mut input = String::new();
+                if let Err(e) = io::stdin().read_line(&mut input) {
+                    let error_msg = format!("PIET Failed to read user input: {}", e);
+                    println!("Error: {}", error_msg);
+                    return Err(GpgError::ValidationError(error_msg));
+                }
+                
+                if input.trim().to_lowercase() == "exit" {
+                    return Err(GpgError::ValidationError("Operation cancelled by user".to_string()));
+                }
+                
+                // Loop continues to check again
+            }
+        }
+    };
+    
+    // Extract the filename for later use
+    let encrypted_filename = encrypted_file_path.file_name()
+        .ok_or_else(|| {
+            let error_msg = "PIET Failed to extract filename from encrypted file path".to_string();
+            println!("Error: {}", error_msg);
+            GpgError::PathError(error_msg)
+        })?
+        .to_string_lossy()
+        .to_string();
+    
+    debug_log!("PIET Processing encrypted file: {}", encrypted_filename);
+    
+    // STEP 4: Create processed directory for moving files after processing
+    debug_log!("PIET Step 4: Setting up processed directory");
+    
+    let relative_processed_dir = "invites_updates/processed";
+    let absolute_processed_dir = make_input_path_name_abs_executabledirectoryrelative_nocheck(relative_processed_dir)
+        .map_err(|e| {
+            let error_msg = format!("PIET Failed to resolve processed directory path: {}", e);
+            println!("Error: {}", error_msg);
+            GpgError::PathError(error_msg)
+        })?;
+    
+    // Create the processed directory if it doesn't exist
+    if let Err(e) = fs::create_dir_all(&absolute_processed_dir) {
+        let error_msg = format!("PIET Failed to create processed directory: {}", e);
+        println!("Error: {}", error_msg);
+        return Err(GpgError::GpgOperationError(error_msg));
+    }
+    
+    // STEP 5: Set up temporary directory for processing
+    debug_log!("PIET Step 5: Setting up temporary directory for decryption and verification");
+    
+    let temp_dir = make_input_path_name_abs_executabledirectoryrelative_nocheck("temp_gpg_processing")
+        .map_err(|e| {
+            let error_msg = format!("PIET Failed to create temp directory path: {}", e);
+            println!("Error: {}", error_msg);
+            GpgError::PathError(error_msg)
+        })?;
+    
+    if let Err(e) = fs::create_dir_all(&temp_dir) {
+        let error_msg = format!("PIET Failed to create temp directory: {}", e);
+        println!("Error: {}", error_msg);
+        return Err(GpgError::GpgOperationError(error_msg));
+    }
+    
+    // Temporary file to hold decrypted (but not yet verified) content
+    let temp_decrypted_path = temp_dir.join("temp_decrypted.toml");
+    
+    // STEP 6: Decrypt the file using the LOCAL OWNER USER's key
+    debug_log!("PIET Step 6: Decrypting file using LOCAL OWNER USER's key");
+    println!("Decrypting file using LOCAL OWNER USER's key ID: {}", local_owner_gpg_key_id);
+    
+    // Decrypt the file without verification at this stage
+    let decrypt_result = decrypt_gpg_file_to_output(
+        &encrypted_file_path,
+        &temp_decrypted_path
+    );
+    
+    if let Err(e) = &decrypt_result {
+        let error_msg = format!("PIET Failed to decrypt file: {:?}", e);
+        println!("Error: {}", error_msg);
+        println!("This could mean:");
+        println!("1. The file is not properly encrypted or signed");
+        println!("2. The file wasn't encrypted for your GPG key");
+        println!("3. You don't have the sender's public key in your keyring");
+        
+        // Clean up temp directory before returning
+        let _ = fs::remove_dir_all(&temp_dir);
+        
+        return Err(GpgError::GpgOperationError(error_msg));
+    }
+    
+    debug_log!("PIET Successfully decrypted file");
+    
+    // STEP 7: Extract team channel owner from decrypted (but not yet verified) content
+    debug_log!("PIET Step 7: Extracting team channel owner from decrypted content");
+    
+    // Convert temporary file path to string for TOML reading
+    let temp_decrypted_path_str = temp_decrypted_path
+        .to_str()
+        .ok_or_else(|| {
+            let error_msg = "PIET Unable to convert temp file path to string".to_string();
+            println!("Error: {}", error_msg);
+            
+            // Clean up temp directory before returning
+            let _ = fs::remove_dir_all(&temp_dir);
+            
+            GpgError::PathError(error_msg)
+        })?;
+    
+    // Read the team channel owner from the decrypted content
+    // Note: Reading from unverified content, but we need it to find the right public key for verification
+    let unverified_content = match fs::read_to_string(&temp_decrypted_path) {
+        Ok(content) => content,
+        Err(e) => {
+            let error_msg = format!("PIET Failed to read decrypted content: {}", e);
+            println!("Error: {}", error_msg);
+            
+            // Clean up temp directory before returning
+            let _ = fs::remove_dir_all(&temp_dir);
+            
+            return Err(GpgError::GpgOperationError(error_msg));
+        }
+    };
+
+    // Parse to find the owner field in the clearsigned content
+    let team_channel_owner = unverified_content.lines()
+        .find_map(|line| {
+            if line.trim().starts_with("owner =") {
+                let parts: Vec<&str> = line.split('=').collect();
+                if parts.len() >= 2 {
+                    let value = parts[1].trim();
+                    // Remove quotes if present
+                    let clean_value = value.trim_matches('"').trim_matches('\'');
+                    Some(clean_value.to_string())
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
+        .ok_or_else(|| {
+            let error_msg = "PIET Failed to find owner field in decrypted content".to_string();
+            println!("Error: {}", error_msg);
+            
+            // Clean up temp directory before returning
+            let _ = fs::remove_dir_all(&temp_dir);
+            
+            GpgError::ValidationError(error_msg)
+        })?;
+    
+    debug_log!("PIET Extracted team channel owner: {}", team_channel_owner);
+    println!("Team channel owned by: {}", team_channel_owner);
+    
+    // STEP 8: Get team channel owner's public key for verification
+    debug_log!("PIET Step 8: Getting team channel owner's public key for verification");
+    
+    // Path to the team channel owner's addressbook file
+    let team_channel_owner_address_book_filename = format!("{}__collaborator.toml", team_channel_owner);
+    let absolute_team_channel_owner_address_book_path = absolute_collab_dir.join(&team_channel_owner_address_book_filename);
+    
+    debug_log!("PIET Team channel owner's addressbook path: {}", absolute_team_channel_owner_address_book_path.display());
+    
+    // Verify the team channel owner's addressbook file exists
+    if !absolute_team_channel_owner_address_book_path.exists() {
+        let error_msg = format!(
+            "PIET Team channel owner's addressbook file not found at: {}", 
+            absolute_team_channel_owner_address_book_path.display()
+        );
+        println!("Error: {}", error_msg);
+        println!("You need to import the team channel owner's addressbook first.");
+        
+        // Clean up temp directory before returning
+        let _ = fs::remove_dir_all(&temp_dir);
+        
+        return Err(GpgError::PathError(error_msg));
+    }
+    
+    // Convert the team channel owner's addressbook path to string for TOML reading
+    let absolute_team_channel_owner_address_book_path_str = absolute_team_channel_owner_address_book_path
+        .to_str()
+        .ok_or_else(|| {
+            let error_msg = format!(
+                "PIET Unable to convert team channel owner's addressbook path to string: {}", 
+                absolute_team_channel_owner_address_book_path.display()
+            );
+            println!("Error: {}", error_msg);
+            
+            // Clean up temp directory before returning
+            let _ = fs::remove_dir_all(&temp_dir);
+            
+            GpgError::PathError(error_msg)
+        })?;
+    
+    // Read the team channel owner's public GPG key from their addressbook
+    let team_channel_owner_public_key = read_multiline_string_from_clearsigntoml(
+        absolute_team_channel_owner_address_book_path_str,
+        "gpg_key_public"
+    ).map_err(|e| {
+        let error_msg = format!("PIET Failed to read team channel owner's public GPG key: {}", e);
+        println!("Error: {}", error_msg);
+        
+        // Clean up temp directory before returning
+        let _ = fs::remove_dir_all(&temp_dir);
+        
+        GpgError::ValidationError(error_msg)
+    })?;
+    
+    debug_log!("PIET Successfully read team channel owner's public GPG key");
+    
+    // Create temporary file for the team channel owner's public key
+    let temp_public_key_path = temp_dir.join("temp_public_key.asc");
+    
+    // Write public key to temporary file
+    if let Err(e) = fs::write(&temp_public_key_path, team_channel_owner_public_key) {
+        let error_msg = format!("PIET Failed to write team channel owner's public key to temp file: {}", e);
+        println!("Error: {}", error_msg);
+        
+        // Clean up temp directory before returning
+        let _ = fs::remove_dir_all(&temp_dir);
+        
+        return Err(GpgError::GpgOperationError(error_msg));
+    }
+    
+    // STEP 9: Verify the clearsign signature using team channel owner's public key
+    debug_log!("PIET Step 9: Verifying clearsign signature using team channel owner's public key");
+    println!("Verifying signature using team channel owner's public key...");
+    
+    // Temporary file to hold verified content
+    let temp_verified_path = temp_dir.join("temp_verified.toml");
+    
+    // Verify the clearsign signature
+    let verify_result = verify_clearsigned_file_and_extract_content_to_output(
+        &temp_decrypted_path,
+        &temp_public_key_path,
+        &temp_verified_path
+    );
+    
+    if let Err(e) = &verify_result {
+        let error_msg = format!("PIET Failed to verify clearsign signature: {:?}", e);
+        println!("Error: {}", error_msg);
+        println!("The signature could not be verified with the team channel owner's public key.");
+        
+        // Clean up temp directory before returning
+        let _ = fs::remove_dir_all(&temp_dir);
+        
+        return Err(GpgError::GpgOperationError(error_msg));
+    }
+    
+    println!("Signature successfully verified!");
+    debug_log!("PIET Successfully verified clearsign signature");
+    
+    // STEP 10: Extract team channel name from verified content
+    debug_log!("PIET Step 10: Extracting team channel name from verified content");
+    
+    // Convert verified file path to string for TOML reading
+    let temp_verified_path_str = temp_verified_path
+        .to_str()
+        .ok_or_else(|| {
+            let error_msg = "PIET Unable to convert verified file path to string".to_string();
+            println!("Error: {}", error_msg);
+            
+            // Clean up temp directory before returning
+            let _ = fs::remove_dir_all(&temp_dir);
+            
+            GpgError::PathError(error_msg)
+        })?;
+    
+    // Read the team channel name from the verified content
+    let team_channel_name = read_single_line_string_field_from_toml(
+        temp_verified_path_str,
+        "team_channel_name"
+    ).map_err(|e| {
+        let error_msg = format!("PIET Failed to read team channel name from verified content: {}", e);
+        println!("Error: {}", error_msg);
+        println!("The verified file doesn't contain a valid 'team_channel_name' field.");
+        
+        // Clean up temp directory before returning
+        let _ = fs::remove_dir_all(&temp_dir);
+        
+        GpgError::ValidationError(error_msg)
+    })?;
+    
+    debug_log!("PIET Extracted team channel name: {}", team_channel_name);
+    println!("Imported team channel name: {}", team_channel_name);
+    
+    // TODO: STEP 11: Check for port conflicts with existing team channels
+    // This is intentionally left as a placeholder for future implementation
+    debug_log!("PIET Step 11: TODO - Check for port conflicts with existing team channels");
+    
+    // STEP 12: Create team channel directory structure
+    debug_log!("PIET Step 12: Creating team channel directory structure");
+    
+    // Get absolute path to team channels directory
+    let relative_team_channels_dir = "project_graph_data/team_channels";
+    let absolute_team_channels_dir = make_input_path_name_abs_executabledirectoryrelative_nocheck(relative_team_channels_dir)
+        .map_err(|e| {
+            let error_msg = format!("PIET Failed to resolve team channels directory path: {}", e);
+            println!("Error: {}", error_msg);
+            
+            // Clean up temp directory before returning
+            let _ = fs::remove_dir_all(&temp_dir);
+            
+            GpgError::PathError(error_msg)
+        })?;
+    
+    // Create the team channels directory if it doesn't exist
+    if let Err(e) = fs::create_dir_all(&absolute_team_channels_dir) {
+        let error_msg = format!("PIET Failed to create team channels directory: {}", e);
+        println!("Error: {}", error_msg);
+        
+        // Clean up temp directory before returning
+        let _ = fs::remove_dir_all(&temp_dir);
+        
+        return Err(GpgError::GpgOperationError(error_msg));
+    }
+    
+    // Create specific team channel directory
+    let absolute_specific_team_channel_dir = absolute_team_channels_dir.join(&team_channel_name);
+    
+    // Create the specific team channel directory if it doesn't exist
+    if let Err(e) = fs::create_dir_all(&absolute_specific_team_channel_dir) {
+        let error_msg = format!("PIET Failed to create specific team channel directory: {}", e);
+        println!("Error: {}", error_msg);
+        
+        // Clean up temp directory before returning
+        let _ = fs::remove_dir_all(&temp_dir);
+        
+        return Err(GpgError::GpgOperationError(error_msg));
+    }
+    
+    debug_log!("PIET Created team channel directory: {}", absolute_specific_team_channel_dir.display());
+    
+    // Create paths for node.toml and node.gpg in the team channel directory
+    let node_toml_path = absolute_specific_team_channel_dir.join("node.toml");
+    let node_gpg_path = absolute_specific_team_channel_dir.join("node.gpg");
+    
+    // STEP 13: Save verified content as node.toml
+    debug_log!("PIET Step 13: Saving verified content as node.toml");
+    
+    // Copy verified content to node.toml
+    if let Err(e) = fs::copy(&temp_verified_path, &node_toml_path) {
+        let error_msg = format!("PIET Failed to save node.toml: {}", e);
+        println!("Error: {}", error_msg);
+        
+        // Clean up temp directory before returning
+        let _ = fs::remove_dir_all(&temp_dir);
+        
+        return Err(GpgError::GpgOperationError(error_msg));
+    }
+    
+    debug_log!("PIET Saved node.toml to: {}", node_toml_path.display());
+    
+    // STEP 14: Save original encrypted file as node.gpg
+    debug_log!("PIET Step 14: Saving original encrypted file as node.gpg");
+    
+    // Copy original encrypted file to node.gpg
+    if let Err(e) = fs::copy(&encrypted_file_path, &node_gpg_path) {
+        let error_msg = format!("PIET Failed to save node.gpg: {}", e);
+        println!("Error: {}", error_msg);
+        
+        // Clean up temp directory before returning
+        let _ = fs::remove_dir_all(&temp_dir);
+        
+        return Err(GpgError::GpgOperationError(error_msg));
+    }
+    
+    debug_log!("PIET Saved node.gpg to: {}", node_gpg_path.display());
+    
+    // STEP 15: Move original encrypted file to processed directory
+    debug_log!("PIET Step 15: Moving original encrypted file to processed directory");
+    
+    let processed_file_path = absolute_processed_dir.join(&encrypted_filename);
+    
+    // Move the original file to the processed directory
+    if let Err(e) = fs::rename(&encrypted_file_path, &processed_file_path) {
+        let error_msg = format!("PIET Failed to move original encrypted file: {}", e);
+        println!("Warning: {}", error_msg);
+        
+        // This is a non-critical error, so we'll just log it and continue
+        debug_log!("PIET Warning: {}", error_msg);
+    } else {
+        debug_log!("PIET Moved original encrypted file to: {}", processed_file_path.display());
+    }
+    
+    // STEP 16: Clean up temporary directory
+    debug_log!("PIET Step 16: Cleaning up temporary directory");
+    
+    if let Err(e) = fs::remove_dir_all(&temp_dir) {
+        debug_log!("PIET Warning: Failed to remove temporary directory: {}", e);
+        println!("Warning: Failed to clean up temporary files: {}", e);
+        // This is a non-critical error, so we'll just log it and continue
+    }
+    
+    // STEP 17: Report success to user
+    debug_log!("PIET Step 17: Reporting success to user");
+    println!("\nTeam channel successfully imported!");
+    println!("Team channel name: {}", team_channel_name);
+    println!("Team channel owner: {}", team_channel_owner);
+    println!("Files saved to: {}", absolute_specific_team_channel_dir.display());
+    
+    debug_log!("PIET Successfully completed team channel import process");
+    
+    // Wait for user acknowledgment
+    println!("\nPress Enter to continue...");
+    let mut input = String::new();
+    let _ = io::stdin().read_line(&mut input);
+    
+    Ok(())
+}
+
 /// TODO needs extensive doc string 
 /// TODO needs absolute file paths, see:  src/manage_absolute_executable_directory_relative_paths.rs
 /// 
@@ -11041,7 +12673,6 @@ pub fn invite_wizard() -> Result<(), GpgError> {
             make team-channel node.toml
             
             */
-            println!("Team channel sharing - Not implemented yet");
             println!("\n\n-- Option 3: Sharing a Team-Channel --");    
             println!("\n 1. Do you wish to share a Team-Channel that you own");
             println!("    with an existing remote-collaborator?");
@@ -11145,8 +12776,8 @@ pub fn invite_wizard() -> Result<(), GpgError> {
                     }
 
                 2 => {
-                    println!(" --- FROM a remote-collaborator / team-channel-owner, TO you --- ");
-                    println!("Please put their FILENAME.asc file in the");
+                    println!(" --- FROM a remote-collaborator & team-channel-owner, TO you --- ");
+                    println!("Please put their FILENAME.SUFFIX file, as the only file, in the");
                     println!("```path");
                     println!("invites_updates/incoming/teamchannels ");
                     println!("```");
@@ -11161,17 +12792,35 @@ pub fn invite_wizard() -> Result<(), GpgError> {
 
                     /*
                     logic to target that directory...
-                    // 1. Scans the incoming directory for .asc files
-                    // 2. If exactly one file is found, proceeds with processing
-                    // 3. If multiple files are found, prompts the user to clean up the directory
-                    // 4. Decrypts the file and verifies the clearsignature
-                    // 5. Extracts the collaborator's username from the clearsigned content
-                    // 6. Saves the validated clearsigned file to the collaborator address book directory
-                    // 7. Moves the original encrypted file to the processed directory
+                    1. Scans the incoming directory for .asc file (or any gpg suffix)
+                    2. If exactly one file is found, proceeds with processing
+                    3. If multiple files are found, prompts the user to clean up the directory press enter to proceed (not loop))
+                    4. Decrypts the file (with local owner key-id, standard process) and next verifies the clearsignature: 
+                    5. Extracts the collaborator's username from the clearsigned content
+                    6. gets the collaborator's gpg key from an addressbook file
+                    7. uses that to verify the clearsign
+                    TODO STEP: checks all team-channel ports for a colission and
+                    gives a warning (press enter to proceed, not quit) if collision (not a breaking issue)
+                    8. if verified, saves file in two versions: node.toml (clearsign toml); and gpg-encrypted .asc 
+                    - Saves the validated clearsigned file to the collaborator address book directory
+                    (note: the name is always simply node.toml)
+                    - Moves the original encrypted file to the processed directory
+                    
+                    9. Make team-channel folders etc.
+                    The current plan is to leave this step minimal
+                    and have file-sync fill in whatever is inside.
+                    - make directory based on field name
+                    - put node.toml file/gpg-file in the dir
+                    
+                    
+                    
                     */
-                    process_incoming_encrypted_collaborator_addressbook();
+                    
+                    // THIS IS NEW BEING MADE NOW
+                    process_incoming_encrypted_teamchannel();
 
                     }
+                    
                 // Handle cases where subchoice is 0 or ≥ 4
                 _ => {
                     println!("Invalid option. Please select 1, 2, or 3.");

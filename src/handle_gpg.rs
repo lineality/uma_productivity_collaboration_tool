@@ -1062,4 +1062,3 @@ pub fn gpg_abs_executable_directory_relative_exists<P: AsRef<Path>>(path_to_chec
     let path = path_to_check.as_ref();
     Ok(path.exists())
 }
-
