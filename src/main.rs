@@ -11963,7 +11963,7 @@ pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
     debug_log!("PIET Step 3: Locating encrypted file in incoming teamchannels directory");
     
     // Resolve the incoming teamchannels directory path (relative to executable)
-    let relative_incoming_dir = "invites_updates/incoming/teamchannels";
+    let relative_incoming_dir = "invites_updates/incoming";
     let absolute_incoming_dir = make_input_path_name_abs_executabledirectoryrelative_nocheck(relative_incoming_dir)
         .map_err(|e| {
             let error_msg = format!("PIET Failed to resolve incoming teamchannels directory path: {}", e);
@@ -12310,7 +12310,7 @@ pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
     // Read the team channel name from the verified content
     let team_channel_name = read_single_line_string_field_from_toml(
         temp_verified_path_str,
-        "team_channel_name"
+        "node_name"
     ).map_err(|e| {
         let error_msg = format!("PIET Failed to read team channel name from verified content: {}", e);
         println!("Error: {}", error_msg);
@@ -12474,9 +12474,9 @@ pub fn invite_wizard() -> Result<(), GpgError> {
     */
     println!(">> Invite/Update Wizard <<");    
     println!("\nThere are three steps...");
-    println!("1. share gpg");
-    println!("2. share address-book file");
-    println!("3. share team-channel (if you own it)");
+    println!("1. sharing gpg");
+    println!("2. sharing address-book file");
+    println!("3. sharing team-channel");
     println!("\nQ: Which step do you want to do now?");
     println!("(Enter: number + enter)");
 
