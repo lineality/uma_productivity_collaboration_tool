@@ -376,16 +376,20 @@ use crate::clearsign_toml_module::{
     // read_field_from_toml,
     // read_basename_fields_from_toml,
     read_single_line_string_field_from_toml,
+    read_u8_field_from_toml,
+    read_u64_field_from_toml,
+    read_float_f32_field_from_toml,
     read_multi_line_toml_string,
     read_integer_array,
     read_singleline_string_from_clearsigntoml,
     read_multiline_string_from_clearsigntoml,
+    read_str_array_field_clearsigntoml,
     extract_verify_store_gpg_encrypted_clearsign_toml,
     verify_clearsigned_file_and_extract_content_to_output,
     clearsign_and_encrypt_file_for_recipient,
     decrypt_and_validate_file,
     gpg_make_input_path_name_abs_executabledirectoryrelative_nocheck,
-    decrypt_gpg_file_to_output,
+    decrypt_gpgfile_to_output,
 }; 
 
 // // deprecated, code moved to new clearsign_toml_module
@@ -407,6 +411,8 @@ use manage_absolute_executable_directory_relative_paths::{
     get_absolute_path_to_executable_parentdirectory,
     abs_executable_directory_relative_exists,
     prepare_file_parent_directories_abs_executabledirectoryrelative,
+    make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path,
+    count_subdirectories_executabledirectoryrelative_default_zero,
 };
 
 
@@ -513,6 +519,10 @@ pub enum ThisProjectError {
     WalkDirError(walkdir::Error),
     ParseIntError(ParseIntError),
     GpgError(String),  // GPG-specific error type
+    ParseError(std::num::ParseIntError),
+    // Add new variant for String errors
+    StringError(String),
+    // Other variants...
 }
 
 // Implement From<walkdir::Error> for ThisProjectError
@@ -561,9 +571,35 @@ impl std::fmt::Display for ThisProjectError {
             ThisProjectError::WalkDirError(ref err) => write!(f, "WalkDir Error: {}", err),
             ThisProjectError::ParseIntError(ref err) => write!(f, "ParseInt Error: {}", err),
             ThisProjectError::ParseIntError(ref err) => write!(f, "ParseInt Error: {}", err),
-            ThisProjectError::GpgError(ref err) => write!(f, "GPG Error: {}", err), // Add this arm
+            ThisProjectError::GpgError(ref err) => write!(f, "GPG Error: {}", err), 
+            ThisProjectError::ParseError(ref err) => write!(f, "Parse Error: {}", err),
+            ThisProjectError::StringError(ref msg) => write!(f, "Error: {}", msg),
             // ... add formatting for other error types
         }
+    }
+}
+
+/// Implements conversion from String to ThisProjectError
+/// 
+/// This allows using .into() to convert string error messages directly to
+/// the project's error type, simplifying error propagation when the error
+/// source is a formatted message.
+impl From<String> for ThisProjectError {
+    fn from(message: String) -> Self {
+        // Create a ThisProjectError from a String
+        // Assuming ThisProjectError has a variant for string errors
+        // Update this to match your actual error type structure
+        ThisProjectError::StringError(message)
+    }
+}
+
+/// Implements conversion from &str to ThisProjectError for convenience
+/// 
+/// This allows using string literals as errors without explicit conversion
+impl From<&str> for ThisProjectError {
+    fn from(message: &str) -> Self {
+        // Convert &str to String and then use the String implementation
+        ThisProjectError::from(message.to_string())
     }
 }
 
@@ -715,6 +751,10 @@ fn get_band__find_valid_network_index_and_type(
             );
         }
     };
+    
+    // println!("ipv4_addresses: {:?}", ipv4_addresses);
+    // println!("ipv6_addresses: {:?}", ipv6_addresses);
+    // println!("HERE HERE BREAKPOINT 
 
     let (ipv4_addresses_string, ipv6_addresses_string) = match load_local_iplists_as_stringtype(uma_local_owner_user) {
         Ok(lists) => lists,
@@ -724,6 +764,10 @@ fn get_band__find_valid_network_index_and_type(
             return (false, "none".to_string(), 0, Ipv4Addr::UNSPECIFIED, Ipv6Addr::UNSPECIFIED); 
         }
     };
+    
+    // println!("ipv4_addresses_string: {:?}", ipv4_addresses_string);
+    // println!("ipv6_addresses_string: {:?}", ipv6_addresses_string);
+
 
     // 3. Try IPv6 addresses first
     if let Some(valid_ipv6) = find_valid_local_owner_ipv6_address(&ipv6_addresses) {
@@ -809,78 +853,362 @@ fn find_valid_local_owner_ipv4_address(ipv4_addresses: &[Ipv4Addr]) -> Option<Ip
 /// Loads the local user's IPv4 and IPv6 addresses from their collaborator TOML file.
 ///
 /// This function reads the collaborator file for the given `owner` and extracts the
-/// `ipv4_addresses` and `ipv6_addresses` fields. It handles missing fields by returning empty vectors.
+/// `ipv4_addresses` and `ipv6_addresses` fields as strings. It ensures security by requiring
+/// clearsigned validation of the TOML file.
+///
+/// # Security
+/// - REQUIRES cryptographically verified clearsigned TOML files
+/// - Will REJECT files that fail signature verification
+/// - Maintains the integrity of configuration data
 ///
 /// # Arguments
-///
 /// * `owner`: The username of the local user.
 ///
 /// # Returns
-///
-/// * `Result<(Vec<String>, Vec<String>), ThisProjectError>`: A tuple containing the IPv4 and IPv6 address lists as strings, or a `ThisProjectError` if an error occurs.
+/// * `Result<(Vec<String>, Vec<String>), ThisProjectError>`: A tuple containing the IPv4 and IPv6 
+///   address lists as strings, or a `ThisProjectError` if an error occurs.
 fn load_local_iplists_as_stringtype(owner: &str) -> Result<(Vec<String>, Vec<String>), ThisProjectError> {
-    let toml_path = format!("project_graph_data/collaborator_files_address_book/{}__collaborator.toml", owner);
-    let toml_string = std::fs::read_to_string(toml_path)?;
-    let toml_value: toml::Value = toml::from_str(&toml_string)?;
-
-    // Extract IPv4 addresses (handling missing/invalid data):
-    let ipv4_addresses: Vec<String> = match toml_value.get("ipv4_addresses") {
-        Some(toml::Value::Array(arr)) => arr
-            .iter()
-            .filter_map(|val| val.as_str().map(|s| s.to_string()))
-            .collect(),
-        _ => Vec::new(), // Return empty if no IP list found.
+    // Construct the relative path to the collaborator file
+    let relative_path = format!(
+        "project_graph_data/collaborator_files_address_book/{}__collaborator.toml", 
+        owner
+    );
+    
+    // Convert to an absolute path based on executable location
+    let absolute_path = match gpg_make_input_path_name_abs_executabledirectoryrelative_nocheck(&relative_path) {
+        Ok(path) => path.to_string_lossy().to_string(),
+        Err(e) => {
+            return Err(ThisProjectError::IoError(
+                std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    format!("Failed to resolve path for collaborator '{}': {}", owner, e)
+                )
+            ));
+        }
     };
-
-    // Extract IPv6 addresses:
-    let ipv6_addresses: Vec<String> = match toml_value.get("ipv6_addresses") {
-        Some(toml::Value::Array(arr)) => arr
-            .iter()
-            .filter_map(|val| val.as_str().map(|s| s.to_string()))
-            .collect(),
-        _ => Vec::new(), // Return empty on error.
+    
+    // Check if the file exists
+    if !std::path::Path::new(&absolute_path).exists() {
+        return Err(ThisProjectError::IoError(
+            std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("Collaborator file for '{}' not found at: {}", owner, absolute_path)
+            )
+        ));
+    }
+    
+    // Read IP addresses as strings from the clearsigned TOML file
+    // We use our secure verification function that will fail if verification fails
+    let ipv4_addresses = match read_str_array_field_clearsigntoml(&absolute_path, "ipv4_addresses") {
+        Ok(strings) => strings,
+        Err(e) => {
+            return Err(ThisProjectError::GpgError(
+                format!("Failed to securely read IPv4 addresses from clearsigned file: {}", e)
+            ));
+        }
     };
-
+    
+    let ipv6_addresses = match read_str_array_field_clearsigntoml(&absolute_path, "ipv6_addresses") {
+        Ok(strings) => strings,
+        Err(e) => {
+            return Err(ThisProjectError::GpgError(
+                format!("Failed to securely read IPv6 addresses from clearsigned file: {}", e)
+            ));
+        }
+    };
+    
+    // Return the string representations of the IP addresses directly
+    // No need to parse them into IP address types since we want strings
     Ok((ipv4_addresses, ipv6_addresses))
 }
+
+// /// Loads the local user's IPv4 and IPv6 addresses from their collaborator TOML file.
+// ///
+// /// This function reads the collaborator file for the given `owner` and extracts the
+// /// `ipv4_addresses` and `ipv6_addresses` fields. It handles missing fields by returning empty vectors.
+// ///
+// /// # Arguments
+// ///
+// /// * `owner`: The username of the local user.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<(Vec<String>, Vec<String>), ThisProjectError>`: A tuple containing the IPv4 and IPv6 address lists as strings, or a `ThisProjectError` if an error occurs.
+// fn load_local_iplists_as_stringtype(owner: &str) -> Result<(Vec<String>, Vec<String>), ThisProjectError> {
+//     let toml_path = format!("project_graph_data/collaborator_files_address_book/{}__collaborator.toml", owner);
+//     let toml_string = std::fs::read_to_string(toml_path)?;
+//     let toml_value: toml::Value = toml::from_str(&toml_string)?;
+
+//     // Extract IPv4 addresses (handling missing/invalid data):
+//     let ipv4_addresses: Vec<String> = match toml_value.get("ipv4_addresses") {
+//         Some(toml::Value::Array(arr)) => arr
+//             .iter()
+//             .filter_map(|val| val.as_str().map(|s| s.to_string()))
+//             .collect(),
+//         _ => Vec::new(), // Return empty if no IP list found.
+//     };
+
+//     // Extract IPv6 addresses:
+//     let ipv6_addresses: Vec<String> = match toml_value.get("ipv6_addresses") {
+//         Some(toml::Value::Array(arr)) => arr
+//             .iter()
+//             .filter_map(|val| val.as_str().map(|s| s.to_string()))
+//             .collect(),
+//         _ => Vec::new(), // Return empty on error.
+//     };
+
+//     Ok((ipv4_addresses, ipv6_addresses))
+// }
 
 /// Loads the local user's IPv4 and IPv6 addresses from their collaborator TOML file.
 ///
 /// This function reads the collaborator file for the given `owner` and extracts the
-/// `ipv4_addresses` and `ipv6_addresses` fields. It handles missing fields by returning empty vectors.
+/// `ipv4_addresses` and `ipv6_addresses` fields. It ensures security by requiring
+/// clearsigned validation of the TOML file.
+///
+/// # Security
+/// - REQUIRES cryptographically verified clearsigned TOML files
+/// - Will REJECT files that fail signature verification
+/// - Will NOT fall back to reading unsigned files
 ///
 /// # Arguments
-///
 /// * `owner`: The username of the local user.
 ///
 /// # Returns
-///
-/// * `Result<(Vec<Ipv4Addr>, Vec<Ipv6Addr>), ThisProjectError>`: A tuple containing the IPv4 and IPv6 address lists, or a `ThisProjectError` if an error occurs.
+/// * `Result<(Vec<Ipv4Addr>, Vec<Ipv6Addr>), ThisProjectError>`: A tuple containing the IPv4 and IPv6 
+///   address lists, or a `ThisProjectError` if an error occurs.
 fn load_local_ip_lists(owner: &str) -> Result<(Vec<Ipv4Addr>, Vec<Ipv6Addr>), ThisProjectError> {
-    let toml_path = format!("project_graph_data/collaborator_files_address_book/{}__collaborator.toml", owner);
-    let toml_string = std::fs::read_to_string(toml_path)?;
-    let toml_value: toml::Value = toml::from_str(&toml_string)?;
-
-    // Extract IPv4 addresses (handling missing/invalid data):
-    let ipv4_addresses: Vec<Ipv4Addr> = match toml_value.get("ipv4_addresses") {
-        Some(toml::Value::Array(arr)) => arr
-            .iter()
-            .filter_map(|val| val.as_str().and_then(|s| s.parse::<Ipv4Addr>().ok()))
-            .collect(),
-        _ => Vec::new(), // Return empty if no IP list found.
+    // Construct the relative path to the collaborator file
+    let relative_path = format!(
+        "project_graph_data/collaborator_files_address_book/{}__collaborator.toml", 
+        owner
+    );
+    
+    // Convert to an absolute path based on executable location
+    let absolute_path = match gpg_make_input_path_name_abs_executabledirectoryrelative_nocheck(&relative_path) {
+        Ok(path) => path.to_string_lossy().to_string(),
+        Err(e) => {
+            return Err(ThisProjectError::IoError(
+                std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    format!("Failed to resolve path for collaborator '{}': {}", owner, e)
+                )
+            ));
+        }
     };
-
-    // Extract IPv6 addresses:
-    let ipv6_addresses: Vec<Ipv6Addr> = match toml_value.get("ipv6_addresses") {
-        Some(toml::Value::Array(arr)) => arr
-            .iter()
-            .filter_map(|val| val.as_str().and_then(|s| s.parse::<Ipv6Addr>().ok()))
-            .collect(),
-        _ => Vec::new(), // Return empty on error.
+    
+    // Check if the file exists
+    if !std::path::Path::new(&absolute_path).exists() {
+        return Err(ThisProjectError::IoError(
+            std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("Collaborator file for '{}' not found at: {}", owner, absolute_path)
+            )
+        ));
+    }
+    
+    // Read IP addresses from the clearsigned TOML file
+    // This will fail if the file is not clearsigned or fails verification
+    let ipv4_strings = match read_str_array_field_clearsigntoml(&absolute_path, "ipv4_addresses") {
+        Ok(strings) => strings,
+        Err(e) => {
+            return Err(ThisProjectError::GpgError(
+                format!("Failed to securely read IPv4 addresses from clearsigned file: {}", e)
+            ));
+        }
     };
-
+    
+    let ipv6_strings = match read_str_array_field_clearsigntoml(&absolute_path, "ipv6_addresses") {
+        Ok(strings) => strings,
+        Err(e) => {
+            return Err(ThisProjectError::GpgError(
+                format!("Failed to securely read IPv6 addresses from clearsigned file: {}", e)
+            ));
+        }
+    };
+    
+    // Parse the string values into IP address types
+    let mut ipv4_addresses = Vec::new();
+    for ip_str in ipv4_strings {
+        match ip_str.parse::<Ipv4Addr>() {
+            Ok(addr) => ipv4_addresses.push(addr),
+            Err(e) => {
+                println!("Warning: Invalid IPv4 address '{}': {}", ip_str, e);
+            }
+        }
+    }
+    
+    let mut ipv6_addresses = Vec::new();
+    for ip_str in ipv6_strings {
+        match ip_str.parse::<Ipv6Addr>() {
+            Ok(addr) => ipv6_addresses.push(addr),
+            Err(e) => {
+                println!("Warning: Invalid IPv6 address '{}': {}", ip_str, e);
+            }
+        }
+    }
+    
+    // Return the collected IP addresses
     Ok((ipv4_addresses, ipv6_addresses))
 }
+
+// /// Reads IP addresses from a collaborator's TOML file.
+// ///
+// /// # Purpose
+// /// This function securely retrieves IPv4 and IPv6 addresses from a collaborator's
+// /// configuration file. It ensures paths are correctly resolved relative to the
+// /// executable's location and handles both regular and clearsigned TOML files.
+// ///
+// /// # Process
+// /// 1. Constructs an absolute path to the collaborator file based on the executable's location
+// /// 2. Reads IP address arrays from the TOML file
+// /// 3. Parses string values into typed IP address objects
+// /// 4. Returns structured collections of IPv4 and IPv6 addresses
+// ///
+// /// # Arguments
+// /// * `owner` - Name of the collaborator (used to construct the filename)
+// /// * `use_clearsign` - Whether to use clearsigned verification (true) or plain TOML reading (false)
+// ///
+// /// # Returns
+// /// * `Result<(Vec<Ipv4Addr>, Vec<Ipv6Addr>), String>` - A tuple containing:
+// ///   - Vector of IPv4 addresses
+// ///   - Vector of IPv6 addresses
+// ///   Or an error message if any step fails
+// ///
+// /// # Example
+// /// ```
+// /// match get_collaborator_ip_addresses("alice", true) {
+// ///     Ok((ipv4_addrs, ipv6_addrs)) => {
+// ///         println!("IPv4 addresses: {:?}", ipv4_addrs);
+// ///         println!("IPv6 addresses: {:?}", ipv6_addrs);
+// ///     },
+// ///     Err(e) => eprintln!("Error: {}", e)
+// /// }
+// /// ```
+// pub fn get_collaborator_ip_addresses(
+//     owner: &str, 
+//     use_clearsign: bool
+// ) -> Result<(Vec<Ipv4Addr>, Vec<Ipv6Addr>), String> {
+//     // Step 1: Construct the relative path to the collaborator file
+//     let relative_path = format!(
+//         "project_graph_data/collaborator_files_address_book/{}__collaborator.toml", 
+//         owner
+//     );
+    
+//     // Step 2: Convert to an absolute path based on executable location
+//     let absolute_path = gpg_make_input_path_name_abs_executabledirectoryrelative_nocheck(&relative_path)
+//         .map_err(|e| format!("Failed to resolve path for collaborator '{}': {}", owner, e))?
+//         .to_string_lossy()
+//         .to_string();
+    
+//     // Step 3: Read the IPv4 and IPv6 address arrays from the TOML file
+//     let ipv4_strings: Vec<String>;
+//     let ipv6_strings: Vec<String>;
+    
+//     if use_clearsign {
+//         // Read from clearsigned TOML file
+//         ipv4_strings = match read_str_array_field_clearsigntoml(&absolute_path, "ipv4_addresses") {
+//             Ok(addresses) => addresses,
+//             Err(e) => {
+//                 println!("Warning: Could not read IPv4 addresses from clearsigned file: {}", e);
+//                 Vec::new()
+//             }
+//         };
+        
+//         ipv6_strings = match read_str_array_field_clearsigntoml(&absolute_path, "ipv6_addresses") {
+//             Ok(addresses) => addresses,
+//             Err(e) => {
+//                 println!("Warning: Could not read IPv6 addresses from clearsigned file: {}", e);
+//                 Vec::new()
+//             }
+//         };
+//     } else {
+//         // Read from regular TOML file
+//         ipv4_strings = match read_string_array_field_from_toml(&absolute_path, "ipv4_addresses") {
+//             Ok(addresses) => addresses,
+//             Err(e) => {
+//                 println!("Warning: Could not read IPv4 addresses: {}", e);
+//                 Vec::new()
+//             }
+//         };
+        
+//         ipv6_strings = match read_string_array_field_from_toml(&absolute_path, "ipv6_addresses") {
+//             Ok(addresses) => addresses,
+//             Err(e) => {
+//                 println!("Warning: Could not read IPv6 addresses: {}", e);
+//                 Vec::new()
+//             }
+//         };
+//     }
+    
+//     // Step 4: Parse the string values into IP address types
+//     let mut ipv4_addresses = Vec::new();
+//     for ip_str in ipv4_strings {
+//         match ip_str.parse::<Ipv4Addr>() {
+//             Ok(addr) => ipv4_addresses.push(addr),
+//             Err(e) => println!("Warning: Invalid IPv4 address '{}': {}", ip_str, e),
+//         }
+//     }
+    
+//     let mut ipv6_addresses = Vec::new();
+//     for ip_str in ipv6_strings {
+//         match ip_str.parse::<Ipv6Addr>() {
+//             Ok(addr) => ipv6_addresses.push(addr),
+//             Err(e) => println!("Warning: Invalid IPv6 address '{}': {}", ip_str, e),
+//         }
+//     }
+    
+//     // Step 5: Return the parsed IP addresses
+//     Ok((ipv4_addresses, ipv6_addresses))
+// }
+
+// /// Loads the local user's IPv4 and IPv6 addresses from their collaborator TOML file.
+// ///
+// /// This function reads the collaborator file for the given `owner` and extracts the
+// /// `ipv4_addresses` and `ipv6_addresses` fields. It handles missing fields by returning empty vectors.
+// ///
+// /// # Arguments
+// ///
+// /// * `owner`: The username of the local user.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<(Vec<Ipv4Addr>, Vec<Ipv6Addr>), ThisProjectError>`: A tuple containing the IPv4 and IPv6 address lists, or a `ThisProjectError` if an error occurs.
+// fn load_local_ip_lists(owner: &str) -> Result<(Vec<Ipv4Addr>, Vec<Ipv6Addr>), ThisProjectError> {
+    
+//     /*
+//     1. make path to clearsign toml
+//     2. read array values... get needed when needed
+    
+//     (old code is wrong to:
+//         1. use local path
+//         2. load the whole file, bad 
+//         )
+//     */
+//     let toml_path = format!("project_graph_data/collaborator_files_address_book/{}__collaborator.toml", owner);
+//     let toml_string = std::fs::read_to_string(toml_path)?;
+//     let toml_value: toml::Value = toml::from_str(&toml_string)?;
+
+//     // Extract IPv4 addresses (handling missing/invalid data):
+//     let ipv4_addresses: Vec<Ipv4Addr> = match toml_value.get("ipv4_addresses") {
+//         Some(toml::Value::Array(arr)) => arr
+//             .iter()
+//             .filter_map(|val| val.as_str().and_then(|s| s.parse::<Ipv4Addr>().ok()))
+//             .collect(),
+//         _ => Vec::new(), // Return empty if no IP list found.
+//     };
+
+//     // Extract IPv6 addresses:
+//     let ipv6_addresses: Vec<Ipv6Addr> = match toml_value.get("ipv6_addresses") {
+//         Some(toml::Value::Array(arr)) => arr
+//             .iter()
+//             .filter_map(|val| val.as_str().and_then(|s| s.parse::<Ipv6Addr>().ok()))
+//             .collect(),
+//         _ => Vec::new(), // Return empty on error.
+//     };
+
+//     Ok((ipv4_addresses, ipv6_addresses))
+// }
 
 /// This converts between the u8 sent by uma over network and usize that Rust uses for array-indices.
 fn get_ip_by_index(
@@ -1881,7 +2209,7 @@ Seri_Deseri Deserialize From End
 */
 
 /// get unix time 
-/// e.g. for use with updated_at_timestamp
+/// e.g. for use with updated_at_timestamp 
 fn get_current_unix_timestamp() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -1890,8 +2218,23 @@ fn get_current_unix_timestamp() -> u64 {
 }
 
 
+
 fn check_all_ports_in_team_channels() -> Result<(), ThisProjectError> {
-    let team_channels_dir = Path::new("project_graph_data/team_channels");
+
+    // let team_channels_dir = Path::new("project_graph_data/team_channels");
+
+    // Ensure the project graph data directory exists relative to the executable
+    let team_channelsdir_result = make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path("project_graph_data/team_channels");
+
+    // Handle any errors that might occur during directory creation or verification
+    let team_channels_dir = match team_channelsdir_result {
+        Ok(directory_path) => directory_path,
+        Err(io_error) => {
+            // Log the error and handle appropriately for your application
+            return Err(format!("in check_all_ports_in_team_channels(), Failed to ensure team_channels_dir exists: {}", io_error).into());
+        }
+    };
+    
     let mut ports_in_use = HashSet::new();
 
     // Iterate over all team channel directories
@@ -1921,6 +2264,8 @@ fn check_all_ports_in_team_channels() -> Result<(), ThisProjectError> {
             }
         }
     }
+    
+    debug_log("Done check_all_ports_in_team_channels()");
 
     Ok(()) // No port collisions found
 }
@@ -2008,14 +2353,88 @@ fn should_not_hard_restart() -> bool {
     }
 }
 
-fn dir_at_path_is_empty_returns_false(path_to_dir: &Path) -> bool { 
+// // old relative path version
+// fn dir_at_path_is_empty_returns_false(path_to_dir: &Path) -> bool { 
 
-    debug_log!("dir_at_path_is_empty_returns_false()-> Checking if directory is empty: {:?}", path_to_dir);
-    if let Ok(mut entries) = fs::read_dir(path_to_dir) {
+//     debug_log!("dir_at_path_is_empty_returns_false()-> Checking if directory is empty: {:?}", path_to_dir);
+//     if let Ok(mut entries) = fs::read_dir(path_to_dir) {
         
-        entries.next().is_some() // Returns false if the directory is empty
-    } else {
-        true // Assume directory is NOT empty if an error occurs reading it
+//         entries.next().is_some() // Returns false if the directory is empty
+//     } else {
+//         true // Assume directory is NOT empty if an error occurs reading it
+//     }
+// }
+
+
+// use std::fs;
+// use std::path::Path;
+// use crate::manage_absolute_executable_directory_relative_paths::make_input_path_name_abs_executabledirectoryrelative_nocheck;
+
+/// Checks if a directory is empty and returns the appropriate boolean value.
+///
+/// This function attempts to check if the directory at the given path is empty.
+/// It converts the provided path to an absolute path relative to the executable's
+/// location before performing the check.
+///
+/// # Arguments
+///
+/// * `path_to_dir` - A reference to a Path that represents the directory to check.
+///                   This can be either an absolute path or a path relative to the executable.
+///
+/// # Returns
+///
+/// * `bool` - Returns `false` if the directory exists and is empty.
+///            Returns `true` if the directory is not empty OR if any error occurs
+///            (e.g., the directory doesn't exist, permissions issues, etc.)
+///
+/// # Note 
+///
+/// The function name indicates its inverse behavior: it returns `false` when
+/// a directory is empty, and `true` otherwise. This pattern is maintained for
+/// backward compatibility with existing code.
+fn dir_at_path_is_empty_returns_false(path_to_dir: &Path) -> bool { 
+    debug_log!("dir_at_path_is_empty_returns_false()-> Checking if directory is empty: {:?}", path_to_dir);
+    
+    // Try to convert the path to an absolute path relative to the executable
+    let abs_path = match make_input_path_name_abs_executabledirectoryrelative_nocheck(path_to_dir) {
+        Ok(path) => path,
+        Err(e) => {
+            debug_log!("Error resolving absolute path: {}", e);
+            return true; // Assume NOT empty (return true) if path conversion fails
+        }
+    };
+    
+    debug_log!("Checking absolute path: {:?}", abs_path);
+    
+    // Check if the path exists and is a directory
+    if !abs_path.exists() {
+        debug_log!("Path does not exist: {:?}", abs_path);
+        return true; // Assume NOT empty (return true) if path doesn't exist
+    }
+    
+    if !abs_path.is_dir() {
+        debug_log!("Path exists but is not a directory: {:?}", abs_path);
+        return true; // Assume NOT empty (return true) if path is not a directory
+    }
+    
+    // Attempt to read the directory entries
+    match fs::read_dir(&abs_path) {
+        Ok(mut entries) => {
+            // If there are any entries, the directory is not empty
+            let has_entries = entries.next().is_some();
+            
+            if has_entries {
+                debug_log!("Directory is NOT empty: {:?}", abs_path);
+                true // Directory is NOT empty, return true
+            } else {
+                debug_log!("Directory is empty: {:?}", abs_path);
+                false // Directory IS empty, return false
+            }
+        },
+        Err(e) => {
+            debug_log!("Error reading directory entries: {}", e);
+            true // Assume NOT empty (return true) if an error occurs reading the directory
+        }
     }
 }
 
@@ -2092,15 +2511,62 @@ pub fn verify_toml_signature(file_path: &Path) -> Result<(), Error> {
     }
 }
 
+// //relative path version
+// fn debug_log(message: &str) {
+//     if DEBUG_FLAG {
+//         let mut file = OpenOptions::new()
+//             .append(true)
+//             .create(true)
+//             .open("uma.log")
+//             .expect("Failed to open log file");
+    
+//         writeln!(file, "{}", message).expect("Failed to write to log file");
+//     }
+// }
+/// Logs a debug message to a log file located relative to the executable directory.
+///
+/// This function only writes to the log file if the DEBUG_FLAG is set to true.
+/// The log file (uma.log) will be created in the same directory as the executable
+/// if it doesn't exist, or appended to if it already exists.
+///
+/// # Arguments
+///
+/// * `message` - The debug message to write to the log file
+///
+/// # Note
+///
+/// This function handles errors internally and does not propagate them
+/// to the caller, to maintain backward compatibility with existing code.
 fn debug_log(message: &str) {
     if DEBUG_FLAG {
-        let mut file = OpenOptions::new()
+        // Get the log file path relative to the executable
+        let log_file_path_result = make_input_path_name_abs_executabledirectoryrelative_nocheck("uma.log");
+        
+        if let Err(path_error) = log_file_path_result {
+            // Print error but don't panic
+            eprintln!("Failed to determine log file path: {}", path_error);
+            return;
+        }
+        
+        let log_file_path = log_file_path_result.unwrap(); // Safe after check
+        
+        // Open the log file
+        let file_result = std::fs::OpenOptions::new()
             .append(true)
             .create(true)
-            .open("uma.log")
-            .expect("Failed to open log file");
-    
-        writeln!(file, "{}", message).expect("Failed to write to log file");
+            .open(&log_file_path);
+            
+        if let Err(file_error) = file_result {
+            eprintln!("Failed to open log file at {}: {}", log_file_path.display(), file_error);
+            return;
+        }
+        
+        let mut file = file_result.unwrap(); // Safe after check
+        
+        // Write to the log file
+        if let Err(write_error) = writeln!(file, "{}", message) {
+            eprintln!("Failed to write to log file: {}", write_error);
+        }
     }
 }
 
@@ -2146,22 +2612,69 @@ fn get_toml_file_updated_at_timestamp(file_path: &Path) -> Result<u64, ThisProje
     Ok(timestamp)
 }
 
-// debug_log! macro for f-string printing variables
-// #[macro_use]
-#[macro_export] 
+/// Macro for logging debug messages to a file located relative to the executable directory.
+///
+/// This macro formats the input like println! and only executes if DEBUG_FLAG is true.
+/// The log file (uma.log) will be created in the same directory as the executable
+/// if it doesn't exist, or appended to if it already exists.
+///
+/// # Examples
+///
+/// ```
+/// debug_log!("Starting application");
+/// debug_log!("Value: {}", some_variable);
+/// ```
+#[macro_export]
 macro_rules! debug_log {
-    ($($arg:tt)*) => (
+    ($($arg:tt)*) => {
         if DEBUG_FLAG {
-            let mut file = OpenOptions::new()
-                .append(true)
-                .create(true)
-                .open("uma.log")
-                .expect("Failed to open log file");
-
-            writeln!(file, $($arg)*).expect("Failed to write to log file");
-        } 
-    )
+            // Get the log file path relative to the executable
+            let log_file_path_result = crate::manage_absolute_executable_directory_relative_paths::make_input_path_name_abs_executabledirectoryrelative_nocheck("uma.log");
+            
+            match log_file_path_result {
+                Ok(log_file_path) => {
+                    // Open the log file in append mode, creating it if it doesn't exist
+                    match std::fs::OpenOptions::new()
+                        .append(true)
+                        .create(true)
+                        .open(&log_file_path) 
+                    {
+                        Ok(mut file) => {
+                            // Write the formatted message to the file
+                            if let Err(write_err) = writeln!(file, $($arg)*) {
+                                eprintln!("Failed to write to log file: {}", write_err);
+                            }
+                        },
+                        Err(open_err) => {
+                            eprintln!("Failed to open log file at {}: {}", 
+                                log_file_path.display(), open_err);
+                        }
+                    }
+                },
+                Err(path_err) => {
+                    eprintln!("Failed to determine log file path: {}", path_err);
+                }
+            }
+        }
+    };
 }
+
+// // debug_log! macro for f-string printing variables
+// // #[macro_use]
+// #[macro_export] 
+// macro_rules! debug_log {
+//     ($($arg:tt)*) => (
+//         if DEBUG_FLAG {
+//             let mut file = OpenOptions::new()
+//                 .append(true)
+//                 .create(true)
+//                 .open("uma.log")
+//                 .expect("Failed to open log file");
+
+//             writeln!(file, $($arg)*).expect("Failed to write to log file");
+//         } 
+//     )
+// }
 
 // maybe deprecated
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -4021,6 +4534,8 @@ struct LocalUserUma {
     uma_local_owner_user: String,
     uma_default_im_messages_expiration_days: u64,
     uma_default_task_nodes_expiration_days: u64,
+    tui_height: u8,
+    tui_width: u8,
     log_mode_refresh: f32,
 }
 
@@ -4030,10 +4545,11 @@ impl LocalUserUma {
             uma_local_owner_user,
             uma_default_im_messages_expiration_days: 28, // Default to 7 days
             uma_default_task_nodes_expiration_days: 90, // Default to 30 days 
+            tui_height: 24,
+            tui_width: 80,
             log_mode_refresh: 1.5 // how fast log mode refreshes
             }
     }
-
 
     fn save_owner_to_file(&self, path: &Path) -> Result<(), io::Error> {
         let toml_string = toml::to_string(&self).map_err(|e| {
@@ -7529,7 +8045,7 @@ fn gpg_clearsign_file_to_sendbytes(
     let clearsigned_bytes = clearsign_output.stdout;
 
     // 4. Clean up the temporary file.
-    fs::remove_file(&temp_dir)?; // TODO Handle potential errors if you wish
+    fs::remove_file(&temp_dir)?; // TODO Handle potential error
 
     debug_log!(
         "(inHRCD)gpg_clearsign_file_to_sendbytes clearsigned_bytes {:?}",
@@ -8218,29 +8734,111 @@ fn find_gpg_public_key_file(directory: &Path) -> Result<Option<PathBuf>, ThisPro
 //     local_owner_username
 // }
 
-fn get_local_owner_username() -> String {  // Returns String directly
-    debug_log("starting get_local_owner_username()");
-    let uma_toml_path = Path::new("uma.toml");
+// OLD relative path
+// fn get_local_owner_username() -> String {  // Returns String directly
+//     debug_log("starting get_local_owner_username()");
+//     let uma_toml_path = Path::new("uma.toml");
 
-    let toml_string = read_to_string(uma_toml_path).unwrap_or_else(|e| {
-        eprintln!("Error reading uma.toml: {}", e); // Log the error
-        std::process::exit(1); // Or handle differently, but exit if no config is a show stopper.
-    });
+//     let toml_string = read_to_string(uma_toml_path).unwrap_or_else(|e| {
+//         eprintln!("Error reading uma.toml: {}", e); // Log the error
+//         std::process::exit(1); // Or handle differently, but exit if no config is a show stopper.
+//     });
 
-    let toml_value: toml::Value = toml::from_str(&toml_string).unwrap_or_else(|e| {
-        eprintln!("Error parsing uma.toml: {}", e);
-        std::process::exit(1);  // If your application cannot continue without a username...
-    });
+//     let toml_value: toml::Value = toml::from_str(&toml_string).unwrap_or_else(|e| {
+//         eprintln!("Error parsing uma.toml: {}", e);
+//         std::process::exit(1);  // If your application cannot continue without a username...
+//     });
 
-    toml_value["uma_local_owner_user"]
-        .as_str()
-        .unwrap_or_else(|| {
-            eprintln!("'uma_local_owner_user' not found in uma.toml"); // Handle the error
-            std::process::exit(1);
-        })
-        .to_string()
+//     toml_value["uma_local_owner_user"]
+//         .as_str()
+//         .unwrap_or_else(|| {
+//             eprintln!("'uma_local_owner_user' not found in uma.toml"); // Handle the error
+//             std::process::exit(1);
+//         })
+//         .to_string()
+// }
+
+/// Retrieves the local owner username from the uma.toml configuration file.
+///
+/// # Returns
+///
+/// A String containing the username if successful, or an empty string if any error occurs.
+fn get_local_owner_username() -> String {
+    debug_log!("___ Step 1: Reading LOCAL OWNER USER's name from uma.toml");
+    
+    // Get absolute path to uma.toml configuration file
+    let absolute_uma_toml_path = match make_file_path_abs_executabledirectoryrelative_canonicalized_or_error("uma.toml") {
+        Ok(path) => path,
+        Err(e) => {
+            println!("Error: ___ Failed to locate uma.toml configuration file: {}", e);
+            return String::new(); // Return empty string on error
+        }
+    };
+    
+    // Convert PathBuf to string for TOML reading
+    let absolute_uma_toml_path_str = match absolute_uma_toml_path.to_str() {
+        Some(path_str) => path_str,
+        None => {
+            println!("Error: __ Unable to convert UMA TOML path to string");
+            return String::new(); // Return empty string on error
+        }
+    };
+    
+    // Read LOCAL OWNER USER's name from uma.toml
+    match read_single_line_string_field_from_toml(
+        absolute_uma_toml_path_str, 
+        "uma_local_owner_user"
+    ) {
+        Ok(username) => {
+            debug_log!("___ LOCAL OWNER USER's name is: {}", username);
+            username  // Return the username string on success
+        },
+        Err(e) => {
+            println!("Error: ___ Failed to read LOCAL OWNER USER's name: {}", e);
+            String::new()  // Return empty string on error
+        }
+    }
 }
 
+// pseudocode draft
+// fn get_local_owner_username() -> String {  // Returns String directly
+//     debug_log!("___ Step 1: Reading LOCAL OWNER USER's name from uma.toml");
+    
+//     // Get absolute path to uma.toml configuration file
+//     let relative_uma_toml_path = "uma.toml";
+//     let absolute_uma_toml_path = make_file_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_uma_toml_path)
+//         .map_err(|e| {
+//             let error_msg = format!("___ Failed to locate uma.toml configuration file: {}", e);
+//             println!("Error: {}", error_msg);
+//             GpgError::PathError(error_msg)
+//         })?;
+    
+//     // Convert PathBuf to string for TOML reading
+//     let absolute_uma_toml_path_str = absolute_uma_toml_path
+//         .to_str()
+//         .ok_or_else(|| {
+//             let error_msg = "__ Unable to convert UMA TOML path to string".to_string();
+//             println!("Error: {}", error_msg);
+//             GpgError::PathError(error_msg)
+//         })?;
+    
+//     // Read LOCAL OWNER USER's name from uma.toml
+//     let local_owner_user_name = read_single_line_string_field_from_toml(
+//         absolute_uma_toml_path_str, 
+//         "uma_local_owner_user"
+//     ).map_err(|e| {
+//         let error_msg = format!("___ Failed to read LOCAL OWNER USER's name: {}", e);
+//         println!("Error: {}", error_msg);
+//         GpgError::ValidationError(error_msg)
+//     })?;
+    
+//     debug_log!("___ LOCAL OWNER USER's name is: {}", local_owner_user_name);
+
+//     local_owner_user_name
+// }
+
+// TODO maybe various updatesand fixes, how files read, paths
+// TODO doc string needed here...
 fn export_addressbook() -> Result<(), ThisProjectError> {
     debug_log("start export_addressbook()");
 
@@ -8249,9 +8847,32 @@ fn export_addressbook() -> Result<(), ThisProjectError> {
     // Read uma_local_owner_user from uma.toml
     // maybe add gpg and make this a separate function TODO
     // Load UMA configuration from uma.toml
-    let uma_toml_path = Path::new("uma.toml");
+    // let uma_toml_path = Path::new("uma.toml");
+    
+    
+    // 1. Get local owner's username (from exe-parent absolute path file)
+    // Get absolute path to uma.toml configuration file
+    let relative_uma_toml_path = "uma.toml";
+    let absolute_uma_toml_path = make_file_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_uma_toml_path)
+        .map_err(|e| {
+            let error_msg = format!("___ Failed to locate uma.toml configuration file: {}", e);
+            println!("Error: {}", error_msg);
+            io::Error::new(io::ErrorKind::InvalidData, error_msg)
+        })?;
+    
+    // Convert PathBuf to string for TOML reading
+    let absolute_uma_toml_path_str = absolute_uma_toml_path
+        .to_str()
+        .ok_or_else(|| {
+            let error_msg = "__ Unable to convert UMA TOML path to string".to_string();
+            println!("Error: {}", error_msg);
+            io::Error::new(io::ErrorKind::InvalidData, error_msg)
+        })?;
+    
+    
     // let user_metadata = toml::from_str::<toml::Value>(&std::fs::read_to_string(uma_toml_path)?)?; 
-    let user_metadata = toml::from_str::<toml::Value>(&std::fs::read_to_string(uma_toml_path)?)
+    // let user_metadata = toml::from_str::<toml::Value>(&std::fs::read_to_string(uma_toml_path)?)
+    let user_metadata = toml::from_str::<toml::Value>(&std::fs::read_to_string(absolute_uma_toml_path_str)?)
     .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("TOML deserialization error: {}", e)))?;
     let local_owner_username = user_metadata["uma_local_owner_user"].as_str().unwrap().to_string();
 
@@ -8338,7 +8959,62 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
     debug_log("Staring initialize_uma_application()");
 
     // --- 1. CHECK FOR & SETUP uma.toml ---
-    let uma_toml_path = Path::new("uma.toml");
+    // let uma_toml_path = Path::new("uma.toml");
+    
+        
+    // Check for uma.toml file relative to the executable's directory
+    let uma_toml_path_result = make_file_path_abs_executabledirectoryrelative_canonicalized_or_error("uma.toml");
+
+    // // Handle the result appropriately
+    // let uma_toml_path = match uma_toml_path_result {
+    //     Ok(file_path) => {
+    //         // File exists, we can proceed with using it
+    //         debug_log!("Found uma.toml at: {:?}", file_path);
+    //         file_path
+    //     },
+    //     Err(io_error) => {
+    //         if io_error.kind() == std::io::ErrorKind::NotFound {
+    //             // File doesn't exist - handle this specific case
+    //             return Err(format!("Configuration file uma.toml not found in executable directory").into());
+    //         } else if io_error.kind() == std::io::ErrorKind::InvalidInput {
+    //             // Path exists but is a directory
+    //             return Err(format!("uma.toml exists but is a directory, not a file").into());
+    //         } else {
+    //             // Other I/O errors
+    //             return Err(format!("Error accessing uma.toml: {}", io_error).into());
+    //         }
+    //     }
+    // };
+
+    // This will pass an empty 'uma_toml_path' ahead if initial setup is needed
+    let uma_toml_path = match uma_toml_path_result {
+        Ok(file_path) => {
+            // Path is valid (whether file exists or not)
+            debug_log!("Determined uma.toml path at: {:?}", file_path);
+            file_path
+        },
+        Err(io_error) => {
+            // Only treat certain errors as fatal
+            if io_error.kind() == std::io::ErrorKind::InvalidInput {
+                // Path exists but is a directory
+                return Err(format!("uma.toml exists but is a directory, not a file").into());
+            } else if io_error.kind() == std::io::ErrorKind::NotFound {
+                // For first-time setup, NotFound is expected - construct the default path
+                let mut default_path = std::env::current_exe().map_err(|e| 
+                    format!("Failed to determine executable path: {}", e)
+                )?;
+                default_path.pop(); // Remove executable name
+                default_path.push("uma.toml");
+                debug_log!("Using default uma.toml path: {:?}", default_path);
+                default_path
+            } else {
+                // Other I/O errors
+                return Err(format!("Error accessing uma.toml: {}", io_error).into());
+            }
+        }
+    };
+    
+    // looks to see if setup is needed
     if !uma_toml_path.exists() {
         /*
         This uses the struct method 'new' to make a standard
@@ -8351,8 +9027,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         // Prompt for owner and create uma.toml
         println!("Welcome to the Uma Collaboration Tools. Please enter your username (this will be the owner for this Uma 'instance'):");
         let mut owner_input = String::new();
-        io::stdin().read_line(&mut owner_input).unwrap();
-        // remove this unwrap
+        io::stdin().read_line(&mut owner_input).unwrap();  // TODO remove this unwrap!!!!!!!!!!!!!!!!!!!!!
         
         let owner = owner_input.trim().to_string();
 
@@ -8367,7 +9042,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
     }
     
     // ... 2. Load user metadata from the now-existing uma.toml
-    let user_metadata = match toml::from_str::<LocalUserUma>(&fs::read_to_string(uma_toml_path)?) {
+    let user_metadata = match toml::from_str::<LocalUserUma>(&fs::read_to_string(&uma_toml_path)?) {
         Ok(metadata) => {
             debug_log!("uma.toml loaded successfully!");
             metadata
@@ -8395,7 +9070,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
 
     
     
-    // // --- 3. CHECK FOR PORT COLLISIONS ---
+    // // --- 3. CHECK FOR PORT COLLISIONS --- 
     // // You can now safely access user_metadata.uma_local_owner_user if needed
     // if let Err(e) = check_all_ports_in_team_channels() {
     //     eprintln!("Error: {}", e); 
@@ -8405,13 +9080,30 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
 
     // // ... 4. CREATE DIRECTORIES --- 
     
+
+    // old relative path version, depricated    
+    // // Check if the data directory exists
+    // let project_graph_directory = Path::new("project_graph_data");
+    // if !project_graph_directory.exists() {
+    //     // If the directory does not exist, create it
+    //     fs::create_dir_all(project_graph_directory).expect("Failed to create project_graph_data directory");
+    // }
     
-    // Check if the data directory exists
-    let project_graph_directory = Path::new("project_graph_data");
-    if !project_graph_directory.exists() {
-        // If the directory does not exist, create it
-        fs::create_dir_all(project_graph_directory).expect("Failed to create project_graph_data directory");
-    }
+    
+    // using path relative to exe-parent:
+    // Ensure directory exists relative to the executable
+    let project_graph_directory_result = make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path("project_graph_data");
+    
+    // Handle any errors that might occur during directory creation or verification
+    let project_graph_directory = match project_graph_directory_result {
+        Ok(directory_path) => directory_path,
+        Err(io_error) => {
+            // Log the error and handle appropriately for your application
+            return Err(format!("Failed to ensure project graph directory exists: {}", io_error).into());
+        }
+    };
+        
+    debug_log!("IUA: project_graph_directory -> {:?}", project_graph_directory);
 
 
     // // Check if the data directory exists
@@ -8481,55 +9173,204 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
     // try to read it as a gpg key
     // export your addressbook file clearsigned by you and encrypted with the public gpg key in that file
     
-    
-    // Check if the sync_data directory exists,
+    // // relative version
+    // // Check if the sync_data directory exists,
+    // // and recursively erase all old files.
+    // // This is 'session' state for sync which must
+    // // be new each start-up session.
+    // // Make a fresh session sync directory
+    // // note: each 'local instance' should be specific
+    // // to the location of the uma executable file
+    // // more than one user may be running on a given computer
+    // let sync_data_directory = Path::new("sync_data");
+    // if sync_data_directory.exists() {
+    //     // If the directory exists, remove it recursively
+    //     if let Err(e) = remove_dir_all(sync_data_directory) {
+    //         // Handle the error appropriately, e.g., log it and continue, or return an error if you want to stop initialization
+    //         debug_log!("Error removing sync_data directory: {}", e);
+    //         // Or: return Err(e.into()); // Or handle the error differently
+    //     }
+    // }
+    // // Create the directory fresh for the new session.
+    // fs::create_dir_all(sync_data_directory).expect("Failed to create sync_data directory");
+        
+            
+    // Check if the sync_data directory exists relative to the executable location,
     // and recursively erase all old files.
     // This is 'session' state for sync which must
     // be new each start-up session.
-    // Make a fresh session sync directory
+    // Make a fresh session sync directory.
     // note: each 'local instance' should be specific
     // to the location of the uma executable file
-    // more than one user may be running on a given computer
-    let sync_data_directory = Path::new("sync_data");
-    if sync_data_directory.exists() {
-        // If the directory exists, remove it recursively
-        if let Err(e) = remove_dir_all(sync_data_directory) {
-            // Handle the error appropriately, e.g., log it and continue, or return an error if you want to stop initialization
-            debug_log!("Error removing sync_data directory: {}", e);
-            // Or: return Err(e.into()); // Or handle the error differently
+    // more than one user may be running on a given computer.
+    // Using executable-relative paths ensures that multiple instances running
+    // from different locations won't interfere with each other's sync data.
+
+    // Get the path to the sync_data directory relative to the executable's location
+    let sync_data_directory_result = make_input_path_name_abs_executabledirectoryrelative_nocheck("sync_data");
+
+    match sync_data_directory_result {
+        Ok(sync_data_directory) => {
+            // Check if the directory exists
+            match abs_executable_directory_relative_exists(&sync_data_directory) {
+                Ok(exists) => {
+                    if exists {
+                        // Directory exists, remove it recursively to start fresh
+                        debug_log!("Clearing existing sync_data directory at: {}", sync_data_directory.display());
+                        if let Err(remove_err) = remove_dir_all(&sync_data_directory) {
+                            // Handle the error appropriately, log it and continue
+                            debug_log!("Error removing sync_data directory: {}", remove_err);
+                            // We'll still attempt to create the directory below
+                        }
+                    }
+                    
+                    // Create the directory fresh for the new session, whether it was previously
+                    // removed successfully or didn't exist at all
+                    match fs::create_dir_all(&sync_data_directory) {
+                        Ok(_) => {
+                            debug_log!("Successfully created fresh sync_data directory at: {}", sync_data_directory.display());
+                        },
+                        Err(create_err) => {
+                            // This is a more serious error as we need the directory
+                            debug_log!("Critical error: Failed to create sync_data directory: {}", create_err);
+                            // Depending on app requirements, you might want to handle this more severely
+                            // or implement a fallback mechanism
+                        }
+                    }
+                },
+                Err(check_err) => {
+                    debug_log!("Error checking if sync_data directory exists: {}", check_err);
+                    // Attempt to create the directory anyway
+                    if let Err(create_err) = fs::create_dir_all(&sync_data_directory) {
+                        debug_log!("Critical error: Failed to create sync_data directory: {}", create_err);
+                    }
+                }
+            }
+        },
+        Err(path_err) => {
+            // Failed to determine the executable-relative path
+            debug_log!("Error determining sync_data directory path: {}", path_err);
+            
+            // Fallback to using a relative path as a last resort
+            let fallback_sync_data_directory = Path::new("sync_data");
+            debug_log!("Falling back to current directory relative path for sync_data");
+            
+            if fallback_sync_data_directory.exists() {
+                if let Err(remove_err) = remove_dir_all(fallback_sync_data_directory) {
+                    debug_log!("Error removing fallback sync_data directory: {}", remove_err);
+                }
+            }
+            
+            if let Err(create_err) = fs::create_dir_all(fallback_sync_data_directory) {
+                debug_log!("Critical error: Failed to create fallback sync_data directory: {}", create_err);
+                // This is a critical failure point - consider how your application should handle it
+            }
         }
     }
-    // Create the directory fresh for the new session.
-    fs::create_dir_all(sync_data_directory).expect("Failed to create sync_data directory");
-    
+            
     /////////////////////
     // Log Housekeeping
     /////////////////////
+    debug_log("IUA: Log Housekeeping");
 
-    // 1. Create the archive directory if it doesn't exist.
-    // saves archives not in the project_graph_data directory, not for sync
-    let mut uma_archive_dir = PathBuf::new(); // Start with an empty PathBuf safe path os
-    uma_archive_dir.push("uma_archive");    // Push the 'uma_archive' directory
-    uma_archive_dir.push("logs");            // Push the 'logs' subdirectory
+    // 1. Create the archive directory if it doesn't exist, relative to the executable.
+    // This directory stores archived logs and is not intended for syncing
+    let archive_dir_result = make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path("uma_archive/logs");
 
-    if !uma_archive_dir.exists() {
-        fs::create_dir_all(&uma_archive_dir).expect("Failed to create uma_archive directory");
-    }    
+    let uma_archive_dir = match archive_dir_result {
+        Ok(dir_path) => dir_path,
+        Err(io_error) => {
+            eprintln!("Warning: Failed to create uma_archive/logs directory: {}", io_error);
+            // Create a fallback directory in case the executable-relative path fails
+            let mut fallback_dir = PathBuf::new();
+            fallback_dir.push("uma_archive");
+            fallback_dir.push("logs");
+            
+            // Try to create the fallback directory
+            if !fallback_dir.exists() {
+                if let Err(e) = fs::create_dir_all(&fallback_dir) {
+                    eprintln!("Critical: Failed to create fallback archive directory: {}", e);
+                    // Return a sensible default to allow the program to continue
+                    PathBuf::from("uma_archive/logs") 
+                } else {
+                    fallback_dir
+                }
+            } else {
+                fallback_dir
+            }
+        }
+    };
 
     // 2. Get the current timestamp.
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .expect("Time went backwards!")
+        .unwrap_or_else(|_| {
+            eprintln!("Warning: System time appears to be before Unix epoch");
+            std::time::Duration::from_secs(0) // Fallback to epoch if time is weird
+        })
         .as_secs();
 
     // 3. Construct the new archive file path.
     let archived_log_path = uma_archive_dir.join(format!("uma__{}.log", timestamp));
+    debug_log!("IUA archived_log_path -> {:?}", archived_log_path);
 
-    // 4. Rename (move) the uma.log file to the archive directory.
-    if let Err(e) = fs::rename("uma.log", &archived_log_path) {
-        eprintln!("Failed to archive uma.log: {}", e); // Handle the error, but don't stop initialization.
+    // 4. Get the source log file path relative to the executable
+    let source_log_path_result = make_input_path_name_abs_executabledirectoryrelative_nocheck("uma.log");
+
+    match source_log_path_result {
+        Ok(source_log_path) => {
+            // Check if the source log file exists before trying to rename it
+            if Path::new(&source_log_path).exists() {
+                // Rename (move) the uma.log file to the archive directory
+                if let Err(e) = fs::rename(&source_log_path, &archived_log_path) {
+                    eprintln!("Failed to archive uma.log: {}", e); 
+                    // Handle the error, but don't stop initialization.
+                }
+            } else {
+                // No log file to archive, this might be the first run
+                eprintln!("Notice: No uma.log file found to archive");
+            }
+        },
+        Err(io_error) => {
+            // Log the error and continue
+            eprintln!("Warning: Failed to determine uma.log path: {}", io_error);
+            debug_log!("Could not archive log file: Failed to determine executable-relative path");
+            // Do NOT attempt with a relative path - just continue the program
+            // No fallback to a relative path - this would defeat the purpose
+        }
     }
+    
+    // relative path version
+    // /////////////////////
+    // // Log Housekeeping
+    // /////////////////////
 
+    // // 1. Create the archive directory if it doesn't exist.
+    // // saves archives not in the project_graph_data directory, not for sync
+    // let mut uma_archive_dir = PathBuf::new(); // Start with an empty PathBuf safe path os
+    // uma_archive_dir.push("uma_archive");    // Push the 'uma_archive' directory
+    // uma_archive_dir.push("logs");            // Push the 'logs' subdirectory
+
+    // if !uma_archive_dir.exists() {
+    //     fs::create_dir_all(&uma_archive_dir).expect("Failed to create uma_archive directory");
+    // }    
+
+    // // 2. Get the current timestamp.
+    // let timestamp = SystemTime::now()
+    //     .duration_since(UNIX_EPOCH)
+    //     .expect("Time went backwards!")
+    //     .as_secs();
+
+    // // 3. Construct the new archive file path.
+    // let archived_log_path = uma_archive_dir.join(format!("uma__{}.log", timestamp));
+
+    // // 4. Rename (move) the uma.log file to the archive directory.
+    // if let Err(e) = fs::rename("uma.log", &archived_log_path) {
+    //     eprintln!("Failed to archive uma.log: {}", e); // Handle the error, but don't stop initialization.
+    // }
+    
+    
+    debug_log("next IUA check_all_ports_in_team_channels");
 
     // Check for port collisions across all team channels
     if let Err(e) = check_all_ports_in_team_channels() {
@@ -8539,32 +9380,108 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         return Ok(false);
     }
     
+    debug_log("next IUA get_local_ip_addresses");
     get_local_ip_addresses();
     
+    
+    
+    debug_log("next IUA ensure some dirs exist");
 
+
+    /////////////////////////////
+    // ensure directories exist
+    /////////////////////////////
+
+    // assumes 'project_graph_directory' path is exe-parent based
     // Ensure project_graph_data/team_channels directory exists
     let team_channels_dir = project_graph_directory.join("team_channels");
     if !team_channels_dir.exists() {
         fs::create_dir_all(&team_channels_dir).expect("Failed to create team_channels directory");
     }
+    
+    debug_log!("IUA: team_channels_dir -> {:?}", team_channels_dir);
 
+    
+    // // using path relative to exe-parent:
+    // // Ensure directory exists relative to the executable
+    // let team_channelsdir_result = make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path("team_channels");
+    
+    // // Handle any errors that might occur during directory creation or verification
+    // let team_channels_dir = match team_channelsdir_result {
+    //     Ok(directory_path) => directory_path,
+    //     Err(io_error) => {
+    //         // Log the error and handle appropriately for your application
+    //         return Err(format!("Failed to ensure team_channels directory exists: {}", io_error).into());
+    //     }
+    // };
+
+
+    // assumes 'project_graph_directory' path is exe-parent based
     // Ensure project_graph_data/collaborator_files_address_book directory exists
     let collaborator_files_address_book_dir = project_graph_directory.join("collaborator_files_address_book");
     if !collaborator_files_address_book_dir.exists() {
         fs::create_dir_all(&collaborator_files_address_book_dir).expect("Failed to create collaborator_files_address_book directory");
     }
     
+    // // using path relative to exe-parent:
+    // // Ensure directory exists relative to the executable
+    // let collaborator_files_addressbook_result = make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path("collaborator_files_address_book");
+    
+    // // Handle any errors that might occur during directory creation or verification
+    // let collaborator_files_address_book_dir = match collaborator_files_addressbook_result {
+    //     Ok(directory_path) => directory_path,
+    //     Err(io_error) => {
+    //         // Log the error and handle appropriately for your application
+    //         return Err(format!("Failed to ensure collaborator_files_address_book directory exists: {}", io_error).into());
+    //     }
+    // };
+
+
+    // assumes 'project_graph_directory' path is exe-parent based
     // Ensure project_graph_data/session_state_items directory exists
     let session_state_dir = project_graph_directory.join("session_state_items");
     if !session_state_dir.exists() {
         fs::create_dir_all(&session_state_dir).expect("Failed to create session_state_items directory");
     }
 
+    // // using path relative to exe-parent:
+    // // Ensure directory exists relative to the executable
+    // let session_statedir_result = make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path("session_state_items");
+    
+    // // Handle any errors that might occur during directory creation or verification
+    // let session_state_dir = match session_statedir_result {
+    //     Ok(directory_path) => directory_path,
+    //     Err(io_error) => {
+    //         // Log the error and handle appropriately for your application
+    //         return Err(format!("Failed to ensure session_state_items exists: {}", io_error).into());
+    //     }
+    // };
+
+
+    // assumes 'project_graph_directory' path is exe-parent basedpath
     // Ensure project_graph_data/sync_state_items directory exists
     let sync_state_dir = project_graph_directory.join("sync_state_items");
     if !sync_state_dir.exists() {
         fs::create_dir_all(&sync_state_dir).expect("Failed to create sync_state_items directory");
     }
+    
+    
+    // // using path relative to exe-parent:
+    // // Ensure directory exists relative to the executable
+    // let sync_statedir_result = make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path("sync_state_items");
+    
+    // // Handle any errors that might occur during directory creation or verification
+    // let sync_state_dir = match sync_statedir_result {
+    //     Ok(directory_path) => directory_path,
+    //     Err(io_error) => {
+    //         // Log the error and handle appropriately for your application
+    //         return Err(format!("Failed to ensure sync_state_items directory exists: {}", io_error).into());
+    //     }
+    // };
+
+    debug_log("IUA ensured some dirs existed...");
+    // println!("IUA ensured some dirs existed...");
+    
     
     // To stop sync from starting before a channel is entered:
     initialize_ok_to_start_sync_flag_to_false();
@@ -8574,12 +9491,31 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
 
     // if !dir_at_path_is_empty_returns_false("project_graph_data/collaborator_files_address_book") {
     debug_log("if !dir_at_path_is_empty_returns_false(Path::new(project_graph_data/collaborator_files_address_book)) { ");
+        
+        
+    // println!("dir_at_path_is_empty_returns_false -> {:?}", dir_at_path_is_empty_returns_false());
 
-    if !dir_at_path_is_empty_returns_false(Path::new("project_graph_data/collaborator_files_address_book")) { 
+    
+    // let test_this = dir_at_path_is_empty_returns_false(
+    //     &collaborator_files_address_book_dir
+    //         );
+    // println!(
+    //     "IUA: test_this -> {:?}",
+    //     test_this
+    //     );
+    
+
+    // if !dir_at_path_is_empty_returns_false(Path::new("project_graph_data/collaborator_files_address_book")) { 
+    if !dir_at_path_is_empty_returns_false(
+        &collaborator_files_address_book_dir
+            ) { 
+        
+        
         // If there are no existing users, prompt the user to add a new user
         println!("Welcome to the application!");
         println!("To get started, please add a new user.");
 
+        // old unwrap (BAD!!!) version
         // Prompt the user to enter a username
         println!("Enter a username:");
         let mut username = String::new();
@@ -8592,7 +9528,28 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         // io::stdin().read_line(&mut ipv4_address).unwrap();
         // let ipv4_address = ipv4_address.trim().parse().unwrap();
         
-
+        
+        // Prompt the user to enter a username
+        println!("Enter a username:");
+        let mut username = String::new();
+        
+        // Read line from standard input and handle potential errors
+        match std::io::stdin().read_line(&mut username) {
+            Ok(_) => {
+                // Successfully read input, proceed with trimming
+                let username = username.trim().to_string();
+                
+                // Continue with the rest of your code using username...
+                println!("Hello, {}", username); // Example usage
+            },
+            Err(io_error) => {
+                // Handle the error appropriately
+                eprintln!("Failed to read input: {}", io_error);
+                // Additional error handling as needed...
+            }
+        }
+                
+        
         // choice...
         // Get IP address input method
         // 3. Auto-detect IP Addresses
@@ -8738,11 +9695,53 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
     /////////////////////////////
     // Check & Make Team Channel
     /////////////////////////////
-    let number_of_team_channels = fs::read_dir(&team_channels_dir)
-        .unwrap()
-        .filter(|entry| entry.as_ref().unwrap().path().is_dir())
-        .count();
+    // let number_of_team_channels = fs::read_dir(&team_channels_dir)
+    //     .unwrap()
+    //     .filter(|entry| entry.as_ref().unwrap().path().is_dir())
+    //     .count();
+        
 
+    
+    // No unwrap calls: Uses pattern matching to handle errors gracefully
+    // Handles the potential error from fs::read_dir
+    // Handles potential errors for each directory entry separately
+    // Graceful error recovery: Continues processing entries even if some fail
+    // Provides  context in error messages
+    // Default value: Returns 0 if unable to read the directory
+    // assigns a usize to number_of_team_channels
+    // Count subdirectories with proper error handling
+    let number_of_team_channels = match fs::read_dir(&team_channels_dir) {
+        Ok(entries) => {
+            // Filter and count only the directories, safely handling entry errors
+            entries
+                .filter_map(|entry_result| {
+                    // Safely handle potential errors for each directory entry
+                    match entry_result {
+                        Ok(entry) => {
+                            // Check if this entry is a directory
+                            if entry.path().is_dir() {
+                                Some(()) // Count this directory
+                            } else {
+                                None // Not a directory, don't count
+                            }
+                        },
+                        Err(e) => {
+                            println!("Error accessing directory entry: {}", e);
+                            None // Skip this entry due to error
+                        }
+                    }
+                })
+                .count()
+        },
+        Err(e) => {
+            println!("Error reading directory {}: {}", team_channels_dir.display(), e);
+            0 // Default to 0 channels if directory can't be read
+        }
+    };
+    
+
+    // let number_of_team_channels = count_subdirectories_executabledirectoryrelative_default_zero(&team_channels_dir);
+    
     if number_of_team_channels == 0 {
         // If no team channels exist, create the first one
         println!("There are no existing team channels. Let's create one.");
@@ -8821,11 +9820,23 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
     ) = get_band__find_valid_network_index_and_type(&uma_local_owner_user);
 
 
+    println!("IUA next: get_band__find_valid_network_index_and_type");
+    println!(
+        "IUA: network_found_ok -> {:?}",
+        network_found_ok
+        );
+    println!(
+        "IUA: network_type -> {:?}\n",
+        network_type
+        );
+    
+    
     // Handle offline mode if no network connection is found
     if !network_found_ok {  // Check the flag *before* writing/saving values to prevent corrupting or creating bad data from invalid inputs.
         debug_log!("No valid network connection found. Entering offline mode.");
         return Ok(false); // Return false to signal offline mode; do not initialize sync, do not continue processing those invalid or undefined network type and IP values. Halt immediately in this specific scenario and set `network_found_ok` boolean flag to `false` consistent with best practice for what you stated was the desired and specified handling for this exact use-case: halt Uma.
     }
+
 
 
     // set network data state-file(s) in sync_data/ directory:
@@ -8839,8 +9850,6 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         // e.g. debug_log("Error saving network configuration: {}", e);
         return Err(Box::new(e)); // Or handle the error as needed, including halting Uma with an informative message
     };
-
-
 
     Ok(true) // Indicate online mode only when valid IP data has been obtained, parsed, converted, and written to sync data state files correctly
 }
@@ -11502,7 +12511,7 @@ fn share_lou_addressbook_with_incomingkey() -> Result<(), GpgError> {
 //     println!("Decrypting file using LOCAL OWNER USER's key ID: {}", local_owner_gpg_key_id);
     
 //     // Decrypt the file without verification at this stage
-//     decrypt_gpg_file_to_output(&encrypted_file_path, &temp_decrypted_path)
+//     decrypt_gpgfile_to_output(&encrypted_file_path, &temp_decrypted_path)
 //         .map_err(|e| {
 //             let error_msg = format!("PIET Failed to decrypt file: {:?}", e);
 //             println!("Error: {}", error_msg);
@@ -12111,7 +13120,7 @@ pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
     println!("Decrypting file using LOCAL OWNER USER's key ID: {}", local_owner_gpg_key_id);
     
     // Decrypt the file without verification at this stage
-    let decrypt_result = decrypt_gpg_file_to_output(
+    let decrypt_result = decrypt_gpgfile_to_output(
         &encrypted_file_path,
         &temp_decrypted_path
     );
@@ -13060,56 +14069,91 @@ fn handle_command_main_mode(
 
            "l" | "log" | "logmode" | "debug" | "debuglog" | "showlog" => {
             debug_log("Starting log mode...ctrl+c to exit");
+            
+                // TODO: NO!!!!!!!!! GET NEEDED WHEN NEEDED  
+                
+                // // 1. Read log_mode_refresh DIRECTLY from uma.toml (without loading user data).
+                // let uma_toml_path = Path::new("uma.toml");
+                // let toml_data = toml::from_str::<toml::Value>(&fs::read_to_string(uma_toml_path)?)
+                //     .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?; // Convert toml::de::Error 
 
-                // 1. Read log_mode_refresh DIRECTLY from uma.toml (without loading user data).
-                let uma_toml_path = Path::new("uma.toml");
-                let toml_data = toml::from_str::<toml::Value>(&fs::read_to_string(uma_toml_path)?)
-                    .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?; // Convert toml::de::Error 
+                // // TODO read this...in a better way
+                // // Use a default refresh rate if log_mode_refresh is not found or invalid.
+                // // Use a default refresh rate if log_mode_refresh is not found or invalid.
+                // // let log_mode_refresh = toml_data
+                // //     .get("log_mode_refresh")
+                // //     .and_then(toml::Value::as_float) // Use as_float to get the floating-point value
+                // //     .map(|v| v as f32) // Convert to f32
+                // //     .unwrap_or(1.0); // Default refresh rate of 1 second
+                // let log_mode_refresh = match fs::read_to_string(uma_toml_path) {
+                //     Ok(toml_string) => {
+                //         match toml::from_str::<toml::Value>(&toml_string) {
+                //             Ok(toml_data) => {
+                //                 toml_data
+                //                     .get("log_mode_refresh")
+                //                     .and_then(toml::Value::as_float)
+                //                     .and_then(|v| {
+                //                         if v >= 0.1 && v <= 10.0 {
+                //                             Some(v as f32)
+                //                         } else {
+                //                             None
+                //                         }
+                //                     })
+                //                     .unwrap_or(3.0)
+                //             }
+                //             Err(e) => {
+                //                 debug_log!("Error parsing uma.toml: {}", e);
+                //                 3.0 // Default to 3 seconds on parsing error
+                //             }
+                //         }
+                //     }
+                //     Err(e) => {
+                //         debug_log!("Error log_mode_refresh reading uma.toml: {}", e);
+                //         3.0 // Default to 3 seconds on reading error
+                //     }
+                // };
 
-                // Use a default refresh rate if log_mode_refresh is not found or invalid.
-                // Use a default refresh rate if log_mode_refresh is not found or invalid.
-                // let log_mode_refresh = toml_data
-                //     .get("log_mode_refresh")
-                //     .and_then(toml::Value::as_float) // Use as_float to get the floating-point value
-                //     .map(|v| v as f32) // Convert to f32
-                //     .unwrap_or(1.0); // Default refresh rate of 1 second
-                let log_mode_refresh = match fs::read_to_string(uma_toml_path) {
-                    Ok(toml_string) => {
-                        match toml::from_str::<toml::Value>(&toml_string) {
-                            Ok(toml_data) => {
-                                toml_data
-                                    .get("log_mode_refresh")
-                                    .and_then(toml::Value::as_float)
-                                    .and_then(|v| {
-                                        if v >= 0.1 && v <= 10.0 {
-                                            Some(v as f32)
-                                        } else {
-                                            None
-                                        }
-                                    })
-                                    .unwrap_or(3.0)
-                            }
-                            Err(e) => {
-                                debug_log!("Error parsing uma.toml: {}", e);
-                                3.0 // Default to 3 seconds on parsing error
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        debug_log!("Error log_mode_refresh reading uma.toml: {}", e);
-                        3.0 // Default to 3 seconds on reading error
-                    }
-                };
+                // this takes a path n the form of a string
+                // as input, outputs size etc.
+                // fs::metadata(INPUT_PATH)
+                // Get absolute path to uma.toml configuration file
 
-                debug_log!("log_mode_refresh: {:?}", log_mode_refresh); 
+                let relative_uma_toml_path = "uma.toml";
+                let absolute_uma_toml_path = make_file_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_uma_toml_path)
+                    .map_err(|e| {
+                        let error_msg = format!("___ Failed to locate uma.toml configuration file: {}", e);
+                        println!("Error: {}", error_msg);
+                        io::Error::new(io::ErrorKind::InvalidData, error_msg)
+                    })?;
 
-                let mut last_log_file_size = fs::metadata("uma.log")
+                // Convert PathBuf to string for TOML reading
+                let absolute_uma_toml_path_str = absolute_uma_toml_path
+                    .to_str()
+                    .ok_or_else(|| {
+                        let error_msg = "__ Unable to convert UMA TOML path to string".to_string();
+                        println!("Error: {}", error_msg);
+                        io::Error::new(io::ErrorKind::InvalidData, error_msg)
+                    })?;
+
+                // Read log_mode_refresh from uma.toml
+                let log_mode_refresh = read_float_f32_field_from_toml(
+                    absolute_uma_toml_path_str, 
+                    "log_mode_refresh"
+                ).map_err(|e| {
+                    let error_msg = format!(" Failed to read log_mode_refresh: {}", e);
+                    println!("Error: {}", error_msg);
+                    io::Error::new(io::ErrorKind::InvalidData, error_msg)
+                })?;
+
+                debug_log!("log_mode_refresh: {:?}", log_mode_refresh);
+
+                let mut last_log_file_size = fs::metadata(absolute_uma_toml_path_str)
                     .map(|metadata| metadata.len())
                     .unwrap_or(0); // Get initial size, or 0 if error
 
-                // bootstrap, first print
+                // bootstrap, first print 
                 // File size has changed, read and display new contents 
-                match fs::read_to_string("uma.log") {
+                match fs::read_to_string(absolute_uma_toml_path_str) {
                     Ok(log_contents) => {
                         println!("{}", log_contents); // Print to console for now
                     }
@@ -13121,14 +14165,14 @@ fn handle_command_main_mode(
                 loop { // Enter the refresh loop
 
                     // Check for file size changes 
-                    let current_log_file_size = fs::metadata("uma.log") 
+                    let current_log_file_size = fs::metadata(absolute_uma_toml_path_str) 
                         .map(|metadata| metadata.len())
                         .unwrap_or(0);
                     if current_log_file_size != last_log_file_size {
 
                         // 1. Read and display the log contents.
                         // File size has changed, read and display new contents 
-                        match fs::read_to_string("uma.log") {
+                        match fs::read_to_string(absolute_uma_toml_path_str) {
                             Ok(log_contents) => { 
                                 print!("\x1B[2J\x1B[1;1H"); // Clear the screen 
                                 println!("{}", log_contents);
@@ -14753,7 +15797,7 @@ fn hex_string_to_pearson_hash(hex_string: &str) -> Result<Vec<u8>, String> {
 }
 
 
-
+// TODO not used?
 /// Retrieves the salt list for a collaborator from their TOML configuration file.
 ///
 /// This function reads the collaborator's TOML file located at
@@ -19665,12 +20709,48 @@ fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
     
     debug_log("starting UMA Sync Team Office...you_love_the_sync_team_office()");
     
-    // Read uma_local_owner_user from uma.toml
-    // maybe add gpg and make this a separate function TODO
-    let uma_toml_path = Path::new("uma.toml");
-    let user_metadata = toml::from_str::<toml::Value>(&fs::read_to_string(uma_toml_path)?)?; 
-    let uma_local_owner_user = user_metadata["uma_local_owner_user"].as_str().unwrap().to_string();
+    // // Read uma_local_owner_user from uma.toml
+    // // maybe add gpg and make this a separate function TODO
+    // let uma_toml_path = Path::new("uma.toml");
+    // let user_metadata = toml::from_str::<toml::Value>(&fs::read_to_string(uma_toml_path)?)?; 
+    // let uma_local_owner_user = user_metadata["uma_local_owner_user"].as_str().unwrap().to_string();
 
+    
+    
+    debug_log!("YLTSTO Step 1: Reading LOCAL OWNER USER's name from uma.toml");
+    
+    // Get absolute path to uma.toml configuration file
+    let relative_uma_toml_path = "uma.toml";
+    let absolute_uma_toml_path = make_file_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_uma_toml_path)
+        .map_err(|e| {
+            let error_msg = format!("YLTSTO Failed to locate uma.toml configuration file: {}", e);
+            println!("Error: {}", error_msg);
+            GpgError::PathError(error_msg)
+        })?;
+    
+    // Convert PathBuf to string for TOML reading
+    let absolute_uma_toml_path_str = absolute_uma_toml_path
+        .to_str()
+        .ok_or_else(|| {
+            let error_msg = "YLTSTO Unable to convert UMA TOML path to string".to_string();
+            println!("Error: {}", error_msg);
+            GpgError::PathError(error_msg)
+        })?;
+    
+    // Read LOCAL OWNER USER's name from uma.toml
+    let uma_local_owner_user = read_single_line_string_field_from_toml(
+        absolute_uma_toml_path_str, 
+        "uma_local_owner_user"
+    ).map_err(|e| {
+        let error_msg = format!("YLTSTO Failed to read LOCAL OWNER USER's name: {}", e);
+        println!("Error: {}", error_msg);
+        GpgError::ValidationError(error_msg)
+    })?;
+    
+    debug_log!("YLTSTO LOCAL OWNER USER's name is, uma_local_owner_user: {}", uma_local_owner_user);
+    
+    
+    
     debug_log!("\n\nStarting UMA Sync Team Office for (local owner) -> {}", &uma_local_owner_user);
 
     // let session_connection_allowlists = make_sync_meetingroomconfig_datasets(&uma_local_owner_user)?;
@@ -19862,7 +20942,9 @@ fn handle_task_selection(app: &mut App, selection: usize) -> Result<bool, io::Er
 //     file_content.trim() == "0"
 // }
 
-// Proverbial Main()
+
+// TODO doc string needed
+/// Proverbial Main()
 fn we_love_projects_loop() -> Result<(), io::Error> {
     /*
     
@@ -19877,8 +20959,9 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
     3. show updated state
     */
 
+    // TODO abs exe-parent path needed
     // Load UMA configuration from uma.toml
-    let uma_toml_path = Path::new("uma.toml");
+    // let uma_toml_path = Path::new("uma.toml");
 
    // TUI Setup, TODO
     /*
@@ -19891,9 +20974,10 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
     or maybe this gets done in the project-manager-thread (not the sink thread)    
     */
 
-    // let user_metadata = toml::from_str::<toml::Value>(&std::fs::read_to_string(uma_toml_path)?)?; 
-    let user_metadata = toml::from_str::<toml::Value>(&std::fs::read_to_string(uma_toml_path)?)
-    .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("TOML deserialization error: {}", e)))?;
+    // // TODO read clearsign toml?
+    // // let user_metadata = toml::from_str::<toml::Value>(&std::fs::read_to_string(uma_toml_path)?)?; 
+    // let user_metadata = toml::from_str::<toml::Value>(&std::fs::read_to_string(uma_toml_path)?)
+    // .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("TOML deserialization error: {}", e)))?;
 
     // // TODO executible-relative-absolute-file-paths!!!! 
     // // abs_current_full_file_path -> current_executable_directory_relative_absolute_file_path_canonicalized
@@ -19930,8 +21014,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
 
     debug_log!("executable_parent_directory: {:?}", executable_parent_directory);
 
-    
-    // Step 2: Join the target path to the executable directory
+    // Step 2: Join the target path to the executable directory 
     let target_path = executable_parent_directory.join("project_graph_data/team_channels");
 
     // Step 3: Verify the path exists
@@ -19972,12 +21055,117 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         
     debug_log!(" {:?}", current_exe_dir_relative_abs_path_canonicalized);
     
+    
+    /// getting data from uma.toml
+    /*
+    requires new functions:
+    simple read / clearsign-read
+    u8 int
+    u64 int
+    or... how to do?
+    int out?
+    */
+    
+    println!("HERE HERE BREAKPOINT we_love_projects");
+    
+    // Get absolute path to uma.toml configuration file
+    let relative_uma_toml_path = "uma.toml";
+    let absolute_uma_toml_path = make_file_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_uma_toml_path)
+        .map_err(|e| {
+            let error_msg = format!("___ Failed to locate uma.toml configuration file: {}", e);
+            println!("Error: {}", error_msg);
+            io::Error::new(io::ErrorKind::InvalidData, error_msg)
+        })?;
+    
+    // Convert PathBuf to string for TOML reading
+    let absolute_uma_toml_path_str = absolute_uma_toml_path
+        .to_str()
+        .ok_or_else(|| {
+            let error_msg = "__ Unable to convert UMA TOML path to string".to_string();
+            println!("Error: {}", error_msg);
+            io::Error::new(io::ErrorKind::InvalidData, error_msg)
+        })?;
+        
+        
+    // Read LOCAL OWNER USER's name from uma.toml
+    let uma_local_owner_user = read_single_line_string_field_from_toml(
+        absolute_uma_toml_path_str, 
+        "uma_local_owner_user"
+    ).map_err(|e| {
+        let error_msg = format!("WLPL Failed to read LOCAL OWNER USER's name: {}", e);
+        println!("Error: {}", error_msg);
+        io::Error::new(io::ErrorKind::InvalidData, error_msg)
+    })?;
+
+    // u64
+    let default_im_messages_expiration_days = read_u64_field_from_toml(
+        absolute_uma_toml_path_str, 
+        "uma_default_im_messages_expiration_days"
+    ).map_err(|e| {
+        let error_msg = format!("WLPL Failed to read default_im_messages_expiration_days: {}", e);
+        println!("Error: {}", error_msg);
+        io::Error::new(io::ErrorKind::InvalidData, error_msg)
+    })?;
+
+    // u64
+    let default_task_nodes_expiration_days = read_u64_field_from_toml(
+        absolute_uma_toml_path_str, 
+        "uma_default_task_nodes_expiration_days"
+    ).map_err(|e| {
+        let error_msg = format!("WLPL Failed to read default_task_nodes_expiration_days: {}", e);
+        println!("Error: {}", error_msg);
+        io::Error::new(io::ErrorKind::InvalidData, error_msg)
+    })?;
+
+    // u8
+    let tui_height = read_u8_field_from_toml(
+        absolute_uma_toml_path_str, 
+        "tui_height"
+    ).map_err(|e| {
+        let error_msg = format!("WLPL Failed to read tui_height: {}", e);
+        println!("Error: {}", error_msg);
+        io::Error::new(io::ErrorKind::InvalidData, error_msg)
+    })?;
+
+    // u8
+    let tui_width = read_u8_field_from_toml(
+        absolute_uma_toml_path_str, 
+        "tui_width"
+    ).map_err(|e| {
+        let error_msg = format!("WLPL Failed to read tui_width: {}", e);
+        println!("Error: {}", error_msg);
+        io::Error::new(io::ErrorKind::InvalidData, error_msg)
+    })?;
+
+
+
     // node-graph navigation 'state' initial setup
     let mut graph_navigation_instance_state = GraphNavigationInstanceState {
-        local_owner_user: user_metadata["uma_local_owner_user"].as_str().unwrap().to_string(),
+        // local_owner_user: user_metadata["uma_local_owner_user"].as_str().unwrap().to_string(),
+        // active_team_channel: String::new(), // or perhaps "None", or "Default"
+        // default_im_messages_expiration_days: user_metadata["uma_default_im_messages_expiration_days"].as_integer().unwrap() as u64,
+        // default_task_nodes_expiration_days: user_metadata["uma_default_task_nodes_expiration_days"].as_integer().unwrap() as u64,
+        
+        // // look into making these smaller for memory use...unless there is a reason
+        // // this is not pixels, but character-lines on a single screen
+        // // tui_height: user_metadata["tui_height"].as_integer().unwrap() as u8,
+        // // tui_width: user_metadata["tui_width"].as_integer().unwrap() as u8,
+        
+        // // Handle missing or invalid values for tui_height and tui_width:
+        // tui_height: user_metadata.get("tui_height")
+        //     .and_then(Value::as_integer)
+        //     .map(|height| height as u8) // Convert to u8 if valid
+        //     .unwrap_or(24),  // Default to 24 if missing or invalid 
+    
+        // tui_width: user_metadata.get("tui_width")
+        //     .and_then(Value::as_integer) 
+        //     .map(|width| width as u8) // Convert to u8 if valid
+        //     .unwrap_or(80), // Default to 80 if missing or invalid 
+        
+        local_owner_user: uma_local_owner_user,
         active_team_channel: String::new(), // or perhaps "None", or "Default"
-        default_im_messages_expiration_days: user_metadata["uma_default_im_messages_expiration_days"].as_integer().unwrap() as u64,
-        default_task_nodes_expiration_days: user_metadata["uma_default_task_nodes_expiration_days"].as_integer().unwrap() as u64,
+        default_im_messages_expiration_days: default_im_messages_expiration_days,
+        default_task_nodes_expiration_days: default_task_nodes_expiration_days,
         
         // look into making these smaller for memory use...unless there is a reason
         // this is not pixels, but character-lines on a single screen
@@ -19985,15 +21173,8 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         // tui_width: user_metadata["tui_width"].as_integer().unwrap() as u8,
         
         // Handle missing or invalid values for tui_height and tui_width:
-        tui_height: user_metadata.get("tui_height")
-            .and_then(Value::as_integer)
-            .map(|height| height as u8) // Convert to u8 if valid
-            .unwrap_or(24),  // Default to 24 if missing or invalid 
-    
-        tui_width: user_metadata.get("tui_width")
-            .and_then(Value::as_integer) 
-            .map(|width| width as u8) // Convert to u8 if valid
-            .unwrap_or(80), // Default to 80 if missing or invalid 
+        tui_height: tui_height,  // Default to 24 if missing or invalid 
+        tui_width: tui_width, // Default to 80 if missing or invalid 
 
         current_full_file_path: current_exe_dir_relative_abs_path_canonicalized, // Set initial absolute path
         // Initialize other fields of GraphNavigationInstanceState
@@ -20616,32 +21797,128 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
 //     Ok(())
 // }
 
-/// set sync_start_ok_flag to true
-/// also use: sync_flag_ok_or_wait(3);
-fn set_sync_start_ok_flag_to_true() { 
-    if fs::remove_file(SYNC_START_OK_FLAG_PATH).is_ok() {
-        debug_log("Old 'ok_to_start_sync_flag.txt' file deleted."); // Optional log.
+// // old relative version
+// /// set sync_start_ok_flag to true
+// /// also use: sync_flag_ok_or_wait(3);
+// fn set_sync_start_ok_flag_to_true() { 
+//     if fs::remove_file(SYNC_START_OK_FLAG_PATH).is_ok() {
+//         debug_log("Old 'ok_to_start_sync_flag.txt' file deleted."); // Optional log.
+//     }
+
+//     let mut file = fs::File::create(SYNC_START_OK_FLAG_PATH)
+//         .expect("Failed to create 'ok_to_start_sync_flag.txt' file.");
+
+//     file.write_all(b"1")
+//         .expect("Failed to write to 'ok_to_start_sync_flag.txt' file.");
+// }
+
+// // old relative version
+// /// initialize sync_start_ok_flag
+// /// also use: sync_flag_ok_or_wait(3);
+// fn initialize_ok_to_start_sync_flag_to_false() { 
+//     if fs::remove_file(SYNC_START_OK_FLAG_PATH).is_ok() {
+//         debug_log("Old 'continue_uma.txt' file deleted."); // Optional log.
+//     } 
+
+//     let mut file = fs::File::create(SYNC_START_OK_FLAG_PATH)
+//         .expect("Failed to create 'ok_to_start_sync_flag.txt' file.");
+
+//     file.write_all(b"0")
+//         .expect("Failed to write to 'ok_to_start_sync_flag.txt' file.");
+// }
+
+
+// use std::fs::{self, File};
+// use std::io::{self, Write};
+// use std::path::PathBuf;
+
+// use crate::manage_absolute_executable_directory_relative_paths::make_input_path_name_abs_executabledirectoryrelative_nocheck;
+
+
+/// Helper function to set the sync flag to a specific value
+/// for set_sync_start_ok_flag_to_true()
+/// for initialize_ok_to_start_sync_flag_to_false()
+///
+/// # Arguments
+///
+/// * `value` - The byte value to write to the flag file ("0" for false, "1" for true)
+/// * `operation_name` - A description of the operation for logging purposes
+///
+/// # Returns
+///
+/// * `Result<(), io::Error>` - Success or failure with detailed error information
+fn set_sync_flag(value: &[u8], operation_name: &str) -> Result<(), io::Error> {
+    // Get the absolute path to the flag file relative to the executable
+    let flag_path = make_input_path_name_abs_executabledirectoryrelative_nocheck(
+        "data/flags/ok_to_start_sync_flag.txt"
+    )?;
+    
+    // Ensure parent directories exist
+    if let Some(parent_dir) = flag_path.parent() {
+        fs::create_dir_all(parent_dir)?;
+    }
+    
+    // Remove existing file if it exists
+    match fs::remove_file(&flag_path) {
+        Ok(_) => debug_log!("Old 'ok_to_start_sync_flag.txt' file deleted."),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {
+            // File doesn't exist, that's fine
+        },
+        Err(e) => {
+            // Other errors might be important (permissions, etc.)
+            debug_log!("Warning: couldn't remove old flag file: {}", e);
+        }
     }
 
-    let mut file = fs::File::create(SYNC_START_OK_FLAG_PATH)
-        .expect("Failed to create 'ok_to_start_sync_flag.txt' file.");
+    // Create the file
+    let mut file = File::create(&flag_path)
+        .map_err(|e| {
+            debug_log!("Failed to create 'ok_to_start_sync_flag.txt' file: {}", e);
+            e
+        })?;
 
-    file.write_all(b"1")
-        .expect("Failed to write to 'ok_to_start_sync_flag.txt' file.");
+    // Write the value
+    file.write_all(value)
+        .map_err(|e| {
+            debug_log!("Failed to write to 'ok_to_start_sync_flag.txt' file: {}", e);
+            e
+        })?;
+    
+    debug_log!("Successfully {} at: {:?}", operation_name, flag_path);
+    Ok(())
 }
 
-/// initialize sync_start_ok_flag
-/// also use: sync_flag_ok_or_wait(3);
-fn initialize_ok_to_start_sync_flag_to_false() { 
-    if fs::remove_file(SYNC_START_OK_FLAG_PATH).is_ok() {
-        debug_log("Old 'continue_uma.txt' file deleted."); // Optional log.
-    } 
+/// Sets the synchronization start flag to true ("1"), allowing synchronization to proceed.
+///
+/// # Returns
+///
+/// * `Result<(), io::Error>` - Success or failure with detailed error information
+///
+/// # Errors
+///
+/// This function can fail if:
+/// * Path resolution fails
+/// * File creation fails (e.g., insufficient permissions)
+/// * Writing to the file fails
+pub fn set_sync_start_ok_flag_to_true() -> Result<(), io::Error> {
+    set_sync_flag(b"1", "set sync flag to true")
+}
 
-    let mut file = fs::File::create(SYNC_START_OK_FLAG_PATH)
-        .expect("Failed to create 'ok_to_start_sync_flag.txt' file.");
-
-    file.write_all(b"0")
-        .expect("Failed to write to 'ok_to_start_sync_flag.txt' file.");
+/// Initializes the synchronization start flag to false ("0"), indicating that
+/// synchronization should wait.
+///
+/// # Returns
+///
+/// * `Result<(), io::Error>` - Success or failure with detailed error information
+///
+/// # Errors
+///
+/// This function can fail if:
+/// * Path resolution fails
+/// * File creation fails (e.g., insufficient permissions)
+/// * Writing to the file fails
+pub fn initialize_ok_to_start_sync_flag_to_false() -> Result<(), io::Error> {
+    set_sync_flag(b"0", "initialized sync flag to false")
 }
 
 /// Sets a collaborator as "active" by creating a stub file in the sync_data directory.
@@ -20831,7 +22108,7 @@ fn main() {
                 // break;
             }
         }
-        
+
         debug_log("Start!");
         
         // Thread 1: Executes the thread1_loop function

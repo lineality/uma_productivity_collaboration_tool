@@ -259,7 +259,8 @@ fn main() -> Result<(), String> {
 }
 
 */
-
+use std::error::Error as StdError;
+use std::fmt;
 use std::io::{
     self, 
     Write, 
@@ -514,6 +515,143 @@ pub fn read_single_line_string_field_from_toml(path: &str, field_name: &str) -> 
                 .trim()
                 .trim_matches('"')
                 .to_string());
+        }
+    }
+    
+    Err(format!("Field '{}' not found", field_name))
+}
+
+
+/// Reads a u8 integer value from a TOML file.
+/// 
+/// # Arguments
+/// * `path` - Path to the TOML file
+/// * `field_name` - Name of the field to read
+/// 
+/// # Returns
+/// * `Result<u8, String>` - The parsed u8 value or an error message
+pub fn read_u8_field_from_toml(path: &str, field_name: &str) -> Result<u8, String> {
+    let file = File::open(path)
+        .map_err(|e| format!("Failed to open file: {}", e))?;
+    
+    let reader = io::BufReader::new(file);
+    
+    for line in reader.lines() {
+        let line = line.map_err(|e| format!("Failed to read line: {}", e))?;
+        let trimmed = line.trim();
+        
+        if trimmed.starts_with(&format!("{} = ", field_name)) {
+            let value_str = trimmed
+                .splitn(2, '=')
+                .nth(1)
+                .ok_or_else(|| format!("Invalid format for field '{}'", field_name))?
+                .trim();
+                
+            // Parse the value as u8
+            return value_str.parse::<u8>()
+                .map_err(|e| format!("Failed to parse '{}' as u8: {}", value_str, e));
+        }
+    }
+    
+    Err(format!("Field '{}' not found", field_name))
+}
+
+/// Reads a u64 integer value from a TOML file.
+/// 
+/// # Arguments
+/// * `path` - Path to the TOML file
+/// * `field_name` - Name of the field to read
+/// 
+/// # Returns
+/// * `Result<u64, String>` - The parsed u64 value or an error message
+pub fn read_u64_field_from_toml(path: &str, field_name: &str) -> Result<u64, String> {
+    let file = File::open(path)
+        .map_err(|e| format!("Failed to open file: {}", e))?;
+    
+    let reader = io::BufReader::new(file);
+    
+    for line in reader.lines() {
+        let line = line.map_err(|e| format!("Failed to read line: {}", e))?;
+        let trimmed = line.trim();
+        
+        if trimmed.starts_with(&format!("{} = ", field_name)) {
+            let value_str = trimmed
+                .splitn(2, '=')
+                .nth(1)
+                .ok_or_else(|| format!("Invalid format for field '{}'", field_name))?
+                .trim();
+                
+            // Parse the value as u64
+            return value_str.parse::<u64>()
+                .map_err(|e| format!("Failed to parse '{}' as u64: {}", value_str, e));
+        }
+    }
+    
+    Err(format!("Field '{}' not found", field_name))
+}
+
+/// Reads a floating point (f64) value from a TOML file.
+/// 
+/// # Arguments
+/// * `path` - Path to the TOML file
+/// * `field_name` - Name of the field to read
+/// 
+/// # Returns
+/// * `Result<f64, String>` - The parsed f64 value or an error message
+pub fn read_float_f64_field_from_toml(path: &str, field_name: &str) -> Result<f64, String> {
+    let file = File::open(path)
+        .map_err(|e| format!("Failed to open file: {}", e))?;
+    
+    let reader = io::BufReader::new(file);
+    
+    for line in reader.lines() {
+        let line = line.map_err(|e| format!("Failed to read line: {}", e))?;
+        let trimmed = line.trim();
+        
+        if trimmed.starts_with(&format!("{} = ", field_name)) {
+            let value_str = trimmed
+                .splitn(2, '=')
+                .nth(1)
+                .ok_or_else(|| format!("Invalid format for field '{}'", field_name))?
+                .trim();
+                
+            // Parse the value as f64
+            return value_str.parse::<f64>()
+                .map_err(|e| format!("Failed to parse '{}' as floating point number: {}", value_str, e));
+        }
+    }
+    
+    Err(format!("Field '{}' not found", field_name))
+}
+
+/// Reads a floating point (f32) value from a TOML file.
+/// 
+/// # Arguments
+/// * `path` - Path to the TOML file
+/// * `field_name` - Name of the field to read
+/// 
+/// # Returns
+/// * `Result<f32, String>` - The parsed f32 value or an error message
+pub fn read_float_f32_field_from_toml(path: &str, field_name: &str) -> Result<f32, String> {
+    let file = File::open(path)
+        .map_err(|e| format!("Failed to open file: {}", e))?;
+    
+    let reader = io::BufReader::new(file);
+    
+    for line in reader.lines() {
+        let line = line.map_err(|e| format!("Failed to read line: {}", e))?;
+        let trimmed = line.trim();
+        
+        if trimmed.starts_with(&format!("{} = ", field_name)) {
+            let value_str = trimmed
+                .splitn(2, '=')
+                .nth(1)
+                .ok_or_else(|| format!("Invalid format for field '{}'", field_name))?
+                .trim();
+                
+            // Parse the value as f32
+            return value_str.parse::<f32>()
+                .map_err(|e| format!("Failed to parse '{}' as 32-bit floating point number: {}", value_str, e));
         }
     }
     
@@ -846,6 +984,24 @@ pub fn read_integerarray_clearsigntoml(path: &str, field_name: &str) -> Result<V
 }
 
 
+/// Reads an string array field from a clearsigned TOML file
+///...
+pub fn read_str_array_clearsigntoml(path: &str, field_name: &str) -> Result<Vec<u64>, String> {
+    // Extract GPG key from the file
+    let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")?;
+    
+    // Verify the file and only proceed if verification succeeds
+    let verification_result = verify_clearsign(path, &key)?;
+    
+    if !verification_result {
+        return Err(format!("GPG verification failed for file: {}", path));
+    }
+    
+    // Only read the field if verification succeeded
+    read_integer_array(path, field_name)
+}
+
+
 #[cfg(test)]
 mod tests {
 
@@ -977,6 +1133,27 @@ string
 ////////////
 // gpg code
 ////////////
+
+// use std::error::Error as StdError;
+// use std::fmt;
+
+// First, implement Display trait for GpgError (if not already implemented)
+impl fmt::Display for GpgError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.to_string())
+    }
+}
+
+// Then implement the Error trait for GpgError
+impl StdError for GpgError {
+    // This method is optional; only needed if your error wraps other errors
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+        match self {
+            GpgError::FileSystemError(e) => Some(e),
+            _ => None,
+        }
+    }
+}
 
 // Add these to the existing GpgError enum:
 impl GpgError {
@@ -1554,208 +1731,6 @@ fn decrypt_and_validate_workflow() -> Result<(), GpgError> {
     Ok(())
 }
 
-/// Interactive workflow for clearsigning files.
-///
-/// # Purpose
-/// Guides the user through providing necessary information to clearsign
-/// a file with their GPG private key.
-///
-/// # Process
-/// 1. Prompts for file path to clearsign
-/// 2. Prompts for output file path (with default option)
-/// 3. Prompts for signing key ID
-/// 4. Validates all inputs
-/// 5. Performs the clearsigning operation
-/// 6. Reports results to the user
-///
-/// # Returns
-/// * `Ok(())` - If the workflow completes successfully
-/// * `Err(GpgError)` - If any step fails
-fn clearsign_workflow() -> Result<(), GpgError> {
-    // Get input file path from user
-    print!("Enter the path to the file you want to clearsign: ");
-    io::stdout().flush()
-        .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
-    
-    let mut input_file_path_str = String::new();
-    io::stdin()
-        .read_line(&mut input_file_path_str)
-        .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
-    let input_file_path = Path::new(input_file_path_str.trim());
-    
-    // Validate input file exists
-    if !input_file_path.exists() {
-        return Err(GpgError::FileSystemError(
-            std::io::Error::new(std::io::ErrorKind::NotFound, "Input file not found")
-        ));
-    }
-    
-    // Get output file path (use default if empty)
-    print!("Enter the output file path (or press Enter for default): ");
-    io::stdout().flush()
-        .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
-    
-    let mut output_file_path_str = String::new();
-    io::stdin()
-        .read_line(&mut output_file_path_str)
-        .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
-    
-    let output_file_path = if output_file_path_str.trim().is_empty() {
-        // Create default output file path with .asc extension
-        let input_filename = input_file_path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .ok_or_else(|| GpgError::PathError("Invalid input file name".to_string()))?;
-            
-        let mut output_path = PathBuf::from("clearsigned");
-        fs::create_dir_all(&output_path)
-            .map_err(|e| GpgError::FileSystemError(e))?;
-        output_path.push(format!("{}.asc", input_filename));
-        output_path
-    } else {
-        PathBuf::from(output_file_path_str.trim())
-    };
-    
-    // Get signing key ID
-    println!("\nTo get your signing key ID, run: $ gpg --list-secret-keys --keyid-format=long");
-    print!("Enter your GPG signing key ID: ");
-    io::stdout().flush()
-        .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
-    
-    let mut signing_key_id = String::new();
-    io::stdin()
-        .read_line(&mut signing_key_id)
-        .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
-    let signing_key_id = signing_key_id.trim();
-    
-    // Validate that a key ID was provided
-    if signing_key_id.is_empty() {
-        return Err(GpgError::ValidationError(
-            "No signing key ID provided".to_string()
-        ));
-    }
-    
-    // Display the parameters that will be used
-    println!("\nProcessing with the following parameters:");
-    println!("Input file path: {}", input_file_path.display());
-    println!("Output file path: {}", output_file_path.display());
-    println!("Signing key ID: {}", signing_key_id);
-    
-    // Perform the clearsigning
-    clearsign_file(input_file_path, &output_file_path, &signing_key_id)?;
-    
-    // Confirm successful completion
-    println!("\nSuccess: File has been clearsigned!");
-    println!("Clearsigned file location: {}", output_file_path.display());
-    
-    Ok(())
-}
-
-/// Interactive workflow for clearsigning and encrypting files.
-///
-/// # Purpose
-/// Guides the user through providing necessary information to clearsign
-/// a file with their GPG private key and encrypt it for a recipient.
-///
-/// # Process
-/// 1. Prompts for file path to process
-/// 2. Prompts for signing key ID
-/// 3. Prompts for recipient's public key file path
-/// 4. Validates all inputs
-/// 5. Performs clearsigning and encryption
-/// 6. Reports results to the user
-///
-/// # Returns
-/// * `Ok(())` - If the workflow completes successfully
-/// * `Err(GpgError)` - If any step fails
-///
-/// # Notes
-/// Output is saved to invites_updates/outgoing/ directory.
-fn clearsign_and_encrypt_workflow() -> Result<(), GpgError> {
-    // Get input file path from user
-    print!("Enter the path to the file you want to clearsign and encrypt: ");
-    io::stdout().flush()
-        .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
-    
-    let mut input_file_path_str = String::new();
-    io::stdin()
-        .read_line(&mut input_file_path_str)
-        .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
-    let input_file_path = Path::new(input_file_path_str.trim());
-    
-    // Validate input file exists
-    if !input_file_path.exists() {
-        return Err(GpgError::FileSystemError(
-            std::io::Error::new(std::io::ErrorKind::NotFound, "Input file not found")
-        ));
-    }
-    
-    // Get signing key ID
-    println!("\nTo get your signing key ID, run: $ gpg --list-secret-keys --keyid-format=long");
-    print!("Enter your GPG signing key ID: ");
-    io::stdout().flush()
-        .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
-    
-    let mut signing_key_id = String::new();
-    io::stdin()
-        .read_line(&mut signing_key_id)
-        .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
-    let signing_key_id = signing_key_id.trim();
-    
-    // Validate that a key ID was provided
-    if signing_key_id.is_empty() {
-        return Err(GpgError::ValidationError(
-            "No signing key ID provided".to_string()
-        ));
-    }
-    
-    // Get recipient's public key path
-    print!("Enter path to recipient's public key file: ");
-    io::stdout().flush()
-        .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
-    
-    let mut recipient_key_path_str = String::new();
-    io::stdin()
-        .read_line(&mut recipient_key_path_str)
-        .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
-    let recipient_key_path = Path::new(recipient_key_path_str.trim());
-    
-    // Validate recipient key exists
-    if !recipient_key_path.exists() {
-        return Err(GpgError::FileSystemError(
-            std::io::Error::new(std::io::ErrorKind::NotFound, "Recipient key file not found")
-        ));
-    }
-    
-    // Display the parameters that will be used
-    println!("\nProcessing with the following parameters:");
-    println!("Input file path: {}", input_file_path.display());
-    println!("Signing key ID: {}", signing_key_id);
-    println!("Recipient public key path: {}", recipient_key_path.display());
-    println!("Output will be saved to: invites_updates/outgoing/");
-    
-    // Perform the clearsigning and encryption
-    clearsign_and_encrypt_file_for_recipient(
-        input_file_path,
-        &signing_key_id,
-        recipient_key_path
-    )?;
-    
-    // Calculate the output path for display
-    let original_filename = input_file_path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .ok_or_else(|| GpgError::PathError("Invalid input file name".to_string()))?;
-    
-    let output_path = PathBuf::from(format!("invites_updates/outgoing/{}.gpg", original_filename));
-    
-    // Confirm successful completion
-    println!("\nSuccess: File has been clearsigned and encrypted!");
-    println!("Encrypted file location: {}", output_path.display());
-    
-    Ok(())
-}
-
 /// Main entry point for GPG file decryption and validation.
 /// 
 /// # Purpose
@@ -2033,7 +2008,7 @@ pub fn manual_q_and_a_new_encrypted_clearsigntoml_verification() -> Result<(), S
 /// # Errors
 /// * `GpgError::PathError` - If the input file doesn't exist or output path is invalid
 /// * `GpgError::GpgOperationError` - If the GPG decryption operation fails
-pub fn decrypt_gpg_file_to_output(input_file_path: &Path, output_file_path: &Path) -> Result<(), GpgError> {
+pub fn decrypt_gpgfile_to_output(input_file_path: &Path, output_file_path: &Path) -> Result<(), GpgError> {
     // Debug logging
     println!("Decrypting GPG file: {} to: {}", 
                input_file_path.display(), output_file_path.display());
@@ -2089,13 +2064,330 @@ pub fn decrypt_gpg_file_to_output(input_file_path: &Path, output_file_path: &Pat
     // Verify the output file was created
     if !output_file_path.exists() {
         return Err(GpgError::PathError(format!(
-            "Decryption succeeded but output file was not created: {}", 
+            "Error in decrypt_gpgfile_to_output(): Decryption succeeded but output file was not created: {}", 
             output_file_path.display()
         )));
     }
     
     println!("Successfully decrypted file");
     Ok(())
+}
+
+/// Reads an array of strings from a TOML file into a Vec<String>.
+/// 
+/// # Purpose
+/// This function parses a TOML file to extract an array of strings defined by the specified field name.
+/// It handles both single-line arrays (`field = ["value1", "value2"]`) and multi-line arrays:
+/// ```toml
+/// field = [
+///     "value1",
+///     "value2",
+/// ]
+/// ```
+/// 
+/// # Arguments
+/// * `path` - Path to the TOML file
+/// * `field_name` - Name of the field to read (must be an array of strings in the TOML file)
+/// 
+/// # Returns
+/// * `Result<Vec<String>, String>` - A vector containing all strings in the array if successful,
+///   or an error message if the field is not found or cannot be parsed correctly
+/// 
+/// # Error Handling
+/// This function returns errors when:
+/// * The file cannot be opened or read
+/// * The specified field is not found
+/// * The field is not a valid array format
+/// 
+/// # Example
+/// For a TOML file containing:
+/// ```toml
+/// colors = [
+///     "red",
+///     "green",
+///     "blue"
+/// ]
+/// ```
+/// 
+/// Usage:
+/// ```
+/// let colors = read_string_array_field_from_toml("config.toml", "colors")?;
+/// // Returns: vec!["red", "green", "blue"]
+/// ```
+pub fn read_string_array_field_from_toml(path: &str, field_name: &str) -> Result<Vec<String>, String> {
+    // Open the file
+    let file = File::open(path)
+        .map_err(|e| format!("Failed to open file '{}': {}", path, e))?;
+    
+    let reader = io::BufReader::new(file);
+    
+    // Variables to track multi-line array parsing
+    let mut in_array = false;
+    let mut array_values = Vec::new();
+    let array_start_pattern = format!("{} = [", field_name);
+    
+    // Process each line
+    for line_result in reader.lines() {
+        // Handle line reading errors
+        let line = line_result
+            .map_err(|e| format!("Failed to read line from file '{}': {}", path, e))?;
+        let trimmed = line.trim();
+        
+        // Skip empty lines and comments
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        
+        // Case 1: Check if we're starting an array definition
+        if !in_array && trimmed.starts_with(&array_start_pattern) {
+            in_array = true;
+            
+            // Check if this is a single-line array definition (starts and ends on same line)
+            if trimmed.contains(']') {
+                // Extract everything between the brackets
+                let bracket_start = trimmed.find('[').ok_or_else(|| 
+                    format!("Malformed array format for field '{}': opening bracket missing", field_name))?;
+                
+                let bracket_end = trimmed.rfind(']').ok_or_else(|| 
+                    format!("Malformed array format for field '{}': closing bracket missing", field_name))?;
+                
+                // Make sure closing bracket comes after opening bracket
+                if bracket_end <= bracket_start {
+                    return Err(format!("Malformed array format for field '{}'", field_name));
+                }
+                
+                // Extract array content between brackets
+                let array_content = &trimmed[bracket_start + 1..bracket_end].trim();
+                
+                // If the array is not empty, parse its elements
+                if !array_content.is_empty() {
+                    // Split by commas and process each value
+                    array_values = array_content
+                        .split(',')
+                        .map(|s| {
+                            // Clean up each string value
+                            s.trim()
+                             .trim_matches('"')
+                             .to_string()
+                        })
+                        .filter(|s| !s.is_empty()) // Skip empty entries
+                        .collect();
+                }
+                
+                // We've processed a single-line array, so return the result
+                return Ok(array_values);
+            }
+            
+            // If we get here, this is the start of a multi-line array
+            // Check if there's a value on the same line as the opening bracket
+            if let Some(first_element_pos) = trimmed.find('[') {
+                let after_bracket = &trimmed[first_element_pos + 1..].trim();
+                
+                // If there's content after the opening bracket
+                if !after_bracket.is_empty() && !after_bracket.starts_with(']') {
+                    // Check if there's a comma in this content (could be multiple values)
+                    if after_bracket.contains(',') {
+                        // Handle multiple values on same line as opening bracket
+                        for value_part in after_bracket.split(',') {
+                            let clean_value = value_part.trim().trim_matches('"').to_string();
+                            if !clean_value.is_empty() && clean_value != "]" {
+                                array_values.push(clean_value);
+                            }
+                        }
+                    } else {
+                        // Single value on same line as opening bracket
+                        let clean_value = after_bracket.trim().trim_matches('"').to_string();
+                        if !clean_value.is_empty() {
+                            array_values.push(clean_value);
+                        }
+                    }
+                }
+            }
+            
+            continue;
+        }
+        
+        // Case 2: If we're inside a multi-line array definition
+        if in_array {
+            // Check if this line is just the closing bracket
+            if trimmed == "]" {
+                // We've reached the end of the array
+                return Ok(array_values);
+            }
+            
+            // This is an array element line - check if it contains a closing bracket
+            let has_closing_bracket = trimmed.contains(']');
+            
+            if has_closing_bracket {
+                // Extract content before the closing bracket
+                let parts: Vec<&str> = trimmed.split(']').collect();
+                let value_part = parts[0].trim();
+                
+                // Handle case where value and closing bracket are on same line
+                if !value_part.is_empty() {
+                    // Clean the value (remove comma and quotes)
+                    let clean_value = value_part
+                        .trim_end_matches(',')
+                        .trim()
+                        .trim_matches('"')
+                        .to_string();
+                    
+                    if !clean_value.is_empty() {
+                        array_values.push(clean_value);
+                    }
+                }
+                
+                // End array processing since we found the closing bracket
+                return Ok(array_values);
+            } else {
+                // Regular array element (no closing bracket)
+                // Clean up the value and add it to the results
+                let clean_value = trimmed
+                    .trim_end_matches(',')
+                    .trim()
+                    .trim_matches('"')
+                    .to_string();
+                
+                if !clean_value.is_empty() {
+                    array_values.push(clean_value);
+                }
+            }
+        }
+    }
+    
+    // If we parsed array values but didn't find the closing bracket
+    if !array_values.is_empty() {
+        // This is technically a malformed TOML file, but we'll return what we found
+        // for robustness, with a warning in the logs
+        println!("Warning: Array field '{}' in '{}' is missing a closing bracket, but values were found",
+                field_name, path);
+        return Ok(array_values);
+    }
+    
+    // If we get here, we didn't find the array
+    Err(format!("String array field '{}' not found in file '{}'", field_name, path))
+}
+
+/// Reads an array of strings from a clearsigned TOML file into a Vec<String>.
+/// 
+/// # Purpose
+/// This function securely reads a string array from a clearsigned TOML file by:
+/// 1. Extracting the GPG public key from the file
+/// 2. Verifying the clearsign signature
+/// 3. If verification succeeds, reading the requested string array
+/// 
+/// # Arguments
+/// * `path` - Path to the clearsigned TOML file
+/// * `field_name` - Name of the field to read (must be an array of strings in the TOML file)
+/// 
+/// # Returns
+/// * `Result<Vec<String>, String>` - A vector containing all strings in the array if successful and verified,
+///   or an error message if verification fails or the field cannot be read
+/// 
+/// # Security
+/// This function ensures that the TOML file's content is cryptographically verified 
+/// before any data is extracted, providing integrity protection for the configuration.
+/// 
+/// # Example
+/// For a clearsigned TOML file containing:
+/// ```toml
+/// ipv4_addresses = [
+///     "10.0.0.213",
+///     "192.168.1.1"
+/// ]
+/// 
+/// gpg_key_public = """
+/// -----BEGIN PGP PUBLIC KEY BLOCK-----
+/// ...
+/// -----END PGP PUBLIC KEY BLOCK-----
+/// """
+/// ```
+/// 
+/// Calling:
+/// ```
+/// let addresses = read_string_array_clearsigntoml("secure_config.toml", "ipv4_addresses")?;
+/// // Returns: vec!["10.0.0.213", "192.168.1.1"] if signature verification succeeds
+/// ```
+pub fn read_str_array_field_clearsigntoml(path: &str, field_name: &str) -> Result<Vec<String>, String> {
+    // Step 1: Extract GPG key from the file
+    let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")
+        .map_err(|e| format!("Failed to extract GPG key from file '{}': {}", path, e))?;
+    
+    // Step 2: Verify the file's clearsign signature
+    let verification_result = verify_clearsign(path, &key)
+        .map_err(|e| format!("Error during signature verification of file '{}': {}", path, e))?;
+    
+    // Step 3: Check if verification was successful
+    if !verification_result {
+        return Err(format!("GPG signature verification failed for file: {}", path));
+    }
+    
+    // Step 4: If verification succeeded, read the requested field
+    read_string_array_field_from_toml(path, field_name)
+        .map_err(|e| format!("Failed to read string array '{}' from verified file '{}': {}", 
+                             field_name, path, e))
+}
+
+/// Reads an array of strings from a clearsigned TOML file using a GPG key from a separate config file.
+/// 
+/// # Purpose
+/// This function provides a way to verify and read string arrays from clearsigned TOML files
+/// that don't contain their own GPG keys, instead using a key from a separate centralized config file.
+/// 
+/// # Process Flow
+/// 1. Extracts the GPG public key from the specified config file
+/// 2. Uses this key to verify the signature of the target clearsigned TOML file
+/// 3. If verification succeeds, reads the requested string array field
+/// 4. Returns the string array or an appropriate error
+/// 
+/// # Arguments
+/// * `config_file_with_gpg_key` - Path to a clearsigned TOML file containing the GPG public key
+/// * `target_clearsigned_file` - Path to the clearsigned TOML file to read from (without its own GPG key)
+/// * `field_name` - Name of the string array field to read from the target file
+/// 
+/// # Returns
+/// * `Ok(Vec<String>)` - The string array values if verification succeeds
+/// * `Err(String)` - Detailed error message if any step fails
+/// 
+/// # Example
+/// ```
+/// let config_path = "security_config.toml";
+/// let addresses_file = "network_config.toml";
+/// 
+/// let ipv4_addresses = read_string_array_using_clearsignedconfig_from_clearsigntoml(
+///     config_path,
+///     addresses_file, 
+///     "ipv4_addresses"
+/// )?;
+/// // Returns: vec!["10.0.0.213", "192.168.1.1"] if verification succeeds
+/// ```
+pub fn read_stringarray_using_clearsignedconfig_from_clearsigntoml(
+    config_file_with_gpg_key: &str,
+    target_clearsigned_file: &str, 
+    field_name: &str,
+) -> Result<Vec<String>, String> {
+    // Step 1: Extract GPG key from the config file
+    let key = extract_gpg_key_from_clearsigntoml(config_file_with_gpg_key, "gpg_key_public")
+        .map_err(|e| format!("Failed to extract GPG key from config file '{}': {}", 
+                             config_file_with_gpg_key, e))?;
+
+    // Step 2: Verify the target file using the extracted key
+    let verification_result = verify_clearsign(target_clearsigned_file, &key)
+        .map_err(|e| format!("Failed during verification process: {}", e))?;
+
+    // Step 3: Check verification result
+    if !verification_result {
+        return Err(format!(
+            "GPG signature verification failed for file '{}' using key from '{}'",
+            target_clearsigned_file,
+            config_file_with_gpg_key
+        ));
+    }
+
+    // Step 4: Read the requested field from the verified file
+    read_string_array_field_from_toml(target_clearsigned_file, field_name)
+        .map_err(|e| format!("Failed to read string array '{}' from verified file '{}': {}", 
+                             field_name, target_clearsigned_file, e))
 }
 
 /// Verifies a clearsigned file and extracts its content to a separate output file
@@ -2241,3 +2533,604 @@ pub fn verify_clearsigned_file_and_extract_content_to_output(
         )))
     }
 }
+
+
+/// Lists available GPG key IDs and prompts the user to select one for signing operations.
+/// 
+/// # Purpose
+/// This function provides an interactive interface for users to select which GPG key ID
+/// to use for signing operations. It lists available key IDs with their associated user
+/// identities and allows selection via a numbered menu.
+///
+/// # Process Flow
+/// 1. Queries GPG for a list of available key IDs (metadata only)
+/// 2. Displays these key IDs in a numbered list with their associated user identities
+/// 3. Prompts the user to either:
+///    - Select a specific key ID by entering its number
+///    - Press Enter to use the default key ID (first in the list)
+/// 4. Returns the selected or default key ID
+///
+/// # Security Notes
+/// This function ONLY accesses and displays key ID metadata (never secret key material).
+/// The GPG command used (--list-secret-keys) shows identifying information about keys,
+/// not the actual cryptographic key material.
+///
+/// # Returns
+/// * `Ok(String)` - The selected GPG key ID
+/// * `Err(GpgError)` - If listing keys fails, no keys are available, or user input is invalid
+///
+/// # Example
+/// ```
+/// match select_gpg_signing_key_id() {
+///     Ok(key_id) => println!("Selected key ID: {}", key_id),
+///     Err(e) => eprintln!("Error selecting key ID: {}", e.to_string()),
+/// }
+/// ```
+pub fn select_gpg_signing_key_id() -> Result<String, GpgError> {
+    // Execute GPG to list key IDs (NOT the keys themselves)
+    // Using --with-colons format for more reliable parsing
+    let gpg_output = Command::new("gpg")
+        .arg("--list-secret-keys")
+        .arg("--keyid-format=long")
+        .arg("--with-colons")
+        .output()
+        .map_err(|e| GpgError::GpgOperationError(format!(
+            "Failed to execute GPG to list key IDs: {}", e
+        )))?;
+
+    // Check if the command executed successfully
+    if !gpg_output.status.success() {
+        let error_message = String::from_utf8_lossy(&gpg_output.stderr);
+        return Err(GpgError::GpgOperationError(format!(
+            "GPG command failed while listing key IDs: {}", error_message
+        )));
+    }
+
+    // Parse the output to extract key IDs and user identities
+    let output_text = String::from_utf8_lossy(&gpg_output.stdout);
+    let key_id_list = parse_gpg_key_id_listing(&output_text)?;
+
+    // Verify we found at least one key ID
+    if key_id_list.is_empty() {
+        return Err(GpgError::GpgOperationError(
+            "No GPG key IDs found in your keyring. Please create or import a key pair.".to_string()
+        ));
+    }
+
+    // Display the available key IDs as a numbered list
+    println!("\nAvailable GPG key IDs for signing:");
+    for (index, (key_id, user_identity)) in key_id_list.iter().enumerate() {
+        println!("{}. {} ({})", index + 1, key_id, user_identity);
+    }
+
+    // Prompt the user for selection
+    print!("\nSelect a key ID number or press Enter to use the default key ID: ");
+    io::stdout().flush()
+        .map_err(|e| GpgError::GpgOperationError(format!(
+            "Failed to display prompt: {}", e
+        )))?;
+
+    // Read the user's selection
+    let mut user_input = String::new();
+    io::stdin()
+        .read_line(&mut user_input)
+        .map_err(|e| GpgError::GpgOperationError(format!(
+            "Failed to read user input: {}", e
+        )))?;
+
+    let trimmed_input = user_input.trim();
+
+    // If user pressed Enter without a selection, use the default (first) key ID
+    if trimmed_input.is_empty() {
+        let default_key_id = &key_id_list[0].0;
+        println!("Using default key ID: {} ({})", default_key_id, key_id_list[0].1);
+        return Ok(default_key_id.clone());
+    }
+
+    // Otherwise parse the user's numeric selection
+    match trimmed_input.parse::<usize>() {
+        Ok(selected_number) if selected_number > 0 && selected_number <= key_id_list.len() => {
+            // Valid selection - return the corresponding key ID
+            let selected_index = selected_number - 1;
+            let selected_key_id = &key_id_list[selected_index].0;
+            println!("Using key ID: {} ({})", 
+                     selected_key_id, key_id_list[selected_index].1);
+            Ok(selected_key_id.clone())
+        },
+        _ => {
+            // Invalid selection
+            Err(GpgError::GpgOperationError(format!(
+                "Invalid selection: '{}'. Please enter a number between 1 and {}.", 
+                trimmed_input, key_id_list.len()
+            )))
+        }
+    }
+}
+
+/// Parses the colon-delimited output from GPG's list-secret-keys command.
+/// 
+/// # Purpose
+/// Extracts key ID and user identity information from GPG's machine-readable output.
+/// This function processes output from `gpg --list-secret-keys --with-colons` to
+/// extract only the metadata about keys, never the key material itself.
+///
+/// # Arguments
+/// * `gpg_colon_output` - String containing the colon-delimited output from GPG
+///
+/// # Returns
+/// * `Ok(Vec<(String, String)>)` - Vector of (key_id, user_identity) pairs
+/// * `Err(GpgError)` - If parsing fails
+///
+/// # Format Details
+/// This function expects GPG's colon-delimited format where:
+/// - Lines starting with "sec:" contain key ID information in field 4
+/// - Lines starting with "uid:" contain user identity information in field 9
+/// - A key ID may have multiple associated user identities
+fn parse_gpg_key_id_listing(gpg_colon_output: &str) -> Result<Vec<(String, String)>, GpgError> {
+    let mut key_id_pairs = Vec::new();
+    let mut current_key_id = None;
+    
+    // Process each line of the GPG output
+    for line in gpg_colon_output.lines() {
+        // Split the line by colons to get fields
+        let fields: Vec<&str> = line.split(':').collect();
+        
+        // Process secret key records (contain key IDs)
+        if fields.len() > 4 && fields[0] == "sec" {
+            // Field 4 contains the key ID
+            current_key_id = Some(fields[4].to_string());
+        }
+        
+        // Process user ID records (contain user identities)
+        else if fields.len() > 9 && fields[0] == "uid" && current_key_id.is_some() {
+            // Field 9 contains the user identity
+            let user_identity = fields[9].to_string();
+            
+            // Store the key ID and user identity pair
+            if let Some(key_id) = current_key_id.clone() {
+                key_id_pairs.push((key_id, user_identity));
+            }
+        }
+    }
+    
+    Ok(key_id_pairs)
+}
+
+
+// /// Interactive workflow for clearsigning files.
+// ///
+// /// # Purpose
+// /// Guides the user through providing necessary information to clearsign
+// /// a file with their GPG private key.
+// ///
+// /// # Process
+// /// 1. Prompts for file path to clearsign
+// /// 2. Prompts for output file path (with default option)
+// /// 3. Prompts for signing key ID
+// /// 4. Validates all inputs
+// /// 5. Performs the clearsigning operation
+// /// 6. Reports results to the user
+// ///
+// /// # Returns
+// /// * `Ok(())` - If the workflow completes successfully
+// /// * `Err(GpgError)` - If any step fails
+// fn clearsign_workflow() -> Result<(), GpgError> {
+//     // Get input file path from user
+//     print!("Enter the path to the file you want to clearsign: ");
+//     io::stdout().flush()
+//         .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
+    
+//     let mut input_file_path_str = String::new();
+//     io::stdin()
+//         .read_line(&mut input_file_path_str)
+//         .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
+//     let input_file_path = Path::new(input_file_path_str.trim());
+    
+//     // Validate input file exists
+//     if !input_file_path.exists() {
+//         return Err(GpgError::FileSystemError(
+//             std::io::Error::new(std::io::ErrorKind::NotFound, "Input file not found")
+//         ));
+//     }
+    
+//     // Get output file path (use default if empty)
+//     print!("Enter the output file path (or press Enter for default): ");
+//     io::stdout().flush()
+//         .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
+    
+//     let mut output_file_path_str = String::new();
+//     io::stdin()
+//         .read_line(&mut output_file_path_str)
+//         .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
+    
+//     let output_file_path = if output_file_path_str.trim().is_empty() {
+//         // Create default output file path with .asc extension
+//         let input_filename = input_file_path
+//             .file_name()
+//             .and_then(|n| n.to_str())
+//             .ok_or_else(|| GpgError::PathError("Invalid input file name".to_string()))?;
+            
+//         let mut output_path = PathBuf::from("clearsigned");
+//         fs::create_dir_all(&output_path)
+//             .map_err(|e| GpgError::FileSystemError(e))?;
+//         output_path.push(format!("{}.asc", input_filename));
+//         output_path
+//     } else {
+//         PathBuf::from(output_file_path_str.trim())
+//     };
+    
+//     // Get signing key ID
+//     println!("\nTo get your signing key ID, run: $ gpg --list-secret-keys --keyid-format=long");
+//     print!("Enter your GPG signing key ID: ");
+//     io::stdout().flush()
+//         .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
+    
+//     let mut signing_key_id = String::new();
+//     io::stdin()
+//         .read_line(&mut signing_key_id)
+//         .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
+//     let signing_key_id = signing_key_id.trim();
+    
+//     // Validate that a key ID was provided
+//     if signing_key_id.is_empty() {
+//         return Err(GpgError::ValidationError(
+//             "No signing key ID provided".to_string()
+//         ));
+//     }
+    
+//     // Display the parameters that will be used
+//     println!("\nProcessing with the following parameters:");
+//     println!("Input file path: {}", input_file_path.display());
+//     println!("Output file path: {}", output_file_path.display());
+//     println!("Signing key ID: {}", signing_key_id);
+    
+//     // Perform the clearsigning
+//     clearsign_file(input_file_path, &output_file_path, &signing_key_id)?;
+    
+//     // Confirm successful completion
+//     println!("\nSuccess: File has been clearsigned!");
+//     println!("Clearsigned file location: {}", output_file_path.display());
+    
+//     Ok(())
+// }
+
+// /// Interactive workflow for clearsigning and encrypting files.
+// ///
+// /// # Purpose
+// /// Guides the user through providing necessary information to clearsign
+// /// a file with their GPG private key and encrypt it for a recipient.
+// ///
+// /// # Process
+// /// 1. Prompts for file path to process
+// /// 2. Prompts for signing key ID
+// /// 3. Prompts for recipient's public key file path
+// /// 4. Validates all inputs
+// /// 5. Performs clearsigning and encryption
+// /// 6. Reports results to the user
+// ///
+// /// # Returns
+// /// * `Ok(())` - If the workflow completes successfully
+// /// * `Err(GpgError)` - If any step fails
+// ///
+// /// # Notes
+// /// Output is saved to invites_updates/outgoing/ directory.
+// fn clearsign_and_encrypt_workflow() -> Result<(), GpgError> {
+//     // Get input file path from user
+//     print!("Enter the path to the file you want to clearsign and encrypt: ");
+//     io::stdout().flush()
+//         .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
+    
+//     let mut input_file_path_str = String::new();
+//     io::stdin()
+//         .read_line(&mut input_file_path_str)
+//         .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
+//     let input_file_path = Path::new(input_file_path_str.trim());
+    
+//     // Validate input file exists
+//     if !input_file_path.exists() {
+//         return Err(GpgError::FileSystemError(
+//             std::io::Error::new(std::io::ErrorKind::NotFound, "Input file not found")
+//         ));
+//     }
+    
+//     // Get signing key ID
+//     println!("\nTo get your signing key ID, run: $ gpg --list-secret-keys --keyid-format=long");
+//     print!("Enter your GPG signing key ID: ");
+//     io::stdout().flush()
+//         .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
+    
+//     let mut signing_key_id = String::new();
+//     io::stdin()
+//         .read_line(&mut signing_key_id)
+//         .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
+//     let signing_key_id = signing_key_id.trim();
+    
+//     // Validate that a key ID was provided
+//     if signing_key_id.is_empty() {
+//         return Err(GpgError::ValidationError(
+//             "No signing key ID provided".to_string()
+//         ));
+//     }
+    
+//     // Get recipient's public key path
+//     print!("Enter path to recipient's public key file: ");
+//     io::stdout().flush()
+//         .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
+    
+//     let mut recipient_key_path_str = String::new();
+//     io::stdin()
+//         .read_line(&mut recipient_key_path_str)
+//         .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
+//     let recipient_key_path = Path::new(recipient_key_path_str.trim());
+    
+//     // Validate recipient key exists
+//     if !recipient_key_path.exists() {
+//         return Err(GpgError::FileSystemError(
+//             std::io::Error::new(std::io::ErrorKind::NotFound, "Recipient key file not found")
+//         ));
+//     }
+    
+//     // Display the parameters that will be used
+//     println!("\nProcessing with the following parameters:");
+//     println!("Input file path: {}", input_file_path.display());
+//     println!("Signing key ID: {}", signing_key_id);
+//     println!("Recipient public key path: {}", recipient_key_path.display());
+//     println!("Output will be saved to: invites_updates/outgoing/");
+    
+//     // Perform the clearsigning and encryption
+//     clearsign_and_encrypt_file_for_recipient(
+//         input_file_path,
+//         &signing_key_id,
+//         recipient_key_path
+//     )?;
+    
+//     // Calculate the output path for display
+//     let original_filename = input_file_path
+//         .file_name()
+//         .and_then(|n| n.to_str())
+//         .ok_or_else(|| GpgError::PathError("Invalid input file name".to_string()))?;
+    
+//     let output_path = PathBuf::from(format!("invites_updates/outgoing/{}.gpg", original_filename));
+    
+//     // Confirm successful completion
+//     println!("\nSuccess: File has been clearsigned and encrypted!");
+//     println!("Encrypted file location: {}", output_path.display());
+    
+//     Ok(())
+// }
+
+/// Guides the user through an interactive workflow to clearsign a file with their selected GPG key.
+///
+/// # Purpose
+/// This function provides a step-by-step interactive command-line interface that:
+/// 1. Prompts the user for the input file path to clearsign
+/// 2. Prompts for an output file path (with default option if user presses Enter)
+/// 3. Presents available GPG key IDs for selection
+/// 4. Clearsigns the input file with the selected key
+/// 5. Reports the results to the user
+///
+/// # Process Flow
+/// 1. Collect input file path and validate its existence
+/// 2. Collect output file path or generate default path
+/// 3. Display available key IDs and prompt for selection
+/// 4. Clearsign the file using the selected key ID
+/// 5. Confirm successful completion with output file location
+///
+/// # Parameters
+/// None - All inputs are collected interactively
+///
+/// # Returns
+/// * `Ok(())` - If the clearsigning process completes successfully
+/// * `Err(GpgError)` - If any step fails, with specific error information:
+///   - `GpgError::FileSystemError` - If file operations fail (missing files, permissions)
+///   - `GpgError::GpgOperationError` - If GPG operations fail
+///   - `GpgError::PathError` - If path operations fail
+///
+/// # Error Handling
+/// - Validates input file existence before proceeding
+/// - Creates output directories if they don't exist
+/// - Validates GPG key selection
+/// - Reports specific errors for each potential failure point
+///
+/// # Example Usage
+/// ```no_run
+/// match clearsign_workflow() {
+///     Ok(()) => println!("Clearsigning completed successfully"),
+///     Err(e) => eprintln!("Error: {}", e.to_string()),
+/// }
+/// ```
+///
+/// # Related Functions
+/// * `select_gpg_signing_key_id()` - Called to allow key ID selection
+/// * `clearsign_file()` - Called to perform the actual clearsigning
+fn clearsign_workflow() -> Result<(), GpgError> {
+    // Get input file path from user
+    print!("Enter the path to the file you want to clearsign: ");
+    io::stdout().flush()
+        .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
+    
+    // Read the input file path
+    let mut input_file_path_str = String::new();
+    io::stdin()
+        .read_line(&mut input_file_path_str)
+        .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
+    let input_file_path = Path::new(input_file_path_str.trim());
+    
+    // Validate input file exists to provide early error feedback
+    if !input_file_path.exists() {
+        return Err(GpgError::FileSystemError(
+            std::io::Error::new(std::io::ErrorKind::NotFound, "Input file not found")
+        ));
+    }
+    
+    // Get output file path (use default if empty)
+    print!("Enter the output file path (or press Enter for default): ");
+    io::stdout().flush()
+        .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
+    
+    // Read the output file path
+    let mut output_file_path_str = String::new();
+    io::stdin()
+        .read_line(&mut output_file_path_str)
+        .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
+    
+    // Process output path - use default or user-provided path
+    let output_file_path = if output_file_path_str.trim().is_empty() {
+        // Create default output file path with .asc extension
+        let input_filename = input_file_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .ok_or_else(|| GpgError::PathError("Invalid input file name".to_string()))?;
+            
+        // Create clearsigned directory if it doesn't exist
+        let mut output_path = PathBuf::from("clearsigned");
+        fs::create_dir_all(&output_path)
+            .map_err(|e| GpgError::FileSystemError(e))?;
+        
+        // Add filename with .asc extension
+        output_path.push(format!("{}.asc", input_filename));
+        output_path
+    } else {
+        PathBuf::from(output_file_path_str.trim())
+    };
+    
+    // Present GPG key ID selection menu and get user's choice
+    let signing_key_id = select_gpg_signing_key_id()?;
+    
+    // Display the parameters that will be used to confirm with user
+    println!("\nProcessing with the following parameters:");
+    println!("Input file path: {}", input_file_path.display());
+    println!("Output file path: {}", output_file_path.display());
+    println!("Signing key ID: {}", signing_key_id);
+    
+    // Perform the clearsigning operation
+    clearsign_file(input_file_path, &output_file_path, &signing_key_id)?;
+    
+    // Confirm successful completion
+    println!("\nSuccess: File has been clearsigned!");
+    println!("Clearsigned file location: {}", output_file_path.display());
+    
+    Ok(())
+}
+
+/// Guides the user through an interactive workflow to clearsign and encrypt a file.
+///
+/// # Purpose
+/// This function provides a step-by-step interactive command-line interface that:
+/// 1. Prompts the user for the input file path to process
+/// 2. Displays available GPG key IDs and lets the user select one for signing
+/// 3. Prompts for the recipient's public key file path
+/// 4. Clearsigns the file with the selected key and encrypts it for the recipient
+/// 5. Reports the results to the user
+///
+/// # Process Flow
+/// 1. Collect input file path and validate its existence
+/// 2. Present available GPG key IDs and prompt for selection
+/// 3. Collect recipient's public key path and validate its existence
+/// 4. Perform clearsigning and encryption operations
+/// 5. Calculate and display the output file path
+/// 6. Confirm successful completion
+///
+/// # Parameters
+/// None - All inputs are collected interactively
+///
+/// # Returns
+/// * `Ok(())` - If the clearsigning and encryption process completes successfully
+/// * `Err(GpgError)` - If any step fails, with specific error information:
+///   - `GpgError::FileSystemError` - If file operations fail (missing files, permissions)
+///   - `GpgError::GpgOperationError` - If GPG operations fail
+///   - `GpgError::PathError` - If path operations fail
+///
+/// # Error Handling
+/// - Validates input file existence before proceeding
+/// - Validates recipient key existence
+/// - Validates GPG key selection
+/// - Reports specific errors for each potential failure point
+///
+/// # Example Usage
+/// ```no_run
+/// match clearsign_and_encrypt_workflow() {
+///     Ok(()) => println!("Clearsigning and encryption completed successfully"),
+///     Err(e) => eprintln!("Error: {}", e.to_string()),
+/// }
+/// ```
+///
+/// # Notes
+/// The output file is automatically saved to the invites_updates/outgoing/ directory
+/// with the original filename and a .gpg extension. This function will create the
+/// directory if it doesn't exist.
+///
+/// # Related Functions
+/// * `select_gpg_signing_key_id()` - Called to allow key ID selection
+/// * `clearsign_and_encrypt_file_for_recipient()` - Called to perform the actual operations
+fn clearsign_and_encrypt_workflow() -> Result<(), GpgError> {
+    // Get input file path from user
+    print!("Enter the path to the file you want to clearsign and encrypt: ");
+    io::stdout().flush()
+        .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
+    
+    // Read the input file path
+    let mut input_file_path_str = String::new();
+    io::stdin()
+        .read_line(&mut input_file_path_str)
+        .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
+    let input_file_path = Path::new(input_file_path_str.trim());
+    
+    // Validate input file exists to provide early error feedback
+    if !input_file_path.exists() {
+        return Err(GpgError::FileSystemError(
+            std::io::Error::new(std::io::ErrorKind::NotFound, "Input file not found")
+        ));
+    }
+    
+    // Present GPG key ID selection menu and get user's choice
+    let signing_key_id = select_gpg_signing_key_id()?;
+    
+    // Get recipient's public key path
+    print!("Enter path to recipient's public key file: ");
+    io::stdout().flush()
+        .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
+    
+    // Read the recipient key path
+    let mut recipient_key_path_str = String::new();
+    io::stdin()
+        .read_line(&mut recipient_key_path_str)
+        .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
+    let recipient_key_path = Path::new(recipient_key_path_str.trim());
+    
+    // Validate recipient key exists to provide early error feedback
+    if !recipient_key_path.exists() {
+        return Err(GpgError::FileSystemError(
+            std::io::Error::new(std::io::ErrorKind::NotFound, "Recipient key file not found")
+        ));
+    }
+    
+    // Display the parameters that will be used to confirm with user
+    println!("\nProcessing with the following parameters:");
+    println!("Input file path: {}", input_file_path.display());
+    println!("Signing key ID: {}", signing_key_id);
+    println!("Recipient public key path: {}", recipient_key_path.display());
+    println!("Output will be saved to: invites_updates/outgoing/");
+    
+    // Perform the clearsigning and encryption operations
+    clearsign_and_encrypt_file_for_recipient(
+        input_file_path,
+        &signing_key_id,
+        recipient_key_path
+    )?;
+    
+    // Calculate the output path for display to user
+    let original_filename = input_file_path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| GpgError::PathError("Invalid input file name".to_string()))?;
+    
+    let output_path = PathBuf::from(format!("invites_updates/outgoing/{}.gpg", original_filename));
+    
+    // Confirm successful completion
+    println!("\nSuccess: File has been clearsigned and encrypted!");
+    println!("Encrypted file location: {}", output_path.display());
+    
+    Ok(())
+}
+
