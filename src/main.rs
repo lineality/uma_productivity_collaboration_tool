@@ -9493,12 +9493,12 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         println!("Welcome to the application!");
         println!("To get started, please add a new user.");
 
-        // old unwrap (BAD!!!) version
-        // Prompt the user to enter a username
-        println!("Enter a username:");
-        let mut username = String::new();
-        io::stdin().read_line(&mut username).unwrap();
-        let username = username.trim().to_string();
+        // // old unwrap (BAD!!!) version
+        // // Prompt the user to enter a username
+        // println!("Enter a username:");
+        // let mut username = String::new();
+        // io::stdin().read_line(&mut username).unwrap();
+        // let username = username.trim().to_string();
 
         // // Prompt the user to enter an IP address
         // println!("Enter an ipv4_address:");
@@ -9507,25 +9507,51 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         // let ipv4_address = ipv4_address.trim().parse().unwrap();
         
         
+        // // Prompt the user to enter a username
+        // println!("Enter a username:");
+        // let mut username = String::new();
+        
+        // // Read line from standard input and handle potential errors
+        // match std::io::stdin().read_line(&mut username) {
+        //     Ok(_) => {
+        //         // Successfully read input, proceed with trimming
+        //         let username = username.trim().to_string();
+                
+        //         // Continue with the rest of your code using username...
+        //         println!("Hello, {}", username); // Example usage
+        //     },
+        //     Err(io_error) => {
+        //         // Handle the error appropriately
+        //         eprintln!("Failed to read input: {}", io_error);
+        //         // Additional error handling as needed...
+        //     }
+        // }
+            
         // Prompt the user to enter a username
         println!("Enter a username:");
-        let mut username = String::new();
-        
-        // Read line from standard input and handle potential errors
-        match std::io::stdin().read_line(&mut username) {
+        let mut username_input = String::new(); // Use a temporary variable for input
+
+        let username_for_function: String = match std::io::stdin().read_line(&mut username_input) {
             Ok(_) => {
-                // Successfully read input, proceed with trimming
-                let username = username.trim().to_string();
-                
-                // Continue with the rest of your code using username...
-                println!("Hello, {}", username); // Example usage
+                // Successfully read input, trim it, and this will be the value of username_for_function
+                let trimmed = username_input.trim().to_string();
+                if trimmed.is_empty() {
+                    eprintln!("Username cannot be empty.");
+                    // Handle empty username case, perhaps by returning or panicking
+                    // For now, let's panic as an example, but you should handle it gracefully.
+                    panic!("Username was empty after trimming."); 
+                }
+                println!("Hello, (trimmed): '{}'", trimmed); // Debug: Check the trimmed value
+                trimmed 
             },
             Err(io_error) => {
                 // Handle the error appropriately
                 eprintln!("Failed to read input: {}", io_error);
-                // Additional error handling as needed...
+                // You must return or panic here, as username_for_function needs a value.
+                // Or provide a default, though that's unlikely for a username.
+                panic!("Failed to read username: {}", io_error); 
             }
-        }
+        };
                 
         
         // choice...
@@ -9681,7 +9707,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
 
         // // Add a new user to Uma file system
         add_collaborator_setup_file(
-            username, 
+            username_for_function, 
             new_usersalt_list,
             ipv4_addresses, 
             ipv6_addresses,
@@ -10171,11 +10197,12 @@ pub fn export_public_gpg_key(
         .ok_or_else(|| ThisProjectError::InvalidInput("Cannot convert collaborator file path to string".to_string()))?;
     
     debug_log!("user_config_path {}", user_config_path.display());
+    println!("user_config_path {}", user_config_path.display());
     
     // Extract the GPG key ID from the collaborator file
     let gpg_key_id = read_singleline_string_from_clearsigntoml(user_config_path_str, "gpg_publickey_id")
         .map_err(|error_message| ThisProjectError::TomlVanillaDeserialStrError(
-            format!("export_public_gpg_key() Failed to read GPG key ID from clearsigntoml collaborator file: {}", error_message)
+            format!("export_public_gpg_key() Failed read_singleline_string_from_clearsigntoml() to read GPG key ID from clearsigntoml collaborator file: {}", error_message)
         ))?;
 
     // Convert output_directory to an absolute path relative to the executable directory
