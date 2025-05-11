@@ -1186,9 +1186,9 @@ impl GpgError {
 /// let input = Path::new("document.txt");
 /// let output = Path::new("document.txt.asc");
 /// let key_id = "3AA5C34371567BD2";
-/// clearsign_file(input, output, key_id)?;
+/// clearsign_filepath_to_path(input, output, key_id)?;
 /// ```
-pub fn clearsign_file(
+pub fn clearsign_filepath_to_path(
     input_file_path: &Path,
     output_file_path: &Path,
     signing_key_id: &str,
@@ -1402,6 +1402,83 @@ pub fn validate_gpg_key(key_id: &str) -> Result<bool, GpgError> {
         .map_err(|e| GpgError::GpgOperationError(e.to_string()))?;
 
     Ok(validation_output.status.success())
+}
+
+/// Validates that a GPG secret key ID exists in the user's GPG keyring and is available.
+///
+/// This function is crucial for operations that require signing, as it checks for the
+/// presence of the private key component.
+///
+/// # Arguments
+/// * `key_id` - The GPG key ID (long format recommended) to check for. This ID typically
+///   refers to the public key, but GPG uses it to find the associated secret key.
+///
+/// # Returns
+/// * `Ok(true)` - If the secret key corresponding to the `key_id` exists in the keyring.
+/// * `Ok(false)` - If the secret key is not found (GPG command succeeds but indicates no such key).
+/// * `Err(GpgError::GpgOperationError)` - If there was an error executing the GPG command itself,
+///   or if the GPG command reported an error other than "key not found".
+///
+/// # Process
+/// Internally, this function executes the command `gpg --list-secret-keys <key_id>`.
+/// The success of this GPG command (exit status 0) indicates that GPG recognizes
+/// the key ID and has information about its secret part.
+///
+/// # Note
+/// This function does not check if the key is passphrase-protected or if the GPG agent
+/// can access it without interaction. It only confirms its presence in the secret keyring.
+pub fn validate_gpg_secret_key(key_id: &str) -> Result<bool, GpgError> {
+    // Ensure the key_id is not empty, as GPG might interpret this differently.
+    if key_id.is_empty() {
+        return Err(GpgError::GpgOperationError(
+            "Key ID for secret key validation cannot be empty.".to_string(),
+        ));
+    }
+
+    // Log the action being performed for traceability.
+    println!(
+        "Validating presence of GPG secret key for ID: '{}'",
+        key_id
+    );
+
+    // Construct and execute the GPG command to list the specific secret key.
+    let validation_output_result = Command::new("gpg")
+        .arg("--list-secret-keys") // Command to list secret keys.
+        .arg(key_id) // Specify the key ID to look for.
+        .output(); // Execute the command and capture its output.
+
+    match validation_output_result {
+        Ok(output) => {
+            // GPG command executed. Now check its status.
+            if output.status.success() {
+                // GPG command succeeded, meaning the secret key is known.
+                println!("GPG secret key for ID '{}' found in keyring.", key_id);
+                Ok(true)
+            } else {
+                // GPG command failed. This usually means the secret key was not found,
+                // or some other GPG error occurred.
+                let stderr_output = String::from_utf8_lossy(&output.stderr);
+                println!(
+                    "GPG secret key for ID '{}' not found or GPG error. GPG stderr: {}",
+                    key_id, stderr_output
+                );
+                // We interpret a non-success status as the key not being definitively available.
+                // GPG's `gpg --list-secret-keys <non_existent_key_id>` typically returns a non-zero exit code.
+                Ok(false)
+            }
+        }
+        Err(io_error) => {
+            // Failed to execute the GPG command itself (e.g., GPG not in PATH).
+            eprintln!(
+                "Failed to execute GPG command for secret key validation (ID: '{}'): {}",
+                key_id, io_error
+            );
+            Err(GpgError::GpgOperationError(format!(
+                "Failed to execute GPG command while validating secret key ID '{}': {}",
+                key_id, io_error
+            )))
+        }
+    }
 }
 
 /// Custom error type for GPG operations
@@ -1849,7 +1926,7 @@ pub fn gpg_make_input_path_name_abs_executabledirectoryrelative_nocheck<P: AsRef
     let target_path = executable_directory.join(path_to_make_absolute);
     
     // If the path doesn't exist, we still return the absolute path without trying to canonicalize
-    if !gpg_abs_executable_directory_relative_exists(&target_path)? {
+    if !gpg_abs_executable_directory_relative_exists_boolean_check(&target_path)? {
         // Ensure the path is absolute (it should be since we joined with executable_directory)
         if target_path.is_absolute() {
             return Ok(target_path);
@@ -1879,7 +1956,7 @@ pub fn gpg_make_input_path_name_abs_executabledirectoryrelative_nocheck<P: AsRef
 /// # Returns
 ///
 /// * `Result<bool, io::Error>` - Whether the path exists or an error
-pub fn gpg_abs_executable_directory_relative_exists<P: AsRef<Path>>(path_to_check: P) -> Result<bool, io::Error> {
+pub fn gpg_abs_executable_directory_relative_exists_boolean_check<P: AsRef<Path>>(path_to_check: P) -> Result<bool, io::Error> {
     let path = path_to_check.as_ref();
     Ok(path.exists())
 }
@@ -2561,12 +2638,12 @@ pub fn verify_clearsigned_file_and_extract_content_to_output(
 ///
 /// # Example
 /// ```
-/// match select_gpg_signing_key_id() {
+/// match select_gpg_signing_shortkey_id() {
 ///     Ok(key_id) => println!("Selected key ID: {}", key_id),
 ///     Err(e) => eprintln!("Error selecting key ID: {}", e.to_string()),
 /// }
 /// ```
-pub fn select_gpg_signing_key_id() -> Result<String, GpgError> {
+pub fn select_gpg_signing_shortkey_id() -> Result<String, GpgError> {
     // Execute GPG to list key IDs (NOT the keys themselves)
     // Using --with-colons format for more reliable parsing
     let gpg_output = Command::new("gpg")
@@ -2646,6 +2723,413 @@ pub fn select_gpg_signing_key_id() -> Result<String, GpgError> {
         }
     }
 }
+
+
+// use std::io::{self, Write};
+// use std::process::Command;
+// use std::str;
+
+// GpgError enum is assumed to be defined elsewhere, as per your instructions.
+// For this example, we'll assume it has at least a GpgOperationError variant:
+//
+// #[derive(Debug)]
+// pub enum GpgError {
+//     GpgOperationError(String),
+//     // Potentially other variants like ParseError, UserInputError, NoKeysFoundError
+// }
+//
+// impl std::fmt::Display for GpgError {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         match self {
+//             GpgError::GpgOperationError(msg) => write!(f, "GPG Error: {}", msg),
+//         }
+//     }
+// }
+//
+// impl std::error::Error for GpgError {}
+//
+// --- End of assumed GpgError definition ---
+
+
+/// Holds structured information about a GPG public key, primarily its fingerprint and user identity.
+///
+/// This structure is used to store and display key information parsed from GPG's output.
+#[derive(Debug, Clone)] // Clone is useful for easily returning owned data from the selection.
+struct GpgPublicKeyDisplayInfo {
+    /// The full GPG key fingerprint (e.g., a 40-character hexadecimal string for RSA keys).
+    /// This is the long, unique identifier for the public key.
+    fingerprint: String,
+    /// The primary user identity (UID) string associated with the key (e.g., "User Name <email@example.com>").
+    user_identity: String,
+}
+
+/// Decodes a GPG UID string that might contain percent-encoded characters.
+///
+/// GPG's colon-delimited output format (`--with-colons`) percent-encodes certain bytes
+/// within User ID strings (e.g., `%40` for `@`, `%25` for `%`, `%20` for space).
+/// This function decodes these sequences back into their original byte values
+/// and then interprets the entire resulting byte sequence as a UTF-8 string.
+///
+/// # Arguments
+/// * `encoded_uid_string`: A string slice representing the GPG UID, potentially containing
+///   percent-encoded sequences.
+///
+/// # Returns
+/// A `String` where percent-encoded sequences have been converted to their corresponding
+/// characters.
+/// - If an invalid or incomplete percent-encoded sequence (e.g., `%A` followed by end-of-string,
+///   or `%XY` where X or Y are not hex digits) is encountered, the original sequence
+///   (e.g., `'%', 'A'`) is passed through literally to the output string as UTF-8 bytes.
+/// - If the final sequence of decoded bytes does not form valid UTF-8, any invalid UTF-8
+///   sequences are replaced with `U+FFFD REPLACEMENT CHARACTER`, per `String::from_utf8_lossy`.
+fn decode_gpg_uid_string(encoded_uid_string: &str) -> String {
+    // Pre-allocate vector with capacity based on the input string length.
+    // Decoded string is unlikely to be much larger, usually same size or smaller.
+    let mut decoded_bytes: Vec<u8> = Vec::with_capacity(encoded_uid_string.len());
+    
+    // Iterate over characters of the input string.
+    let mut char_iterator = encoded_uid_string.chars();
+
+    while let Some(current_char) = char_iterator.next() {
+        if current_char == '%' {
+            // This character might be the start of a percent-encoded sequence.
+            // A valid sequence is '%' followed by two hexadecimal digits.
+            let hex_char1_opt = char_iterator.next();
+            let hex_char2_opt = char_iterator.next();
+
+            if let (Some(hc1), Some(hc2)) = (hex_char1_opt, hex_char2_opt) {
+                // Check if both characters are ASCII hexadecimal digits.
+                if hc1.is_ascii_hexdigit() && hc2.is_ascii_hexdigit() {
+                    let hex_pair_str = format!("{}{}", hc1, hc2);
+                    // Attempt to parse the hex pair (e.g., "4A") into a u8 byte value.
+                    // This `from_str_radix` should succeed if `is_ascii_hexdigit` was true for both.
+                    if let Ok(byte_value) = u8::from_str_radix(&hex_pair_str, 16) {
+                        decoded_bytes.push(byte_value);
+                    } else {
+                        // This case is highly unlikely if `is_ascii_hexdigit` passed.
+                        // It implies an issue with `from_str_radix` or char properties.
+                        // Fallback: treat as a literal sequence.
+                        decoded_bytes.push(b'%'); // Push the literal '%' byte.
+                        let mut char_encode_buffer = [0; 4]; // Max 4 bytes for a char in UTF-8.
+                        decoded_bytes.extend_from_slice(hc1.encode_utf8(&mut char_encode_buffer).as_bytes());
+                        decoded_bytes.extend_from_slice(hc2.encode_utf8(&mut char_encode_buffer).as_bytes());
+                    }
+                } else {
+                    // One or both characters after '%' are not hex digits. Treat as literal.
+                    decoded_bytes.push(b'%');
+                    let mut char_encode_buffer = [0; 4];
+                    decoded_bytes.extend_from_slice(hc1.encode_utf8(&mut char_encode_buffer).as_bytes());
+                    decoded_bytes.extend_from_slice(hc2.encode_utf8(&mut char_encode_buffer).as_bytes());
+                }
+            } else {
+                // Incomplete percent sequence (e.g., "%" at end of string, or "%A" at end).
+                // Treat as literal characters.
+                decoded_bytes.push(b'%');
+                if let Some(hc1) = hex_char1_opt { // If there was at least one char after '%'
+                    let mut char_encode_buffer = [0; 4];
+                    decoded_bytes.extend_from_slice(hc1.encode_utf8(&mut char_encode_buffer).as_bytes());
+                }
+                // If hc2 was also None, nothing more to push for this partial sequence.
+            }
+        } else {
+            // Not a percent-encoded character; append its UTF-8 bytes directly.
+            let mut char_encode_buffer = [0; 4]; // Max 4 bytes for a char in UTF-8.
+            decoded_bytes.extend_from_slice(current_char.encode_utf8(&mut char_encode_buffer).as_bytes());
+        }
+    }
+    
+    // Convert the accumulated byte vector to a String.
+    // `from_utf8_lossy` replaces any invalid UTF-8 sequences with U+FFFD.
+    String::from_utf8_lossy(&decoded_bytes).into_owned()
+}
+
+/// Parses GPG's colon-delimited output to extract public key fingerprints and user identities.
+///
+/// This function is designed to process the output of the GPG command:
+/// `gpg --list-keys --keyid-format=long --with-colons --with-fingerprint`.
+/// It iterates through the lines of output, identifying sequences of records:
+///   1. `pub`: Indicates a primary public key.
+///   2. `fpr`: Contains the full fingerprint for the preceding `pub` key.
+///   3. `uid`: Contains a user identity string for that key.
+///
+/// The function associates the fingerprint from an `fpr` record with the first `uid` record
+/// that follows it for a given `pub` key.
+///
+/// # Arguments
+/// * `gpg_output_string`: A string slice containing the raw, colon-delimited output from GPG.
+///
+/// # Returns
+/// * `Ok(Vec<GpgPublicKeyDisplayInfo>)`: A vector of `GpgPublicKeyDisplayInfo` structs. Each struct
+///   represents a public key, containing its fingerprint and primary user identity.
+///   The vector will be empty if no keys are found or if keys lack necessary information (fingerprint/UID).
+/// * `Err(GpgError::GpgOperationError)`: If the parsing logic determines that no valid key information
+///   could be extracted (e.g., output is malformed or no keys with UIDs are present).
+fn parse_gpg_public_key_listing(gpg_output_string: &str) -> Result<Vec<GpgPublicKeyDisplayInfo>, GpgError> {
+    // Vector to store the information for each successfully parsed public key.
+    let mut parsed_keys_info: Vec<GpgPublicKeyDisplayInfo> = Vec::new();
+    
+    // Holds the fingerprint of the current public key block being processed.
+    // This is populated when an "fpr" record is encountered after a "pub" record,
+    // and cleared when the fingerprint is associated with a UID or a new "pub" record starts.
+    let mut current_key_fingerprint_holder: Option<String> = None;
+
+    // Iterate over each line in the GPG output string.
+    for line in gpg_output_string.lines() {
+        // Split the line into fields using ':' as the delimiter.
+        // GPG's colon-format consists of multiple colon-separated fields per line.
+        let fields: Vec<&str> = line.split(':').collect();
+
+        // Basic validation: ensure there's at least one field (the record type).
+        if fields.is_empty() {
+            continue; // Skip empty or malformed lines.
+        }
+
+        // The first field indicates the type of record (e.g., "pub", "fpr", "uid").
+        let record_type = fields[0];
+
+        match record_type {
+            "pub" => {
+                // A "pub" record signifies the beginning of a new public key block.
+                // Any fingerprint held from a previous, incomplete key block (e.g., "pub" -> "fpr" without "uid")
+                // should be discarded. We reset `current_key_fingerprint_holder` to prepare for
+                // the fingerprint of this new key, which will appear in a subsequent "fpr" record.
+                current_key_fingerprint_holder = None;
+            }
+            "fpr" => {
+                // An "fpr" record contains the key fingerprint.
+                // The fingerprint string is typically in the 10th field (index 9).
+                // We are interested in this fingerprint if we are processing a "pub" key's details
+                // and haven't yet captured its fingerprint. This means `current_key_fingerprint_holder`
+                // should be `None` (it was reset by a "pub" line or a previous key was completed).
+                if current_key_fingerprint_holder.is_none() && fields.len() > 9 && !fields[9].is_empty() {
+                    current_key_fingerprint_holder = Some(fields[9].to_string());
+                }
+            }
+            "uid" => {
+                // A "uid" record contains a user identity string for the current key.
+                // The UID string is typically in the 10th field (index 9).
+                // We attempt to pair this UID with a fingerprint captured from a preceding "fpr" record.
+                // `current_key_fingerprint_holder.take()` consumes the fingerprint, ensuring it's
+                // used only once (with the first UID encountered for that fingerprint).
+                if let Some(fingerprint_for_this_key) = current_key_fingerprint_holder.take() {
+                    if fields.len() > 9 && !fields[9].is_empty() {
+                        let raw_user_id_string = fields[9];
+                        // Decode the UID string in case it contains percent-encoded characters.
+                        let decoded_user_id_string = decode_gpg_uid_string(raw_user_id_string);
+                        
+                        // Store the paired fingerprint and user identity.
+                        parsed_keys_info.push(GpgPublicKeyDisplayInfo {
+                            fingerprint: fingerprint_for_this_key,
+                            user_identity: decoded_user_id_string,
+                        });
+                    } else {
+                        // The UID record is malformed, or the UID string is empty.
+                        // The fingerprint `fingerprint_for_this_key` was `take`n and is now "lost"
+                        // for this specific UID. If other UIDs follow for the same key, they won't
+                        // be associated with this fingerprint because `current_key_fingerprint_holder` is now `None`.
+                        // This means a key with a fingerprint but no valid parsable UID will be skipped.
+                        // This behavior is generally acceptable as a UID is needed for user presentation.
+                        // For more complex error recovery, the fingerprint could be put back:
+                        // `current_key_fingerprint_holder = Some(fingerprint_for_this_key);`
+                        // but this would complicate the "first UID wins" logic.
+                    }
+                }
+            }
+            _ => {
+                // Other record types ("sub", "sig", "rev", "cfg", etc.) are ignored in this function,
+                // as we are primarily interested in `pub` key fingerprints and their UIDs.
+                // If a "sub" record appears, it generally means UIDs for the primary key have passed.
+                // If `current_key_fingerprint_holder` still has a value here, it implies a `pub`/`fpr`
+                // without a subsequent `uid` before another significant record type or end of output.
+                // Such an entry (fingerprint without UID) will not be added to `parsed_keys_info`.
+            }
+        }
+    }
+
+    // After processing all lines, if no keys were successfully parsed and stored,
+    // it indicates an issue (e.g., no keys, no keys with UIDs, or malformed GPG output).
+    if parsed_keys_info.is_empty() {
+        // This error indicates that the parsing logic, while it might not have encountered
+        // IO errors or GPG command failures, did not find any data that meets the criteria
+        // for a selectable key (i.e., a public key with both a fingerprint and a user ID).
+        return Err(GpgError::GpgOperationError( // Consistent with original error style.
+                                               // A more specific error variant like NoKeysFoundError or ParseError would be ideal if GpgError supports it.
+            "No GPG public keys with associated fingerprints and user IDs were found. \
+            Please ensure GPG is configured with suitable public keys that have user identities."
+                .to_string(),
+        ));
+    }
+
+    Ok(parsed_keys_info)
+}
+
+/// Lists available GPG public key fingerprints and prompts the user to select one for signing operations.
+///
+/// # Purpose
+/// This function provides an interactive interface for users to select which GPG public key
+/// (identified by its fingerprint) to use for operations like signing. It lists available public
+/// keys with their fingerprints and associated user identities, allowing selection via a numbered menu.
+///
+/// # Process Flow
+/// 1. Queries GPG for a list of available public keys and their fingerprints using the command:
+///    `gpg --list-keys --keyid-format=long --with-colons --with-fingerprint`.
+///    This command provides machine-readable output.
+/// 2. Parses this output to extract key fingerprints and primary user identities.
+/// 3. Displays these keys in a numbered list.
+/// 4. Prompts the user to either:
+///    - Select a specific key by entering its number.
+///    - Press Enter to use the default key (the first key in the list).
+/// 5. Returns the fingerprint of the selected or default key.
+///
+/// # Security Notes
+/// - This function interacts with GPG to list public key metadata. It does not access or
+///   handle secret key material directly.
+/// - The GPG command used (`--list-keys`) displays identifying information about public keys,
+///   not cryptographic secrets.
+///
+/// # Returns
+/// * `Ok(String)`: The selected GPG public key fingerprint as a string.
+/// * `Err(GpgError)`: If any step fails, such as:
+///     - Failure to execute the GPG command.
+///     - The GPG command returning an error.
+///     - Failure to parse the GPG output.
+///     - No GPG public keys being found.
+///     - Issues with reading user input.
+///     - The user providing an invalid selection.
+///
+/// # Example
+/// ```
+/// // fn main() -> Result<(), GpgError> { // Assuming GpgError is defined
+/// //     match q_and_a_user_selects_gpg_key_full_fingerprint() {
+/// //         Ok(fingerprint) => println!("Selected key fingerprint: {}", fingerprint),
+/// //         Err(e) => eprintln!("Error selecting key fingerprint: {}", e.to_string()),
+/// //     }
+/// //     Ok(())
+/// // }
+/// ```
+/// select_gpg_long_key_id
+pub fn q_and_a_user_selects_gpg_key_full_fingerprint() -> Result<String, GpgError> {
+    // Step 1: Execute the GPG command to list public keys and their fingerprints.
+    // `--list-keys`: Specifies listing public keys.
+    // `--keyid-format=long`: Requests long key IDs (though fingerprint is distinct and primary here).
+    // `--with-colons`: Produces machine-readable, colon-delimited output.
+    // `--with-fingerprint`: Ensures that "fpr" records (containing full fingerprints) are included.
+    let gpg_command_output_result = Command::new("gpg")
+        .arg("--list-keys")
+        .arg("--keyid-format=long")
+        .arg("--with-colons")
+        .arg("--with-fingerprint")
+        .output();
+
+    let gpg_command_output = match gpg_command_output_result {
+        Ok(output) => output,
+        Err(io_error) => {
+            return Err(GpgError::GpgOperationError(format!(
+                "Failed to execute GPG command to list public key fingerprints: {}. \
+                Ensure GPG is installed and accessible in your system's PATH.",
+                io_error
+            )));
+        }
+    };
+
+    // Step 2: Check if the GPG command itself executed successfully (exit status 0).
+    if !gpg_command_output.status.success() {
+        // GPG command failed. stderr often contains useful error messages from GPG.
+        let error_description_from_gpg = String::from_utf8_lossy(&gpg_command_output.stderr);
+        return Err(GpgError::GpgOperationError(format!(
+            "GPG command execution failed while listing public key fingerprints. Exit status: {}. GPG stderr: {}",
+            gpg_command_output.status, error_description_from_gpg.trim()
+        )));
+    }
+
+    // Step 3: Parse the GPG output (stdout) to extract fingerprints and user identities.
+    // stdout is expected to be UTF-8 encoded.
+    let gpg_output_stdout_string = String::from_utf8_lossy(&gpg_command_output.stdout);
+    
+    // `parse_gpg_public_key_listing` handles the parsing and returns a list of keys
+    // or an error if no suitable keys are found or parsing fails.
+    let available_keys_list = parse_gpg_public_key_listing(&gpg_output_stdout_string)?;
+    // Note: `parse_gpg_public_key_listing` itself returns an error if `available_keys_list` would be empty,
+    // so an additional explicit check `if available_keys_list.is_empty()` here is typically redundant
+    // unless the parser could validly return an Ok(empty_vector).
+
+    // Step 4: Display the available keys (fingerprint and user identity) to the user in a numbered list.
+    println!("\nAvailable GPG public keys (identified by fingerprint):");
+    for (index, key_info) in available_keys_list.iter().enumerate() {
+        // Format: "1. FINGERPRINT_HEX_STRING (User Name <email@example.com>)"
+        println!("{}. {} ({})", index + 1, key_info.fingerprint, key_info.user_identity);
+    }
+
+    // Step 5: Prompt the user to make a selection.
+    // It's crucial to flush stdout to ensure the prompt is displayed before `read_line` blocks for input.
+    print!("\nSelect a key by its number, or press Enter to use the default key (first in the list): ");
+    if let Err(flush_error) = io::stdout().flush() {
+        return Err(GpgError::GpgOperationError(format!(
+            "Failed to flush stdout when displaying prompt for key selection: {}",
+            flush_error
+        )));
+    }
+
+    // Step 6: Read the user's input from stdin.
+    let mut user_selection_input_string = String::new();
+    if let Err(read_error) = io::stdin().read_line(&mut user_selection_input_string) {
+        return Err(GpgError::GpgOperationError(format!(
+            "Failed to read user input for GPG key selection: {}",
+            read_error
+        )));
+    }
+
+    // Trim whitespace (like newline characters) from the input.
+    let trimmed_user_input = user_selection_input_string.trim();
+
+    // Step 7: Process the user's selection.
+    if trimmed_user_input.is_empty() {
+        // User pressed Enter (input is empty after trim), signifying use of the default key.
+        // The default is the first key in the list. `available_keys_list` is guaranteed
+        // not to be empty at this point due to checks in `parse_gpg_public_key_listing`.
+        let default_key_info = &available_keys_list[0]; // Index 0 is safe.
+        println!(
+            "Default key selected. Using fingerprint: {} ({})",
+            default_key_info.fingerprint, default_key_info.user_identity
+        );
+        Ok(default_key_info.fingerprint.clone()) // Return the fingerprint of the default key.
+    } else {
+        // User entered some text, expecting it to be a number.
+        // Attempt to parse the input as a 1-based index.
+        match trimmed_user_input.parse::<usize>() {
+            Ok(selected_number) => {
+                // Check if the parsed number is within the valid range of listed keys (1 to list_length).
+                if selected_number > 0 && selected_number <= available_keys_list.len() {
+                    // Valid number selected. Convert 1-based number to 0-based index.
+                    let selected_index = selected_number - 1;
+                    let selected_key_info = &available_keys_list[selected_index];
+                    println!(
+                        "Key {} selected. Using fingerprint: {} ({})",
+                        selected_number, selected_key_info.fingerprint, selected_key_info.user_identity
+                    );
+                    Ok(selected_key_info.fingerprint.clone()) // Return the fingerprint of the selected key.
+                } else {
+                    // Number is out of the valid range.
+                    Err(GpgError::GpgOperationError(format!( // Consistent with original error style. UserInputError might be more semantic.
+                        "Invalid selection: '{}'. Number is out of range. Please enter a number between 1 and {}.",
+                        trimmed_user_input,
+                        available_keys_list.len()
+                    )))
+                }
+            }
+            Err(_) => {
+                // Input was not a parsable unsigned integer.
+                Err(GpgError::GpgOperationError(format!( // Consistent with original error style. UserInputError might be more semantic.
+                    "Invalid selection: '{}'. Please enter a valid number or press Enter for the default.",
+                    trimmed_user_input
+                )))
+            }
+        }
+    }
+}
+
+
+
 
 /// Parses the colon-delimited output from GPG's list-secret-keys command.
 /// 
@@ -2941,8 +3425,8 @@ fn parse_gpg_key_id_listing(gpg_colon_output: &str) -> Result<Vec<(String, Strin
 /// ```
 ///
 /// # Related Functions
-/// * `select_gpg_signing_key_id()` - Called to allow key ID selection
-/// * `clearsign_file()` - Called to perform the actual clearsigning
+/// * `select_gpg_signing_shortkey_id()` - Called to allow key ID selection
+/// * `clearsign_filepath_to_path()` - Called to perform the actual clearsigning
 fn clearsign_workflow() -> Result<(), GpgError> {
     // Get input file path from user
     print!("Enter the path to the file you want to clearsign: ");
@@ -2995,7 +3479,7 @@ fn clearsign_workflow() -> Result<(), GpgError> {
     };
     
     // Present GPG key ID selection menu and get user's choice
-    let signing_key_id = select_gpg_signing_key_id()?;
+    let signing_key_id = select_gpg_signing_shortkey_id()?;
     
     // Display the parameters that will be used to confirm with user
     println!("\nProcessing with the following parameters:");
@@ -3004,7 +3488,7 @@ fn clearsign_workflow() -> Result<(), GpgError> {
     println!("Signing key ID: {}", signing_key_id);
     
     // Perform the clearsigning operation
-    clearsign_file(input_file_path, &output_file_path, &signing_key_id)?;
+    clearsign_filepath_to_path(input_file_path, &output_file_path, &signing_key_id)?;
     
     // Confirm successful completion
     println!("\nSuccess: File has been clearsigned!");
@@ -3061,7 +3545,7 @@ fn clearsign_workflow() -> Result<(), GpgError> {
 /// directory if it doesn't exist.
 ///
 /// # Related Functions
-/// * `select_gpg_signing_key_id()` - Called to allow key ID selection
+/// * `select_gpg_signing_shortkey_id()` - Called to allow key ID selection
 /// * `clearsign_and_encrypt_file_for_recipient()` - Called to perform the actual operations
 fn clearsign_and_encrypt_workflow() -> Result<(), GpgError> {
     // Get input file path from user
@@ -3084,7 +3568,7 @@ fn clearsign_and_encrypt_workflow() -> Result<(), GpgError> {
     }
     
     // Present GPG key ID selection menu and get user's choice
-    let signing_key_id = select_gpg_signing_key_id()?;
+    let signing_key_id = select_gpg_signing_shortkey_id()?;
     
     // Get recipient's public key path
     print!("Enter path to recipient's public key file: ");
@@ -3134,3 +3618,483 @@ fn clearsign_and_encrypt_workflow() -> Result<(), GpgError> {
     Ok(())
 }
 
+// ... (previous code including validate_gpg_secret_key) ...
+
+/// Converts a TOML file into a clearsigned TOML file in-place, asserting authorship and integrity.
+///
+/// # Purpose
+/// This function is designed for the **owner or author of a TOML file** to cryptographically
+/// sign their file. By doing so, they create a "clearsigned TOML" file. Recipients
+/// of this file can then verify:
+/// 1.  **Integrity**: That the file's content has not been altered since it was signed.
+/// 2.  **Authenticity/Authorship**: That the file was indeed signed by the claimed author
+///     (provided the recipient trusts the author's GPG public key).
+///
+/// The function reads a specified GPG key ID from within the TOML file itself. This ID
+/// must correspond to the author's GPG private key, which is then used to clearsign
+/// the *entire* TOML file. The original file is subsequently replaced by this new
+/// clearsigned version, while retaining the original filename.
+///
+/// # "In-Place" Operation
+/// The term "in-place" means the original TOML file at `path_to_toml_file` will be
+/// **overwritten** by its clearsigned counterpart. The content changes, but the
+/// filename and location remain the same. This is a destructive operation; ensure
+/// backups are considered if the original unsigned state is important.
+///
+/// # Input TOML File Requirements for the Author
+/// To use this function, the author's TOML file (provided via `path_to_toml_file`)
+/// **must** contain a field named `"gpg_publickey_id"`. The value of this field must be
+/// the GPG key ID (long format recommended, e.g., `3AA5C34371567BD20B882D206F2A2E1F61D5A1D2`)
+/// of the GPG key pair whose **private key component** will be used for signing.
+///
+/// For example, the author would include in their TOML file:
+/// `gpg_publickey_id = "THEIR_OWN_GPG_KEY_ID_FOR_SIGNING"`
+///
+/// Optionally, for recipients to easily verify the signature, the author might also
+/// include their corresponding public key in a field like `gpg_key_public`. This
+/// public key is then part of the signed content and can be extracted by verifiers.
+///
+/// # GPG Private Key Requirement for the Author
+/// The GPG keyring on the system executing this function (i.e., the author's system)
+/// **must** contain the **private key** corresponding to the `gpg_publickey_id`
+/// specified in the TOML file. This private key must be available and usable by GPG
+/// for signing (e.g., unlocked if passphrase-protected, and the GPG agent is
+/// properly configured).
+///
+/// # Process Flow
+/// 1.  **Validation**:
+///     *   Checks if `path_to_toml_file` exists and is a file.
+/// 2.  **Key ID Extraction**:
+///     *   Reads the TOML file to find and extract the value of the `gpg_publickey_id` field.
+///     *   If this field is missing, empty, or unreadable, the function returns an error.
+/// 3.  **Signing Key Validation**:
+///     *   Calls `validate_gpg_secret_key` to ensure the private key associated with the
+///         extracted `gpg_publickey_id` is present in the author's local GPG keyring.
+///     *   If the key is not found or not usable, the function returns an error.
+/// 4.  **Temporary File Creation**:
+///     *   A temporary file path is generated.
+/// 5.  **GPG Clearsign Operation**:
+///     *   Executes the GPG command:
+///         `gpg --clearsign --default-key <gpg_publickey_id_from_toml> --output <temporary_file_path> <path_to_toml_file>`
+///     *   This signs the entire content of the original TOML file using the author's private key.
+/// 6.  **In-Place Replacement**:
+///     *   If GPG clearsigning is successful, the original file is deleted, and the
+///         temporary clearsigned file is renamed to the original file's name.
+/// 7.  **Cleanup**:
+///     *   The temporary file is removed if it still exists after the process.
+///
+/// # Output File Characteristics
+/// *   The file at `path_to_toml_file` becomes a standard GPG clearsigned message.
+/// *   Its content is the original TOML data, encapsulated within PGP signature blocks.
+/// *   All original fields, including `gpg_publickey_id` and any `gpg_key_public` field,
+///     are part of the signed message, allowing them to be part of the integrity check.
+///
+/// # Subsequent Verification by Recipients
+/// A recipient of this clearsigned TOML file can use standard GPG tools or other
+/// functions in this module (e.g., `read_singleline_string_from_clearsigntoml`
+/// or `verify_clearsign`) to verify the signature. If the author included their
+/// public key in a `gpg_key_public` field, the recipient can extract this key
+/// from the (now verified) content to perform the signature check, confirming
+/// both integrity and authorship against that specific public key.
+///
+/// # Arguments
+/// * `path_to_toml_file` - A reference to a `Path` object representing the TOML file
+///   to be converted in-place by its author.
+///
+/// # Returns
+/// * `Ok(())` - If the TOML file was successfully clearsigned and replaced in-place.
+/// * `Err(GpgError)` - If any step in the process fails. (Details as previously listed)
+///
+/// # Prerequisites for the Author
+/// *   GnuPG (GPG) must be installed on the author's system and accessible via the PATH.
+/// *   The author's GPG private key (corresponding to the `gpg_publickey_id` value
+///     within the input TOML file) must be in their local GPG keyring and usable.
+///
+/// # Security Considerations
+/// *   **Authorship Assertion**: This function is a tool for an author to assert control
+///     and authorship over a TOML file. The security relies on the author protecting
+///     their private GPG key.
+/// *   **Destructive Operation**: Overwrites the original file.
+/// *   **Key Specification**: The signing key is determined by the TOML file's content.
+///     The author must ensure the `gpg_publickey_id` field correctly specifies their
+///     intended signing key ID.
+pub fn convert_toml_filewithkeyid_into_clearsigntoml_inplace(
+    path_to_toml_file: &Path,
+) -> Result<(), GpgError> {
+    // --- Stage 1: Input Validation and Path Preparation ---
+    println!(
+        "Starting in-place clearsign conversion for: {}. This will assert authorship and integrity.",
+        path_to_toml_file.display()
+    );
+
+    // Check if the input path exists and is a file.
+    if !path_to_toml_file.exists() {
+        return Err(GpgError::PathError(format!(
+            "Input TOML file not found: {}",
+            path_to_toml_file.display()
+        )));
+    }
+    if !path_to_toml_file.is_file() {
+        return Err(GpgError::PathError(format!(
+            "Input path is not a file: {}",
+            path_to_toml_file.display()
+        )));
+    }
+
+    // Convert path to string for TOML reading function.
+    let path_str = match path_to_toml_file.to_str() {
+        Some(s) => s,
+        None => {
+            return Err(GpgError::PathError(format!(
+                "Invalid path encoding for: {}",
+                path_to_toml_file.display()
+            )));
+        }
+    };
+
+    // --- Stage 2: Extract Signing Key ID from TOML File ---
+    let field_name_for_signing_key_id = "gpg_publickey_id";
+    println!(
+        "Reading author's GPG signing key ID from field '{}' in file '{}'",
+        field_name_for_signing_key_id, path_str
+    );
+
+    let signing_key_id =
+        match read_single_line_string_field_from_toml(path_str, field_name_for_signing_key_id) {
+            Ok(id) => {
+                if id.is_empty() {
+                    return Err(GpgError::GpgOperationError(format!(
+                        "Field '{}' is empty in TOML file: {}. Author's GPG key ID is required for signing.",
+                        field_name_for_signing_key_id, path_str
+                    )));
+                }
+                id
+            }
+            Err(e) => {
+                // read_single_line_string_field_from_toml returns String, map error type.
+                return Err(GpgError::GpgOperationError(format!(
+                    "Failed to read author's GPG signing key ID from field '{}' in TOML file '{}': {}",
+                    field_name_for_signing_key_id, path_str, e
+                )));
+            }
+        };
+    println!("Author's GPG signing key ID for this file: '{}'", signing_key_id);
+
+    // --- Stage 3: Validate Author's GPG Secret Key Availability ---
+    match validate_gpg_secret_key(&signing_key_id) {
+        Ok(true) => {
+            println!(
+                "Author's GPG secret key for ID '{}' is available for signing.",
+                signing_key_id
+            );
+        }
+        Ok(false) => {
+            return Err(GpgError::GpgOperationError(format!(
+                "Author's GPG secret key for ID '{}' (specified in '{}') not found in keyring or is not usable. Cannot sign file.",
+                signing_key_id,
+                path_to_toml_file.display()
+            )));
+        }
+        Err(e) => {
+            // Pass through the GpgError from validate_gpg_secret_key.
+            return Err(e);
+        }
+    }
+
+    // --- Stage 4: Prepare Temporary File Path ---
+    // Create a temporary file path in the same directory to increase likelihood of atomic rename.
+    let original_file_name = path_to_toml_file
+        .file_name()
+        .ok_or_else(|| GpgError::PathError(format!("Could not get filename from path: {}", path_to_toml_file.display())))?
+        .to_string_lossy();
+
+    let temp_file_name = format!("{}.tmp_clearsign_{}", original_file_name, generate_timestamp());
+    let temp_output_path = path_to_toml_file.with_file_name(temp_file_name);
+
+    println!(
+        "Temporary file for clearsigned output: {}",
+        temp_output_path.display()
+    );
+
+    // --- Stage 5: Perform GPG Clearsign Operation ---
+    println!(
+        "Performing GPG clearsign operation on '{}' using author's key ID '{}'",
+        path_to_toml_file.display(),
+        signing_key_id
+    );
+
+    let clearsign_command_result = Command::new("gpg")
+        .arg("--clearsign") // Perform a clearsign operation.
+        .arg("--batch") // Ensure no interactive prompts from GPG.
+        .arg("--yes") // Assume "yes" to prompts like overwriting.
+        .arg("--default-key") // Specify the key to use for signing.
+        .arg(&signing_key_id) // The key ID extracted from the TOML.
+        .arg("--output") // Specify the output file for the clearsigned content.
+        .arg(&temp_output_path) // Path to the temporary output file.
+        .arg(path_to_toml_file) // The input file to be clearsigned.
+        .output(); // Execute and get full output (status, stdout, stderr).
+
+    match clearsign_command_result {
+        Ok(output) => {
+            if output.status.success() {
+                println!(
+                    "GPG clearsign operation successful. Output written to temporary file: {}",
+                    temp_output_path.display()
+                );
+            } else {
+                // GPG command executed but failed.
+                let stderr_output = String::from_utf8_lossy(&output.stderr);
+                if temp_output_path.exists() {
+                    if let Err(e_remove) = fs::remove_file(&temp_output_path) {
+                        eprintln!("Additionally, failed to remove temporary file '{}' after GPG error: {}", temp_output_path.display(), e_remove);
+                    }
+                }
+                return Err(GpgError::GpgOperationError(format!(
+                    "GPG clearsign command failed for file '{}' with exit code: {}. GPG stderr: {}. Ensure GPG is configured correctly and the key is usable.",
+                    path_to_toml_file.display(),
+                    output.status,
+                    stderr_output.trim()
+                )));
+            }
+        }
+        Err(e) => {
+            // Failed to execute GPG command itself.
+             if temp_output_path.exists() {
+                if let Err(e_remove) = fs::remove_file(&temp_output_path) {
+                    eprintln!("Additionally, failed to remove temporary file '{}' after GPG execution error: {}", temp_output_path.display(), e_remove);
+                }
+            }
+            return Err(GpgError::GpgOperationError(format!(
+                "Failed to execute GPG clearsign command for file '{}': {}",
+                path_to_toml_file.display(),
+                e
+            )));
+        }
+    }
+
+    // --- Stage 6: In-Place Replacement ---
+    // At this point, temp_output_path contains the successfully clearsigned file.
+    println!(
+        "Replacing original file '{}' with its clearsigned version to finalize authorship assertion.",
+        path_to_toml_file.display()
+    );
+
+    // 1. Delete the original file.
+    // This is a critical step. We back up the original content to a string first,
+    // just in case the rename fails catastrophically, though this is a very minor safeguard.
+    // A more robust solution for critical data would involve staging areas or more complex transaction logic.
+    let original_content_backup = fs::read_to_string(path_to_toml_file)
+        .map_err(|e| GpgError::FileSystemError(std::io::Error::new(
+            e.kind(),
+            format!("Failed to read original file for backup before deletion: {}. Error: {}", path_to_toml_file.display(), e)
+        )))?;
+
+
+    if let Err(e_remove_orig) = fs::remove_file(path_to_toml_file) {
+        // If original file deletion fails, we have a problem.
+        // The clearsigned version is in temp_output_path.
+        // It's safer to not delete temp_output_path here, as it might be recoverable.
+        return Err(GpgError::FileSystemError(std::io::Error::new(
+            e_remove_orig.kind(),
+            format!(
+                "Failed to delete original file '{}' before replacing with clearsigned version. Clearsigned data is in '{}'. Error: {}",
+                path_to_toml_file.display(),
+                temp_output_path.display(),
+                e_remove_orig
+            )
+        )));
+    }
+    println!("Original file '{}' deleted.", path_to_toml_file.display());
+
+    // 2. Rename the temporary clearsigned file to the original file's name.
+    if let Err(e_rename) = fs::rename(&temp_output_path, path_to_toml_file) {
+        // If rename fails, the original is gone, and the new version is still under temp_output_path.
+        // This is a critical error state. Attempt to restore the original file from backup.
+        eprintln!(
+            "Critical: Failed to rename temporary file '{}' to original file path '{}'. Attempting to restore original content.",
+            temp_output_path.display(),
+            path_to_toml_file.display()
+        );
+        if let Err(e_restore) = fs::write(path_to_toml_file, original_content_backup) {
+             eprintln!(
+                "Catastrophic failure: Could not restore original file '{}' after rename failure. Original content might be lost. Clearsigned data is in '{}'. Restore error: {}. Rename error: {}",
+                path_to_toml_file.display(),
+                temp_output_path.display(),
+                e_restore,
+                e_rename
+            );
+        } else {
+            eprintln!(
+                "Successfully restored original content to '{}'. Clearsigned data is in '{}'. Rename error: {}",
+                path_to_toml_file.display(),
+                temp_output_path.display(),
+                e_rename
+            );
+        }
+        return Err(GpgError::FileSystemError(std::io::Error::new(
+            e_rename.kind(),
+            format!(
+                "Critical: Failed to rename temporary file '{}' to original file path '{}'. Original data was in memory and an attempt to restore was made. Please check file states. Clearsigned data is in temporary file. Rename Error: {}",
+                temp_output_path.display(),
+                path_to_toml_file.display(),
+                e_rename
+            )
+        )));
+    }
+
+    println!(
+        "Successfully converted '{}' to clearsigned TOML in-place. Authorship and integrity asserted.",
+        path_to_toml_file.display()
+    );
+
+    // --- Stage 7: Cleanup (should not be strictly necessary if rename succeeded) ---
+    if temp_output_path.exists() {
+        println!(
+            "Attempting to clean up residual temporary file: {}",
+            temp_output_path.display()
+        );
+        if let Err(e_remove_temp) = fs::remove_file(&temp_output_path) {
+            eprintln!(
+                "Warning: Failed to clean up residual temporary file '{}': {}",
+                temp_output_path.display(),
+                e_remove_temp
+            );
+        }
+    }
+
+    Ok(())
+}
+
+
+#[cfg(test)]
+mod tests_inplace_conversion {
+    use super::*;
+    use std::fs::{self, File, write};
+    use std::io::Read;
+
+    // Helper to create a dummy TOML file for testing.
+    fn create_test_toml_file(path: &Path, key_id_field: &str, key_id_value: &str, other_content: &str) -> Result<(), std::io::Error> {
+        let content = format!("{} = \"{}\"\n{}", key_id_field, key_id_value, other_content);
+        fs::write(path, content)
+    }
+    
+    // Helper to check if GPG is available for skipping tests.
+    fn is_gpg_available() -> bool {
+        Command::new("gpg").arg("--version").status().map_or(false, |s| s.success())
+    }
+
+    #[test]
+    fn test_convert_toml_inplace_basic_workflow() {
+        if !is_gpg_available() {
+            println!("Skipping GPG-dependent test: test_convert_toml_inplace_basic_workflow (GPG not available)");
+            return;
+        }
+
+        // IMPORTANT: This test requires a GPG key to be available for signing.
+        // Replace "TEST_SIGNING_KEY_ID" with an actual key ID from your test GPG keyring
+        // that can be used for non-interactive signing.
+        // For automated CI, this often involves setting up a temporary GPG keyring with a test key.
+        // For local testing, ensure your GPG agent is running and the key is usable.
+        // If no such key is readily available, this test will likely fail at the
+        // `validate_gpg_secret_key` step or the GPG command execution.
+        let test_key_id_for_signing = "YOUR_TEST_GPG_SIGNING_KEY_ID"; // !!! REPLACE THIS !!!
+        if test_key_id_for_signing == "YOUR_TEST_GPG_SIGNING_KEY_ID" {
+            println!("Skipping test_convert_toml_inplace_basic_workflow: Placeholder GPG key ID not replaced.");
+            println!("Please configure a real test GPG key ID that can be used for signing.");
+            // Consider this a soft skip or an ignored test if not configured.
+            // For robust testing, this should be a hard requirement or use a mock.
+            // Since no third-party crates are allowed, mocking GPG is non-trivial.
+            return; 
+        }
+
+
+        let test_file_name = "test_inplace_conversion.toml";
+        let test_file_path = PathBuf::from(test_file_name);
+        let original_other_content = "message = \"Hello, GPG!\"";
+
+        // Create the initial TOML file
+        if let Err(e) = create_test_toml_file(&test_file_path, "gpg_publickey_id", test_key_id_for_signing, original_other_content) {
+            panic!("Failed to create test TOML file: {}", e);
+        }
+
+        // Run the conversion
+        let conversion_result = convert_toml_filewithkeyid_into_clearsigntoml_inplace(&test_file_path);
+        
+        // Assert success
+        assert!(conversion_result.is_ok(), "In-place conversion failed: {:?}", conversion_result.err());
+
+        // Verify the file content is now clearsigned
+        let mut file_content = String::new();
+        match File::open(&test_file_path) {
+            Ok(mut f) => {
+                if let Err(e) = f.read_to_string(&mut file_content) {
+                    panic!("Failed to read converted file content: {}", e);
+                }
+            },
+            Err(e) => panic!("Failed to open converted file: {}", e),
+        }
+        
+        assert!(file_content.contains("-----BEGIN PGP SIGNED MESSAGE-----"), "Output file is not clearsigned (missing header)");
+        assert!(file_content.contains("-----BEGIN PGP SIGNATURE-----"), "Output file is not clearsigned (missing signature)");
+        assert!(file_content.contains(original_other_content), "Original content not found in clearsigned file");
+        assert!(file_content.contains(&format!("gpg_publickey_id = \"{}\"", test_key_id_for_signing)), "Signing key ID field not found in clearsigned file");
+
+        // Cleanup
+        let _ = fs::remove_file(&test_file_path);
+    }
+
+    #[test]
+    fn test_convert_toml_inplace_file_not_found() {
+        let non_existent_path = Path::new("this_file_does_not_exist_for_testing.toml");
+        let result = convert_toml_filewithkeyid_into_clearsigntoml_inplace(non_existent_path);
+        assert!(result.is_err());
+        if let Err(GpgError::PathError(msg)) = result {
+            assert!(msg.contains("Input TOML file not found"));
+        } else {
+            panic!("Expected PathError for non-existent file, got {:?}", result);
+        }
+    }
+    
+    #[test]
+    fn test_convert_toml_inplace_missing_key_id_field() {
+        let test_file_name = "test_missing_key_id.toml";
+        let test_file_path = PathBuf::from(test_file_name);
+        
+        // Create TOML without the required gpg_publickey_id field
+        fs::write(&test_file_path, "some_other_field = \"value\"").unwrap();
+        
+        let result = convert_toml_filewithkeyid_into_clearsigntoml_inplace(&test_file_path);
+        assert!(result.is_err());
+        if let Err(GpgError::GpgOperationError(msg)) = result {
+            assert!(msg.contains("Failed to read GPG signing key ID from field 'gpg_publickey_id'"));
+        } else {
+            panic!("Expected GpgOperationError for missing key ID field, got {:?}", result);
+        }
+        
+        let _ = fs::remove_file(&test_file_path);
+    }
+
+    #[test]
+    fn test_convert_toml_inplace_invalid_signing_key() {
+         if !is_gpg_available() {
+            println!("Skipping GPG-dependent test: test_convert_toml_inplace_invalid_signing_key (GPG not available)");
+            return;
+        }
+        let test_file_name = "test_invalid_signing_key.toml";
+        let test_file_path = PathBuf::from(test_file_name);
+        let invalid_key_id = "THIS_IS_NOT_A_VALID_GPG_KEY_ID_AT_ALL_NO_WAY_JOSE";
+        
+        create_test_toml_file(&test_file_path, "gpg_publickey_id", invalid_key_id, "content = \"test\"").unwrap();
+        
+        let result = convert_toml_filewithkeyid_into_clearsigntoml_inplace(&test_file_path);
+        assert!(result.is_err());
+        if let Err(GpgError::GpgOperationError(msg)) = result {
+             assert!(msg.contains(&format!("GPG secret key for ID '{}'", invalid_key_id)));
+             assert!(msg.contains("not found in keyring or is not usable"));
+        } else {
+            panic!("Expected GpgOperationError for invalid signing key, got {:?}", result);
+        }
+        
+        let _ = fs::remove_file(&test_file_path);
+    }
+}

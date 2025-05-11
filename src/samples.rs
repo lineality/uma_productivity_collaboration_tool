@@ -8,6 +8,7 @@ Samples
     debug_log!("___ Step 1: Reading LOCAL OWNER USER's name from uma.toml");
     
     // Get absolute path to uma.toml configuration file
+    // alternately, use: GpgError::PathError(error_msg)
     let relative_uma_toml_path = "uma.toml";
     let absolute_uma_toml_path = make_file_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_uma_toml_path)
         .map_err(|e| {

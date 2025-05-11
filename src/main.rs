@@ -375,6 +375,8 @@ use crate::clearsign_toml_module::{
     GpgError,
     // read_field_from_toml,
     // read_basename_fields_from_toml,
+    convert_toml_filewithkeyid_into_clearsigntoml_inplace,
+    q_and_a_user_selects_gpg_key_full_fingerprint,
     read_single_line_string_field_from_toml,
     read_u8_field_from_toml,
     read_u64_field_from_toml,
@@ -403,6 +405,7 @@ use crate::clearsign_toml_module::{
 // }; 
 
 // for managing file paths
+
 mod manage_absolute_executable_directory_relative_paths;
 use manage_absolute_executable_directory_relative_paths::{
     make_input_path_name_abs_executabledirectoryrelative_nocheck,
@@ -2947,121 +2950,6 @@ fn extract_ports_from_table(port_set: &toml::map::Map<String, Value>) -> Result<
     })
 }
 
-/*
-maybe put these three into toml module
-*/
-
-
-
-/// Reads a single-line string field from a TOML file.
-/// 
-/// # Arguments
-/// * `path` - Path to the TOML file
-/// * `field_name` - Name of the field to read
-/// 
-/// # Returns
-/// * `Result<String, String>` - The field value or an error message
-pub fn read_toml_single_line_string(path: &str, field_name: &str) -> Result<String, String> {
-    let file = File::open(path)
-        .map_err(|e| format!("Failed to open file: {}", e))?;
-    
-    let reader = io::BufReader::new(file);
-    
-    for line in reader.lines() {
-        let line = line.map_err(|e| format!("Failed to read line: {}", e))?;
-        let trimmed = line.trim();
-        
-        if trimmed.starts_with(&format!("{} = ", field_name)) {
-            return Ok(trimmed
-                .splitn(2, '=')
-                .nth(1)
-                .unwrap_or("")
-                .trim()
-                .trim_matches('"')
-                .to_string());
-        }
-    }
-    
-    Err(format!("Field '{}' not found", field_name))
-}
-
-/// Reads a multi-line string field (triple-quoted) from a TOML file.
-/// 
-/// # Arguments
-/// * `path` - Path to the TOML file
-/// * `field_name` - Name of the field to read
-/// 
-/// # Returns
-/// * `Result<String, String>` - The concatenated multi-line value or an error message
-pub fn read_toml_multi_line_string(path: &str, field_name: &str) -> Result<String, String> {
-    let mut file = File::open(path)
-        .map_err(|e| format!("Failed to open file: {}", e))?;
-    
-    let mut content = String::new();
-    file.read_to_string(&mut content)
-        .map_err(|e| format!("Failed to read file: {}", e))?;
-
-    // Find the start of the field
-    let field_start = format!("{} = \"\"\"", field_name);
-    let start_pos = content.find(&field_start)
-        .ok_or_else(|| format!("Multi-line field '{}' not found", field_name))?;
-
-    // Find the end of the field (next """)
-    let content_after_start = &content[start_pos + field_start.len()..];
-    let end_pos = content_after_start.find("\"\"\"")
-        .ok_or_else(|| format!("Closing triple quotes not found for field '{}'", field_name))?;
-
-    // Extract the content between the triple quotes
-    let multi_line_content = &content_after_start[..end_pos];
-
-    // Clean up the content
-    Ok(multi_line_content
-        .lines()
-        .map(|line| line.trim())
-        .collect::<Vec<&str>>()
-        .join("\n")
-        .trim()
-        .to_string())
-}
-
-/// Reads an array of integers from a TOML file into a Vec<u64>.
-/// 
-/// # Arguments
-/// * `path` - Path to the TOML file
-/// * `field_name` - Name of the field to read
-/// 
-/// # Returns
-/// * `Result<Vec<u64>, String>` - The vector of integers or an error message
-pub fn read_toml_integer_array(path: &str, field_name: &str) -> Result<Vec<u64>, String> {
-    let file = File::open(path)
-        .map_err(|e| format!("Failed to open file: {}", e))?;
-    
-    let reader = io::BufReader::new(file);
-    
-    for line in reader.lines() {
-        let line = line.map_err(|e| format!("Failed to read line: {}", e))?;
-        let trimmed = line.trim();
-        
-        if trimmed.starts_with(&format!("{} = [", field_name)) {
-            let array_part = trimmed
-                .splitn(2, '=')
-                .nth(1)
-                .ok_or("Invalid array format")?
-                .trim()
-                .trim_matches(|c| c == '[' || c == ']');
-                
-            return array_part
-                .split(',')
-                .map(|s| s.trim().parse::<u64>()
-                    .map_err(|e| format!("Invalid integer: {}", e)))
-                .collect::<Result<Vec<u64>, String>>();
-        }
-    }
-    
-    Err(format!("Array field '{}' not found", field_name))
-}
-
-
 /// Extracts the list of collaborator names from a team channel's `node.toml` file.
 ///
 /// This function reads the `node.toml` file at the specified path, parses the TOML data,
@@ -4699,6 +4587,8 @@ impl CollaboratorTomlData {
 /// working directory to ensure consistent path resolution regardless of where the program
 /// is executed from.
 ///
+/// adds as clearsign-toml file
+///
 /// # Arguments
 ///
 /// * `user_name` - The collaborator's username
@@ -4767,6 +4657,7 @@ pub fn add_collaborator_setup_file(
     debug_log!("collaborator {:?}", collaborator);
 
     // Serialize the collaborator to TOML format
+    // TODO this may need to be done inhouse
     let toml_string = match serialize_collaborator_to_toml(&collaborator) {
         Ok(content) => {
             debug_log!("Successfully serialized collaborator to TOML");
@@ -4804,31 +4695,105 @@ pub fn add_collaborator_setup_file(
             return Err(e);
         }
     };
-    
+
     // Log the constructed file path
-    debug_log!("Attempting to write collaborator file to: {:?}", prepared_path); 
+    debug_log!("Attempting to write collaborator file to: {:?}", prepared_path.display());
     
-    // Create the file and write the TOML data
-    let mut file = match File::create(&prepared_path) {
-        Ok(f) => f,
-        Err(e) => {
-            debug_log!("Error creating file: {}", e);
-            return Err(e);
+    // --- Block for file writing ---
+    // This ensures `file` is dropped and the file is closed before the GPG operation.
+    {
+        let mut file = match File::create(&prepared_path) {
+            Ok(f) => f,
+            Err(e) => {
+                // Corrected debug_log! usage:
+                debug_log!("Error creating file '{}': {}", prepared_path.display(), e);
+                return Err(e); // Return immediately if file creation fails
+            }
+        };
+    
+        // Write the serialized TOML to the file
+        match file.write_all(toml_string.as_bytes()) {
+            Ok(_) => {
+                // Corrected debug_log! usage:
+                debug_log!("Successfully wrote initial TOML data to collaborator file: {}", prepared_path.display());
+                // Do NOT return Ok(()) here yet. Proceed to the next step.
+            },
+            Err(e) => {
+                // Corrected debug_log! usage:
+                debug_log!("Error writing TOML data to file '{}': {}", prepared_path.display(), e);
+                return Err(e); // Return immediately if writing fails
+            }
         }
-    };
-    
-    // Write the serialized TOML to the file
-    match file.write_all(toml_string.as_bytes()) {
-        Ok(_) => {
-            debug_log!("Successfully wrote collaborator file");
+    } // `file` is dropped here, so it's closed.
+
+    // Now that the TOML file is written and closed, proceed to clearsign it in-place.
+    // Corrected debug_log! usage:
+    debug_log!("Attempting to clearsign the TOML file '{}' in-place.", prepared_path.display());
+
+    // Call the in-place clearsigning function.
+    // Note: `prepared_path` is a `PathBuf`. `&prepared_path` correctly provides a `&Path`.
+    match convert_toml_filewithkeyid_into_clearsigntoml_inplace(&prepared_path) {
+        Ok(()) => {
+            // Clearsigning was successful.
+            // Corrected debug_log! usage:
+            debug_log!("Successfully converted '{}' to clearsigned TOML in-place.", prepared_path.display());
+            // This is now the final successful outcome of add_collaborator_setup_file.
             Ok(())
-        },
-        Err(e) => {
-            debug_log!("Error writing to file: {}", e);
-            Err(e)
+        }
+        Err(gpg_error) => {
+            // Clearsigning failed. Convert GpgError to std::io::Error.
+            let error_message = format!(
+                "Failed to convert TOML file '{}' to clearsign TOML in-place: {}",
+                prepared_path.display(),
+                gpg_error.to_string() // Assumes GpgError has .to_string() or implements Display
+            );
+            // Corrected debug_log! usage for a pre-formatted string:
+            debug_log!("{}", error_message); // Log the detailed error
+            // Return an std::io::Error.
+            Err(std::io::Error::new(
+                std::io::ErrorKind::Other, // Or a more contextually appropriate ErrorKind
+                error_message, // Pass the already formatted string
+            ))
         }
     }
+    // The result of this final `match` expression is the return value of 
+    // `add_collaborator_setup_file`, satisfying its `Result<(), std::io::Error>` signature.
 }
+
+
+//     // Log the constructed file path
+//     debug_log!("Attempting to write collaborator file to: {:?}", prepared_path); 
+    
+//     // Create the file and write the TOML data
+//     let mut file = match File::create(&prepared_path) {
+//         Ok(f) => f,
+//         Err(e) => {
+//             debug_log!("Error creating file: {}", e);
+//             return Err(e);
+//         }
+//     };
+    
+//     // Write the serialized TOML to the file
+//     match file.write_all(toml_string.as_bytes()) {
+//         Ok(_) => {
+//             debug_log!("Successfully wrote collaborator file");
+//             Ok(())
+//         },
+//         Err(e) => {
+//             debug_log!("Error writing to file: {}", e);
+//             Err(e)
+//         }
+//     }
+
+//     // TODO function must be modified to allow ending after this
+//     // logging success or failure would be wise.
+//     // make clearsign-toml file remove old file...overwrite...
+//     // let clearsigntoml_result = 
+//     convert_toml_filewithkeyid_into_clearsigntoml_inplace(
+//     prepared_path
+//     );
+
+// }
 
 /// old relative path vesion
 // fn add_collaborator_setup_file(
@@ -8870,11 +8835,24 @@ fn export_addressbook() -> Result<(), ThisProjectError> {
         })?;
     
     
-    // let user_metadata = toml::from_str::<toml::Value>(&std::fs::read_to_string(uma_toml_path)?)?; 
-    // let user_metadata = toml::from_str::<toml::Value>(&std::fs::read_to_string(uma_toml_path)?)
-    let user_metadata = toml::from_str::<toml::Value>(&std::fs::read_to_string(absolute_uma_toml_path_str)?)
-    .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("TOML deserialization error: {}", e)))?;
-    let local_owner_username = user_metadata["uma_local_owner_user"].as_str().unwrap().to_string();
+    // // let user_metadata = toml::from_str::<toml::Value>(&std::fs::read_to_string(uma_toml_path)?)?; 
+    // // let user_metadata = toml::from_str::<toml::Value>(&std::fs::read_to_string(uma_toml_path)?)
+    // let user_metadata = toml::from_str::<toml::Value>(&std::fs::read_to_string(absolute_uma_toml_path_str)?)
+    // .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("TOML deserialization error: {}", e)))?;
+    // let local_owner_username = user_metadata["uma_local_owner_user"].as_str().unwrap().to_string();
+    
+    
+    // Read LOCAL OWNER USER's name from uma.toml
+    let local_owner_username = read_single_line_string_field_from_toml(
+        absolute_uma_toml_path_str, 
+        "uma_local_owner_user"
+    ).map_err(|e| {
+        let error_msg = format!("___ Failed to read LOCAL OWNER USER's name: {}", e);
+        println!("Error: {}", error_msg);
+        io::Error::new(io::ErrorKind::InvalidData, error_msg)
+    })?;
+    
+    debug_log!("export_addressbook() local_owner_username is: {}", local_owner_username);
 
     // 2. Construct paths
     let address_book_export_dir = PathBuf::from("invites_updates/addressbook_invite/export");
@@ -9573,22 +9551,30 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
                 }
             }
         }
-                        
+
         // // Prompt the user to enter an IP address
         // println!("Enter an ipv6_addresses:");
         // let mut ipv6_address = String::new();
         // io::stdin().read_line(&mut ipv6_address).unwrap();
         // let ipv6_address: Ipv6Addr = ipv6_address.trim().parse().unwrap(); // Parse into Ipv6Addr
-
-        // Prompt the user to enter a GPG key
-        println!("Enter a gpg_publickey_id:  // Posix? $gpg --list-keys");
-        let mut gpg_publickey_id = String::new();
-        io::stdin().read_line(&mut gpg_publickey_id).unwrap();
-        let gpg_publickey_id = gpg_publickey_id.trim().to_string();
-
-        // Get armored public key, using key-id
+        // show user their gpg key id list
+        
+        
+        /// new Q&A workflow, not requiring the user to open a new terminal and use gpg cli
+        
+        // Get armored public key, using key-id (full fingerprint in)
+        let mut full_fingerprint_key_id_string = String::new();
+        match q_and_a_user_selects_gpg_key_full_fingerprint() {
+            Ok(temp_fullfingerprint_key_idstring) => {
+                
+                println!("Selected key id (full fingerprint in): {}", temp_fullfingerprint_key_idstring);
+                full_fingerprint_key_id_string = temp_fullfingerprint_key_idstring;
+        }
+            Err(e) => eprintln!("Error selecting full_fingerprint_key_id_string: {}", e.to_string()),
+        }
+        // Get armored public key, using key-id (full fingerprint in)
         let mut gpg_key_public = String::new();
-        match get_gpg_armored_public_key_via_key_id(&gpg_publickey_id) {
+        match get_gpg_armored_public_key_via_key_id(&full_fingerprint_key_id_string) {
             Ok(armored_key) => {
                 println!("Armored Public Key:\n{}", armored_key);
                 gpg_key_public = armored_key;
@@ -9597,7 +9583,28 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
                 eprintln!("Error: {}", e);
             }
         }
-            
+        
+
+        // // OLD SYSTEM START
+        // // Prompt the user to enter a GPG key
+        // println!("Enter a gpg_publickey_id:  // If Posix, use ~ ```$gpg --list-keys```");
+        // let mut gpg_publickey_id = String::new();
+        // io::stdin().read_line(&mut gpg_publickey_id).unwrap();
+        // let gpg_publickey_id = gpg_publickey_id.trim().to_string();
+
+        // // Get armored public key, using key-id (full fingerprint in)
+        // let mut gpg_key_public = String::new();
+        // match get_gpg_armored_public_key_via_key_id(&gpg_publickey_id) {
+        //     Ok(armored_key) => {
+        //         println!("Armored Public Key:\n{}", armored_key);
+        //         gpg_key_public = armored_key;
+        //     }
+        //     Err(e) => {
+        //         eprintln!("Error: {}", e);
+        //     }
+        // }
+        // // OLD SYSTEM END
+
             
         
         // // Prompt the user to enter a GPG key
@@ -9678,7 +9685,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
             new_usersalt_list,
             ipv4_addresses, 
             ipv6_addresses,
-            gpg_publickey_id,
+            full_fingerprint_key_id_string,
             gpg_key_public, 
             60,   // Example sync_interval (in seconds)
             get_current_unix_timestamp(),
@@ -10168,7 +10175,7 @@ pub fn export_public_gpg_key(
     // Extract the GPG key ID from the collaborator file
     let gpg_key_id = read_singleline_string_from_clearsigntoml(user_config_path_str, "gpg_publickey_id")
         .map_err(|error_message| ThisProjectError::TomlVanillaDeserialStrError(
-            format!("Failed to read GPG key ID from collaborator file: {}", error_message)
+            format!("export_public_gpg_key() Failed to read GPG key ID from clearsigntoml collaborator file: {}", error_message)
         ))?;
 
     // Convert output_directory to an absolute path relative to the executable directory
@@ -13507,13 +13514,41 @@ pub fn invite_wizard() -> Result<(), GpgError> {
     match mainchoice {
         1 => {
             println!("\n\n-- Option 1: share a public gpg key --");   
-            let uma_config_path = Path::new("uma.toml");
-            let output_dir = Path::new("invites_updates/outgoing");
+            
+            
+            let relative_uma_toml_path = Path::new("uma.toml");
 
-            match export_public_gpg_key(&uma_config_path, &output_dir) {
+            // // Get absolute path to uma.toml configuration file
+            // let relative_uma_toml_path = "uma.toml";
+            // let absolute_uma_toml_path = make_file_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_uma_toml_path)
+            //     .map_err(|e| {
+            //         let error_msg = format!("___ Failed to locate uma.toml configuration file: {}", e);
+            //         println!("Error: {}", error_msg);
+            //         GpgError::PathError(error_msg)
+            //     })?;
+                    
+            
+            let output_dir = Path::new("invites_updates/outgoing");
+            
+            // let relative_output_dir = "invites_updates/outgoing";
+            // let absolute_output_dir = gpg_make_input_path_name_abs_executabledirectoryrelative_nocheck(relative_output_dir)
+            //     .map_err(|e| {
+            //         let error_msg = format!("invite wizard! Failed to convert 'invites_updates/outgoing' path: {}", e);
+            //         println!("Error: {}", error_msg);
+            //         GpgError::PathError(error_msg)
+            //     })?;
+
+            // this function makes the path absolute relative
+            match export_public_gpg_key(
+                &relative_uma_toml_path, 
+                &output_dir,
+                ) {
                 Ok(key_path) => println!("GPG key exported successfully to: {}", key_path),
-                Err(e) => eprintln!("Failed to export GPG key: {}", e),
+                Err(e) => eprintln!("invite wizard! Failed to export GPG key: {}", e),
             }
+            
+            
+            
             // Pause and wait for the user to press Enter
             println!("\nHit enter to proceed...");
             let mut input = String::new();
