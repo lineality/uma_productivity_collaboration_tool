@@ -434,16 +434,18 @@ const FILE_READWRITE_RETRY_SEC_PAUSE_MAX: u64 = 6;
 Path constants will later be converted
 to executible-parent-relative-aboslute paths
 */
-const CONTINUE_UMA_PATH: &str = "project_graph_data/session_state_items/continue_uma.txt";
-const HARD_RESTART_FLAG_PATH: &str = "project_graph_data/session_state_items/yes_hard_restart_flag.txt";
-const SYNC_START_OK_FLAG_PATH: &str = "project_graph_data/session_state_items/ok_to_start_sync_flag.txt";
-const PATH_TO_INCOMING_PUBLICGPG_KEYASC: &str = "invites_updates/incoming/key.asc";
+const UMA_TOML_CONFIGFILE_PATH_STR: &str = "uma.toml";
+
+const CONTINUE_UMA_PATH_STR: &str = "project_graph_data/session_state_items/continue_uma.txt";
+const HARD_RESTART_FLAG_PATH_STR: &str = "project_graph_data/session_state_items/yes_hard_restart_flag.txt";
+const SYNC_START_OK_FLAG_PATH_STR: &str = "project_graph_data/session_state_items/ok_to_start_sync_flag.txt";
+const INCOMING_PUBLICGPG_KEYASC_FILEPATH_STR: &str = "invites_updates/incoming/key.asc";
 
 /// Gets the absolute path to the hard restart flag file.
 /// executible-parent-relative-aboslute path
 pub fn get_hard_restart_flag_path() -> io::Result<PathBuf> {
     make_input_path_name_abs_executabledirectoryrelative_nocheck(
-        HARD_RESTART_FLAG_PATH
+        HARD_RESTART_FLAG_PATH_STR
     )
 }
 
@@ -451,7 +453,7 @@ pub fn get_hard_restart_flag_path() -> io::Result<PathBuf> {
 /// executible-parent-relative-aboslute path
 pub fn get_sync_start_ok_flag_path() -> io::Result<PathBuf> {
     make_input_path_name_abs_executabledirectoryrelative_nocheck(
-        SYNC_START_OK_FLAG_PATH
+        SYNC_START_OK_FLAG_PATH_STR
     )
 }
 
@@ -459,13 +461,13 @@ pub fn get_sync_start_ok_flag_path() -> io::Result<PathBuf> {
 /// executible-parent-relative-aboslute path
 pub fn get_incoming_publicgpg_keyasc_path() -> io::Result<PathBuf> {
     make_input_path_name_abs_executabledirectoryrelative_nocheck(
-        PATH_TO_INCOMING_PUBLICGPG_KEYASC
+        INCOMING_PUBLICGPG_KEYASC_FILEPATH_STR
     )
 }
 
 pub fn get_continue_uma_path() -> io::Result<PathBuf> {
     make_input_path_name_abs_executabledirectoryrelative_nocheck(
-        CONTINUE_UMA_PATH
+        CONTINUE_UMA_PATH_STR
     )
 }
 
@@ -548,7 +550,7 @@ pub fn should_halt_uma() -> bool {
 // /// * The file cannot be created when it doesn't exist
 // /// * Path canonicalization fails for any reason
 // fn get_continue_uma_path() -> io::Result<PathBuf> {
-//     let relative_path = CONTINUE_UMA_PATH;
+//     let relative_path = CONTINUE_UMA_PATH_STR;
     
 //     // First try to get the path if it already exists
 //     match make_file_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_path) {
@@ -2499,7 +2501,7 @@ fn is_port_in_use(port: u16) -> bool {
 // /// Function for broadcasting to theads to wrapup and end uma session: quit
 // fn should_halt_uma() -> bool {
 //     // 1. Read the 'continue_uma.txt' file
-//     let file_content = match fs::read_to_string(CONTINUE_UMA_PATH) {
+//     let file_content = match fs::read_to_string(CONTINUE_UMA_PATH_STR) {
 //         Ok(content) => content,
 //         Err(e) => {
 //             eprintln!("Error reading 'continue_uma.txt': {:?}", e); // Log the error
@@ -2526,7 +2528,7 @@ fn is_port_in_use(port: u16) -> bool {
 // /// and find that you should (quite) not-restart, it works the same way.
 // fn should_not_hard_restart() -> bool {
 //     // 1. Read the 'hard_restart_flag.txt' file
-//     let file_content = match fs::read_to_string(HARD_RESTART_FLAG_PATH) {
+//     let file_content = match fs::read_to_string(HARD_RESTART_FLAG_PATH_STR) {
 //         Ok(content) => content,
 //         Err(e) => {
 //             eprintln!("Error in should_not_hard_restart(), error reading 'yes_hard_restart_flag.txt': {:?}", e); // Log the error
@@ -9030,10 +9032,15 @@ fn find_gpg_public_key_file(directory: &Path) -> Result<Option<PathBuf>, ThisPro
 ///
 /// A String containing the username if successful, or an empty string if any error occurs.
 fn get_local_owner_username() -> String {
-    debug_log!("___ Step 1: Reading LOCAL OWNER USER's name from uma.toml");
+    debug_log!(
+        "___ Step 1: Reading LOCAL OWNER USER's name from {}",
+        UMA_TOML_CONFIGFILE_PATH_STR,
+    );
     
     // Get absolute path to uma.toml configuration file
-    let absolute_uma_toml_path = match make_file_path_abs_executabledirectoryrelative_canonicalized_or_error("uma.toml") {
+    let absolute_uma_toml_path = match make_file_path_abs_executabledirectoryrelative_canonicalized_or_error(
+        UMA_TOML_CONFIGFILE_PATH_STR
+        ) {
         Ok(path) => path,
         Err(e) => {
             println!("Error: ___ Failed to locate uma.toml configuration file: {}", e);
@@ -9114,11 +9121,11 @@ fn export_addressbook() -> Result<(), ThisProjectError> {
     // maybe add gpg and make this a separate function TODO
     // Load UMA configuration from uma.toml
     // let uma_toml_path = Path::new("uma.toml");
-    
-    
+
+    // // For exe-parent-relative Absolute paths:
     // 1. Get local owner's username (from exe-parent absolute path file)
     // Get absolute path to uma.toml configuration file
-    let relative_uma_toml_path = "uma.toml";
+    let relative_uma_toml_path = UMA_TOML_CONFIGFILE_PATH_STR;
     let absolute_uma_toml_path = make_file_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_uma_toml_path)
         .map_err(|e| {
             let error_msg = format!("___ Failed to locate uma.toml configuration file: {}", e);
@@ -9242,7 +9249,9 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
     
         
     // Check for uma.toml file relative to the executable's directory
-    let uma_toml_path_result = make_file_path_abs_executabledirectoryrelative_canonicalized_or_error("uma.toml");
+    let uma_toml_path_result = make_file_path_abs_executabledirectoryrelative_canonicalized_or_error(
+        UMA_TOML_CONFIGFILE_PATH_STR
+    );
 
     // // Handle the result appropriately
     // let uma_toml_path = match uma_toml_path_result {
@@ -9283,7 +9292,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
                     format!("Failed to determine executable path: {}", e)
                 )?;
                 default_path.pop(); // Remove executable name
-                default_path.push("uma.toml");
+                default_path.push(UMA_TOML_CONFIGFILE_PATH_STR);
                 debug_log!("Using default uma.toml path: {:?}", default_path);
                 default_path
             } else {
@@ -10976,7 +10985,7 @@ fn generic_share_address_book(recipient_name: &str) -> Result<(), GpgError> {
 // /// - Output file: invites_updates/outgoing/{LOCAL_OWNER_USER}__collaborator.toml.gpg
 // ///
 // /// uses: constant Path to incoming public GPG key file
-// /// const PATH_TO_INCOMING_PUBLICGPG_KEYASC: &str = "invites_updates/incoming/key.asc";
+// /// const INCOMING_PUBLICGPG_KEYASC_FILEPATH_STR: &str = "invites_updates/incoming/key.asc";
 // ///
 // /// For safe tmml handling as 'clearsign_toml', singleline and multiline fields 
 // /// from addressbook files are read with:
@@ -11167,10 +11176,13 @@ fn share_team_channel_with_existing_collaborator(
     debug_log!("TCS: Successfully verified team channel node.toml file exists");
     
     // ======== STEP 2: Get local owner username from uma.toml ========
-    debug_log!("TCS: STEP 2 - Reading local owner username from uma.toml");
+    debug_log!(
+        "TCS: STEP 2 - Reading local owner username from {}", 
+        UMA_TOML_CONFIGFILE_PATH_STR,
+    );
     
     // Get absolute path to uma.toml configuration file
-    let relative_uma_toml_path = "uma.toml";
+    let relative_uma_toml_path = UMA_TOML_CONFIGFILE_PATH_STR;
     let absolute_uma_toml_path = gpg_make_input_path_name_abs_executabledirectoryrelative_nocheck(relative_uma_toml_path)
         .map_err(|e| GpgError::PathError(format!(
             "TCS: Failed to locate uma.toml configuration file: {}", e
@@ -11418,7 +11430,7 @@ fn share_team_channel_with_existing_collaborator(
 /// - Output file: {EXECUTABLE_DIR}/invites_updates/outgoing/{LOCAL_OWNER_USER}__collaborator.toml.gpg
 ///
 /// uses: constant Path to incoming public GPG key file
-/// const PATH_TO_INCOMING_PUBLICGPG_KEYASC: &str = "invites_updates/incoming/key.asc";
+/// const INCOMING_PUBLICGPG_KEYASC_FILEPATH_STR: &str = "invites_updates/incoming/key.asc";
 ///
 /// For safe tmml handling as 'clearsign_toml', singleline and multiline fields 
 /// from addressbook files are read with:
@@ -11446,7 +11458,7 @@ fn share_lou_address_book_with_existingcollaborator(recipient_name: &str) -> Res
     debug_log!("SLABE absolute_output_dir {}", &absolute_output_dir.display());
     
     // Get absolute path to uma.toml configuration file
-    let relative_uma_toml_path = "uma.toml";
+    let relative_uma_toml_path = UMA_TOML_CONFIGFILE_PATH_STR;
     let absolute_uma_toml_path = make_file_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_uma_toml_path)
         .map_err(|e| GpgError::PathError(format!("Failed to locate uma.toml configuration file: {}", e)))?;
     
@@ -11638,10 +11650,13 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
     
     // STEP 1: Get LOCAL OWNER USER's name from uma.toml
     // This identifies which addressbook file contains our GPG key ID
-    debug_log!("PIECA Step 1: Reading LOCAL OWNER USER's name from uma.toml");
+    debug_log!(
+        "PIECA Step 1: Reading LOCAL OWNER USER's name from {}",
+        UMA_TOML_CONFIGFILE_PATH_STR
+    );
     
     // Get absolute path to uma.toml configuration file
-    let relative_uma_toml_path = "uma.toml";
+    let relative_uma_toml_path = UMA_TOML_CONFIGFILE_PATH_STR;
     let absolute_uma_toml_path = make_file_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_uma_toml_path)
         .map_err(|e| {
             let error_msg = format!("PIECA Failed to locate uma.toml configuration file: {}", e);
@@ -12231,7 +12246,7 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
 //     }
     
 //     // Path to recipient's public key file
-//     let recipient_public_key_path = Path::new(PATH_TO_INCOMING_PUBLICGPG_KEYASC);
+//     let recipient_public_key_path = Path::new(INCOMING_PUBLICGPG_KEYASC_FILEPATH_STR);
 
 //     // Verify the public key file exists
 //     if !recipient_public_key_path.exists() {
@@ -12260,7 +12275,7 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
 // }
 
 // /// Path to incoming public GPG key file
-// const PATH_TO_INCOMING_PUBLICGPG_KEYASC: &str = "invites_updates/incoming/key.asc";
+// const INCOMING_PUBLICGPG_KEYASC_FILEPATH_STR: &str = "invites_updates/incoming/key.asc";
 
 // /// Share the Local Owner User's (LOU) address book with a new collaborator using their incoming key
 // /// 
@@ -12296,7 +12311,7 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
 // /// - Output file: invites_updates/outgoing/{LOCAL_OWNER_USER}__collaborator.toml.gpg
 // ///
 // /// # Dependencies
-// /// - Uses constant PATH_TO_INCOMING_PUBLICGPG_KEYASC for the location of the incoming key
+// /// - Uses constant INCOMING_PUBLICGPG_KEYASC_FILEPATH_STR for the location of the incoming key
 // /// - For safe toml handling as 'clearsign_toml', fields from addressbook files are read with:
 // ///   - read_singleline_string_from_clearsigntoml() for single-line fields
 // ///   - read_multiline_string_from_clearsigntoml() for multi-line fields
@@ -12339,7 +12354,7 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
     
 //     // Path to recipient's public key file in the incoming directory
 //     // This key was placed here externally as this is a new collaborator
-//     let recipient_public_key_path = Path::new(PATH_TO_INCOMING_PUBLICGPG_KEYASC);
+//     let recipient_public_key_path = Path::new(INCOMING_PUBLICGPG_KEYASC_FILEPATH_STR);
 
 //     // Verify the recipient's public key file exists in the incoming directory
 //     if !recipient_public_key_path.exists() {
@@ -12370,7 +12385,7 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
 //     println!("invites_updates/outgoing/{}__collaborator.toml.gpg", local_owner_user_name);
     
 //     println!("\nImportant: After sending this file to the recipient, you may want to add them");
-//     println!("to your address book using their public key from: {}", PATH_TO_INCOMING_PUBLICGPG_KEYASC);
+//     println!("to your address book using their public key from: {}", INCOMING_PUBLICGPG_KEYASC_FILEPATH_STR);
     
 //     Ok(())
 // }
@@ -12422,7 +12437,7 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
 /// - Output file: {EXECUTABLE_DIR}/invites_updates/outgoing/{LOCAL_OWNER_USER}__collaborator.toml.gpg
 ///
 /// # Dependencies
-/// - Uses constant PATH_TO_INCOMING_PUBLICGPG_KEYASC for the location of the incoming key
+/// - Uses constant INCOMING_PUBLICGPG_KEYASC_FILEPATH_STR for the location of the incoming key
 /// - For safe toml handling as 'clearsign_toml', fields from addressbook files are read with:
 ///   - read_singleline_string_from_clearsigntoml() for single-line fields
 ///   - read_multiline_string_from_clearsigntoml() for multi-line fields
@@ -12446,7 +12461,7 @@ fn share_lou_addressbook_with_incomingkey() -> Result<(), GpgError> {
     debug_log!("SLABIK Output directory created successfully? {}", absolute_output_dir.exists());
     
     // Get absolute path to uma.toml configuration file
-    let relative_uma_toml_path = "uma.toml";
+    let relative_uma_toml_path = UMA_TOML_CONFIGFILE_PATH_STR;
     let absolute_uma_toml_path = make_file_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_uma_toml_path)
         .map_err(|e| GpgError::PathError(format!("SLABIK Failed to locate uma.toml configuration file: {}", e)))?;
     
@@ -12519,7 +12534,7 @@ fn share_lou_addressbook_with_incomingkey() -> Result<(), GpgError> {
     println!("LOCAL OWNER USER'S GPG key ID (for signing their address book): {}", owner_gpg_key_id);
     
     // Path to recipient's public key file in the incoming directory with absolute path
-    let relative_incoming_key_path = PATH_TO_INCOMING_PUBLICGPG_KEYASC;
+    let relative_incoming_key_path = INCOMING_PUBLICGPG_KEYASC_FILEPATH_STR;
     let absolute_recipient_public_key_path = make_file_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_incoming_key_path)
         .map_err(|e| GpgError::PathError(format!(
             "Recipient's public key not found at: {} - Error: {}", 
@@ -13213,10 +13228,13 @@ pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
     debug_log!("\nStarting -> PIET fn process_incoming_encrypted_teamchannel()");
     
     // STEP 1: Get LOCAL OWNER USER's name from uma.toml
-    debug_log!("PIET Step 1: Reading LOCAL OWNER USER's name from uma.toml");
+    debug_log!("
+        PIET Step 1: Reading LOCAL OWNER USER's name from {}",
+        UMA_TOML_CONFIGFILE_PATH_STR,
+    );
     
     // Get absolute path to uma.toml configuration file
-    let relative_uma_toml_path = "uma.toml";
+    let relative_uma_toml_path = UMA_TOML_CONFIGFILE_PATH_STR;
     let absolute_uma_toml_path = make_file_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_uma_toml_path)
         .map_err(|e| {
             let error_msg = format!("PIET Failed to locate uma.toml configuration file: {}", e);
@@ -13844,7 +13862,8 @@ pub fn invite_wizard() -> Result<(), GpgError> {
             println!("\n\n-- Option 1: share a public gpg key --");   
             
             
-            let relative_uma_toml_path = Path::new("uma.toml");
+            // later function makes the path absolute relative
+            let relative_uma_toml_path = Path::new(UMA_TOML_CONFIGFILE_PATH_STR);
 
             // // Get absolute path to uma.toml configuration file
             // let relative_uma_toml_path = "uma.toml";
@@ -14264,7 +14283,7 @@ fn handle_command_main_mode(
 
                 // paths are always the same 
                 // TODO make paths constants
-                let uma_config_path = Path::new("uma.toml");
+                let uma_config_path = Path::new(UMA_TOML_CONFIGFILE_PATH_STR);
                 let output_dir = Path::new("invites_updates/outgoing");
 
                 match export_public_gpg_key(&uma_config_path, &output_dir) {
@@ -14481,7 +14500,7 @@ fn handle_command_main_mode(
                 // fs::metadata(INPUT_PATH)
                 // Get absolute path to uma.toml configuration file
 
-                let relative_uma_toml_path = "uma.toml";
+                let relative_uma_toml_path = UMA_TOML_CONFIGFILE_PATH_STR;
                 let absolute_uma_toml_path = make_file_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_uma_toml_path)
                     .map_err(|e| {
                         let error_msg = format!("___ Failed to locate uma.toml configuration file: {}", e);
@@ -16319,11 +16338,24 @@ fn verify_readysignal_hashes(
     true
 }
 
+/// Waits until either UMA should halt or synchronization is enabled.
+///
+/// This function implements a loop that checks two conditions:
+/// 1. If UMA should halt (continue_uma.txt contains "0")
+/// 2. If synchronization is enabled (ok_to_start_sync_flag.txt contains "1")
+///
+/// If UMA should halt, the function exits immediately.
+/// If synchronization is enabled, the function exits to allow syncing to proceed.
+/// Otherwise, it sleeps for the specified duration and checks again.
+///
+/// # Arguments
+///
+/// * `wait_this_many_seconds` - Number of seconds to wait between checks
 fn sync_flag_ok_or_wait(wait_this_many_seconds: u64) {
     // check for quit 
     loop {
         // // 1. Read the 'continue_uma.txt' file 
-        // let file_content = match fs::read_to_string(CONTINUE_UMA_PATH) {
+        // let file_content = match fs::read_to_string(CONTINUE_UMA_PATH_STR) {
         //     Ok(content) => content,
         //     Err(_) => {
         //         debug_log("Error reading 'continue_uma.txt'. Continuing..."); // Handle the error (e.g., log it) but continue for now
@@ -16343,16 +16375,46 @@ fn sync_flag_ok_or_wait(wait_this_many_seconds: u64) {
             break; 
         }
 
-        let is_sync_enabled = fs::read_to_string(SYNC_START_OK_FLAG_PATH) 
-            .unwrap_or("0".to_string())
-            .trim() == "1"; 
+        // let is_sync_enabled = fs::read_to_string(SYNC_START_OK_FLAG_PATH_STR) 
+        //     .unwrap_or("0".to_string())
+        //     .trim() == "1"; 
+
+        // if is_sync_enabled {
+        //     debug_log("Synchronization flag is '1'. Proceeding...");
+        //     break; // Exit the loop
+        // } else {
+        //     // debug_log("Synchronization flag is '0'. Waiting...");
+        //     thread::sleep(Duration::from_secs(wait_this_many_seconds)); // Wait for 3 seconds
+        // }
+        
+
+        // Get the absolute path to the sync flag file
+        let sync_flag_path = match get_sync_start_ok_flag_path() {
+            Ok(path) => path,
+            Err(e) => {
+                debug_log!("Error resolving path to sync flag: {}", e);
+                // Continue with the default value of "0" (assume syncing is disabled)
+                thread::sleep(Duration::from_secs(wait_this_many_seconds));
+                continue;
+            }
+        };
+
+        // Read the sync flag file
+        let is_sync_enabled = match fs::read_to_string(&sync_flag_path) {
+            Ok(content) => content.trim() == "1",
+            Err(e) => {
+                debug_log!("Error reading sync flag file: {}", e);
+                // Default to disabled (false) if we can't read the file
+                false
+            }
+        };
 
         if is_sync_enabled {
             debug_log("Synchronization flag is '1'. Proceeding...");
             break; // Exit the loop
         } else {
             // debug_log("Synchronization flag is '0'. Waiting...");
-            thread::sleep(Duration::from_secs(wait_this_many_seconds)); // Wait for 3 seconds
+            thread::sleep(Duration::from_secs(wait_this_many_seconds)); // Wait for specified seconds
         }
     }
 }
@@ -21086,10 +21148,13 @@ fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
 
     
     
-    debug_log!("YLTSTO Step 1: Reading LOCAL OWNER USER's name from uma.toml");
+    debug_log!(
+        "YLTSTO Step 1: Reading LOCAL OWNER USER's name from {}",
+        UMA_TOML_CONFIGFILE_PATH_STR,
+    );
     
     // Get absolute path to uma.toml configuration file
-    let relative_uma_toml_path = "uma.toml";
+    let relative_uma_toml_path = UMA_TOML_CONFIGFILE_PATH_STR;
     let absolute_uma_toml_path = make_file_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_uma_toml_path)
         .map_err(|e| {
             let error_msg = format!("YLTSTO Failed to locate uma.toml configuration file: {}", e);
@@ -21299,7 +21364,7 @@ fn handle_task_selection(app: &mut App, selection: usize) -> Result<bool, io::Er
 // /// Function for broadcasting to theads to wrapup and end uma session: quit
 // fn should_halt_uma() -> bool {
 //     // 1. Read the 'continue_uma.txt' file
-//     let file_content = match fs::read_to_string(CONTINUE_UMA_PATH) {
+//     let file_content = match fs::read_to_string(CONTINUE_UMA_PATH_STR) {
 //         Ok(content) => content,
 //         Err(e) => {
 //             eprintln!("Error reading 'continue_uma.txt': {:?}", e); // Log the error
@@ -21438,7 +21503,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
     println!("HERE HERE BREAKPOINT we_love_projects");
     
     // Get absolute path to uma.toml configuration file
-    let relative_uma_toml_path = "uma.toml";
+    let relative_uma_toml_path = UMA_TOML_CONFIGFILE_PATH_STR;
     let absolute_uma_toml_path = make_file_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_uma_toml_path)
         .map_err(|e| {
             let error_msg = format!("___ Failed to locate uma.toml configuration file: {}", e);
@@ -21598,7 +21663,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
     // Start 
     loop {
         // // Read the 'continue_uma.txt' file 
-        // let file_content = match fs::read_to_string(CONTINUE_UMA_PATH) {
+        // let file_content = match fs::read_to_string(CONTINUE_UMA_PATH_STR) {
         //     Ok(content) => content,
         //     Err(_) => {
         //         debug_log!("Error reading 'continue_uma.txt'. Continuing..."); // Handle the error (e.g., log it) but continue for now
@@ -22176,11 +22241,11 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
 // /// set sync_start_ok_flag to true
 // /// also use: sync_flag_ok_or_wait(3);
 // fn set_sync_start_ok_flag_to_true() { 
-//     if fs::remove_file(SYNC_START_OK_FLAG_PATH).is_ok() {
+//     if fs::remove_file(SYNC_START_OK_FLAG_PATH_STR).is_ok() {
 //         debug_log("Old 'ok_to_start_sync_flag.txt' file deleted."); // Optional log.
 //     }
 
-//     let mut file = fs::File::create(SYNC_START_OK_FLAG_PATH)
+//     let mut file = fs::File::create(SYNC_START_OK_FLAG_PATH_STR)
 //         .expect("Failed to create 'ok_to_start_sync_flag.txt' file.");
 
 //     file.write_all(b"1")
@@ -22191,11 +22256,11 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
 // /// initialize sync_start_ok_flag
 // /// also use: sync_flag_ok_or_wait(3);
 // fn initialize_ok_to_start_sync_flag_to_false() { 
-//     if fs::remove_file(SYNC_START_OK_FLAG_PATH).is_ok() {
+//     if fs::remove_file(SYNC_START_OK_FLAG_PATH_STR).is_ok() {
 //         debug_log("Old 'continue_uma.txt' file deleted."); // Optional log.
 //     } 
 
-//     let mut file = fs::File::create(SYNC_START_OK_FLAG_PATH)
+//     let mut file = fs::File::create(SYNC_START_OK_FLAG_PATH_STR)
 //         .expect("Failed to create 'ok_to_start_sync_flag.txt' file.");
 
 //     file.write_all(b"0")
@@ -22357,15 +22422,15 @@ fn set_as_active(collaborator_name: &str) -> Result<(), ThisProjectError> {
 // /// set to halt by `quit_set_continue_uma_to_false()`
 // fn initialize_continue_uma_signal() {
 //     // 1. Ensure the directory exists
-//     let directory_path = Path::new(CONTINUE_UMA_PATH).parent().unwrap(); // Get the parent directory
+//     let directory_path = Path::new(CONTINUE_UMA_PATH_STR).parent().unwrap(); // Get the parent directory
 //     fs::create_dir_all(directory_path).expect("Failed to create directory for continue_uma.txt");
 
 //     // 2. Create or overwrite the file
-//     if fs::remove_file(CONTINUE_UMA_PATH).is_ok() {
+//     if fs::remove_file(CONTINUE_UMA_PATH_STR).is_ok() {
 //         debug_log("Old 'continue_uma.txt' file deleted."); // Optional log.
 //     } 
 
-//     let mut file = fs::File::create(CONTINUE_UMA_PATH)
+//     let mut file = fs::File::create(CONTINUE_UMA_PATH_STR)
 //         .expect("Failed to create 'continue_uma.txt' file.");
 
 //     file.write_all(b"1")
@@ -22375,15 +22440,15 @@ fn set_as_active(collaborator_name: &str) -> Result<(), ThisProjectError> {
 // /// signal for continuing or for stoping whole Uma program with all threads
 // fn initialize_hard_restart_signal() {
 //     // 1. Ensure the directory exists
-//     let directory_path = Path::new(HARD_RESTART_FLAG_PATH).parent().unwrap(); // Get the parent directory
+//     let directory_path = Path::new(HARD_RESTART_FLAG_PATH_STR).parent().unwrap(); // Get the parent directory
 //     fs::create_dir_all(directory_path).expect("Failed to create directory for yes_hard_restart_flag.txt");
 
 //     // 2. Create or overwrite the file
-//     if fs::remove_file(HARD_RESTART_FLAG_PATH).is_ok() {
+//     if fs::remove_file(HARD_RESTART_FLAG_PATH_STR).is_ok() {
 //         debug_log("Old 'yes_hard_restart_flag.txt' file deleted."); // Optional log.
 //     } 
 
-//     let mut file = fs::File::create(HARD_RESTART_FLAG_PATH)
+//     let mut file = fs::File::create(HARD_RESTART_FLAG_PATH_STR)
 //         .expect("Failed to create 'yes_hard_restart_flag.txt' file.");
 
 //     file.write_all(b"1")
@@ -22615,11 +22680,11 @@ pub fn no_restart_set_hard_reset_flag_to_false() -> Result<(), io::Error> {
 
 // /// set signal to stop whole Uma program with all threads
 // fn quit_set_continue_uma_to_false() { 
-//     if fs::remove_file(CONTINUE_UMA_PATH).is_ok() {
+//     if fs::remove_file(CONTINUE_UMA_PATH_STR).is_ok() {
 //         debug_log("Old 'continue_uma.txt' file deleted."); // Optional log.
 //     } 
 
-//     let mut file = fs::File::create(CONTINUE_UMA_PATH)
+//     let mut file = fs::File::create(CONTINUE_UMA_PATH_STR)
 //         .expect("Failed to create 'continue_uma.txt' file.");
 
 //     file.write_all(b"0")
@@ -22628,11 +22693,11 @@ pub fn no_restart_set_hard_reset_flag_to_false() -> Result<(), io::Error> {
 
 // /// set signal to stop whole Uma program with all threads
 // fn no_restart_set_hard_reset_flag_to_false() { 
-//     if fs::remove_file(HARD_RESTART_FLAG_PATH).is_ok() {
+//     if fs::remove_file(HARD_RESTART_FLAG_PATH_STR).is_ok() {
 //         debug_log("Old 'yes_hard_restart_flag.txt' file deleted."); // Optional log.
 //     } 
 
-//     let mut file = fs::File::create(HARD_RESTART_FLAG_PATH)
+//     let mut file = fs::File::create(HARD_RESTART_FLAG_PATH_STR)
 //         .expect("Failed to create 'yes_hard_restart_flag.txt' file.");
 
 //     file.write_all(b"0")
