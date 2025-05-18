@@ -9447,24 +9447,35 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
     
     
     // // Check if the data directory exists
-    // let addressbook_invite = Path::new("invites_updates/addressbook_invites/import");
+    // let addressbook_invite = Path::new("invites_updates/incoming");
     // if !addressbook_invite.exists() {
     //     // If the directory does not exist, create it
     //     fs::create_dir_all(addressbook_invite).expect("Failed to create addressbook_invite directory");
     // }
+
+    // // Check if the data directory exists  
+    let invites_incoming_pathbuf =  make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path(
+        "invites_updates/incoming"
+    );
     
     // // Check if the data directory exists
-    // let teamchannel_invites = Path::new("invites_updates/teamchannel_invites/import");
-    // if !teamchannel_invites.exists() {
+    // let invites_outgoing_pathbuf = Path::new("invites_updates/outgoing");
+    // if !invites_outgoing_pathbuf.exists() {
     //     // If the directory does not exist, create it
-    //     fs::create_dir_all(teamchannel_invites).expect("Failed to create teamchannel_invites directory");
+    //     fs::create_dir_all(invites_outgoing_pathbuf).expect("Failed to create invites_outgoing_pathbuf directory");
     // }
-    
+
     // // Check if the data directory exists
-    // let teamchannel_invites = Path::new("invites_updates/teamchannel_invites/export");
-    // if !teamchannel_invites.exists() {
+    let invites_outgoing_pathbuf =  make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path(
+        "invites_updates/outgoing"
+    );
+
+            
+    // // Check if the data directory exists
+    // let invites_outgoing_pathbuf = Path::new("invites_updates/invites_outgoing_pathbuf/export");
+    // if !invites_outgoing_pathbuf.exists() {
     //     // If the directory does not exist, create it
-    //     fs::create_dir_all(teamchannel_invites).expect("Failed to create teamchannel_invites directory");
+    //     fs::create_dir_all(invites_outgoing_pathbuf).expect("Failed to create invites_outgoing_pathbuf directory");
     // }
     
     // not yet working
@@ -12585,6 +12596,13 @@ fn share_lou_addressbook_with_incomingkey() -> Result<(), GpgError> {
     println!("\nImportant: After sending this file to the recipient, you may want to add them");
     println!("to your address book using their public key from: {}", absolute_recipient_public_key_path.display());
     
+    println!("Press Enter to continue...");
+    // this does nothing, press enter to proceed.
+    let mut input = String::new();
+    io::stdin()
+        .read_line(&mut input)
+        .map_err(|e| format!("Failed to read input: {:?}", e));
+    
     debug_log!("\nSLABIK  Completed fn share_lou_addressbook_with_incomingkey() successfully");
     Ok(())
 }
@@ -13904,11 +13922,11 @@ pub fn invite_wizard() -> Result<(), GpgError> {
                 &relative_uma_toml_path, 
                 &output_dir,
                 ) {
-                Ok(key_path) => println!("GPG key exported successfully to: {}", key_path),
+                Ok(key_path) => println!("\nOK! GPG key exported successfully to: {}", key_path),
                 Err(e) => eprintln!("invite wizard! Failed to export GPG key: {}", e),
             }
             
-            
+
             
             // Pause and wait for the user to press Enter
             println!("\nHit enter to proceed...");
