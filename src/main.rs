@@ -424,14 +424,202 @@ use manage_absolute_executable_directory_relative_paths::{
 mod tiny_tui_module;
 use tiny_tui_module::tiny_tui;
 
+
 const FILE_READWRITE_N_RETRIES: u64 = 5;
 const FILE_READWRITE_RETRY_SEC_PAUSE: u64 = 2;
 const FILE_READWRITE_RETRY_SEC_PAUSE_MIN: u64 = 1;
 const FILE_READWRITE_RETRY_SEC_PAUSE_MAX: u64 = 6;
+
+/*
+Path constants will later be converted
+to executible-parent-relative-aboslute paths
+*/
 const CONTINUE_UMA_PATH: &str = "project_graph_data/session_state_items/continue_uma.txt";
 const HARD_RESTART_FLAG_PATH: &str = "project_graph_data/session_state_items/yes_hard_restart_flag.txt";
 const SYNC_START_OK_FLAG_PATH: &str = "project_graph_data/session_state_items/ok_to_start_sync_flag.txt";
 const PATH_TO_INCOMING_PUBLICGPG_KEYASC: &str = "invites_updates/incoming/key.asc";
+
+/// Gets the absolute path to the hard restart flag file.
+/// executible-parent-relative-aboslute path
+pub fn get_hard_restart_flag_path() -> io::Result<PathBuf> {
+    make_input_path_name_abs_executabledirectoryrelative_nocheck(
+        HARD_RESTART_FLAG_PATH
+    )
+}
+
+/// Gets the absolute path to the sync start OK flag file.
+/// executible-parent-relative-aboslute path
+pub fn get_sync_start_ok_flag_path() -> io::Result<PathBuf> {
+    make_input_path_name_abs_executabledirectoryrelative_nocheck(
+        SYNC_START_OK_FLAG_PATH
+    )
+}
+
+/// Gets the absolute path to the incoming public GPG key file.
+/// executible-parent-relative-aboslute path
+pub fn get_incoming_publicgpg_keyasc_path() -> io::Result<PathBuf> {
+    make_input_path_name_abs_executabledirectoryrelative_nocheck(
+        PATH_TO_INCOMING_PUBLICGPG_KEYASC
+    )
+}
+
+pub fn get_continue_uma_path() -> io::Result<PathBuf> {
+    make_input_path_name_abs_executabledirectoryrelative_nocheck(
+        CONTINUE_UMA_PATH
+    )
+}
+
+
+/// Determines if UMA should halt based on the continue_uma.txt file.
+///
+/// Reads the content of the continue_uma.txt file from its executable-relative
+/// absolute path, and checks if the content is "0".
+///
+/// # Returns
+///
+/// * `bool` - true if UMA should halt (file contains "0"), false otherwise.
+///
+/// # Behavior
+///
+/// - Returns true if the file exists and contains "0"
+/// - Returns false if:
+///   - The path to the file cannot be resolved
+///   - The file does not exist
+///   - The file cannot be read
+///   - The file contains any value other than "0"
+pub fn should_halt_uma() -> bool {
+    // 1. Get the absolute path to the continue_uma.txt file
+    let file_path = match get_continue_uma_path() {
+        Ok(path) => path,
+        Err(e) => {
+            eprintln!("Error resolving path to continue_uma.txt: {:?}", e);
+            return false; // Don't halt if we can't even find the path
+        }
+    };
+    
+    // 2. Read the file content
+    let file_content = match fs::read_to_string(&file_path) {
+        Ok(content) => content,
+        Err(e) => {
+            eprintln!("Error reading continue_uma.txt at {:?}: {:?}", file_path, e);
+            
+            // Optional: attempt to create the file if it doesn't exist
+            if e.kind() == io::ErrorKind::NotFound {
+                println!("continue_uma.txt not found, creating with default value '1'");
+                if let Some(parent) = file_path.parent() {
+                    if let Err(e) = fs::create_dir_all(parent) {
+                        eprintln!("Failed to create parent directories: {:?}", e);
+                    }
+                }
+                
+                if let Err(e) = fs::write(&file_path, "1") {
+                    eprintln!("Failed to create continue_uma.txt file: {:?}", e);
+                }
+            }
+            
+            return false; // Don't halt on error reading the file
+        }
+    };
+
+    // 3. Check if the file content is "0"
+    file_content.trim() == "0"
+}
+
+// use std::fs;
+// use std::io::{self, Write};
+// use std::path::{Path, PathBuf};
+// use crate::manage_absolute_executable_directory_relative_paths::{
+//     make_file_path_abs_executabledirectoryrelative_canonicalized_or_error,
+//     prepare_file_parent_directories_abs_executabledirectoryrelative,
+// };
+
+// /// optional
+// /// Gets the absolute path to the continue_uma.txt file, creating it with default content "1"
+// /// if it doesn't exist.
+// ///
+// /// # Returns
+// ///
+// /// * `io::Result<PathBuf>` - The absolute canonicalized path to the continue_uma.txt file
+// ///
+// /// # Errors
+// ///
+// /// This function will return an error if:
+// /// * The parent directory cannot be created
+// /// * The file cannot be created when it doesn't exist
+// /// * Path canonicalization fails for any reason
+// fn get_continue_uma_path() -> io::Result<PathBuf> {
+//     let relative_path = CONTINUE_UMA_PATH;
+    
+//     // First try to get the path if it already exists
+//     match make_file_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_path) {
+//         Ok(path) => {
+//             // File exists, return its canonicalized path
+//             println!("Continue UMA file found at: {:?}", path);
+//             Ok(path)
+//         },
+//         Err(_) => {
+//             // File doesn't exist or other error - create it with default content "1"
+//             println!("Continue UMA file not found, creating it with default value '1'");
+            
+//             // Prepare the parent directories
+//             let path = prepare_file_parent_directories_abs_executabledirectoryrelative(relative_path)?;
+            
+//             // Create the file with default content
+//             let mut file = fs::File::create(&path)?;
+//             file.write_all(b"1")?;
+            
+//             // Return the canonicalized path
+//             let canonicalized = path.canonicalize()?;
+//             println!("Created continue UMA file at: {:?}", canonicalized);
+//             Ok(canonicalized)
+//         }
+//     }
+// }
+
+// /// Reads the content of the continue_uma.txt file, creating it with default value "1"
+// /// if it doesn't exist or there's an error reading it.
+// ///
+// /// # Returns
+// ///
+// /// * `String` - The content of the continue_uma.txt file ("0" or "1"), defaults to "1" on errors
+// fn read_continue_uma_file() -> String {
+//     // First get the path, which creates the file if needed
+//     let continue_path = match get_continue_uma_path() {
+//         Ok(path) => path,
+//         Err(e) => {
+//             eprintln!("Error ensuring continue_uma.txt path: {}", e);
+//             return "1".to_string(); // Default to "continue" on path resolution error
+//         }
+//     };
+    
+//     // Then read the file content
+//     match fs::read_to_string(&continue_path) {
+//         Ok(content) => {
+//             let trimmed = content.trim().to_string();
+//             // Validate content - if not "0" or "1", default to "1"
+//             if trimmed != "0" && trimmed != "1" {
+//                 eprintln!("Invalid content in continue_uma.txt: '{}', defaulting to '1'", trimmed);
+//                 // Try to fix the file with correct content
+//                 let _ = fs::write(&continue_path, "1");
+//                 "1".to_string()
+//             } else {
+//                 trimmed
+//             }
+//         },
+//         Err(e) => {
+//             eprintln!("Error reading continue_uma.txt: {}", e);
+            
+//             // Try to recreate the file with default content
+//             match fs::write(&continue_path, "1") {
+//                 Ok(_) => "1".to_string(),
+//                 Err(e2) => {
+//                     eprintln!("Error creating continue_uma.txt after read failed: {}", e2);
+//                     "1".to_string() // Default to "continue" on write error
+//                 }
+//             }
+//         }
+//     }
+// }
 
 pub enum SyncError {
     ConnectionError(std::io::Error),
@@ -2307,53 +2495,166 @@ fn is_port_in_use(port: u16) -> bool {
     }
 }
 
-/// Function for broadcasting to theads to wrapup and end uma session: quit
-fn should_halt_uma() -> bool {
-    // 1. Read the 'continue_uma.txt' file
-    let file_content = match fs::read_to_string(CONTINUE_UMA_PATH) {
-        Ok(content) => content,
-        Err(e) => {
-            eprintln!("Error reading 'continue_uma.txt': {:?}", e); // Log the error
-            return false; // Don't halt on error reading the file
-        }
-    };
+// old relative path
+// /// Function for broadcasting to theads to wrapup and end uma session: quit
+// fn should_halt_uma() -> bool {
+//     // 1. Read the 'continue_uma.txt' file
+//     let file_content = match fs::read_to_string(CONTINUE_UMA_PATH) {
+//         Ok(content) => content,
+//         Err(e) => {
+//             eprintln!("Error reading 'continue_uma.txt': {:?}", e); // Log the error
+//             return false; // Don't halt on error reading the file
+//         }
+//     };
 
-    // 2. Check if the file content is "0"
-    file_content.trim() == "0"
-}
+//     // 2. Check if the file content is "0"
+//     file_content.trim() == "0"
+// }
 
+// /// Check for a Restart
+// /// The logic here is easy to get backwards:
+// /// There are two flags that are checked
+// /// regarding shut-down.
+// /// There is the normal ~should_continue flag,
+// /// which is checked with a should_halt_uma checker.
+// /// To keep things symetric, there is a parallel
+// /// system for hard-reboot, working the same way
+// /// with one exception:
+// /// If you should restart this also re-reset the 'quit'
+// /// function (so you are not in an infinite loop of quit-restart).
+// /// if you check should_not_hard_restart() (this function)
+// /// and find that you should (quite) not-restart, it works the same way.
+// fn should_not_hard_restart() -> bool {
+//     // 1. Read the 'hard_restart_flag.txt' file
+//     let file_content = match fs::read_to_string(HARD_RESTART_FLAG_PATH) {
+//         Ok(content) => content,
+//         Err(e) => {
+//             eprintln!("Error in should_not_hard_restart(), error reading 'yes_hard_restart_flag.txt': {:?}", e); // Log the error
+//             return false; // Don't halt on error reading the file
+//         }
+//     };
+
+//     if file_content.trim() == "0" {
+//         return true; // Hard restart requested
+//     } else {
+//         // Reset the quit flag using the safe function
+//         // In the case that you ARE restarting.
+//         // So you don't loop from restart to quit-again.
+//         initialize_continue_uma_signal();
+//         return false;
+//     }
+// }
+
+/// Checks if UMA should NOT perform a hard restart.
+///
 /// Check for a Restart
 /// The logic here is easy to get backwards:
 /// There are two flags that are checked
 /// regarding shut-down.
-/// There is the normal shoud_continue flag,
+/// There is the normal ~should_continue flag,
 /// which is checked with a should_halt_uma checker.
 /// To keep things symetric, there is a parallel
 /// system for hard-reboot, working the same way
 /// with one exception:
-/// If you should restart this also re-resets the 'quit'
+/// If you should restart this also re-reset the 'quit'
 /// function (so you are not in an infinite loop of quit-restart).
 /// if you check should_not_hard_restart() (this function)
 /// and find that you should (quite) not-restart, it works the same way.
-fn should_not_hard_restart() -> bool {
-    // 1. Read the 'hard_restart_flag.txt' file
-    let file_content = match fs::read_to_string(HARD_RESTART_FLAG_PATH) {
-        Ok(content) => content,
+/// This function reads the hard restart flag file to determine if UMA should perform a hard restart.
+/// The logic works as follows:
+///
+/// - If file contains "0": Return true (meaning: do NOT restart, normal shutdown)
+/// - If file contains "1": Return false (meaning: yes DO restart)
+/// - On file read errors: Return false (safer to restart than get stuck)
+///
+/// When a restart is indicated (function returns false), it also resets the
+/// continue_uma flag to "1" to prevent an infinite loop of quit-restart.
+///
+/// # Returns
+///
+/// * `bool` - true if UMA should NOT restart (normal shutdown), false if it SHOULD restart
+pub fn should_not_hard_restart() -> bool {
+    // Get the absolute path to the hard restart flag file
+    let file_path = match get_hard_restart_flag_path() {
+        Ok(path) => path,
         Err(e) => {
-            eprintln!("Error reading 'yes_hard_restart_flag.txt': {:?}", e); // Log the error
-            return false; // Don't halt on error reading the file
+            debug_log!("Error resolving path to hard restart flag: {}", e);
+            return false; // Default to restarting if we can't resolve the path
+        }
+    };
+    
+    // Read the file content
+    let file_content = match fs::read_to_string(&file_path) {
+        Ok(content) => content.trim().to_string(),
+        Err(e) => {
+            debug_log!("Error reading hard restart flag file: {}", e);
+            return false; // Default to restarting if we can't read the file
         }
     };
 
-    if file_content.trim() == "0" {
-        return true; // Hard restart requested
+    // Process the flag value
+    let should_not_restart = file_content == "0";
+    
+    if should_not_restart {
+        debug_log!("Hard restart flag is '0': Normal shutdown (no restart)");
+        return true; // Do NOT restart (normal shutdown)
     } else {
-        // Reset the quit flag using the safe function
-        // In the case that you ARE restarting.
-        // So you don't loop from restart to quit-again.
-        initialize_continue_uma_signal();
-        return false;
+        debug_log!("Hard restart flag is '1': Will restart UMA");
+        
+        // Reset the continue_uma flag to avoid quit-restart loop
+        match initialize_continue_uma_signal() {
+            Ok(_) => debug_log!("Reset continue_uma flag to '1' for restart"),
+            Err(e) => debug_log!("Warning: Failed to reset continue_uma flag: {}", e)
+        }
+        
+        return false; // DO restart
     }
+}
+
+/// Prints the status of all control flags for debugging purposes.
+///
+/// This function reads and displays the values and locations of all flag files
+/// used by UMA. This can be helpful for troubleshooting boot and shutdown issues.
+pub fn debug_print_flag_status() {
+    debug_log!("===== UMA FLAG STATUS =====");
+    
+    // Check continue_uma flag
+    match get_continue_uma_path() {
+        Ok(path) => {
+            debug_log!("Continue UMA flag path: {:?}", path);
+            match fs::read_to_string(&path) {
+                Ok(content) => debug_log!("Continue UMA flag value: '{}'", content.trim()),
+                Err(e) => debug_log!("Error reading Continue UMA flag: {}", e)
+            }
+        },
+        Err(e) => debug_log!("Error resolving Continue UMA flag path: {}", e)
+    }
+    
+    // Check hard restart flag
+    match get_hard_restart_flag_path() {
+        Ok(path) => {
+            debug_log!("Hard restart flag path: {:?}", path);
+            match fs::read_to_string(&path) {
+                Ok(content) => debug_log!("Hard restart flag value: '{}'", content.trim()),
+                Err(e) => debug_log!("Error reading hard restart flag: {}", e)
+            }
+        },
+        Err(e) => debug_log!("Error resolving hard restart flag path: {}", e)
+    }
+    
+    // Check sync start OK flag
+    match get_sync_start_ok_flag_path() {
+        Ok(path) => {
+            debug_log!("Sync start OK flag path: {:?}", path);
+            match fs::read_to_string(&path) {
+                Ok(content) => debug_log!("Sync start OK flag value: '{}'", content.trim()),
+                Err(e) => debug_log!("Error reading sync start OK flag: {}", e)
+            }
+        },
+        Err(e) => debug_log!("Error resolving sync start OK flag path: {}", e)
+    }
+    
+    debug_log!("===== END FLAG STATUS =====");
 }
 
 // // old relative path version
@@ -16019,20 +16320,26 @@ fn verify_readysignal_hashes(
 }
 
 fn sync_flag_ok_or_wait(wait_this_many_seconds: u64) {
-    // check for quit
+    // check for quit 
     loop {
-        // 1. Read the 'continue_uma.txt' file 
-        let file_content = match fs::read_to_string(CONTINUE_UMA_PATH) {
-            Ok(content) => content,
-            Err(_) => {
-                debug_log("Error reading 'continue_uma.txt'. Continuing..."); // Handle the error (e.g., log it) but continue for now
-                continue; // Skip to the next loop iteration
-            }
-        };
+        // // 1. Read the 'continue_uma.txt' file 
+        // let file_content = match fs::read_to_string(CONTINUE_UMA_PATH) {
+        //     Ok(content) => content,
+        //     Err(_) => {
+        //         debug_log("Error reading 'continue_uma.txt'. Continuing..."); // Handle the error (e.g., log it) but continue for now
+        //         continue; // Skip to the next loop iteration
+        //     }
+        // };
 
-        // 2. break loop if continue=0
-        if file_content.trim() == "0" {
-            debug_log("'continue_uma.txt' is 0. sync_flag_ok_or_wait Exiting loop.");
+        // // 2. break loop if continue=0
+        // if file_content.trim() == "0" {
+        //     debug_log("'continue_uma.txt' is 0. sync_flag_ok_or_wait Exiting loop.");
+        //     break; 
+        // }
+        
+        // Read the 'continue_uma.txt' file and check if we should exit
+        if should_halt_uma() {
+            debug_log("wlpl 'continue_uma.txt' is 0. we_love_projects_loop() Exiting loop.");
             break; 
         }
 
@@ -21290,16 +21597,22 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
 
     // Start 
     loop {
-        // Read the 'continue_uma.txt' file 
-        let file_content = match fs::read_to_string(CONTINUE_UMA_PATH) {
-            Ok(content) => content,
-            Err(_) => {
-                debug_log!("Error reading 'continue_uma.txt'. Continuing..."); // Handle the error (e.g., log it) but continue for now
-                continue; // Skip to the next loop iteration
-            }
-        };
-        // break loop if continue=0
-        if file_content.trim() == "0" {
+        // // Read the 'continue_uma.txt' file 
+        // let file_content = match fs::read_to_string(CONTINUE_UMA_PATH) {
+        //     Ok(content) => content,
+        //     Err(_) => {
+        //         debug_log!("Error reading 'continue_uma.txt'. Continuing..."); // Handle the error (e.g., log it) but continue for now
+        //         continue; // Skip to the next loop iteration
+        //     }
+        // };
+        // // break loop if continue=0
+        // if file_content.trim() == "0" {
+        //     debug_log("wlpl 'continue_uma.txt' is 0. we_love_projects_loop() Exiting loop.");
+        //     break; 
+        // }
+        
+        // Read the 'continue_uma.txt' file and check if we should exit
+        if should_halt_uma() {
             debug_log("wlpl 'continue_uma.txt' is 0. we_love_projects_loop() Exiting loop.");
             break; 
         }
@@ -22038,70 +22351,293 @@ fn set_as_active(collaborator_name: &str) -> Result<(), ThisProjectError> {
 }
 
 
-/// signal for continuing or for stoping whole Uma program with all threads
+// /// signal for continuing or for stoping whole Uma program with all threads
+// /// Initializes the UMA continue/halt signal by creating or resetting the 
+// /// `continue_uma.txt` file and setting its value to "1" (continue).
+// /// set to halt by `quit_set_continue_uma_to_false()`
+// fn initialize_continue_uma_signal() {
+//     // 1. Ensure the directory exists
+//     let directory_path = Path::new(CONTINUE_UMA_PATH).parent().unwrap(); // Get the parent directory
+//     fs::create_dir_all(directory_path).expect("Failed to create directory for continue_uma.txt");
+
+//     // 2. Create or overwrite the file
+//     if fs::remove_file(CONTINUE_UMA_PATH).is_ok() {
+//         debug_log("Old 'continue_uma.txt' file deleted."); // Optional log.
+//     } 
+
+//     let mut file = fs::File::create(CONTINUE_UMA_PATH)
+//         .expect("Failed to create 'continue_uma.txt' file.");
+
+//     file.write_all(b"1")
+//         .expect("Failed to write to 'continue_uma.txt' file.");
+// }
+
+// /// signal for continuing or for stoping whole Uma program with all threads
+// fn initialize_hard_restart_signal() {
+//     // 1. Ensure the directory exists
+//     let directory_path = Path::new(HARD_RESTART_FLAG_PATH).parent().unwrap(); // Get the parent directory
+//     fs::create_dir_all(directory_path).expect("Failed to create directory for yes_hard_restart_flag.txt");
+
+//     // 2. Create or overwrite the file
+//     if fs::remove_file(HARD_RESTART_FLAG_PATH).is_ok() {
+//         debug_log("Old 'yes_hard_restart_flag.txt' file deleted."); // Optional log.
+//     } 
+
+//     let mut file = fs::File::create(HARD_RESTART_FLAG_PATH)
+//         .expect("Failed to create 'yes_hard_restart_flag.txt' file.");
+
+//     file.write_all(b"1")
+//         .expect("Failed to write to 'yes_hard_restart_flag.txt' file.");
+// }
+
+// use std::fs::{self, File};
+// use std::io::{self, Write};
+// use std::path::PathBuf;
+
 /// Initializes the UMA continue/halt signal by creating or resetting the 
 /// `continue_uma.txt` file and setting its value to "1" (continue).
-/// set to halt by `quit_set_continue_uma_to_false()`
-fn initialize_continue_uma_signal() {
-    // 1. Ensure the directory exists
-    let directory_path = Path::new(CONTINUE_UMA_PATH).parent().unwrap(); // Get the parent directory
-    fs::create_dir_all(directory_path).expect("Failed to create directory for continue_uma.txt");
-
-    // 2. Create or overwrite the file
-    if fs::remove_file(CONTINUE_UMA_PATH).is_ok() {
-        debug_log("Old 'continue_uma.txt' file deleted."); // Optional log.
-    } 
-
-    let mut file = fs::File::create(CONTINUE_UMA_PATH)
-        .expect("Failed to create 'continue_uma.txt' file.");
-
-    file.write_all(b"1")
-        .expect("Failed to write to 'continue_uma.txt' file.");
+///
+/// This function sets up the continue/halt mechanism by writing a "1" to the
+/// continue_uma.txt file, indicating that UMA should continue running.
+/// It follows these steps:
+///
+/// 1. Resolves the absolute path to the file relative to the executable location
+/// 2. Creates any necessary parent directories
+/// 3. Removes any existing file (if present)
+/// 4. Creates a new file with the content "1"
+///
+/// To halt UMA, the file can be set to "0" using `quit_set_continue_uma_to_false()`.
+///
+/// # Returns
+///
+/// * `Result<(), io::Error>` - Success or an I/O error if the operation failed
+///
+/// # Errors
+///
+/// This function can fail if:
+/// * The path cannot be resolved
+/// * Parent directories cannot be created
+/// * The file cannot be created or written to
+pub fn initialize_continue_uma_signal() -> Result<(), io::Error> {
+    // Get the executable-relative absolute path
+    let abs_path = get_continue_uma_path()?;
+    
+    debug_log!("Initializing continue_uma signal to true (1) at: {:?}", abs_path);
+    
+    // Ensure parent directories exist
+    if let Some(parent) = abs_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    
+    // Try to delete the existing file if it exists
+    match fs::remove_file(&abs_path) {
+        Ok(_) => debug_log!("Old 'continue_uma.txt' file deleted."),
+        Err(e) => {
+            if e.kind() != io::ErrorKind::NotFound {
+                // Log warning but continue - it's not fatal if we can't delete
+                debug_log!("Warning: Could not delete old continue_uma.txt file: {}", e);
+            }
+        }
+    }
+    
+    // Create and write to the file
+    let mut file = File::create(&abs_path)?;
+    file.write_all(b"1")?;
+    
+    debug_log!("Successfully initialized continue_uma signal to true (1)");
+    Ok(())
 }
 
-/// signal for continuing or for stoping whole Uma program with all threads
-fn initialize_hard_restart_signal() {
-    // 1. Ensure the directory exists
-    let directory_path = Path::new(HARD_RESTART_FLAG_PATH).parent().unwrap(); // Get the parent directory
-    fs::create_dir_all(directory_path).expect("Failed to create directory for yes_hard_restart_flag.txt");
-
-    // 2. Create or overwrite the file
-    if fs::remove_file(HARD_RESTART_FLAG_PATH).is_ok() {
-        debug_log("Old 'yes_hard_restart_flag.txt' file deleted."); // Optional log.
-    } 
-
-    let mut file = fs::File::create(HARD_RESTART_FLAG_PATH)
-        .expect("Failed to create 'yes_hard_restart_flag.txt' file.");
-
-    file.write_all(b"1")
-        .expect("Failed to write to 'yes_hard_restart_flag.txt' file.");
+/// Initializes the hard restart signal by creating or resetting the
+/// `yes_hard_restart_flag.txt` file and setting its value to "1".
+///
+/// This function sets up the hard restart mechanism by writing a "1" to the
+/// yes_hard_restart_flag.txt file, indicating that a hard restart is required.
+/// It follows these steps:
+///
+/// 1. Resolves the absolute path to the file relative to the executable location
+/// 2. Creates any necessary parent directories
+/// 3. Removes any existing file (if present)
+/// 4. Creates a new file with the content "1"
+///
+/// To cancel a hard restart, the file can be set to "0" using 
+/// `no_restart_set_hard_reset_flag_to_false()`.
+///
+/// # Returns
+///
+/// * `Result<(), io::Error>` - Success or an I/O error if the operation failed
+///
+/// # Errors
+///
+/// This function can fail if:
+/// * The path cannot be resolved
+/// * Parent directories cannot be created
+/// * The file cannot be created or written to
+pub fn initialize_hard_restart_signal() -> Result<(), io::Error> {
+    // Get the executable-relative absolute path
+    let abs_path = get_hard_restart_flag_path()?;
+    
+    debug_log!("Initializing hard restart signal to true (1) at: {:?}", abs_path);
+    
+    // Ensure parent directories exist
+    if let Some(parent) = abs_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    
+    // Try to delete the existing file if it exists
+    match fs::remove_file(&abs_path) {
+        Ok(_) => debug_log!("Old 'yes_hard_restart_flag.txt' file deleted."),
+        Err(e) => {
+            if e.kind() != io::ErrorKind::NotFound {
+                // Log warning but continue - it's not fatal if we can't delete
+                debug_log!("Warning: Could not delete old yes_hard_restart_flag.txt file: {}", e);
+            }
+        }
+    }
+    
+    // Create and write to the file
+    let mut file = File::create(&abs_path)?;
+    file.write_all(b"1")?;
+    
+    debug_log!("Successfully initialized hard restart signal to true (1)");
+    Ok(())
 }
 
-/// set signal to stop whole Uma program with all threads
-fn quit_set_continue_uma_to_false() { 
-    if fs::remove_file(CONTINUE_UMA_PATH).is_ok() {
-        debug_log("Old 'continue_uma.txt' file deleted."); // Optional log.
-    } 
+// use std::fs::{self, File};
+// use std::io::{self, Write};
+// use std::path::PathBuf;
 
-    let mut file = fs::File::create(CONTINUE_UMA_PATH)
-        .expect("Failed to create 'continue_uma.txt' file.");
-
-    file.write_all(b"0")
-        .expect("Failed to write to 'continue_uma.txt' file.");
+/// Sets a signal to stop the entire Uma program with all threads.
+///
+/// This function writes a "0" to the continue_uma.txt file, which is used
+/// as a signal to stop the Uma program. It follows these steps:
+///
+/// 1. Resolves the absolute path to the continue_uma.txt file relative to the executable
+/// 2. Attempts to delete any existing file (ignoring if it doesn't exist)
+/// 3. Creates parent directories if they don't exist
+/// 4. Creates a new file with the content "0"
+///
+/// The function uses a replace-not-modify workflow to avoid potential
+/// file locking or partial write issues.
+///
+/// # Returns
+///
+/// * `Result<(), io::Error>` - Success or an I/O error if the operation failed
+///
+/// # Errors
+///
+/// This function can fail if:
+/// * The path cannot be resolved
+/// * The parent directories cannot be created
+/// * The file cannot be created or written to
+pub fn quit_set_continue_uma_to_false() -> Result<(), io::Error> {
+    // Get the executable-relative absolute path
+    let abs_path = get_continue_uma_path()?;
+    
+    debug_log!("Setting continue_uma flag to false (0) at: {:?}", abs_path);
+    
+    // Try to delete the existing file if it exists
+    match fs::remove_file(&abs_path) {
+        Ok(_) => debug_log!("Old 'continue_uma.txt' file deleted."),
+        Err(e) => {
+            if e.kind() != io::ErrorKind::NotFound {
+                // Log error but continue - it's not fatal if we can't delete
+                debug_log!("Warning: Could not delete old continue_uma.txt file: {}", e);
+            }
+        }
+    }
+    
+    // Ensure parent directories exist
+    if let Some(parent) = abs_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    
+    // Create and write to the file
+    let mut file = File::create(&abs_path)?;
+    file.write_all(b"0")?;
+    
+    debug_log!("Successfully set continue_uma flag to false (0)");
+    Ok(())
 }
 
-/// set signal to stop whole Uma program with all threads
-fn no_restart_set_hard_reset_flag_to_false() { 
-    if fs::remove_file(HARD_RESTART_FLAG_PATH).is_ok() {
-        debug_log("Old 'yes_hard_restart_flag.txt' file deleted."); // Optional log.
-    } 
-
-    let mut file = fs::File::create(HARD_RESTART_FLAG_PATH)
-        .expect("Failed to create 'yes_hard_restart_flag.txt' file.");
-
-    file.write_all(b"0")
-        .expect("Failed to write to 'yes_hard_restart_flag.txt' file.");
+/// Sets the hard restart flag to false, indicating no restart is needed.
+///
+/// This function writes a "0" to the yes_hard_restart_flag.txt file, which is used
+/// to control program restart behavior. It follows these steps:
+///
+/// 1. Resolves the absolute path to the flag file relative to the executable
+/// 2. Attempts to delete any existing file (ignoring if it doesn't exist)
+/// 3. Creates parent directories if they don't exist
+/// 4. Creates a new file with the content "0"
+///
+/// The function uses a replace-not-modify workflow to avoid potential
+/// file locking or partial write issues.
+///
+/// # Returns
+///
+/// * `Result<(), io::Error>` - Success or an I/O error if the operation failed
+///
+/// # Errors
+///
+/// This function can fail if:
+/// * The path cannot be resolved
+/// * The parent directories cannot be created
+/// * The file cannot be created or written to
+pub fn no_restart_set_hard_reset_flag_to_false() -> Result<(), io::Error> {
+    // Get the executable-relative absolute path
+    let abs_path = get_hard_restart_flag_path()?;
+    
+    debug_log!("Setting hard restart flag to false (0) at: {:?}", abs_path);
+    
+    // Try to delete the existing file if it exists
+    match fs::remove_file(&abs_path) {
+        Ok(_) => debug_log!("Old 'yes_hard_restart_flag.txt' file deleted."),
+        Err(e) => {
+            if e.kind() != io::ErrorKind::NotFound {
+                // Log error but continue - it's not fatal if we can't delete
+                debug_log!("Warning: Could not delete old yes_hard_restart_flag.txt file: {}", e);
+            }
+        }
+    }
+    
+    // Ensure parent directories exist
+    if let Some(parent) = abs_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    
+    // Create and write to the file
+    let mut file = File::create(&abs_path)?;
+    file.write_all(b"0")?;
+    
+    debug_log!("Successfully set hard restart flag to false (0)");
+    Ok(())
 }
+
+// /// set signal to stop whole Uma program with all threads
+// fn quit_set_continue_uma_to_false() { 
+//     if fs::remove_file(CONTINUE_UMA_PATH).is_ok() {
+//         debug_log("Old 'continue_uma.txt' file deleted."); // Optional log.
+//     } 
+
+//     let mut file = fs::File::create(CONTINUE_UMA_PATH)
+//         .expect("Failed to create 'continue_uma.txt' file.");
+
+//     file.write_all(b"0")
+//         .expect("Failed to write to 'continue_uma.txt' file.");
+// }
+
+// /// set signal to stop whole Uma program with all threads
+// fn no_restart_set_hard_reset_flag_to_false() { 
+//     if fs::remove_file(HARD_RESTART_FLAG_PATH).is_ok() {
+//         debug_log("Old 'yes_hard_restart_flag.txt' file deleted."); // Optional log.
+//     } 
+
+//     let mut file = fs::File::create(HARD_RESTART_FLAG_PATH)
+//         .expect("Failed to create 'yes_hard_restart_flag.txt' file.");
+
+//     file.write_all(b"0")
+//         .expect("Failed to write to 'yes_hard_restart_flag.txt' file.");
+// }
 
 /*
 An Appropriately Svelt Mainland:
