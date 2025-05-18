@@ -436,6 +436,8 @@ to executible-parent-relative-aboslute paths
 */
 const UMA_TOML_CONFIGFILE_PATH_STR: &str = "uma.toml";
 
+const COLLABORATOR_ADDRESSBOOK_PATH_STR: &str = "project_graph_data/collaborator_files_address_book";
+
 const CONTINUE_UMA_PATH_STR: &str = "project_graph_data/session_state_items/continue_uma.txt";
 const HARD_RESTART_FLAG_PATH_STR: &str = "project_graph_data/session_state_items/yes_hard_restart_flag.txt";
 const SYNC_START_OK_FLAG_PATH_STR: &str = "project_graph_data/session_state_items/ok_to_start_sync_flag.txt";
@@ -2177,11 +2179,24 @@ fn read_one_collaborator_setup_toml(collaborator_name: &str) -> Result<Collabora
     debug_log("Starting read_one_collaborator_setup_toml()");
 
     // 1. Construct File Path
-    let file_path = Path::new("project_graph_data/collaborator_files_address_book")
+    let relative_file_path = Path::new(COLLABORATOR_ADDRESSBOOK_PATH_STR)
         .join(format!("{}__collaborator.toml", collaborator_name));
 
+    // Get the executable-relative base directory path
+    let abs_file_path = match make_input_path_name_abs_executabledirectoryrelative_nocheck(
+        relative_file_path
+    ) {
+        Ok(path) => path,
+        Err(e) => {
+            debug_log!("Failed to resolve collaborator directory path: {}", e);
+            return Err(ThisProjectError::IoError(e));
+        }
+    };
+    
+    debug_log!("read_one_collaborator_setup_toml(), abs_file_path (executable-relative) -> {:?}", abs_file_path);
+
     // 2. Read TOML File
-    let toml_string = fs::read_to_string(&file_path)?; 
+    let toml_string = fs::read_to_string(&abs_file_path)?; 
 
     // 3. Parse TOML Data
     // 3. Parse TOML Data (handle potential toml::de::Error)
@@ -4759,7 +4774,7 @@ impl LocalUserUma {
 /// returning a ThisProjectError::InvalidData.
 fn get_team_member_collaborator_salt(collaborator_name: &str) -> Result<u8, ThisProjectError> {
     // 1. Construct File Path
-    let file_path = Path::new("project_graph_data/collaborator_files_address_book")
+    let file_path = Path::new(COLLABORATOR_ADDRESSBOOK_PATH_STR)
         .join(format!("{}__collaborator.toml", collaborator_name));
 
     // 2. Read File Contents
@@ -5173,7 +5188,7 @@ pub fn add_collaborator_setup_file(
 //             debug_log!("toml_string {:?}", toml_string);
         
 //             // Construct the file path:
-//             let file_path = Path::new("project_graph_data/collaborator_files_address_book")
+//             let file_path = Path::new(COLLABORATOR_ADDRESSBOOK_PATH_STR)
 //                 .join(format!("{}__collaborator.toml", collaborator.user_name));
         
 //             // Log the constructed file path:
@@ -9165,7 +9180,7 @@ fn export_addressbook() -> Result<(), ThisProjectError> {
     // 2. Construct paths
     let address_book_export_dir = PathBuf::from("invites_updates/addressbook_invite/export");
     let key_file_path = address_book_export_dir.join("key.asc");
-    let collaborator_file_path = PathBuf::from("project_graph_data/collaborator_files_address_book")
+    let collaborator_file_path = PathBuf::from(COLLABORATOR_ADDRESSBOOK_PATH_STR)
         .join(format!("{}__collaborator.toml", local_owner_username));
 
     // 3. Read public key (early return on error).  Handles NotFound.
@@ -9777,7 +9792,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
     // Check if there are any directories in project_graph_data/team_channels
     debug_log("let number_of_team_channels = fs::read_dir(&team_channels_dir)");
 
-    // if !dir_at_path_is_empty_returns_false("project_graph_data/collaborator_files_address_book") {
+    // if !dir_at_path_is_empty_returns_false(COLLABORATOR_ADDRESSBOOK_PATH_STR) {
     debug_log("if !dir_at_path_is_empty_returns_false(Path::new(project_graph_data/collaborator_files_address_book)) { ");
         
         
@@ -9793,7 +9808,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
     //     );
     
 
-    // if !dir_at_path_is_empty_returns_false(Path::new("project_graph_data/collaborator_files_address_book")) { 
+    // if !dir_at_path_is_empty_returns_false(Path::new(COLLABORATOR_ADDRESSBOOK_PATH_STR)) { 
     if !dir_at_path_is_empty_returns_false(
         &collaborator_files_address_book_dir
             ) { 
@@ -10239,7 +10254,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
 // /// 
 // /// # Returns
 // /// * `Result<String, ThisProjectError>` - Returns the path to the exported key file or an error
-// pub fn export_public_gpg_key(
+// pub fn export_public_gpg_key_converts_to_abs_path(
 //     config_path: &Path,
 //     output_directory: &Path,
 // ) -> Result<String, ThisProjectError> {
@@ -10252,7 +10267,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
 //     let username = read_single_line_string_field_from_toml(config_path_str, "uma_local_owner_user");
 
 //     // Step 2: Construct path to user's config file
-//     let user_config_path = Path::new("project_graph_data/collaborator_files_address_book")
+//     let user_config_path = Path::new(COLLABORATOR_ADDRESSBOOK_PATH_STR)
 //         .join(format!("{}__collaborator.toml", username));
 
 //     // Step 3: Get GPG key ID from user's config file
@@ -10338,12 +10353,12 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
 // /// * `ThisProjectError::TomlVanillaDeserialStrError` - If reading from TOML files fails
 // /// * `ThisProjectError::IoError` - If file operations fail
 // /// * `ThisProjectError::GpgError` - If the GPG key export operation fails
-// pub fn export_public_gpg_key(
+// pub fn export_public_gpg_key_converts_to_abs_path(
 //     config_path: &Path,
 //     output_directory: &Path,
 // ) -> Result<String, ThisProjectError> {
     
-//     debug_log("\n\nStarting -> fn export_public_gpg_key()");
+//     debug_log("\n\nStarting -> fn export_public_gpg_key_converts_to_abs_path()");
     
 //     // Convert config path to string for TOML reading functions
 //     let config_path_str = config_path.to_str()
@@ -10358,7 +10373,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
 //     debug_log!("uma_localowneruser_username {}", uma_localowneruser_username);
     
 //     // Construct the path to the user's collaborator file, which contains their GPG key ID
-//     let collaborator_files_directory = "project_graph_data/collaborator_files_address_book";
+//     let collaborator_files_directory = COLLABORATOR_ADDRESSBOOK_PATH_STR;
 //     let collaborator_filename = format!("{}__collaborator.toml", uma_localowneruser_username);
 //     let user_config_path = Path::new(collaborator_files_directory).join(collaborator_filename);
     
@@ -10433,7 +10448,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
 //     // Return the path to the exported key file as a string
 //     let result_path = output_file_path.to_string_lossy().into_owned();
     
-//     debug_log!("\n\n Ending -> fn export_public_gpg_key(), result_path -> {:?}", &result_path);    
+//     debug_log!("\n\n Ending -> fn export_public_gpg_key_converts_to_abs_path(), result_path -> {:?}", &result_path);    
     
 //     Ok(result_path)
 // }
@@ -10466,12 +10481,12 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
 /// * `ThisProjectError::TomlVanillaDeserialStrError` - If reading from TOML files fails
 /// * `ThisProjectError::IoError` - If file operations fail, including if required directories don't exist
 /// * `ThisProjectError::GpgError` - If the GPG key export operation fails
-pub fn export_public_gpg_key(
+pub fn export_public_gpg_key_converts_to_abs_path(
     config_path: &Path,
     output_directory: &Path,
 ) -> Result<String, ThisProjectError> {
     
-    debug_log("\n\nStarting -> fn export_public_gpg_key()");
+    debug_log("\n\nStarting -> fn export_public_gpg_key_converts_to_abs_path()");
     
     // Convert config_path to an absolute path relative to the executable directory
     let absolute_config_path = make_file_path_abs_executabledirectoryrelative_canonicalized_or_error(config_path)
@@ -10480,7 +10495,7 @@ pub fn export_public_gpg_key(
     // Convert config path to string for TOML reading functions
     let config_path_str = absolute_config_path.to_str()
         .ok_or_else(|| ThisProjectError::InvalidInput("Cannot convert config path to string".to_string()))?;
-    
+
     // Read username from the configuration file, mapping any reading errors to our error type
     let uma_localowneruser_username = read_single_line_string_field_from_toml(config_path_str, "uma_local_owner_user")
         .map_err(|error_message| ThisProjectError::TomlVanillaDeserialStrError(
@@ -10491,7 +10506,7 @@ pub fn export_public_gpg_key(
     
     // Convert the collaborator files directory to an absolute path based on the executable's location
     // AND verify that the directory exists (returns error if not found or not a directory)
-    let collaborator_files_directory_relative = "project_graph_data/collaborator_files_address_book";
+    let collaborator_files_directory_relative = COLLABORATOR_ADDRESSBOOK_PATH_STR;
     let collaborator_files_directory_absolute = make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(
         collaborator_files_directory_relative
     ).map_err(|io_error| ThisProjectError::IoError(io_error))?;
@@ -10512,7 +10527,7 @@ pub fn export_public_gpg_key(
     // Extract the GPG key ID from the collaborator file
     let gpg_key_id = read_singleline_string_from_clearsigntoml(user_config_path_str, "gpg_publickey_id")
         .map_err(|error_message| ThisProjectError::TomlVanillaDeserialStrError(
-            format!("export_public_gpg_key() Failed read_singleline_string_from_clearsigntoml() to read GPG key ID from clearsigntoml collaborator file: {}", error_message)
+            format!("export_public_gpg_key_converts_to_abs_path() Failed read_singleline_string_from_clearsigntoml() to read GPG key ID from clearsigntoml collaborator file: {}", error_message)
         ))?;
 
     // Convert output_directory to an absolute path relative to the executable directory
@@ -10574,7 +10589,7 @@ pub fn export_public_gpg_key(
     // Return the path to the exported key file as a string
     let result_path = output_file_path.to_string_lossy().into_owned();
     
-    debug_log!("\n\n Ending -> fn export_public_gpg_key(), result_path -> {:?}", &result_path);    
+    debug_log!("\n\n Ending -> fn export_public_gpg_key_converts_to_abs_path(), result_path -> {:?}", &result_path);    
     
     Ok(result_path)
 }
@@ -10587,7 +10602,7 @@ pub fn export_public_gpg_key(
 // /// 
 // /// # Returns
 // /// * `Result<String, ThisProjectError>` - Returns the path to the exported key file or an error
-// pub fn export_public_gpg_key(
+// pub fn export_public_gpg_key_converts_to_abs_path(
 //     config_path: &Path,
 //     output_directory: &Path,
 // ) -> Result<String, ThisProjectError> {
@@ -10634,7 +10649,7 @@ pub fn export_public_gpg_key(
 // /// 
 // /// # Returns
 // /// * `Result<String, Box<dyn Error>>` - Returns the path to the exported key file or an error
-// pub fn export_public_gpg_key(
+// pub fn export_public_gpg_key_converts_to_abs_path(
 //     config_path: &Path,
 //     output_directory: &Path,
 // ) -> Result<String, Box<dyn Error>> {
@@ -11212,7 +11227,7 @@ fn share_team_channel_with_existing_collaborator(
     debug_log!("TCS: STEP 3 - Locating collaborator files directory");
     
     // Get absolute path to collaborator files directory
-    let relative_collaborator_files_directory_path = "project_graph_data/collaborator_files_address_book";
+    let relative_collaborator_files_directory_path = COLLABORATOR_ADDRESSBOOK_PATH_STR;
     let absolute_collaborator_files_directory_path = gpg_make_input_path_name_abs_executabledirectoryrelative_nocheck(relative_collaborator_files_directory_path)
         .map_err(|e| GpgError::PathError(format!(
             "TCS: Failed to locate collaborator files directory: {}", e
@@ -11493,7 +11508,7 @@ fn share_lou_address_book_with_existingcollaborator(recipient_name: &str) -> Res
     debug_log!("SLABE local_owner_user_name {}", &local_owner_user_name);
     
     // Get absolute path to the collaborator files directory
-    let relative_collab_dir = "project_graph_data/collaborator_files_address_book";
+    let relative_collab_dir = COLLABORATOR_ADDRESSBOOK_PATH_STR;
     let absolute_collab_dir = make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_collab_dir)
         .map_err(|e| GpgError::PathError(format!("Failed to locate collaborator files directory: {}", e)))?;
     
@@ -11690,7 +11705,7 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
     debug_log!("PIECA Step 2: Locating LOCAL OWNER USER's addressbook file to get GPG key ID");
     
     // Get absolute path to the collaborator files directory
-    let relative_collab_dir = "project_graph_data/collaborator_files_address_book";
+    let relative_collab_dir = COLLABORATOR_ADDRESSBOOK_PATH_STR;
     let absolute_collab_dir = make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_collab_dir)
         .map_err(|e| {
             let error_msg = format!("PIECA Failed to locate collaborator files directory: {}", e);
@@ -12487,7 +12502,7 @@ fn share_lou_addressbook_with_incomingkey() -> Result<(), GpgError> {
     println!("Local owner username (whose address book we are sharing): {}", local_owner_user_name);
     
     // Get absolute path to the collaborator files directory
-    let relative_collab_dir = "project_graph_data/collaborator_files_address_book";
+    let relative_collab_dir = COLLABORATOR_ADDRESSBOOK_PATH_STR;
     let absolute_collab_dir = make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_collab_dir)
         .map_err(|e| GpgError::PathError(format!("SLABIK Failed to locate collaborator files directory: {}", e)))?;
     
@@ -12653,7 +12668,7 @@ fn share_lou_addressbook_with_incomingkey() -> Result<(), GpgError> {
 //     debug_log!("PIET Step 2: Locating LOCAL OWNER USER's addressbook file to get GPG key ID");
     
 //     // Get absolute path to the collaborator files directory
-//     let relative_collab_dir = "project_graph_data/collaborator_files_address_book";
+//     let relative_collab_dir = COLLABORATOR_ADDRESSBOOK_PATH_STR;
 //     let absolute_collab_dir = make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_collab_dir)
 //         .map_err(|e| {
 //             let error_msg = format!("PIET Failed to locate collaborator files directory: {}", e);
@@ -13268,7 +13283,7 @@ pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
     debug_log!("PIET Step 2: Locating LOCAL OWNER USER's addressbook file to get GPG key ID");
     
     // Get absolute path to the collaborator files directory
-    let relative_collab_dir = "project_graph_data/collaborator_files_address_book";
+    let relative_collab_dir = COLLABORATOR_ADDRESSBOOK_PATH_STR;
     let absolute_collab_dir = make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_collab_dir)
         .map_err(|e| {
             let error_msg = format!("PIET Failed to locate collaborator files directory: {}", e);
@@ -13860,8 +13875,7 @@ pub fn invite_wizard() -> Result<(), GpgError> {
     match mainchoice {
         1 => {
             println!("\n\n-- Option 1: share a public gpg key --");   
-            
-            
+
             // later function makes the path absolute relative
             let relative_uma_toml_path = Path::new(UMA_TOML_CONFIGFILE_PATH_STR);
 
@@ -13874,7 +13888,7 @@ pub fn invite_wizard() -> Result<(), GpgError> {
             //         GpgError::PathError(error_msg)
             //     })?;
                     
-            
+            // later function makes the path absolute relative
             let output_dir = Path::new("invites_updates/outgoing");
             
             // let relative_output_dir = "invites_updates/outgoing";
@@ -13886,7 +13900,7 @@ pub fn invite_wizard() -> Result<(), GpgError> {
             //     })?;
 
             // this function makes the path absolute relative
-            match export_public_gpg_key(
+            match export_public_gpg_key_converts_to_abs_path(
                 &relative_uma_toml_path, 
                 &output_dir,
                 ) {
@@ -14286,11 +14300,10 @@ fn handle_command_main_mode(
                 let uma_config_path = Path::new(UMA_TOML_CONFIGFILE_PATH_STR);
                 let output_dir = Path::new("invites_updates/outgoing");
 
-                match export_public_gpg_key(&uma_config_path, &output_dir) {
+                match export_public_gpg_key_converts_to_abs_path(&uma_config_path, &output_dir) {
                     Ok(key_path) => println!("GPG key exported successfully to: {}", key_path),
                     Err(e) => eprintln!("Failed to export GPG key: {}", e),
                 }
-
             }
 
             "invite" | "update" => {
@@ -15109,66 +15122,159 @@ fn get_next_message_file_path(current_path: &Path, username: &str) -> PathBuf {
     file_path
 }
 
+// /// Loads collaborator data from a TOML file based on the username.
+// ///
+// /// This function uses `read_one_collaborator_setup_toml` to deserialize the collaborator data.
+// ///
+// /// # Arguments
+// ///
+// /// * `username` - The username of the collaborator whose data needs to be loaded.
+// ///
+// /// # Errors
+// ///
+// /// This function returns a `Result<CollaboratorTomlData, ThisProjectError>` to handle potential errors:
+// ///  - `ThisProjectError::IoError`: If the collaborator file is not found or if there is an error reading the file.
+// ///  - `ThisProjectError::TomlDeserializationError`: If there is an error parsing the TOML data.
+// ///
+// /// # Example
+// ///
+// /// ```
+// /// let collaborator = get_addressbook_file_by_username("alice").unwrap(); // Assuming alice's data exists
+// /// println!("Collaborator: {:?}", collaborator);
+// /// ```
+// fn get_addressbook_file_by_username(username: &str) -> Result<CollaboratorTomlData, ThisProjectError> {
+//     debug_log!("Starting get_addressbook_file_by_username(username),  for -> '{}'", username);
+//     // debug_log!("Starting get_addressbook_file_by_username(username),  for -> '{}'", username);
+    
+//     // Debug the directory structure
+//     let base_dir = Path::new(COLLABORATOR_ADDRESSBOOK_PATH_STR);
+//     debug_log!("Base directory path: {:?}", base_dir);
+//     debug_log!("Base directory exists: {}", base_dir.exists());
+    
+//     // Check current working directory
+//     debug_log!("Current working directory: {:?}", std::env::current_dir()?);
+    
+//     // Construct and check the specific file path
+//     let file_path = base_dir.join(format!("{}__collaborator.toml", username));
+//     debug_log!("Looking for file at: {:?}", file_path);
+//     debug_log!("File exists: {}", file_path.exists());
+
+//     // Try to list files in the directory if it exists
+//     if base_dir.exists() {
+//         debug_log!("Contents of collaborator_files_address_book directory:");
+//         match std::fs::read_dir(base_dir) {
+//             Ok(entries) => {
+//                 for entry in entries {
+//                     if let Ok(entry) = entry {
+//                         debug_log!("Found file: {:?}", entry.path());
+//                     }
+//                 }
+//             },
+//             Err(e) => debug_log!("Could not read directory contents: {}", e),
+//         }
+//     }
+//     // Use read_one_collaborator_setup_toml to read and deserialize the data
+//     match read_one_collaborator_setup_toml(username) {
+//         Ok(loaded_collaborator) => {
+//             debug_log!("Collaborator file found ok.");
+//             Ok(loaded_collaborator)
+//         }
+//         Err(e) => {
+//             debug_log!("Collaborator file not found: {:?}", e);
+//             Err(e) // Propagate the error from read_one_collaborator_setup_toml
+//         }
+//     }
+// }
+
 /// Loads collaborator data from a TOML file based on the username.
 ///
-/// This function uses `read_one_collaborator_setup_toml` to deserialize the collaborator data.
+/// This function locates and loads a collaborator's data file using executable-relative 
+/// paths, ensuring consistent file access regardless of the current working directory.
+/// The file is expected to be named "{username}__collaborator.toml" and located 
+/// in the project_graph_data/collaborator_files_address_book directory relative 
+/// to the executable's location.
 ///
 /// # Arguments
 ///
 /// * `username` - The username of the collaborator whose data needs to be loaded.
+///
+/// # Returns
+///
+/// * `Result<CollaboratorTomlData, ThisProjectError>` - The deserialized collaborator data
+///   or an error detailing what went wrong.
 ///
 /// # Errors
 ///
 /// This function returns a `Result<CollaboratorTomlData, ThisProjectError>` to handle potential errors:
 ///  - `ThisProjectError::IoError`: If the collaborator file is not found or if there is an error reading the file.
 ///  - `ThisProjectError::TomlDeserializationError`: If there is an error parsing the TOML data.
+///  - `ThisProjectError::PathResolutionError`: If the executable-relative path cannot be determined.
 ///
 /// # Example
 ///
 /// ```
-/// let collaborator = get_addressbook_file_by_username("alice").unwrap(); // Assuming alice's data exists
-/// println!("Collaborator: {:?}", collaborator);
+/// let collaborator = get_addressbook_file_by_username("alice")?;
+/// println!("Loaded collaborator data for: {}", collaborator.user_name);
 /// ```
 fn get_addressbook_file_by_username(username: &str) -> Result<CollaboratorTomlData, ThisProjectError> {
-    debug_log!("Starting get_addressbook_file_by_username(username),  for -> '{}'", username);
-    // debug_log!("Starting get_addressbook_file_by_username(username),  for -> '{}'", username);
+    debug_log!("Starting get_addressbook_file_by_username for username -> '{}'", username);
     
-    // Debug the directory structure
-    let base_dir = Path::new("project_graph_data/collaborator_files_address_book");
-    debug_log!("Base directory path: {:?}", base_dir);
-    debug_log!("Base directory exists: {}", base_dir.exists());
+    // Get the executable-relative base directory path
+    let base_dir = match make_input_path_name_abs_executabledirectoryrelative_nocheck(
+        COLLABORATOR_ADDRESSBOOK_PATH_STR
+    ) {
+        Ok(path) => path,
+        Err(e) => {
+            debug_log!("Failed to resolve collaborator directory path: {}", e);
+            return Err(ThisProjectError::IoError(e));
+        }
+    };
     
-    // Check current working directory
-    debug_log!("Current working directory: {:?}", std::env::current_dir()?);
+    debug_log!("Base directory path (executable-relative): {:?}", base_dir);
     
-    // Construct and check the specific file path
-    let file_path = base_dir.join(format!("{}__collaborator.toml", username));
-    debug_log!("Looking for file at: {:?}", file_path);
-    debug_log!("File exists: {}", file_path.exists());
+    // Check if base directory exists
+    let base_exists = base_dir.exists();
+    debug_log!("Base directory exists: {}", base_exists);
+    
+    // Construct the specific file path
+    let file_name = format!("{}__collaborator.toml", username);
+    let file_path = base_dir.join(&file_name);
+    debug_log!("Looking for collaborator file at: {:?}", file_path);
+    
+    // Check if file exists
+    let file_exists = file_path.exists();
+    debug_log!("Collaborator file exists: {}", file_exists);
 
-    // Try to list files in the directory if it exists
-    if base_dir.exists() {
+    // If directory exists but file doesn't, list contents to help debugging
+    if base_exists && !file_exists {
         debug_log!("Contents of collaborator_files_address_book directory:");
-        match std::fs::read_dir(base_dir) {
+        match std::fs::read_dir(&base_dir) {
             Ok(entries) => {
+                let mut found_files = false;
                 for entry in entries {
                     if let Ok(entry) = entry {
-                        debug_log!("Found file: {:?}", entry.path());
+                        debug_log!("- Found file: {:?}", entry.path().file_name().unwrap_or_default());
+                        found_files = true;
                     }
+                }
+                if !found_files {
+                    debug_log!("(directory is empty)");
                 }
             },
             Err(e) => debug_log!("Could not read directory contents: {}", e),
         }
     }
-    // Use read_one_collaborator_setup_toml to read and deserialize the data
+    
+    // Update the read_one_collaborator_setup_toml function to also use executable-relative paths
+    // Since we don't see its implementation, we'll assume it's a function we need to call
     match read_one_collaborator_setup_toml(username) {
         Ok(loaded_collaborator) => {
-            debug_log!("Collaborator file found ok.");
+            debug_log!("Successfully loaded collaborator data for '{}'", username);
             Ok(loaded_collaborator)
         }
         Err(e) => {
-            debug_log!("Collaborator file not found: {:?}", e);
-            Err(e) // Propagate the error from read_one_collaborator_setup_toml
+            debug_log!("Failed to load collaborator file for '{}': {:?}", username, e);
+            Err(e) // Propagate the error
         }
     }
 }
@@ -15888,7 +15994,7 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
     // the team-owner invites people to the team
     // each collaborator invites you to connect with them
     filtered_collaboratorsarray.retain(|name| {
-        let toml_file_path = Path::new("project_graph_data/collaborator_files_address_book")
+        let toml_file_path = Path::new(COLLABORATOR_ADDRESSBOOK_PATH_STR)
             .join(format!("{}__collaborator.toml", name));
         toml_file_path.exists()
     });
@@ -16199,7 +16305,7 @@ fn hex_string_to_pearson_hash(hex_string: &str) -> Result<Vec<u8>, String> {
 ///
 fn get_saltlist_for_collaborator(collaborator_name: &str) -> Result<Vec<u128>, ThisProjectError> {
     // 1. Construct File Path (using PathBuf)
-    let file_path = Path::new("project_graph_data/collaborator_files_address_book")
+    let file_path = Path::new(COLLABORATOR_ADDRESSBOOK_PATH_STR)
         .join(format!("{}__collaborator.toml", collaborator_name));
 
     // 2. Read File (handling potential errors)
