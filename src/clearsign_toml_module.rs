@@ -983,7 +983,7 @@ pub fn read_integerarray_clearsigntoml(path: &str, field_name: &str) -> Result<V
     read_integer_array(path, field_name)
 }
 
-
+/* maybe ~duplicate of better read_str_array_field_clearsigntoml()
 /// Reads an string array field from a clearsigned TOML file
 ///...
 pub fn read_str_array_clearsigntoml(path: &str, field_name: &str) -> Result<Vec<u64>, String> {
@@ -998,9 +998,9 @@ pub fn read_str_array_clearsigntoml(path: &str, field_name: &str) -> Result<Vec<
     }
     
     // Only read the field if verification succeeded
-    read_integer_array(path, field_name)
+    read_string_array_field_from_toml(path, field_name)
 }
-
+*/
 
 #[cfg(test)]
 mod tests {
@@ -2388,20 +2388,20 @@ pub fn read_string_array_field_from_toml(path: &str, field_name: &str) -> Result
 pub fn read_str_array_field_clearsigntoml(path: &str, field_name: &str) -> Result<Vec<String>, String> {
     // Step 1: Extract GPG key from the file
     let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")
-        .map_err(|e| format!("Failed to extract GPG key from file '{}': {}", path, e))?;
+        .map_err(|e| format!("in read_str_array_field_clearsigntoml() Failed to extract GPG key from file '{}': {}", path, e))?;
     
     // Step 2: Verify the file's clearsign signature
     let verification_result = verify_clearsign(path, &key)
-        .map_err(|e| format!("Error during signature verification of file '{}': {}", path, e))?;
+        .map_err(|e| format!("in read_str_array_field_clearsigntoml()  Error during signature verification of file '{}': {}", path, e))?;
     
     // Step 3: Check if verification was successful
     if !verification_result {
-        return Err(format!("GPG signature verification failed for file: {}", path));
+        return Err(format!("in read_str_array_field_clearsigntoml()  GPG signature verification failed for file: {}", path));
     }
     
     // Step 4: If verification succeeded, read the requested field
     read_string_array_field_from_toml(path, field_name)
-        .map_err(|e| format!("Failed to read string array '{}' from verified file '{}': {}", 
+        .map_err(|e| format!("in read_str_array_field_clearsigntoml()  Failed to read string array '{}' from verified file '{}': {}", 
                              field_name, path, e))
 }
 

@@ -365,6 +365,10 @@ use std::net::{
 // https://docs.rs/getifaddrs/latest/getifaddrs/
 use getifaddrs::{getifaddrs, InterfaceFlags};
 
+
+
+
+
 /*
 To eventually replace any 3rd party 
 toml crates
@@ -2056,127 +2060,302 @@ Seri_Deseri Serialize To TOml File End
 Seri_Deseri Deserialize From .toml Start
 */
 
-/// Vanilla-Rust File Deserialization
-/// Toml Deserialization: Reads collaborator setup data from TOML files in a specified directory.
+// WRONG!!!! THIS USES TOML CRATE!!!!
+// /// Vanilla-Rust File Deserialization
+// /// Toml Deserialization: Reads collaborator setup data from TOML files in a specified directory.
+// ///
+// /// # Requires: 
+// /// the toml crate (use a current version)
+// /// 
+// /// [dependencies]
+// /// toml = "0.8"
+// /// 
+// /// # Terms:
+// /// Serialization: The process of converting a data structure (like your CollaboratorTomlData struct) into a textual representation (like a TOML file).
+// /// 
+// /// Deserialization: The process of converting a textual representation (like a TOML file) into a data structure (like your CollaboratorTomlData struct).
+// /// 
+// /// This function reads and parses TOML files located in the directory 
+// /// `project_graph_data/collaborator_files_address_book`. Each file is expected to 
+// /// contain data for a single collaborator in a structure that can be mapped to 
+// /// the `CollaboratorTomlData` struct.
+// ///
+// /// # No `serde` Crate
+// ///
+// /// This function implements TOML parsing *without* using the `serde` crate. 
+// /// It manually extracts values from the TOML data using the `toml` crate's 
+// /// `Value` enum and pattern matching. 
+// ///
+// /// This approach is taken to avoid the dependency on the `serde` crate 
+// /// while still providing a way to parse TOML files.
+// ///
+// /// # Data Extraction
+// ///
+// /// The function extracts the following fields from one TOML file:
+// ///
+// /// - `user_name` (String)
+// /// - `user_salt_list` (Vec<u128>): Stored as hexadecimal strings in the TOML file.
+// /// - `ipv4_addresses` (Option<Vec<Ipv4Addr>>): Stored as strings in the TOML file.
+// /// - `ipv6_addresses` (Option<Vec<Ipv6Addr>>): Stored as strings in the TOML file.
+// /// - `gpg_key_public` (String)
+// /// - `sync_interval` (u64)
+// /// - `updated_at_timestamp` (u64)
+// ///
+// /// # Helper Functions
+// ///
+// /// The following helper functions are used to extract and parse specific data types:
+// ///
+// /// - `extract_ipv4_addresses`: Parses a string array into `Option<Vec<Ipv4Addr>>`.
+// /// - `extract_ipv6_addresses`: Parses a string array into `Option<Vec<Ipv6Addr>>`.
+// /// - `extract_u64`: Parses a TOML integer into a `u64` value, handling potential errors.
+// ///
+// /// Reads collaborator setup data from a TOML file for a specific user.
+// ///
+// /// This function reads and parses a TOML file located at 
+// /// `project_graph_data/collaborator_files_address_book/{collaborator_name}__collaborator.toml`.
+// /// The file is expected to contain data for a single collaborator in a structure that 
+// /// can be mapped to the `CollaboratorTomlData` struct.
+// ///
+// /// # Error Handling
+// ///
+// /// This function uses a centralized error handling approach. If any error occurs during:
+// ///
+// /// - File reading (e.g., file not found)
+// /// - TOML parsing (e.g., invalid TOML syntax)
+// /// - Data extraction (e.g., missing required fields, invalid data formats)
+// ///
+// /// The function will immediately return an `Err` containing a `ThisProjectError` that describes the error.
+// /// 
+// /// This approach simplifies error propagation and allows for early exit on error. 
+// /// If any part of the parsing or data extraction process fails, the function will stop 
+// /// and return the error without attempting to process the rest of the file.
+// ///
+// /// # Example
+// ///
+// /// ```
+// /// let collaborator_data = read_one_collaborator_setup_toml("alice");
+// ///
+// /// match collaborator_data {
+// ///     Ok(data) => { /* ... process the collaborator data */ },
+// ///     Err(e) => { /* ... handle the error */ },
+// /// }
+// /// ```
+// ///
+// /// # Example TOML File
+// ///
+// /// ```toml
+// /// user_name = "Alice"
+// /// user_salt_list = ["0x11111111111111111111111111111111", "0x11111111111111111111111111111112"]
+// /// ipv4_addresses = ["192.168.1.1", "10.0.0.1"]
+// /// ipv6_addresses = ["fe80::1", "::1"]
+// /// gpg_key_public = """-----BEGIN PGP PUBLIC KEY BLOCK----- ..."""
+// /// sync_interval = 60
+// /// updated_at_timestamp = 1728307160
+// /// ```
+// ///
+// /// # Returns
+// ///
+// /// Returns a `Result` containing:
+// /// - `Ok`: A tuple with:
+// ///     - A vector of successfully parsed `CollaboratorTomlData` instances.
+// ///     - A vector of any `ThisProjectError` encountered during parsing.
+// /// - `Err`: A `ThisProjectError` if there was an error reading the directory or any file.
+// /// 
+// /// This was developed for the UMA project, as the naming reflects:
+// /// https://github.com/lineality/uma_productivity_collaboration_tool
+// /// 
+// /// # Use with:
+// /// // Specify the username of the collaborator to read
+// /// let username = "alice";
+// ///
+// /// /// Read the collaborator data from the TOML file
+// /// match read_one_collaborator_setup_toml(username) {
+// ///     Ok(collaborator) => {
+// ///         // Print the collaborator data
+// ///         println!("Collaborator Data for {}:", username);
+// ///         println!("{:#?}", collaborator); /// Use {:#?} for pretty-printing
+// ///     }
+// ///     Err(e) => {
+// ///         // Print an error message if there was an error reading or parsing the TOML file
+// ///         println!("Error reading collaborator data for {}: {}", username, e);
+// ///     }
+// /// }
+// fn read_one_collaborator_setup_toml(collaborator_name: &str) -> Result<CollaboratorTomlData, ThisProjectError> {
+//     debug_log("Starting ROCST: read_one_collaborator_setup_toml()");
+
+//     // 1. Construct File Path
+//     let relative_file_path = Path::new(COLLABORATOR_ADDRESSBOOK_PATH_STR)
+//         .join(format!("{}__collaborator.toml", collaborator_name));
+
+//     // Get the executable-relative base directory path
+//     let abs_file_path = match make_input_path_name_abs_executabledirectoryrelative_nocheck(
+//         relative_file_path
+//     ) {
+//         Ok(path) => path,
+//         Err(e) => {
+//             debug_log!("ROCST: Failed to resolve collaborator directory path: {}", e);
+//             return Err(ThisProjectError::IoError(e));
+//         }
+//     };
+    
+//     debug_log!("ROCST: read_one_collaborator_setup_toml(), abs_file_path (executable-relative) -> {:?}", abs_file_path);
+
+//     // 2. Read TOML File
+//     let toml_string = fs::read_to_string(&abs_file_path)?; 
+
+//     // 3. Parse TOML Data
+//     let toml_value = match toml::from_str::<Value>(&toml_string) {
+//         Ok(value) => value,
+//         Err(e) => return Err(ThisProjectError::TomlVanillaDeserialStrError(e.to_string())), 
+//     };
+
+//     // 4. Extract Data from TOML Value (similar to your previous code)
+//     if let Value::Table(table) = toml_value {
+
+//         // Extract user_name
+//         let user_name = if let Some(Value::String(s)) = table.get("user_name") {
+//             s.clone()
+//         } else {
+//             return Err(ThisProjectError::TomlVanillaDeserialStrError("ROCST: Missing user_name".into()));
+//         };
+
+//         // Extract user_salt_list
+//         let user_salt_list = if let Some(Value::Array(arr)) = table.get("user_salt_list") {
+//             arr.iter()
+//                 .map(|val| {
+//                     if let Value::String(s) = val {
+//                         u128::from_str_radix(s.trim_start_matches("0x"), 16)
+//                             .map_err(|e| ThisProjectError::ParseIntError(e))
+//                     } else {
+//                         Err(ThisProjectError::TomlVanillaDeserialStrError("ROCST: Invalid salt format: Expected string".into()))
+//                     }
+//                 })
+//                 .collect::<Result<Vec<u128>, ThisProjectError>>()?
+//         } else {
+//             return Err(ThisProjectError::TomlVanillaDeserialStrError("ROCST: Missing user_salt_list".into()));
+//         };
+
+//         // Extract ipv4_addresses
+//         let ipv4_addresses = extract_ipv4_addresses(&table, "ipv4_addresses")?;
+
+//         // Extract ipv6_addresses
+//         let ipv6_addresses = extract_ipv6_addresses(&table, "ipv6_addresses")?;
+
+//         // Extract gpg_publickey_id
+//         let gpg_publickey_id = if let Some(Value::String(s)) = table.get("gpg_publickey_id") {
+//             s.clone()
+//         } else {
+//             return Err(ThisProjectError::TomlVanillaDeserialStrError("ROCST: Missing or invalid gpg_publickey_id".into()));
+//         };        
+        
+//         // Extract gpg_key_public
+//         let gpg_key_public = if let Some(Value::String(s)) = table.get("gpg_key_public") {
+//             s.clone()
+//         } else {
+//             return Err(ThisProjectError::TomlVanillaDeserialStrError("Missing or invalid gpg_key_public".into()));
+//         };
+
+//         // Extract sync_interval
+//         let sync_interval = extract_u64(&table, "sync_interval")?;
+
+//         // Extract updated_at_timestamp
+//         let updated_at_timestamp = extract_u64(&table, "updated_at_timestamp")?;
+
+//         // 5. Return CollaboratorTomlData 
+//         Ok(CollaboratorTomlData {
+//             user_name,
+//             user_salt_list,
+//             ipv4_addresses,
+//             ipv6_addresses,
+//             gpg_publickey_id,
+//             gpg_key_public,
+//             sync_interval,
+//             updated_at_timestamp,
+//         })
+//     } else {
+//         Err(ThisProjectError::TomlVanillaDeserialStrError("Invalid TOML structure: Expected a table".into()))
+//     }
+// }
+
+/// Reads and parses collaborator setup data from a clearsigned TOML file.
 ///
-/// # Requires: 
-/// the toml crate (use a current version)
-/// 
-/// [dependencies]
-/// toml = "0.8"
-/// 
-/// # Terms:
-/// Serialization: The process of converting a data structure (like your CollaboratorTomlData struct) into a textual representation (like a TOML file).
-/// 
-/// Deserialization: The process of converting a textual representation (like a TOML file) into a data structure (like your CollaboratorTomlData struct).
-/// 
-/// This function reads and parses TOML files located in the directory 
-/// `project_graph_data/collaborator_files_address_book`. Each file is expected to 
-/// contain data for a single collaborator in a structure that can be mapped to 
-/// the `CollaboratorTomlData` struct.
+/// This function securely reads collaborator data from a clearsigned TOML file by:
+/// 1. Extracting the GPG public key from the file itself
+/// 2. Verifying the clearsign signature to ensure integrity and authenticity
+/// 3. If verification succeeds, parsing the TOML data within the clearsigned content
+/// 4. Extracting all required fields into a CollaboratorTomlData structure
 ///
-/// # No `serde` Crate
+/// # Security Model
+/// This function implements a self-verifying approach where each collaborator file
+/// contains its own GPG public key and is clearsigned with the corresponding private key.
+/// This ensures that:
+/// - The data has not been tampered with (integrity)
+/// - The data comes from the claimed source (authenticity)
+/// - No external key management is required for basic verification
 ///
-/// This function implements TOML parsing *without* using the `serde` crate. 
-/// It manually extracts values from the TOML data using the `toml` crate's 
-/// `Value` enum and pattern matching. 
-///
-/// This approach is taken to avoid the dependency on the `serde` crate 
-/// while still providing a way to parse TOML files.
-///
-/// # Data Extraction
-///
-/// The function extracts the following fields from one TOML file:
-///
-/// - `user_name` (String)
-/// - `user_salt_list` (Vec<u128>): Stored as hexadecimal strings in the TOML file.
-/// - `ipv4_addresses` (Option<Vec<Ipv4Addr>>): Stored as strings in the TOML file.
-/// - `ipv6_addresses` (Option<Vec<Ipv6Addr>>): Stored as strings in the TOML file.
-/// - `gpg_key_public` (String)
-/// - `sync_interval` (u64)
-/// - `updated_at_timestamp` (u64)
-///
-/// # Helper Functions
-///
-/// The following helper functions are used to extract and parse specific data types:
-///
-/// - `extract_ipv4_addresses`: Parses a string array into `Option<Vec<Ipv4Addr>>`.
-/// - `extract_ipv6_addresses`: Parses a string array into `Option<Vec<Ipv6Addr>>`.
-/// - `extract_u64`: Parses a TOML integer into a `u64` value, handling potential errors.
-///
-/// Reads collaborator setup data from a TOML file for a specific user.
-///
-/// This function reads and parses a TOML file located at 
-/// `project_graph_data/collaborator_files_address_book/{collaborator_name}__collaborator.toml`.
-/// The file is expected to contain data for a single collaborator in a structure that 
-/// can be mapped to the `CollaboratorTomlData` struct.
-///
-/// # Error Handling
-///
-/// This function uses a centralized error handling approach. If any error occurs during:
-///
-/// - File reading (e.g., file not found)
-/// - TOML parsing (e.g., invalid TOML syntax)
-/// - Data extraction (e.g., missing required fields, invalid data formats)
-///
-/// The function will immediately return an `Err` containing a `ThisProjectError` that describes the error.
-/// 
-/// This approach simplifies error propagation and allows for early exit on error. 
-/// If any part of the parsing or data extraction process fails, the function will stop 
-/// and return the error without attempting to process the rest of the file.
-///
-/// # Example
-///
+/// # File Format Expected
+/// The input file should be a clearsigned TOML file with the following structure:
 /// ```
-/// let collaborator_data = read_one_collaborator_setup_toml("alice");
-///
-/// match collaborator_data {
-///     Ok(data) => { /* ... process the collaborator data */ },
-///     Err(e) => { /* ... handle the error */ },
-/// }
-/// ```
-///
-/// # Example TOML File
-///
-/// ```toml
-/// user_name = "Alice"
+/// -----BEGIN PGP SIGNED MESSAGE-----
+/// Hash: SHA256
+/// 
+/// user_name = "alice"
 /// user_salt_list = ["0x11111111111111111111111111111111", "0x11111111111111111111111111111112"]
 /// ipv4_addresses = ["192.168.1.1", "10.0.0.1"]
 /// ipv6_addresses = ["fe80::1", "::1"]
-/// gpg_key_public = """-----BEGIN PGP PUBLIC KEY BLOCK----- ..."""
+/// gpg_publickey_id = "3AA5C34371567BD2"
+/// gpg_key_public = """-----BEGIN PGP PUBLIC KEY BLOCK-----
+/// ...
+/// -----END PGP PUBLIC KEY BLOCK-----"""
 /// sync_interval = 60
 /// updated_at_timestamp = 1728307160
+/// -----BEGIN PGP SIGNATURE-----
+/// ...
+/// -----END PGP SIGNATURE-----
 /// ```
 ///
+/// # Arguments
+/// * `collaborator_name` - The username/identifier of the collaborator whose data to read
+///
 /// # Returns
+/// * `Ok(CollaboratorTomlData)` - Successfully parsed and verified collaborator data
+/// * `Err(ThisProjectError)` - If verification fails, file is missing, or data is malformed
 ///
-/// Returns a `Result` containing:
-/// - `Ok`: A tuple with:
-///     - A vector of successfully parsed `CollaboratorTomlData` instances.
-///     - A vector of any `ThisProjectError` encountered during parsing.
-/// - `Err`: A `ThisProjectError` if there was an error reading the directory or any file.
-/// 
-/// This was developed for the UMA project, as the naming reflects:
-/// https://github.com/lineality/uma_productivity_collaboration_tool
-/// 
-/// # Use with:
-/// // Specify the username of the collaborator to read
-/// let username = "alice";
+/// # Errors
+/// This function may return errors for several reasons:
+/// * File not found or unreadable
+/// * GPG signature verification failure
+/// * Missing or invalid GPG public key in the file
+/// * Missing required TOML fields
+/// * Invalid data formats (e.g., malformed IP addresses, invalid timestamps)
 ///
-/// /// Read the collaborator data from the TOML file
-/// match read_one_collaborator_setup_toml(username) {
-///     Ok(collaborator) => {
-///         // Print the collaborator data
-///         println!("Collaborator Data for {}:", username);
-///         println!("{:#?}", collaborator); /// Use {:#?} for pretty-printing
-///     }
+/// # Example Usage
+/// ```rust
+/// match read_one_collaborator_setup_toml("alice") {
+///     Ok(collaborator_data) => {
+///         println!("Successfully loaded data for: {}", collaborator_data.user_name);
+///         println!("IP addresses: {:?}", collaborator_data.ipv4_addresses);
+///     },
 ///     Err(e) => {
-///         // Print an error message if there was an error reading or parsing the TOML file
-///         println!("Error reading collaborator data for {}: {}", username, e);
+///         eprintln!("Failed to load collaborator data: {}", e);
 ///     }
 /// }
+/// ```
+///
+/// # Implementation Notes
+/// - Uses line-by-line reading instead of loading entire file into memory
+/// - Does not use any third-party crates like `serde` or `toml`
+/// - Implements manual TOML field extraction for security and control
+/// - Performs cryptographic verification before any data extraction
+/// - Handles both IPv4 and IPv6 address parsing with proper error handling
+///
+/// # Related Functions
+/// This function uses several helper functions from the clearsign_toml_module:
+/// - `read_singleline_string_from_clearsigntoml()` - For single-line string fields
+/// - `read_stringarray_field_clearsigntoml()` - For string arrays
+/// - `read_u64_field_from_toml()` - For numeric fields (after verification)
 fn read_one_collaborator_setup_toml(collaborator_name: &str) -> Result<CollaboratorTomlData, ThisProjectError> {
-    debug_log("Starting read_one_collaborator_setup_toml()");
+    debug_log("Starting ROCST: read_one_collaborator_setup_toml()");
 
     // 1. Construct File Path
     let relative_file_path = Path::new(COLLABORATOR_ADDRESSBOOK_PATH_STR)
@@ -2188,89 +2367,122 @@ fn read_one_collaborator_setup_toml(collaborator_name: &str) -> Result<Collabora
     ) {
         Ok(path) => path,
         Err(e) => {
-            debug_log!("Failed to resolve collaborator directory path: {}", e);
+            debug_log!("ROCST: Failed to resolve collaborator directory path: {}", e);
             return Err(ThisProjectError::IoError(e));
         }
     };
     
-    debug_log!("read_one_collaborator_setup_toml(), abs_file_path (executable-relative) -> {:?}", abs_file_path);
+    debug_log!("ROCST: read_one_collaborator_setup_toml(), abs_file_path (executable-relative) -> {:?}", abs_file_path);
 
-    // 2. Read TOML File
-    let toml_string = fs::read_to_string(&abs_file_path)?; 
+    // Convert path to string for clearsign functions
+    let file_path_str = abs_file_path.to_str()
+        .ok_or_else(|| ThisProjectError::TomlVanillaDeserialStrError(
+            "Failed to convert file path to string".to_string()
+        ))?;
 
-    // 3. Parse TOML Data
-    // 3. Parse TOML Data (handle potential toml::de::Error)
-    let toml_value = match toml::from_str::<Value>(&toml_string) {
-        Ok(value) => value,
-        Err(e) => return Err(ThisProjectError::TomlVanillaDeserialStrError(e.to_string())), 
+    // 2. Read and verify all fields from the clearsigned TOML file
+    // Each read operation includes signature verification
+    
+    // Extract user_name
+    let user_name = read_singleline_string_from_clearsigntoml(file_path_str, "user_name")
+        .map_err(|e| ThisProjectError::TomlVanillaDeserialStrError(
+            format!("Failed to read user_name: {}", e)
+        ))?;
+
+    // Extract gpg_publickey_id
+    let gpg_publickey_id = read_singleline_string_from_clearsigntoml(file_path_str, "gpg_publickey_id")
+        .map_err(|e| ThisProjectError::TomlVanillaDeserialStrError(
+            format!("Failed to read gpg_publickey_id: {}", e)
+        ))?;
+
+    // Extract gpg_key_public
+    let gpg_key_public = read_multiline_string_from_clearsigntoml(file_path_str, "gpg_key_public")
+        .map_err(|e| ThisProjectError::TomlVanillaDeserialStrError(
+            format!("Failed to read gpg_key_public: {}", e)
+        ))?;
+
+    // Extract user_salt_list (array of hex strings that need to be converted to u128)
+    let salt_strings = read_str_array_field_clearsigntoml(file_path_str, "user_salt_list")
+        .map_err(|e| ThisProjectError::TomlVanillaDeserialStrError(
+            format!("Failed to read user_salt_list: {}", e)
+        ))?;
+
+    // Convert hex strings to u128 values
+    let user_salt_list: Result<Vec<u128>, ThisProjectError> = salt_strings
+        .iter()
+        .map(|hex_str| {
+            // Remove "0x" prefix if present
+            let clean_hex = hex_str.trim_start_matches("0x");
+            u128::from_str_radix(clean_hex, 16)
+                .map_err(|e| ThisProjectError::ParseIntError(e))
+        })
+        .collect();
+    let user_salt_list = user_salt_list?;
+
+    // Extract IPv4 addresses (optional)
+    let ipv4_addresses = match read_str_array_field_clearsigntoml(file_path_str, "ipv4_addresses") {
+        Ok(addr_strings) => {
+            let parsed_addrs: Result<Vec<std::net::Ipv4Addr>, ThisProjectError> = addr_strings
+                .iter()
+                .map(|addr_str| {
+                    addr_str.parse::<std::net::Ipv4Addr>()
+                        .map_err(|e| ThisProjectError::TomlVanillaDeserialStrError(
+                            format!("Invalid IPv4 address '{}': {}", addr_str, e)
+                        ))
+                })
+                .collect();
+            Some(parsed_addrs?)
+        },
+        Err(_) => None, // Field is optional
     };
 
-    // 4. Extract Data from TOML Value (similar to your previous code)
-    if let Value::Table(table) = toml_value {
-
-        // Extract user_name
-        let user_name = if let Some(Value::String(s)) = table.get("user_name") {
-            s.clone()
-        } else {
-            return Err(ThisProjectError::TomlVanillaDeserialStrError("Missing user_name".into()));
-        };
-
-        // Extract user_salt_list
-        let user_salt_list = if let Some(Value::Array(arr)) = table.get("user_salt_list") {
-            arr.iter()
-                .map(|val| {
-                    if let Value::String(s) = val {
-                        u128::from_str_radix(s.trim_start_matches("0x"), 16)
-                            .map_err(|e| ThisProjectError::ParseIntError(e))
-                    } else {
-                        Err(ThisProjectError::TomlVanillaDeserialStrError("Invalid salt format: Expected string".into()))
-                    }
+    // Extract IPv6 addresses (optional)
+    let ipv6_addresses = match read_str_array_field_clearsigntoml(file_path_str, "ipv6_addresses") {
+        Ok(addr_strings) => {
+            let parsed_addrs: Result<Vec<std::net::Ipv6Addr>, ThisProjectError> = addr_strings
+                .iter()
+                .map(|addr_str| {
+                    addr_str.parse::<std::net::Ipv6Addr>()
+                        .map_err(|e| ThisProjectError::TomlVanillaDeserialStrError(
+                            format!("Invalid IPv6 address '{}': {}", addr_str, e)
+                        ))
                 })
-                .collect::<Result<Vec<u128>, ThisProjectError>>()?
-        } else {
-            return Err(ThisProjectError::TomlVanillaDeserialStrError("Missing user_salt_list".into()));
-        };
+                .collect();
+            Some(parsed_addrs?)
+        },
+        Err(_) => None, // Field is optional
+    };
 
-        // Extract ipv4_addresses
-        let ipv4_addresses = extract_ipv4_addresses(&table, "ipv4_addresses")?;
+    // For numeric fields, we need to read them as strings first (since they're in a clearsigned file)
+    // then parse them manually
+    
+    // Extract sync_interval
+    let sync_interval_str = read_singleline_string_from_clearsigntoml(file_path_str, "sync_interval")
+        .map_err(|e| ThisProjectError::TomlVanillaDeserialStrError(
+            format!("Failed to read sync_interval: {}", e)
+        ))?;
+    let sync_interval = sync_interval_str.parse::<u64>()
+        .map_err(|e| ThisProjectError::ParseIntError(e))?;
 
-        // Extract ipv6_addresses
-        let ipv6_addresses = extract_ipv6_addresses(&table, "ipv6_addresses")?;
+    // Extract updated_at_timestamp
+    let timestamp_str = read_singleline_string_from_clearsigntoml(file_path_str, "updated_at_timestamp")
+        .map_err(|e| ThisProjectError::TomlVanillaDeserialStrError(
+            format!("Failed to read updated_at_timestamp: {}", e)
+        ))?;
+    let updated_at_timestamp = timestamp_str.parse::<u64>()
+        .map_err(|e| ThisProjectError::ParseIntError(e))?;
 
-        // Extract gpg_publickey_id
-        let gpg_publickey_id = if let Some(Value::String(s)) = table.get("gpg_publickey_id") {
-            s.clone()
-        } else {
-            return Err(ThisProjectError::TomlVanillaDeserialStrError("Missing or invalid gpg_publickey_id".into()));
-        };        
-        
-        // Extract gpg_key_public
-        let gpg_key_public = if let Some(Value::String(s)) = table.get("gpg_key_public") {
-            s.clone()
-        } else {
-            return Err(ThisProjectError::TomlVanillaDeserialStrError("Missing or invalid gpg_key_public".into()));
-        };
-
-        // Extract sync_interval
-        let sync_interval = extract_u64(&table, "sync_interval")?;
-
-        // Extract updated_at_timestamp
-        let updated_at_timestamp = extract_u64(&table, "updated_at_timestamp")?;
-
-        // 5. Return CollaboratorTomlData 
-        Ok(CollaboratorTomlData {
-            user_name,
-            user_salt_list,
-            ipv4_addresses,
-            ipv6_addresses,
-            gpg_publickey_id,
-            gpg_key_public,
-            sync_interval,
-            updated_at_timestamp,
-        })
-    } else {
-        Err(ThisProjectError::TomlVanillaDeserialStrError("Invalid TOML structure: Expected a table".into()))
-    }
+    // 3. Construct and return the CollaboratorTomlData structure
+    Ok(CollaboratorTomlData {
+        user_name,
+        user_salt_list,
+        ipv4_addresses,
+        ipv6_addresses,
+        gpg_publickey_id,
+        gpg_key_public,
+        sync_interval,
+        updated_at_timestamp,
+    })
 }
 
 fn extract_ipv4_addresses(table: &toml::map::Map<String, Value>, key: &str) -> Result<Option<Vec<Ipv4Addr>>, ThisProjectError> {
@@ -4043,9 +4255,9 @@ impl App {
                     debug_log("Invalid index.");
                 }
             } 
-        } else if self.is_in_instant_message_browser_directory() {
+        } else if self.is_in_message_posts_browser_directory() {
             // ... handle other TUI actions ...
-            debug_log("else if self.is_in_instant_message_browser_directory()");
+            debug_log("else if self.is_in_message_posts_browser_directory()");
             
             
         }
@@ -4059,9 +4271,9 @@ impl App {
     }
 
     // // TODO not being used
-    // fn enter_instant_message_browser(&mut self, channel_path: PathBuf) { 
+    // fn enter_message_posts_browser(&mut self, channel_path: PathBuf) { 
     //     // Update the current path to the instant message browser directory within the selected channel
-    //     self.current_path = channel_path.join("instant_message_browser"); 
+    //     self.current_path = channel_path.join("message_posts_browser"); 
     //     // Load the instant messages for this channel
     //     self.load_im_messages(); // No need to pass any arguments 
     //     // Reset the TUI focus to the beginning of the message list
@@ -4099,7 +4311,7 @@ impl App {
     ///   3. Watch thread: Monitors directory for changes
     ///
     /// # Parameters
-    /// * `channel_path` - Path to the channel containing the instant_message_browser directory
+    /// * `channel_path` - Path to the channel containing the message_posts_browser directory
     ///
     /// # Returns
     /// * `io::Result<()>` - Success or IO error
@@ -4114,23 +4326,23 @@ impl App {
     /// - Sets App.input_mode appropriately
     /// - Loads messages via App.load_im_messages()
     /// - Restores previous path on exit
-    pub fn enter_modal_instant_message_browser(&mut self, channel_path: PathBuf) -> io::Result<()> {
-        debug_log("starting enter_modal_instant_message_browser()");
+    pub fn enter_modal_message_posts_browser(&mut self, channel_path: PathBuf) -> io::Result<()> {
+        debug_log("starting enter_modal_message_posts_browser()");
         
         // Store the original path for restoration on exit
         let original_path = self.current_path.clone();
         
         // Update the current path to the instant message browser directory
-        self.current_path = channel_path.join("instant_message_browser");
+        self.current_path = channel_path.join("message_posts_browser");
         
         debug_log!(
-            "enter_modal_instant_message_browser() app.current_path after joining 'instant_message_browser': {:?}",
+            "enter_modal_message_posts_browser() app.current_path after joining 'message_posts_browser': {:?}",
             self.current_path
         ); 
         
         // Verify directory exists
         if !self.current_path.exists() {
-            println!("enter_modal_instant_message_browser Message directory not found!");
+            println!("enter_modal_message_posts_browser Message directory not found!");
             self.current_path = original_path; // Restore original path
             return Ok(());
         }
@@ -4687,8 +4899,8 @@ fn handle_task_action(&mut self, input: &str) -> bool { // Return true to exit t
         self.current_path == PathBuf::from("project_graph_data/team_channels")
     }
 
-    fn is_in_instant_message_browser_directory(&self) -> bool {
-        self.current_path.ends_with("instant_message_browser")
+    fn is_in_message_posts_browser_directory(&self) -> bool {
+        self.current_path.ends_with("message_posts_browser")
     }
     
     fn get_tui_focus_node_path(&self) -> Option<PathBuf> { 
@@ -5893,6 +6105,7 @@ struct CoreNode {
     teamchannel_collaborators_with_access: Vec<String>,
     /// A map containing port assignments for each collaborator associated with the node.
     abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
+
     // project areas: project module items as task-ish thing
     pa1_process: String,
     pa2_schedule: Vec<u64>, 
@@ -5900,6 +6113,31 @@ struct CoreNode {
     pa4_features: String,
     pa5_mvp: String,
     pa6_feedback: String,
+    
+    /////////////////
+    // message_posts
+    /////////////////
+    
+    /// Integer validation ranges as tuples (min, max) - inclusive bounds 
+    pub message_post_data_format_specs_integer_ranges_from_to_tuple_array: Option<Vec<(i32, i32)>>, 
+
+    /// Integer-string validation ranges as tuples (min, max) for the integer part 
+    pub message_post_data_format_specs_int_string_ranges_from_to_tuple_array: Option<Vec<(i32, i32)>>, 
+
+    /// Maximum string length for integer-string pairs 
+    pub message_post_data_format_specs_int_string_max_string_length: Option<usize>, 
+
+    /// Whether posts are public or private 
+    pub message_post_is_public_bool: Option<bool>, 
+
+    /// Whether user confirmation is required before posting 
+    pub message_post_user_confirms_bool: Option<bool>, 
+
+    /// Start time for accepting posts (UTC POSIX timestamp) 
+    pub message_post_start_date_utc_posix: Option<i64>, 
+
+    /// End time for accepting posts (UTC POSIX timestamp) 
+    pub message_post_end_date_utc_posix: Option<i64>,
 }
 
 
@@ -5946,6 +6184,27 @@ struct CoreNode {
 /// A map containing port assignments for each collaborator associated with the node.
 /// abstract_collaborator_port_assignments: HashMap<String, CollaboratorPorts>,
 ///
+/// # Arguments
+/// 
+/// * `node_name` - The name of the node
+/// * `description_for_tui` - Description to display in the TUI
+/// * `directory_path` - Absolute path to the node's directory
+/// * `owner` - Username of the node owner
+/// * `teamchannel_collaborators_with_access` - List of collaborators with access
+/// * `abstract_collaborator_port_assignments` - Port assignments for collaborators
+/// * `pa1_process` - Project area 1: process description
+/// * `pa2_schedule` - Project area 2: schedule timestamps
+/// * `pa3_users` - Project area 3: users description
+/// * `pa4_features` - Project area 4: features description
+/// * `pa5_mvp` - Project area 5: MVP description
+/// * `pa6_feedback` - Project area 6: feedback description
+/// * `message_post_data_format_specs_integer_ranges_from_to_tuple_array` - Integer validation ranges
+/// * `message_post_data_format_specs_int_string_ranges_from_to_tuple_array` - Integer-string validation ranges
+/// * `message_post_data_format_specs_int_string_max_string_length` - Max string length for int-string pairs
+/// * `message_post_is_public_bool` - Whether posts are public
+/// * `message_post_user_confirms_bool` - Whether user confirmation is required
+/// * `message_post_start_date_utc_posix` - Start date for accepting posts
+/// * `message_post_end_date_utc_posix` - End date for accepting posts
 impl CoreNode {
     fn new(
         node_name: String,
@@ -5961,6 +6220,14 @@ impl CoreNode {
         pa4_features: String,
         pa5_mvp: String,
         pa6_feedback: String,
+        // Message Post Configuration
+        message_post_data_format_specs_integer_ranges_from_to_tuple_array: Option<Vec<(i32, i32)>>,
+        message_post_data_format_specs_int_string_ranges_from_to_tuple_array: Option<Vec<(i32, i32)>>,
+        message_post_data_format_specs_int_string_max_string_length: Option<usize>,
+        message_post_is_public_bool: Option<bool>,
+        message_post_user_confirms_bool: Option<bool>,
+        message_post_start_date_utc_posix: Option<i64>,
+        message_post_end_date_utc_posix: Option<i64>,
     ) -> Result<CoreNode, ThisProjectError> {
         debug_log!("Starting CoreNode::new");
         debug_log!("Directory path received: {:?}", directory_path);
@@ -5980,7 +6247,7 @@ impl CoreNode {
                 data
             },
             Err(e) => {
-                debug_log!("Error getting address book data: {:?}", e);
+                debug_log!("impl corenode new() Error getting address book data: {:?}", e);
                 return Err(e);
             }
         };
@@ -6024,6 +6291,14 @@ impl CoreNode {
             pa4_features,
             pa5_mvp,
             pa6_feedback,
+            // Message Post Configuration
+            message_post_data_format_specs_integer_ranges_from_to_tuple_array,
+            message_post_data_format_specs_int_string_ranges_from_to_tuple_array,
+            message_post_data_format_specs_int_string_max_string_length,
+            message_post_is_public_bool,
+            message_post_user_confirms_bool,
+            message_post_start_date_utc_posix,
+            message_post_end_date_utc_posix,
         };
         debug_log!("Successfully created CoreNode instance");
 
@@ -6679,6 +6954,219 @@ fn display_simple_tui_table(headers: &[&str], data: &[Vec<&str>]) {
 //     Ok(collaborator_data) 
 // }
 
+// /*
+// should not use any 3rd party crates
+// - pending:
+// -- clearsign validate
+// */
+// /// Loads a `CoreNode` from a TOML file, handling potential errors.
+// ///
+// /// # Arguments
+// ///
+// /// * `file_path` - The path to the TOML file containing the node data.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<CoreNode, String>` - `Ok(CoreNode)` if the node is successfully loaded,
+// ///    `Err(String)` containing an error message if an error occurs. 
+// fn load_core_node_from_toml_file(file_path: &Path) -> Result<CoreNode, String> {
+    
+//     debug_log!(
+//         "Starting: load_core_node_from_toml_file(), file_path -> {:?}",
+//         file_path,
+//     );
+    
+//     // pending
+//     /*
+//     look up file owner
+//     get gpg public key
+//     validate clearsign
+//     */
+    
+//     // 1. Read File Contents 
+//     let toml_string = match fs::read_to_string(file_path) {
+//         Ok(content) => content,
+//         Err(e) => return Err(format!("Error lcnftf reading file: {} in load_core_node_from_toml_file", e)),
+//     };
+
+//     // 2. Parse TOML String 
+//     let toml_value: Value = match toml_string.parse() {
+//         Ok(value) => value,
+//         Err(e) => return Err(format!("Error lcnftf parsing TOML in load_core_node_from_toml_file: {}", e)),
+//     };
+
+//     // 3. Extract node_unique_id as hex string and decode using your function:
+//     // let node_unique_id = match toml_value.get("node_unique_id").and_then(Value::as_str) {
+//     //     Some(hex_string) => hex_string_to_pearson_hash(hex_string)?, // Use your function. Propagate error with ?.
+//     //     None => return Err("error: load_core_node_from_toml_file(), Missing node_unique_id".to_string()),
+//     // };
+    
+//     // 3. Extract node_unique_id as array
+//     let node_unique_id = match toml_value.get("node_unique_id").and_then(Value::as_array) {
+//         Some(array) => {
+//             let mut vec = Vec::new();
+//             for value in array {
+//                 if let Some(num) = value.as_integer() {
+//                     if num >= 0 && num <= 255 {
+//                         vec.push(num as u8);
+//                     } else {
+//                         return Err("Invalid byte value in node_unique_id".to_string());
+//                     }
+//                 } else {
+//                     return Err("Invalid value in node_unique_id array".to_string());
+//                 }
+//             }
+//             vec
+//         },
+//         None => return Err("Missing or invalid node_unique_id".to_string()),
+//     };
+//     // // Project Areas
+//     // pa1_process
+//     // pa2_schedule
+//     // pa3_users
+//     // pa4_features
+//     // pa5_mvp
+//     // pa6_feedback 
+
+//     // TODO
+    
+//     // 4. Task Items
+//     let pa1_process = toml_value
+//         .get("pa1_process")
+//         .and_then(Value::as_str)
+//         .ok_or("Missing or invalid pa1_process")?
+//         .to_string();
+
+//     // schedule_duration
+//     let pa2_schedule = toml_value
+//         .get("pa2_schedule")
+//         .and_then(Value::as_array)
+//         .ok_or("Missing or invalid pa2_schedule")?
+//         .iter()
+//         .map(|v| v.as_integer().ok_or("Invalid integer in pa2_schedule"))
+//         .collect::<Result<Vec<i64>, &str>>()?
+//         .into_iter()
+//         .map(|i| i as u64)
+//         .collect();
+    
+//     let pa3_users = toml_value
+//         .get("pa3_users")
+//         .and_then(Value::as_str)
+//         .ok_or("Missing or invalid pa3_users")?
+//         .to_string();
+
+//     let pa4_features = toml_value
+//         .get("pa4_features")
+//         .and_then(Value::as_str)
+//         .ok_or("Missing or invalid pa4_features")?
+//         .to_string();
+
+//     let pa5_mvp = toml_value
+//         .get("pa5_mvp")
+//         .and_then(Value::as_str)
+//         .ok_or("Missing or invalid pa5_mvp")?
+//         .to_string();
+    
+//     let pa6_feedback = toml_value
+//         .get("pa6_feedback")
+//         .and_then(Value::as_str)
+//         .ok_or("Missing or invalid pa6_feedback")?
+//         .to_string();
+    
+//     // // 4. Handle abstract_collaborator_port_assignments
+//     // if let Some(collaborator_assignments_table) = toml_value.get("abstract_collaborator_port_assignments").and_then(Value::as_table) {
+//     //     for (pair_name, pair_data) in collaborator_assignments_table {
+//     //         debug_log("Looking for 'collaborator_ports' load_core...");
+//     //         if let Some(ports_list) = pair_data.get("collaborator_ports").and_then(Value::as_array) {
+//     //             let mut collaborator_ports = Vec::new();
+//     //             for port_data in ports_list {
+//     //                 // Deserialize each AbstractTeamchannelNodeTomlPortsData from the array
+//     //                 let port_data_str = toml::to_string(&port_data).unwrap(); // Convert Value to String
+//     //                 // let collaborator_port: AbstractTeamchannelNodeTomlPortsData = toml::from_str(&port_data_str).map_err(|e| format!("Error deserializing collaborator port: {}", e))?;
+//     //                 let collaborator_port: ReadTeamchannelCollaboratorPortsToml = toml::from_str(&port_data_str).map_err(|e| format!("Error deserializing collaborator port: {}", e))?;
+//     //                 collaborator_ports.push(collaborator_port);
+//     //             }
+//     //             core_node.abstract_collaborator_port_assignments.insert(pair_name.clone(), collaborator_ports);
+//     //             // let mut collaborator_ports = Vec::new();
+//     //             // for port_data in ports_list {
+//     //             //     // Deserialize each ReadTeamchannelCollaboratorPortsToml from the array
+//     //             //     let port_data_str = toml::to_string(&port_data).unwrap(); // Convert Value to String
+//     //             //     let collaborator_port: ReadTeamchannelCollaboratorPortsToml = toml::from_str(&port_data_str).map_err(|e| format!("Error deserializing collaborator port: {}", e))?;
+//     //             //     collaborator_ports.push(collaborator_port);
+//     //             // }
+//     //             // // this is doing what?
+//     //             // core_node.abstract_collaborator_port_assignments.insert(pair_name.clone(), collaborator_ports);
+
+//     //         }
+//     //     }
+//     // }
+
+//     // 5. Deserialize into CoreNode Struct (Manually)
+//     let mut core_node = CoreNode {
+//         node_name: toml_value.get("node_name").and_then(Value::as_str).unwrap_or("").to_string(),
+//         description_for_tui: toml_value.get("description_for_tui").and_then(Value::as_str).unwrap_or("").to_string(),
+//         node_unique_id: node_unique_id,
+//         directory_path: PathBuf::from(toml_value.get("directory_path").and_then(Value::as_str).unwrap_or("")),
+//         // order_number: toml_value.get("order_number").and_then(Value::as_integer).unwrap_or(0) as u32,
+//         // priority: match toml_value.get("priority").and_then(Value::as_str).unwrap_or("Medium") {
+//         //     "High" => NodePriority::High,
+//         //     "Medium" => NodePriority::Medium,
+//         //     "Low" => NodePriority::Low,
+//         //     _ => NodePriority::Medium,
+//         // },
+//         owner: toml_value.get("owner").and_then(Value::as_str).unwrap_or("").to_string(),
+//         updated_at_timestamp: toml_value.get("updated_at_timestamp").and_then(Value::as_integer).unwrap_or(0) as u64,
+//         expires_at: toml_value.get("expires_at").and_then(Value::as_integer).unwrap_or(0) as u64,
+//         // children: Vec::new(), // You might need to load children recursively
+//         teamchannel_collaborators_with_access: toml_value.get("teamchannel_collaborators_with_access").and_then(Value::as_array).map(|arr| arr.iter().filter_map(Value::as_str).map(String::from).collect()).unwrap_or_default(),
+//         abstract_collaborator_port_assignments: HashMap::new(),
+        
+//         // Project Areas
+//         pa1_process: pa1_process,
+//         pa2_schedule: pa2_schedule, // schedule_duration,
+//         pa3_users: pa3_users,
+//         pa4_features: pa4_features, //, goals_features,
+//         pa5_mvp: pa5_mvp,
+//         pa6_feedback: pa6_feedback,
+//     };
+
+//     // 6. collaborators
+//     // Inside load_core_node_from_toml_file
+//     // if let Some(collaborator_assignments_table) = toml_value.get("abstract_collaborator_port_assignments").and_then(Value::as_table) {
+//     if let Some(collaborator_assignments_table) = toml_value.get("collaborator_port_assignments").and_then(Value::as_table) {
+//         for (pair_name, pair_data) in collaborator_assignments_table {
+//             debug_log("Looking for 'collaborator_ports' load_core...");
+//             if let Some(ports_list) = pair_data.get("collaborator_ports").and_then(Value::as_array) {
+//                 // Create a vector to hold ReadTeamchannelCollaboratorPortsToml instances for this pair
+//                 let mut ports_for_pair = Vec::new();
+    
+//                 for port_data in ports_list {
+//                     // Deserialize each AbstractTeamchannelNodeTomlPortsData from the array
+//                     let port_data_str = toml::to_string(&port_data).unwrap(); // Convert Value to String
+//                     let collaborator_port: AbstractTeamchannelNodeTomlPortsData = toml::from_str(&port_data_str).map_err(|e| format!("Error deserializing collaborator port: {}", e))?;
+    
+//                     // Create ReadTeamchannelCollaboratorPortsToml and add it to the vector
+//                     let read_teamchannel_collaborator_ports_toml = ReadTeamchannelCollaboratorPortsToml {
+//                         collaborator_ports: vec![collaborator_port], // Wrap in a vector
+//                     };
+//                     ports_for_pair.push(read_teamchannel_collaborator_ports_toml);
+//                 }
+    
+//                 // Insert the vector of ReadTeamchannelCollaboratorPortsToml into the HashMap
+//                 core_node.abstract_collaborator_port_assignments.insert(pair_name.clone(), ports_for_pair);
+//             }
+//         }
+//     }
+    
+//     Ok(core_node)
+// }
+
+
+/*
+should not use any 3rd party crates
+- pending:
+-- clearsign validate
+*/
 /// Loads a `CoreNode` from a TOML file, handling potential errors.
 ///
 /// # Arguments
@@ -6694,7 +7182,15 @@ fn load_core_node_from_toml_file(file_path: &Path) -> Result<CoreNode, String> {
     debug_log!(
         "Starting: load_core_node_from_toml_file(), file_path -> {:?}",
         file_path,
-        );
+    );
+    
+    // pending
+    /*
+    look up file owner
+    get gpg public key
+    validate clearsign
+    */
+    
     // 1. Read File Contents 
     let toml_string = match fs::read_to_string(file_path) {
         Ok(content) => content,
@@ -6707,12 +7203,6 @@ fn load_core_node_from_toml_file(file_path: &Path) -> Result<CoreNode, String> {
         Err(e) => return Err(format!("Error lcnftf parsing TOML in load_core_node_from_toml_file: {}", e)),
     };
 
-    // 3. Extract node_unique_id as hex string and decode using your function:
-    // let node_unique_id = match toml_value.get("node_unique_id").and_then(Value::as_str) {
-    //     Some(hex_string) => hex_string_to_pearson_hash(hex_string)?, // Use your function. Propagate error with ?.
-    //     None => return Err("error: load_core_node_from_toml_file(), Missing node_unique_id".to_string()),
-    // };
-    
     // 3. Extract node_unique_id as array
     let node_unique_id = match toml_value.get("node_unique_id").and_then(Value::as_array) {
         Some(array) => {
@@ -6732,24 +7222,14 @@ fn load_core_node_from_toml_file(file_path: &Path) -> Result<CoreNode, String> {
         },
         None => return Err("Missing or invalid node_unique_id".to_string()),
     };
-    // // Project Areas
-    // pa1_process
-    // pa2_schedule
-    // pa3_users
-    // pa4_features
-    // pa5_mvp
-    // pa6_feedback 
 
-    // TODO
-    
-    // 4. Task Items
+    // 4. Extract Project Areas
     let pa1_process = toml_value
         .get("pa1_process")
         .and_then(Value::as_str)
         .ok_or("Missing or invalid pa1_process")?
         .to_string();
 
-    // schedule_duration
     let pa2_schedule = toml_value
         .get("pa2_schedule")
         .and_then(Value::as_array)
@@ -6784,67 +7264,113 @@ fn load_core_node_from_toml_file(file_path: &Path) -> Result<CoreNode, String> {
         .and_then(Value::as_str)
         .ok_or("Missing or invalid pa6_feedback")?
         .to_string();
+
+    // 5. Extract Message Post Configuration Fields
     
-    // // 4. Handle abstract_collaborator_port_assignments
-    // if let Some(collaborator_assignments_table) = toml_value.get("abstract_collaborator_port_assignments").and_then(Value::as_table) {
-    //     for (pair_name, pair_data) in collaborator_assignments_table {
-    //         debug_log("Looking for 'collaborator_ports' load_core...");
-    //         if let Some(ports_list) = pair_data.get("collaborator_ports").and_then(Value::as_array) {
-    //             let mut collaborator_ports = Vec::new();
-    //             for port_data in ports_list {
-    //                 // Deserialize each AbstractTeamchannelNodeTomlPortsData from the array
-    //                 let port_data_str = toml::to_string(&port_data).unwrap(); // Convert Value to String
-    //                 // let collaborator_port: AbstractTeamchannelNodeTomlPortsData = toml::from_str(&port_data_str).map_err(|e| format!("Error deserializing collaborator port: {}", e))?;
-    //                 let collaborator_port: ReadTeamchannelCollaboratorPortsToml = toml::from_str(&port_data_str).map_err(|e| format!("Error deserializing collaborator port: {}", e))?;
-    //                 collaborator_ports.push(collaborator_port);
-    //             }
-    //             core_node.abstract_collaborator_port_assignments.insert(pair_name.clone(), collaborator_ports);
-    //             // let mut collaborator_ports = Vec::new();
-    //             // for port_data in ports_list {
-    //             //     // Deserialize each ReadTeamchannelCollaboratorPortsToml from the array
-    //             //     let port_data_str = toml::to_string(&port_data).unwrap(); // Convert Value to String
-    //             //     let collaborator_port: ReadTeamchannelCollaboratorPortsToml = toml::from_str(&port_data_str).map_err(|e| format!("Error deserializing collaborator port: {}", e))?;
-    //             //     collaborator_ports.push(collaborator_port);
-    //             // }
-    //             // // this is doing what?
-    //             // core_node.abstract_collaborator_port_assignments.insert(pair_name.clone(), collaborator_ports);
+    // Helper function to parse integer range tuples from TOML arrays
+    let parse_integer_ranges = |ranges_array: &toml::value::Array| -> Result<Vec<(i32, i32)>, String> {
+        let mut ranges = Vec::new();
+        for range_value in ranges_array {
+            if let Some(range_array) = range_value.as_array() {
+                if range_array.len() == 2 {
+                    let min = range_array[0].as_integer()
+                        .ok_or("Invalid minimum value in range")?;
+                    let max = range_array[1].as_integer()
+                        .ok_or("Invalid maximum value in range")?;
+                    ranges.push((min as i32, max as i32));
+                } else {
+                    return Err("Range must have exactly 2 elements (min, max)".to_string());
+                }
+            } else {
+                return Err("Invalid range format in array".to_string());
+            }
+        }
+        Ok(ranges)
+    };
 
-    //         }
-    //     }
-    // }
+    // Extract message_post_data_format_specs_integer_ranges_from_to_tuple_array
+    let message_post_data_format_specs_integer_ranges_from_to_tuple_array = 
+        match toml_value.get("message_post_data_format_specs_integer_ranges_from_to_tuple_array") {
+            Some(value) => {
+                if let Some(ranges_array) = value.as_array() {
+                    Some(parse_integer_ranges(ranges_array)?)
+                } else {
+                    None
+                }
+            },
+            None => None,
+        };
 
-    // 5. Deserialize into CoreNode Struct (Manually)
+    // Extract message_post_data_format_specs_int_string_ranges_from_to_tuple_array
+    let message_post_data_format_specs_int_string_ranges_from_to_tuple_array = 
+        match toml_value.get("message_post_data_format_specs_int_string_ranges_from_to_tuple_array") {
+            Some(value) => {
+                if let Some(ranges_array) = value.as_array() {
+                    Some(parse_integer_ranges(ranges_array)?)
+                } else {
+                    None
+                }
+            },
+            None => None,
+        };
+
+    // Extract message_post_data_format_specs_int_string_max_string_length
+    let message_post_data_format_specs_int_string_max_string_length = 
+        toml_value.get("message_post_data_format_specs_int_string_max_string_length")
+            .and_then(Value::as_integer)
+            .map(|i| i as usize);
+
+    // Extract message_post_is_public_bool
+    let message_post_is_public_bool = 
+        toml_value.get("message_post_is_public_bool")
+            .and_then(Value::as_bool);
+
+    // Extract message_post_user_confirms_bool
+    let message_post_user_confirms_bool = 
+        toml_value.get("message_post_user_confirms_bool")
+            .and_then(Value::as_bool);
+
+    // Extract message_post_start_date_utc_posix
+    let message_post_start_date_utc_posix = 
+        toml_value.get("message_post_start_date_utc_posix")
+            .and_then(Value::as_integer);
+
+    // Extract message_post_end_date_utc_posix
+    let message_post_end_date_utc_posix = 
+        toml_value.get("message_post_end_date_utc_posix")
+            .and_then(Value::as_integer);
+
+    // 6. Deserialize into CoreNode Struct (Manually)
     let mut core_node = CoreNode {
         node_name: toml_value.get("node_name").and_then(Value::as_str).unwrap_or("").to_string(),
         description_for_tui: toml_value.get("description_for_tui").and_then(Value::as_str).unwrap_or("").to_string(),
         node_unique_id: node_unique_id,
         directory_path: PathBuf::from(toml_value.get("directory_path").and_then(Value::as_str).unwrap_or("")),
-        // order_number: toml_value.get("order_number").and_then(Value::as_integer).unwrap_or(0) as u32,
-        // priority: match toml_value.get("priority").and_then(Value::as_str).unwrap_or("Medium") {
-        //     "High" => NodePriority::High,
-        //     "Medium" => NodePriority::Medium,
-        //     "Low" => NodePriority::Low,
-        //     _ => NodePriority::Medium,
-        // },
         owner: toml_value.get("owner").and_then(Value::as_str).unwrap_or("").to_string(),
         updated_at_timestamp: toml_value.get("updated_at_timestamp").and_then(Value::as_integer).unwrap_or(0) as u64,
         expires_at: toml_value.get("expires_at").and_then(Value::as_integer).unwrap_or(0) as u64,
-        // children: Vec::new(), // You might need to load children recursively
         teamchannel_collaborators_with_access: toml_value.get("teamchannel_collaborators_with_access").and_then(Value::as_array).map(|arr| arr.iter().filter_map(Value::as_str).map(String::from).collect()).unwrap_or_default(),
         abstract_collaborator_port_assignments: HashMap::new(),
         
         // Project Areas
         pa1_process: pa1_process,
-        pa2_schedule: pa2_schedule, // schedule_duration,
+        pa2_schedule: pa2_schedule,
         pa3_users: pa3_users,
-        pa4_features: pa4_features, //, goals_features,
+        pa4_features: pa4_features,
         pa5_mvp: pa5_mvp,
         pa6_feedback: pa6_feedback,
+        
+        // Message Post Configuration
+        message_post_data_format_specs_integer_ranges_from_to_tuple_array,
+        message_post_data_format_specs_int_string_ranges_from_to_tuple_array,
+        message_post_data_format_specs_int_string_max_string_length,
+        message_post_is_public_bool,
+        message_post_user_confirms_bool,
+        message_post_start_date_utc_posix,
+        message_post_end_date_utc_posix,
     };
 
-    // 6. collaborators
-    // Inside load_core_node_from_toml_file
-    // if let Some(collaborator_assignments_table) = toml_value.get("abstract_collaborator_port_assignments").and_then(Value::as_table) {
+    // 7. Handle collaborator port assignments
     if let Some(collaborator_assignments_table) = toml_value.get("collaborator_port_assignments").and_then(Value::as_table) {
         for (pair_name, pair_data) in collaborator_assignments_table {
             debug_log("Looking for 'collaborator_ports' load_core...");
@@ -6872,6 +7398,7 @@ fn load_core_node_from_toml_file(file_path: &Path) -> Result<CoreNode, String> {
     
     Ok(core_node)
 }
+
 
 
 // Generic function to save any serializable data to a TOML file
@@ -6908,7 +7435,7 @@ impl NodeInstMsgBrowserMetadata {
     ) -> NodeInstMsgBrowserMetadata {
         NodeInstMsgBrowserMetadata {
             node_name: node_name.to_string(),
-            path_in_node: "/instant_message_browser".to_string(), // TODO
+            path_in_node: "/message_posts_browser".to_string(), // TODO
             expiration_period_days: 30, // Default: 7 days
             max_message_size_char: 4096, // Default: 4096 characters
             total_max_size_mb: 512, // Default: 1024 MB
@@ -6991,11 +7518,11 @@ impl InstantMessageFile {
 
 //     // 1. Create the team channel directory and subdirectories
 //     if !new_channel_path.exists() {
-//         fs::create_dir_all(new_channel_path.join("instant_message_browser"))
+//         fs::create_dir_all(new_channel_path.join("message_posts_browser"))
 //             .expect("Failed to create team channel and subdirectories");
 
-//         // 2. Create 0.toml for instant_message_browser with default metadata
-//         let metadata_path = new_channel_path.join("instant_message_browser").join("0.toml");
+//         // 2. Create 0.toml for message_posts_browser with default metadata
+//         let metadata_path = new_channel_path.join("message_posts_browser").join("0.toml");
 //         let metadata = NodeInstMsgBrowserMetadata::new(&team_channel_name, owner.clone());
 //         save_toml_to_file(&metadata, &metadata_path).expect("Failed to create 0.toml"); 
 //     }
@@ -7039,7 +7566,7 @@ impl InstantMessageFile {
 /// 
 /// ```
 /// project_graph_data/team_channels/[team_channel_name]/
-/// ├── instant_message_browser/
+/// ├── message_posts_browser/
 /// │   └── 0.toml (metadata file)
 /// └── task_browser/
 ///     ├── 1_planning/
@@ -7094,12 +7621,12 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
     debug_log!("New channel path: {:?}", new_channel_path);
 
     // 1. Create Directory Structure (with error handling)
-    // Create instant_message_browser directory
-    let instant_msg_path = new_channel_path.join("instant_message_browser");
+    // Create message_posts_browser directory
+    let instant_msg_path = new_channel_path.join("message_posts_browser");
     match fs::create_dir_all(&instant_msg_path) {
-        Ok(_) => debug_log!("Created instant_message_browser directory"),
+        Ok(_) => debug_log!("Created message_posts_browser directory"),
         Err(e) => {
-            debug_log!("Error creating instant_message_browser directory: {}", e);
+            debug_log!("Error creating message_posts_browser directory: {}", e);
             return Err(ThisProjectError::IoError(e));
         }
     }
@@ -7179,7 +7706,7 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
     // Retrieve project area data
     debug_log!("Retrieving project area data...");
     
-    let pa1_process = match faq_get_pa1_process() {
+    let pa1_process = match q_and_a_get_pa1_process() {
         Ok(data) => data,
         Err(e) => {
             debug_log!("Error getting PA1 Process: {}", e);
@@ -7187,7 +7714,7 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
         }
     };
     
-    let pa2_schedule = match faq_get_pa2_schedule() {
+    let pa2_schedule = match q_and_a_get_pa2_schedule() {
         Ok(data) => data,
         Err(e) => {
             debug_log!("Error getting PA2 Schedule: {}", e);
@@ -7195,7 +7722,7 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
         }
     };
     
-    let pa3_users = match faq_get_pa3_users() {
+    let pa3_users = match q_and_a_get_pa3_users() {
         Ok(data) => data,
         Err(e) => {
             debug_log!("Error getting PA3 Users: {}", e);
@@ -7203,7 +7730,7 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
         }
     };
     
-    let pa4_features = match faq_get_pa4_features() {
+    let pa4_features = match q_and_a_get_pa4_features() {
         Ok(data) => data,
         Err(e) => {
             debug_log!("Error getting PA4 Features: {}", e);
@@ -7211,7 +7738,7 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
         }
     };
     
-    let pa5_mvp = match faq_get_pa5_mvp() {
+    let pa5_mvp = match q_and_a_get_pa5_mvp() {
         Ok(data) => data,
         Err(e) => {
             debug_log!("Error getting PA5 MVP: {}", e);
@@ -7219,7 +7746,7 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
         }
     };
     
-    let pa6_feedback = match faq_get_pa6_feedback() {
+    let pa6_feedback = match q_and_a_get_pa6_feedback() {
         Ok(data) => data,
         Err(e) => {
             debug_log!("Error getting PA6 Feedback: {}", e);
@@ -7246,6 +7773,14 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
         pa4_features,
         pa5_mvp,
         pa6_feedback,
+        // Message Post Configuration - all None when no values
+        None,  // message_post_data_format_specs_integer_ranges_from_to_tuple_array
+        None,  // message_post_data_format_specs_int_string_ranges_from_to_tuple_array
+        None,  // message_post_data_format_specs_int_string_max_string_length
+        None,  // message_post_is_public_bool
+        None,  // message_post_user_confirms_bool
+        None,  // message_post_start_date_utc_posix
+        None,  // message_post_end_date_utc_posix
     );
     
     debug_log!("CoreNode creation complete, saving...");
@@ -7291,7 +7826,7 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
 //     let new_channel_path = team_channels_dir.join(&team_channel_name);
 
 //     // 1. Create Directory Structure (with error handling)
-//     fs::create_dir_all(new_channel_path.join("instant_message_browser"))?; // Propagate errors with ?
+//     fs::create_dir_all(new_channel_path.join("message_posts_browser"))?; // Propagate errors with ?
 //     fs::create_dir_all(new_channel_path.join("task_browser"))?; // task browser directory
 //     // for i in 1..=3 { // Using numbers
 //     //     let col_name = format!("{}_col{}", i, i);
@@ -7312,7 +7847,7 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
 
     
 //     // 2. Create and Save 0.toml Metadata (with error handling)
-//     let metadata_path = new_channel_path.join("instant_message_browser/0.toml"); // Simplified path
+//     let metadata_path = new_channel_path.join("message_posts_browser/0.toml"); // Simplified path
 //     let metadata = NodeInstMsgBrowserMetadata::new(&team_channel_name, owner.clone());
 //     save_toml_to_file(&metadata, &metadata_path)?; // Use ? for error propagation
 
@@ -7379,29 +7914,29 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
     
 //     // Add debug logs for Project State retrieval
 //     // Project Areas
-//     debug_log!("create_team_channel(): About to get faq_get_pa1_process");
-//     let pa1_process = faq_get_pa1_process()?;
-//     debug_log!("create_team_channel(): Got faq_get_pa1_process");
+//     debug_log!("create_team_channel(): About to get q_and_a_get_pa1_process");
+//     let pa1_process = q_and_a_get_pa1_process()?;
+//     debug_log!("create_team_channel(): Got q_and_a_get_pa1_process");
 
-//     debug_log!("create_team_channel(): About to get faq_get_pa2_schedule");
-//     let pa2_schedule = faq_get_pa2_schedule()?;
-//     debug_log!("create_team_channel(): Got faq_get_pa2_schedule");
+//     debug_log!("create_team_channel(): About to get q_and_a_get_pa2_schedule");
+//     let pa2_schedule = q_and_a_get_pa2_schedule()?;
+//     debug_log!("create_team_channel(): Got q_and_a_get_pa2_schedule");
     
-//     debug_log!("create_team_channel(): About to get faq_get_pa3_users");
-//     let pa3_users = faq_get_pa3_users()?;
-//     debug_log!("create_team_channel(): Got faq_get_pa3_users");
+//     debug_log!("create_team_channel(): About to get q_and_a_get_pa3_users");
+//     let pa3_users = q_and_a_get_pa3_users()?;
+//     debug_log!("create_team_channel(): Got q_and_a_get_pa3_users");
 
-//     debug_log!("create_team_channel(): About to get faq_get_pa4_features");
-//     let pa4_features = faq_get_pa4_features()?;
+//     debug_log!("create_team_channel(): About to get q_and_a_get_pa4_features");
+//     let pa4_features = q_and_a_get_pa4_features()?;
 //     debug_log!("create_team_channel(): Got project_scope");
 
-//     debug_log!("create_team_channel(): About to get faq_get_pa5_mvp");
-//     let pa5_mvp = faq_get_pa5_mvp()?;
-//     debug_log!("create_team_channel(): Got faq_get_pa5_mvp");
+//     debug_log!("create_team_channel(): About to get q_and_a_get_pa5_mvp");
+//     let pa5_mvp = q_and_a_get_pa5_mvp()?;
+//     debug_log!("create_team_channel(): Got q_and_a_get_pa5_mvp");
 
-//     debug_log!("create_team_channel(): About to get faq_get_pf6");
-//     let pa6_feedback = faq_get_pa6_feedback()?;
-//     debug_log!("create_team_channel(): Got faq_get_pa6_feedback");
+//     debug_log!("create_team_channel(): About to get q_and_a_get_pf6");
+//     let pa6_feedback = q_and_a_get_pa6_feedback()?;
+//     debug_log!("create_team_channel(): Got q_and_a_get_pa6_feedback");
     
 //     debug_log!("create_team_channel(): About to create CoreNode");
             
@@ -7481,6 +8016,7 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
 
 // }
 
+
 /// Creates a new (core)Node directory, subdirectories, and metadata files.
 /// Handles errors and returns a Result to indicate success or failure.
 ///
@@ -7519,27 +8055,29 @@ fn create_core_node(
     // Create the main node directory
     fs::create_dir_all(&node_specific_path)?;
 
-    // Get user input for planning fields
-    
-    // Project Areas
-    // let agenda_process = get_agenda_process()?;
-    // let features = get_features_and_goals()?;
-    // let scope = get_project_scope()?;
-    // let schedule = get_schedule_info()?;
-    
-    
-    let pa1_process = faq_get_pa1_process()?;
-    let pa2_schedule = faq_get_pa2_schedule()?;
-    let pa3_users = faq_get_pa3_users()?;
-    let pa4_features = faq_get_pa4_features()?;
-    let pa5_mvp = faq_get_pa5_mvp()?;
-    let pa6_feedback = faq_get_pa6_feedback()?;
-    
-    
+    // local owner user name
     let owner = get_local_owner_username();
+    
+    // Get user input for planning fields
+    // Project Areas
+    let pa1_process = q_and_a_get_pa1_process()?;
+    let pa2_schedule = q_and_a_get_pa2_schedule()?;
+    let pa3_users = q_and_a_get_pa3_users()?;
+    let pa4_features = q_and_a_get_pa4_features()?;
+    let pa5_mvp = q_and_a_get_pa5_mvp()?;
+    let pa6_feedback = q_and_a_get_pa6_feedback()?;
+    
+    // Get user input for message post configuration fields
+    let message_post_integer_ranges = q_and_a_get_message_post_integer_ranges()?;
+    let message_post_int_string_ranges = q_and_a_get_message_post_int_string_ranges()?;
+    let message_post_max_string_length = q_and_a_get_message_post_max_string_length()?;
+    let message_post_is_public = q_and_a_get_message_post_is_public()?;
+    let message_post_user_confirms = q_and_a_get_message_post_user_confirms()?;
+    let message_post_start_date = q_and_a_get_message_post_start_date()?;
+    let message_post_end_date = q_and_a_get_message_post_end_date()?;
 
     // Create subdirectories within the node directory
-    let message_dir = node_specific_path.join("instant_message_browser");
+    let message_dir = node_specific_path.join("message_posts_browser");
     let task_browser_dir = node_specific_path.join("task_browser");
     
     fs::create_dir_all(&message_dir)?;
@@ -7574,6 +8112,15 @@ fn create_core_node(
         pa4_features,
         pa5_mvp,
         pa6_feedback,
+        
+        // Message Post Configuration
+        message_post_integer_ranges,
+        message_post_int_string_ranges,
+        message_post_max_string_length,
+        message_post_is_public,
+        message_post_user_confirms,
+        message_post_start_date,
+        message_post_end_date,
     );
     
     match new_node_result {
@@ -7631,7 +8178,7 @@ fn create_core_node(
 //     // };
 
 //     // Create directory structure at the specified path
-//     fs::create_dir_all(&node_path.join("instant_message_browser"))?;
+//     fs::create_dir_all(&node_path.join("message_posts_browser"))?;
 //     fs::create_dir_all(&node_path.join("task_browser"))?;
 
 //     let col_name = "1_planning";
@@ -7647,7 +8194,7 @@ fn create_core_node(
 //     fs::create_dir_all(&col_path)?;
 
 //     // 2. Create and Save 0.toml Metadata (with error handling)
-//     let metadata_path = node_path.join("instant_message_browser/0.toml");
+//     let metadata_path = node_path.join("message_posts_browser/0.toml");
 //     let metadata = NodeInstMsgBrowserMetadata::new(&team_channel_name, owner.clone());
 //     save_toml_to_file(&metadata, &metadata_path)?;
 
@@ -7734,7 +8281,7 @@ fn run_passive_task_mode(path: &Path) -> io::Result<()> {
 ///
 /// # Command Line Launch:
 /// Launched via: uma --passive_message_mode [path_to_message_dir]
-/// Example: uma --passive_message_mode /home/user/team1/channel1/instant_message_browser
+/// Example: uma --passive_message_mode /home/user/team1/channel1/message_posts_browser
 ///
 /// # Operational Flow:
 /// 1. Directory Monitoring:
@@ -7750,7 +8297,7 @@ fn run_passive_task_mode(path: &Path) -> io::Result<()> {
 ///
 /// # Directory Structure Expected:
 /// ```text
-/// instant_message_browser/
+/// message_posts_browser/
 /// ├── 0.toml (metadata)
 /// ├── 1__user1.toml (message)
 /// ├── 2__user2.toml (message)
@@ -7859,7 +8406,7 @@ Q&A Functions for 6pa, 6 Project Areas
 */
 
 /// Gets user input for agenda process selection of create_core_node()
-fn faq_get_pa1_process() -> Result<String, ThisProjectError> {
+fn q_and_a_get_pa1_process() -> Result<String, ThisProjectError> {
     println!("Enter Process statement: Project Process: Workflow Type, STEM Integration, Values, Agenda, Methods, Coordinated Decisions, (Data/System)Ecology: Collapse & Productivity (default option: Agile, Kahneman-Tversky, Definition-Studies)
 :");
     let mut input = String::new();
@@ -7879,8 +8426,8 @@ fn faq_get_pa1_process() -> Result<String, ThisProjectError> {
 /// badly named, this is a Q&A tool
 /// Gets schedule information and converts 
 /// to required format of create_core_node()
-fn faq_get_pa2_schedule() -> Result<Vec<u64>, ThisProjectError> {
-    debug_log("starting faq_get_pa2_schedule()");
+fn q_and_a_get_pa2_schedule() -> Result<Vec<u64>, ThisProjectError> {
+    debug_log("starting q_and_a_get_pa2_schedule()");
 
     // Duration input and validation
     println!("Project Schedule: Enter project duration in days:");
@@ -7960,7 +8507,7 @@ fn faq_get_pa2_schedule() -> Result<Vec<u64>, ThisProjectError> {
 }
 
 /// Gets user input for agenda process selection of create_core_node()
-fn faq_get_pa3_users() -> Result<String, ThisProjectError> {
+fn q_and_a_get_pa3_users() -> Result<String, ThisProjectError> {
     println!("Enter User Statement, Users: Stakeholders & Needs & Goals Evaluation (of users): Who are users? What are their needs?");
     let mut input = String::new();
     io::stdout().flush()?;
@@ -7975,7 +8522,7 @@ fn faq_get_pa3_users() -> Result<String, ThisProjectError> {
 }
 
 /// Gets user input for agenda process selection of create_core_node()
-fn faq_get_pa4_features() -> Result<String, ThisProjectError> {
+fn q_and_a_get_pa4_features() -> Result<String, ThisProjectError> {
     println!("Enter Feature Statement: Features: User-Features & Subfeatures/Under-The-Hood Features -> From a user-story standpoint, what is this project making? Under-the-hood, what is this projet making?");
     let mut input = String::new();
     io::stdout().flush()?;
@@ -7990,7 +8537,7 @@ fn faq_get_pa4_features() -> Result<String, ThisProjectError> {
 }
 
 /// Gets user input for agenda process selection of create_core_node()
-fn faq_get_pa5_mvp() -> Result<String, ThisProjectError> {
+fn q_and_a_get_pa5_mvp() -> Result<String, ThisProjectError> {
     println!("Enter MVP Statement: MVP: 'MVP's (Minimum Viable Products); Tools & 'Tool Stack / Tech Stack'");
     let mut input = String::new();
     io::stdout().flush()?;
@@ -8005,7 +8552,7 @@ fn faq_get_pa5_mvp() -> Result<String, ThisProjectError> {
 }
 
 /// Gets user input for agenda process selection of create_core_node()
-fn faq_get_pa6_feedback() -> Result<String, ThisProjectError> {
+fn q_and_a_get_pa6_feedback() -> Result<String, ThisProjectError> {
     println!("Enter Feedback Statement: Feedback: Tests, Communication, Signals, Documentation & Iteration, Organizational, System, and 'Ecological' Effects, (~agile) -> Based on what signals will you define failure and orient to measure productivity.");
     let mut input = String::new();
     io::stdout().flush()?;
@@ -8018,6 +8565,218 @@ fn faq_get_pa6_feedback() -> Result<String, ThisProjectError> {
 
     Ok(input.to_string())
 }
+    
+    
+/// Gets user input for message post integer validation ranges
+/// 
+/// # Returns
+/// * `Result<Option<Vec<(i32, i32)>>, ThisProjectError>` - Vector of integer range tuples or None
+fn q_and_a_get_message_post_integer_ranges() -> Result<Option<Vec<(i32, i32)>>, ThisProjectError> {
+    println!("Enter integer validation ranges for message posts (format: min1-max1,min2-max2,... or press Enter to skip):");
+    println!("Example: 1-10,20-30,50-100");
+    
+    let mut input = String::new();
+    io::stdout().flush()?;
+    io::stdin().read_line(&mut input)?;
+    
+    let input = input.trim();
+    if input.is_empty() {
+        return Ok(None);
+    }
+    
+    // Parse the ranges
+    let mut ranges = Vec::new();
+    for range_str in input.split(',') {
+        let parts: Vec<&str> = range_str.trim().split('-').collect();
+        if parts.len() != 2 {
+            return Err(ThisProjectError::InvalidInput(format!("Invalid range format: {}", range_str)));
+        }
+        
+        let min = parts[0].parse::<i32>()
+            .map_err(|_| ThisProjectError::InvalidInput(format!("Invalid minimum value: {}", parts[0])))?;
+        let max = parts[1].parse::<i32>()
+            .map_err(|_| ThisProjectError::InvalidInput(format!("Invalid maximum value: {}", parts[1])))?;
+        
+        if min > max {
+            return Err(ThisProjectError::InvalidInput(format!("Minimum {} is greater than maximum {}", min, max)));
+        }
+        
+        ranges.push((min, max));
+    }
+    
+    Ok(Some(ranges))
+}
+
+/// Gets user input for message post integer-string validation ranges
+/// 
+/// # Returns
+/// * `Result<Option<Vec<(i32, i32)>>, ThisProjectError>` - Vector of integer range tuples for int-string pairs or None
+fn q_and_a_get_message_post_int_string_ranges() -> Result<Option<Vec<(i32, i32)>>, ThisProjectError> {
+    println!("Enter integer ranges for integer-string pair validation (format: min1-max1,min2-max2,... or press Enter to skip):");
+    println!("Example: 1-100,200-300");
+    
+    let mut input = String::new();
+    io::stdout().flush()?;
+    io::stdin().read_line(&mut input)?;
+    
+    let input = input.trim();
+    if input.is_empty() {
+        return Ok(None);
+    }
+    
+    // Parse the ranges (same logic as integer ranges)
+    let mut ranges = Vec::new();
+    for range_str in input.split(',') {
+        let parts: Vec<&str> = range_str.trim().split('-').collect();
+        if parts.len() != 2 {
+            return Err(ThisProjectError::InvalidInput(format!("Invalid range format: {}", range_str)));
+        }
+        
+        let min = parts[0].parse::<i32>()
+            .map_err(|_| ThisProjectError::InvalidInput(format!("Invalid minimum value: {}", parts[0])))?;
+        let max = parts[1].parse::<i32>()
+            .map_err(|_| ThisProjectError::InvalidInput(format!("Invalid maximum value: {}", parts[1])))?;
+        
+        if min > max {
+            return Err(ThisProjectError::InvalidInput(format!("Minimum {} is greater than maximum {}", min, max)));
+        }
+        
+        ranges.push((min, max));
+    }
+    
+    Ok(Some(ranges))
+}
+
+/// Gets user input for maximum string length in integer-string pairs
+/// 
+/// # Returns
+/// * `Result<Option<usize>, ThisProjectError>` - Maximum string length or None
+fn q_and_a_get_message_post_max_string_length() -> Result<Option<usize>, ThisProjectError> {
+    println!("Enter maximum string length for integer-string pairs (or press Enter to skip):");
+    println!("Example: 255");
+    
+    let mut input = String::new();
+    io::stdout().flush()?;
+    io::stdin().read_line(&mut input)?;
+    
+    let input = input.trim();
+    if input.is_empty() {
+        return Ok(None);
+    }
+    
+    let max_length = input.parse::<usize>()
+        .map_err(|_| ThisProjectError::InvalidInput(format!("Invalid maximum string length: {}", input)))?;
+    
+    Ok(Some(max_length))
+}
+
+/// Gets user input for whether message posts should be public
+/// 
+/// # Returns
+/// * `Result<Option<bool>, ThisProjectError>` - Whether posts are public or None
+fn q_and_a_get_message_post_is_public() -> Result<Option<bool>, ThisProjectError> {
+    println!("Should message posts be public? (yes/no or press Enter to skip):");
+    
+    let mut input = String::new();
+    io::stdout().flush()?;
+    io::stdin().read_line(&mut input)?;
+    
+    let input = input.trim().to_lowercase();
+    if input.is_empty() {
+        return Ok(None);
+    }
+    
+    match input.as_str() {
+        "yes" | "y" | "true" | "1" => Ok(Some(true)),
+        "no" | "n" | "false" | "0" => Ok(Some(false)),
+        _ => Err(ThisProjectError::InvalidInput(format!("Invalid boolean value: {}. Use yes/no", input)))
+    }
+}
+
+/// Gets user input for whether user confirmation is required before posting
+/// 
+/// # Returns
+/// * `Result<Option<bool>, ThisProjectError>` - Whether user confirmation is required or None
+fn q_and_a_get_message_post_user_confirms() -> Result<Option<bool>, ThisProjectError> {
+    println!("Require user confirmation before posting messages? (yes/no or press Enter to skip):");
+    
+    let mut input = String::new();
+    io::stdout().flush()?;
+    io::stdin().read_line(&mut input)?;
+    
+    let input = input.trim().to_lowercase();
+    if input.is_empty() {
+        return Ok(None);
+    }
+    
+    match input.as_str() {
+        "yes" | "y" | "true" | "1" => Ok(Some(true)),
+        "no" | "n" | "false" | "0" => Ok(Some(false)),
+        _ => Err(ThisProjectError::InvalidInput(format!("Invalid boolean value: {}. Use yes/no", input)))
+    }
+}
+
+/// Gets user input for message post start date
+/// 
+/// # Returns
+/// * `Result<Option<i64>, ThisProjectError>` - Start date as UTC POSIX timestamp or None
+fn q_and_a_get_message_post_start_date() -> Result<Option<i64>, ThisProjectError> {
+    println!("Enter start date for accepting posts (format: YYYY-MM-DD HH:MM:SS or press Enter to skip):");
+    println!("Example: 2024-01-01 00:00:00");
+    
+    let mut input = String::new();
+    io::stdout().flush()?;
+    io::stdin().read_line(&mut input)?;
+    
+    let input = input.trim();
+    if input.is_empty() {
+        return Ok(None);
+    }
+    
+    // Parse the date string into a timestamp
+    // This is a simplified example - you might want to use a proper date parsing library
+    // For now, let's accept a Unix timestamp directly
+    println!("For now, please enter a Unix timestamp (seconds since 1970-01-01):");
+    let mut timestamp_input = String::new();
+    io::stdin().read_line(&mut timestamp_input)?;
+    
+    let timestamp = timestamp_input.trim().parse::<i64>()
+        .map_err(|_| ThisProjectError::InvalidInput(format!("Invalid timestamp: {}", timestamp_input.trim())))?;
+    
+    Ok(Some(timestamp))
+}
+
+/// Gets user input for message post end date
+/// 
+/// # Returns
+/// * `Result<Option<i64>, ThisProjectError>` - End date as UTC POSIX timestamp or None
+fn q_and_a_get_message_post_end_date() -> Result<Option<i64>, ThisProjectError> {
+    println!("Enter end date for accepting posts (format: YYYY-MM-DD HH:MM:SS or press Enter to skip):");
+    println!("Example: 2024-12-31 23:59:59");
+    
+    let mut input = String::new();
+    io::stdout().flush()?;
+    io::stdin().read_line(&mut input)?;
+    
+    let input = input.trim();
+    if input.is_empty() {
+        return Ok(None);
+    }
+    
+    // Parse the date string into a timestamp
+    // This is a simplified example - you might want to use a proper date parsing library
+    // For now, let's accept a Unix timestamp directly
+    println!("For now, please enter a Unix timestamp (seconds since 1970-01-01):");
+    let mut timestamp_input = String::new();
+    io::stdin().read_line(&mut timestamp_input)?;
+    
+    let timestamp = timestamp_input.trim().parse::<i64>()
+        .map_err(|_| ThisProjectError::InvalidInput(format!("Invalid timestamp: {}", timestamp_input.trim())))?;
+    
+    Ok(Some(timestamp))
+}
+
+    
     
 // /// Gets schedule information and converts 
 // /// to required format of create_core_node()
@@ -8116,7 +8875,7 @@ fn faq_get_pa6_feedback() -> Result<String, ThisProjectError> {
 //     let new_channel_path = team_channels_dir.join(&team_channel_name);
 
 //     // 1. Create Directory Structure (with error handling)
-//     fs::create_dir_all(new_channel_path.join("instant_message_browser"))?; // Propagate errors with ?
+//     fs::create_dir_all(new_channel_path.join("message_posts_browser"))?; // Propagate errors with ?
 //     fs::create_dir_all(new_channel_path.join("task_browser"))?; // task browser directory
 //     // for i in 1..=3 { // Using numbers
 //     //     let col_name = format!("{}_col{}", i, i);
@@ -8138,7 +8897,7 @@ fn faq_get_pa6_feedback() -> Result<String, ThisProjectError> {
 
     
 //     // 2. Create and Save 0.toml Metadata (with error handling)
-//     let metadata_path = new_channel_path.join("instant_message_browser/0.toml"); // Simplified path
+//     let metadata_path = new_channel_path.join("message_posts_browser/0.toml"); // Simplified path
 //     let metadata = NodeInstMsgBrowserMetadata::new(&team_channel_name, owner.clone());
 //     save_toml_to_file(&metadata, &metadata_path)?; // Use ? for error propagation
 
@@ -8779,7 +9538,7 @@ fn add_im_message(
     }
 
     // Read 0.toml to get this instant messager browser room's settings
-    let metadata_path = parent_dir.join("0.toml"); // Assuming path is the instant_message_browser directory
+    let metadata_path = parent_dir.join("0.toml"); // Assuming path is the message_posts_browser directory
     let metadata_string = fs::read_to_string(metadata_path)?;
     let metadata: NodeInstMsgBrowserMetadata = toml::from_str(&metadata_string)
     .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("TOML deserialization error: {}", e)))?;
@@ -11160,7 +11919,7 @@ fn generic_share_address_book(recipient_name: &str) -> Result<(), GpgError> {
 /// * Local owner's address book: `{exe-parent}/project_graph_data/collaborator_files_address_book/{local-owner}__collaborator.toml`
 /// * Remote collaborator's address book: `{exe-parent}/project_graph_data/collaborator_files_address_book/{remote-collaborator}__collaborator.toml`
 /// * Output file: `{exe-parent}/invites_updates/outgoing/{team-channel-name}__team_channel__{remote-collaborator}.toml.gpg`
-fn share_team_channel_with_existing_collaborator(
+fn share_team_channel_with_existing_collaborator_converts_to_abs(
     remote_collaborator_username: &str,
     team_channel_name: &str
 ) -> Result<(), GpgError> {
@@ -14191,7 +14950,7 @@ pub fn invite_wizard() -> Result<(), GpgError> {
                     exe-parent/invites_updates/incoming/
                     ``` 
                     */
-                    share_team_channel_with_existing_collaborator(
+                    share_team_channel_with_existing_collaborator_converts_to_abs(
                         &remote_collaborator_username,
                         &team_channel_name,
                     );
@@ -14731,7 +15490,7 @@ fn handle_command_main_mode(
             //     // Passive View 
             //     /////////////////
             //     let mut message_path = app.current_path.clone();
-            //     message_path.push("instant_message_browser");
+            //     message_path.push("message_posts_browser");
 
             //     // Check if directory exists
             //     if !message_path.exists() {
@@ -14761,10 +15520,10 @@ fn handle_command_main_mode(
             //         .to_string_lossy()
             //         .to_string();
 
-            //     app.current_path = app.current_path.join("instant_message_browser");
+            //     app.current_path = app.current_path.join("message_posts_browser");
 
             //     debug_log!(
-            //         "app.current_path after joining 'instant_message_browser': {:?}",
+            //         "app.current_path after joining 'message_posts_browser': {:?}",
             //         app.current_path
             //     ); 
                 
@@ -14782,7 +15541,7 @@ fn handle_command_main_mode(
             # Process Flow:
             1. Path Handling:
                - Clones current directory path
-               - Appends "instant_message_browser" subdirectory
+               - Appends "message_posts_browser" subdirectory
                - Validates directory existence (returns Ok(false) if not found)
             /
             2. Passive View Terminal Launch (Linux):
@@ -14799,7 +15558,7 @@ fn handle_command_main_mode(
             # Directory Structure:
             ```text
             current_path/
-            └── instant_message_browser/
+            └── message_posts_browser/
                 ├── 0.toml (metadata)
                 ├── 1__user1.toml (messages)
                 └── 2__user2.toml (messages)
@@ -14845,7 +15604,7 @@ fn handle_command_main_mode(
             // Main Process (Original Uma Terminal):
             // Launches new terminal for passive view, then continues normal operation
             let mut message_path = app.current_path.clone();
-            message_path.push("instant_message_browser");
+            message_path.push("message_posts_browser");
             
             // New terminal command structure:
             StdCommand::new("gnome-terminal")
@@ -14863,7 +15622,7 @@ fn handle_command_main_mode(
             /
             2. Path Handling:
                - Clones and modifies current path
-               - Adds "instant_message_browser" subdirectory
+               - Adds "message_posts_browser" subdirectory
                - Converts paths to strings safely using to_string_lossy()
             /
             3. Process Launch:
@@ -14901,7 +15660,7 @@ fn handle_command_main_mode(
                 // Passive View 
                 /////////////////
                 let mut message_path = app.current_path.clone();
-                message_path.push("instant_message_browser");
+                message_path.push("message_posts_browser");
                 
                 debug_log!("message_path {:?}", message_path);
 
@@ -14929,10 +15688,10 @@ fn handle_command_main_mode(
                 
                 debug_log(&format!("handle command 'm' app.current_path {:?}", app.current_path)); 
                 // app.input_mode = InputMode::InsertText;
-                // app.current_path = app.current_path.join("instant_message_browser");
+                // app.current_path = app.current_path.join("message_posts_browser");
 
                 // debug_log!(
-                //     "app.current_path after joining 'instant_message_browser': {:?}",
+                //     "app.current_path after joining 'message_posts_browser': {:?}",
                 //     app.current_path
                 // ); 
                 
@@ -14940,7 +15699,7 @@ fn handle_command_main_mode(
                 // app.load_im_messages();
                 
                 // TODO experimental state refresh
-                app.enter_modal_instant_message_browser(app.current_path.clone())?;
+                app.enter_modal_message_posts_browser(app.current_path.clone())?;
             }
 
             "t" | "task" | "tasks" => {
@@ -15005,7 +15764,7 @@ fn handle_command_main_mode(
                 // Display error message (e.g., "Invalid command")
                 debug_log(" 'other' commend? _ => {...");
                 // if app.is_in_task_browser_directory() {
-                if app.is_in_instant_message_browser_directory() {
+                if app.is_in_message_posts_browser_directory() {
                 
                     if app.handle_task_action(input) { // Exit if handle_task_action returns true.
                         app.current_path.pop(); // Leave task browser directory
@@ -15235,7 +15994,7 @@ fn get_next_message_file_path(current_path: &Path, username: &str) -> PathBuf {
 /// println!("Loaded collaborator data for: {}", collaborator.user_name);
 /// ```
 fn get_addressbook_file_by_username(username: &str) -> Result<CollaboratorTomlData, ThisProjectError> {
-    debug_log!("Starting get_addressbook_file_by_username for username -> '{}'", username);
+    debug_log!("Starting GAFbU: get_addressbook_file_by_username for username -> '{}'", username);
     
     // Get the executable-relative base directory path
     let base_dir = match make_input_path_name_abs_executabledirectoryrelative_nocheck(
@@ -15243,29 +16002,29 @@ fn get_addressbook_file_by_username(username: &str) -> Result<CollaboratorTomlDa
     ) {
         Ok(path) => path,
         Err(e) => {
-            debug_log!("Failed to resolve collaborator directory path: {}", e);
+            debug_log!("GAFbU: Failed to resolve collaborator directory path: {}", e);
             return Err(ThisProjectError::IoError(e));
         }
     };
     
-    debug_log!("Base directory path (executable-relative): {:?}", base_dir);
+    debug_log!("GAFbU: Base directory path (executable-relative): {:?}", base_dir);
     
     // Check if base directory exists
     let base_exists = base_dir.exists();
-    debug_log!("Base directory exists: {}", base_exists);
+    debug_log!("GAFbU: Base directory exists: {}", base_exists);
     
     // Construct the specific file path
     let file_name = format!("{}__collaborator.toml", username);
     let file_path = base_dir.join(&file_name);
-    debug_log!("Looking for collaborator file at: {:?}", file_path);
+    debug_log!("GAFbU: Looking for collaborator file at: {:?}", file_path);
     
     // Check if file exists
     let file_exists = file_path.exists();
-    debug_log!("Collaborator file exists: {}", file_exists);
+    debug_log!("GAFbU: Collaborator file exists: {}", file_exists);
 
     // If directory exists but file doesn't, list contents to help debugging
     if base_exists && !file_exists {
-        debug_log!("Contents of collaborator_files_address_book directory:");
+        debug_log!("GAFbU: Contents of collaborator_files_address_book directory:");
         match std::fs::read_dir(&base_dir) {
             Ok(entries) => {
                 let mut found_files = false;
@@ -15276,10 +16035,10 @@ fn get_addressbook_file_by_username(username: &str) -> Result<CollaboratorTomlDa
                     }
                 }
                 if !found_files {
-                    debug_log!("(directory is empty)");
+                    debug_log!("GAFbU: (directory is empty)");
                 }
             },
-            Err(e) => debug_log!("Could not read directory contents: {}", e),
+            Err(e) => debug_log!("GAFbU: Could not read directory contents: {}", e),
         }
     }
     
@@ -15287,11 +16046,11 @@ fn get_addressbook_file_by_username(username: &str) -> Result<CollaboratorTomlDa
     // Since we don't see its implementation, we'll assume it's a function we need to call
     match read_one_collaborator_setup_toml(username) {
         Ok(loaded_collaborator) => {
-            debug_log!("Successfully loaded collaborator data for '{}'", username);
+            debug_log!("GAFbU: Successfully loaded collaborator data for '{}'", username);
             Ok(loaded_collaborator)
         }
         Err(e) => {
-            debug_log!("Failed to load collaborator file for '{}': {:?}", username, e);
+            debug_log!("GAFbU: Failed to load collaborator file for '{}': {:?}", username, e);
             Err(e) // Propagate the error
         }
     }
@@ -16029,7 +16788,7 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
             // return Err(e); 
             return Err(e.into()); // Convert ThisProjectError to MyCustomError
         }
-    };     
+    };
     
     // --- 7. Iterate through the filtered address-book-name-list ---
     // Go through the list make a set of meeting room information for each team-member, 
@@ -16967,7 +17726,7 @@ impl SendQueue {
 ///
 /// This function takes the raw bytes of a clearsigned and decrypted `node.toml` file
 /// and saves it to the specified path. It also creates the standard UMA node
-/// subdirectories: "instant_message_browser" and "task_browser".
+/// subdirectories: "message_posts_browser" and "task_browser".
 ///
 /// This function is used during file synchronization to create or update nodes
 /// on the local file system based on data received from a remote collaborator.
@@ -17020,7 +17779,7 @@ fn unpack_new_node_save_toml_and_create_dir(
     }
     
     // 4. Add IM-Browser directory
-    let im_browser_path = new_full_abs_node_directory_path.join("instant_message_browser");  // Construct path correctly
+    let im_browser_path = new_full_abs_node_directory_path.join("message_posts_browser");  // Construct path correctly
     create_dir_all(&im_browser_path)?;
 
     // 5. Add Task-Browser directory
@@ -17046,12 +17805,12 @@ fn unpack_new_node_save_toml_and_create_dir(
 //     toml_file.write_all(toml_string.as_bytes())?;
 
 //     // 3. Create associated directory.  (This is the only change)
-//     let dir_path = path.join(dir_name); // No longer specifically "instant_message_browser"
+//     let dir_path = path.join(dir_name); // No longer specifically "message_posts_browser"
 //     create_dir_all(&dir_path)?;
 
 
-//     // Add this to create "instant_message_browser/" next to node.toml:
-//     let im_browser_path = path.join("instant_message_browser");
+//     // Add this to create "message_posts_browser/" next to node.toml:
+//     let im_browser_path = path.join("message_posts_browser");
 //     create_dir_all(&im_browser_path)?;    
 
 //     Ok(())
@@ -19038,10 +19797,10 @@ fn handle_local_owner_desk(
                     1. if X then save in A place
                     2. if Y then save in B place
                     for a message file, 
-                    filepath_in_node = "/instant_message_browser"
+                    filepath_in_node = "/message_posts_browser"
                     for MVP: just add it the same way you add any message, next available number.
                     
-                    current_path = project_graph_data/team_channels/{}/instant_message_browser/
+                    current_path = project_graph_data/team_channels/{}/message_posts_browser/
                     
                     let incoming_file_path = get_next_message_file_path(current_path, local_owner_user); 
                     */
@@ -19064,7 +19823,7 @@ fn handle_local_owner_desk(
                         )?;
                 
                     // TODO for now only handling IM and Node files
-                    if file_str.contains("filepath_in_node = \"/instant_message_browser\"") {
+                    if file_str.contains("filepath_in_node = \"/message_posts_browser\"") {
                         debug_log!("HLOD-InTray: an instant message file.");
 
                         // 7.2 
@@ -19072,7 +19831,7 @@ fn handle_local_owner_desk(
 
                         let mut current_path = PathBuf::from("project_graph_data/team_channels");
                         current_path.push(&team_channel_name);
-                        current_path.push("instant_message_browser");
+                        current_path.push("message_posts_browser");
                         
                         incoming_file_path = get_next_message_file_path(
                             &current_path, 
@@ -22278,9 +23037,9 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
             //                         debug_log("Invalid index.");
             //                     }
             //                 } 
-            //             } else if app.is_in_instant_message_browser_directory() {
+            //             } else if app.is_in_message_posts_browser_directory() {
             //                 // ... handle other TUI actions ...
-            //                 debug_log("else if self.is_in_instant_message_browser_directory()");
+            //                 debug_log("else if self.is_in_message_posts_browser_directory()");
                             
                             
             //             }
