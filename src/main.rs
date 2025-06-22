@@ -371,7 +371,7 @@ use getifaddrs::{getifaddrs, InterfaceFlags};
 
 /*
 To eventually replace any 3rd party 
-toml crates
+toml crates 
 */
 // For toml and clearsigntoml
 mod clearsign_toml_module;
@@ -379,6 +379,7 @@ use crate::clearsign_toml_module::{
     GpgError,
     // read_field_from_toml,
     // read_basename_fields_from_toml,
+    convert_tomlfile_without_keyid_into_clearsigntoml_inplace,
     convert_toml_filewithkeyid_into_clearsigntoml_inplace,
     q_and_a_user_selects_gpg_key_full_fingerprint,
     read_single_line_string_field_from_toml,
@@ -722,6 +723,12 @@ pub enum ThisProjectError {
     // Add new variant for String errors
     StringError(String),
     // Other variants...
+}
+
+impl From<GpgError> for ThisProjectError {
+    fn from(err: GpgError) -> Self {
+        ThisProjectError::GpgError(format!("GPG operation failed: {:?}", err))
+    }
 }
 
 // Implement From<walkdir::Error> for ThisProjectError
@@ -6529,7 +6536,7 @@ impl CoreNode {
             }
         }
 
-        // 6. Write the TOML data to the file
+        // 6. Write the TOML data to the file 
         debug_log!("Writing TOML data to file...");
         fs::write(&file_path, &toml_string)?;
         
@@ -6539,10 +6546,146 @@ impl CoreNode {
         } else {
             debug_log!("Warning: File write succeeded but file doesn't exist!");
         }
+        
+        /*
+        
+this will include an extra lookup step:
+        1. get file_owner name from the clearsign-toml file
+        2. look up user addressbook file by user-name
+        3. get key-id from file-owner's addressbook file
+        4. clearsign with key-id so that reader can varify clearsign with public-key
+        from addressbook file.
+        convert_toml_filewithkeyid_into_clearsigntoml_inplace?
+        maybe new function with extra lookup step...
+        
+the new function will be:
+fn convert_tomlfile_without_keyid_into_clearsigntoml_inplace(
+    path_to_toml_file: &Path,
+) -> Result<(), GpgError> {
+            
+these may be the needed steps:
+
+    // Read username from the configuration file, mapping any reading errors to our error type
+    let file_owner_username = read_single_line_string_field_from_toml(config_path_str, "owner")
+        .map_err(|error_message| ThisProjectError::TomlVanillaDeserialStrError(
+            format!("Failed to read file_owner_username from config: {}", error_message)
+        ))?;
+
+    debug_log!("file_owner_username {}", file_owner_username);
+    
+    // Convert the collaborator files directory to an absolute path based on the executable's location
+    // AND verify that the directory exists (returns error if not found or not a directory)
+    let collaborator_files_directory_relative = COLLABORATOR_ADDRESSBOOK_PATH_STR;
+    let collaborator_files_directory_absolute = make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(
+        collaborator_files_directory_relative
+    ).map_err(|io_error| ThisProjectError::IoError(io_error))?;
+    
+    // Construct the path to the user's collaborator file, which contains their GPG key ID
+    let collaborator_filename = format!("{}__collaborator.toml", file_owner_username);
+    let user_config_path = collaborator_files_directory_absolute.join(collaborator_filename);
+    
+    debug_log!("user_config_path {}", user_config_path.display());
+
+    // Convert the collaborator file path to string for TOML reading
+    let user_config_path_str = user_config_path.to_str()
+        .ok_or_else(|| ThisProjectError::InvalidInput("Cannot convert collaborator file path to string".to_string()))?;
+    
+    debug_log!("user_config_path {}", user_config_path.display());
+    println!("user_config_path {}", user_config_path.display());
+    
+    // Extract the GPG key ID from the collaborator file
+    let gpg_key_id = read_singleline_string_from_clearsigntoml(user_config_path_str, "gpg_publickey_id")
+        .map_err(|error_message| ThisProjectError::TomlVanillaDeserialStrError(
+            format!("export_public_gpg_key_converts_to_abs_path() Failed read_singleline_string_from_clearsigntoml() to read GPG key ID from clearsigntoml collaborator file: {}", error_message)
+        ))?;
+
+        
+        notes:
+        File Types Being Handled:
+
+The Target TOML File (the one we want to clearsign):
+
+Initially: Plain TOML file (NOT clearsigned)
+Contains: An owner field with the username
+Read with: read_single_line_string_field_from_toml()
+End state: Will become clearsigned after our function runs
+
+
+The Collaborator Addressbook File ({username}__collaborator.toml):
+
+Already clearsigned TOML
+Contains: The gpg_publickey_id field
+Read with: read_singleline_string_from_clearsigntoml()
+Remains unchanged by our function
+
+scope summary:
+        Scope Confirmation
+Purpose
+Create a function that clearsigns a plain TOML file in-place, but unlike the existing function, this one does not expect the gpg_publickey_id to be present in the target TOML file. Instead, it performs a multi-step lookup process to determine which GPG key to use for signing.
+Key Differences from Existing Function
+
+Target TOML file: Does NOT contain gpg_publickey_id field
+Target TOML file: MUST contain an owner field with the file owner's username
+Additional lookup: Uses the owner's username to find their collaborator addressbook file
+GPG key source: Extracts the gpg_publickey_id from the owner's addressbook file (not from the target file)
+
+Process Flow
+
+Read owner username from the target TOML file (plain TOML)
+
+Field name: "owner"
+Use: read_single_line_string_field_from_toml()
+
+
+Construct addressbook file path
+
+Base directory: COLLABORATOR_ADDRESSBOOK_PATH_STR (relative to executable)
+Convert to absolute path using: make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error()
+Filename pattern: {owner_username}__collaborator.toml
+
+
+Read GPG key ID from the addressbook file
+
+The addressbook file is already clearsigned
+Field name: "gpg_publickey_id"
+Use: read_singleline_string_from_clearsigntoml()
+
+
+Clearsign the target file
+
+Use the extracted GPG key ID to sign the original target TOML file
+Replace the original file in-place with its clearsigned version
+
+
+
+File States
+
+Target TOML file: Starts as plain TOML → Ends as clearsigned TOML
+Addressbook file: Already clearsigned → Remains unchanged (read-only operation)
+        
+        */
+        
+        // In your function that returns Result<(), std::io::Error>
+        convert_tomlfile_without_keyid_into_clearsigntoml_inplace(
+            &file_path,
+            COLLABORATOR_ADDRESSBOOK_PATH_STR,
+        )
+        .map_err(|gpg_err| {
+            // Convert GpgError to std::io::Error
+            std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("GPG operation failed: {:?}", gpg_err),
+            )
+        })?;
 
         Ok(())
     }
-        
+    /*
+    variant:
+    re_clearsign_clearsigntoml_file_without_keyid_into_clearsigntoml_inplace
+    
+    */
+
     // /// Saves the `CoreNode` data to a `node.toml` file.
     // ///
     // /// This function serializes the `CoreNode` struct into TOML format and writes 
@@ -10087,7 +10230,13 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         if a new chanel needs to be created (as the owner)
         */
         // Prompt for owner and create uma.toml
-        println!("Welcome to the Uma Collaboration Tools. Please enter your username (this will be the owner for this Uma 'instance'):");
+        println!("Welcome to the Uma Collaboration Tools.");
+        println!("Please enter your username.");
+        println!("This nickname will be the local-owner-user for this Uma 'instance.'");
+        println!("Changing 'uma_local_owner_user = ___' in uma.toml");
+        println!("will change the local-owner-user when running Uma.");
+        println!("Please enter your username:");
+        
         let mut owner_input = String::new();
         io::stdin().read_line(&mut owner_input).unwrap();  // TODO remove this unwrap!!!!!!!!!!!!!!!!!!!!!
         
@@ -10131,7 +10280,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
     };
 
     
-    
+    // TODO
     // // --- 3. CHECK FOR PORT COLLISIONS --- 
     // // You can now safely access user_metadata.uma_local_owner_user if needed
     // if let Err(e) = check_all_ports_in_team_channels() {
