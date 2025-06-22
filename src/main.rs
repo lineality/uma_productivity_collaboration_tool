@@ -2645,7 +2645,7 @@ fn get_current_unix_timestamp() -> u64 {
 }
 
 
-
+// it's a total garbage function! 
 fn check_all_ports_in_team_channels() -> Result<(), ThisProjectError> {
 
     // let team_channels_dir = Path::new("project_graph_data/team_channels");
@@ -2674,11 +2674,24 @@ fn check_all_ports_in_team_channels() -> Result<(), ThisProjectError> {
         if node_toml_path.exists() {
             // Read the node.toml file
             let toml_string = std::fs::read_to_string(&node_toml_path)?;
+            
+            // TODO -> this needs to use use clear-sign reading
             let toml_value: Value = toml::from_str(&toml_string)?;
 
             // Extract the teamchannel_collaborators_with_access array
+            
+            // teamchannel_collaborators_with_access -> array of strings
             if let Some(collaborators_array) = toml_value.get("teamchannel_collaborators_with_access").and_then(Value::as_array) {
                 for collaborator_data in collaborators_array {
+                    
+                    /*
+                    e.g.
+                    [[abstract_collaborator_port_assignments.bob_bob.collaborator_ports]]
+                    user_name = "bob"
+                    ready_port = 55342
+                    intray_port = 54493
+                    gotit_port = 58652
+                    */
                     // Extract each port and check if it's in use
                     if let Some(ready_port) = collaborator_data.get("ready_port").and_then(|v| v.as_integer()).map(|p| p as u16) {
                         if is_port_in_use(ready_port) && !ports_in_use.insert(ready_port) {
@@ -8779,10 +8792,70 @@ fn q_and_a_get_message_post_integer_ranges() -> Result<Option<Vec<(i32, i32)>>, 
     Ok(Some(ranges))
 }
 
+// /// Gets user input for message post integer-string validation ranges
+// /// 
+// /// # Returns
+// /// * `Result<Option<Vec<(i32, i32)>>, ThisProjectError>` - Vector of integer range tuples for int-string pairs or None
+// fn q_and_a_get_message_post_int_string_ranges() -> Result<Option<Vec<(i32, i32)>>, ThisProjectError> {
+    
+//     println!("Integer:Write-In choices, if applicable:");
+//     println!("For write-in answers/choices for Message-Posts, such as the third part of this form: 1. mustard-yellow  2. pink 3. write in your choice of colour");
+//     println!("Or the third AND fourth parts of this form: 1. blue  2. yellow  3. write in: your choice of colour  4. write in: exceptional reason to avoid colour");
+//     println!("Here the user enters BOTH an integer AND (after a colon) their write-in character-string -> integer:string -> 3:lilac");
+//     println!("As with integer-only above, these can be single, continuous ranges, or (lists) discontinuous options (ranges or singles)");
+//     println!("If applicable, enter integer ranges for integer-string pair options (format: min1-max1,min2-max2,... or press Enter to skip):");
+//     println!("Example: 2-2,5-10");
+    
+//     let mut input = String::new();
+//     io::stdout().flush()?;
+//     io::stdin().read_line(&mut input)?;
+    
+//     let input = input.trim();
+//     if input.is_empty() {
+//         return Ok(None);
+//     }
+    
+//     // Parse the ranges (same logic as integer ranges)
+//     let mut ranges = Vec::new();
+//     for range_str in input.split(',') {
+//         let parts: Vec<&str> = range_str.trim().split('-').collect();
+//         if parts.len() != 2 {
+//             return Err(ThisProjectError::InvalidInput(format!("Invalid range format: {}", range_str)));
+//         }
+        
+//         let min = parts[0].parse::<i32>()
+//             .map_err(|_| ThisProjectError::InvalidInput(format!("Invalid minimum value: {}", parts[0])))?;
+//         let max = parts[1].parse::<i32>()
+//             .map_err(|_| ThisProjectError::InvalidInput(format!("Invalid maximum value: {}", parts[1])))?;
+        
+//         if min > max {
+//             return Err(ThisProjectError::InvalidInput(format!("Minimum {} is greater than maximum {}", min, max)));
+//         }
+        
+//         ranges.push((min, max));
+//     }
+    
+//     Ok(Some(ranges))
+// }
+
 /// Gets user input for message post integer-string validation ranges
+/// 
+/// Prompts the user to enter integer ranges for integer-string pair options.
+/// These are used for write-in choices where users provide both an integer
+/// selection and a string value (e.g., "3:lilac" for a color choice).
+/// 
+/// # Input Format
+/// - Single integers: "5" (interpreted as range 5-5)
+/// - Ranges: "5-10" (range from 5 to 10)
+/// - Multiple values: "2,5-10,12" (single value 2, range 5-10, single value 12)
+/// - Empty input skips this configuration
 /// 
 /// # Returns
 /// * `Result<Option<Vec<(i32, i32)>>, ThisProjectError>` - Vector of integer range tuples for int-string pairs or None
+/// 
+/// # Errors
+/// * `ThisProjectError::InvalidInput` - If the input format is invalid
+/// * `ThisProjectError::IoError` - If there's an I/O error reading input
 fn q_and_a_get_message_post_int_string_ranges() -> Result<Option<Vec<(i32, i32)>>, ThisProjectError> {
     
     println!("Integer:Write-In choices, if applicable:");
@@ -8790,8 +8863,8 @@ fn q_and_a_get_message_post_int_string_ranges() -> Result<Option<Vec<(i32, i32)>
     println!("Or the third AND fourth parts of this form: 1. blue  2. yellow  3. write in: your choice of colour  4. write in: exceptional reason to avoid colour");
     println!("Here the user enters BOTH an integer AND (after a colon) their write-in character-string -> integer:string -> 3:lilac");
     println!("As with integer-only above, these can be single, continuous ranges, or (lists) discontinuous options (ranges or singles)");
-    println!("If applicable, enter integer ranges for integer-string pair options (format: min1-max1,min2-max2,... or press Enter to skip):");
-    println!("Example: 2-2,5-10");
+    println!("If applicable, enter integer ranges for integer-string pair options (format: min-max,min-max,... or single values like 5 or press Enter to skip):");
+    println!("Example: 2,5-10,12");
     
     let mut input = String::new();
     io::stdout().flush()?;
@@ -8802,24 +8875,55 @@ fn q_and_a_get_message_post_int_string_ranges() -> Result<Option<Vec<(i32, i32)>
         return Ok(None);
     }
     
-    // Parse the ranges (same logic as integer ranges)
+    // Parse the ranges with support for single integers
     let mut ranges = Vec::new();
+    
+    // Split by comma to handle multiple entries
     for range_str in input.split(',') {
-        let parts: Vec<&str> = range_str.trim().split('-').collect();
-        if parts.len() != 2 {
-            return Err(ThisProjectError::InvalidInput(format!("Invalid range format: {}", range_str)));
+        let trimmed = range_str.trim();
+        
+        // Check if it contains a dash (range) or is a single value
+        if trimmed.contains('-') {
+            // Handle range format (e.g., "5-10")
+            let parts: Vec<&str> = trimmed.split('-').collect();
+            
+            // Validate that we have exactly 2 parts
+            if parts.len() != 2 {
+                return Err(ThisProjectError::InvalidInput(
+                    format!("Invalid range format: '{}'. Expected format: 'min-max'", trimmed)
+                ));
+            }
+            
+            // Parse minimum value
+            let min = parts[0].parse::<i32>()
+                .map_err(|_| ThisProjectError::InvalidInput(
+                    format!("Invalid minimum value: '{}'", parts[0])
+                ))?;
+            
+            // Parse maximum value
+            let max = parts[1].parse::<i32>()
+                .map_err(|_| ThisProjectError::InvalidInput(
+                    format!("Invalid maximum value: '{}'", parts[1])
+                ))?;
+            
+            // Validate that min <= max
+            if min > max {
+                return Err(ThisProjectError::InvalidInput(
+                    format!("Minimum {} is greater than maximum {}", min, max)
+                ));
+            }
+            
+            ranges.push((min, max));
+        } else {
+            // Handle single integer (e.g., "5" becomes "5-5")
+            let single_value = trimmed.parse::<i32>()
+                .map_err(|_| ThisProjectError::InvalidInput(
+                    format!("Invalid integer value: '{}'", trimmed)
+                ))?;
+            
+            // Add as a range where min equals max
+            ranges.push((single_value, single_value));
         }
-        
-        let min = parts[0].parse::<i32>()
-            .map_err(|_| ThisProjectError::InvalidInput(format!("Invalid minimum value: {}", parts[0])))?;
-        let max = parts[1].parse::<i32>()
-            .map_err(|_| ThisProjectError::InvalidInput(format!("Invalid maximum value: {}", parts[1])))?;
-        
-        if min > max {
-            return Err(ThisProjectError::InvalidInput(format!("Minimum {} is greater than maximum {}", min, max)));
-        }
-        
-        ranges.push((min, max));
     }
     
     Ok(Some(ranges))
@@ -11626,7 +11730,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
     // }
     
     
-    debug_log("next IUA check_all_ports_in_team_channels");
+    debug_log("next IUA runs fn  check_all_ports_in_team_channels()");
 
     // Check for port collisions across all team channels
     if let Err(e) = check_all_ports_in_team_channels() {
