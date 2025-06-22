@@ -6145,6 +6145,8 @@ struct CoreNode {
 
     /// End time for accepting posts (UTC POSIX timestamp) 
     pub message_post_end_date_utc_posix: Option<i64>,
+    
+    // TODO: comments string thingy?
 }
 
 
@@ -6236,6 +6238,7 @@ impl CoreNode {
         message_post_start_date_utc_posix: Option<i64>,
         message_post_end_date_utc_posix: Option<i64>,
     ) -> Result<CoreNode, ThisProjectError> {
+
         debug_log!("Starting CoreNode::new");
         debug_log!("Directory path received: {:?}", directory_path);
         debug_log!("Checking if directory exists: {}", directory_path.exists());
@@ -6262,7 +6265,7 @@ impl CoreNode {
 
         debug_log!("About to calculate node_unique_id");
         // 2. Calculate the hash
-        // TODO add new fields
+        // TODO add new fields to hash
         let node_unique_id = match calculate_corenode_hashes(
             &node_name,
             &description_for_tui,
@@ -6548,121 +6551,121 @@ impl CoreNode {
         }
         
         /*
-        
-this will include an extra lookup step:
-        1. get file_owner name from the clearsign-toml file
-        2. look up user addressbook file by user-name
-        3. get key-id from file-owner's addressbook file
-        4. clearsign with key-id so that reader can varify clearsign with public-key
-        from addressbook file.
-        convert_toml_filewithkeyid_into_clearsigntoml_inplace?
-        maybe new function with extra lookup step...
-        
-the new function will be:
-fn convert_tomlfile_without_keyid_into_clearsigntoml_inplace(
-    path_to_toml_file: &Path,
-) -> Result<(), GpgError> {
+                
+        this will include an extra lookup step:
+                1. get file_owner name from the clearsign-toml file
+                2. look up user addressbook file by user-name
+                3. get key-id from file-owner's addressbook file
+                4. clearsign with key-id so that reader can varify clearsign with public-key
+                from addressbook file.
+                convert_toml_filewithkeyid_into_clearsigntoml_inplace?
+                maybe new function with extra lookup step...
+                
+        the new function will be:
+        fn convert_tomlfile_without_keyid_into_clearsigntoml_inplace(
+            path_to_toml_file: &Path,
+        ) -> Result<(), GpgError> {
+                    
+        these may be the needed steps:
+
+            // Read username from the configuration file, mapping any reading errors to our error type
+            let file_owner_username = read_single_line_string_field_from_toml(config_path_str, "owner")
+                .map_err(|error_message| ThisProjectError::TomlVanillaDeserialStrError(
+                    format!("Failed to read file_owner_username from config: {}", error_message)
+                ))?;
+
+            debug_log!("file_owner_username {}", file_owner_username);
             
-these may be the needed steps:
+            // Convert the collaborator files directory to an absolute path based on the executable's location
+            // AND verify that the directory exists (returns error if not found or not a directory)
+            let collaborator_files_directory_relative = COLLABORATOR_ADDRESSBOOK_PATH_STR;
+            let collaborator_files_directory_absolute = make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(
+                collaborator_files_directory_relative
+            ).map_err(|io_error| ThisProjectError::IoError(io_error))?;
+            
+            // Construct the path to the user's collaborator file, which contains their GPG key ID
+            let collaborator_filename = format!("{}__collaborator.toml", file_owner_username);
+            let user_config_path = collaborator_files_directory_absolute.join(collaborator_filename);
+            
+            debug_log!("user_config_path {}", user_config_path.display());
 
-    // Read username from the configuration file, mapping any reading errors to our error type
-    let file_owner_username = read_single_line_string_field_from_toml(config_path_str, "owner")
-        .map_err(|error_message| ThisProjectError::TomlVanillaDeserialStrError(
-            format!("Failed to read file_owner_username from config: {}", error_message)
-        ))?;
+            // Convert the collaborator file path to string for TOML reading
+            let user_config_path_str = user_config_path.to_str()
+                .ok_or_else(|| ThisProjectError::InvalidInput("Cannot convert collaborator file path to string".to_string()))?;
+            
+            debug_log!("user_config_path {}", user_config_path.display());
+            println!("user_config_path {}", user_config_path.display());
+            
+            // Extract the GPG key ID from the collaborator file
+            let gpg_key_id = read_singleline_string_from_clearsigntoml(user_config_path_str, "gpg_publickey_id")
+                .map_err(|error_message| ThisProjectError::TomlVanillaDeserialStrError(
+                    format!("export_public_gpg_key_converts_to_abs_path() Failed read_singleline_string_from_clearsigntoml() to read GPG key ID from clearsigntoml collaborator file: {}", error_message)
+                ))?;
 
-    debug_log!("file_owner_username {}", file_owner_username);
-    
-    // Convert the collaborator files directory to an absolute path based on the executable's location
-    // AND verify that the directory exists (returns error if not found or not a directory)
-    let collaborator_files_directory_relative = COLLABORATOR_ADDRESSBOOK_PATH_STR;
-    let collaborator_files_directory_absolute = make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(
-        collaborator_files_directory_relative
-    ).map_err(|io_error| ThisProjectError::IoError(io_error))?;
-    
-    // Construct the path to the user's collaborator file, which contains their GPG key ID
-    let collaborator_filename = format!("{}__collaborator.toml", file_owner_username);
-    let user_config_path = collaborator_files_directory_absolute.join(collaborator_filename);
-    
-    debug_log!("user_config_path {}", user_config_path.display());
+                
+                notes:
+                File Types Being Handled:
 
-    // Convert the collaborator file path to string for TOML reading
-    let user_config_path_str = user_config_path.to_str()
-        .ok_or_else(|| ThisProjectError::InvalidInput("Cannot convert collaborator file path to string".to_string()))?;
-    
-    debug_log!("user_config_path {}", user_config_path.display());
-    println!("user_config_path {}", user_config_path.display());
-    
-    // Extract the GPG key ID from the collaborator file
-    let gpg_key_id = read_singleline_string_from_clearsigntoml(user_config_path_str, "gpg_publickey_id")
-        .map_err(|error_message| ThisProjectError::TomlVanillaDeserialStrError(
-            format!("export_public_gpg_key_converts_to_abs_path() Failed read_singleline_string_from_clearsigntoml() to read GPG key ID from clearsigntoml collaborator file: {}", error_message)
-        ))?;
+        The Target TOML File (the one we want to clearsign):
 
-        
-        notes:
-        File Types Being Handled:
-
-The Target TOML File (the one we want to clearsign):
-
-Initially: Plain TOML file (NOT clearsigned)
-Contains: An owner field with the username
-Read with: read_single_line_string_field_from_toml()
-End state: Will become clearsigned after our function runs
+        Initially: Plain TOML file (NOT clearsigned)
+        Contains: An owner field with the username
+        Read with: read_single_line_string_field_from_toml()
+        End state: Will become clearsigned after our function runs
 
 
-The Collaborator Addressbook File ({username}__collaborator.toml):
+        The Collaborator Addressbook File ({username}__collaborator.toml):
 
-Already clearsigned TOML
-Contains: The gpg_publickey_id field
-Read with: read_singleline_string_from_clearsigntoml()
-Remains unchanged by our function
+        Already clearsigned TOML
+        Contains: The gpg_publickey_id field
+        Read with: read_singleline_string_from_clearsigntoml()
+        Remains unchanged by our function
 
-scope summary:
-        Scope Confirmation
-Purpose
-Create a function that clearsigns a plain TOML file in-place, but unlike the existing function, this one does not expect the gpg_publickey_id to be present in the target TOML file. Instead, it performs a multi-step lookup process to determine which GPG key to use for signing.
-Key Differences from Existing Function
+        scope summary:
+                Scope Confirmation
+        Purpose
+        Create a function that clearsigns a plain TOML file in-place, but unlike the existing function, this one does not expect the gpg_publickey_id to be present in the target TOML file. Instead, it performs a multi-step lookup process to determine which GPG key to use for signing.
+        Key Differences from Existing Function
 
-Target TOML file: Does NOT contain gpg_publickey_id field
-Target TOML file: MUST contain an owner field with the file owner's username
-Additional lookup: Uses the owner's username to find their collaborator addressbook file
-GPG key source: Extracts the gpg_publickey_id from the owner's addressbook file (not from the target file)
+        Target TOML file: Does NOT contain gpg_publickey_id field
+        Target TOML file: MUST contain an owner field with the file owner's username
+        Additional lookup: Uses the owner's username to find their collaborator addressbook file
+        GPG key source: Extracts the gpg_publickey_id from the owner's addressbook file (not from the target file)
 
-Process Flow
+        Process Flow
 
-Read owner username from the target TOML file (plain TOML)
+        Read owner username from the target TOML file (plain TOML)
 
-Field name: "owner"
-Use: read_single_line_string_field_from_toml()
-
-
-Construct addressbook file path
-
-Base directory: COLLABORATOR_ADDRESSBOOK_PATH_STR (relative to executable)
-Convert to absolute path using: make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error()
-Filename pattern: {owner_username}__collaborator.toml
+        Field name: "owner"
+        Use: read_single_line_string_field_from_toml()
 
 
-Read GPG key ID from the addressbook file
+        Construct addressbook file path
 
-The addressbook file is already clearsigned
-Field name: "gpg_publickey_id"
-Use: read_singleline_string_from_clearsigntoml()
+        Base directory: COLLABORATOR_ADDRESSBOOK_PATH_STR (relative to executable)
+        Convert to absolute path using: make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error()
+        Filename pattern: {owner_username}__collaborator.toml
 
 
-Clearsign the target file
+        Read GPG key ID from the addressbook file
 
-Use the extracted GPG key ID to sign the original target TOML file
-Replace the original file in-place with its clearsigned version
+        The addressbook file is already clearsigned
+        Field name: "gpg_publickey_id"
+        Use: read_singleline_string_from_clearsigntoml()
+
+
+        Clearsign the target file
+
+        Use the extracted GPG key ID to sign the original target TOML file
+        Replace the original file in-place with its clearsigned version
 
 
 
-File States
+        File States
 
-Target TOML file: Starts as plain TOML → Ends as clearsigned TOML
-Addressbook file: Already clearsigned → Remains unchanged (read-only operation)
-        
+        Target TOML file: Starts as plain TOML → Ends as clearsigned TOML
+        Addressbook file: Already clearsigned → Remains unchanged (read-only operation)
+                
         */
         
         // In your function that returns Result<(), std::io::Error>
@@ -6683,8 +6686,8 @@ Addressbook file: Already clearsigned → Remains unchanged (read-only operation
     /*
     variant:
     re_clearsign_clearsigntoml_file_without_keyid_into_clearsigntoml_inplace
-    
     */
+
 
     // /// Saves the `CoreNode` data to a `node.toml` file.
     // ///
@@ -6862,7 +6865,10 @@ Addressbook file: Already clearsigned → Remains unchanged (read-only operation
     fn update_updated_at_timestamp(&mut self) {
         self.updated_at_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
     }
-
+    
+    
+    // TODO: this will need to be replaced with a
+    // clearsigntoml version
     fn load_node_from_file(path: &Path) -> Result<CoreNode, io::Error> {
         let toml_string = fs::read_to_string(path)?;
         let node: CoreNode = toml::from_str(&toml_string).map_err(|e| {
@@ -8212,12 +8218,18 @@ fn create_core_node(
     
     // Get user input for message post configuration fields
     let message_post_integer_ranges = q_and_a_get_message_post_integer_ranges()?;
+    print!("\n");
     let message_post_int_string_ranges = q_and_a_get_message_post_int_string_ranges()?;
+    print!("\n");
     let message_post_max_string_length = q_and_a_get_message_post_max_string_length()?;
+    print!("\n");
     let message_post_is_public = q_and_a_get_message_post_is_public()?;
+    print!("\n");
     let message_post_user_confirms = q_and_a_get_message_post_user_confirms()?;
+    print!("\n");
     let message_post_start_date = q_and_a_get_message_post_start_date()?;
-    let message_post_end_date = q_and_a_get_message_post_end_date()?;
+    print!("\n");
+    let message_post_end_date = q_and_a_get_message_post_end_date(message_post_start_date)?;
 
     // Create subdirectories within the node directory
     let message_dir = node_specific_path.join("message_posts_browser");
@@ -8232,6 +8244,7 @@ fn create_core_node(
         fs::create_dir_all(&col_path)?;
         // TODO: Create column nodes (recursive call for later)
         // create_core_node(col_path, teamchannel_collaborators_with_access.clone(), format!("{}_{}", node_name, col_name))?;
+        // TODO maybe custom shallow node with no tasks option needed...
     }
 
     // Create and Save metadata
@@ -8708,15 +8721,31 @@ fn q_and_a_get_pa6_feedback() -> Result<String, ThisProjectError> {
 
     Ok(input.to_string())
 }
-    
+
+/*
+Message-Post Q&A functions
+*/
     
 /// Gets user input for message post integer validation ranges
 /// 
 /// # Returns
 /// * `Result<Option<Vec<(i32, i32)>>, ThisProjectError>` - Vector of integer range tuples or None
 fn q_and_a_get_message_post_integer_ranges() -> Result<Option<Vec<(i32, i32)>>, ThisProjectError> {
-    println!("Enter integer validation ranges for message posts (format: min1-max1,min2-max2,... or press Enter to skip):");
-    println!("Example: 1-10,20-30,50-100");
+    
+    // Section Blurb
+    println!("\n\nMessage-Posts: optional modular customization of the Message-Post section of this node.");
+    println!("for example, using this message post for: elections/votes/poles, surveys, questionnaires, data-collection for analysis, etc.\n");
+    
+    // Question for User
+    println!("Integer-Choices, if applicable:");
+    println!("For preset answers/choices for Message-Posts, such as poles or questionnaires with options taking the \"multile-choice\" form: 1. breakfast  2. second-breakfast 3. supper");
+    println!("where the user enters only the integer (commonly a letter for \"multile-choice\")");
+    println!("to indicate that they are selecting the option that corresponds to that integer (commonly a letter):");
+    println!("Enter the range (or ranges) of how many integer-only options the user can select from.");
+    println!("I.e. enter a list of integer ranges that the user will be able select from, using integers, dashes, and commas: Format: min1-max1,min2-max2,");
+    println!("Example -> 1-10,20-30,50-100   E.g. for 1. breakfast  2. second-breakfast 3. supper, the format would be -> 1-3");
+    println!("Write-in options are dealt with below, this for one or more ranges of values where the user only enters the integer of their selection.");
+    println!("...or press Enter to skip if this format does not apply to your project-node.");
     
     let mut input = String::new();
     io::stdout().flush()?;
@@ -8755,8 +8784,14 @@ fn q_and_a_get_message_post_integer_ranges() -> Result<Option<Vec<(i32, i32)>>, 
 /// # Returns
 /// * `Result<Option<Vec<(i32, i32)>>, ThisProjectError>` - Vector of integer range tuples for int-string pairs or None
 fn q_and_a_get_message_post_int_string_ranges() -> Result<Option<Vec<(i32, i32)>>, ThisProjectError> {
-    println!("Enter integer ranges for integer-string pair validation (format: min1-max1,min2-max2,... or press Enter to skip):");
-    println!("Example: 1-100,200-300");
+    
+    println!("Integer:Write-In choices, if applicable:");
+    println!("For write-in answers/choices for Message-Posts, such as the third part of this form: 1. mustard-yellow  2. pink 3. write in your choice of colour");
+    println!("Or the third AND fourth parts of this form: 1. blue  2. yellow  3. write in: your choice of colour  4. write in: exceptional reason to avoid colour");
+    println!("Here the user enters BOTH an integer AND (after a colon) their write-in character-string -> integer:string -> 3:lilac");
+    println!("As with integer-only above, these can be single, continuous ranges, or (lists) discontinuous options (ranges or singles)");
+    println!("If applicable, enter integer ranges for integer-string pair options (format: min1-max1,min2-max2,... or press Enter to skip):");
+    println!("Example: 2-2,5-10");
     
     let mut input = String::new();
     io::stdout().flush()?;
@@ -8795,8 +8830,8 @@ fn q_and_a_get_message_post_int_string_ranges() -> Result<Option<Vec<(i32, i32)>
 /// # Returns
 /// * `Result<Option<usize>, ThisProjectError>` - Maximum string length or None
 fn q_and_a_get_message_post_max_string_length() -> Result<Option<usize>, ThisProjectError> {
-    println!("Enter maximum string length for integer-string pairs (or press Enter to skip):");
-    println!("Example: 255");
+    println!("Enter maximum string length (max number of write-in characters) for integer-string pairs (or press Enter to skip):");
+    println!("Example: 42");
     
     let mut input = String::new();
     io::stdout().flush()?;
@@ -8818,7 +8853,7 @@ fn q_and_a_get_message_post_max_string_length() -> Result<Option<usize>, ThisPro
 /// # Returns
 /// * `Result<Option<bool>, ThisProjectError>` - Whether posts are public or None
 fn q_and_a_get_message_post_is_public() -> Result<Option<bool>, ThisProjectError> {
-    println!("Should message posts be public? (yes/no or press Enter to skip):");
+    println!("Should message posts be public? -> (y)es / (n)o / Press-Enter to skip):");
     
     let mut input = String::new();
     io::stdout().flush()?;
@@ -8841,7 +8876,7 @@ fn q_and_a_get_message_post_is_public() -> Result<Option<bool>, ThisProjectError
 /// # Returns
 /// * `Result<Option<bool>, ThisProjectError>` - Whether user confirmation is required or None
 fn q_and_a_get_message_post_user_confirms() -> Result<Option<bool>, ThisProjectError> {
-    println!("Require user confirmation before posting messages? (yes/no or press Enter to skip):");
+    println!("Require user confirmation before posting messages?  -> (y)es / (n)o / Press-Enter to skip):");
     
     let mut input = String::new();
     io::stdout().flush()?;
@@ -8859,65 +8894,1064 @@ fn q_and_a_get_message_post_user_confirms() -> Result<Option<bool>, ThisProjectE
     }
 }
 
-/// Gets user input for message post start date
+// /// Gets user input for message post start date
+// /// 
+// /// # Returns
+// /// * `Result<Option<i64>, ThisProjectError>` - Start date as UTC POSIX timestamp or None
+// fn q_and_a_get_message_post_start_date() -> Result<Option<i64>, ThisProjectError> {
+//     println!("Enter start date for accepting posts (format: YYYY-MM-DD HH:MM:SS or press Enter to skip):");
+//     println!("Example: 2024-01-01 00:00:00");
+    
+//     let mut input = String::new();
+//     io::stdout().flush()?;
+//     io::stdin().read_line(&mut input)?;
+    
+//     let input = input.trim();
+//     if input.is_empty() {
+//         return Ok(None);
+//     }
+    
+//     // Parse the date string into a timestamp
+//     // This is a simplified example - you might want to use a proper date parsing library
+//     // For now, let's accept a Unix timestamp directly
+//     println!("For now, please enter a Unix timestamp (seconds since 1970-01-01):");
+//     let mut timestamp_input = String::new();
+//     io::stdin().read_line(&mut timestamp_input)?;
+    
+//     let timestamp = timestamp_input.trim().parse::<i64>()
+//         .map_err(|_| ThisProjectError::InvalidInput(format!("Invalid timestamp: {}", timestamp_input.trim())))?;
+    
+//     Ok(Some(timestamp))
+// }
+
+/// Gets user input for message post start date with component-based input
+/// 
+/// This function provides multiple input options:
+/// - "now" - Uses current UTC time
+/// - Component-based input - Guides user through entering year, month, day, hour, minute
+/// - Skip option - Returns None if user doesn't want to set a start date
+/// 
+/// The function validates each component and converts the final date/time to a UTC POSIX timestamp.
 /// 
 /// # Returns
-/// * `Result<Option<i64>, ThisProjectError>` - Start date as UTC POSIX timestamp or None
+/// * `Ok(Some(i64))` - Start date as UTC POSIX timestamp if user provided valid input
+/// * `Ok(None)` - If user chose to skip
+/// * `Err(ThisProjectError)` - If input/output operations fail or validation fails
+/// 
+/// # Example Flow
+/// ```text
+/// Enter start date for accepting posts:
+/// - Type "now" for current UTC time
+/// - Type "custom" to enter a specific date
+/// - Press Enter to skip
+/// > now
+/// Start date set to current UTC time: 2024-01-15 14:30:45
+/// Timestamp: 1705329045
+/// ```
 fn q_and_a_get_message_post_start_date() -> Result<Option<i64>, ThisProjectError> {
-    println!("Enter start date for accepting posts (format: YYYY-MM-DD HH:MM:SS or press Enter to skip):");
-    println!("Example: 2024-01-01 00:00:00");
+    // Log function entry
+    debug_log("Starting q_and_a_get_message_post_start_date()");
     
-    let mut input = String::new();
-    io::stdout().flush()?;
-    io::stdin().read_line(&mut input)?;
+    // Display options to user
+    println!("Enter start date for accepting posts:");
+    println!("  - Type \"now\" for current UTC time");
+    println!("  - Type \"custom\" to enter a specific date");
+    println!("  - Press Enter to skip");
+    print!("> ");
     
-    let input = input.trim();
-    if input.is_empty() {
-        return Ok(None);
+    // Ensure prompt is displayed before reading input
+    io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+    // Read user choice
+    let mut choice = String::new();
+    io::stdin().read_line(&mut choice).map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let choice = choice.trim().to_lowercase();
+    
+    // Handle user choice
+    match choice.as_str() {
+        "" => {
+            // User pressed Enter - skip setting start date
+            debug_log("User chose to skip start date");
+            Ok(None)
+        },
+        "now" => {
+            // Use current UTC time
+            handle_now_option()
+        },
+        "custom" => {
+            // Guide through component-based input
+            handle_custom_date_input()
+        },
+        _ => {
+            // Invalid option
+            Err(ThisProjectError::InvalidInput(
+                format!("Invalid option '{}'. Please choose 'now', 'custom', or press Enter to skip.", choice)
+            ))
+        }
     }
+}
+
+/// Handles the "now" option by getting current UTC time
+/// 
+/// # Returns
+/// * `Ok(Some(i64))` - Current UTC timestamp
+/// * `Err(ThisProjectError)` - If system time retrieval fails
+fn handle_now_option() -> Result<Option<i64>, ThisProjectError> {
+    debug_log("User selected 'now' option");
     
-    // Parse the date string into a timestamp
-    // This is a simplified example - you might want to use a proper date parsing library
-    // For now, let's accept a Unix timestamp directly
-    println!("For now, please enter a Unix timestamp (seconds since 1970-01-01):");
-    let mut timestamp_input = String::new();
-    io::stdin().read_line(&mut timestamp_input)?;
+    // Get current system time
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| {
+            ThisProjectError::InvalidData(format!("System time error: {}", e))
+        })?;
     
-    let timestamp = timestamp_input.trim().parse::<i64>()
-        .map_err(|_| ThisProjectError::InvalidInput(format!("Invalid timestamp: {}", timestamp_input.trim())))?;
+    let timestamp = now.as_secs() as i64;
+    
+    // Calculate and display human-readable UTC time
+    let (year, month, day, hour, minute, second) = timestamp_to_utc_components(timestamp);
+    
+    println!("\nStart date set to current UTC time:");
+    println!("  UTC: {:04}-{:02}-{:02} {:02}:{:02}:{:02}", 
+        year, month, day, hour, minute, second);
+    println!("  Timestamp: {}", timestamp);
+    
+    debug_log!("Current UTC timestamp: {}", timestamp);
     
     Ok(Some(timestamp))
 }
 
-/// Gets user input for message post end date
+/// Handles custom date input by guiding user through component entry
 /// 
 /// # Returns
-/// * `Result<Option<i64>, ThisProjectError>` - End date as UTC POSIX timestamp or None
-fn q_and_a_get_message_post_end_date() -> Result<Option<i64>, ThisProjectError> {
-    println!("Enter end date for accepting posts (format: YYYY-MM-DD HH:MM:SS or press Enter to skip):");
-    println!("Example: 2024-12-31 23:59:59");
+/// * `Ok(Some(i64))` - Custom date as UTC timestamp
+/// * `Err(ThisProjectError)` - If input validation fails
+fn handle_custom_date_input() -> Result<Option<i64>, ThisProjectError> {
+    debug_log("User selected custom date input");
     
-    let mut input = String::new();
-    io::stdout().flush()?;
-    io::stdin().read_line(&mut input)?;
+    // Get current year for validation
+    let current_timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| {
+            ThisProjectError::InvalidData(format!("System time error: {}", e))
+        })?
+        .as_secs() as i64;
     
-    let input = input.trim();
-    if input.is_empty() {
-        return Ok(None);
+    let (current_year, _, _, _, _, _) = timestamp_to_utc_components(current_timestamp);
+    
+    // Year input and validation
+    println!("\nEnter start year (YYYY, e.g., {})", current_year);
+    print!("> ");
+    io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let mut year_input = String::new();
+    io::stdin().read_line(&mut year_input).map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let year: i32 = year_input.trim().parse().map_err(|_| {
+        ThisProjectError::InvalidInput(format!("Invalid year: '{}'", year_input.trim()))
+    })?;
+    
+    // Validate year range (current year - 10 to current year + 10)
+    if year < current_year - 10 || year > current_year + 10 {
+        return Err(ThisProjectError::InvalidInput(
+            format!("Year must be between {} and {}", current_year - 10, current_year + 10)
+        ));
     }
+    debug_log!("Parsed year: {}", year);
     
-    // Parse the date string into a timestamp
-    // This is a simplified example - you might want to use a proper date parsing library
-    // For now, let's accept a Unix timestamp directly
-    println!("For now, please enter a Unix timestamp (seconds since 1970-01-01):");
-    let mut timestamp_input = String::new();
-    io::stdin().read_line(&mut timestamp_input)?;
+    // Month input and validation
+    println!("Enter start month (1-12):");
+    print!("> ");
+    io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
     
-    let timestamp = timestamp_input.trim().parse::<i64>()
-        .map_err(|_| ThisProjectError::InvalidInput(format!("Invalid timestamp: {}", timestamp_input.trim())))?;
+    let mut month_input = String::new();
+    io::stdin().read_line(&mut month_input).map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let month: u32 = month_input.trim().parse().map_err(|_| {
+        ThisProjectError::InvalidInput(format!("Invalid month: '{}'", month_input.trim()))
+    })?;
+    
+    if month < 1 || month > 12 {
+        return Err(ThisProjectError::InvalidInput("Month must be between 1 and 12".into()));
+    }
+    debug_log!("Parsed month: {}", month);
+    
+    // Day input and validation
+    let max_day = get_days_in_month(year, month);
+    println!("Enter start day (1-{}):", max_day);
+    print!("> ");
+    io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let mut day_input = String::new();
+    io::stdin().read_line(&mut day_input).map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let day: u32 = day_input.trim().parse().map_err(|_| {
+        ThisProjectError::InvalidInput(format!("Invalid day: '{}'", day_input.trim()))
+    })?;
+    
+    if day < 1 || day > max_day {
+        return Err(ThisProjectError::InvalidInput(
+            format!("Day must be between 1 and {} for {}/{}", max_day, year, month)
+        ));
+    }
+    debug_log!("Parsed day: {}", day);
+    
+    // Hour input and validation
+    println!("Enter start hour (0-23, 24-hour format):");
+    print!("> ");
+    io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let mut hour_input = String::new();
+    io::stdin().read_line(&mut hour_input).map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let hour: u32 = hour_input.trim().parse().map_err(|_| {
+        ThisProjectError::InvalidInput(format!("Invalid hour: '{}'", hour_input.trim()))
+    })?;
+    
+    if hour > 23 {
+        return Err(ThisProjectError::InvalidInput("Hour must be between 0 and 23".into()));
+    }
+    debug_log!("Parsed hour: {}", hour);
+    
+    // Minute input and validation
+    println!("Enter start minute (0-59):");
+    print!("> ");
+    io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let mut minute_input = String::new();
+    io::stdin().read_line(&mut minute_input).map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let minute: u32 = minute_input.trim().parse().map_err(|_| {
+        ThisProjectError::InvalidInput(format!("Invalid minute: '{}'", minute_input.trim()))
+    })?;
+    
+    if minute > 59 {
+        return Err(ThisProjectError::InvalidInput("Minute must be between 0 and 59".into()));
+    }
+    debug_log!("Parsed minute: {}", minute);
+    
+    // Note about timezone
+    println!("\nNote: Time will be interpreted as UTC");
+    
+    // Calculate timestamp from components
+    let timestamp = utc_components_to_timestamp(year, month, day, hour, minute, 0)?;
+    
+    // Display confirmation
+    println!("\nStart date set to:");
+    println!("  UTC: {:04}-{:02}-{:02} {:02}:{:02}:00", 
+        year, month, day, hour, minute);
+    println!("  Timestamp: {}", timestamp);
+    
+    debug_log!("Successfully created start date timestamp: {}", timestamp);
     
     Ok(Some(timestamp))
 }
+
+/// Determines the number of days in a given month, accounting for leap years
+/// 
+/// # Arguments
+/// * `year` - The year (used for leap year calculation)
+/// * `month` - The month (1-12)
+/// 
+/// # Returns
+/// * `u32` - Number of days in the month
+fn get_days_in_month(year: i32, month: u32) -> u32 {
+    match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 => {
+            // Check for leap year
+            if is_leap_year(year) {
+                29
+            } else {
+                28
+            }
+        },
+        _ => unreachable!("Month already validated to be 1-12"),
+    }
+}
+
+/// Checks if a given year is a leap year
+/// 
+/// # Arguments
+/// * `year` - The year to check
+/// 
+/// # Returns
+/// * `bool` - true if leap year, false otherwise
+fn is_leap_year(year: i32) -> bool {
+    (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
+}
+
+/// Converts UTC date/time components to a Unix timestamp
+/// 
+/// # Arguments
+/// * `year` - Year (e.g., 2024)
+/// * `month` - Month (1-12)
+/// * `day` - Day of month (1-31)
+/// * `hour` - Hour (0-23)
+/// * `minute` - Minute (0-59)
+/// * `second` - Second (0-59)
+/// 
+/// # Returns
+/// * `Ok(i64)` - Unix timestamp (seconds since 1970-01-01 00:00:00 UTC)
+/// * `Err(ThisProjectError)` - If date is invalid
+fn utc_components_to_timestamp(
+    year: i32, 
+    month: u32, 
+    day: u32, 
+    hour: u32, 
+    minute: u32, 
+    second: u32
+) -> Result<i64, ThisProjectError> {
+    // Validate inputs
+    if year < 1970 {
+        return Err(ThisProjectError::InvalidInput("Year must be 1970 or later".into()));
+    }
+    
+    // Calculate days since epoch (1970-01-01)
+    let mut days: i64 = 0;
+    
+    // Add days for complete years
+    for y in 1970..year {
+        days += if is_leap_year(y) { 366 } else { 365 };
+    }
+    
+    // Add days for complete months in current year
+    for m in 1..month {
+        days += get_days_in_month(year, m) as i64;
+    }
+    
+    // Add remaining days
+    days += (day - 1) as i64;
+    
+    // Convert to seconds and add time components
+    let seconds_per_day: i64 = 24 * 60 * 60;
+    let seconds_per_hour: i64 = 60 * 60;
+    let seconds_per_minute: i64 = 60;
+    
+    let timestamp = days * seconds_per_day 
+        + (hour as i64) * seconds_per_hour
+        + (minute as i64) * seconds_per_minute
+        + (second as i64);
+    
+    debug_log!("Converted date components to timestamp: {}", timestamp);
+    
+    Ok(timestamp)
+}
+
+/// Converts a Unix timestamp to UTC date/time components
+/// 
+/// This function performs the reverse operation of utc_components_to_timestamp,
+/// breaking down a timestamp into human-readable date and time components.
+/// 
+/// # Arguments
+/// * `timestamp` - Unix timestamp (seconds since 1970-01-01 00:00:00 UTC)
+/// 
+/// # Returns
+/// * `(year, month, day, hour, minute, second)` - Tuple of date/time components
+fn timestamp_to_utc_components(timestamp: i64) -> (i32, u32, u32, u32, u32, u32) {
+    // Constants for time calculations
+    let seconds_per_day: i64 = 24 * 60 * 60;
+    let seconds_per_hour: i64 = 60 * 60;
+    let seconds_per_minute: i64 = 60;
+    
+    // Calculate total days since epoch
+    let total_days = timestamp / seconds_per_day;
+    let remaining_seconds = timestamp % seconds_per_day;
+    
+    // Calculate time components from remaining seconds
+    let hour = (remaining_seconds / seconds_per_hour) as u32;
+    let minute = ((remaining_seconds % seconds_per_hour) / seconds_per_minute) as u32;
+    let second = (remaining_seconds % seconds_per_minute) as u32;
+    
+    // Calculate year by iterating from 1970
+    let mut year = 1970;
+    let mut days_counted: i64 = 0;
+    
+    loop {
+        let days_in_year = if is_leap_year(year) { 366 } else { 365 };
+        if days_counted + days_in_year > total_days {
+            break;
+        }
+        days_counted += days_in_year;
+        year += 1;
+    }
+    
+    // Calculate remaining days in the current year
+    let mut days_in_year = (total_days - days_counted) as u32;
+    
+    // Calculate month and day
+    let mut month = 1;
+    loop {
+        let days_in_month = get_days_in_month(year, month);
+        if days_in_year < days_in_month {
+            break;
+        }
+        days_in_year -= days_in_month;
+        month += 1;
+        if month > 12 {
+            // This shouldn't happen with valid timestamps, but handle it gracefully
+            month = 12;
+            days_in_year = get_days_in_month(year, 12) - 1;
+            break;
+        }
+    }
+    
+    // Day is 1-based (days_in_year is 0-based)
+    let day = days_in_year + 1;
+    
+    (year, month, day, hour, minute, second)
+}
+
+// /// Gets user input for message post end date
+// /// 
+// /// # Returns
+// /// * `Result<Option<i64>, ThisProjectError>` - End date as UTC POSIX timestamp or None
+// fn q_and_a_get_message_post_end_date() -> Result<Option<i64>, ThisProjectError> {
+//     println!("Enter end date for accepting posts (format: YYYY-MM-DD HH:MM:SS or press Enter to skip):");
+//     println!("Example: 2024-12-31 23:59:59");
+    
+//     let mut input = String::new();
+//     io::stdout().flush()?;
+//     io::stdin().read_line(&mut input)?;
+    
+//     let input = input.trim();
+//     if input.is_empty() {
+//         return Ok(None);
+//     }
+
+
+// /// Handles custom end date input by guiding user through component entry
+// /// 
+// /// # Arguments
+// /// * `start_date_timestamp` - Optional start date timestamp for validation
+// /// 
+// /// # Returns
+// /// * `Ok(Some(i64))` - Custom end date as UTC timestamp
+// /// * `Err(ThisProjectError)` - If input validation fails
+// fn q_and_a_get_message_post_end_date(start_date_timestamp: Option<i64>) -> Result<Option<i64>, ThisProjectError> {
+//     debug_log("User selected custom end date input");
+    
+//     // Get current year for validation
+//     let current_timestamp = SystemTime::now()
+//         .duration_since(UNIX_EPOCH)
+//         .map_err(|e| {
+//             ThisProjectError::InvalidData(format!("System time error: {}", e))
+//         })?
+//         .as_secs() as i64;
+    
+//     let (current_year, _, _, _, _, _) = timestamp_to_utc_components(current_timestamp);
+    
+//     // Calculate minimum year based on start date if provided
+//     let min_year = if let Some(start_ts) = start_date_timestamp {
+//         let (start_year, _, _, _, _, _) = timestamp_to_utc_components(start_ts);
+//         start_year
+//     } else {
+//         current_year - 10
+//     };
+    
+//     // Year input and validation
+//     println!("\nEnter end year (YYYY, e.g., {})", current_year);
+//     if let Some(start_ts) = start_date_timestamp {
+//         let (start_year, _, _, _, _, _) = timestamp_to_utc_components(start_ts);
+//         println!("  (Must be {} or later based on start date)", start_year);
+//     }
+//     print!("> ");
+//     io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+//     let mut year_input = String::new();
+//     io::stdin().read_line(&mut year_input).map_err(|e| ThisProjectError::IoError(e))?;
+    
+//     let year: i32 = year_input.trim().parse().map_err(|_| {
+//         ThisProjectError::InvalidInput(format!("Invalid year: '{}'", year_input.trim()))
+//     })?;
+    
+//     // Validate year range
+//     if year < min_year || year > current_year + 50 {
+//         return Err(ThisProjectError::InvalidInput(
+//             format!("Year must be between {} and {}", min_year, current_year + 50)
+//         ));
+//     }
+//     debug_log!("Parsed year: {}", year);
+    
+//     // Month input and validation
+//     println!("Enter end month (1-12):");
+//     print!("> ");
+//     io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+//     let mut month_input = String::new();
+//     io::stdin().read_line(&mut month_input).map_err(|e| ThisProjectError::IoError(e))?;
+    
+//     let month: u32 = month_input.trim().parse().map_err(|_| {
+//         ThisProjectError::InvalidInput(format!("Invalid month: '{}'", month_input.trim()))
+//     })?;
+    
+//     if month < 1 || month > 12 {
+//         return Err(ThisProjectError::InvalidInput("Month must be between 1 and 12".into()));
+//     }
+//     debug_log!("Parsed month: {}", month);
+    
+//     // Day input and validation
+//     let max_day = get_days_in_month(year, month);
+//     println!("Enter end day (1-{}):", max_day);
+//     print!("> ");
+//     io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+//     let mut day_input = String::new();
+//     io::stdin().read_line(&mut day_input).map_err(|e| ThisProjectError::IoError(e))?;
+    
+//     let day: u32 = day_input.trim().parse().map_err(|_| {
+//         ThisProjectError::InvalidInput(format!("Invalid day: '{}'", day_input.trim()))
+//     })?;
+    
+//     if day < 1 || day > max_day {
+//         return Err(ThisProjectError::InvalidInput(
+//             format!("Day must be between 1 and {} for {}/{}", max_day, year, month)
+//         ));
+//     }
+//     debug_log!("Parsed day: {}", day);
+    
+//     // Hour input and validation
+//     println!("Enter end hour (0-23, 24-hour format):");
+//     print!("> ");
+//     io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+//     let mut hour_input = String::new();
+//     io::stdin().read_line(&mut hour_input).map_err(|e| ThisProjectError::IoError(e))?;
+    
+//     let hour: u32 = hour_input.trim().parse().map_err(|_| {
+//         ThisProjectError::InvalidInput(format!("Invalid hour: '{}'", hour_input.trim()))
+//     })?;
+    
+//     if hour > 23 {
+//         return Err(ThisProjectError::InvalidInput("Hour must be between 0 and 23".into()));
+//     }
+//     debug_log!("Parsed hour: {}", hour);
+    
+//     // Minute input and validation
+//     println!("Enter end minute (0-59):");
+//     print!("> ");
+//     io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+//     let mut minute_input = String::new();
+//     io::stdin().read_line(&mut minute_input).map_err(|e| ThisProjectError::IoError(e))?;
+    
+//     let minute: u32 = minute_input.trim().parse().map_err(|_| {
+//         ThisProjectError::InvalidInput(format!("Invalid minute: '{}'", minute_input.trim()))
+//     })?;
+    
+//     if minute > 59 {
+//         return Err(ThisProjectError::InvalidInput("Minute must be between 0 and 59".into()));
+//     }
+//     debug_log!("Parsed minute: {}", minute);
+    
+//     // Note about timezone
+//     println!("\nNote: Time will be interpreted as UTC");
+    
+//     // Calculate timestamp from components
+//     let end_timestamp = utc_components_to_timestamp(year, month, day, hour, minute, 0)?;
+    
+//     // Validate that end date is after start date
+//     if let Some(start_ts) = start_date_timestamp {
+//         if end_timestamp <= start_ts {
+//             let (start_year, start_month, start_day, start_hour, start_minute, start_second) = 
+//                 timestamp_to_utc_components(start_ts);
+            
+//             return Err(ThisProjectError::InvalidInput(
+//                 format!(
+//                     "End date must be after start date ({:04}-{:02}-{:02} {:02}:{:02}:{:02} UTC)",
+//                     start_year, start_month, start_day, start_hour, start_minute, start_second
+//                 )
+//             ));
+//         }
+        
+//         // Calculate and display duration
+//         let duration_seconds = end_timestamp - start_ts;
+//         let duration_days = duration_seconds / (24 * 60 * 60);
+//         let duration_hours = (duration_seconds % (24 * 60 * 60)) / (60 * 60);
+        
+//         println!("\nDuration: {} days, {} hours", duration_days, duration_hours);
+//     }
+    
+//     // Display confirmation
+//     println!("\nEnd date set to:");
+//     println!("  UTC: {:04}-{:02}-{:02} {:02}:{:02}:00", 
+//         year, month, day, hour, minute);
+//     println!("  Timestamp: {}", end_timestamp);
+    
+//     debug_log!("Successfully created end date timestamp: {}", end_timestamp);
+    
+//     Ok(Some(end_timestamp))
+// }
+    
+    /// Gets user input for message post end date with multiple input methods
+/// 
+/// This function provides options for entering an end date:
+/// - Duration-based input - Specify duration from start date (requires start date)
+/// - Component-based input - Enter specific date/time components
+/// - Skip option - Returns None if user doesn't want to set an end date
+/// 
+/// The function validates all inputs and ensures the end date is after the start date.
+/// 
+/// # Arguments
+/// * `start_date_timestamp` - Optional start date timestamp for validation and duration calculation
+/// 
+/// # Returns
+/// * `Ok(Some(i64))` - End date as UTC POSIX timestamp if user provided valid input
+/// * `Ok(None)` - If user chose to skip
+/// * `Err(ThisProjectError)` - If input/output operations fail or validation fails
+/// 
+/// # Example Flow
+/// ```text
+/// Enter end date for accepting posts:
+/// - Type "duration" to specify duration from start date
+/// - Type "custom" to enter a specific date
+/// - Press Enter to skip
+/// > duration
+/// Enter duration from start date:
+/// Years (press Enter for 0): 
+/// Months (press Enter for 0): 
+/// Weeks (press Enter for 0): 2
+/// Days (press Enter for 0): 
+/// Hours (press Enter for 0): 
+/// Minutes (press Enter for 0): 
+/// 
+/// End date set to: 2024-01-29 14:30:00 UTC (2 weeks from start)
+/// ```
+fn q_and_a_get_message_post_end_date(start_date_timestamp: Option<i64>) -> Result<Option<i64>, ThisProjectError> {
+    // Log function entry
+    debug_log("Starting q_and_a_get_message_post_end_date()");
+    
+    // Display options to user
+    println!("\nEnter end date for accepting posts:");
+    
+    // Only show duration option if start date exists
+    if start_date_timestamp.is_some() {
+        println!("  - Type \"duration\" to specify duration from start date");
+    }
+    
+    println!("  - Type \"custom\" to enter a specific date");
+    println!("  - Press Enter to skip");
+    
+    // If start date exists, show it for reference
+    if let Some(start_ts) = start_date_timestamp {
+        let (year, month, day, hour, minute, second) = timestamp_to_utc_components(start_ts);
+        println!("\n  Note: Start date is {:04}-{:02}-{:02} {:02}:{:02}:{:02} UTC", 
+            year, month, day, hour, minute, second);
+    }
+    
+    print!("> ");
+    
+    // Ensure prompt is displayed before reading input
+    io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+    // Read user choice
+    let mut choice = String::new();
+    io::stdin().read_line(&mut choice).map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let choice = choice.trim().to_lowercase();
+    
+    // Handle user choice
+    match choice.as_str() {
+        "" => {
+            // User pressed Enter - skip setting end date
+            debug_log("User chose to skip end date");
+            Ok(None)
+        },
+        "duration" => {
+            // Check if start date exists
+            match start_date_timestamp {
+                Some(start_ts) => handle_duration_based_end_date(start_ts),
+                None => Err(ThisProjectError::InvalidInput(
+                    "Cannot specify duration without a start date. Please use 'custom' option instead.".into()
+                ))
+            }
+        },
+        "custom" => {
+            // Guide through component-based input
+            handle_custom_end_date_input(start_date_timestamp)
+        },
+        _ => {
+            // Invalid option
+            let mut error_msg = format!("Invalid option '{}'. Please choose ", choice);
+            if start_date_timestamp.is_some() {
+                error_msg.push_str("'duration', 'custom', or press Enter to skip.");
+            } else {
+                error_msg.push_str("'custom' or press Enter to skip.");
+            }
+            Err(ThisProjectError::InvalidInput(error_msg))
+        }
+    }
+}
+
+/// Handles duration-based end date calculation
+/// 
+/// Guides user through entering duration components and calculates end date
+/// from the provided start date.
+/// 
+/// # Arguments
+/// * `start_timestamp` - Start date timestamp to calculate from
+/// 
+/// # Returns
+/// * `Ok(Some(i64))` - Calculated end date timestamp
+/// * `Err(ThisProjectError)` - If input validation fails
+fn handle_duration_based_end_date(start_timestamp: i64) -> Result<Option<i64>, ThisProjectError> {
+    debug_log("User selected duration-based end date");
+    
+    println!("\nEnter duration from start date:");
+    println!("(Press Enter to skip any unit, entering 0 has the same effect)");
+    
+    // Years input
+    print!("\nYears (press Enter for 0): ");
+    io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let mut years_input = String::new();
+    io::stdin().read_line(&mut years_input).map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let years: u32 = if years_input.trim().is_empty() {
+        0
+    } else {
+        years_input.trim().parse().map_err(|_| {
+            ThisProjectError::InvalidInput(format!("Invalid years: '{}'", years_input.trim()))
+        })?
+    };
+    
+    if years > 100 {
+        return Err(ThisProjectError::InvalidInput("Years must be 100 or less".into()));
+    }
+    
+    // Months input
+    print!("Months (press Enter for 0): ");
+    io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let mut months_input = String::new();
+    io::stdin().read_line(&mut months_input).map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let months: u32 = if months_input.trim().is_empty() {
+        0
+    } else {
+        months_input.trim().parse().map_err(|_| {
+            ThisProjectError::InvalidInput(format!("Invalid months: '{}'", months_input.trim()))
+        })?
+    };
+    
+    if months > 12 * 100 { // Reasonable upper limit
+        return Err(ThisProjectError::InvalidInput("Months value is too large".into()));
+    }
+    
+    // Weeks input
+    print!("Weeks (press Enter for 0): ");
+    io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let mut weeks_input = String::new();
+    io::stdin().read_line(&mut weeks_input).map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let weeks: u32 = if weeks_input.trim().is_empty() {
+        0
+    } else {
+        weeks_input.trim().parse().map_err(|_| {
+            ThisProjectError::InvalidInput(format!("Invalid weeks: '{}'", weeks_input.trim()))
+        })?
+    };
+    
+    // Days input
+    print!("Days (press Enter for 0): ");
+    io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let mut days_input = String::new();
+    io::stdin().read_line(&mut days_input).map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let days: u32 = if days_input.trim().is_empty() {
+        0
+    } else {
+        days_input.trim().parse().map_err(|_| {
+            ThisProjectError::InvalidInput(format!("Invalid days: '{}'", days_input.trim()))
+        })?
+    };
+    
+    // Hours input
+    print!("Hours (press Enter for 0): ");
+    io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let mut hours_input = String::new();
+    io::stdin().read_line(&mut hours_input).map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let hours: u32 = if hours_input.trim().is_empty() {
+        0
+    } else {
+        hours_input.trim().parse().map_err(|_| {
+            ThisProjectError::InvalidInput(format!("Invalid hours: '{}'", hours_input.trim()))
+        })?
+    };
+    
+    // Minutes input
+    print!("Minutes (press Enter for 0): ");
+    io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let mut minutes_input = String::new();
+    io::stdin().read_line(&mut minutes_input).map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let minutes: u32 = if minutes_input.trim().is_empty() {
+        0
+    } else {
+        minutes_input.trim().parse().map_err(|_| {
+            ThisProjectError::InvalidInput(format!("Invalid minutes: '{}'", minutes_input.trim()))
+        })?
+    };
+    
+    // Validate that at least some duration was specified
+    if years == 0 && months == 0 && weeks == 0 && days == 0 && hours == 0 && minutes == 0 {
+        return Err(ThisProjectError::InvalidInput(
+            "Duration must be greater than zero. At least one time unit must be specified.".into()
+        ));
+    }
+    
+    // Calculate end timestamp
+    // Note: For months and years, we need to handle them specially due to varying lengths
+    let (start_year, start_month, start_day, start_hour, start_minute, start_second) = 
+        timestamp_to_utc_components(start_timestamp);
+    
+    // Calculate target date components
+    let mut target_year = start_year + years as i32;
+    let mut target_month = start_month + months;
+    
+    // Handle month overflow
+    while target_month > 12 {
+        target_month -= 12;
+        target_year += 1;
+    }
+    
+    // For day calculation, we need to be careful about month boundaries
+    let mut target_day = start_day;
+    
+    // Adjust day if it would be invalid in the target month
+    let max_day_in_target_month = get_days_in_month(target_year, target_month);
+    if target_day > max_day_in_target_month {
+        target_day = max_day_in_target_month;
+    }
+    
+    // Convert to timestamp for the year/month adjusted date
+    let intermediate_timestamp = utc_components_to_timestamp(
+        target_year, target_month, target_day, start_hour, start_minute, start_second
+    )?;
+    
+    // Now add weeks, days, hours, and minutes as seconds
+    let seconds_per_minute: i64 = 60;
+    let seconds_per_hour: i64 = 60 * 60;
+    let seconds_per_day: i64 = 24 * 60 * 60;
+    let seconds_per_week: i64 = 7 * seconds_per_day;
+    
+    let additional_seconds = 
+        (weeks as i64 * seconds_per_week) +
+        (days as i64 * seconds_per_day) +
+        (hours as i64 * seconds_per_hour) +
+        (minutes as i64 * seconds_per_minute);
+    
+    let end_timestamp = intermediate_timestamp + additional_seconds;
+    
+    // Build duration description
+    let mut duration_parts = Vec::new();
+    if years > 0 { duration_parts.push(format!("{} year{}", years, if years == 1 { "" } else { "s" })); }
+    if months > 0 { duration_parts.push(format!("{} month{}", months, if months == 1 { "" } else { "s" })); }
+    if weeks > 0 { duration_parts.push(format!("{} week{}", weeks, if weeks == 1 { "" } else { "s" })); }
+    if days > 0 { duration_parts.push(format!("{} day{}", days, if days == 1 { "" } else { "s" })); }
+    if hours > 0 { duration_parts.push(format!("{} hour{}", hours, if hours == 1 { "" } else { "s" })); }
+    if minutes > 0 { duration_parts.push(format!("{} minute{}", minutes, if minutes == 1 { "" } else { "s" })); }
+    
+    let duration_description = duration_parts.join(", ");
+    
+    // Display the calculated end date
+    let (end_year, end_month, end_day, end_hour, end_minute, end_second) = 
+        timestamp_to_utc_components(end_timestamp);
+    
+    println!("\nEnd date set to:");
+    println!("  UTC: {:04}-{:02}-{:02} {:02}:{:02}:{:02}", 
+        end_year, end_month, end_day, end_hour, end_minute, end_second);
+    println!("  Duration: {} from start date", duration_description);
+    println!("  Timestamp: {}", end_timestamp);
+    
+    debug_log!("Successfully calculated end date with duration: {}", duration_description);
+    
+    Ok(Some(end_timestamp))
+}
+    
+
+/// Handles custom end date input by guiding user through component entry
+/// 
+/// # Arguments
+/// * `start_date_timestamp` - Optional start date timestamp for validation
+/// 
+/// # Returns
+/// * `Ok(Some(i64))` - Custom end date as UTC timestamp
+/// * `Err(ThisProjectError)` - If input validation fails
+fn handle_custom_end_date_input(start_date_timestamp: Option<i64>) -> Result<Option<i64>, ThisProjectError> {
+    debug_log("User selected custom end date input");
+    
+    // Get current year for validation
+    let current_timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| {
+            ThisProjectError::InvalidData(format!("System time error: {}", e))
+        })?
+        .as_secs() as i64;
+    
+    let (current_year, _, _, _, _, _) = timestamp_to_utc_components(current_timestamp);
+    
+    // Calculate minimum year based on start date if provided
+    let min_year = if let Some(start_ts) = start_date_timestamp {
+        let (start_year, _, _, _, _, _) = timestamp_to_utc_components(start_ts);
+        start_year
+    } else {
+        current_year - 10
+    };
+    
+    // Year input and validation
+    println!("\nEnter end year (YYYY, e.g., {})", current_year);
+    if let Some(start_ts) = start_date_timestamp {
+        let (start_year, _, _, _, _, _) = timestamp_to_utc_components(start_ts);
+        println!("  (Must be {} or later based on start date)", start_year);
+    }
+    print!("> ");
+    io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let mut year_input = String::new();
+    io::stdin().read_line(&mut year_input).map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let year: i32 = year_input.trim().parse().map_err(|_| {
+        ThisProjectError::InvalidInput(format!("Invalid year: '{}'", year_input.trim()))
+    })?;
+    
+    // Validate year range
+    if year < min_year || year > current_year + 50 {
+        return Err(ThisProjectError::InvalidInput(
+            format!("Year must be between {} and {}", min_year, current_year + 50)
+        ));
+    }
+    debug_log!("Parsed year: {}", year);
+    
+    // Month input and validation
+    println!("Enter end month (1-12):");
+    print!("> ");
+    io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let mut month_input = String::new();
+    io::stdin().read_line(&mut month_input).map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let month: u32 = month_input.trim().parse().map_err(|_| {
+        ThisProjectError::InvalidInput(format!("Invalid month: '{}'", month_input.trim()))
+    })?;
+    
+    if month < 1 || month > 12 {
+        return Err(ThisProjectError::InvalidInput("Month must be between 1 and 12".into()));
+    }
+    debug_log!("Parsed month: {}", month);
+    
+    // Day input and validation
+    let max_day = get_days_in_month(year, month);
+    println!("Enter end day (1-{}):", max_day);
+    print!("> ");
+    io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let mut day_input = String::new();
+    io::stdin().read_line(&mut day_input).map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let day: u32 = day_input.trim().parse().map_err(|_| {
+        ThisProjectError::InvalidInput(format!("Invalid day: '{}'", day_input.trim()))
+    })?;
+    
+    if day < 1 || day > max_day {
+        return Err(ThisProjectError::InvalidInput(
+            format!("Day must be between 1 and {} for {}/{}", max_day, year, month)
+        ));
+    }
+    debug_log!("Parsed day: {}", day);
+    
+    // Hour input and validation
+    println!("Enter end hour (0-23, 24-hour format):");
+    print!("> ");
+    io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let mut hour_input = String::new();
+    io::stdin().read_line(&mut hour_input).map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let hour: u32 = hour_input.trim().parse().map_err(|_| {
+        ThisProjectError::InvalidInput(format!("Invalid hour: '{}'", hour_input.trim()))
+    })?;
+    
+    if hour > 23 {
+        return Err(ThisProjectError::InvalidInput("Hour must be between 0 and 23".into()));
+    }
+    debug_log!("Parsed hour: {}", hour);
+    
+    // Minute input and validation
+    println!("Enter end minute (0-59):");
+    print!("> ");
+    io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let mut minute_input = String::new();
+    io::stdin().read_line(&mut minute_input).map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let minute: u32 = minute_input.trim().parse().map_err(|_| {
+        ThisProjectError::InvalidInput(format!("Invalid minute: '{}'", minute_input.trim()))
+    })?;
+    
+    if minute > 59 {
+        return Err(ThisProjectError::InvalidInput("Minute must be between 0 and 59".into()));
+    }
+    debug_log!("Parsed minute: {}", minute);
+    
+    // Note about timezone
+    println!("\nNote: Time will be interpreted as UTC");
+    
+    // Calculate timestamp from components
+    let end_timestamp = utc_components_to_timestamp(year, month, day, hour, minute, 0)?;
+    
+    // Validate that end date is after start date
+    if let Some(start_ts) = start_date_timestamp {
+        if end_timestamp <= start_ts {
+            let (start_year, start_month, start_day, start_hour, start_minute, start_second) = 
+                timestamp_to_utc_components(start_ts);
+            
+            return Err(ThisProjectError::InvalidInput(
+                format!(
+                    "End date must be after start date ({:04}-{:02}-{:02} {:02}:{:02}:{:02} UTC)",
+                    start_year, start_month, start_day, start_hour, start_minute, start_second
+                )
+            ));
+        }
+        
+        // Calculate and display duration
+        let duration_seconds = end_timestamp - start_ts;
+        let duration_days = duration_seconds / (24 * 60 * 60);
+        let duration_hours = (duration_seconds % (24 * 60 * 60)) / (60 * 60);
+        
+        println!("\nDuration: {} days, {} hours", duration_days, duration_hours);
+    }
+    
+    // Display confirmation
+    println!("\nEnd date set to:");
+    println!("  UTC: {:04}-{:02}-{:02} {:02}:{:02}:00", 
+        year, month, day, hour, minute);
+    println!("  Timestamp: {}", end_timestamp);
+    
+    debug_log!("Successfully created end date timestamp: {}", end_timestamp);
+    
+    Ok(Some(end_timestamp))
+}
+    
+//     // Parse the date string into a timestamp
+//     // This is a simplified example - you might want to use a proper date parsing library
+//     // For now, let's accept a Unix timestamp directly
+//     println!("For now, please enter a Unix timestamp (seconds since 1970-01-01):");
+//     let mut timestamp_input = String::new();
+//     io::stdin().read_line(&mut timestamp_input)?;
+    
+//     let timestamp = timestamp_input.trim().parse::<i64>()
+//         .map_err(|_| ThisProjectError::InvalidInput(format!("Invalid timestamp: {}", timestamp_input.trim())))?;
+    
+//     Ok(Some(timestamp))
+// }
 
     
     
