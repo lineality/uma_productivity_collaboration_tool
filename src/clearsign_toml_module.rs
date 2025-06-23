@@ -280,6 +280,7 @@ use std::time::{
     SystemTime,
     UNIX_EPOCH,
 };
+use std::collections::HashMap;
 
 /// The function reads a single line from a TOML file that starts with a specified field name
 /// and ends with a value. The function returns an empty string if the field is not found, and
@@ -4902,5 +4903,1280 @@ mod tests_inplace_conversion {
         }
         
         let _ = fs::remove_file(&test_file_path);
+    }
+}
+
+
+/*
+for uma team-channel node and similar struct fields
+
+## Refined Function Scope
+
+**Purpose**: Read nested port assignments from a clearsigned TOML file that uses owner-based key lookup (same pattern as `convert_tomlfile_without_keyid_into_clearsigntoml_inplace`).
+
+**Key Requirements**:
+1. **Security-First**: The function MUST validate the clearsign signature before reading ANY data
+2. **Owner-Based Key Lookup**: 
+   - The target TOML file contains an `owner` field
+   - The owner's GPG key is stored in their addressbook file: `{owner}__collaborator.toml`
+   - The addressbook file contains the `gpg_publickey_id` used to verify the signature
+3. **No Direct Reading**: If signature validation fails, NO data is returned - security is mandatory
+4. **Nested Structure Parsing**: After validation, parse the complex nested structure without third-party libraries
+
+**Validation Flow** (same as `convert_tomlfile_without_keyid_into_clearsigntoml_inplace`):
+1. Read the `owner` field from the target file
+2. Construct path to owner's addressbook: `{collaborator_files_directory}/{owner}__collaborator.toml`
+3. Extract `gpg_publickey_id` from the addressbook (which itself is clearsigned)
+4. Use that key to verify the target file's signature
+5. Only if verification succeeds, proceed to parse the port assignments
+
+**Data Extraction**:
+- Parse the `abstract_collaborator_port_assignments` table structure
+- Extract port assignments for each collaborator pair
+- Each assignment includes: `user_name`, `ready_port`, `intray_port`, `gotit_port`
+*/
+
+/// Represents a single collaborator's port assignments within a team channel.
+///
+/// This structure holds the network port configuration for a specific collaborator,
+/// including ports for different communication channels (ready, intray, gotit).
+#[derive(Debug, Clone, PartialEq)]
+pub struct CollaboratorPortAssignment {
+    /// The username of the collaborator
+    pub user_name: String,
+    /// The port number for "ready" status communication
+    pub ready_port: u16,
+    /// The port number for "intray" (inbox) communication
+    pub intray_port: u16,
+    /// The port number for "gotit" (acknowledgment) communication
+    pub gotit_port: u16,
+}
+
+/// Reads port assignments for a specific collaborator pair from a clearsigned TOML file using owner-based GPG key lookup.
+///
+/// # Purpose
+/// This function extracts network port assignments for a specific pair of collaborators from a
+/// clearsigned team channel configuration file. It enforces security by requiring GPG signature
+/// validation before any data extraction occurs.
+///
+/// # Security Model
+/// This function implements a strict security-first approach:
+/// 1. **No data access without validation**: The clearsigned file MUST be validated before any content is read
+/// 2. **Owner-based key management**: The signing key is determined by the file's owner field
+/// 3. **Chain of trust**: Validation uses keys from the collaborator addressbook system
+///
+/// # Validation Process
+/// 1. Reads the `owner` field from the target clearsigned TOML file
+/// 2. Constructs the path to the owner's addressbook file: `{owner}__collaborator.toml`
+/// 3. Extracts the GPG key ID from the addressbook (which is itself clearsigned and validated)
+/// 4. Uses that key to verify the target file's signature
+/// 5. Only proceeds with data extraction if signature validation succeeds
+///
+/// # Data Structure
+/// The function expects the TOML file to contain a structure like:
+/// ```toml
+/// [abstract_collaborator_port_assignments.alice_bob]
+/// collaborator_ports = [
+///     { user_name = "alice", ready_port = 50001, intray_port = 50002, gotit_port = 50003 },
+///     { user_name = "bob", ready_port = 50004, intray_port = 50005, gotit_port = 50006 },
+/// ]
+/// ```
+///
+/// # Arguments
+/// * `path_to_clearsigned_toml` - Path to the clearsigned TOML file containing port assignments
+/// * `collaborator_files_directory_relative` - Relative path to the directory containing collaborator addressbook files
+/// * `pair_name` - The name of the collaborator pair (e.g., "alice_bob")
+///
+/// # Returns
+/// * `Ok(Vec<CollaboratorPortAssignment>)` - A vector of port assignments for the specified pair
+/// * `Err(GpgError)` - If any step fails:
+///   - `PathError`: File not found or invalid path
+///   - `GpgOperationError`: GPG validation failure or missing required fields
+///   - `FileSystemError`: I/O errors
+///
+/// # Example
+/// ```no_run
+/// let assignments = read_specific_pair_port_assignments_from_clearsigntoml(
+///     Path::new("team_channel_config.toml"),
+///     "collaborators",
+///     "alice_bob"
+/// )?;
+/// 
+/// for assignment in assignments {
+///     println!("{}: ready={}, intray={}, gotit={}", 
+///              assignment.user_name, 
+///              assignment.ready_port,
+///              assignment.intray_port,
+///              assignment.gotit_port);
+/// }
+/// ```
+pub fn read_specific_pair_port_assignments_from_clearsigntoml(
+    path_to_clearsigned_toml: &Path,
+    collaborator_files_directory_relative: &str,
+    pair_name: &str,
+) -> Result<Vec<CollaboratorPortAssignment>, GpgError> {
+    // --- Stage 1: Input Validation ---
+    println!(
+        "Starting secure port assignment extraction for pair '{}' from: {}",
+        pair_name,
+        path_to_clearsigned_toml.display()
+    );
+
+    // Validate that the input path exists and is a file
+    if !path_to_clearsigned_toml.exists() {
+        return Err(GpgError::PathError(format!(
+            "Clearsigned TOML file not found: {}",
+            path_to_clearsigned_toml.display()
+        )));
+    }
+    if !path_to_clearsigned_toml.is_file() {
+        return Err(GpgError::PathError(format!(
+            "Path is not a file: {}",
+            path_to_clearsigned_toml.display()
+        )));
+    }
+
+    // Convert path to string for reading functions
+    let path_str = match path_to_clearsigned_toml.to_str() {
+        Some(s) => s,
+        None => {
+            return Err(GpgError::PathError(format!(
+                "Invalid path encoding for: {}",
+                path_to_clearsigned_toml.display()
+            )));
+        }
+    };
+
+    // --- Stage 2: Extract Owner for Key Lookup ---
+    let owner_field_name = "owner";
+    println!(
+        "Reading file owner from field '{}' for security validation",
+        owner_field_name
+    );
+
+    // Note: We're reading from a clearsigned file, but we need the owner field first
+    // This is safe because we'll validate the entire file before using any other data
+    let file_owner_username = match read_single_line_string_field_from_toml(path_str, owner_field_name) {
+        Ok(username) => {
+            if username.is_empty() {
+                return Err(GpgError::GpgOperationError(format!(
+                    "Field '{}' is empty in TOML file. File owner is required for security validation.",
+                    owner_field_name
+                )));
+            }
+            username
+        }
+        Err(e) => {
+            return Err(GpgError::GpgOperationError(format!(
+                "Failed to read file owner from field '{}': {}",
+                owner_field_name, e
+            )));
+        }
+    };
+    println!("File owner: '{}'", file_owner_username);
+
+    // --- Stage 3: Construct Addressbook Path and Extract GPG Key ---
+    println!("Looking up GPG key for owner '{}' in addressbook", file_owner_username);
+
+    // Convert collaborator directory to absolute path
+    let collaborator_files_directory_absolute = 
+        match make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(
+            collaborator_files_directory_relative
+        ) {
+            Ok(path) => path,
+            Err(io_error) => {
+                return Err(GpgError::FileSystemError(io_error));
+            }
+        };
+
+    // Construct addressbook filename
+    let collaborator_filename = format!("{}__collaborator.toml", file_owner_username);
+    let user_addressbook_path = collaborator_files_directory_absolute.join(&collaborator_filename);
+
+    println!("Owner's addressbook path: {}", user_addressbook_path.display());
+
+    // Verify addressbook exists
+    if !user_addressbook_path.exists() {
+        return Err(GpgError::PathError(format!(
+            "Addressbook file not found for owner '{}': {}",
+            file_owner_username,
+            user_addressbook_path.display()
+        )));
+    }
+
+    // Convert addressbook path to string
+    let user_addressbook_path_str = match user_addressbook_path.to_str() {
+        Some(s) => s,
+        None => {
+            return Err(GpgError::PathError(format!(
+                "Invalid path encoding for addressbook file: {}",
+                user_addressbook_path.display()
+            )));
+        }
+    };
+
+    // Extract GPG key ID from addressbook
+    let gpg_key_id_field_name = "gpg_publickey_id";
+    let signing_key_id = match read_singleline_string_from_clearsigntoml(
+        user_addressbook_path_str,
+        gpg_key_id_field_name
+    ) {
+        Ok(key_id) => {
+            if key_id.is_empty() {
+                return Err(GpgError::GpgOperationError(format!(
+                    "GPG key ID is empty in addressbook for owner '{}'",
+                    file_owner_username
+                )));
+            }
+            key_id
+        }
+        Err(e) => {
+            return Err(GpgError::GpgOperationError(format!(
+                "Failed to read GPG key ID from addressbook: {}",
+                e
+            )));
+        }
+    };
+    println!("Found GPG key ID for validation: '{}'", signing_key_id);
+
+    // --- Stage 4: Create Temporary File for Validation ---
+    let temp_validation_path = create_temp_file_path("validate_ports")?;
+    
+    // --- Stage 5: Verify Signature and Extract Content ---
+    println!("Validating clearsigned file signature...");
+    
+    // Decrypt (which validates) the clearsigned file
+    let validation_result = Command::new("gpg")
+        .arg("--decrypt")
+        .arg("--batch")
+        .arg("--status-fd")
+        .arg("2")
+        .arg("--output")
+        .arg(&temp_validation_path)
+        .arg(path_to_clearsigned_toml)
+        .output();
+
+    match validation_result {
+        Ok(output) => {
+            if !output.status.success() {
+                // Cleanup temp file
+                let _ = fs::remove_file(&temp_validation_path);
+                
+                let stderr_output = String::from_utf8_lossy(&output.stderr);
+                return Err(GpgError::GpgOperationError(format!(
+                    "GPG signature validation FAILED. File may be tampered. GPG output: {}",
+                    stderr_output.trim()
+                )));
+            }
+            println!("✓ Signature validation PASSED. File integrity confirmed.");
+        }
+        Err(e) => {
+            // Cleanup temp file
+            let _ = fs::remove_file(&temp_validation_path);
+            
+            return Err(GpgError::GpgOperationError(format!(
+                "Failed to execute GPG validation: {}",
+                e
+            )));
+        }
+    }
+
+    // --- Stage 6: Parse Port Assignments from Validated Content ---
+    println!("Extracting port assignments for pair '{}'", pair_name);
+    
+    // Now we can safely read from the validated content
+    let validated_content = match fs::read_to_string(&temp_validation_path) {
+        Ok(content) => content,
+        Err(e) => {
+            // Cleanup temp file
+            let _ = fs::remove_file(&temp_validation_path);
+            return Err(GpgError::FileSystemError(e));
+        }
+    };
+
+    // Cleanup temp file
+    let _ = fs::remove_file(&temp_validation_path);
+
+    // Parse the specific table section we're looking for
+    let table_header = format!("[abstract_collaborator_port_assignments.{}]", pair_name);
+    let mut port_assignments = Vec::new();
+    let mut in_target_section = false;
+    let mut in_ports_array = false;
+    let mut current_port_entry: Option<PartialPortEntry> = None;
+
+    // Helper structure for parsing
+    #[derive(Default)]
+    struct PartialPortEntry {
+        user_name: Option<String>,
+        ready_port: Option<u16>,
+        intray_port: Option<u16>,
+        gotit_port: Option<u16>,
+    }
+
+    for line in validated_content.lines() {
+        let trimmed = line.trim();
+        
+        // Check if we're entering our target section
+        if trimmed == table_header {
+            in_target_section = true;
+            continue;
+        }
+        
+        // Check if we're leaving our section (new section starts)
+        if in_target_section && trimmed.starts_with('[') && trimmed != table_header {
+            break; // We've passed our section
+        }
+        
+        // Skip if not in our section
+        if !in_target_section {
+            continue;
+        }
+        
+        // Check for collaborator_ports array start
+        if trimmed.starts_with("collaborator_ports = [") {
+            in_ports_array = true;
+            continue;
+        }
+        
+        // Check for array end
+        if in_ports_array && trimmed == "]" {
+            break; // End of our data
+        }
+        
+        // Parse array entries
+        if in_ports_array {
+            // Handle start of a new port entry
+            if trimmed.starts_with('{') || trimmed.contains("{ user_name") {
+                current_port_entry = Some(PartialPortEntry::default());
+            }
+            
+            // Parse fields within the entry
+            if let Some(ref mut entry) = current_port_entry {
+                // Parse user_name
+                if trimmed.contains("user_name = ") {
+                    if let Some(value) = extract_quoted_value(trimmed, "user_name") {
+                        entry.user_name = Some(value);
+                    }
+                }
+                
+                // Parse ready_port
+                if trimmed.contains("ready_port = ") {
+                    if let Some(value) = extract_port_value(trimmed, "ready_port") {
+                        entry.ready_port = Some(value);
+                    }
+                }
+                
+                // Parse intray_port
+                if trimmed.contains("intray_port = ") {
+                    if let Some(value) = extract_port_value(trimmed, "intray_port") {
+                        entry.intray_port = Some(value);
+                    }
+                }
+                
+                // Parse gotit_port
+                if trimmed.contains("gotit_port = ") {
+                    if let Some(value) = extract_port_value(trimmed, "gotit_port") {
+                        entry.gotit_port = Some(value);
+                    }
+                }
+            }
+            
+            // Check for end of entry
+            if trimmed.ends_with("},") || trimmed.ends_with('}') {
+                if let Some(entry) = current_port_entry.take() {
+                    // Validate we have all required fields
+                    match (entry.user_name, entry.ready_port, entry.intray_port, entry.gotit_port) {
+                        (Some(user), Some(ready), Some(intray), Some(gotit)) => {
+                            port_assignments.push(CollaboratorPortAssignment {
+                                user_name: user,
+                                ready_port: ready,
+                                intray_port: intray,
+                                gotit_port: gotit,
+                            });
+                        }
+                        _ => {
+                            return Err(GpgError::GpgOperationError(format!(
+                                "Incomplete port assignment entry for pair '{}'. Missing required fields.",
+                                pair_name
+                            )));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Check if we found the section
+    if !in_target_section {
+        return Err(GpgError::GpgOperationError(format!(
+            "Collaborator pair '{}' not found in abstract_collaborator_port_assignments",
+            pair_name
+        )));
+    }
+
+    println!(
+        "Successfully extracted {} port assignments for pair '{}'",
+        port_assignments.len(),
+        pair_name
+    );
+
+    Ok(port_assignments)
+}
+
+/// Helper function to extract quoted string values from TOML lines
+///
+/// # Arguments
+/// * `line` - The line containing the field
+/// * `field_name` - The name of the field to extract
+///
+/// # Returns
+/// * `Option<String>` - The extracted value without quotes, or None if not found
+fn extract_quoted_value(line: &str, field_name: &str) -> Option<String> {
+    let field_pattern = format!("{} = ", field_name);
+    if let Some(start_pos) = line.find(&field_pattern) {
+        let value_start = start_pos + field_pattern.len();
+        let value_part = &line[value_start..].trim();
+        
+        // Remove quotes and any trailing comma
+        let cleaned = value_part
+            .trim_start_matches('"')
+            .trim_end_matches(',')
+            .trim_end_matches('"');
+            
+        Some(cleaned.to_string())
+    } else {
+        None
+    }
+}
+
+/// Helper function to extract port number values from TOML lines
+///
+/// # Arguments
+/// * `line` - The line containing the field
+/// * `field_name` - The name of the field to extract
+///
+/// # Returns
+/// * `Option<u16>` - The parsed port number, or None if not found or invalid
+fn extract_port_value(line: &str, field_name: &str) -> Option<u16> {
+    let field_pattern = format!("{} = ", field_name);
+    if let Some(start_pos) = line.find(&field_pattern) {
+        let value_start = start_pos + field_pattern.len();
+        let value_part = &line[value_start..].trim();
+        
+        // Remove any trailing comma and parse
+        let cleaned = value_part.trim_end_matches(',').trim();
+        cleaned.parse::<u16>().ok()
+    } else {
+        None
+    }
+}
+
+/// Reads all collaborator pair port assignments from a clearsigned TOML file using owner-based GPG key lookup.
+///
+/// # Purpose
+/// This function extracts network port assignments for ALL collaborator pairs from a
+/// clearsigned team channel configuration file. It enforces the same security model as
+/// `read_specific_pair_port_assignments_from_clearsigntoml`, requiring GPG signature
+/// validation before any data extraction.
+///
+/// # Security Model
+/// Identical to `read_specific_pair_port_assignments_from_clearsigntoml`:
+/// - Mandatory signature validation before data access
+/// - Owner-based key management via addressbook lookup
+/// - Complete chain of trust enforcement
+///
+/// # Implementation
+/// This function:
+/// 1. Validates the clearsigned file using owner-based key lookup
+/// 2. Identifies all collaborator pairs in the `abstract_collaborator_port_assignments` table
+/// 3. Calls `read_specific_pair_port_assignments_from_clearsigntoml` for each pair
+/// 4. Aggregates results into a HashMap
+///
+/// # Arguments
+/// * `path_to_clearsigned_toml` - Path to the clearsigned TOML file containing port assignments
+/// * `collaborator_files_directory_relative` - Relative path to the directory containing collaborator addressbook files
+///
+/// # Returns
+/// * `Ok(HashMap<String, Vec<CollaboratorPortAssignment>>)` - A map of pair names to their port assignments
+/// * `Err(GpgError)` - If validation fails or no assignments are found
+///
+/// # Example
+/// ```no_run
+/// let all_assignments = read_abstract_collaborator_port_assignments_from_clearsigntoml(
+///     Path::new("team_channel_config.toml"),
+///     "collaborators"
+/// )?;
+/// 
+/// for (pair_name, assignments) in all_assignments {
+///     println!("Pair: {}", pair_name);
+///     for assignment in assignments {
+///         println!("  {}: ports {}, {}, {}", 
+///                  assignment.user_name,
+///                  assignment.ready_port,
+///                  assignment.intray_port,
+///                  assignment.gotit_port);
+///     }
+/// }
+/// ```
+pub fn read_abstract_collaborator_port_assignments_from_clearsigntoml(
+    path_to_clearsigned_toml: &Path,
+    collaborator_files_directory_relative: &str,
+) -> Result<HashMap<String, Vec<CollaboratorPortAssignment>>, GpgError> {
+    println!(
+        "Starting extraction of all collaborator port assignments from: {}",
+        path_to_clearsigned_toml.display()
+    );
+
+    // First, we need to validate the file and get the list of pairs
+    // We'll do this by reading the validated content once to find all pairs
+    
+    // Perform the same validation steps as the specific function
+    // This code is duplicated for clarity and to ensure independent validation
+    
+    // --- Stage 1: Input Validation ---
+    if !path_to_clearsigned_toml.exists() {
+        return Err(GpgError::PathError(format!(
+            "Clearsigned TOML file not found: {}",
+            path_to_clearsigned_toml.display()
+        )));
+    }
+    if !path_to_clearsigned_toml.is_file() {
+        return Err(GpgError::PathError(format!(
+            "Path is not a file: {}",
+            path_to_clearsigned_toml.display()
+        )));
+    }
+
+    let path_str = match path_to_clearsigned_toml.to_str() {
+        Some(s) => s,
+        None => {
+            return Err(GpgError::PathError(format!(
+                "Invalid path encoding for: {}",
+                path_to_clearsigned_toml.display()
+            )));
+        }
+    };
+
+    // --- Stage 2: Owner-based Validation (same as specific function) ---
+    let owner_field_name = "owner";
+    let file_owner_username = match read_single_line_string_field_from_toml(path_str, owner_field_name) {
+        Ok(username) => {
+            if username.is_empty() {
+                return Err(GpgError::GpgOperationError(format!(
+                    "Field '{}' is empty. File owner is required for security validation.",
+                    owner_field_name
+                )));
+            }
+            username
+        }
+        Err(e) => {
+            return Err(GpgError::GpgOperationError(format!(
+                "Failed to read file owner: {}",
+                e
+            )));
+        }
+    };
+
+    // Get collaborator directory and addressbook path
+    let collaborator_files_directory_absolute = 
+        match make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(
+            collaborator_files_directory_relative
+        ) {
+            Ok(path) => path,
+            Err(io_error) => return Err(GpgError::FileSystemError(io_error)),
+        };
+
+    let collaborator_filename = format!("{}__collaborator.toml", file_owner_username);
+    let user_addressbook_path = collaborator_files_directory_absolute.join(&collaborator_filename);
+    let user_addressbook_path_str = match user_addressbook_path.to_str() {
+        Some(s) => s,
+        None => {
+            return Err(GpgError::PathError(format!(
+                "Invalid path encoding for addressbook file"
+            )));
+        }
+    };
+
+    // Extract GPG key ID
+    let gpg_key_id_field_name = "gpg_publickey_id";
+    let signing_key_id = match read_singleline_string_from_clearsigntoml(
+        user_addressbook_path_str,
+        gpg_key_id_field_name
+    ) {
+        Ok(key_id) => {
+            if key_id.is_empty() {
+                return Err(GpgError::GpgOperationError(
+                    "GPG key ID is empty in addressbook".to_string()
+                ));
+            }
+            key_id
+        }
+        Err(e) => return Err(GpgError::GpgOperationError(format!(
+            "Failed to read GPG key ID: {}",
+            e
+        ))),
+    };
+
+    // --- Stage 3: Validate and Extract Content Once ---
+    let temp_validation_path = create_temp_file_path("validate_all_ports")?;
+    
+    let validation_result = Command::new("gpg")
+        .arg("--decrypt")
+        .arg("--batch")
+        .arg("--status-fd")
+        .arg("2")
+        .arg("--output")
+        .arg(&temp_validation_path)
+        .arg(path_to_clearsigned_toml)
+        .output();
+
+    match validation_result {
+        Ok(output) => {
+            if !output.status.success() {
+                let _ = fs::remove_file(&temp_validation_path);
+                return Err(GpgError::GpgOperationError(
+                    "GPG signature validation FAILED".to_string()
+                ));
+            }
+        }
+        Err(e) => {
+            let _ = fs::remove_file(&temp_validation_path);
+            return Err(GpgError::GpgOperationError(format!(
+                "Failed to execute GPG validation: {}",
+                e
+            )));
+        }
+    }
+
+    // Read validated content to find all pairs
+    let validated_content = match fs::read_to_string(&temp_validation_path) {
+        Ok(content) => content,
+        Err(e) => {
+            let _ = fs::remove_file(&temp_validation_path);
+            return Err(GpgError::FileSystemError(e));
+        }
+    };
+    
+    // Cleanup temp file
+    let _ = fs::remove_file(&temp_validation_path);
+
+    // --- Stage 4: Find All Collaborator Pairs ---
+    let mut pair_names = Vec::new();
+    let table_prefix = "[abstract_collaborator_port_assignments.";
+    
+    for line in validated_content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with(table_prefix) && trimmed.ends_with(']') {
+            // Extract pair name from table header
+            let start = table_prefix.len();
+            let end = trimmed.len() - 1;
+            let pair_name = &trimmed[start..end];
+            pair_names.push(pair_name.to_string());
+        }
+    }
+    
+    if pair_names.is_empty() {
+        return Err(GpgError::GpgOperationError(
+            "No collaborator pairs found in abstract_collaborator_port_assignments".to_string()
+        ));
+    }
+    
+    println!("Found {} collaborator pairs to process", pair_names.len());
+
+    // --- Stage 5: Call Specific Function for Each Pair ---
+    let mut all_assignments = HashMap::new();
+    
+    for pair_name in pair_names {
+        println!("Processing pair: {}", pair_name);
+        
+        match read_specific_pair_port_assignments_from_clearsigntoml(
+            path_to_clearsigned_toml,
+            collaborator_files_directory_relative,
+            &pair_name,
+        ) {
+            Ok(assignments) => {
+                all_assignments.insert(pair_name, assignments);
+            }
+            Err(e) => {
+                // Log the error but continue with other pairs
+                eprintln!("Warning: Failed to read assignments for pair '{}': {}", pair_name, e.to_string());
+                // Optionally, you might want to fail fast instead:
+                // return Err(e);
+            }
+        }
+    }
+    
+    if all_assignments.is_empty() {
+        return Err(GpgError::GpgOperationError(
+            "No port assignments could be extracted from any collaborator pairs".to_string()
+        ));
+    }
+    
+    println!(
+        "Successfully extracted port assignments for {} pairs",
+        all_assignments.len()
+    );
+    
+    Ok(all_assignments)
+}
+
+/// Reads all collaborator pair port assignments from a clearsigned TOML file using owner-based GPG key lookup (optimized version).
+///
+/// # Purpose
+/// This function extracts network port assignments for ALL collaborator pairs from a
+/// clearsigned team channel configuration file in a single pass. Unlike the previous version
+/// that calls the specific function multiple times, this version validates the file once
+/// and extracts all data efficiently.
+///
+/// # Security Model
+/// This function implements the same strict security-first approach:
+/// 1. **Mandatory validation**: The clearsigned file MUST be validated before ANY data extraction
+/// 2. **Owner-based key management**: Uses the file's owner field to look up the validation key
+/// 3. **Chain of trust**: Validation uses keys from the collaborator addressbook system
+/// 4. **Single validation pass**: Optimized to validate once and extract all data
+///
+/// # Validation Process
+/// 1. Reads the `owner` field from the target clearsigned TOML file
+/// 2. Constructs the path to the owner's addressbook file: `{owner}__collaborator.toml`
+/// 3. Extracts the GPG key ID from the addressbook (which is itself clearsigned and validated)
+/// 4. Uses that key to verify the target file's signature ONCE
+/// 5. Extracts all port assignments in a single pass through the validated content
+///
+/// # Data Structure Expected
+/// The function expects the TOML file to contain:
+/// ```toml
+/// [abstract_collaborator_port_assignments.alice_bob]
+/// collaborator_ports = [
+///     { user_name = "alice", ready_port = 50001, intray_port = 50002, gotit_port = 50003 },
+///     { user_name = "bob", ready_port = 50004, intray_port = 50005, gotit_port = 50006 },
+/// ]
+/// 
+/// [abstract_collaborator_port_assignments.alice_charlotte]
+/// collaborator_ports = [
+///     { user_name = "alice", ready_port = 50007, intray_port = 50008, gotit_port = 50009 },
+///     { user_name = "charlotte", ready_port = 50010, intray_port = 50011, gotit_port = 50012 },
+/// ]
+/// ```
+///
+/// # Arguments
+/// * `path_to_clearsigned_toml` - Path to the clearsigned TOML file containing port assignments
+/// * `collaborator_files_directory_relative` - Relative path to the directory containing collaborator addressbook files
+///
+/// # Returns
+/// * `Ok(HashMap<String, Vec<CollaboratorPortAssignment>>)` - A map where:
+///   - Keys are collaborator pair names (e.g., "alice_bob")
+///   - Values are vectors of port assignments for that pair
+/// * `Err(GpgError)` - If any step fails:
+///   - `PathError`: File not found, invalid path, or path encoding issues
+///   - `GpgOperationError`: GPG validation failure, missing required fields, or parsing errors
+///   - `FileSystemError`: I/O errors during file operations
+///
+/// # Performance
+/// This optimized version:
+/// - Performs GPG validation only ONCE (vs. once per pair in the previous version)
+/// - Reads the file content only ONCE
+/// - Parses all assignments in a single pass
+/// - Significantly faster for files with many collaborator pairs
+///
+/// # Example
+/// ```no_run
+/// let all_assignments = read_all_collaborator_port_assignments_clearsigntoml_optimized(
+///     Path::new("team_channel_config.toml"),
+///     "collaborators"
+/// )?;
+/// 
+/// // Display all assignments
+/// for (pair_name, assignments) in &all_assignments {
+///     println!("Collaborator pair: {}", pair_name);
+///     for assignment in assignments {
+///         println!("  {} -> ready: {}, intray: {}, gotit: {}", 
+///                  assignment.user_name,
+///                  assignment.ready_port,
+///                  assignment.intray_port,
+///                  assignment.gotit_port);
+///     }
+/// }
+/// 
+/// // Access specific pair
+/// if let Some(alice_bob_ports) = all_assignments.get("alice_bob") {
+///     println!("Alice-Bob communication ports: {:?}", alice_bob_ports);
+/// }
+/// ```
+pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
+    path_to_clearsigned_toml: &Path,
+    collaborator_files_directory_relative: &str,
+) -> Result<HashMap<String, Vec<CollaboratorPortAssignment>>, GpgError> {
+    // --- Stage 1: Input Validation ---
+    println!(
+        "Starting optimized extraction of all collaborator port assignments from: {}",
+        path_to_clearsigned_toml.display()
+    );
+    println!("This version validates once and extracts all data in a single pass.");
+
+    // Validate that the input path exists and is a file
+    if !path_to_clearsigned_toml.exists() {
+        return Err(GpgError::PathError(format!(
+            "Clearsigned TOML file not found: {}",
+            path_to_clearsigned_toml.display()
+        )));
+    }
+    if !path_to_clearsigned_toml.is_file() {
+        return Err(GpgError::PathError(format!(
+            "Path is not a file: {}",
+            path_to_clearsigned_toml.display()
+        )));
+    }
+
+    // Convert path to string for reading functions
+    let path_str = match path_to_clearsigned_toml.to_str() {
+        Some(s) => s,
+        None => {
+            return Err(GpgError::PathError(format!(
+                "Invalid path encoding for: {}",
+                path_to_clearsigned_toml.display()
+            )));
+        }
+    };
+
+    // --- Stage 2: Extract Owner for Key Lookup ---
+    let owner_field_name = "owner";
+    println!(
+        "Reading file owner from field '{}' for security validation",
+        owner_field_name
+    );
+
+    // Read owner from the file (before validation, but we won't use other data until validated)
+    let file_owner_username = match read_single_line_string_field_from_toml(path_str, owner_field_name) {
+        Ok(username) => {
+            if username.is_empty() {
+                return Err(GpgError::GpgOperationError(format!(
+                    "Field '{}' is empty in TOML file. File owner is required for security validation.",
+                    owner_field_name
+                )));
+            }
+            username
+        }
+        Err(e) => {
+            return Err(GpgError::GpgOperationError(format!(
+                "Failed to read file owner from field '{}': {}",
+                owner_field_name, e
+            )));
+        }
+    };
+    println!("File owner: '{}'", file_owner_username);
+
+    // --- Stage 3: Construct Addressbook Path and Extract GPG Key ---
+    println!("Looking up GPG key for owner '{}' in addressbook", file_owner_username);
+
+    // Convert collaborator directory to absolute path
+    let collaborator_files_directory_absolute = 
+        match make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(
+            collaborator_files_directory_relative
+        ) {
+            Ok(path) => path,
+            Err(io_error) => {
+                return Err(GpgError::FileSystemError(io_error));
+            }
+        };
+
+    // Construct addressbook filename
+    let collaborator_filename = format!("{}__collaborator.toml", file_owner_username);
+    let user_addressbook_path = collaborator_files_directory_absolute.join(&collaborator_filename);
+
+    println!("Owner's addressbook path: {}", user_addressbook_path.display());
+
+    // Verify addressbook exists
+    if !user_addressbook_path.exists() {
+        return Err(GpgError::PathError(format!(
+            "Addressbook file not found for owner '{}': {}",
+            file_owner_username,
+            user_addressbook_path.display()
+        )));
+    }
+
+    // Convert addressbook path to string
+    let user_addressbook_path_str = match user_addressbook_path.to_str() {
+        Some(s) => s,
+        None => {
+            return Err(GpgError::PathError(format!(
+                "Invalid path encoding for addressbook file: {}",
+                user_addressbook_path.display()
+            )));
+        }
+    };
+
+    // Extract GPG key ID from addressbook (which validates the addressbook's signature)
+    let gpg_key_id_field_name = "gpg_publickey_id";
+    let signing_key_id = match read_singleline_string_from_clearsigntoml(
+        user_addressbook_path_str,
+        gpg_key_id_field_name
+    ) {
+        Ok(key_id) => {
+            if key_id.is_empty() {
+                return Err(GpgError::GpgOperationError(format!(
+                    "GPG key ID is empty in addressbook for owner '{}'",
+                    file_owner_username
+                )));
+            }
+            key_id
+        }
+        Err(e) => {
+            return Err(GpgError::GpgOperationError(format!(
+                "Failed to read GPG key ID from addressbook: {}",
+                e
+            )));
+        }
+    };
+    println!("Found GPG key ID for validation: '{}'", signing_key_id);
+
+    // --- Stage 4: Create Temporary File for Validation ---
+    let temp_validation_path = create_temp_file_path("validate_all_ports_optimized")?;
+    
+    // --- Stage 5: Verify Signature and Extract Content (ONCE) ---
+    println!("Validating clearsigned file signature...");
+    
+    // Decrypt (which validates) the clearsigned file
+    let validation_result = Command::new("gpg")
+        .arg("--decrypt")
+        .arg("--batch")
+        .arg("--status-fd")
+        .arg("2")
+        .arg("--output")
+        .arg(&temp_validation_path)
+        .arg(path_to_clearsigned_toml)
+        .output();
+
+    match validation_result {
+        Ok(output) => {
+            if !output.status.success() {
+                // Cleanup temp file
+                let _ = fs::remove_file(&temp_validation_path);
+                
+                let stderr_output = String::from_utf8_lossy(&output.stderr);
+                return Err(GpgError::GpgOperationError(format!(
+                    "GPG signature validation FAILED. File may be tampered. GPG output: {}",
+                    stderr_output.trim()
+                )));
+            }
+            println!("✓ Signature validation PASSED. File integrity confirmed.");
+            println!("Now extracting all port assignments in a single pass...");
+        }
+        Err(e) => {
+            // Cleanup temp file
+            let _ = fs::remove_file(&temp_validation_path);
+            
+            return Err(GpgError::GpgOperationError(format!(
+                "Failed to execute GPG validation: {}",
+                e
+            )));
+        }
+    }
+
+    // --- Stage 6: Parse ALL Port Assignments from Validated Content ---
+    
+    // Read the validated content once
+    let validated_content = match fs::read_to_string(&temp_validation_path) {
+        Ok(content) => content,
+        Err(e) => {
+            // Cleanup temp file
+            let _ = fs::remove_file(&temp_validation_path);
+            return Err(GpgError::FileSystemError(e));
+        }
+    };
+
+    // Cleanup temp file immediately after reading
+    let _ = fs::remove_file(&temp_validation_path);
+
+    // Parse all collaborator pair sections in one pass
+    let mut all_assignments: HashMap<String, Vec<CollaboratorPortAssignment>> = HashMap::new();
+    let table_prefix = "[abstract_collaborator_port_assignments.";
+    
+    // State tracking for parsing
+    let mut current_pair_name: Option<String> = None;
+    let mut current_pair_assignments: Vec<CollaboratorPortAssignment> = Vec::new();
+    let mut in_ports_array = false;
+    let mut current_port_entry: Option<PartialPortEntry> = None;
+
+    // Helper structure for parsing (reused from the specific function)
+    #[derive(Default)]
+    struct PartialPortEntry {
+        user_name: Option<String>,
+        ready_port: Option<u16>,
+        intray_port: Option<u16>,
+        gotit_port: Option<u16>,
+    }
+
+    // Process each line of the validated content
+    for line in validated_content.lines() {
+        let trimmed = line.trim();
+        
+        // Check if we're entering a new collaborator pair section
+        if trimmed.starts_with(table_prefix) && trimmed.ends_with(']') {
+            // Save previous pair's data if any
+            if let Some(pair_name) = current_pair_name.take() {
+                if !current_pair_assignments.is_empty() {
+                    all_assignments.insert(pair_name, current_pair_assignments.clone());
+                    current_pair_assignments.clear();
+                }
+            }
+            
+            // Extract new pair name
+            let start = table_prefix.len();
+            let end = trimmed.len() - 1;
+            current_pair_name = Some(trimmed[start..end].to_string());
+            in_ports_array = false;
+            println!("  Processing pair: {}", current_pair_name.as_ref().unwrap());
+            continue;
+        }
+        
+        // Skip lines if we're not in a pair section
+        if current_pair_name.is_none() {
+            continue;
+        }
+        
+        // Check for collaborator_ports array start
+        if trimmed.starts_with("collaborator_ports = [") {
+            in_ports_array = true;
+            
+            // Check if it's a single-line array (for simple cases)
+            if trimmed.contains(']') {
+                // TODO: Handle single-line array parsing if needed
+                in_ports_array = false;
+            }
+            continue;
+        }
+        
+        // Check for array end
+        if in_ports_array && trimmed == "]" {
+            in_ports_array = false;
+            continue;
+        }
+        
+        // Parse array entries
+        if in_ports_array {
+            // Handle start of a new port entry
+            if trimmed.starts_with('{') || trimmed.contains("{ user_name") {
+                // If we had a previous incomplete entry, it's an error
+                if current_port_entry.is_some() {
+                    return Err(GpgError::GpgOperationError(format!(
+                        "Malformed port entry in pair '{}'",
+                        current_pair_name.as_ref().unwrap()
+                    )));
+                }
+                current_port_entry = Some(PartialPortEntry::default());
+            }
+            
+            // Parse fields within the entry
+            if let Some(ref mut entry) = current_port_entry {
+                // Parse all fields that might be on this line
+                
+                // Parse user_name
+                if trimmed.contains("user_name = ") {
+                    if let Some(value) = extract_quoted_value(trimmed, "user_name") {
+                        entry.user_name = Some(value);
+                    }
+                }
+                
+                // Parse ready_port
+                if trimmed.contains("ready_port = ") {
+                    if let Some(value) = extract_port_value(trimmed, "ready_port") {
+                        entry.ready_port = Some(value);
+                    }
+                }
+                
+                // Parse intray_port
+                if trimmed.contains("intray_port = ") {
+                    if let Some(value) = extract_port_value(trimmed, "intray_port") {
+                        entry.intray_port = Some(value);
+                    }
+                }
+                
+                // Parse gotit_port
+                if trimmed.contains("gotit_port = ") {
+                    if let Some(value) = extract_port_value(trimmed, "gotit_port") {
+                        entry.gotit_port = Some(value);
+                    }
+                }
+            }
+            
+            // Check for end of entry
+            if trimmed.ends_with("},") || trimmed.ends_with('}') {
+                if let Some(entry) = current_port_entry.take() {
+                    // Validate we have all required fields
+                    match (entry.user_name, entry.ready_port, entry.intray_port, entry.gotit_port) {
+                        (Some(user), Some(ready), Some(intray), Some(gotit)) => {
+                            current_pair_assignments.push(CollaboratorPortAssignment {
+                                user_name: user,
+                                ready_port: ready,
+                                intray_port: intray,
+                                gotit_port: gotit,
+                            });
+                        }
+                        _ => {
+                            return Err(GpgError::GpgOperationError(format!(
+                                "Incomplete port assignment entry for pair '{}'. Missing required fields.",
+                                current_pair_name.as_ref().unwrap()
+                            )));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // Don't forget the last pair if the file doesn't end with another section
+    if let Some(pair_name) = current_pair_name.take() {
+        if !current_pair_assignments.is_empty() {
+            all_assignments.insert(pair_name, current_pair_assignments);
+        }
+    }
+    
+    // --- Stage 7: Validate Results ---
+    if all_assignments.is_empty() {
+        return Err(GpgError::GpgOperationError(
+            "No collaborator port assignments found in abstract_collaborator_port_assignments".to_string()
+        ));
+    }
+    
+    // Log summary
+    println!(
+        "✓ Successfully extracted port assignments for {} collaborator pairs:",
+        all_assignments.len()
+    );
+    for (pair_name, assignments) in &all_assignments {
+        println!("  - {}: {} port assignments", pair_name, assignments.len());
+    }
+    
+    Ok(all_assignments)
+}
+
+/// Reads all collaborator usernames who have access to the team channel from a clearsigned TOML file.
+///
+/// # Purpose
+/// This function extracts the list of collaborators who have access to a team channel
+/// from the `teamchannel_collaborators_with_access` field in a clearsigned TOML file.
+/// It enforces the same security model as other functions in this module, requiring
+/// GPG signature validation before any data extraction.
+///
+/// # Security Model
+/// - Mandatory signature validation before data access
+/// - Owner-based key management via addressbook lookup
+/// - No data returned if validation fails
+///
+/// # Expected Data Structure
+/// The function expects the TOML file to contain:
+/// ```toml
+/// teamchannel_collaborators_with_access = ["alice", "bob", "charlotte"]
+/// ```
+///
+/// # Arguments
+/// * `path_to_clearsigned_toml` - Path to the clearsigned TOML file
+/// * `collaborator_files_directory_relative` - Relative path to the collaborator addressbook directory
+///
+/// # Returns
+/// * `Ok(Vec<String>)` - A vector of collaborator usernames who have access
+/// * `Err(GpgError)` - If validation fails or the field is not found
+///
+/// # Example
+/// ```no_run
+/// let collaborators = read_teamchannel_collaborators_with_access_from_clearsigntoml(
+///     Path::new("team_channel_config.toml"),
+///     "collaborators"
+/// )?;
+/// 
+/// println!("Team channel collaborators: {:?}", collaborators);
+/// // Output: ["alice", "bob", "charlotte"]
+/// ```
+pub fn read_teamchannel_collaborators_with_access_from_clearsigntoml(
+    path_to_clearsigned_toml: &Path,
+    collaborator_files_directory_relative: &str,
+) -> Result<Vec<String>, GpgError> {
+    println!(
+        "Reading team channel collaborators with access from: {}",
+        path_to_clearsigned_toml.display()
+    );
+
+    // Convert path to string for the reading function
+    let path_str = match path_to_clearsigned_toml.to_str() {
+        Some(s) => s,
+        None => {
+            return Err(GpgError::PathError(format!(
+                "Invalid path encoding for: {}",
+                path_to_clearsigned_toml.display()
+            )));
+        }
+    };
+
+    // Use the existing string array reading function with owner-based validation
+    match read_stringarray_using_clearsignedconfig_from_clearsigntoml(
+        collaborator_files_directory_relative,  // This should be the config file path
+        path_str,                               // This is the target file
+        "teamchannel_collaborators_with_access"
+    ) {
+        Ok(collaborators) => {
+            println!(
+                "Successfully extracted {} collaborators with access",
+                collaborators.len()
+            );
+            Ok(collaborators)
+        }
+        Err(e) => {
+            Err(GpgError::GpgOperationError(format!(
+                "Failed to read teamchannel_collaborators_with_access: {}",
+                e
+            )))
+        }
+    }
+}
+
+/// Validates that all collaborators mentioned in port assignments are listed in the access list.
+///
+/// # Purpose
+/// This helper function ensures consistency between the port assignments and the
+/// list of collaborators who have access to the team channel. It checks that every
+/// username appearing in port assignments is also listed in `teamchannel_collaborators_with_access`.
+///
+/// # Arguments
+/// * `port_assignments` - HashMap of pair names to their port assignments
+/// * `authorized_collaborators` - List of collaborators authorized for the team channel
+///
+/// # Returns
+/// * `Ok(())` - If all collaborators in port assignments are authorized
+/// * `Err(Vec<String>)` - List of unauthorized collaborators found in port assignments
+///
+/// # Example
+/// ```no_run
+/// let authorized = vec!["alice".to_string(), "bob".to_string()];
+/// let assignments = read_all_collaborator_port_assignments_clearsigntoml_optimized(...)?;
+/// 
+/// match validate_port_assignment_collaborators(&assignments, &authorized) {
+///     Ok(()) => println!("All collaborators are authorized"),
+///     Err(unauthorized) => println!("Unauthorized collaborators: {:?}", unauthorized),
+/// }
+/// ```
+pub fn validate_port_assignment_collaborators(
+    port_assignments: &HashMap<String, Vec<CollaboratorPortAssignment>>,
+    authorized_collaborators: &[String],
+) -> Result<(), Vec<String>> {
+    let mut unauthorized_users = Vec::new();
+    let authorized_set: std::collections::HashSet<&String> = authorized_collaborators.iter().collect();
+    
+    // Check each port assignment
+    for (pair_name, assignments) in port_assignments {
+        for assignment in assignments {
+            if !authorized_set.contains(&assignment.user_name) {
+                unauthorized_users.push(assignment.user_name.clone());
+            }
+        }
+    }
+    
+    // Remove duplicates
+    unauthorized_users.sort();
+    unauthorized_users.dedup();
+    
+    if unauthorized_users.is_empty() {
+        Ok(())
+    } else {
+        Err(unauthorized_users)
     }
 }
