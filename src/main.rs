@@ -397,6 +397,8 @@ use crate::clearsign_toml_module::{
     decrypt_and_validate_file,
     gpg_make_input_path_name_abs_executabledirectoryrelative_nocheck,
     decrypt_gpgfile_to_output,
+    read_all_collaborator_port_assignments_clearsigntoml_optimized,
+    read_teamchannel_collaborators_with_access_from_clearsigntoml,
 }; 
 
 // // deprecated, code moved to new clearsign_toml_module
@@ -2645,104 +2647,421 @@ fn get_current_unix_timestamp() -> u64 {
 }
 
 
-// it's a total garbage function! 
-fn check_all_ports_in_team_channels() -> Result<(), ThisProjectError> {
-
-    // let team_channels_dir = Path::new("project_graph_data/team_channels");
-
+/// Checks all ports across all team channels for collisions and usage conflicts.
+///
+/// # Purpose
+/// This function performs a comprehensive audit of all network ports configured across
+/// all team channels in the project. It ensures that:
+/// 1. No two collaborators are assigned the same port (collision detection)
+/// 2. Ports that are supposed to be in use are actually available on the system
+/// 3. All team channel configurations are properly clearsigned and validated
+///
+/// # Process Flow
+/// 1. **Directory Setup**: Ensures the team channels directory exists
+/// 2. **Channel Discovery**: Walks through all subdirectories looking for `node.toml` files
+/// 3. **Security Validation**: Each `node.toml` must be clearsigned and validated
+/// 4. **Port Extraction**: Extracts all port assignments from validated files
+/// 5. **Collision Detection**: Checks for duplicate port assignments across channels
+/// 6. **System Availability**: Verifies if ports marked as "in use" are actually available
+///
+/// # Security Model
+/// - Only processes clearsigned `node.toml` files
+/// - Uses owner-based GPG key validation via the collaborator addressbook system
+/// - Skips any files that fail signature validation
+///
+/// # Error Handling
+/// The function provides detailed error information and interactive warnings:
+/// - Port collisions trigger a warning with user confirmation to continue
+/// - Invalid configurations are logged but don't stop the entire scan
+/// - Returns a comprehensive error if critical issues are found
+///
+/// # Returns
+/// * `Ok(())` - If all ports are properly configured without collisions
+/// * `Err(ThisProjectError)` - If critical errors occur:
+///   - Directory access issues
+///   - Systematic port collision patterns
+///   - Critical configuration errors
+///
+/// # Example Output
+/// ```text
+/// === Team Channel Port Audit ===
+/// Checking all team channels in: /path/to/project_graph_data/team_channels
+/// 
+/// Processing channel: team_alpha
+///   ✓ Validated signature for owner: alice
+///   Found 3 collaborator pairs with 6 port assignments
+/// 
+/// Processing channel: team_beta
+///   ✓ Validated signature for owner: bob
+///   Found 2 collaborator pairs with 4 port assignments
+/// 
+/// ⚠️  PORT COLLISION DETECTED!
+/// Port 50001 is assigned multiple times:
+///   - team_alpha: alice (ready_port) in pair alice_bob
+///   - team_beta: charlie (ready_port) in pair charlie_dave
+/// 
+/// Press Enter to continue scanning or Ctrl+C to abort...
+/// 
+/// === Summary ===
+/// Total channels scanned: 2
+/// Total port assignments: 10
+/// Collisions found: 1
+/// ```
+pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), ThisProjectError> {
+    println!("=== Team Channel Port Audit ===");
+    
+    // --- Stage 1: Directory Setup ---
+    println!("Setting up team channels directory...");
+    
     // Ensure the project graph data directory exists relative to the executable
-    let team_channelsdir_result = make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path("project_graph_data/team_channels");
-
-    // Handle any errors that might occur during directory creation or verification
-    let team_channels_dir = match team_channelsdir_result {
-        Ok(directory_path) => directory_path,
+    let team_channels_dir = match make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path(
+        "project_graph_data/team_channels"
+    ) {
+        Ok(directory_path) => {
+            println!("Team channels directory: {}", directory_path.display());
+            directory_path
+        }
         Err(io_error) => {
-            // Log the error and handle appropriately for your application
-            return Err(format!("in check_all_ports_in_team_channels(), Failed to ensure team_channels_dir exists: {}", io_error).into());
+            let error_msg = format!(
+                "Failed to ensure team_channels_dir exists: {}",
+                io_error
+            );
+            eprintln!("ERROR: {}", error_msg);
+            return Err(ThisProjectError::from(error_msg));
         }
     };
     
-    let mut ports_in_use = HashSet::new();
-
-    // Iterate over all team channel directories
-    for entry in WalkDir::new(team_channels_dir)
+    // Get collaborator files directory for addressbook lookups
+    let collaborator_files_dir_relative = "project_graph_data/collaborator_files_address_book";
+    
+    // --- Stage 2: Initialize Tracking Structures ---
+    
+    // Track all port assignments with their context for detailed collision reporting
+    #[derive(Debug, Clone)]
+    struct PortAssignmentContext {
+        channel_name: String,
+        pair_name: String,
+        user_name: String,
+        port_type: String, // "ready", "intray", or "gotit"
+    }
+    
+    let mut port_registry: HashMap<u16, Vec<PortAssignmentContext>> = HashMap::new();
+    let mut channels_processed = 0;
+    let mut total_port_assignments = 0;
+    let mut validation_failures = 0;
+    let mut collision_count = 0;
+    
+    println!("\nScanning for team channel configurations...\n");
+    
+    // --- Stage 3: Walk Through Team Channels ---
+    for entry in WalkDir::new(&team_channels_dir)
         .into_iter()
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().is_dir())
     {
         let node_toml_path = entry.path().join("node.toml");
-        if node_toml_path.exists() {
-            // Read the node.toml file
-            let toml_string = std::fs::read_to_string(&node_toml_path)?;
-            
-            // TODO -> this needs to use use clear-sign reading
-            let toml_value: Value = toml::from_str(&toml_string)?;
-
-            // Extract the teamchannel_collaborators_with_access array
-            
-            // teamchannel_collaborators_with_access -> array of strings
-            if let Some(collaborators_array) = toml_value.get("teamchannel_collaborators_with_access").and_then(Value::as_array) {
-                for collaborator_data in collaborators_array {
-                    
-                    /*
-                    e.g.
-                    [[abstract_collaborator_port_assignments.bob_bob.collaborator_ports]]
-                    user_name = "bob"
-                    ready_port = 55342
-                    intray_port = 54493
-                    gotit_port = 58652
-                    */
-                    // Extract each port and check if it's in use
-                    if let Some(ready_port) = collaborator_data.get("ready_port").and_then(|v| v.as_integer()).map(|p| p as u16) {
-                        if is_port_in_use(ready_port) && !ports_in_use.insert(ready_port) {
-                            return Err(ThisProjectError::PortCollision(format!("Port {} is already in use.", ready_port)));
+        
+        // Skip directories without node.toml
+        if !node_toml_path.exists() {
+            continue;
+        }
+        
+        // Extract channel name from directory path
+        let channel_name = entry.path()
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown")
+            .to_string();
+        
+        // Skip the root directory itself
+        if entry.path() == team_channels_dir {
+            continue;
+        }
+        
+        println!("Processing channel: {}", channel_name);
+        channels_processed += 1;
+        
+        // --- Stage 4: Read and Validate Clearsigned Configuration ---
+        match read_all_collaborator_port_assignments_clearsigntoml_optimized(
+            &node_toml_path,
+            collaborator_files_dir_relative,
+        ) {
+            Ok(port_assignments) => {
+                println!("  ✓ Signature validated successfully");
+                println!("  Found {} collaborator pairs", port_assignments.len());
+                
+                // --- Stage 5: Process Port Assignments ---
+                for (pair_name, assignments) in port_assignments {
+                    for assignment in assignments {
+                        // Track each port with its context
+                        let port_contexts = [
+                            (assignment.ready_port, "ready"),
+                            (assignment.intray_port, "intray"),
+                            (assignment.gotit_port, "gotit"),
+                        ];
+                        
+                        for (port, port_type) in port_contexts {
+                            total_port_assignments += 1;
+                            
+                            let context = PortAssignmentContext {
+                                channel_name: channel_name.clone(),
+                                pair_name: pair_name.clone(),
+                                user_name: assignment.user_name.clone(),
+                                port_type: port_type.to_string(),
+                            };
+                            
+                            // Add to registry
+                            port_registry
+                                .entry(port)
+                                .or_insert_with(Vec::new)
+                                .push(context);
                         }
                     }
-                    // Repeat for intray_port, gotit_port, self_ready_port, self_intray_port, self_gotit_port
-                    // ... (add similar checks for the other five ports) 
+                }
+                
+                // Also check if authorized collaborators can be read (optional)
+                match read_teamchannel_collaborators_with_access_from_clearsigntoml(
+                    &node_toml_path,
+                    collaborator_files_dir_relative,
+                ) {
+                    Ok(collaborators) => {
+                        println!("  Authorized collaborators: {:?}", collaborators);
+                    }
+                    Err(e) => {
+                        println!("  ⚠️  Could not read authorized collaborators: {}", e.to_string());
+                    }
+                }
+            }
+            Err(e) => {
+                validation_failures += 1;
+                eprintln!("  ✗ Validation FAILED: {}", e.to_string());
+                eprintln!("  Skipping this channel due to security validation failure");
+                continue;
+            }
+        }
+        
+        println!(); // Empty line between channels
+    }
+    
+    // --- Stage 6: Analyze Port Collisions ---
+    println!("=== Port Collision Analysis ===\n");
+    
+    let mut collision_found = false;
+    
+    for (port, contexts) in &port_registry {
+        if contexts.len() > 1 {
+            collision_found = true;
+            collision_count += 1;
+            
+            // Print collision warning
+            println!("⚠️  PORT COLLISION DETECTED!");
+            println!("Port {} is assigned multiple times:", port);
+            
+            for context in contexts {
+                println!(
+                    "  - Channel '{}': {} ({}_port) in pair {}",
+                    context.channel_name,
+                    context.user_name,
+                    context.port_type,
+                    context.pair_name
+                );
+            }
+            
+            println!();
+            
+            // Check if the port is actually in use on the system
+            if is_port_in_use(*port) {
+                println!("  🔴 CRITICAL: Port {} is currently IN USE on the system!", port);
+            } else {
+                println!("  🟡 Port {} is not currently in use on the system", port);
+            }
+            
+            // Interactive warning - ask user to continue
+            println!("\nPress Enter to continue scanning or Ctrl+C to abort...");
+            let mut input = String::new();
+            match io::stdin().read_line(&mut input) {
+                Ok(_) => {
+                    println!("Continuing scan...\n");
+                }
+                Err(e) => {
+                    return Err(ThisProjectError::from(format!(
+                        "Failed to read user input: {}",
+                        e
+                    )));
                 }
             }
         }
     }
     
-    debug_log("Done check_all_ports_in_team_channels()");
-
-    Ok(()) // No port collisions found
-}
-
-
-/// check for port collision
-/// Checks if a given port is currently in use.
-///
-/// This function attempts to bind a TCP listener to the specified port on the loopback 
-/// interface (127.0.0.1). If the binding is successful, it means the port is likely 
-/// available. If the binding fails, it suggests the port is already in use.
-///
-/// # Caveats:
-///
-/// * **TCP-Specific:** This check only verifies if a TCP listener can be bound. 
-///   It does not guarantee that the port is not being used by a UDP process
-///   or a process using a different protocol. 
-/// * **UMA is UDP-Only:** Ideally, this function should be replaced with a more
-///   accurate check that is specific to UDP port availability. 
-/// * **Resource Usage:** Binding a TCP listener, even momentarily, consumes system resources. 
-/// * **Race Conditions:** It's possible for another process to bind to the port 
-///   between the time this check is performed and the time UMA actually attempts
-///   to use the port.
-///
-/// # Arguments
-///
-/// * `port` - The port number to check.
-///
-/// # Returns
-///
-/// * `bool` - `true` if the port is likely in use, `false` if it's likely available. 
-fn is_port_in_use(port: u16) -> bool {
-    match TcpListener::bind(("127.0.0.1", port)) {
-        Ok(_) => false, // Port is available
-        Err(_) => true, // Port is in use
+    if !collision_found {
+        println!("✓ No port collisions detected!");
+    }
+    
+    // --- Stage 7: Summary Report ---
+    println!("\n=== Summary ===");
+    println!("Total channels scanned: {}", channels_processed);
+    println!("Total port assignments: {}", total_port_assignments);
+    println!("Unique ports used: {}", port_registry.len());
+    println!("Validation failures: {}", validation_failures);
+    println!("Port collisions found: {}", collision_count);
+    
+    // --- Stage 8: Final Status ---
+    if collision_found {
+        eprintln!("\n❌ Port audit FAILED: {} collision(s) detected", collision_count);
+        eprintln!("Please resolve port conflicts before proceeding.");
+        
+        // Create detailed error message
+        let mut collision_details = String::from("Port collisions detected:\n");
+        for (port, contexts) in &port_registry {
+            if contexts.len() > 1 {
+                collision_details.push_str(&format!("  Port {}: {} assignments\n", port, contexts.len()));
+            }
+        }
+        
+        Err(ThisProjectError::PortCollision(collision_details))
+    } else if validation_failures > 0 {
+        eprintln!("\n⚠️  Port audit completed with {} validation failures", validation_failures);
+        eprintln!("Some channels could not be verified due to signature issues.");
+        Ok(())
+    } else {
+        println!("\n✅ Port audit PASSED: All ports properly configured!");
+        debug_log("Done check_all_ports_in_team_channels_clearsign_validated()");
+        Ok(())
     }
 }
+
+/// Checks if a specific port is currently in use on the system.
+///
+/// # Purpose
+/// This function attempts to bind to a port to determine if it's already in use.
+/// It's used during port collision detection to identify which conflicts are
+/// most critical (ports already bound vs. just configuration conflicts).
+///
+/// # Arguments
+/// * `port` - The port number to check
+///
+/// # Returns
+/// * `true` - If the port is in use (binding fails)
+/// * `false` - If the port is available (binding succeeds)
+///
+/// # Implementation Note
+/// The function attempts to bind to both IPv4 and IPv6 addresses to ensure
+/// comprehensive checking across different network configurations.
+fn is_port_in_use(port: u16) -> bool {
+    use std::net::{TcpListener, SocketAddr, IpAddr, Ipv4Addr, Ipv6Addr};
+    
+    // Check IPv4
+    let ipv4_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
+    let ipv4_in_use = TcpListener::bind(ipv4_addr).is_err();
+    
+    // Check IPv6
+    let ipv6_addr = SocketAddr::new(IpAddr::V6(Ipv6Addr::LOCALHOST), port);
+    let ipv6_in_use = TcpListener::bind(ipv6_addr).is_err();
+    
+    // Port is in use if either binding fails
+    ipv4_in_use || ipv6_in_use
+}
+
+
+// /// check for port collision
+// /// Checks if a given port is currently in use.
+// ///
+// /// This function attempts to bind a TCP listener to the specified port on the loopback 
+// /// interface (127.0.0.1). If the binding is successful, it means the port is likely 
+// /// available. If the binding fails, it suggests the port is already in use.
+// ///
+// /// # Caveats:
+// ///
+// /// * **TCP-Specific:** This check only verifies if a TCP listener can be bound. 
+// ///   It does not guarantee that the port is not being used by a UDP process
+// ///   or a process using a different protocol. 
+// /// * **UMA is UDP-Only:** Ideally, this function should be replaced with a more
+// ///   accurate check that is specific to UDP port availability. 
+// /// * **Resource Usage:** Binding a TCP listener, even momentarily, consumes system resources. 
+// /// * **Race Conditions:** It's possible for another process to bind to the port 
+// ///   between the time this check is performed and the time UMA actually attempts
+// ///   to use the port.
+// ///
+// /// # Arguments
+// ///
+// /// * `port` - The port number to check.
+// ///
+// /// # Returns
+// ///
+// /// * `bool` - `true` if the port is likely in use, `false` if it's likely available. 
+// fn is_port_in_use(port: u16) -> bool {
+//     match TcpListener::bind(("127.0.0.1", port)) {
+//         Ok(_) => false, // Port is available
+//         Err(_) => true, // Port is in use
+//     }
+// }
+
+
+// // it's a total garbage function! 
+// fn check_all_ports_in_team_channels() -> Result<(), ThisProjectError> {
+
+//     // let team_channels_dir = Path::new("project_graph_data/team_channels");
+
+//     // Ensure the project graph data directory exists relative to the executable
+//     let team_channelsdir_result = make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path("project_graph_data/team_channels");
+
+//     // Handle any errors that might occur during directory creation or verification
+//     let team_channels_dir = match team_channelsdir_result {
+//         Ok(directory_path) => directory_path,
+//         Err(io_error) => {
+//             // Log the error and handle appropriately for your application
+//             return Err(format!("in check_all_ports_in_team_channels(), Failed to ensure team_channels_dir exists: {}", io_error).into());
+//         }
+//     };
+    
+//     let mut ports_in_use = HashSet::new();
+
+//     // Iterate over all team channel directories
+//     for entry in WalkDir::new(team_channels_dir)
+//         .into_iter()
+//         .filter_map(|e| e.ok())
+//         .filter(|e| e.file_type().is_dir())
+//     {
+//         let node_toml_path = entry.path().join("node.toml");
+//         if node_toml_path.exists() {
+//             // Read the node.toml file
+//             let toml_string = std::fs::read_to_string(&node_toml_path)?;
+            
+//             // TODO -> this needs to use use clear-sign reading
+//             let toml_value: Value = toml::from_str(&toml_string)?;
+
+//             // Extract the teamchannel_collaborators_with_access array
+            
+//             // teamchannel_collaborators_with_access -> array of strings
+//             if let Some(collaborators_array) = toml_value.get("teamchannel_collaborators_with_access").and_then(Value::as_array) {
+//                 for collaborator_data in collaborators_array {
+                    
+//                     /*
+//                     e.g.
+//                     [[abstract_collaborator_port_assignments.bob_bob.collaborator_ports]]
+//                     user_name = "bob"
+//                     ready_port = 55342
+//                     intray_port = 54493
+//                     gotit_port = 58652
+//                     */
+//                     // Extract each port and check if it's in use
+//                     if let Some(ready_port) = collaborator_data.get("ready_port").and_then(|v| v.as_integer()).map(|p| p as u16) {
+//                         if is_port_in_use(ready_port) && !ports_in_use.insert(ready_port) {
+//                             return Err(ThisProjectError::PortCollision(format!("Port {} is already in use.", ready_port)));
+//                         }
+//                     }
+//                     // Repeat for intray_port, gotit_port, self_ready_port, self_intray_port, self_gotit_port
+//                     // ... (add similar checks for the other five ports) 
+//                 }
+//             }
+//         }
+//     }
+    
+//     debug_log("Done check_all_ports_in_team_channels()");
+
+//     Ok(()) // No port collisions found
+// }
+
 
 // old relative path
 // /// Function for broadcasting to theads to wrapup and end uma session: quit
@@ -11733,7 +12052,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
     debug_log("next IUA runs fn  check_all_ports_in_team_channels()");
 
     // Check for port collisions across all team channels
-    if let Err(e) = check_all_ports_in_team_channels() {
+    if let Err(e) = check_all_ports_in_team_channels_clearsign_validated() {
         eprintln!("Error: {}", e); // Print the error message
         debug_log!("Error: {}", e);
         // Handle the error as needed (e.g., exit UMA)
