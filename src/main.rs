@@ -8910,76 +8910,371 @@ fn q_and_a_get_pa1_process() -> Result<String, ThisProjectError> {
     Ok(input.to_string())
 }
 
-
-/// badly named, this is a Q&A tool
-/// Gets schedule information and converts 
-/// to required format of create_core_node()
+/// Gets schedule information and converts to required format for create_core_node()
+/// 
+/// This function provides two options for setting the project start time:
+/// - Use current UTC time ("now")
+/// - Enter a custom date
+/// 
+/// After determining the start time, it prompts for project duration and calculates
+/// the end timestamp.
+/// 
+/// The function will re-prompt for any invalid inputs rather than failing immediately,
+/// providing a better user experience.
+/// 
+/// # Returns
+/// * `Ok(Vec<u64>)` - Vector containing [start_timestamp, end_timestamp, duration_seconds]
+/// * `Err(ThisProjectError)` - If input/output operations fail
+/// 
+/// # Example Flow
+/// ```text
+/// Would you like to use current UTC time as your project's start time? (y/n): y
+/// Current UTC time selected: 2024-01-15 14:30:45
+/// 
+/// Project Schedule: Enter project duration in days: 14
+/// 
+/// Project Schedule Summary:
+///   Start: 2024-01-15 14:30:45 UTC
+///   End: 2024-01-29 14:30:45 UTC
+///   Duration: 14 days (1209600 seconds)
+/// ```
 fn q_and_a_get_pa2_schedule() -> Result<Vec<u64>, ThisProjectError> {
     debug_log("starting q_and_a_get_pa2_schedule()");
 
-    // Duration input and validation
-    println!("Project Schedule: Enter project duration in days:");
-    let mut days = String::new();
-    io::stdin().read_line(&mut days)?;
-    let days: u64 = days.trim().parse().map_err(|_| 
-        ThisProjectError::InvalidInput("Invalid number of days".into()))?;
-    debug_log!("Parsed days: {}", days);
+    // Get current year for validation once at the start
+    let current_timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| {
+            ThisProjectError::InvalidData(format!("System time error: {}", e))
+        })?
+        .as_secs() as i64;
+    let (current_year, _, _, _, _, _) = timestamp_to_utc_components(current_timestamp);
+
+    // Ask if user wants to use current time as start with retry loop
+    let use_now = loop {
+        println!("\n'Now'? -> Use current UTC time as project's start time? (y)es / (n)o");
+        print!("> ");
+        
+        // Ensure prompt is displayed before reading input
+        io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+        
+        let mut use_now_input = String::new();
+        io::stdin().read_line(&mut use_now_input).map_err(|e| ThisProjectError::IoError(e))?;
+        
+        match use_now_input.trim().to_lowercase().as_str() {
+            "y" | "yes" | "now" => break true,
+            "n" | "no" => break false,
+            "" => {
+                // Treat empty input as "no" for convenience
+                println!("  (Treating empty input as 'no')");
+                break false;
+            },
+            _ => {
+                // Invalid input - inform user and loop to retry
+                println!("  Invalid input '{}'. Please enter 'y' for yes or 'n' for no.", 
+                    use_now_input.trim());
+                continue;
+            }
+        }
+    };
     
-    if days == 0 || days > 3650 { // 10 years max
-        return Err(ThisProjectError::InvalidInput("Duration must be between 1 and 3650 days".into()));
-    }
+    // Get start timestamp based on user choice
+    let start_timestamp: u64 = if use_now {
+        // Use current UTC time
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|e| {
+                ThisProjectError::InvalidData(format!("System time error: {}", e))
+            })?;
+        
+        let timestamp = now.as_secs();
+        
+        // Display the current time for confirmation
+        let (year, month, day, hour, minute, second) = timestamp_to_utc_components(timestamp as i64);
+        println!("\nCurrent UTC time selected: {:04}-{:02}-{:02} {:02}:{:02}:{:02}",
+            year, month, day, hour, minute, second);
+        
+        debug_log!("Using current UTC timestamp: {}", timestamp);
+        timestamp
+    } else {
+        // Get custom start date from user
+        println!("\nEnter project start date:");
+        
+        // Year input with retry loop
+        let year: i32 = loop {
+            println!("Enter start year (YYYY, {} to 2100):", current_year);
+            print!("> ");
+            io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+            
+            let mut year_input = String::new();
+            io::stdin().read_line(&mut year_input).map_err(|e| ThisProjectError::IoError(e))?;
+            
+            // Handle empty input
+            if year_input.trim().is_empty() {
+                println!("  Year cannot be empty. Please enter a valid year.");
+                continue;
+            }
+            
+            // Try to parse the year
+            match year_input.trim().parse::<i32>() {
+                Ok(parsed_year) => {
+                    // Validate year range
+                    if parsed_year < current_year || parsed_year > 2100 {
+                        println!("  Year must be between {} and 2100. You entered: {}", 
+                            current_year, parsed_year);
+                        continue;
+                    }
+                    debug_log!("Parsed year: {}", parsed_year);
+                    break parsed_year;
+                },
+                Err(_) => {
+                    println!("  Invalid year format '{}'. Please enter a 4-digit year.", 
+                        year_input.trim());
+                    continue;
+                }
+            }
+        };
 
-    // Year input and validation
-    println!("Enter start year (YYYY):");
-    let mut year = String::new();
-    io::stdin().read_line(&mut year)?;
-    let year: u64 = year.trim().parse().map_err(|_| 
-        ThisProjectError::InvalidInput("Invalid year".into()))?;
-    debug_log!("Parsed year: {}", year);
+        // Month input with retry loop
+        let month: u32 = loop {
+            println!("Enter start month (1-12):");
+            print!("> ");
+            io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+            
+            let mut month_input = String::new();
+            io::stdin().read_line(&mut month_input).map_err(|e| ThisProjectError::IoError(e))?;
+            
+            // Handle empty input
+            if month_input.trim().is_empty() {
+                println!("  Month cannot be empty. Please enter a value between 1 and 12.");
+                continue;
+            }
+            
+            // Try to parse the month
+            match month_input.trim().parse::<u32>() {
+                Ok(parsed_month) => {
+                    // Validate month range
+                    if parsed_month < 1 || parsed_month > 12 {
+                        println!("  Month must be between 1 and 12. You entered: {}", parsed_month);
+                        continue;
+                    }
+                    debug_log!("Parsed month: {}", parsed_month);
+                    break parsed_month;
+                },
+                Err(_) => {
+                    println!("  Invalid month format '{}'. Please enter a number between 1 and 12.", 
+                        month_input.trim());
+                    continue;
+                }
+            }
+        };
 
-    if year < 2023 || year > 2100 {
-        return Err(ThisProjectError::InvalidInput("Year must be between 2023 and 2100".into()));
-    }
+        // Day input with retry loop
+        let max_day = get_days_in_month(year, month);
+        let day: u32 = loop {
+            println!("Enter start day (1-{}):", max_day);
+            print!("> ");
+            io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+            
+            let mut day_input = String::new();
+            io::stdin().read_line(&mut day_input).map_err(|e| ThisProjectError::IoError(e))?;
+            
+            // Handle empty input
+            if day_input.trim().is_empty() {
+                println!("  Day cannot be empty. Please enter a value between 1 and {}.", max_day);
+                continue;
+            }
+            
+            // Try to parse the day
+            match day_input.trim().parse::<u32>() {
+                Ok(parsed_day) => {
+                    // Validate day range
+                    if parsed_day < 1 || parsed_day > max_day {
+                        println!("  Day must be between 1 and {} for {}/{}. You entered: {}", 
+                            max_day, year, month, parsed_day);
+                        continue;
+                    }
+                    debug_log!("Parsed day: {}", parsed_day);
+                    break parsed_day;
+                },
+                Err(_) => {
+                    println!("  Invalid day format '{}'. Please enter a number between 1 and {}.", 
+                        day_input.trim(), max_day);
+                    continue;
+                }
+            }
+        };
 
-    // Month input and validation
-    println!("Enter start month (1-12):");
-    let mut month = String::new();
-    io::stdin().read_line(&mut month)?;
-    let month: u64 = month.trim().parse().map_err(|_| 
-        ThisProjectError::InvalidInput("Invalid month".into()))?;
-    debug_log!("Parsed month: {}", month);
+        // Optional time input with retry loop
+        let (hour, minute) = loop {
+            println!("\nYou've entered the date: {}-{:02}-{:02}", year, month, day);
+            println!("Would you like to specify a specific time of day?");
+            println!("  - Enter 'y' to set hour and minute");
+            println!("  - Enter 'n' or press Enter to use midnight (00:00:00)");
+            print!("> ");
+            io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+            
+            let mut time_choice = String::new();
+            io::stdin().read_line(&mut time_choice).map_err(|e| ThisProjectError::IoError(e))?;
+            
+            match time_choice.trim().to_lowercase().as_str() {
+                "y" | "yes" => {
+                    println!("\nSetting time of day for {}-{:02}-{:02}:", year, month, day);
+                    
+                    // Get hour with retry loop
+                    let hour: u32 = loop {
+                        println!("Enter hour (0-23, 24-hour format):");
+                        println!("  Examples: 0 = midnight, 12 = noon, 23 = 11 PM");
+                        print!("> ");
+                        io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+                        
+                        let mut hour_input = String::new();
+                        io::stdin().read_line(&mut hour_input).map_err(|e| ThisProjectError::IoError(e))?;
+                        
+                        // Handle empty input
+                        if hour_input.trim().is_empty() {
+                            println!("  Hour cannot be empty. Please enter a value between 0 and 23.");
+                            continue;
+                        }
+                        
+                        // Try to parse the hour
+                        match hour_input.trim().parse::<u32>() {
+                            Ok(parsed_hour) => {
+                                if parsed_hour > 23 {
+                                    println!("  Hour must be between 0 and 23. You entered: {}", parsed_hour);
+                                    continue;
+                                }
+                                break parsed_hour;
+                            },
+                            Err(_) => {
+                                println!("  Invalid hour format '{}'. Please enter a number between 0 and 23.", 
+                                    hour_input.trim());
+                                continue;
+                            }
+                        }
+                    };
+                    
+                    // Get minute with retry loop
+                    let minute: u32 = loop {
+                        println!("Enter minute (0-59):");
+                        print!("> ");
+                        io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+                        
+                        let mut minute_input = String::new();
+                        io::stdin().read_line(&mut minute_input).map_err(|e| ThisProjectError::IoError(e))?;
+                        
+                        // Handle empty input
+                        if minute_input.trim().is_empty() {
+                            println!("  Minute cannot be empty. Please enter a value between 0 and 59.");
+                            continue;
+                        }
+                        
+                        // Try to parse the minute
+                        match minute_input.trim().parse::<u32>() {
+                            Ok(parsed_minute) => {
+                                if parsed_minute > 59 {
+                                    println!("  Minute must be between 0 and 59. You entered: {}", parsed_minute);
+                                    continue;
+                                }
+                                break parsed_minute;
+                            },
+                            Err(_) => {
+                                println!("  Invalid minute format '{}'. Please enter a number between 0 and 59.", 
+                                    minute_input.trim());
+                                continue;
+                            }
+                        }
+                    };
+                    
+                    println!("  Time set to {:02}:{:02} (24-hour format)", hour, minute);
+                    break (hour, minute);
+                },
+                "n" | "no" | "" => {
+                    // Use default midnight time
+                    println!("  Using default time: 00:00 (midnight)");
+                    break (0, 0);
+                },
+                _ => {
+                    println!("  Invalid choice '{}'. Please enter 'y' for yes or 'n' for no.", 
+                        time_choice.trim());
+                    continue;
+                }
+            }
+        };
 
-    if month < 1 || month > 12 {
-        return Err(ThisProjectError::InvalidInput("Month must be between 1 and 12".into()));
-    }
+        // Use the accurate timestamp conversion function
+        let timestamp = utc_components_to_timestamp(year, month, day, hour, minute, 0)?;
 
-    // Day input and validation
-    println!("Enter start day (1-31):");
-    let mut day = String::new();
-    io::stdin().read_line(&mut day)?;
-    let day: u64 = day.trim().parse().map_err(|_| 
-        ThisProjectError::InvalidInput("Invalid day".into()))?;
-    debug_log!("Parsed day: {}", day);
+        // Confirm the selected start time with full clarity
+        println!("\nProject start date and time confirmed:");
+        println!("  Date: {:04}-{:02}-{:02} (YYYY-MM-DD)", year, month, day);
+        println!("  Time: {:02}:{:02}:00 UTC (HH:MM:SS)", hour, minute);
+        println!("  Full: {:04}-{:02}-{:02} {:02}:{:02}:00 UTC", year, month, day, hour, minute);
+                
+        // Confirm the selected start time
+        println!("\nProject start time: {:04}-{:02}-{:02} {:02}:{:02}:00 UTC",
+            year, month, day, hour, minute);
+        
+        debug_log!("Calculated start timestamp: {}", timestamp);
+        timestamp as u64
+    };
 
-    if day < 1 || day > 31 {
-        return Err(ThisProjectError::InvalidInput("Day must be between 1 and 31".into()));
-    }
+    // Duration input with retry loop
+    let days: u64 = loop {
+        println!("\nProject Schedule: Enter project duration in days (1-3650):");
+        print!("> ");
+        io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+        
+        let mut days_input = String::new();
+        io::stdin().read_line(&mut days_input).map_err(|e| ThisProjectError::IoError(e))?;
+        
+        // Handle empty input
+        if days_input.trim().is_empty() {
+            println!("  Duration cannot be empty. Please enter a number between 1 and 3650.");
+            continue;
+        }
+        
+        // Try to parse the days
+        match days_input.trim().parse::<u64>() {
+            Ok(parsed_days) => {
+                // Validate days range
+                if parsed_days == 0 || parsed_days > 3650 {
+                    println!("  Duration must be between 1 and 3650 days. You entered: {}", parsed_days);
+                    continue;
+                }
+                debug_log!("Parsed days: {}", parsed_days);
+                break parsed_days;
+            },
+            Err(_) => {
+                println!("  Invalid duration format '{}'. Please enter a number between 1 and 3650.", 
+                    days_input.trim());
+                continue;
+            }
+        }
+    };
 
-    // Time calculations
+    // Calculate end timestamp and duration
     let seconds_per_day: u64 = 24 * 60 * 60;
-    let days_since_epoch = (year - 1970) * 365 + ((month - 1) * 30) + (day - 1);
-    debug_log!("Calculated days since epoch: {}", days_since_epoch);
-
-    let start_timestamp = days_since_epoch * seconds_per_day;
-    debug_log!("Calculated start timestamp: {}", start_timestamp);
-    
     let duration_seconds = days * seconds_per_day;
     debug_log!("Calculated duration in seconds: {}", duration_seconds);
 
     let end_timestamp = start_timestamp + duration_seconds;
     debug_log!("Calculated end timestamp: {}", end_timestamp);
 
-    // Final validation
+    // Display summary
+    let (start_year, start_month, start_day, start_hour, start_minute, start_second) = 
+        timestamp_to_utc_components(start_timestamp as i64);
+    let (end_year, end_month, end_day, end_hour, end_minute, end_second) = 
+        timestamp_to_utc_components(end_timestamp as i64);
+    
+    println!("\nProject Schedule Summary:");
+    println!("  Start: {:04}-{:02}-{:02} {:02}:{:02}:{:02} UTC", 
+        start_year, start_month, start_day, start_hour, start_minute, start_second);
+    println!("  End:   {:04}-{:02}-{:02} {:02}:{:02}:{:02} UTC", 
+        end_year, end_month, end_day, end_hour, end_minute, end_second);
+    println!("  Duration: {} days ({} seconds)", days, duration_seconds);
+
+    // Final validation (should never fail with proper input validation)
     if end_timestamp < start_timestamp {
         return Err(ThisProjectError::InvalidInput("End time cannot be before start time".into()));
     }
@@ -8993,6 +9288,327 @@ fn q_and_a_get_pa2_schedule() -> Result<Vec<u64>, ThisProjectError> {
 
     Ok(result)
 }
+
+// // use std::io::{self, Write};
+// // use std::time::{SystemTime, UNIX_EPOCH};
+
+// /// Gets schedule information and converts to required format for create_core_node()
+// /// 
+// /// This function provides two options for setting the project start time:
+// /// - Use current UTC time ("now")
+// /// - Enter a custom date
+// /// 
+// /// After determining the start time, it prompts for project duration and calculates
+// /// the end timestamp.
+// /// 
+// /// # Returns
+// /// * `Ok(Vec<u64>)` - Vector containing [start_timestamp, end_timestamp, duration_seconds]
+// /// * `Err(ThisProjectError)` - If input/output operations fail or validation fails
+// /// 
+// /// # Example Flow
+// /// ```text
+// /// Would you like to use current UTC time as your project's start time? (y/n): y
+// /// Current UTC time selected: 2024-01-15 14:30:45
+// /// 
+// /// Project Schedule: Enter project duration in days: 14
+// /// 
+// /// Project Schedule Summary:
+// ///   Start: 2024-01-15 14:30:45 UTC
+// ///   End: 2024-01-29 14:30:45 UTC
+// ///   Duration: 14 days (1209600 seconds)
+// /// ```
+// fn q_and_a_get_pa2_schedule() -> Result<Vec<u64>, ThisProjectError> {
+//     debug_log("starting q_and_a_get_pa2_schedule()");
+
+//     // Ask if user wants to use current time as start
+//     println!("'Now'? -> Use current UTC time as project's start time? (y)es / (n)o");
+//     print!("> ");
+    
+//     // Ensure prompt is displayed before reading input
+//     io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+//     let mut use_now_input = String::new();
+//     io::stdin().read_line(&mut use_now_input).map_err(|e| ThisProjectError::IoError(e))?;
+    
+//     let use_now = match use_now_input.trim().to_lowercase().as_str() {
+//         "y" | "yes" | "now" => true,
+//         "n" | "no" | "" => false,
+//         _ => {
+//             return Err(ThisProjectError::InvalidInput(
+//                 "Please enter 'y' for yes or 'n' for no".into()
+//             ));
+//         }
+//     };
+    
+//     // Get start timestamp based on user choice
+//     let start_timestamp: u64 = if use_now {
+//         // Use current UTC time
+//         let now = SystemTime::now()
+//             .duration_since(UNIX_EPOCH)
+//             .map_err(|e| {
+//                 ThisProjectError::InvalidData(format!("System time error: {}", e))
+//             })?;
+        
+//         let timestamp = now.as_secs();
+        
+//         // Display the current time for confirmation
+//         let (year, month, day, hour, minute, second) = timestamp_to_utc_components(timestamp as i64);
+//         println!("\nCurrent UTC time selected: {:04}-{:02}-{:02} {:02}:{:02}:{:02}",
+//             year, month, day, hour, minute, second);
+        
+//         debug_log!("Using current UTC timestamp: {}", timestamp);
+//         timestamp
+//     } else {
+//         // Get custom start date from user
+//         println!("\nEnter project start date:");
+        
+//         // Year input and validation
+//         println!("Enter start year (YYYY):");
+//         print!("> ");
+//         io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+        
+//         let mut year = String::new();
+//         io::stdin().read_line(&mut year).map_err(|e| ThisProjectError::IoError(e))?;
+//         let year: i32 = year.trim().parse().map_err(|_| 
+//             ThisProjectError::InvalidInput("Invalid year".into()))?;
+//         debug_log!("Parsed year: {}", year);
+
+//         // Get current year for validation
+//         let current_timestamp = SystemTime::now()
+//             .duration_since(UNIX_EPOCH)
+//             .map_err(|e| {
+//                 ThisProjectError::InvalidData(format!("System time error: {}", e))
+//             })?
+//             .as_secs() as i64;
+//         let (current_year, _, _, _, _, _) = timestamp_to_utc_components(current_timestamp);
+        
+//         if year < current_year || year > 2100 {
+//             return Err(ThisProjectError::InvalidInput(
+//                 format!("Year must be between {} and 2100", current_year)
+//             ));
+//         }
+
+//         // Month input and validation
+//         println!("Enter start month (1-12):");
+//         print!("> ");
+//         io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+        
+//         let mut month = String::new();
+//         io::stdin().read_line(&mut month).map_err(|e| ThisProjectError::IoError(e))?;
+//         let month: u32 = month.trim().parse().map_err(|_| 
+//             ThisProjectError::InvalidInput("Invalid month".into()))?;
+//         debug_log!("Parsed month: {}", month);
+
+//         if month < 1 || month > 12 {
+//             return Err(ThisProjectError::InvalidInput("Month must be between 1 and 12".into()));
+//         }
+
+//         // Day input and validation with proper month checking
+//         let max_day = get_days_in_month(year, month);
+//         println!("Enter start day (1-{}):", max_day);
+//         print!("> ");
+//         io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+        
+//         let mut day = String::new();
+//         io::stdin().read_line(&mut day).map_err(|e| ThisProjectError::IoError(e))?;
+//         let day: u32 = day.trim().parse().map_err(|_| 
+//             ThisProjectError::InvalidInput("Invalid day".into()))?;
+//         debug_log!("Parsed day: {}", day);
+
+//         if day < 1 || day > max_day {
+//             return Err(ThisProjectError::InvalidInput(
+//                 format!("Day must be between 1 and {} for {}/{}", max_day, year, month)
+//             ));
+//         }
+
+//         // Optional: Ask for time or default to 00:00:00
+//         println!("Enter start time? (y/n, default is 00:00:00 UTC):");
+//         print!("> ");
+//         io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+        
+//         let mut time_choice = String::new();
+//         io::stdin().read_line(&mut time_choice).map_err(|e| ThisProjectError::IoError(e))?;
+        
+//         let (hour, minute) = if time_choice.trim().to_lowercase() == "y" {
+//             // Get hour
+//             println!("Enter hour (0-23):");
+//             print!("> ");
+//             io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+            
+//             let mut hour_input = String::new();
+//             io::stdin().read_line(&mut hour_input).map_err(|e| ThisProjectError::IoError(e))?;
+//             let hour: u32 = hour_input.trim().parse().map_err(|_| 
+//                 ThisProjectError::InvalidInput("Invalid hour".into()))?;
+            
+//             if hour > 23 {
+//                 return Err(ThisProjectError::InvalidInput("Hour must be between 0 and 23".into()));
+//             }
+            
+//             // Get minute
+//             println!("Enter minute (0-59):");
+//             print!("> ");
+//             io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+            
+//             let mut minute_input = String::new();
+//             io::stdin().read_line(&mut minute_input).map_err(|e| ThisProjectError::IoError(e))?;
+//             let minute: u32 = minute_input.trim().parse().map_err(|_| 
+//                 ThisProjectError::InvalidInput("Invalid minute".into()))?;
+            
+//             if minute > 59 {
+//                 return Err(ThisProjectError::InvalidInput("Minute must be between 0 and 59".into()));
+//             }
+            
+//             (hour, minute)
+//         } else {
+//             (0, 0) // Default to midnight
+//         };
+
+//         // Use the accurate timestamp conversion function
+//         let timestamp = utc_components_to_timestamp(year, month, day, hour, minute, 0)?;
+        
+//         // Confirm the selected start time
+//         println!("\nProject start time: {:04}-{:02}-{:02} {:02}:{:02}:00 UTC",
+//             year, month, day, hour, minute);
+        
+//         debug_log!("Calculated start timestamp: {}", timestamp);
+//         timestamp as u64
+//     };
+
+//     // Duration input and validation
+//     println!("\nProject Schedule: Enter project duration in days:");
+//     print!("> ");
+//     io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+//     let mut days = String::new();
+//     io::stdin().read_line(&mut days).map_err(|e| ThisProjectError::IoError(e))?;
+//     let days: u64 = days.trim().parse().map_err(|_| 
+//         ThisProjectError::InvalidInput("Invalid number of days".into()))?;
+//     debug_log!("Parsed days: {}", days);
+    
+//     if days == 0 || days > 3650 { // 10 years max
+//         return Err(ThisProjectError::InvalidInput("Duration must be between 1 and 3650 days".into()));
+//     }
+
+//     // Calculate end timestamp and duration
+//     let seconds_per_day: u64 = 24 * 60 * 60;
+//     let duration_seconds = days * seconds_per_day;
+//     debug_log!("Calculated duration in seconds: {}", duration_seconds);
+
+//     let end_timestamp = start_timestamp + duration_seconds;
+//     debug_log!("Calculated end timestamp: {}", end_timestamp);
+
+//     // Display summary
+//     let (start_year, start_month, start_day, start_hour, start_minute, start_second) = 
+//         timestamp_to_utc_components(start_timestamp as i64);
+//     let (end_year, end_month, end_day, end_hour, end_minute, end_second) = 
+//         timestamp_to_utc_components(end_timestamp as i64);
+    
+//     println!("\nProject Schedule Summary:");
+//     println!("  Start: {:04}-{:02}-{:02} {:02}:{:02}:{:02} UTC", 
+//         start_year, start_month, start_day, start_hour, start_minute, start_second);
+//     println!("  End:   {:04}-{:02}-{:02} {:02}:{:02}:{:02} UTC", 
+//         end_year, end_month, end_day, end_hour, end_minute, end_second);
+//     println!("  Duration: {} days ({} seconds)", days, duration_seconds);
+
+//     // Final validation
+//     if end_timestamp < start_timestamp {
+//         return Err(ThisProjectError::InvalidInput("End time cannot be before start time".into()));
+//     }
+
+//     let result = vec![
+//         start_timestamp,
+//         end_timestamp,
+//         duration_seconds
+//     ];
+//     debug_log!("Returning schedule info: {:?}", result);
+
+//     Ok(result)
+// }
+
+// /// Gets schedule information and converts 
+// /// start_timestamp,
+// /// end_timestamp,
+// /// duration_seconds
+// /// to required format of create_core_node()
+// fn q_and_a_get_pa2_schedule() -> Result<Vec<u64>, ThisProjectError> {
+//     debug_log("starting q_and_a_get_pa2_schedule()");
+
+//     // Duration input and validation
+//     println!("Project Schedule: Enter project duration in days:");
+//     let mut days = String::new();
+//     io::stdin().read_line(&mut days)?;
+//     let days: u64 = days.trim().parse().map_err(|_| 
+//         ThisProjectError::InvalidInput("Invalid number of days".into()))?;
+//     debug_log!("Parsed days: {}", days);
+    
+//     if days == 0 || days > 3650 { // 10 years max
+//         return Err(ThisProjectError::InvalidInput("Duration must be between 1 and 3650 days".into()));
+//     }
+
+//     // Year input and validation
+//     println!("Enter start year (YYYY):");
+//     let mut year = String::new();
+//     io::stdin().read_line(&mut year)?;
+//     let year: u64 = year.trim().parse().map_err(|_| 
+//         ThisProjectError::InvalidInput("Invalid year".into()))?;
+//     debug_log!("Parsed year: {}", year);
+
+//     if year < 2023 || year > 2100 {
+//         return Err(ThisProjectError::InvalidInput("Year must be between 2023 and 2100".into()));
+//     }
+
+//     // Month input and validation
+//     println!("Enter start month (1-12):");
+//     let mut month = String::new();
+//     io::stdin().read_line(&mut month)?;
+//     let month: u64 = month.trim().parse().map_err(|_| 
+//         ThisProjectError::InvalidInput("Invalid month".into()))?;
+//     debug_log!("Parsed month: {}", month);
+
+//     if month < 1 || month > 12 {
+//         return Err(ThisProjectError::InvalidInput("Month must be between 1 and 12".into()));
+//     }
+
+//     // Day input and validation
+//     println!("Enter start day (1-31):");
+//     let mut day = String::new();
+//     io::stdin().read_line(&mut day)?;
+//     let day: u64 = day.trim().parse().map_err(|_| 
+//         ThisProjectError::InvalidInput("Invalid day".into()))?;
+//     debug_log!("Parsed day: {}", day);
+
+//     if day < 1 || day > 31 {
+//         return Err(ThisProjectError::InvalidInput("Day must be between 1 and 31".into()));
+//     }
+
+//     // Time calculations
+//     let seconds_per_day: u64 = 24 * 60 * 60;
+//     let days_since_epoch = (year - 1970) * 365 + ((month - 1) * 30) + (day - 1);
+//     debug_log!("Calculated days since epoch: {}", days_since_epoch);
+
+//     let start_timestamp = days_since_epoch * seconds_per_day;
+//     debug_log!("Calculated start timestamp: {}", start_timestamp);
+    
+//     let duration_seconds = days * seconds_per_day;
+//     debug_log!("Calculated duration in seconds: {}", duration_seconds);
+
+//     let end_timestamp = start_timestamp + duration_seconds;
+//     debug_log!("Calculated end timestamp: {}", end_timestamp);
+
+//     // Final validation
+//     if end_timestamp < start_timestamp {
+//         return Err(ThisProjectError::InvalidInput("End time cannot be before start time".into()));
+//     }
+
+//     let result = vec![
+//         start_timestamp,
+//         end_timestamp,
+//         duration_seconds
+//     ];
+//     debug_log!("Returning schedule info: {:?}", result);
+
+//     Ok(result)
+// }
 
 /// Gets user input for agenda process selection of create_core_node()
 fn q_and_a_get_pa3_users() -> Result<String, ThisProjectError> {
