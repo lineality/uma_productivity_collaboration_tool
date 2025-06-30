@@ -2647,6 +2647,288 @@ fn get_current_unix_timestamp() -> u64 {
 }
 
 
+
+/*
+
+This demo code is only making one set of unique port assignments, but it should be making a sets of port assignment for each collaborator x other collaborators
+
+Here is a sample of what the code should produce (the demo code does not produce this):
+```sample
+teamchannel_collaborators_with_access = ["alice", "bob", "charlotte"]
+# meeting rooms, collaborator_port_assignments
+[abstract_collaborator_port_assignments.alice_bob]
+collaborator_ports = [
+{ user_name = "alice", ready_port = 50001, intray_port = 50002, gotit_port = 50003 },
+{ user_name = "bob", ready_port = 50004, intray_port = 50005, gotit_port = 50006 },
+]
+[abstract_collaborator_port_assignments.alice_charlotte]
+collaborator_ports = [
+{ user_name = "alice", ready_port = 50007, intray_port = 50008, gotit_port = 50009 },
+{ user_name = "charlotte", ready_port = 50010, intray_port = 50011, gotit_port = 50012 },
+]
+[abstract_collaborator_port_assignments.bob_charlotte]
+collaborator_ports = [
+{ user_name = "bob", ready_port = 50013, intray_port = 50014, gotit_port = 50015 },
+{ user_name = "charlotte", ready_port = 50016, intray_port = 50017, gotit_port = 50018 },
+]
+```
+demo code:
+// Generate collaborator port assignments
+let mut abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>> = HashMap::new();
+// Add owner to collaborators list
+let mut collaborators = Vec::new();
+collaborators.push(owner.clone());
+debug_log!(
+"create_team_channel(): owner '{}' added to collaborators",
+owner
+);
+// Generate random ports for the owner
+let mut rng = rand::thread_rng();
+let ready_port = rng.gen_range(40000..60000) as u16;
+let tray_port = rng.gen_range(40000..60000) as u16;
+let gotit_port = rng.gen_range(40000..60000) as u16;
+let abstract_ports_data = AbstractTeamchannelNodeTomlPortsData {
+user_name: owner.clone(),
+ready_port,
+intray_port: tray_port,
+gotit_port,
+};
+debug_log!(
+"create_team_channel(): owner's ports assigned - ready:{}, intray:{}, gotit:{}",
+ready_port, tray_port, gotit_port
+);
+// Store in the HashMap with "owner_owner" key
+abstract_collaborator_port_assignments.insert(
+format!("{}_{}", owner.clone(), owner),
+vec![ReadTeamchannelCollaboratorPortsToml { collaborator_ports: vec![abstract_ports_data] }],
+);
+debug_log!("create_team_channel(): owner added to port assignments");
+// Retrieve project area data
+debug_log!("Retrieving project area data...");
+```
+
+the current code is incomplete, or misconfigured, not generating the collaboration pairs:
+we need pairs of different collaborators:
+"alice_bob" (Alice collaborating with Bob)
+"alice_charlotte" (Alice collaborating with Charlotte)
+"bob_charlotte" (Bob collaborating with Charlotte)
+
+Design factors:
+1. random not sequential ports may be better for security
+2. there will be an exclude-list and a range for generating ports (see below)
+3. There needs to be a user-interface first step step to add collaborators by string input, and checking that each collaborator is in address book (or sub-folder)
+teamchannel_collaborators_with_access = list of collaborators with access (as the name says)
+4. the owner needs to be added along with those that the owner invites. the own IS to be added, not optional.
+
+examples steps:
+1. "Enter the user-names of collaborators you wish to invite separated by commas"
+> user (alice) enters: bob,charlotte,duncan
+The program checks that each name exists only once, e.g. make an alphabetical set. (or set and then an alphabetical string array)
+The owner is just like any other collaborator in terms of the ports, include the owner alphabetically.
+if a string (or more than one) was not in the list, say which it was and ask the user to re-enter the list: "Enter the user-names of collaborators you wish to invite separated by commas"
+
+Checking that users exist works like this (there are a few steps here):
+1. there is an exe-parent/project_graph_data/collaborator_files_address_book/
+directory.
+Code to get directory where addressbook files are:
+```rust
+let collaborator_files_address_book_dir = match make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path(
+"project_graph_data/collaborator_files_address_book"
+) {
+Ok(directory_path) => {
+println!("Team channels directory: {}", directory_path.display());
+directory_path
+}
+Err(io_error) => {
+let error_msg = format!(
+"Failed to ensure team_channels_dir exists: {}",
+io_error
+);
+eprintln!("ERROR: {}", error_msg);
+return Err(ThisProjectError::from(error_msg));
+}
+};
+```
+skip sub directories for now:
+code showing how to find addressbook files
+```rust
+// 1. Construct File Path
+let relative_file_path = Path::new(COLLABORATOR_ADDRESSBOOK_PATH_STR)
+.join(format!("{}__collaborator.toml", collaborator_name));
+// Get the executable-relative base directory path
+let abs_file_path = match make_input_path_name_abs_executabledirectoryrelative_nocheck(
+relative_file_path
+) {
+Ok(path) => path,
+Err(e) => {
+debug_log!("ROCST: Failed to resolve collaborator directory path: {}", e);
+return Err(ThisProjectError::IoError(e));
+}
+};
+```
+
+maybe using the function
+make_input_path_name_abs_executabledirectoryrelative_nocheck()
+and then check if that file exists
+2. adds the current-owner-user to that list
+3. makes version-1 port assignments
+4. should check 'globally' for port collisions...
+if a file cannot be validated, just print a notice (and debug-log a notice) and skip it, don't crash the program.
+
+We will make a new function to create an exclusion list so no ports collide:
+- no ports can collide locally-in-this-team, 100% required.
+- ideally no ports should collide globally, should be feasible but is not required.
+
+So a first dev-task may be to make the new version of check_all_ports_in_team_channels_clearsign_validated() maybe
+make_exclusionlist_check_ports_in_team_channels_clearsign_validated()
+using existing ports as an "exclusion list" when generating new ports, and then double checking to make sure no collisions with self or exclusion list.
+
+the global exclusion list will be made of the ports lists from all team-channels.
+
+The may be a wrapper function 
+global_ports_exclusion_list_generator()
+that uses the 'local'/single exclusion list make to run on all team channels.
+
+e.g.for every team-channel node.toml
+get a list of the team_channel directories:
+- team_channels
+// Ensure the project graph data directory exists relative to the executable
+let team_channels_dir = match make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path(
+"project_graph_data/team_channels"
+) {
+Ok(directory_path) => {
+println!("Team channels directory: {}", directory_path.display());
+directory_path
+}
+Err(io_error) => {
+let error_msg = format!(
+"Failed to ensure team_channels_dir exists: {}",
+io_error
+);
+eprintln!("ERROR: {}", error_msg);
+return Err(ThisProjectError::from(error_msg));
+}
+};
+add .../node.toml to that to get the config files
+
+..
+to sum up
+1. Collect collaborators interactively: Prompt user to enter comma-separated collaborator names
+2. Validate collaborators: Check each collaborator exists in the address book/sub-folder
+3. Include owner: Add the current owner to the collaborator list
+4. Generate pairwise port assignments: Create port assignments for every collaborator pair (not just one global set)
+5. Check global port collisions:
+Create a new function return_checked_ports_in_team_channels_clearsign_validated() [based on existing check_all_ports_in_team_channels_clearsign_validated()]
+Scan all existing team channel node.toml files for used ports
+Ensure new port assignments don't collide with existing ones
+ALL ports across ALL pairs must be globally unique across the entire system
+Retry on collision: If port assignments collide, regenerate until they're unique
+`abstract_collaborator_port_assignments` HashMap should have keys like "alice_bob", "alice_charlotte", "bob_charlotte" with each containing the port data for both collaborators in that pair.
+Each pair of collaborators have unique ports for that pair.
+there is no redundant bob_alice port set. the name order is always the same as the collaborator list.
+Pair Naming Convention: Should the pair names always follow the order they appear in the collaborator list? (e.g., if list is [alice, bob, charlotte], then pairs are alice_bob, alice_charlotte, bob_charlotte)
+Total Pairs: For N collaborators, we generate N*(N-1)/2 unique pairs
+2 collaborators = 1 pair
+3 collaborators = 3 pairs
+4 collaborators = 6 pairs
+etc.
+Port Count: Each pair contains port assignments for both collaborators in that pair, so each pair will have 6 ports total (3 ports × 2 collaborators)
+...
+Generate unique port assignments for every collaborator pair
+Ensure ALL ports are globally unique across the entire system
+Check against existing team channels to prevent any collisions
+since you are using an exclusion-list there should not be a collision. if a collusion happens even though you have an exclusion list show the user a warning and ask if they want to use a list that is locally-in-that-team not-colliding but not-globally-unique (though that can't really happen unless the exclusion list is not functioning)
+with 33k possible ports, a small agile team will be able to use locally in that team unique ports.
+my understanding is that 49152-65535: IANA designated "Dynamic/Private" ports - safest choice, is a safe port range to use.
+of that is full (unlikely) use 32768-65535: Traditional ephemeral range on many Unix systems
+"skip subdirectories" ignore any subdirectories in the address book folder entirely (there are none yet, and maybe won't be any)
+to recap:
+## Scope Confirmation
+### 1. Interactive Collaborator Collection
+- Prompt user to enter comma-separated collaborator names
+- Validate each name exists in `project_graph_data/collaborator_files_address_book/` as `{name}__collaborator.toml`
+- Skip subdirectories entirely in address book folder
+- If any names don't exist, show which ones and re-prompt for the entire list
+- Create alphabetical set (no duplicates)
+- Always include the owner in the final collaborator list
+### 2. Pairwise Port Assignment Generation
+- Generate unique pairs for N collaborators: N*(N-1)/2 pairs
+- Pair naming: alphabetical order from collaborator list (e.g., "alice_bob", "alice_charlotte", "bob_charlotte")
+- Each pair gets 6 unique ports total (3 ports × 2 collaborators)
+- Store in `abstract_collaborator_port_assignments` HashMap with pair names as keys
+### 3. Global Port Collision Prevention
+- Create new function `return_checked_ports_in_team_channels_clearsign_validated()`
+- Scan all existing `project_graph_data/team_channels/ 
+*
+ /node.toml` files for used ports
+- Build exclusion list of all currently used ports across entire system
+- Generate new ports from safe range (49152-65535, fallback to 32768-65535)
+- ALL ports across ALL pairs must be globally unique system-wide
+- If collision occurs despite exclusion list, warn user and offer locally-unique option
+### 4. Error Handling
+- Gracefully handle missing/invalid collaborator files (log and skip, don't crash)
+- Handle file system errors appropriately
+- Provide clear user feedback for validation failures
+### 5. Port Range Strategy
+- Primary: 49152-65535 (IANA Dynamic/Private ports)
+- Fallback: 32768-65535 (Traditional ephemeral range)
+### 6. Data Structure
+The `abstract_collaborator_port_assignments` HashMap structure should look like:
+```
+"alice_bob" -> Vec<ReadTeamchannelCollaboratorPortsToml> with alice and bob's port data
+"alice_charlotte" -> Vec<ReadTeamchannelCollaboratorPortsToml> with alice and charlotte's port data
+"bob_charlotte" -> Vec<ReadTeamchannelCollaboratorPortsToml> with bob and charlotte's port data
+```
+structure:
+[abstract_collaborator_port_assignments.alice_bob]
+collaborator_ports = [
+  { user_name = "alice", ready_port = 50001, intray_port = 50002, gotit_port = 50003 },
+  { user_name = "bob", ready_port = 50004, intray_port = 50005, gotit_port = 50006 },
+]
+
+
+If a single team channel's node.toml fails validation in the exclusion list generator, skip it and continue (adding a warning to logs)
+
+Scope of Ports to Include:
+The exclusion list includes all ports found (ready, intray, gotit)
+the exclusion list only needs the port: if a port is in use, it does not matter who is using it for what, only that it is in use and therefore not available.
+
+
+## Return Type
+**use: `HashSet<u16>`**
+- Since you only need port numbers (not types), a `HashSet<u16>` is ideal
+- Provides O(1) lookup performance when checking if a port is already in use
+- Automatically handles duplicates
+- Perfect for an exclusion list use case
+## Function Structure
+two-function approach:
+### 1. Single Team Channel Function
+```rust
+/// Extracts all ports from a single team channel's node.toml file
+/// Returns a HashSet of all ports found (ready, intray, gotit for all collaborators)
+pub fn make_exclusionlist_from_single_team_channel(
+node_toml_path: &Path,
+collaborator_files_dir_relative: &str,
+) -> Result<HashSet<u16>, ThisProjectError>
+```
+### 2. Global Function (No Parameters)
+```rust
+/// Scans ALL team channels and returns a complete exclusion list of all ports in use
+/// Similar to the original function - takes no parameters and scans everything
+pub fn global_ports_exclusion_list_generator() -> Result<HashSet<u16>, ThisProjectError>
+```
+This matches the pattern of the original function:
+- No parameters needed
+- Automatically determines paths using `make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path()`
+- Walks through ALL team channels in `project_graph_data/team_channels`
+- Hardcodes the collaborator path as `"project_graph_data/collaborator_files_address_book"`
+The global function would internally call the single-channel function for each `node.toml` found, aggregating all ports into one master `HashSet<u16>`.
+...
+
+*/
+
+
+
 /// Checks all ports across all team channels for collisions and usage conflicts.
 ///
 /// # Purpose
@@ -2929,6 +3211,721 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
         Ok(())
     }
 }
+
+/*
+
+*/
+
+
+/// Extracts all ports from a single team channel's node.toml file.
+///
+/// # Purpose
+/// This function reads a clearsigned `node.toml` file from a team channel and extracts
+/// all configured network ports (ready, intray, and gotit ports) for all collaborator
+/// pairs. The extracted ports are returned as a HashSet for efficient lookup when
+/// checking for port collisions.
+///
+/// # Parameters
+/// * `node_toml_path` - The absolute path to the node.toml file to process
+/// * `collaborator_files_dir_relative` - The relative path to the collaborator files
+///   directory (typically "project_graph_data/collaborator_files_address_book")
+///
+/// # Security
+/// - Only processes clearsigned files that pass GPG validation
+/// - Uses the collaborator addressbook system for owner verification
+/// - Returns an empty set if validation fails (with appropriate logging)
+///
+/// # Returns
+/// * `Ok(HashSet<u16>)` - A set of all ports found in the file
+/// * `Err(ThisProjectError)` - If critical errors occur (not validation failures)
+///
+/// # Example
+/// let ports = make_exclusionlist_from_single_team_channel(
+///     Path::new("/path/to/team_channel/node.toml"),
+///     "project_graph_data/collaborator_files_address_book"
+/// )?;
+/// println!("Found {} unique ports in use", ports.len());
+///
+pub fn make_exclusionlist_from_single_team_channel(
+    node_toml_path: &Path,
+    collaborator_files_dir_relative: &str,
+) -> Result<HashSet<u16>, ThisProjectError> {
+    // Initialize the port set
+    let mut port_set: HashSet<u16> = HashSet::new();
+    
+    // Check if the file exists
+    if !node_toml_path.exists() {
+        debug_log!(
+            "make_exclusionlist_from_single_team_channel: File does not exist: {}",
+            node_toml_path.display()
+        );
+        // Return empty set for non-existent files
+        return Ok(port_set);
+    }
+    
+    // Extract channel name for logging
+    let channel_name = node_toml_path
+        .parent()
+        .and_then(|p| p.file_name())
+        .and_then(|n| n.to_str())
+        .unwrap_or("unknown");
+    
+    debug_log!(
+        "make_exclusionlist_from_single_team_channel: Processing channel '{}'",
+        channel_name
+    );
+    
+    // Read and validate the clearsigned configuration
+    match read_all_collaborator_port_assignments_clearsigntoml_optimized(
+        node_toml_path,
+        collaborator_files_dir_relative,
+    ) {
+        Ok(port_assignments) => {
+            debug_log!(
+                "make_exclusionlist_from_single_team_channel: Successfully validated channel '{}'",
+                channel_name
+            );
+            
+            // Extract all ports from all collaborator pairs
+            for (pair_name, assignments) in port_assignments {
+                debug_log!(
+                    "make_exclusionlist_from_single_team_channel: Processing pair '{}'",
+                    pair_name
+                );
+                
+                // Process each collaborator in the pair
+                for assignment in assignments {
+                    // Add all three port types to the set
+                    port_set.insert(assignment.ready_port);
+                    port_set.insert(assignment.intray_port);
+                    port_set.insert(assignment.gotit_port);
+                    
+                    debug_log!(
+                        "make_exclusionlist_from_single_team_channel: Added ports for user '{}': \
+                         ready={}, intray={}, gotit={}",
+                        assignment.user_name,
+                        assignment.ready_port,
+                        assignment.intray_port,
+                        assignment.gotit_port
+                    );
+                }
+            }
+            
+            debug_log!(
+                "make_exclusionlist_from_single_team_channel: Channel '{}' total unique ports: {}",
+                channel_name,
+                port_set.len()
+            );
+        }
+        Err(e) => {
+            // Log the validation failure but don't propagate the error
+            // Return empty set for files that fail validation
+            eprintln!(
+                "WARNING: Skipping channel '{}' due to validation failure: {}",
+                channel_name,
+                e.to_string()
+            );
+            debug_log!(
+                "make_exclusionlist_from_single_team_channel: Validation failed for channel '{}': {}",
+                channel_name,
+                e.to_string()
+            );
+        }
+    }
+    
+    Ok(port_set)
+}
+
+/// Scans ALL team channels and returns a complete exclusion list of all ports in use.
+///
+/// # Purpose
+/// This function provides a comprehensive view of all network ports currently allocated
+/// across all team channels in the project. It's designed to prevent port collisions
+/// when creating new team channels or adding collaborators by maintaining a global
+/// registry of used ports.
+///
+/// # Process
+/// 1. Locates the team channels directory
+/// 2. Walks through all subdirectories looking for `node.toml` files
+/// 3. For each valid team channel found:
+///    - Validates the clearsigned configuration
+///    - Extracts all port assignments
+///    - Adds them to the global exclusion set
+/// 4. Returns the complete set of all ports in use
+///
+/// # Security
+/// - Only includes ports from properly clearsigned and validated configurations
+/// - Skips any channels that fail validation (logs warnings but continues)
+/// - Uses the standard collaborator addressbook for verification
+///
+/// # Error Handling
+/// - Directory access errors are propagated as critical failures
+/// - Individual file validation failures are logged but don't stop the scan
+/// - Returns partial results if some channels can't be processed
+///
+/// # Performance
+/// - Uses HashSet for O(1) lookup performance
+/// - Processes files sequentially to avoid resource contention
+/// - Caches nothing - always provides current state
+///
+/// # Returns
+/// * `Ok(HashSet<u16>)` - Set of all ports currently in use across all channels
+/// * `Err(ThisProjectError)` - If unable to access the team channels directory
+///
+/// # Example
+/// 
+/// match global_ports_exclusion_list_generator() {
+///     Ok(exclusion_list) => {
+///         println!("Total ports in use globally: {}", exclusion_list.len());
+///         // Check if a specific port is available
+///         if !exclusion_list.contains(&50001) {
+///             println!("Port 50001 is available");
+///         }
+///     }
+///     Err(e) => eprintln!("Failed to generate exclusion list: {}", e),
+/// }
+/// 
+pub fn global_ports_exclusion_list_generator() -> Result<HashSet<u16>, ThisProjectError> {
+    println!("=== Generating Global Port Exclusion List ===");
+    
+    // Initialize the global port set
+    let mut global_port_set: HashSet<u16> = HashSet::new();
+    
+    // Set up the team channels directory
+    let team_channels_dir = match make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path(
+        "project_graph_data/team_channels"
+    ) {
+        Ok(directory_path) => {
+            debug_log!(
+                "global_ports_exclusion_list_generator: Team channels directory: {}",
+                directory_path.display()
+            );
+            directory_path
+        }
+        Err(io_error) => {
+            let error_msg = format!(
+                "Failed to access team_channels directory: {}",
+                io_error
+            );
+            eprintln!("ERROR: {}", error_msg);
+            return Err(ThisProjectError::from(error_msg));
+        }
+    };
+    
+    // Set the collaborator files directory path
+    let collaborator_files_dir_relative = "project_graph_data/collaborator_files_address_book";
+    
+    // Statistics tracking
+    let mut channels_processed = 0;
+    let mut channels_skipped = 0;
+    let mut total_ports_found = 0;
+    
+    debug_log!("global_ports_exclusion_list_generator: Starting directory walk...");
+    
+    // Walk through all team channel directories
+    for entry in WalkDir::new(&team_channels_dir)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_dir())
+    {
+        // Skip the root directory itself
+        if entry.path() == team_channels_dir {
+            continue;
+        }
+        
+        // Construct path to node.toml
+        let node_toml_path = entry.path().join("node.toml");
+        
+        // Skip directories without node.toml
+        if !node_toml_path.exists() {
+            continue;
+        }
+        
+        // Extract channel name for logging
+        let channel_name = entry.path()
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown")
+            .to_string();
+        
+        debug_log!(
+            "global_ports_exclusion_list_generator: Processing channel '{}'",
+            channel_name
+        );
+        
+        // Process this channel's ports
+        match make_exclusionlist_from_single_team_channel(
+            &node_toml_path,
+            collaborator_files_dir_relative,
+        ) {
+            Ok(channel_ports) => {
+                let port_count = channel_ports.len();
+                if port_count > 0 {
+                    channels_processed += 1;
+                    total_ports_found += port_count;
+                    
+                    // Merge this channel's ports into the global set
+                    global_port_set.extend(channel_ports);
+                    
+                    debug_log!(
+                        "global_ports_exclusion_list_generator: Channel '{}' contributed {} ports",
+                        channel_name,
+                        port_count
+                    );
+                } else {
+                    channels_skipped += 1;
+                    debug_log!(
+                        "global_ports_exclusion_list_generator: Channel '{}' had no valid ports",
+                        channel_name
+                    );
+                }
+            }
+            Err(e) => {
+                // This shouldn't happen as make_exclusionlist_from_single_team_channel
+                // handles errors gracefully, but log it just in case
+                channels_skipped += 1;
+                eprintln!(
+                    "WARNING: Unexpected error processing channel '{}': {}",
+                    channel_name,
+                    e.to_string()
+                );
+                debug_log!(
+                    "global_ports_exclusion_list_generator: Error processing channel '{}': {}",
+                    channel_name,
+                    e.to_string()
+                );
+            }
+        }
+    }
+    
+    // Print summary
+    println!("\n=== Exclusion List Generation Summary ===");
+    println!("Channels successfully processed: {}", channels_processed);
+    println!("Channels skipped (validation failed or empty): {}", channels_skipped);
+    println!("Total ports found: {}", total_ports_found);
+    println!("Unique ports in exclusion list: {}", global_port_set.len());
+    
+    debug_log!(
+        "global_ports_exclusion_list_generator: Complete. {} unique ports in exclusion list",
+        global_port_set.len()
+    );
+    
+    Ok(global_port_set)
+}
+
+
+/// Interactively collects and validates collaborator names from user input.
+///
+/// # Purpose
+/// This function provides an interactive interface for users to specify which
+/// collaborators should have access to a new team channel. It ensures all
+/// specified collaborators exist in the address book before proceeding.
+///
+/// # Process
+/// 1. Prompts user for comma-separated collaborator names
+/// 2. Validates each name exists as a collaborator file
+/// 3. Re-prompts if any names are invalid
+/// 4. Returns a sorted, deduplicated list of valid collaborators
+///
+/// # Parameters
+/// * `owner` - The owner's name to be included in the final list
+///
+/// # Returns
+/// * `Ok(Vec<String>)` - Alphabetically sorted list of collaborators including owner
+/// * `Err(ThisProjectError)` - If critical errors occur
+///
+/// # Example Interaction
+/// 
+/// Enter the user-names of collaborators you wish to invite separated by commas:
+/// > bob, charlotte, alice, bob
+/// 
+/// ✓ Found collaborator: alice
+/// ✓ Found collaborator: bob
+/// ✓ Found collaborator: charlotte
+/// 
+/// Final collaborator list: ["alice", "bob", "charlotte", "owner"]
+/// 
+pub fn collect_and_validate_collaborators(
+    owner: &str,
+) -> Result<Vec<String>, ThisProjectError> {
+    println!("\n=== Collaborator Setup ===");
+    
+    // Get the collaborator files directory
+    let collaborator_files_dir = match make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path(
+        "project_graph_data/collaborator_files_address_book"
+    ) {
+        Ok(directory_path) => {
+            debug_log!(
+                "collect_and_validate_collaborators: Collaborator directory: {}",
+                directory_path.display()
+            );
+            directory_path
+        }
+        Err(io_error) => {
+            let error_msg = format!(
+                "Failed to access collaborator files directory: {}",
+                io_error
+            );
+            eprintln!("ERROR: {}", error_msg);
+            return Err(ThisProjectError::from(error_msg));
+        }
+    };
+    
+    loop {
+        // Prompt for input
+        print!("Enter the user-names of collaborators you wish to invite separated by commas: ");
+        io::stdout().flush().map_err(|e| {
+            ThisProjectError::from(format!("Failed to flush stdout: {}", e))
+        })?;
+        
+        // Read user input
+        let mut input = String::new();
+        io::stdin().read_line(&mut input).map_err(|e| {
+            ThisProjectError::from(format!("Failed to read user input: {}", e))
+        })?;
+        
+        // Parse input into individual names
+        let mut collaborator_set: HashSet<String> = input
+            .split(',')
+            .map(|s| s.trim().to_lowercase())
+            .filter(|s| !s.is_empty())
+            .collect();
+        
+        // Always include the owner
+        collaborator_set.insert(owner.to_lowercase());
+        
+        // Validate each collaborator
+        let mut invalid_names = Vec::new();
+        let mut valid_names = Vec::new();
+        
+        println!("\nValidating collaborators...");
+        
+        for name in &collaborator_set {
+            // Skip checking the owner (we trust they exist)
+            if name == owner {
+                valid_names.push(name.clone());
+                continue;
+            }
+            
+            // Construct the collaborator file path
+            let collaborator_file = format!("{}__collaborator.toml", name);
+            let file_path = collaborator_files_dir.join(&collaborator_file);
+            
+            // Check if the file exists
+            if file_path.exists() {
+                println!("  ✓ Found collaborator: {}", name);
+                valid_names.push(name.clone());
+                debug_log!(
+                    "collect_and_validate_collaborators: Validated collaborator '{}' at {}",
+                    name,
+                    file_path.display()
+                );
+            } else {
+                println!("  ✗ NOT FOUND: {}", name);
+                invalid_names.push(name.clone());
+                debug_log!(
+                    "collect_and_validate_collaborators: Collaborator '{}' not found at {}",
+                    name,
+                    file_path.display()
+                );
+            }
+        }
+        
+        // Check if all names are valid
+        if invalid_names.is_empty() {
+            // Sort alphabetically and return
+            valid_names.sort();
+            println!("\nFinal collaborator list: {:?}", valid_names);
+            return Ok(valid_names);
+        } else {
+            // Show error and re-prompt
+            eprintln!("\n❌ The following collaborators were not found in the address book:");
+            for name in &invalid_names {
+                eprintln!("   - {}", name);
+            }
+            println!("\nPlease try again with valid collaborator names.\n");
+        }
+    }
+}
+
+/// Generates a unique port not in the exclusion list.
+///
+/// # Parameters
+/// * `rng` - Random number generator
+/// * `exclusion_list` - Set of ports already in use
+/// * `local_used_ports` - Set of ports used locally in this generation session
+/// * `primary_range` - Primary port range to try first (start, end)
+/// * `fallback_range` - Fallback range if primary is exhausted (start, end)
+///
+/// # Returns
+/// * `Ok(u16)` - A unique port number
+/// * `Err(ThisProjectError)` - If no available ports found
+fn generate_unique_port(
+    rng: &mut impl Rng,
+    exclusion_list: &HashSet<u16>,
+    local_used_ports: &HashSet<u16>,
+    primary_range: (u16, u16),
+    fallback_range: (u16, u16),
+) -> Result<u16, ThisProjectError> {
+    // Try primary range first
+    let mut attempts = 0;
+    const MAX_ATTEMPTS: u32 = 1000;
+    
+    while attempts < MAX_ATTEMPTS {
+        let port = rng.gen_range(primary_range.0..=primary_range.1);
+        if !exclusion_list.contains(&port) && !local_used_ports.contains(&port) {
+            return Ok(port);
+        }
+        attempts += 1;
+    }
+    
+    // Try fallback range
+    attempts = 0;
+    while attempts < MAX_ATTEMPTS {
+        let port = rng.gen_range(fallback_range.0..=fallback_range.1);
+        if !exclusion_list.contains(&port) && !local_used_ports.contains(&port) {
+            debug_log!(
+                "generate_unique_port: Using fallback range for port {}",
+                port
+            );
+            return Ok(port);
+        }
+        attempts += 1;
+    }
+    
+    Err(ThisProjectError::from(
+        "Unable to find available port after maximum attempts"
+    ))
+}
+
+/// Generates pairwise port assignments for all collaborators.
+///
+/// # Purpose
+/// Creates unique port assignments for every pair of collaborators in a team channel.
+/// Each pair gets 6 unique ports (3 for each collaborator) that don't conflict with
+/// any existing ports in the system.
+///
+/// # Parameters
+/// * `collaborators` - Sorted list of all collaborators (including owner)
+/// * `exclusion_list` - Set of all ports currently in use globally
+///
+/// # Returns
+/// * `Ok(HashMap)` - Map of pair names to port assignments
+/// * `Err(ThisProjectError)` - If unable to generate unique ports
+///
+/// # Port Ranges
+/// * Primary: 49152-65535 (IANA Dynamic/Private ports)
+/// * Fallback: 32768-65535 (Traditional ephemeral range)
+pub fn generate_pairwise_port_assignments(
+    collaborators: &[String],
+    exclusion_list: &HashSet<u16>,
+) -> Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, ThisProjectError> {
+    println!("\n=== Generating Pairwise Port Assignments ===");
+    
+    let mut port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>> = HashMap::new();
+    let mut local_used_ports: HashSet<u16> = HashSet::new();
+    let mut rng = rand::thread_rng();
+    
+    // Define port ranges
+    const PRIMARY_RANGE: (u16, u16) = (49152, 65535);
+    const FALLBACK_RANGE: (u16, u16) = (32768, 65535);
+    
+    // Calculate total number of pairs
+    let n = collaborators.len();
+    let total_pairs = n * (n - 1) / 2;
+    println!("Generating {} collaboration pairs for {} collaborators", total_pairs, n);
+    
+    // Generate pairs
+    for i in 0..n {
+        for j in (i + 1)..n {
+            let collaborator1 = &collaborators[i];
+            let collaborator2 = &collaborators[j];
+            let pair_name = format!("{}_{}", collaborator1, collaborator2);
+            
+            println!("\nGenerating ports for pair: {}", pair_name);
+            
+            // Generate ports for first collaborator
+            let ready_port1 = generate_unique_port(
+                &mut rng,
+                exclusion_list,
+                &local_used_ports,
+                PRIMARY_RANGE,
+                FALLBACK_RANGE,
+            )?;
+            local_used_ports.insert(ready_port1);
+            
+            let intray_port1 = generate_unique_port(
+                &mut rng,
+                exclusion_list,
+                &local_used_ports,
+                PRIMARY_RANGE,
+                FALLBACK_RANGE,
+            )?;
+            local_used_ports.insert(intray_port1);
+            
+            let gotit_port1 = generate_unique_port(
+                &mut rng,
+                exclusion_list,
+                &local_used_ports,
+                PRIMARY_RANGE,
+                FALLBACK_RANGE,
+            )?;
+            local_used_ports.insert(gotit_port1);
+            
+            // Generate ports for second collaborator
+            let ready_port2 = generate_unique_port(
+                &mut rng,
+                exclusion_list,
+                &local_used_ports,
+                PRIMARY_RANGE,
+                FALLBACK_RANGE,
+            )?;
+            local_used_ports.insert(ready_port2);
+            
+            let intray_port2 = generate_unique_port(
+                &mut rng,
+                exclusion_list,
+                &local_used_ports,
+                PRIMARY_RANGE,
+                FALLBACK_RANGE,
+            )?;
+            local_used_ports.insert(intray_port2);
+            
+            let gotit_port2 = generate_unique_port(
+                &mut rng,
+                exclusion_list,
+                &local_used_ports,
+                PRIMARY_RANGE,
+                FALLBACK_RANGE,
+            )?;
+            local_used_ports.insert(gotit_port2);
+            
+            // Create port assignment structures
+            let ports_data1 = AbstractTeamchannelNodeTomlPortsData {
+                user_name: collaborator1.clone(),
+                ready_port: ready_port1,
+                intray_port: intray_port1,
+                gotit_port: gotit_port1,
+            };
+            
+            let ports_data2 = AbstractTeamchannelNodeTomlPortsData {
+                user_name: collaborator2.clone(),
+                ready_port: ready_port2,
+                intray_port: intray_port2,
+                gotit_port: gotit_port2,
+            };
+            
+            // Store in the HashMap
+            port_assignments.insert(
+                pair_name.clone(),
+                vec![ReadTeamchannelCollaboratorPortsToml {
+                    collaborator_ports: vec![ports_data1, ports_data2],
+                }],
+            );
+            
+            println!("  {} ports: ready={}, intray={}, gotit={}", 
+                collaborator1, ready_port1, intray_port1, gotit_port1);
+            println!("  {} ports: ready={}, intray={}, gotit={}", 
+                collaborator2, ready_port2, intray_port2, gotit_port2);
+            
+            debug_log!(
+                "generate_pairwise_port_assignments: Pair '{}' assigned 6 ports",
+                pair_name
+            );
+        }
+    }
+    
+    // Final verification - ensure no local collisions
+    if local_used_ports.len() != (total_pairs * 6) as usize {
+        let error_msg = format!(
+            "CRITICAL: Local port collision detected! Expected {} unique ports but got {}",
+            total_pairs * 6,
+            local_used_ports.len()
+        );
+        eprintln!("{}", error_msg);
+        return Err(ThisProjectError::from(error_msg));
+    }
+    
+    println!("\n✅ Successfully generated {} unique ports across {} pairs", 
+        local_used_ports.len(), total_pairs);
+    
+    Ok(port_assignments)
+}
+
+/// Main function to create team channel port assignments with global collision prevention.
+///
+/// # Purpose
+/// Orchestrates the complete process of creating port assignments for a new team channel:
+/// 1. Generates global exclusion list
+/// 2. Collects and validates collaborators
+/// 3. Generates pairwise port assignments
+/// 4. Handles collision scenarios
+///
+/// # Parameters
+/// * `owner` - The owner creating the team channel
+///
+/// # Returns
+/// * `Ok((collaborators, port_assignments))` - The validated collaborators and their port assignments
+/// * `Err(ThisProjectError)` - If the process fails
+pub fn create_team_channel_port_assignments(
+    owner: &str,
+) -> Result<(Vec<String>, HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>), ThisProjectError> {
+    println!("\n=== Creating Team Channel Port Assignments ===");
+    println!("Owner: {}", owner);
+    
+    // Step 1: Generate global exclusion list
+    println!("\nStep 1: Checking existing port assignments...");
+    let exclusion_list = match global_ports_exclusion_list_generator() {
+        Ok(ports) => {
+            println!("Found {} ports already in use globally", ports.len());
+            ports
+        }
+        Err(e) => {
+            eprintln!("WARNING: Could not generate global exclusion list: {}", e);
+            eprintln!("Proceeding with empty exclusion list (may cause collisions)");
+            HashSet::new()
+        }
+    };
+    
+    // Step 2: Collect and validate collaborators
+    println!("\nStep 2: Setting up collaborators...");
+    let collaborators = collect_and_validate_collaborators(owner)?;
+    
+    // Step 3: Generate pairwise port assignments
+    println!("\nStep 3: Generating port assignments...");
+    let port_assignments = match generate_pairwise_port_assignments(&collaborators, &exclusion_list) {
+        Ok(assignments) => assignments,
+        Err(e) => {
+            eprintln!("\n❌ Failed to generate globally unique ports: {}", e);
+            
+            // Offer fallback option
+            println!("\nWould you like to proceed with locally unique ports?");
+            println!("(These may conflict with other team channels)");
+            print!("Continue? [y/N]: ");
+            io::stdout().flush().map_err(|e| {
+                ThisProjectError::from(format!("Failed to flush stdout: {}", e))
+            })?;
+            
+            let mut input = String::new();
+            io::stdin().read_line(&mut input).map_err(|e| {
+                ThisProjectError::from(format!("Failed to read user input: {}", e))
+            })?;
+            
+            if input.trim().to_lowercase() == "y" {
+                // Try again with empty exclusion list
+                println!("\nGenerating locally unique ports...");
+                generate_pairwise_port_assignments(&collaborators, &HashSet::new())?
+            } else {
+                return Err(ThisProjectError::from("Port assignment cancelled by user"));
+            }
+        }
+    };
+    
+    println!("\n✅ Team channel port assignments created successfully!");
+    
+    Ok((collaborators, port_assignments))
+}
+
 
 /// Checks if a specific port is currently in use on the system.
 ///
@@ -8147,42 +9144,125 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
         }
     }
 
-    // Generate collaborator port assignments
-    let mut abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>> = HashMap::new();    
+    // // Generate collaborator port assignments
+    // let mut abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>> = HashMap::new();    
 
-    // Add owner to collaborators list
-    let mut collaborators = Vec::new();
-    collaborators.push(owner.clone());
-    debug_log!(
-        "create_team_channel(): owner '{}' added to collaborators",
-        owner
-    );
+    // // Add owner to collaborators list
+    // let mut collaborators = Vec::new();
+    // collaborators.push(owner.clone());
+    // debug_log!(
+    //     "create_team_channel(): owner '{}' added to collaborators",
+    //     owner
+    // );
+    
+    
+    /*
+    full system v1
+    */
+    // Replace the demo code with this:
+    debug_log!("create_team_channel(): Starting port assignment generation for owner '{}'", owner);
 
-    // Generate random ports for the owner
-    let mut rng = rand::thread_rng();
-    let ready_port = rng.gen_range(40000..60000) as u16;
-    let tray_port = rng.gen_range(40000..60000) as u16;
-    let gotit_port = rng.gen_range(40000..60000) as u16;
-    
-    let abstract_ports_data = AbstractTeamchannelNodeTomlPortsData {
-        user_name: owner.clone(), 
-        ready_port,
-        intray_port: tray_port,
-        gotit_port,
-    };    
-    
-    debug_log!(
-        "create_team_channel(): owner's ports assigned - ready:{}, intray:{}, gotit:{}",
-        ready_port, tray_port, gotit_port
-    );
+    // Generate collaborator port assignments with global collision prevention
+    let (collaborators, mut abstract_collaborator_port_assignments) = match create_team_channel_port_assignments(&owner) {
+        Ok((collab_list, port_assigns)) => {
+            debug_log!(
+                "create_team_channel(): Successfully generated port assignments for {} collaborators with {} pairs",
+                collab_list.len(),
+                port_assigns.len()
+            );
+            (collab_list, port_assigns)
+        }
+        Err(e) => {
+            let error_msg = format!(
+                "Failed to create port assignments for team channel: {}",
+                e.to_string()
+            );
+            eprintln!("ERROR: {}", error_msg);
+            return Err(ThisProjectError::from(error_msg));
+        }
+    };
 
-    // Store in the HashMap with "owner_owner" key
-    abstract_collaborator_port_assignments.insert(
-        format!("{}_{}", owner.clone(), owner),
-        vec![ReadTeamchannelCollaboratorPortsToml { collaborator_ports: vec![abstract_ports_data] }],
-    );
+    // Log the results
+    debug_log!("create_team_channel(): Collaborators with access: {:?}", collaborators);
+    for (pair_name, assignments) in &abstract_collaborator_port_assignments {
+        debug_log!("create_team_channel(): Pair '{}' has {} port assignments", 
+            pair_name, 
+            assignments.len()
+        );
+    }
+
+    // Continue with the rest of your team channel creation...
+    debug_log!("Retrieving project area data...");
+        
+            
+    // Generate collaborator port assignments with global collision prevention
+    debug_log!("create_team_channel(): Starting port assignment generation for owner '{}'", owner);
+
+    let (collaborators, abstract_collaborator_port_assignments) = match create_team_channel_port_assignments(&owner) {
+        Ok((collab_list, port_assigns)) => {
+            debug_log!(
+                "create_team_channel(): Successfully generated port assignments for {} collaborators with {} pairs",
+                collab_list.len(),
+                port_assigns.len()
+            );
+            
+            // Log details about each pair
+            for (pair_name, assignments) in &port_assigns {
+                debug_log!("create_team_channel(): Pair '{}':", pair_name);
+                for assignment in &assignments[0].collaborator_ports {
+                    debug_log!(
+                        "  - {}: ready={}, intray={}, gotit={}",
+                        assignment.user_name,
+                        assignment.ready_port,
+                        assignment.intray_port,
+                        assignment.gotit_port
+                    );
+                }
+            }
+            
+            (collab_list, port_assigns)
+        }
+        Err(e) => {
+            let error_msg = format!(
+                "Failed to create port assignments for team channel: {}",
+                e.to_string()
+            );
+            eprintln!("ERROR: {}", error_msg);
+            return Err(ThisProjectError::from(error_msg));
+        }
+    };
+
+    debug_log!("create_team_channel(): Port assignments complete. Collaborators: {:?}", collaborators);
+            
+
+    // // Generate random ports for the owner
+    // let mut rng = rand::thread_rng();
+    // let ready_port = rng.gen_range(40000..60000) as u16;
+    // let tray_port = rng.gen_range(40000..60000) as u16;
+    // let gotit_port = rng.gen_range(40000..60000) as u16;
     
-    debug_log!("create_team_channel(): owner added to port assignments");
+    // let abstract_ports_data = AbstractTeamchannelNodeTomlPortsData {
+    //     user_name: owner.clone(), 
+    //     ready_port,
+    //     intray_port: tray_port,
+    //     gotit_port,
+    // };    
+    
+    // debug_log!(
+    //     "create_team_channel(): owner's ports assigned - ready:{}, intray:{}, gotit:{}",
+    //     ready_port, tray_port, gotit_port
+    // );
+
+    // // Store in the HashMap with "owner_owner" key
+    // abstract_collaborator_port_assignments.insert(
+    //     format!("{}_{}", owner.clone(), owner),
+    //     vec![ReadTeamchannelCollaboratorPortsToml { collaborator_ports: vec![abstract_ports_data] }],
+    // );
+    
+    
+
+    
+    // debug_log!("create_team_channel(): owner added to port assignments");
 
     // Retrieve project area data
     debug_log!("Retrieving project area data...");
