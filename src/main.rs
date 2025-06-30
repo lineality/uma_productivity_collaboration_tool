@@ -3698,6 +3698,160 @@ fn generate_unique_port(
     ))
 }
 
+// /// Generates pairwise port assignments for all collaborators.
+// ///
+// /// # Purpose
+// /// Creates unique port assignments for every pair of collaborators in a team channel.
+// /// Each pair gets 6 unique ports (3 for each collaborator) that don't conflict with
+// /// any existing ports in the system.
+// ///
+// /// # Parameters
+// /// * `collaborators` - Sorted list of all collaborators (including owner)
+// /// * `exclusion_list` - Set of all ports currently in use globally
+// ///
+// /// # Returns
+// /// * `Ok(HashMap)` - Map of pair names to port assignments
+// /// * `Err(ThisProjectError)` - If unable to generate unique ports
+// ///
+// /// # Port Ranges
+// /// * Primary: 49152-65535 (IANA Dynamic/Private ports)
+// /// * Fallback: 32768-65535 (Traditional ephemeral range)
+// pub fn generate_pairwise_port_assignments(
+//     collaborators: &[String],
+//     exclusion_list: &HashSet<u16>,
+// ) -> Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, ThisProjectError> {
+//     println!("\n=== Generating Pairwise Port Assignments ===");
+    
+//     let mut port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>> = HashMap::new();
+//     let mut local_used_ports: HashSet<u16> = HashSet::new();
+//     let mut rng = rand::thread_rng();
+    
+//     // Define port ranges
+//     const PRIMARY_RANGE: (u16, u16) = (49152, 65535);
+//     const FALLBACK_RANGE: (u16, u16) = (32768, 65535);
+    
+//     // Calculate total number of pairs
+//     let n = collaborators.len();
+//     let total_pairs = n * (n - 1) / 2;
+//     println!("Generating {} collaboration pairs for {} collaborators", total_pairs, n);
+    
+//     // Generate pairs
+//     for i in 0..n {
+//         for j in (i + 1)..n {
+//             let collaborator1 = &collaborators[i];
+//             let collaborator2 = &collaborators[j];
+//             let pair_name = format!("{}_{}", collaborator1, collaborator2);
+            
+//             println!("\nGenerating ports for pair: {}", pair_name);
+            
+//             // Generate ports for first collaborator
+//             let ready_port1 = generate_unique_port(
+//                 &mut rng,
+//                 exclusion_list,
+//                 &local_used_ports,
+//                 PRIMARY_RANGE,
+//                 FALLBACK_RANGE,
+//             )?;
+//             local_used_ports.insert(ready_port1);
+            
+//             let intray_port1 = generate_unique_port(
+//                 &mut rng,
+//                 exclusion_list,
+//                 &local_used_ports,
+//                 PRIMARY_RANGE,
+//                 FALLBACK_RANGE,
+//             )?;
+//             local_used_ports.insert(intray_port1);
+            
+//             let gotit_port1 = generate_unique_port(
+//                 &mut rng,
+//                 exclusion_list,
+//                 &local_used_ports,
+//                 PRIMARY_RANGE,
+//                 FALLBACK_RANGE,
+//             )?;
+//             local_used_ports.insert(gotit_port1);
+            
+//             // Generate ports for second collaborator
+//             let ready_port2 = generate_unique_port(
+//                 &mut rng,
+//                 exclusion_list,
+//                 &local_used_ports,
+//                 PRIMARY_RANGE,
+//                 FALLBACK_RANGE,
+//             )?;
+//             local_used_ports.insert(ready_port2);
+            
+//             let intray_port2 = generate_unique_port(
+//                 &mut rng,
+//                 exclusion_list,
+//                 &local_used_ports,
+//                 PRIMARY_RANGE,
+//                 FALLBACK_RANGE,
+//             )?;
+//             local_used_ports.insert(intray_port2);
+            
+//             let gotit_port2 = generate_unique_port(
+//                 &mut rng,
+//                 exclusion_list,
+//                 &local_used_ports,
+//                 PRIMARY_RANGE,
+//                 FALLBACK_RANGE,
+//             )?;
+//             local_used_ports.insert(gotit_port2);
+            
+//             // Create port assignment structures
+//             let ports_data1 = AbstractTeamchannelNodeTomlPortsData {
+//                 user_name: collaborator1.clone(),
+//                 ready_port: ready_port1,
+//                 intray_port: intray_port1,
+//                 gotit_port: gotit_port1,
+//             };
+            
+//             let ports_data2 = AbstractTeamchannelNodeTomlPortsData {
+//                 user_name: collaborator2.clone(),
+//                 ready_port: ready_port2,
+//                 intray_port: intray_port2,
+//                 gotit_port: gotit_port2,
+//             };
+            
+//             // Store in the HashMap
+//             port_assignments.insert(
+//                 pair_name.clone(),
+//                 vec![ReadTeamchannelCollaboratorPortsToml {
+//                     collaborator_ports: vec![ports_data1, ports_data2],
+//                 }],
+//             );
+            
+//             println!("  {} ports: ready={}, intray={}, gotit={}", 
+//                 collaborator1, ready_port1, intray_port1, gotit_port1);
+//             println!("  {} ports: ready={}, intray={}, gotit={}", 
+//                 collaborator2, ready_port2, intray_port2, gotit_port2);
+            
+//             debug_log!(
+//                 "generate_pairwise_port_assignments: Pair '{}' assigned 6 ports",
+//                 pair_name
+//             );
+//         }
+//     }
+    
+//     // Final verification - ensure no local collisions
+//     if local_used_ports.len() != (total_pairs * 6) as usize {
+//         let error_msg = format!(
+//             "CRITICAL: Local port collision detected! Expected {} unique ports but got {}",
+//             total_pairs * 6,
+//             local_used_ports.len()
+//         );
+//         eprintln!("{}", error_msg);
+//         return Err(ThisProjectError::from(error_msg));
+//     }
+    
+//     println!("\n✅ Successfully generated {} unique ports across {} pairs", 
+//         local_used_ports.len(), total_pairs);
+    
+//     Ok(port_assignments)
+// }
+
 /// Generates pairwise port assignments for all collaborators.
 ///
 /// # Purpose
@@ -3815,7 +3969,7 @@ pub fn generate_pairwise_port_assignments(
                 gotit_port: gotit_port2,
             };
             
-            // Store in the HashMap
+            // Store in the HashMap with Vec wrapper (required by CoreNode)
             port_assignments.insert(
                 pair_name.clone(),
                 vec![ReadTeamchannelCollaboratorPortsToml {
