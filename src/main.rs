@@ -443,7 +443,11 @@ to executible-parent-relative-aboslute paths
 */
 const UMA_TOML_CONFIGFILE_PATH_STR: &str = "uma.toml";
 
+/// use:
+/// "project_graph_data/collaborator_files_address_book/{}__collaborator.toml";
+/// "project_graph_data/collaborator_files_address_book/{}__collaborator.gpgtoml";
 const COLLABORATOR_ADDRESSBOOK_PATH_STR: &str = "project_graph_data/collaborator_files_address_book";
+
 
 const CONTINUE_UMA_PATH_STR: &str = "project_graph_data/session_state_items/continue_uma.txt";
 const HARD_RESTART_FLAG_PATH_STR: &str = "project_graph_data/session_state_items/yes_hard_restart_flag.txt";
@@ -924,6 +928,7 @@ fn get_local_ip_addresses() -> Result<Vec<IpAddr>, std::io::Error> {
 ///     Returns ("none", 0) if no valid IP address is found.
 fn get_band__find_valid_network_index_and_type(
     uma_local_owner_user: &str,
+    full_fingerprint_key_id_string: &str,
 ) -> (
     bool, // network_found_ok flag
     String, // network_type
@@ -936,6 +941,7 @@ fn get_band__find_valid_network_index_and_type(
     1. get name of local owner
         paremeter
     2. get local owner file (or fields)
+    COLLABORATOR_ADDRESSBOOK_PATH_STR
     "/project_graph_data/collaborator_files_address_book/{}__collaborator.toml", uma_local_owner_user
     3. look for valid ipv6
         find_valid_local_owner_ipv6_address
@@ -946,7 +952,10 @@ fn get_band__find_valid_network_index_and_type(
     */
 
     // 2. Load IP lists from the collaborator file
-    let (ipv4_addresses, ipv6_addresses) = match load_local_ip_lists(uma_local_owner_user) {
+    let (ipv4_addresses, ipv6_addresses) = match load_local_ip_lists_to_ipvec(
+        uma_local_owner_user,
+        &full_fingerprint_key_id_string,
+        ) {
         Ok(lists) => lists,
         Err(e) => {
             debug_log!("Error loading IP lists: {}. Returning filler values.", e);
@@ -964,7 +973,10 @@ fn get_band__find_valid_network_index_and_type(
     // println!("ipv6_addresses: {:?}", ipv6_addresses);
     // println!("HERE HERE BREAKPOINT 
 
-    let (ipv4_addresses_string, ipv6_addresses_string) = match load_local_iplists_as_stringtype(uma_local_owner_user) {
+    let (ipv4_addresses_string, ipv6_addresses_string) = match load_local_iplists_as_stringtype(
+        uma_local_owner_user,
+        &full_fingerprint_key_id_string,
+        ) {
         Ok(lists) => lists,
         Err(e) => {
             debug_log!("Error loading IP lists as strings: {}", e);
@@ -1058,77 +1070,175 @@ fn find_valid_local_owner_ipv4_address(ipv4_addresses: &[Ipv4Addr]) -> Option<Ip
     None
 }
 
-/// Loads the local user's IPv4 and IPv6 addresses from their collaborator TOML file.
-///
-/// This function reads the collaborator file for the given `owner` and extracts the
-/// `ipv4_addresses` and `ipv6_addresses` fields as strings. It ensures security by requiring
-/// clearsigned validation of the TOML file.
-///
-/// # Security
-/// - REQUIRES cryptographically verified clearsigned TOML files
-/// - Will REJECT files that fail signature verification
-/// - Maintains the integrity of configuration data
-///
-/// # Arguments
-/// * `owner`: The username of the local user.
-///
-/// # Returns
-/// * `Result<(Vec<String>, Vec<String>), ThisProjectError>`: A tuple containing the IPv4 and IPv6 
-///   address lists as strings, or a `ThisProjectError` if an error occurs.
-fn load_local_iplists_as_stringtype(owner: &str) -> Result<(Vec<String>, Vec<String>), ThisProjectError> {
-    // Construct the relative path to the collaborator file
-    let relative_path = format!(
-        "project_graph_data/collaborator_files_address_book/{}__collaborator.toml", 
-        owner
-    );
+// /// Loads the local user's IPv4 and IPv6 addresses from their collaborator TOML file.
+// ///
+// /// This function reads the collaborator file for the given `owner` and extracts the
+// /// `ipv4_addresses` and `ipv6_addresses` fields as strings. It ensures security by requiring
+// /// clearsigned validation of the TOML file.
+// ///
+// /// # Security
+// /// - REQUIRES cryptographically verified clearsigned TOML files
+// /// - Will REJECT files that fail signature verification
+// /// - Maintains the integrity of configuration data
+// ///
+// /// # Arguments
+// /// * `owner`: The username of the local user.
+// ///
+// /// # Returns
+// /// * `Result<(Vec<String>, Vec<String>), ThisProjectError>`: A tuple containing the IPv4 and IPv6 
+// ///   address lists as strings, or a `ThisProjectError` if an error occurs.
+// fn load_local_iplists_as_stringtype(
+//     owner: &str,
+//     full_fingerprint_key_id_string: &str,
+//     ) -> Result<(Vec<String>, Vec<String>), ThisProjectError> {
     
-    // Convert to an absolute path based on executable location
-    let absolute_path = match gpg_make_input_path_name_abs_executabledirectoryrelative_nocheck(&relative_path) {
-        Ok(path) => path.to_string_lossy().to_string(),
-        Err(e) => {
-            return Err(ThisProjectError::IoError(
-                std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    format!("Failed to resolve path for collaborator '{}': {}", owner, e)
-                )
-            ));
-        }
-    };
+//     /*
+//     adding .gpgtoml here:
     
-    // Check if the file exists
-    if !std::path::Path::new(&absolute_path).exists() {
-        return Err(ThisProjectError::IoError(
-            std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                format!("Collaborator file for '{}' not found at: {}", owner, absolute_path)
-            )
-        ));
-    }
+//     check for .gpgtoml 
     
-    // Read IP addresses as strings from the clearsigned TOML file
-    // We use our secure verification function that will fail if verification fails
-    let ipv4_addresses = match read_str_array_field_clearsigntoml(&absolute_path, "ipv4_addresses") {
-        Ok(strings) => strings,
-        Err(e) => {
-            return Err(ThisProjectError::GpgError(
-                format!("Failed to securely read IPv4 addresses from clearsigned file: {}", e)
-            ));
-        }
-    };
     
-    let ipv6_addresses = match read_str_array_field_clearsigntoml(&absolute_path, "ipv6_addresses") {
-        Ok(strings) => strings,
-        Err(e) => {
-            return Err(ThisProjectError::GpgError(
-                format!("Failed to securely read IPv6 addresses from clearsigned file: {}", e)
-            ));
-        }
-    };
+//     // first check:
+//     "project_graph_data/collaborator_files_address_book/{}__collaborator.gpgtoml";
     
-    // Return the string representations of the IP addresses directly
-    // No need to parse them into IP address types since we want strings
-    Ok((ipv4_addresses, ipv6_addresses))
-}
+    
+//     */
+//     // Construct the relative path to the collaborator file
+//     let gpgrelative_path = format!(
+//         "{}/{}__collaborator.gpgtoml",
+//         COLLABORATOR_ADDRESSBOOK_PATH_STR,
+//         owner,
+//     );
+    
+    
+    
+//     // Convert to an absolute path based on executable location
+//     let gpgabsolute_path = match gpg_make_input_path_name_abs_executabledirectoryrelative_nocheck(&gpgrelative_path) {
+//         Ok(path) => path.to_string_lossy().to_string(),
+//         Err(e) => {
+//             return Err(ThisProjectError::IoError(
+//                 std::io::Error::new(
+//                     std::io::ErrorKind::NotFound,
+//                     format!("Failed to resolve path for collaborator '{}': {}", owner, e)
+//                 )
+//             ));
+//         }
+//     };
+    
+//     // Check if the file exists
+//     if !std::path::Path::new(&gpgabsolute_path).exists() {
+//         return Err(ThisProjectError::IoError(
+//             std::io::Error::new(
+//                 std::io::ErrorKind::NotFound,
+//                 format!("Collaborator file for '{}' not found at: {}", owner, gpgabsolute_path)
+//             )
+//         ));
+//     }
+
+//     /*
+//     first try .gpgtoml, if that does not work, default to .toml
+    
+//     1. is .gpgtoml there?
+//     2. use parameter full_fingerprint_key_id_string
+//     2. extract result to temp dir
+//     3. pass path of clearsign-toml to next step
+    
+//     gpg decript ... passphrase?
+//     maybe into a path to an extracted file
+//     run on that extracted file then 
+//     delete temp extracted file
+    
+//     */
+
+//     // Read IP addresses as strings from the clearsigned TOML file
+//     // We use our secure verification function that will fail if verification fails
+//     let ipv4_addresses = match read_str_array_field_clearsigntoml(&absolute_path, "ipv4_addresses") {
+//         Ok(strings) => strings,
+//         Err(e) => {
+//             return Err(ThisProjectError::GpgError(
+//                 format!("Failed to securely read IPv4 addresses from clearsigned file: {}", e)
+//             ));
+//         }
+//     };
+    
+//     let ipv6_addresses = match read_str_array_field_clearsigntoml(&absolute_path, "ipv6_addresses") {
+//         Ok(strings) => strings,
+//         Err(e) => {
+//             return Err(ThisProjectError::GpgError(
+//                 format!("Failed to securely read IPv6 addresses from clearsigned file: {}", e)
+//             ));
+//         }
+//     };
+    
+    
+
+
+
+//     /*
+//     if that doesn't work, do this:
+//     */
+
+//     // Construct the relative path to the collaborator file
+//     let relative_path = format!(
+//         "{}/{}__collaborator.toml",
+//         COLLABORATOR_ADDRESSBOOK_PATH_STR,
+//         owner,
+//     );
+    
+    
+    
+//     // Convert to an absolute path based on executable location
+//     let absolute_path = match gpg_make_input_path_name_abs_executabledirectoryrelative_nocheck(&relative_path) {
+//         Ok(path) => path.to_string_lossy().to_string(),
+//         Err(e) => {
+//             return Err(ThisProjectError::IoError(
+//                 std::io::Error::new(
+//                     std::io::ErrorKind::NotFound,
+//                     format!("Failed to resolve path for collaborator '{}': {}", owner, e)
+//                 )
+//             ));
+//         }
+//     };
+    
+//     // Check if the file exists
+//     if !std::path::Path::new(&absolute_path).exists() {
+//         return Err(ThisProjectError::IoError(
+//             std::io::Error::new(
+//                 std::io::ErrorKind::NotFound,
+//                 format!("Collaborator file for '{}' not found at: {}", owner, absolute_path)
+//             )
+//         ));
+//     }
+    
+    
+    
+    
+//     // Read IP addresses as strings from the clearsigned TOML file
+//     // We use our secure verification function that will fail if verification fails
+//     let ipv4_addresses = match read_str_array_field_clearsigntoml(&absolute_path, "ipv4_addresses") {
+//         Ok(strings) => strings,
+//         Err(e) => {
+//             return Err(ThisProjectError::GpgError(
+//                 format!("Failed to securely read IPv4 addresses from clearsigned file: {}", e)
+//             ));
+//         }
+//     };
+    
+//     let ipv6_addresses = match read_str_array_field_clearsigntoml(&absolute_path, "ipv6_addresses") {
+//         Ok(strings) => strings,
+//         Err(e) => {
+//             return Err(ThisProjectError::GpgError(
+//                 format!("Failed to securely read IPv6 addresses from clearsigned file: {}", e)
+//             ));
+//         }
+//     };
+    
+//     // Return the string representations of the IP addresses directly
+//     // No need to parse them into IP address types since we want strings
+//     Ok((ipv4_addresses, ipv6_addresses))
+// }
+
+
 
 // /// Loads the local user's IPv4 and IPv6 addresses from their collaborator TOML file.
 // ///
@@ -1168,28 +1278,347 @@ fn load_local_iplists_as_stringtype(owner: &str) -> Result<(Vec<String>, Vec<Str
 //     Ok((ipv4_addresses, ipv6_addresses))
 // }
 
+// /// Loads the local user's IPv4 and IPv6 addresses from their collaborator TOML file.
+// ///
+// /// This function reads the collaborator file for the given `owner` and extracts the
+// /// `ipv4_addresses` and `ipv6_addresses` fields. It ensures security by requiring
+// /// clearsigned validation of the TOML file.
+// ///
+// /// # Security
+// /// - REQUIRES cryptographically verified clearsigned TOML files
+// /// - Will REJECT files that fail signature verification
+// /// - Will NOT fall back to reading unsigned files
+// ///
+// /// # Arguments
+// /// * `owner`: The username of the local user.
+// ///
+// /// # Returns
+// /// * `Result<(Vec<Ipv4Addr>, Vec<Ipv6Addr>), ThisProjectError>`: A tuple containing the IPv4 and IPv6 
+// ///   address lists, or a `ThisProjectError` if an error occurs.
+// fn load_local_ip_lists_to_ipvec(
+//     owner: &str,
+//     full_fingerprint_key_id_string: &str,
+//     ) -> Result<(Vec<Ipv4Addr>, Vec<Ipv6Addr>), ThisProjectError> {
+//     // Construct the relative path to the collaborator file
+//     let relative_path = format!(
+//         "{}/{}__collaborator.toml",
+//         COLLABORATOR_ADDRESSBOOK_PATH_STR,
+//         owner
+//     );
+    
+//     // Convert to an absolute path based on executable location
+//     let absolute_path = match gpg_make_input_path_name_abs_executabledirectoryrelative_nocheck(&relative_path) {
+//         Ok(path) => path.to_string_lossy().to_string(),
+//         Err(e) => {
+//             return Err(ThisProjectError::IoError(
+//                 std::io::Error::new(
+//                     std::io::ErrorKind::NotFound,
+//                     format!("Failed to resolve path for collaborator '{}': {}", owner, e)
+//                 )
+//             ));
+//         }
+//     };
+    
+//     // Check if the file exists
+//     if !std::path::Path::new(&absolute_path).exists() {
+//         return Err(ThisProjectError::IoError(
+//             std::io::Error::new(
+//                 std::io::ErrorKind::NotFound,
+//                 format!("Collaborator file for '{}' not found at: {}", owner, absolute_path)
+//             )
+//         ));
+//     }
+    
+//     // Read IP addresses from the clearsigned TOML file
+//     // This will fail if the file is not clearsigned or fails verification
+//     let ipv4_strings = match read_str_array_field_clearsigntoml(&absolute_path, "ipv4_addresses") {
+//         Ok(strings) => strings,
+//         Err(e) => {
+//             return Err(ThisProjectError::GpgError(
+//                 format!("Failed to securely read IPv4 addresses from clearsigned file: {}", e)
+//             ));
+//         }
+//     };
+    
+//     let ipv6_strings = match read_str_array_field_clearsigntoml(&absolute_path, "ipv6_addresses") {
+//         Ok(strings) => strings,
+//         Err(e) => {
+//             return Err(ThisProjectError::GpgError(
+//                 format!("Failed to securely read IPv6 addresses from clearsigned file: {}", e)
+//             ));
+//         }
+//     };
+    
+//     // Parse the string values into IP address types
+//     let mut ipv4_addresses = Vec::new();
+//     for ip_str in ipv4_strings {
+//         match ip_str.parse::<Ipv4Addr>() {
+//             Ok(addr) => ipv4_addresses.push(addr),
+//             Err(e) => {
+//                 println!("Warning: Invalid IPv4 address '{}': {}", ip_str, e);
+//             }
+//         }
+//     }
+    
+//     let mut ipv6_addresses = Vec::new();
+//     for ip_str in ipv6_strings {
+//         match ip_str.parse::<Ipv6Addr>() {
+//             Ok(addr) => ipv6_addresses.push(addr),
+//             Err(e) => {
+//                 println!("Warning: Invalid IPv6 address '{}': {}", ip_str, e);
+//             }
+//         }
+//     }
+    
+//     // Return the collected IP addresses
+//     Ok((ipv4_addresses, ipv6_addresses))
+// }
+
+
+// use std::net::{Ipv4Addr, Ipv6Addr};
+// use std::path::{Path, PathBuf};
+// use std::fs;
+// use std::io::{self, Write};
+
+/// Securely extracts a GPG-encrypted clearsigned TOML file to a temporary location.
+///
+/// This function decrypts a GPG-encrypted file using the specified key fingerprint and
+/// writes the decrypted content to a temporary file with restricted permissions. The
+/// temporary file path is returned for further processing.
+///
+/// # Security
+/// - Creates temporary files with restricted permissions (owner-only access)
+/// - Uses unique filenames to prevent race conditions
+/// - Ensures cross-platform compatibility for file permissions
+/// - Caller is responsible for deleting the temporary file
+///
+/// # Arguments
+/// * `gpg_encrypted_path` - Absolute path to the GPG-encrypted file
+/// * `full_fingerprint_key_id_string` - Full GPG key fingerprint for decryption
+/// * `owner` - Username for generating unique temp filename
+///
+/// # Returns
+/// * `Result<PathBuf, ThisProjectError>` - Path to the temporary decrypted file
+fn decrypt_gpgtoml_to_temp_file_secure(
+    gpg_encrypted_path: &str,
+    full_fingerprint_key_id_string: &str,
+    owner: &str,
+) -> Result<PathBuf, ThisProjectError> {
+    // Verify the encrypted file exists
+    if !Path::new(gpg_encrypted_path).exists() {
+        return Err(ThisProjectError::IoError(
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("GPG encrypted file not found: {}", gpg_encrypted_path)
+            )
+        ));
+    }
+
+    // Generate a unique temporary filename
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| ThisProjectError::IoError(
+            io::Error::new(io::ErrorKind::Other, format!("Time error: {}", e))
+        ))?
+        .as_nanos();
+    
+    let temp_filename = format!("gpg_decrypt_{}_{}.toml", owner, timestamp);
+    let temp_dir = std::env::temp_dir();
+    let temp_path = temp_dir.join(&temp_filename);
+
+    // Decrypt the GPG file using the gpg command
+    let output = std::process::Command::new("gpg")
+        .arg("--quiet")
+        .arg("--batch")
+        .arg("--yes")
+        .arg("--local-user")
+        .arg(full_fingerprint_key_id_string)
+        .arg("--decrypt")
+        .arg(gpg_encrypted_path)
+        .output()
+        .map_err(|e| ThisProjectError::GpgError(
+            format!("Failed to execute GPG decrypt command: {}", e)
+        ))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(ThisProjectError::GpgError(
+            format!("GPG decryption failed: {}", stderr)
+        ));
+    }
+
+    // Create the temporary file with restricted permissions
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .mode(0o600) // Owner read/write only
+            .open(&temp_path)
+            .map_err(|e| ThisProjectError::IoError(
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("Failed to create secure temp file: {}", e)
+                )
+            ))?;
+        
+        file.write_all(&output.stdout)
+            .map_err(|e| ThisProjectError::IoError(
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("Failed to write decrypted content: {}", e)
+                )
+            ))?;
+    }
+    
+    #[cfg(not(unix))]
+    {
+        // On Windows, files in temp directory are typically user-restricted by default
+        fs::write(&temp_path, &output.stdout)
+            .map_err(|e| ThisProjectError::IoError(
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("Failed to write decrypted content: {}", e)
+                )
+            ))?;
+    }
+
+    Ok(temp_path)
+}
+
+/// Attempts to read IP addresses from a GPG-encrypted clearsigned TOML file.
+///
+/// This function tries to decrypt and read a .gpgtoml file if it exists. It handles
+/// the entire process including decryption, reading, and cleanup of temporary files.
+///
+/// # Security
+/// - Decrypts to a temporary file with restricted permissions
+/// - Ensures temporary file cleanup even on error
+/// - Validates clearsigned content after decryption
+///
+/// # Arguments
+/// * `owner` - Username to locate the collaborator file
+/// * `full_fingerprint_key_id_string` - GPG key fingerprint for decryption
+///
+/// # Returns
+/// * `Result<Option<(Vec<String>, Vec<String>)>, ThisProjectError>` - IP addresses if successful,
+///   None if .gpgtoml doesn't exist
+fn try_read_iplists_from_gpg_encrypted_collaborator_file(
+    owner: &str,
+    full_fingerprint_key_id_string: &str,
+) -> Result<Option<(Vec<String>, Vec<String>)>, ThisProjectError> {
+    // Construct path to GPG encrypted file
+    let gpg_relative_path = format!(
+        "{}/{}__collaborator.gpgtoml",
+        COLLABORATOR_ADDRESSBOOK_PATH_STR,
+        owner,
+    );
+    
+    // Convert to absolute path
+    let gpg_absolute_path = match gpg_make_input_path_name_abs_executabledirectoryrelative_nocheck(&gpg_relative_path) {
+        Ok(path) => path.to_string_lossy().to_string(),
+        Err(_) => return Ok(None), // GPG file doesn't exist, return None
+    };
+    
+    // Check if GPG encrypted file exists
+    if !Path::new(&gpg_absolute_path).exists() {
+        return Ok(None); // No GPG file, will fall back to regular clearsign
+    }
+
+    // Decrypt to temporary file
+    let temp_path = match decrypt_gpgtoml_to_temp_file_secure(
+        &gpg_absolute_path,
+        full_fingerprint_key_id_string,
+        owner
+    ) {
+        Ok(path) => path,
+        Err(e) => {
+            // Log the error but return None to allow fallback
+            eprintln!("Warning: Failed to decrypt GPG file for {}: {}", owner, e);
+            return Ok(None);
+        }
+    };
+
+    // Ensure cleanup happens regardless of success or failure
+    let cleanup_temp_file = |path: &Path| {
+        if let Err(e) = fs::remove_file(path) {
+            eprintln!("Warning: Failed to remove temporary file {}: {}", path.display(), e);
+        }
+    };
+
+    // Read from the decrypted clearsigned TOML file
+    let temp_path_str = temp_path.to_string_lossy().to_string();
+    
+    let ipv4_addresses = match read_str_array_field_clearsigntoml(&temp_path_str, "ipv4_addresses") {
+        Ok(addrs) => addrs,
+        Err(e) => {
+            cleanup_temp_file(&temp_path);
+            return Err(ThisProjectError::GpgError(
+                format!("Failed to read IPv4 addresses from decrypted file: {}", e)
+            ));
+        }
+    };
+    
+    let ipv6_addresses = match read_str_array_field_clearsigntoml(&temp_path_str, "ipv6_addresses") {
+        Ok(addrs) => addrs,
+        Err(e) => {
+            cleanup_temp_file(&temp_path);
+            return Err(ThisProjectError::GpgError(
+                format!("Failed to read IPv6 addresses from decrypted file: {}", e)
+            ));
+        }
+    };
+
+    // Clean up temporary file
+    cleanup_temp_file(&temp_path);
+
+    Ok(Some((ipv4_addresses, ipv6_addresses)))
+}
+
 /// Loads the local user's IPv4 and IPv6 addresses from their collaborator TOML file.
 ///
 /// This function reads the collaborator file for the given `owner` and extracts the
-/// `ipv4_addresses` and `ipv6_addresses` fields. It ensures security by requiring
+/// `ipv4_addresses` and `ipv6_addresses` fields as strings. It ensures security by requiring
 /// clearsigned validation of the TOML file.
 ///
 /// # Security
 /// - REQUIRES cryptographically verified clearsigned TOML files
 /// - Will REJECT files that fail signature verification
-/// - Will NOT fall back to reading unsigned files
+/// - Maintains the integrity of configuration data
+/// - Attempts to use GPG-encrypted files first for enhanced security
+/// - Falls back to regular clearsigned files if GPG version unavailable
+///
+/// # Process
+/// 1. First attempts to read from a GPG-encrypted clearsigned file (.gpgtoml)
+/// 2. If .gpgtoml doesn't exist or fails, falls back to regular clearsigned file (.toml)
+/// 3. All files must be cryptographically verified (clearsigned)
 ///
 /// # Arguments
-/// * `owner`: The username of the local user.
+/// * `owner` - The username of the local user
+/// * `full_fingerprint_key_id_string` - GPG key fingerprint for decrypting .gpgtoml files
 ///
 /// # Returns
-/// * `Result<(Vec<Ipv4Addr>, Vec<Ipv6Addr>), ThisProjectError>`: A tuple containing the IPv4 and IPv6 
-///   address lists, or a `ThisProjectError` if an error occurs.
-fn load_local_ip_lists(owner: &str) -> Result<(Vec<Ipv4Addr>, Vec<Ipv6Addr>), ThisProjectError> {
-    // Construct the relative path to the collaborator file
+/// * `Result<(Vec<String>, Vec<String>), ThisProjectError>` - A tuple containing the IPv4 and IPv6 
+///   address lists as strings, or a `ThisProjectError` if an error occurs
+fn load_local_iplists_as_stringtype(
+    owner: &str,
+    full_fingerprint_key_id_string: &str,
+) -> Result<(Vec<String>, Vec<String>), ThisProjectError> {
+    // First, try to read from GPG encrypted file
+    match try_read_iplists_from_gpg_encrypted_collaborator_file(owner, full_fingerprint_key_id_string)? {
+        Some(ip_lists) => return Ok(ip_lists),
+        None => {
+            // GPG file doesn't exist or failed, proceed with regular clearsigned file
+        }
+    }
+
+    // Fall back to regular clearsigned TOML file
     let relative_path = format!(
-        "project_graph_data/collaborator_files_address_book/{}__collaborator.toml", 
-        owner
+        "{}/{}__collaborator.toml",
+        COLLABORATOR_ADDRESSBOOK_PATH_STR,
+        owner,
     );
     
     // Convert to an absolute path based on executable location
@@ -1210,14 +1639,14 @@ fn load_local_ip_lists(owner: &str) -> Result<(Vec<Ipv4Addr>, Vec<Ipv6Addr>), Th
         return Err(ThisProjectError::IoError(
             std::io::Error::new(
                 std::io::ErrorKind::NotFound,
-                format!("Collaborator file for '{}' not found at: {}", owner, absolute_path)
+                format!("No collaborator file found for '{}'. Checked both .gpgtoml and .toml", owner)
             )
         ));
     }
     
-    // Read IP addresses from the clearsigned TOML file
-    // This will fail if the file is not clearsigned or fails verification
-    let ipv4_strings = match read_str_array_field_clearsigntoml(&absolute_path, "ipv4_addresses") {
+    // Read IP addresses as strings from the clearsigned TOML file
+    // We use our secure verification function that will fail if verification fails
+    let ipv4_addresses = match read_str_array_field_clearsigntoml(&absolute_path, "ipv4_addresses") {
         Ok(strings) => strings,
         Err(e) => {
             return Err(ThisProjectError::GpgError(
@@ -1226,7 +1655,7 @@ fn load_local_ip_lists(owner: &str) -> Result<(Vec<Ipv4Addr>, Vec<Ipv6Addr>), Th
         }
     };
     
-    let ipv6_strings = match read_str_array_field_clearsigntoml(&absolute_path, "ipv6_addresses") {
+    let ipv6_addresses = match read_str_array_field_clearsigntoml(&absolute_path, "ipv6_addresses") {
         Ok(strings) => strings,
         Err(e) => {
             return Err(ThisProjectError::GpgError(
@@ -1235,13 +1664,50 @@ fn load_local_ip_lists(owner: &str) -> Result<(Vec<Ipv4Addr>, Vec<Ipv6Addr>), Th
         }
     };
     
+    // Return the string representations of the IP addresses directly
+    Ok((ipv4_addresses, ipv6_addresses))
+}
+
+/// Loads the local user's IPv4 and IPv6 addresses from their collaborator TOML file.
+///
+/// This function reads the collaborator file for the given `owner` and extracts the
+/// `ipv4_addresses` and `ipv6_addresses` fields. It ensures security by requiring
+/// clearsigned validation of the TOML file.
+///
+/// # Security
+/// - REQUIRES cryptographically verified clearsigned TOML files
+/// - Will REJECT files that fail signature verification
+/// - Will NOT fall back to reading unsigned files
+/// - Attempts to use GPG-encrypted files first for enhanced security
+/// - Falls back to regular clearsigned files if GPG version unavailable
+///
+/// # Process
+/// 1. First attempts to read from a GPG-encrypted clearsigned file (.gpgtoml)
+/// 2. If .gpgtoml doesn't exist or fails, falls back to regular clearsigned file (.toml)
+/// 3. Parses string IP addresses into strongly-typed Ipv4Addr and Ipv6Addr
+/// 4. Invalid IP addresses are logged as warnings but don't fail the operation
+///
+/// # Arguments
+/// * `owner` - The username of the local user
+/// * `full_fingerprint_key_id_string` - GPG key fingerprint for decrypting .gpgtoml files
+///
+/// # Returns
+/// * `Result<(Vec<Ipv4Addr>, Vec<Ipv6Addr>), ThisProjectError>` - A tuple containing the IPv4 and IPv6 
+///   address lists, or a `ThisProjectError` if an error occurs
+fn load_local_ip_lists_to_ipvec(
+    owner: &str,
+    full_fingerprint_key_id_string: &str,
+) -> Result<(Vec<Ipv4Addr>, Vec<Ipv6Addr>), ThisProjectError> {
+    // Get IP addresses as strings (handles GPG decryption and fallback internally)
+    let (ipv4_strings, ipv6_strings) = load_local_iplists_as_stringtype(owner, full_fingerprint_key_id_string)?;
+    
     // Parse the string values into IP address types
     let mut ipv4_addresses = Vec::new();
     for ip_str in ipv4_strings {
         match ip_str.parse::<Ipv4Addr>() {
             Ok(addr) => ipv4_addresses.push(addr),
             Err(e) => {
-                println!("Warning: Invalid IPv4 address '{}': {}", ip_str, e);
+                println!("Warning: Invalid IPv4 address '{}' for user '{}': {}", ip_str, owner, e);
             }
         }
     }
@@ -1251,7 +1717,7 @@ fn load_local_ip_lists(owner: &str) -> Result<(Vec<Ipv4Addr>, Vec<Ipv6Addr>), Th
         match ip_str.parse::<Ipv6Addr>() {
             Ok(addr) => ipv6_addresses.push(addr),
             Err(e) => {
-                println!("Warning: Invalid IPv6 address '{}': {}", ip_str, e);
+                println!("Warning: Invalid IPv6 address '{}' for user '{}': {}", ip_str, owner, e);
             }
         }
     }
@@ -1259,6 +1725,7 @@ fn load_local_ip_lists(owner: &str) -> Result<(Vec<Ipv4Addr>, Vec<Ipv6Addr>), Th
     // Return the collected IP addresses
     Ok((ipv4_addresses, ipv6_addresses))
 }
+
 
 // /// Reads IP addresses from a collaborator's TOML file.
 // ///
@@ -1382,7 +1849,7 @@ fn load_local_ip_lists(owner: &str) -> Result<(Vec<Ipv4Addr>, Vec<Ipv6Addr>), Th
 // /// # Returns
 // ///
 // /// * `Result<(Vec<Ipv4Addr>, Vec<Ipv6Addr>), ThisProjectError>`: A tuple containing the IPv4 and IPv6 address lists, or a `ThisProjectError` if an error occurs.
-// fn load_local_ip_lists(owner: &str) -> Result<(Vec<Ipv4Addr>, Vec<Ipv6Addr>), ThisProjectError> {
+// fn load_local_ip_lists_to_ipvec(owner: &str) -> Result<(Vec<Ipv4Addr>, Vec<Ipv6Addr>), ThisProjectError> {
     
 //     /*
 //     1. make path to clearsign toml
@@ -2085,7 +2552,7 @@ Seri_Deseri Deserialize From .toml Start
 // /// Deserialization: The process of converting a textual representation (like a TOML file) into a data structure (like your CollaboratorTomlData struct).
 // /// 
 // /// This function reads and parses TOML files located in the directory 
-// /// `project_graph_data/collaborator_files_address_book`. Each file is expected to 
+// /// `COLLABORATOR_ADDRESSBOOK_PATH_STR`. Each file is expected to 
 // /// contain data for a single collaborator in a structure that can be mapped to 
 // /// the `CollaboratorTomlData` struct.
 // ///
@@ -2121,7 +2588,7 @@ Seri_Deseri Deserialize From .toml Start
 // /// Reads collaborator setup data from a TOML file for a specific user.
 // ///
 // /// This function reads and parses a TOML file located at 
-// /// `project_graph_data/collaborator_files_address_book/{collaborator_name}__collaborator.toml`.
+// /// `COLLABORATOR_ADDRESSBOOK_PATH_STR/{collaborator_name}__collaborator.toml`.
 // /// The file is expected to contain data for a single collaborator in a structure that 
 // /// can be mapped to the `CollaboratorTomlData` struct.
 // ///
@@ -2728,12 +3195,12 @@ The owner is just like any other collaborator in terms of the ports, include the
 if a string (or more than one) was not in the list, say which it was and ask the user to re-enter the list: "Enter the user-names of collaborators you wish to invite separated by commas"
 
 Checking that users exist works like this (there are a few steps here):
-1. there is an exe-parent/project_graph_data/collaborator_files_address_book/
+1. there is an exe-parent/COLLABORATOR_ADDRESSBOOK_PATH_STR/
 directory.
 Code to get directory where addressbook files are:
 ```rust
 let collaborator_files_address_book_dir = match make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path(
-"project_graph_data/collaborator_files_address_book"
+COLLABORATOR_ADDRESSBOOK_PATH_STR
 ) {
 Ok(directory_path) => {
 println!("Team channels directory: {}", directory_path.display());
@@ -2921,7 +3388,7 @@ This matches the pattern of the original function:
 - No parameters needed
 - Automatically determines paths using `make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path()`
 - Walks through ALL team channels in `project_graph_data/team_channels`
-- Hardcodes the collaborator path as `"project_graph_data/collaborator_files_address_book"`
+- Hardcodes the collaborator path as COLLABORATOR_ADDRESSBOOK_PATH_STR
 The global function would internally call the single-channel function for each `node.toml` found, aggregating all ports into one master `HashSet<u16>`.
 ...
 
@@ -3014,7 +3481,7 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
     };
     
     // Get collaborator files directory for addressbook lookups
-    let collaborator_files_dir_relative = "project_graph_data/collaborator_files_address_book";
+    let collaborator_files_dir_relative = COLLABORATOR_ADDRESSBOOK_PATH_STR;
     
     // --- Stage 2: Initialize Tracking Structures ---
     
@@ -3228,7 +3695,7 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
 /// # Parameters
 /// * `node_toml_path` - The absolute path to the node.toml file to process
 /// * `collaborator_files_dir_relative` - The relative path to the collaborator files
-///   directory (typically "project_graph_data/collaborator_files_address_book")
+///   directory (typically COLLABORATOR_ADDRESSBOOK_PATH_STR)
 ///
 /// # Security
 /// - Only processes clearsigned files that pass GPG validation
@@ -3242,7 +3709,7 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
 /// # Example
 /// let ports = make_exclusionlist_from_single_team_channel(
 ///     Path::new("/path/to/team_channel/node.toml"),
-///     "project_graph_data/collaborator_files_address_book"
+///     COLLABORATOR_ADDRESSBOOK_PATH_STR
 /// )?;
 /// println!("Found {} unique ports in use", ports.len());
 ///
@@ -3413,7 +3880,7 @@ pub fn global_ports_exclusion_list_generator() -> Result<HashSet<u16>, ThisProje
     };
     
     // Set the collaborator files directory path
-    let collaborator_files_dir_relative = "project_graph_data/collaborator_files_address_book";
+    let collaborator_files_dir_relative = COLLABORATOR_ADDRESSBOOK_PATH_STR;
     
     // Statistics tracking
     let mut channels_processed = 0;
@@ -3552,7 +4019,7 @@ pub fn collect_and_validate_collaborators(
     
     // Get the collaborator files directory
     let collaborator_files_dir = match make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path(
-        "project_graph_data/collaborator_files_address_book"
+        COLLABORATOR_ADDRESSBOOK_PATH_STR
     ) {
         Ok(directory_path) => {
             debug_log!(
@@ -6694,8 +7161,9 @@ pub fn add_collaborator_setup_file(
     
     // Construct the relative path to the collaborator file
     let relative_path = format!(
-        "project_graph_data/collaborator_files_address_book/{}__collaborator.toml", 
-        collaborator.user_name
+        "{}/{}__collaborator.toml",
+        COLLABORATOR_ADDRESSBOOK_PATH_STR,
+        collaborator.user_name,
     );
     
     // Convert the relative path to an absolute path based on the executable's directory
@@ -7234,12 +7702,15 @@ impl GraphNavigationInstanceState {
                 debug_log!("Error reading file metadata: {}", e);
             }
         }
-
+        
+        debug_log("In nav_graph_look_read_node_toml(), next calling: load_core_node_from_toml_file(file_path: &Path) -> Result<CoreNode");
         // Try to open and read the file
         match fs::read_to_string(&node_toml_path) {
             Ok(contents) => {
                 debug_log!("Successfully read file, content length: {}", contents.len());
                 
+                
+                // here here? 
                 // Load and parse the node.toml file
                 let this_node = match load_core_node_from_toml_file(&node_toml_path) { 
                     Ok(node) => node,
@@ -8810,6 +9281,22 @@ should not use any 3rd party crates
 /// * `Result<CoreNode, String>` - `Ok(CoreNode)` if the node is successfully loaded,
 ///    `Err(String)` containing an error message if an error occurs. 
 fn load_core_node_from_toml_file(file_path: &Path) -> Result<CoreNode, String> {
+    
+    /*
+    1. updating Nodes: Plan A
+    -> fn load_core_node_from_toml_file
+
+    - add feature to look first for and optionally read .gpgtoml for addressbook files
+    - add identification of local owner user addressbook file
+    - select key for self-decrypt for local owner user .gpgtoml
+    - maybe need to add that to app/navigation state?
+    - feature to enable headless OS enter passphrase for local owner user .gpgtoml
+    - add feature to save .gpgtoml format of addressbook file (e.g. in invite/update)
+
+    - functions to read each field of clearsigned node
+    - adding new 'modular message-post' fields to navigation state
+
+    */
     
     debug_log!(
         "Starting: load_core_node_from_toml_file(), file_path -> {:?}",
@@ -13946,7 +14433,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
 
 
     // assumes 'project_graph_directory' path is exe-parent based
-    // Ensure project_graph_data/collaborator_files_address_book directory exists
+    // Ensure COLLABORATOR_ADDRESSBOOK_PATH_STR directory exists
     let collaborator_files_address_book_dir = project_graph_directory.join("collaborator_files_address_book");
     if !collaborator_files_address_book_dir.exists() {
         fs::create_dir_all(&collaborator_files_address_book_dir).expect("Failed to create collaborator_files_address_book directory");
@@ -14019,7 +14506,10 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
     debug_log("let number_of_team_channels = fs::read_dir(&team_channels_dir)");
 
     // if !dir_at_path_is_empty_returns_false(COLLABORATOR_ADDRESSBOOK_PATH_STR) {
-    debug_log("if !dir_at_path_is_empty_returns_false(Path::new(project_graph_data/collaborator_files_address_book)) { ");
+    debug_log!(
+        "if !dir_at_path_is_empty_returns_false(Path::new({})) ",
+        COLLABORATOR_ADDRESSBOOK_PATH_STR,
+    );
         
         
     // println!("dir_at_path_is_empty_returns_false -> {:?}", dir_at_path_is_empty_returns_false());
@@ -14363,7 +14853,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
     // --- Band: Network Band Finder: IP Validity Check and Flag Setting ---
     /////////////////////////////////////////////////////////////////////////  
     
-    // let (ipv4_list, ipv6_list) = load_local_ip_lists(&user_metadata.uma_local_owner_user)?;
+    // let (ipv4_list, ipv6_list) = load_local_ip_lists_to_ipvec(&user_metadata.uma_local_owner_user)?;
     // let (str_ipv4list, str_ipv6list) = load_local_iplists_as_stringtype(&user_metadata.uma_local_owner_user)?;
     
     // // currently only using ipv6
@@ -14391,8 +14881,19 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
     
     
     // Network Detection or Work Offline?
-
     
+    println!("\nSign-In: You are your GPG: Who are you?");
+
+    // Get armored public key, using key-id (full fingerprint in)
+    let mut full_fingerprint_key_id_string = String::new();
+    match q_and_a_user_selects_gpg_key_full_fingerprint() {
+        Ok(temp_fullfingerprint_key_idstring) => {
+            
+            println!("Selected key id (full fingerprint in): {}", temp_fullfingerprint_key_idstring);
+            full_fingerprint_key_id_string = temp_fullfingerprint_key_idstring;
+    }
+        Err(e) => eprintln!("Error selecting full_fingerprint_key_id_string: {}", e.to_string()),
+    }
 
     // Call get_band__find_valid_network_index_and_type to retrieve band info and online status
     let (
@@ -14401,7 +14902,10 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         network_index,
         this_ipv4,
         this_ipv6,
-    ) = get_band__find_valid_network_index_and_type(&uma_local_owner_user);
+    ) = get_band__find_valid_network_index_and_type(
+        &uma_local_owner_user,
+        &full_fingerprint_key_id_string,
+        );
 
 
     println!("IUA next: get_band__find_valid_network_index_and_type");
