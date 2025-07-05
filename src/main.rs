@@ -2830,23 +2830,116 @@ Seri_Deseri Deserialize From .toml Start
 /// - `read_singleline_string_from_clearsigntoml()` - For single-line string fields
 /// - `read_stringarray_field_clearsigntoml()` - For string arrays
 /// - `read_u64_field_from_toml()` - For numeric fields (after verification)
-fn read_one_collaborator_setup_toml(collaborator_name: &str) -> Result<CollaboratorTomlData, ThisProjectError> {
+fn read_one_collaborator_setup_toml(
+    collaborator_name: &str,
+    full_fingerprint_key_id_string: &str,
+    ) -> Result<CollaboratorTomlData, ThisProjectError> {
     debug_log("Starting ROCST: read_one_collaborator_setup_toml()");
 
-    // 1. Construct File Path
-    let relative_file_path = Path::new(COLLABORATOR_ADDRESSBOOK_PATH_STR)
-        .join(format!("{}__collaborator.toml", collaborator_name));
+    // // 1. Construct File Path
+    // let relative_file_path = Path::new(COLLABORATOR_ADDRESSBOOK_PATH_STR)
+    //     .join(format!("{}__collaborator.toml", collaborator_name));
+        
+    // //TODO optional .gpgtoml extract temp path here
+    // // and later code for end to remove extracted temp file
+    // // note: do NOT remove the .gpgtoml file
 
-    // Get the executable-relative base directory path
-    let abs_file_path = match make_input_path_name_abs_executabledirectoryrelative_nocheck(
-        relative_file_path
-    ) {
-        Ok(path) => path,
-        Err(e) => {
-            debug_log!("ROCST: Failed to resolve collaborator directory path: {}", e);
-            return Err(ThisProjectError::IoError(e));
+    // // Get the executable-relative base directory path
+    // let abs_file_path = match make_input_path_name_abs_executabledirectoryrelative_nocheck(
+    //     relative_file_path
+    // ) {
+    //     Ok(path) => path,
+    //     Err(e) => {
+    //         debug_log!("ROCST: Failed to resolve collaborator directory path: {}", e);
+    //         return Err(ThisProjectError::IoError(e));
+    //     }
+    // };
+    
+    // 1. Check for both .toml and .gpgtoml files
+    let toml_relative = Path::new(COLLABORATOR_ADDRESSBOOK_PATH_STR)
+        .join(format!("{}__collaborator.toml", collaborator_name));
+    let gpgtoml_relative = Path::new(COLLABORATOR_ADDRESSBOOK_PATH_STR)
+        .join(format!("{}__collaborator.gpgtoml", collaborator_name));
+        
+    // Get absolute paths
+    let toml_abs = make_input_path_name_abs_executabledirectoryrelative_nocheck(&toml_relative)?;
+    let gpgtoml_abs = make_input_path_name_abs_executabledirectoryrelative_nocheck(&gpgtoml_relative)?;
+    
+    // Determine which file to use and prepare the path
+    let (abs_file_path, temp_file_to_cleanup) = if toml_abs.exists() {
+        // Prefer .toml if it exists
+        debug_log!("ROCST: Using clearsigned .toml file for collaborator '{}'", collaborator_name);
+        (toml_abs, None)
+    } else if gpgtoml_abs.exists() {
+        // Use .gpgtoml and decrypt it
+        debug_log!("ROCST: Using GPG encrypted .gpgtoml file for collaborator '{}'", collaborator_name);
+        
+        // Create secure temp file for decrypted content
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|e| ThisProjectError::IoError(
+                std::io::Error::new(std::io::ErrorKind::Other, format!("Time error: {}", e))
+            ))?
+            .as_nanos();
+        
+        let temp_filename = format!("decrypt_collab_{}_{}.toml", collaborator_name, timestamp);
+        let temp_path = std::env::temp_dir().join(&temp_filename);
+        
+        // Decrypt the .gpgtoml file
+        let output = std::process::Command::new("gpg")
+            .arg("--quiet")
+            .arg("--batch")
+            .arg("--yes")
+            .arg("--local-user")
+            .arg(full_fingerprint_key_id_string)
+            .arg("--decrypt")
+            .arg("--output")
+            .arg(&temp_path)
+            .arg(&gpgtoml_abs)
+            .output()
+            .map_err(|e| {
+                let error_msg = format!("Failed to execute GPG decrypt for collaborator '{}': {}", collaborator_name, e);
+                eprintln!("\nERROR: {}", error_msg);
+                eprintln!("Press Enter to continue...");
+                let _ = std::io::stdin().read_line(&mut String::new());
+                ThisProjectError::GpgError(error_msg)
+            })?;
+            
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let error_msg = format!("GPG decryption failed for collaborator '{}': {}", collaborator_name, stderr);
+            eprintln!("\nERROR: {}", error_msg);
+            eprintln!("Press Enter to continue...");
+            let _ = std::io::stdin().read_line(&mut String::new());
+            return Err(ThisProjectError::GpgError(error_msg));
         }
+        
+        // Set restricted permissions on temp file (Unix only)
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&temp_path, std::fs::Permissions::from_mode(0o600))
+                .map_err(|e| ThisProjectError::IoError(
+                    std::io::Error::new(std::io::ErrorKind::Other, 
+                        format!("Failed to set temp file permissions: {}", e))
+                ))?;
+        }
+        
+        (temp_path.clone(), Some(temp_path))
+    } else {
+        return Err(ThisProjectError::IoError(
+            std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("No collaborator file found for '{}' (checked both .toml and .gpgtoml)", collaborator_name)
+            )
+        ));
     };
+    
+    debug_log!("ROCST: read_one_collaborator_setup_toml(), abs_file_path -> {:?}", abs_file_path);
+
+
+    /////
+    
     
     debug_log!("ROCST: read_one_collaborator_setup_toml(), abs_file_path (executable-relative) -> {:?}", abs_file_path);
 
@@ -2947,7 +3040,15 @@ fn read_one_collaborator_setup_toml(collaborator_name: &str) -> Result<Collabora
         ))?;
     let updated_at_timestamp = timestamp_str.parse::<u64>()
         .map_err(|e| ThisProjectError::ParseIntError(e))?;
-
+        
+    // remove temp file
+    // At the very end of the function, clean up temp file if we created one
+    if let Some(temp_path) = temp_file_to_cleanup {
+        if let Err(e) = std::fs::remove_file(&temp_path) {
+            eprintln!("Warning: Failed to remove temporary decrypted file {}: {}", temp_path.display(), e);
+        }
+    }
+    
     // 3. Construct and return the CollaboratorTomlData structure
     Ok(CollaboratorTomlData {
         user_name,
@@ -4074,28 +4175,69 @@ pub fn collect_and_validate_collaborators(
                 continue;
             }
             
-            // Construct the collaborator file path
-            let collaborator_file = format!("{}__collaborator.toml", name);
-            let file_path = collaborator_files_dir.join(&collaborator_file);
+            // // Construct the collaborator file path
+            // let collaborator_file = format!("{}__collaborator.toml", name);
+            // let file_path = collaborator_files_dir.join(&collaborator_file);
             
+            // // Check if the file exists
+            // if file_path.exists() {
+            //     println!("  ✓ Found collaborator: {}", name);
+            //     valid_names.push(name.clone());
+            //     debug_log!(
+            //         "collect_and_validate_collaborators: Validated collaborator '{}' at {}",
+            //         name,
+            //         file_path.display()
+            //     );
+            // } else {
+            //     println!("  ✗ NOT FOUND: {}", name);
+            //     invalid_names.push(name.clone());
+            //     debug_log!(
+            //         "collect_and_validate_collaborators: Collaborator '{}' not found at {}",
+            //         name,
+            //         file_path.display()
+            //     );
+            // }
+
+            // Construct the collaborator file paths for both possible extensions
+            let collaborator_gpgtoml = format!("{}__collaborator.gpgtoml", name);
+            let collaborator_toml = format!("{}__collaborator.toml", name);
+
+            let gpgtoml_path = collaborator_files_dir.join(&collaborator_gpgtoml);
+            let toml_path = collaborator_files_dir.join(&collaborator_toml);
+
+            // Check if either file exists (prefer .gpgtoml for security)
+            let file_exists = if gpgtoml_path.exists() {
+                debug_log!(
+                    "collect_and_validate_collaborators: Found GPG encrypted collaborator file for '{}' at {}",
+                    name,
+                    gpgtoml_path.display()
+                );
+                true
+            } else if toml_path.exists() {
+                debug_log!(
+                    "collect_and_validate_collaborators: Found clearsigned collaborator file for '{}' at {}",
+                    name,
+                    toml_path.display()
+                );
+                true
+            } else {
+                false
+            };
+
             // Check if the file exists
-            if file_path.exists() {
+            if file_exists {
                 println!("  ✓ Found collaborator: {}", name);
                 valid_names.push(name.clone());
-                debug_log!(
-                    "collect_and_validate_collaborators: Validated collaborator '{}' at {}",
-                    name,
-                    file_path.display()
-                );
             } else {
                 println!("  ✗ NOT FOUND: {}", name);
                 invalid_names.push(name.clone());
                 debug_log!(
-                    "collect_and_validate_collaborators: Collaborator '{}' not found at {}",
-                    name,
-                    file_path.display()
+                    "collect_and_validate_collaborators: Collaborator '{}' not found (checked both .gpgtoml and .toml)",
+                    name
                 );
             }
+                        
+            
         }
         
         // Check if all names are valid
@@ -7065,6 +7207,322 @@ impl CollaboratorTomlData {
 }
 
 
+// /// Adds a new collaborator by creating a TOML configuration file in the executable-relative
+// /// collaborator directory.
+// ///
+// /// This function creates a `CollaboratorTomlData` instance from the provided parameters,
+// /// serializes it to TOML format, and saves it to a file in the collaborator directory.
+// /// The file path is determined relative to the executable location rather than the current
+// /// working directory to ensure consistent path resolution regardless of where the program
+// /// is executed from.
+// ///
+// /// adds as clearsign-toml file
+// ///
+// /// # Arguments
+// ///
+// /// * `user_name` - The collaborator's username
+// /// * `user_salt_list` - List of salt values used for this collaborator
+// /// * `ipv4_addresses` - Optional list of IPv4 addresses associated with the collaborator
+// /// * `ipv6_addresses` - Optional list of IPv6 addresses associated with the collaborator
+// /// * `gpg_publickey_id` - The GPG public key ID for the collaborator
+// /// * `gpg_key_public` - The GPG public key content for the collaborator
+// /// * `sync_interval` - The synchronization interval in seconds
+// /// * `updated_at_timestamp` - Unix timestamp of when this collaborator data was last updated
+// ///
+// /// # Returns
+// ///
+// /// * `Result<(), std::io::Error>` - Ok(()) if the operation succeeded, or an error if any step failed
+// ///
+// /// # Errors
+// ///
+// /// This function can return errors in the following cases:
+// /// * If creating the collaborator directory fails
+// /// * If serializing the collaborator data to TOML fails
+// /// * If creating or writing to the file fails
+// pub fn add_collaborator_setup_file(
+//     user_name: String,
+//     user_salt_list: Vec<u128>,
+//     ipv4_addresses: Option<Vec<Ipv4Addr>>,
+//     ipv6_addresses: Option<Vec<Ipv6Addr>>,
+//     gpg_publickey_id: String,
+//     gpg_key_public: String,
+//     sync_interval: u64,
+//     updated_at_timestamp: u64,
+// ) -> Result<(), std::io::Error> {
+//     /*
+//     use std::fs::File;
+//     use std::io::Write;
+//     use std::net::{Ipv4Addr, Ipv6Addr};
+//     use std::path::Path;
+
+//     // Import the path management module
+//     use crate::manage_absolute_executable_directory_relative_paths::make_input_path_name_abs_executabledirectoryrelative_nocheck;
+//     use crate::manage_absolute_executable_directory_relative_paths::prepare_file_parent_directories_abs_executabledirectoryrelative;
+//     */
+//     debug_log("Starting: fn add_collaborator_setup_file");
+    
+//     // Log function parameters for debugging
+//     debug_log!("user_name {:?}", user_name);
+//     debug_log!("user_salt_list {:?}", &user_salt_list);
+//     debug_log!("ipv4_addresses {:?}", ipv4_addresses);
+//     debug_log!("ipv6_addresses {:?}", ipv6_addresses);
+//     debug_log!("gpg_publickey_id {:?}", &gpg_publickey_id);
+//     debug_log!("gpg_key_public {:?}", &gpg_key_public);
+//     debug_log!("sync_interval {:?}", sync_interval);   
+//     debug_log!("updated_at_timestamp {:?}", updated_at_timestamp); 
+    
+//     // Create the CollaboratorTomlData instance
+//     let collaborator = CollaboratorTomlData::new(
+//         user_name, 
+//         user_salt_list,
+//         ipv4_addresses,
+//         ipv6_addresses,
+//         gpg_publickey_id,
+//         gpg_key_public,
+//         sync_interval,
+//         updated_at_timestamp,
+//     );
+    
+//     debug_log!("collaborator {:?}", collaborator);
+
+//     // Serialize the collaborator to TOML format
+//     // TODO this may need to be done inhouse
+//     let toml_string = match serialize_collaborator_to_toml(&collaborator) {
+//         Ok(content) => {
+//             debug_log!("Successfully serialized collaborator to TOML");
+//             content
+//         },
+//         Err(e) => {
+//             debug_log!("Error serializing to TOML: {}", e);
+//             return Err(std::io::Error::new(
+//                 std::io::ErrorKind::Other,
+//                 format!("TOML serialization error: {}", e),
+//             ));
+//         }
+//     };
+    
+//     // Construct the relative path to the collaborator file
+//     let relative_path = format!(
+//         "{}/{}__collaborator.toml",
+//         COLLABORATOR_ADDRESSBOOK_PATH_STR,
+//         collaborator.user_name,
+//     );
+    
+//     // Convert the relative path to an absolute path based on the executable's directory
+//     let file_path = match make_input_path_name_abs_executabledirectoryrelative_nocheck(&relative_path) {
+//         Ok(path) => path,
+//         Err(e) => {
+//             debug_log!("Error creating absolute path: {}", e);
+//             return Err(e);
+//         }
+//     };
+    
+//     // Ensure parent directories exist
+//     let prepared_path = match prepare_file_parent_directories_abs_executabledirectoryrelative(&relative_path) {
+//         Ok(path) => path,
+//         Err(e) => {
+//             debug_log!("Error preparing parent directories: {}", e);
+//             return Err(e);
+//         }
+//     };
+
+//     // Log the constructed file path
+//     debug_log!("Attempting to write collaborator file to: {:?}", prepared_path.display());
+    
+//     // --- Block for file writing ---
+//     // This ensures `file` is dropped and the file is closed before the GPG operation.
+//     {
+//         let mut file = match File::create(&prepared_path) {
+//             Ok(f) => f,
+//             Err(e) => {
+//                 // Corrected debug_log! usage:
+//                 debug_log!("Error creating file '{}': {}", prepared_path.display(), e);
+//                 return Err(e); // Return immediately if file creation fails
+//             }
+//         };
+    
+//         // Write the serialized TOML to the file
+//         match file.write_all(toml_string.as_bytes()) {
+//             Ok(_) => {
+//                 // Corrected debug_log! usage:
+//                 debug_log!("Successfully wrote initial TOML data to collaborator file: {}", prepared_path.display());
+//                 // Do NOT return Ok(()) here yet. Proceed to the next step.
+//             },
+//             Err(e) => {
+//                 // Corrected debug_log! usage:
+//                 debug_log!("Error writing TOML data to file '{}': {}", prepared_path.display(), e);
+//                 return Err(e); // Return immediately if writing fails
+//             }
+//         }
+//     } // `file` is dropped here, so it's closed.
+
+//     // Now that the TOML file is written and closed, proceed to clearsign it in-place.
+//     // Corrected debug_log! usage:
+//     debug_log!("Attempting to clearsign the TOML file '{}' in-place.", prepared_path.display());
+
+//     // Call the in-place clearsigning function.
+//     // Note: `prepared_path` is a `PathBuf`. `&prepared_path` correctly provides a `&Path`.
+//     match convert_toml_filewithkeyid_into_clearsigntoml_inplace(&prepared_path) {
+//         Ok(()) => {
+//             // Clearsigning was successful.
+//             // Corrected debug_log! usage:
+//             debug_log!("Successfully converted '{}' to clearsigned TOML in-place.", prepared_path.display());
+//             // This is now the final successful outcome of add_collaborator_setup_file.
+//             Ok(())
+//         }
+//         Err(gpg_error) => {
+//             // Clearsigning failed. Convert GpgError to std::io::Error.
+//             let error_message = format!(
+//                 "Failed to convert TOML file '{}' to clearsign TOML in-place: {}",
+//                 prepared_path.display(),
+//                 gpg_error.to_string() // Assumes GpgError has .to_string() or implements Display
+//             );
+//             // Corrected debug_log! usage for a pre-formatted string:
+//             debug_log!("{}", error_message); // Log the detailed error
+//             // Return an std::io::Error.
+//             Err(std::io::Error::new(
+//                 std::io::ErrorKind::Other, // Or a more contextually appropriate ErrorKind
+//                 error_message, // Pass the already formatted string
+//             ))
+//         }
+//     }
+//     // The result of this final `match` expression is the return value of 
+//     // `add_collaborator_setup_file`, satisfying its `Result<(), std::io::Error>` signature.
+// }
+
+/*
+addressbook creation with gpg encryption
+
+*/
+
+/// Prompts the user to choose between clearsigned TOML or GPG encrypted clearsigned TOML format.
+///
+/// This function presents a choice to the user for how to save the collaborator configuration:
+/// - Clearsigned TOML (.toml) - Type "yes" (case-insensitive)
+/// - GPG encrypted clearsigned TOML (.gpgtoml) - Any other input (default)
+///
+/// The function validates user input and returns their choice.
+///
+/// # Returns
+/// * `true` - User chose clearsigned TOML only
+/// * `false` - User chose GPG encrypted clearsigned TOML (default)
+fn prompt_user_for_collaborator_file_format() -> bool {
+    use std::io::{self, Write};
+    
+    println!("\n=== Collaborator File Format Selection ===");
+    println!("Do you want to save this as a clearsigned .toml?");
+    println!("The default is GPG protected (.gpgtoml).");
+    println!("Type 'yes' for clearsign only, anything else for GPG encrypted.");
+    print!("Enter your choice: ");
+    
+    // Ensure the prompt is displayed immediately
+    let _ = io::stdout().flush();
+    
+    // Read user input
+    let mut input = String::new();
+    match io::stdin().read_line(&mut input) {
+        Ok(_) => {
+            // Trim whitespace and convert to lowercase for case-insensitive comparison
+            let cleaned_input = input.trim().to_lowercase();
+            // Return true only if user explicitly typed "yes"
+            cleaned_input == "yes"
+        }
+        Err(e) => {
+            eprintln!("Error reading input: {}. Defaulting to GPG encrypted format.", e);
+            false // Default to encrypted on error
+        }
+    }
+}
+
+/// Encrypts a clearsigned TOML file using a provided GPG public key.
+///
+/// This function takes a clearsigned TOML file and encrypts it using the provided
+/// public key content directly, without any keyring operations. The encrypted
+/// content is saved to a new file with the .gpgtoml extension.
+///
+/// # Security
+/// - Uses the public key content directly without keyring operations
+/// - Creates temporary files with restricted permissions
+/// - Ensures cleanup of all temporary files
+/// - Does not modify or access the GPG keyring
+///
+/// # Arguments
+/// * `clearsigned_toml_path` - Path to the clearsigned TOML file to encrypt
+/// * `gpg_key_public` - The GPG public key content to use for encryption
+/// * `output_gpgtoml_path` - Path where the encrypted file should be saved
+///
+/// # Returns
+/// * `Result<(), std::io::Error>` - Ok(()) on success, or an error
+fn encrypt_clearsigned_toml_with_public_key_content(
+    clearsigned_toml_path: &Path,
+    gpg_key_public: &str,
+    output_gpgtoml_path: &Path,
+) -> Result<(), std::io::Error> {
+    use std::fs;
+    use std::process::Command;
+    
+    debug_log!("Starting GPG encryption of clearsigned TOML");
+    debug_log!("Input file: {}", clearsigned_toml_path.display());
+    debug_log!("Output file: {}", output_gpgtoml_path.display());
+    
+    // Create a temporary file for the public key
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("Time error: {}", e)
+        ))?
+        .as_nanos();
+    
+    let temp_pubkey_filename = format!("temp_pubkey_{}.asc", timestamp);
+    let temp_dir = std::env::temp_dir();
+    let temp_pubkey_path = temp_dir.join(&temp_pubkey_filename);
+    
+    // Write the public key to temporary file
+    debug_log!("Writing public key to temporary file: {}", temp_pubkey_path.display());
+    fs::write(&temp_pubkey_path, gpg_key_public)?;
+    
+    // Ensure cleanup happens regardless of success or failure
+    let cleanup_result = (|| -> Result<(), std::io::Error> {
+        // Read the clearsigned content
+        let clearsigned_content = fs::read_to_string(clearsigned_toml_path)?;
+        
+        // Use GPG to encrypt with the public key directly (no keyring operations)
+        let output = Command::new("gpg")
+            .arg("--batch")
+            .arg("--yes")
+            .arg("--trust-model")
+            .arg("always") // Trust the key without keyring
+            .arg("--armor")
+            .arg("--encrypt")
+            .arg("--recipient-file")
+            .arg(&temp_pubkey_path) // Use the public key file directly
+            .arg("--output")
+            .arg(output_gpgtoml_path)
+            .arg(clearsigned_toml_path)
+            .output()?;
+        
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("GPG encryption failed: {}", stderr)
+            ));
+        }
+        
+        debug_log!("Successfully encrypted file to: {}", output_gpgtoml_path.display());
+        Ok(())
+    })();
+    
+    // Always clean up the temporary public key file
+    if let Err(e) = fs::remove_file(&temp_pubkey_path) {
+        eprintln!("Warning: Failed to remove temporary public key file {}: {}", 
+                  temp_pubkey_path.display(), e);
+    }
+    
+    cleanup_result
+}
+
 /// Adds a new collaborator by creating a TOML configuration file in the executable-relative
 /// collaborator directory.
 ///
@@ -7074,7 +7532,15 @@ impl CollaboratorTomlData {
 /// working directory to ensure consistent path resolution regardless of where the program
 /// is executed from.
 ///
-/// adds as clearsign-toml file
+/// The user is prompted to choose between:
+/// - Clearsigned TOML file (.toml) - for compatibility
+/// - GPG encrypted clearsigned TOML file (.gpgtoml) - for enhanced security (default)
+///
+/// # Security
+/// - Files are always clearsigned for integrity verification
+/// - Optional GPG encryption provides confidentiality
+/// - The collaborator's public key is used for encryption
+/// - No keyring operations are performed
 ///
 /// # Arguments
 ///
@@ -7097,6 +7563,7 @@ impl CollaboratorTomlData {
 /// * If creating the collaborator directory fails
 /// * If serializing the collaborator data to TOML fails
 /// * If creating or writing to the file fails
+/// * If GPG operations fail (clearsigning or encryption)
 pub fn add_collaborator_setup_file(
     user_name: String,
     user_salt_list: Vec<u128>,
@@ -7159,93 +7626,148 @@ pub fn add_collaborator_setup_file(
         }
     };
     
-    // Construct the relative path to the collaborator file
-    let relative_path = format!(
-        "{}/{}__collaborator.toml",
-        COLLABORATOR_ADDRESSBOOK_PATH_STR,
-        collaborator.user_name,
-    );
-    
-    // Convert the relative path to an absolute path based on the executable's directory
-    let file_path = match make_input_path_name_abs_executabledirectoryrelative_nocheck(&relative_path) {
-        Ok(path) => path,
-        Err(e) => {
-            debug_log!("Error creating absolute path: {}", e);
-            return Err(e);
-        }
-    };
-    
-    // Ensure parent directories exist
-    let prepared_path = match prepare_file_parent_directories_abs_executabledirectoryrelative(&relative_path) {
-        Ok(path) => path,
-        Err(e) => {
-            debug_log!("Error preparing parent directories: {}", e);
-            return Err(e);
-        }
-    };
-
-    // Log the constructed file path
-    debug_log!("Attempting to write collaborator file to: {:?}", prepared_path.display());
-    
-    // --- Block for file writing ---
-    // This ensures `file` is dropped and the file is closed before the GPG operation.
-    {
-        let mut file = match File::create(&prepared_path) {
-            Ok(f) => f,
+    // Loop until we successfully create a collaborator file
+    // This ensures the system can proceed, as it cannot function without this file
+    loop {
+        // Prompt user for file format choice
+        let use_clearsign_only = prompt_user_for_collaborator_file_format();
+        
+        // Determine the file extension based on user choice
+        let file_extension = if use_clearsign_only {
+            "toml"
+        } else {
+            "gpgtoml"
+        };
+        
+        debug_log!("User selected file format: .{}", file_extension);
+        
+        // Construct the relative path to the collaborator file
+        // For .gpgtoml, we'll create a temporary .toml first
+        let relative_path = format!(
+            "{}/{}__collaborator.{}",
+            COLLABORATOR_ADDRESSBOOK_PATH_STR,
+            collaborator.user_name,
+            if use_clearsign_only { "toml" } else { "toml" } // Always start with .toml
+        );
+        
+        // Convert the relative path to an absolute path based on the executable's directory
+        let file_path = match make_input_path_name_abs_executabledirectoryrelative_nocheck(&relative_path) {
+            Ok(path) => path,
             Err(e) => {
-                // Corrected debug_log! usage:
-                debug_log!("Error creating file '{}': {}", prepared_path.display(), e);
-                return Err(e); // Return immediately if file creation fails
+                eprintln!("Error creating absolute path: {}. Trying again...", e);
+                continue; // Try again
             }
         };
-    
-        // Write the serialized TOML to the file
-        match file.write_all(toml_string.as_bytes()) {
-            Ok(_) => {
-                // Corrected debug_log! usage:
-                debug_log!("Successfully wrote initial TOML data to collaborator file: {}", prepared_path.display());
-                // Do NOT return Ok(()) here yet. Proceed to the next step.
-            },
+        
+        // Ensure parent directories exist
+        let prepared_path = match prepare_file_parent_directories_abs_executabledirectoryrelative(&relative_path) {
+            Ok(path) => path,
             Err(e) => {
+                eprintln!("Error preparing parent directories: {}. Trying again...", e);
+                continue; // Try again
+            }
+        };
+
+        // Log the constructed file path
+        debug_log!("Attempting to write collaborator file to: {:?}", prepared_path.display());
+        
+        // --- Block for file writing ---
+        // This ensures `file` is dropped and the file is closed before the GPG operation.
+        {
+            let mut file = match File::create(&prepared_path) {
+                Ok(f) => f,
+                Err(e) => {
+                    // Corrected debug_log! usage:
+                    eprintln!("Error creating file '{}': {}. Trying again...", prepared_path.display(), e);
+                    continue; // Try again
+                }
+            };
+        
+            // Write the serialized TOML to the file
+            match file.write_all(toml_string.as_bytes()) {
+                Ok(_) => {
+                    // Corrected debug_log! usage:
+                    debug_log!("Successfully wrote initial TOML data to collaborator file: {}", prepared_path.display());
+                    // Do NOT return Ok(()) here yet. Proceed to the next step.
+                },
+                Err(e) => {
+                    // Corrected debug_log! usage:
+                    eprintln!("Error writing TOML data to file '{}': {}. Trying again...", prepared_path.display(), e);
+                    continue; // Try again
+                }
+            }
+        } // `file` is dropped here, so it's closed.
+
+        // Now that the TOML file is written and closed, proceed to clearsign it in-place.
+        // Corrected debug_log! usage:
+        debug_log!("Attempting to clearsign the TOML file '{}' in-place.", prepared_path.display());
+
+        // Call the in-place clearsigning function.
+        // Note: `prepared_path` is a `PathBuf`. `&prepared_path` correctly provides a `&Path`.
+        match convert_toml_filewithkeyid_into_clearsigntoml_inplace(&prepared_path) {
+            Ok(()) => {
+                // Clearsigning was successful.
                 // Corrected debug_log! usage:
-                debug_log!("Error writing TOML data to file '{}': {}", prepared_path.display(), e);
-                return Err(e); // Return immediately if writing fails
+                debug_log!("Successfully converted '{}' to clearsigned TOML in-place.", prepared_path.display());
+                
+                // Now decide whether to encrypt or leave as clearsigned
+                if use_clearsign_only {
+                    // User chose clearsigned only, we're done
+                    return Ok(());
+                } else {
+                    // User chose GPG encrypted, proceed with encryption
+                    let gpgtoml_relative_path = format!(
+                        "{}/{}__collaborator.gpgtoml",
+                        COLLABORATOR_ADDRESSBOOK_PATH_STR,
+                        collaborator.user_name,
+                    );
+                    
+                    let gpgtoml_path = match make_input_path_name_abs_executabledirectoryrelative_nocheck(&gpgtoml_relative_path) {
+                        Ok(path) => path,
+                        Err(e) => {
+                            eprintln!("Error creating GPG output path: {}. Trying again...", e);
+                            // Clean up the temporary .toml file
+                            let _ = std::fs::remove_file(&prepared_path);
+                            continue; // Try again
+                        }
+                    };
+                    
+                    // Encrypt the clearsigned TOML file
+                    match encrypt_clearsigned_toml_with_public_key_content(
+                        &prepared_path,
+                        &collaborator.gpg_key_public,
+                        &gpgtoml_path
+                    ) {
+                        Ok(()) => {
+                            // Encryption successful, remove the temporary .toml file
+                            debug_log!("Successfully created encrypted file: {}", gpgtoml_path.display());
+                            
+                            // Delete the temporary clearsigned .toml file
+                            if let Err(e) = std::fs::remove_file(&prepared_path) {
+                                eprintln!("Warning: Failed to remove temporary file {}: {}", 
+                                          prepared_path.display(), e);
+                            }
+                            
+                            return Ok(());
+                        }
+                        Err(e) => {
+                            eprintln!("GPG encryption failed: {}. Please choose again.", e);
+                            // Clean up the temporary .toml file
+                            let _ = std::fs::remove_file(&prepared_path);
+                            continue; // Try again with new user choice
+                        }
+                    }
+                }
+            }
+            Err(gpg_error) => {
+                // Clearsigning failed. 
+                eprintln!("Failed to clearsign file: {}. Trying again...", gpg_error);
+                // Clean up the failed file
+                let _ = std::fs::remove_file(&prepared_path);
+                continue; // Try again
             }
         }
-    } // `file` is dropped here, so it's closed.
-
-    // Now that the TOML file is written and closed, proceed to clearsign it in-place.
-    // Corrected debug_log! usage:
-    debug_log!("Attempting to clearsign the TOML file '{}' in-place.", prepared_path.display());
-
-    // Call the in-place clearsigning function.
-    // Note: `prepared_path` is a `PathBuf`. `&prepared_path` correctly provides a `&Path`.
-    match convert_toml_filewithkeyid_into_clearsigntoml_inplace(&prepared_path) {
-        Ok(()) => {
-            // Clearsigning was successful.
-            // Corrected debug_log! usage:
-            debug_log!("Successfully converted '{}' to clearsigned TOML in-place.", prepared_path.display());
-            // This is now the final successful outcome of add_collaborator_setup_file.
-            Ok(())
-        }
-        Err(gpg_error) => {
-            // Clearsigning failed. Convert GpgError to std::io::Error.
-            let error_message = format!(
-                "Failed to convert TOML file '{}' to clearsign TOML in-place: {}",
-                prepared_path.display(),
-                gpg_error.to_string() // Assumes GpgError has .to_string() or implements Display
-            );
-            // Corrected debug_log! usage for a pre-formatted string:
-            debug_log!("{}", error_message); // Log the detailed error
-            // Return an std::io::Error.
-            Err(std::io::Error::new(
-                std::io::ErrorKind::Other, // Or a more contextually appropriate ErrorKind
-                error_message, // Pass the already formatted string
-            ))
-        }
-    }
-    // The result of this final `match` expression is the return value of 
-    // `add_collaborator_setup_file`, satisfying its `Result<(), std::io::Error>` signature.
+    } // End of retry loop
 }
 
 
@@ -8203,9 +8725,25 @@ impl CoreNode {
         let updated_at_timestamp = get_current_unix_timestamp();
         debug_log!("Got timestamps");
 
+        // TODO update here: this needs to look at .gpgtoml
+        // maybe this in uma.toml
+        // Get armored public key, using key-id (full fingerprint in)
+        let mut full_fingerprint_key_id_string = String::new();
+        match q_and_a_user_selects_gpg_key_full_fingerprint() {
+            Ok(temp_fullfingerprint_key_idstring) => {
+
+                println!("Selected key id (full fingerprint in): {}", temp_fullfingerprint_key_idstring);
+                full_fingerprint_key_id_string = temp_fullfingerprint_key_idstring;
+        }
+            Err(e) => eprintln!("Error selecting full_fingerprint_key_id_string: {}", e.to_string()),
+        }
+        
         // 1. Get the salt list using the correct function
         debug_log!("About to get address book data for owner: {}", owner);
-        let owner_data = match get_addressbook_file_by_username(&owner) {
+        let owner_data = match get_addressbook_file_by_username(
+            &owner,
+            &full_fingerprint_key_id_string,
+            ) {
             Ok(data) => {
                 debug_log!("Successfully got address book data");
                 data
@@ -19923,6 +20461,7 @@ fn get_next_message_file_path(current_path: &Path, username: &str) -> PathBuf {
 //     }
 // }
 
+// Version for clearsign toml only?
 /// Loads collaborator data from a TOML file based on the username.
 ///
 /// This function locates and loads a collaborator's data file using executable-relative 
@@ -19953,7 +20492,10 @@ fn get_next_message_file_path(current_path: &Path, username: &str) -> PathBuf {
 /// let collaborator = get_addressbook_file_by_username("alice")?;
 /// println!("Loaded collaborator data for: {}", collaborator.user_name);
 /// ```
-fn get_addressbook_file_by_username(username: &str) -> Result<CollaboratorTomlData, ThisProjectError> {
+fn get_addressbook_file_by_username(
+    username: &str,
+    full_fingerprint_key_id_string: &str,
+    ) -> Result<CollaboratorTomlData, ThisProjectError> {
     debug_log!("Starting GAFbU: get_addressbook_file_by_username for username -> '{}'", username);
     
     // Get the executable-relative base directory path
@@ -19998,19 +20540,22 @@ fn get_addressbook_file_by_username(username: &str) -> Result<CollaboratorTomlDa
                     debug_log!("GAFbU: (directory is empty)");
                 }
             },
-            Err(e) => debug_log!("GAFbU: Could not read directory contents: {}", e),
+            Err(e) => debug_log!("ERROR GAFbU: Could not read directory contents: {}", e),
         }
     }
     
     // Update the read_one_collaborator_setup_toml function to also use executable-relative paths
     // Since we don't see its implementation, we'll assume it's a function we need to call
-    match read_one_collaborator_setup_toml(username) {
+    match read_one_collaborator_setup_toml(
+        username,
+        &full_fingerprint_key_id_string,
+        ) {
         Ok(loaded_collaborator) => {
             debug_log!("GAFbU: Successfully loaded collaborator data for '{}'", username);
             Ok(loaded_collaborator)
         }
         Err(e) => {
-            debug_log!("GAFbU: Failed to load collaborator file for '{}': {:?}", username, e);
+            debug_log!("ERROR GAFbU: Failed to load collaborator file for '{}': {:?}", username, e);
             Err(e) // Propagate the error
         }
     }
@@ -20740,8 +21285,24 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
         &filtered_collaboratorsarray
     );
 
+    // TODO this perhaps shou be a parameter for this functions
+    // maybe in uma.toml
+    // Get armored public key, using key-id (full fingerprint in)
+    let mut full_fingerprint_key_id_string = String::new();
+    match q_and_a_user_selects_gpg_key_full_fingerprint() {
+        Ok(temp_fullfingerprint_key_idstring) => {
+            
+            println!("Selected key id (full fingerprint in): {}", temp_fullfingerprint_key_idstring);
+            full_fingerprint_key_id_string = temp_fullfingerprint_key_idstring;
+    }
+        Err(e) => eprintln!("Error selecting full_fingerprint_key_id_string: {}", e.to_string()),
+    }
+    
     // --- Get local user's salt list ---
-    let local_user_salt_list = match get_addressbook_file_by_username(uma_local_owner_user) {
+    let local_user_salt_list = match get_addressbook_file_by_username(
+        uma_local_owner_user,
+        &full_fingerprint_key_id_string,
+        ) {
         Ok(data) => data.user_salt_list,
         Err(e) => {
             debug_log!("Error loading local user's salt list: {}", e);
@@ -20760,7 +21321,10 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
         // using get_addressbook_file_by_username()
         // which loads the NAME__collaborator.toml from the collaborator_files_address_books directory 
         // (owned by that collaborator, it is their own gpg signed data)
-        let these_collaboratorfiles_toml_data = match get_addressbook_file_by_username(&collaborator_name) {
+        let these_collaboratorfiles_toml_data = match get_addressbook_file_by_username(
+            &collaborator_name,
+            &full_fingerprint_key_id_string,
+            ) {
             Ok(these_collaboratorfiles_toml_data) => these_collaboratorfiles_toml_data,
             Err(e) => {
                 // This is where you'll most likely get the "No such file or directory" error
@@ -20845,7 +21409,10 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
 
         // --- Get remote collaborator's salt list ---
         // let remote_collaborator_salt_list = match get_addressbook_file_by_username(collaborator_name.clone()) {
-        let remote_collaborator_salt_list = match get_addressbook_file_by_username(&collaborator_name.clone()) {
+        let remote_collaborator_salt_list = match get_addressbook_file_by_username(
+            &collaborator_name.clone(),
+            &full_fingerprint_key_id_string,
+            ) {
             Ok(data) => data.user_salt_list,
             Err(e) => {
                 debug_log!("Error loading remote_collaborator_salt_list user's salt list: {}", e);
