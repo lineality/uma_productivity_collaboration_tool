@@ -294,6 +294,7 @@ use std::io::{
     ErrorKind,
     Write,
     BufRead,
+    BufReader,
     Read,
 };
 
@@ -2830,6 +2831,67 @@ Seri_Deseri Deserialize From .toml Start
 /// - `read_singleline_string_from_clearsigntoml()` - For single-line string fields
 /// - `read_stringarray_field_clearsigntoml()` - For string arrays
 /// - `read_u64_field_from_toml()` - For numeric fields (after verification)
+/// This function loads collaborator data from either a clearsigned TOML file (.toml)
+/// or a GPG-encrypted clearsigned TOML file (.gpgtoml). It ensures data integrity
+/// through cryptographic verification and handles both file formats transparently.
+///
+/// # File Format Support
+/// - **Clearsigned TOML (.toml)**: Plain text TOML file with GPG clearsign signature
+/// - **GPG Encrypted TOML (.gpgtoml)**: Encrypted version of the clearsigned TOML
+///
+/// # File Selection Logic
+/// 1. Checks for both `{collaborator_name}__collaborator.toml` and `.gpgtoml` files
+/// 2. If BOTH exist: prefers the `.toml` file (no decryption needed)
+/// 3. If only `.gpgtoml` exists: decrypts it to a temporary file for processing
+/// 4. If only `.toml` exists: uses it directly
+/// 5. If neither exists: returns an error
+///
+/// # GPG Decryption Process (for .gpgtoml files)
+/// - Uses the specified GPG key from the local keyring for decryption
+/// - Creates a secure temporary file with restricted permissions (0600 on Unix)
+/// - Decrypts the content to the temporary file
+/// - Processes the decrypted clearsigned TOML
+/// - Automatically cleans up the temporary file after processing
+///
+/// # Security Features
+/// - All files must be cryptographically clearsigned (signature verification)
+/// - Temporary decrypted files have restricted permissions
+/// - Temporary files are always cleaned up, even on error paths
+/// - Original `.gpgtoml` files are never modified or deleted
+///
+/// # Error Handling
+/// - If GPG decryption fails (wrong key, corrupted file, etc.):
+///   - Displays detailed error message to the user
+///   - Waits for user to press Enter (for visibility in multi-threaded context)
+///   - Returns an error to the caller
+/// - This approach ensures users see decryption failures without crashing the application
+///
+/// # Arguments
+/// * `collaborator_name` - The username of the collaborator whose data to read
+/// * `full_fingerprint_key_id_string` - The GPG key fingerprint to use for decrypting
+///   .gpgtoml files. This must be a private key available in the local keyring.
+///
+/// # Returns
+/// * `Ok(CollaboratorTomlData)` - Successfully parsed collaborator configuration
+/// * `Err(ThisProjectError)` - Various errors:
+///   - File not found (neither .toml nor .gpgtoml exists)
+///   - GPG decryption failure
+///   - Clearsign verification failure
+///   - TOML parsing errors
+///   - IO errors
+///
+/// # Example
+/// ```no_run
+/// let collaborator_data = read_one_collaborator_setup_toml(
+///     "alice",
+///     "1234567890ABCDEF1234567890ABCDEF12345678"
+/// )?;
+/// ```
+///
+/// # Debug Logging
+/// - Logs which file type was selected (.toml vs .gpgtoml)
+/// - Logs file paths being processed
+/// - Logs GPG operations and any errors encountered
 fn read_one_collaborator_setup_toml(
     collaborator_name: &str,
     full_fingerprint_key_id_string: &str,
@@ -4630,7 +4692,7 @@ pub fn generate_pairwise_port_assignments(
 /// # Returns
 /// * `Ok((collaborators, port_assignments))` - The validated collaborators and their port assignments
 /// * `Err(ThisProjectError)` - If the process fails
-pub fn create_team_channel_port_assignments(
+pub fn create_teamchannel_port_assignments(
     owner: &str,
 ) -> Result<(Vec<String>, HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>), ThisProjectError> {
     println!("\n=== Creating Team Channel Port Assignments ===");
@@ -7046,34 +7108,346 @@ fn handle_task_action(&mut self, input: &str) -> bool { // Return true to exit t
 // end impl App {
 
 
-#[derive(Debug, Deserialize, serde::Serialize, Clone)]
+// #[derive(Debug, Clone)]
+// struct LocalUserUma {
+//     uma_local_owner_user: String,
+//     gpg_full_fingerprint_key_id_string: String,
+//     uma_default_im_messages_expiration_days: u64,
+//     uma_default_task_nodes_expiration_days: u64,
+//     tui_height: u8,
+//     tui_width: u8,
+//     log_mode_refresh: f32,
+// }
+
+// impl LocalUserUma {
+//     fn new(
+//         uma_local_owner_user: String,
+//         gpg_full_fingerprint_key_id_string: String,
+//         ) -> LocalUserUma {
+//         LocalUserUma { 
+//             uma_local_owner_user,
+//             gpg_full_fingerprint_key_id_string,
+//             uma_default_im_messages_expiration_days: 28, // Default to 7 days
+//             uma_default_task_nodes_expiration_days: 90, // Default to 30 days 
+//             tui_height: 24,
+//             tui_width: 80,
+//             log_mode_refresh: 1.5 // how fast log mode refreshes
+//             }
+//     }
+
+//     fn save_localuserumastruct_as_umatoml_file(&self, path: &Path) -> Result<(), io::Error> {
+//         let toml_string = ...&self).map_err(|e| {
+//             io::Error::new(io::ErrorKind::Other, format!("TOML serialization error: {}", e))
+//         })?;
+//         fs::write(path, toml_string)?;
+//         Ok(())
+//     }
+// }
+
+// use std::fs;
+// use std::io::{self, BufRead, BufReader};
+// use std::path::Path;
+/// Represents local user configuration for Uma collaboration tools.
+/// This struct holds all user-specific settings including identity,
+/// GPG key information, and UI preferences.
+#[derive(Debug, Clone)]
 struct LocalUserUma {
+    /// The username/nickname for this Uma instance owner
     uma_local_owner_user: String,
+    /// Full GPG key fingerprint for encryption/signing
+    gpg_full_fingerprint_key_id_string: String,
+    /// Number of days before IM messages expire (default: 28)
     uma_default_im_messages_expiration_days: u64,
+    /// Number of days before task nodes expire (default: 90)
     uma_default_task_nodes_expiration_days: u64,
+    /// Terminal UI height in rows (default: 24)
     tui_height: u8,
+    /// Terminal UI width in columns (default: 80)
     tui_width: u8,
+    /// Refresh rate in seconds for log mode display (default: 1.5)
     log_mode_refresh: f32,
 }
 
 impl LocalUserUma {
-    fn new(uma_local_owner_user: String) -> LocalUserUma {
-        LocalUserUma { 
+    /// Creates a new LocalUserUma instance with the specified owner and GPG fingerprint.
+    /// Other fields are initialized with sensible defaults.
+    ///
+    /// # Arguments
+    /// * `uma_local_owner_user` - The username for this Uma instance
+    /// * `gpg_full_fingerprint_key_id_string` - The full GPG key fingerprint
+    ///
+    /// # Returns
+    /// A new LocalUserUma instance with default values for non-specified fields
+    fn new(
+        uma_local_owner_user: String,
+        gpg_full_fingerprint_key_id_string: String,
+    ) -> LocalUserUma {
+        LocalUserUma {
             uma_local_owner_user,
-            uma_default_im_messages_expiration_days: 28, // Default to 7 days
-            uma_default_task_nodes_expiration_days: 90, // Default to 30 days 
+            gpg_full_fingerprint_key_id_string,
+            uma_default_im_messages_expiration_days: 28,  // Default to 28 days
+            uma_default_task_nodes_expiration_days: 90,  // Default to 90 days
             tui_height: 24,
             tui_width: 80,
-            log_mode_refresh: 1.5 // how fast log mode refreshes
-            }
+            log_mode_refresh: 1.5,  // Refresh every 1.5 seconds
+        }
     }
 
-    fn save_owner_to_file(&self, path: &Path) -> Result<(), io::Error> {
-        let toml_string = toml::to_string(&self).map_err(|e| {
-            io::Error::new(io::ErrorKind::Other, format!("TOML serialization error: {}", e))
-        })?;
-        fs::write(path, toml_string)?;
+    /// Saves the entire LocalUserUma configuration to a file in plain text format.
+    /// Each field is written as a key-value pair on its own line.
+    ///
+    /// # Arguments
+    /// * `path` - The absolute path where the configuration file should be written
+    ///
+    /// # Returns
+    /// * `Ok(())` if the file was written successfully
+    /// * `Err(io::Error)` if there was an I/O error
+    fn save_to_uma_toml_file(&self, path: &Path) -> Result<(), io::Error> {
+        // Build the configuration string with all fields
+        let config_content = format!(
+            r#"uma_local_owner_user = "{}"
+gpg_full_fingerprint_key_id_string = "{}"
+uma_default_im_messages_expiration_days = {}
+uma_default_task_nodes_expiration_days = {}
+tui_height = {}
+tui_width = {}
+log_mode_refresh = {}"#,
+            self.uma_local_owner_user,
+            self.gpg_full_fingerprint_key_id_string,
+            self.uma_default_im_messages_expiration_days,
+            self.uma_default_task_nodes_expiration_days,
+            self.tui_height,
+            self.tui_width,
+            self.log_mode_refresh
+        );
+
+        // Write the content to the file
+        fs::write(path, config_content)?;
         Ok(())
+    }
+
+    /// Loads a LocalUserUma configuration from a file.
+    /// Parses the plain text key-value format and constructs a new instance.
+    ///
+    /// # Arguments
+    /// * `path` - The absolute path to the configuration file
+    ///
+    /// # Returns
+    /// * `Ok(LocalUserUma)` if the file was read and parsed successfully
+    /// * `Err(io::Error)` if there was an I/O error or parsing error
+    fn load_from_uma_toml_file(path: &Path) -> Result<LocalUserUma, io::Error> {
+        let file = fs::File::open(path)?;
+        let reader = BufReader::new(file);
+        
+        // Initialize with empty/default values
+        let mut uma_local_owner_user = String::new();
+        let mut gpg_full_fingerprint_key_id_string = String::new();
+        let mut uma_default_im_messages_expiration_days = 28u64;
+        let mut uma_default_task_nodes_expiration_days = 90u64;
+        let mut tui_height = 24u8;
+        let mut tui_width = 80u8;
+        let mut log_mode_refresh = 1.5f32;
+
+        // Parse each line
+        for line in reader.lines() {
+            let line = line?;
+            let trimmed = line.trim();
+            
+            // Skip empty lines
+            if trimmed.is_empty() {
+                continue;
+            }
+
+            // Split on '=' and process key-value pairs
+            if let Some(equals_pos) = trimmed.find('=') {
+                let key = trimmed[..equals_pos].trim();
+                let value = trimmed[equals_pos + 1..].trim();
+
+                match key {
+                    "uma_local_owner_user" => {
+                        uma_local_owner_user = Self::parse_string_value(value)?;
+                    }
+                    "gpg_full_fingerprint_key_id_string" => {
+                        gpg_full_fingerprint_key_id_string = Self::parse_string_value(value)?;
+                    }
+                    "uma_default_im_messages_expiration_days" => {
+                        uma_default_im_messages_expiration_days = Self::parse_u64_value(value)?;
+                    }
+                    "uma_default_task_nodes_expiration_days" => {
+                        uma_default_task_nodes_expiration_days = Self::parse_u64_value(value)?;
+                    }
+                    "tui_height" => {
+                        tui_height = Self::parse_u8_value(value)?;
+                    }
+                    "tui_width" => {
+                        tui_width = Self::parse_u8_value(value)?;
+                    }
+                    "log_mode_refresh" => {
+                        log_mode_refresh = Self::parse_f32_value(value)?;
+                    }
+                    _ => {
+                        // Ignore unknown keys for forward compatibility
+                        eprintln!("Warning: Unknown configuration key: {}", key);
+                    }
+                }
+            }
+        }
+
+        // Validate required fields
+        if uma_local_owner_user.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Missing required field: uma_local_owner_user",
+            ));
+        }
+        if gpg_full_fingerprint_key_id_string.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Missing required field: gpg_full_fingerprint_key_id_string",
+            ));
+        }
+
+        Ok(LocalUserUma {
+            uma_local_owner_user,
+            gpg_full_fingerprint_key_id_string,
+            uma_default_im_messages_expiration_days,
+            uma_default_task_nodes_expiration_days,
+            tui_height,
+            tui_width,
+            log_mode_refresh,
+        })
+    }
+
+    /// Reads only the uma_local_owner_user field from a configuration file.
+    ///
+    /// # Arguments
+    /// * `path` - The absolute path to the configuration file
+    ///
+    /// # Returns
+    /// * `Ok(String)` containing the owner username if found
+    /// * `Err(io::Error)` if the file couldn't be read or the field wasn't found
+    fn read_owner_from_file(path: &Path) -> Result<String, io::Error> {
+        let file = fs::File::open(path)?;
+        let reader = BufReader::new(file);
+
+        for line in reader.lines() {
+            let line = line?;
+            let trimmed = line.trim();
+            
+            if trimmed.starts_with("uma_local_owner_user") {
+                if let Some(equals_pos) = trimmed.find('=') {
+                    let value = trimmed[equals_pos + 1..].trim();
+                    return Self::parse_string_value(value);
+                }
+            }
+        }
+
+        Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "uma_local_owner_user not found in configuration file",
+        ))
+    }
+
+    /// Reads only the gpg_full_fingerprint_key_id_string field from a configuration file.
+    ///
+    /// # Arguments
+    /// * `path` - The absolute path to the configuration file
+    ///
+    /// # Returns
+    /// * `Ok(String)` containing the GPG fingerprint if found
+    /// * `Err(io::Error)` if the file couldn't be read or the field wasn't found
+    fn read_gpg_fingerprint_from_file(path: &Path) -> Result<String, io::Error> {
+        let file = fs::File::open(path)?;
+        let reader = BufReader::new(file);
+
+        for line in reader.lines() {
+            let line = line?;
+            let trimmed = line.trim();
+            
+            if trimmed.starts_with("gpg_full_fingerprint_key_id_string") {
+                if let Some(equals_pos) = trimmed.find('=') {
+                    let value = trimmed[equals_pos + 1..].trim();
+                    return Self::parse_string_value(value);
+                }
+            }
+        }
+
+        Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "gpg_full_fingerprint_key_id_string not found in configuration file",
+        ))
+    }
+
+    /// Helper function to parse a string value from the configuration format.
+    /// Handles quoted strings and removes the quotes.
+    ///
+    /// # Arguments
+    /// * `value` - The raw value string from the configuration file
+    ///
+    /// # Returns
+    /// * `Ok(String)` with quotes removed if present
+    /// * `Err(io::Error)` if the value format is invalid
+    fn parse_string_value(value: &str) -> Result<String, io::Error> {
+        let trimmed = value.trim();
+        
+        // Remove quotes if present
+        if trimmed.starts_with('"') && trimmed.ends_with('"') && trimmed.len() >= 2 {
+            Ok(trimmed[1..trimmed.len() - 1].to_string())
+        } else {
+            // Accept unquoted strings as well
+            Ok(trimmed.to_string())
+        }
+    }
+
+    /// Helper function to parse a u64 value from the configuration format.
+    ///
+    /// # Arguments
+    /// * `value` - The raw value string from the configuration file
+    ///
+    /// # Returns
+    /// * `Ok(u64)` if the value could be parsed
+    /// * `Err(io::Error)` if the value couldn't be parsed as u64
+    fn parse_u64_value(value: &str) -> Result<u64, io::Error> {
+        value.trim().parse::<u64>().map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Failed to parse u64 value: {}", e),
+            )
+        })
+    }
+
+    /// Helper function to parse a u8 value from the configuration format.
+    ///
+    /// # Arguments
+    /// * `value` - The raw value string from the configuration file
+    ///
+    /// # Returns
+    /// * `Ok(u8)` if the value could be parsed
+    /// * `Err(io::Error)` if the value couldn't be parsed as u8
+    fn parse_u8_value(value: &str) -> Result<u8, io::Error> {
+        value.trim().parse::<u8>().map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Failed to parse u8 value: {}", e),
+            )
+        })
+    }
+
+    /// Helper function to parse a f32 value from the configuration format.
+    ///
+    /// # Arguments
+    /// * `value` - The raw value string from the configuration file
+    ///
+    /// # Returns
+    /// * `Ok(f32)` if the value could be parsed
+    /// * `Err(io::Error)` if the value couldn't be parsed as f32
+    fn parse_f32_value(value: &str) -> Result<f32, io::Error> {
+        value.trim().parse::<f32>().map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Failed to parse f32 value: {}", e),
+            )
+        })
     }
 }
 
@@ -8123,17 +8497,43 @@ struct GraphNavigationInstanceState {
         pa4_features - Features: User-Features & Subfeatures (or hidden features) 
         pa5_mvp - MVP: 'MVP's (Minimum Viable Products); Tools & 'Tool Stack / Tech Stack'
         pa6_feedback - Feedback: Tests, Ecological Effects, Communication, Documentation & Iteration (~agile)
-    
     */
 
+    /// Integer validation ranges as tuples (min, max) - inclusive bounds 
+    message_post_data_format_specs_integer_ranges_from_to_tuple_array: Option<Vec<(i32, i32)>>, 
+
+    /// Integer-string validation ranges as tuples (min, max) for the integer part 
+    message_post_data_format_specs_int_string_ranges_from_to_tuple_array: Option<Vec<(i32, i32)>>, 
+
+    /// Maximum string length for integer-string pairs 
+    message_post_data_format_specs_int_string_max_string_length: Option<usize>, 
+
+    /// Whether posts are public or private 
+    message_post_is_public_bool: Option<bool>, 
+
+    /// Whether user confirmation is required before posting 
+    message_post_user_confirms_bool: Option<bool>, 
+
+    /// Start time for accepting posts (UTC POSIX timestamp) 
+    message_post_start_date_utc_posix: Option<i64>, 
+
+    /// End time for accepting posts (UTC POSIX timestamp) 
+    message_post_end_date_utc_posix: Option<i64>,
     
-    
-    // app.&App,  // TODO really?
+	// // limit of how many posts (or per time duration)
+ //    max_posts: Option<i64>,
+ //    duration_for_maxposts: MaxPostsDurationUnitsEnum, // hours, days, weeks
+ //    n_durations_for_maxposts: Option<i64>, 
 }
 
 impl GraphNavigationInstanceState {
     
     /// To read a node toml: See if you want to use load_core_node_from_toml_file() instead.
+    ///
+    /// This is the routine check to see, as you navigate around
+    /// if you are not entering a new node (do nothing becuase
+    /// there is no node.toml), if you are entering a new normal node,
+    /// or if you are entering the special-case of a team-channel node.
     ///
     /// Loads and updates the `GraphNavigationInstanceState` based on the `current_full_file_path`.
     ///
@@ -8156,8 +8556,8 @@ impl GraphNavigationInstanceState {
     /// ## Other Node Types
     ///
     /// For project nodes and task nodes, this method will load relevant data from 
-    /// the `node.toml` file but will NOT load collaborator port assignments, as these 
-    /// are only relevant at the team-channel level.
+    /// the `node.toml` file but will NOT load active_team_channel, as this is 
+    ///  only relevant at the team-channel level.
     /// 
     /// ## Error Handling
     ///
@@ -8215,6 +8615,12 @@ impl GraphNavigationInstanceState {
         debug_log!("Checking if path exists: {:?}", node_toml_path.exists());
         debug_log!("Checking if path is file: {:?}", node_toml_path.is_file());
         
+        // if no file exists, return immediately!
+        if !node_toml_path.exists() {
+            debug_log!("No node.toml at {:?} - this directory is not a node", node_toml_path);
+            return;
+        }
+                
         // Try to read the file metadata
         match fs::metadata(&node_toml_path) {
             Ok(metadata) => {
@@ -8269,9 +8675,48 @@ impl GraphNavigationInstanceState {
                     self.pa6_feedback = this_node.pa6_feedback;
                 } else {
                     debug_log!("nav_graph_look_read_node_toml(), not a team channel node");
+                    /*
+                    this should be loading... node items...
+                    */
+
+                    // Update state for non-team-channel nodes
+                    // These fields should be updated for ANY node type
+                    self.current_node_teamchannel_collaborators_with_access = this_node.teamchannel_collaborators_with_access.clone();
+                    self.current_node_name = this_node.node_name.clone();
+                    self.current_node_owner = this_node.owner.clone();
+                    self.current_node_description_for_tui = this_node.description_for_tui.clone();
+                    self.current_node_directory_path = this_node.directory_path.clone();
+                    self.current_node_unique_id = this_node.node_unique_id;
+                    // self.current_node_members = this_node.members.clone();
+                    self.home_square_one = false;
+
+                    // Project Areas - these should be available for any node
+                    self.pa1_process = this_node.pa1_process;
+                    self.pa2_schedule = this_node.pa2_schedule;
+                    self.pa3_users = this_node.pa3_users;
+                    self.pa4_features = this_node.pa4_features;
+                    self.pa5_mvp = this_node.pa5_mvp;
+                    self.pa6_feedback = this_node.pa6_feedback;
+
+                    // Message posting configuration fields (if present in CoreNode)
+                    self.message_post_data_format_specs_integer_ranges_from_to_tuple_array = this_node.message_post_data_format_specs_integer_ranges_from_to_tuple_array;
+                    self.message_post_data_format_specs_int_string_ranges_from_to_tuple_array = this_node.message_post_data_format_specs_int_string_ranges_from_to_tuple_array;
+                    self.message_post_data_format_specs_int_string_max_string_length = this_node.message_post_data_format_specs_int_string_max_string_length;
+                    self.message_post_is_public_bool = this_node.message_post_is_public_bool;
+                    self.message_post_user_confirms_bool = this_node.message_post_user_confirms_bool;
+                    self.message_post_start_date_utc_posix = this_node.message_post_start_date_utc_posix;
+                    self.message_post_end_date_utc_posix = this_node.message_post_end_date_utc_posix;
+
+                    // Note: We do NOT update active_team_channel
+                    // because these are only relevant for team-channel nodes
+
+                    
                 }
             },
             Err(e) => {
+                // the error would be an error in reading node.toml
+                // it is not an error to not need to try to read
+                // a file that is not there.
                 debug_log!("Error reading file: {}", e);
                 debug_log!("This directory is not a node. nav_graph_look_read_node_toml() node.toml not found at {:?}. ", node_toml_path);
                 return;
@@ -8509,6 +8954,16 @@ struct ReadTeamchannelCollaboratorPortsToml {
 }
 
 
+
+// // Define the enum
+// #[derive(Debug, Clone)]
+// enum MaxPostsDurationUnitsEnum {
+//     Hour,
+//     Day,
+//     Week,
+//     // None,
+// }
+
 /*
 the .toml files and the overall Uma~browser must be able to know their location in the overall project_graph_data/file-system
 
@@ -8622,7 +9077,10 @@ struct CoreNode {
     /// End time for accepting posts (UTC POSIX timestamp) 
     pub message_post_end_date_utc_posix: Option<i64>,
     
-    // TODO: comments string thingy?
+	// limit of how many posts (or per time duration)
+    // pub max_posts: Option<i64>,
+    // pub duration_for_maxposts: MaxPostsDurationUnitsEnum, // hours, days, weeks
+    // pub n_durations_for_maxposts: Option<i64>, 
 }
 
 
@@ -9157,9 +9615,9 @@ impl CoreNode {
 
         Target TOML file: Starts as plain TOML → Ends as clearsigned TOML
         Addressbook file: Already clearsigned → Remains unchanged (read-only operation)
-                
-        */
         
+        */
+
         // In your function that returns Result<(), std::io::Error>
         convert_tomlfile_without_keyid_into_clearsigntoml_inplace(
             &file_path,
@@ -10342,7 +10800,7 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
     debug_log!("create_team_channel(): Starting port assignment generation for owner '{}'", owner);
 
     // Generate collaborator port assignments with global collision prevention
-    let (collaborators, mut abstract_collaborator_port_assignments) = match create_team_channel_port_assignments(&owner) {
+    let (collaborators, mut abstract_collaborator_port_assignments) = match create_teamchannel_port_assignments(&owner) {
         Ok((collab_list, port_assigns)) => {
             debug_log!(
                 "create_team_channel(): Successfully generated port assignments for {} collaborators with {} pairs",
@@ -10377,7 +10835,7 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
     // Generate collaborator port assignments with global collision prevention
     debug_log!("create_team_channel(): Starting port assignment generation for owner '{}'", owner);
 
-    let (collaborators, abstract_collaborator_port_assignments) = match create_team_channel_port_assignments(&owner) {
+    let (collaborators, abstract_collaborator_port_assignments) = match create_teamchannel_port_assignments(&owner) {
         Ok((collab_list, port_assigns)) => {
             debug_log!(
                 "create_team_channel(): Successfully generated port assignments for {} collaborators with {} pairs",
@@ -14569,47 +15027,120 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         println!("will change the local-owner-user when running Uma.");
         println!("Please enter your username:");
         
-        let mut owner_input = String::new();
-        io::stdin().read_line(&mut owner_input).unwrap();  // TODO remove this unwrap!!!!!!!!!!!!!!!!!!!!!
+        // let mut owner_input = String::new();
+        // io::stdin().read_line(&mut owner_input).unwrap();  // TODO remove this unwrap!!!!!!!!!!!!!!!!!!!!!
         
+        // let owner = owner_input.trim().to_string();
+
+        // let local_user_metadata = LocalUserUma::new(owner); // Create LocalUserUma
+        
+        // if let Err(e) = local_user_metadata.save_owner_to_file(&uma_toml_path) { 
+        //     eprintln!("Failed to create uma.toml: {}", e);
+        //     // Handle the error (e.g., exit gracefully) 
+        //     return Ok(false); 
+        // }
+        
+        
+        // // Get armored public key, using key-id (full fingerprint in)
+        // let mut full_fingerprint_key_id_string = String::new();
+        // match q_and_a_user_selects_gpg_key_full_fingerprint() {
+        //     Ok(temp_fullfingerprint_key_idstring) => {
+
+        //         println!("Selected key id (full fingerprint in): {}", temp_fullfingerprint_key_idstring);
+        //         full_fingerprint_key_id_string = temp_fullfingerprint_key_idstring;
+        // }
+        //     Err(e) => eprintln!("Error selecting full_fingerprint_key_id_string: {}", e.to_string()),
+        // }
+        
+        // Initialize Uma configuration
+        // println!("Welcome to the Uma Collaboration Tools.");
+        // println!("Please enter your username.");
+        // println!("This nickname will be the local-owner-user for this Uma 'instance.'");
+        // println!("Changing 'uma_local_owner_user = ___' in uma.toml");
+        // println!("will change the local-owner-user when running Uma.");
+        // println!("Please enter your username:");
+
+        // Read owner username with error handling
+        let mut owner_input = String::new();
+        if let Err(e) = io::stdin().read_line(&mut owner_input) {
+            eprintln!("Failed to read username input: {}", e);
+            return Ok(false);
+        }
         let owner = owner_input.trim().to_string();
 
-        let local_user_metadata = LocalUserUma::new(owner); // Create LocalUserUma
-        
-        if let Err(e) = local_user_metadata.save_owner_to_file(&uma_toml_path) { 
-            eprintln!("Failed to create uma.toml: {}", e);
-            // Handle the error (e.g., exit gracefully) 
-            return Ok(false); 
+        // Validate owner input
+        if owner.is_empty() {
+            eprintln!("Username cannot be empty");
+            return Ok(false);
         }
-        debug_log!("uma.toml created successfully!"); 
+
+        // Get GPG key fingerprint
+        let gpg_fingerprint = match q_and_a_user_selects_gpg_key_full_fingerprint() {
+            Ok(fingerprint) => {
+                println!("Selected key id (full fingerprint): {}", fingerprint);
+                fingerprint
+            }
+            Err(e) => {
+                eprintln!("Error selecting GPG key fingerprint: {}", e);
+                return Ok(false);
+            }
+        };
+
+        // Create LocalUserUma instance with both required fields
+        let local_user_metadata = LocalUserUma::new(owner, gpg_fingerprint);
+
+        // Save configuration to uma.toml file
+        if let Err(e) = local_user_metadata.save_to_uma_toml_file(&uma_toml_path) {
+            eprintln!("Failed to create uma.toml: {}", e);
+            return Ok(false);
+        }
+
+        debug_log!("uma.toml created successfully!");
     }
     
-    // ... 2. Load user metadata from the now-existing uma.toml
-    let user_metadata = match toml::from_str::<LocalUserUma>(&fs::read_to_string(&uma_toml_path)?) {
-        Ok(metadata) => {
-            debug_log!("uma.toml loaded successfully!");
-            metadata
+
+    
+    
+    
+    // // ... 2. Load user metadata from the now-existing uma.toml
+    // let user_metadata = match toml::from_str::<LocalUserUma>(&fs::read_to_string(&uma_toml_path)?) {
+    //     Ok(metadata) => {
+    //         debug_log!("uma.toml loaded successfully!");
+    //         metadata
+    //     },
+    //     Err(e) => {
+    //         eprintln!("Failed to load or parse uma.toml: {}", e); 
+    //         return Ok(false); 
+    //     }
+    // };
+
+    // // Set the uma_local_owner_user from the loaded metadata
+    // let uma_local_owner_user = user_metadata.uma_local_owner_user;
+    
+    
+    // Read only the owner username from uma.toml
+    let uma_local_owner_user = match LocalUserUma::read_owner_from_file(&uma_toml_path) {
+        Ok(owner) => {
+            debug_log!("Owner username loaded successfully: {}", owner);
+            owner
         },
         Err(e) => {
-            eprintln!("Failed to load or parse uma.toml: {}", e); 
+            eprintln!("Failed to read owner username from uma.toml: {}", e); 
             return Ok(false); 
         }
     };
 
-    // Set the uma_local_owner_user from the loaded metadata
-    let uma_local_owner_user = user_metadata.uma_local_owner_user;
-
-    // ... 2. Load user metadata from the now-existing uma.toml
-    let user_metadata = match toml::from_str::<LocalUserUma>(&fs::read_to_string(uma_toml_path)?) {
-        Ok(metadata) => {
-            debug_log!("uma.toml loaded successfully!");
-            metadata
-        },
-        Err(e) => {
-            eprintln!("Failed to load or parse uma.toml: {}", e); 
-            return Ok(false); 
-        }
-    };
+    // // ... 2. Load user metadata from the now-existing uma.toml
+    // let user_metadata = match toml::from_str::<LocalUserUma>(&fs::read_to_string(uma_toml_path)?) {
+    //     Ok(metadata) => {
+    //         debug_log!("uma.toml loaded successfully!");
+    //         metadata
+    //     },
+    //     Err(e) => {
+    //         eprintln!("Failed to load or parse uma.toml: {}", e); 
+    //         return Ok(false); 
+    //     }
+    // };
 
     
     // TODO
@@ -27037,6 +27568,28 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         pa4_features: String::new(),
         pa5_mvp: String::new(),
         pa6_feedback: String::new(),
+        // message-post
+            
+        /// Integer validation ranges as tuples (min, max) - inclusive bounds 
+        message_post_data_format_specs_integer_ranges_from_to_tuple_array: None,
+
+        /// Integer-string validation ranges as tuples (min, max) for the integer part 
+        message_post_data_format_specs_int_string_ranges_from_to_tuple_array: None,
+
+        /// Maximum string length for integer-string pairs 
+        message_post_data_format_specs_int_string_max_string_length: None,
+
+        /// Whether posts are public or private 
+        message_post_is_public_bool: None,
+
+        /// Whether user confirmation is required before posting 
+        message_post_user_confirms_bool: None,
+
+        /// Start time for accepting posts (UTC POSIX timestamp) 
+        message_post_start_date_utc_posix: None,
+
+        /// End time for accepting posts (UTC POSIX timestamp) 
+        message_post_end_date_utc_posix: None,
     };
 
     // if !verify_gpg_signature(&local_user) {
