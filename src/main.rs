@@ -381,6 +381,7 @@ use crate::clearsign_toml_module::{
     // read_field_from_toml,
     // read_basename_fields_from_toml,
     convert_tomlfile_without_keyid_into_clearsigntoml_inplace,
+    convert_tomlfile_without_keyid_using_gpgtomlkeyid_into_clearsigntoml_inplace,
     convert_toml_filewithkeyid_into_clearsigntoml_inplace,
     q_and_a_user_selects_gpg_key_full_fingerprint,
     read_single_line_string_field_from_toml,
@@ -7862,10 +7863,10 @@ fn prompt_user_for_collaborator_file_format() -> bool {
     use std::io::{self, Write};
     
     println!("\n=== Collaborator File Format Selection ===");
-    println!("Do you want to save this as a clearsigned .toml?");
-    println!("The default is GPG protected (.gpgtoml).");
-    println!("Type 'yes' for clearsign only, anything else for GPG encrypted.");
-    print!("Enter your choice: ");
+    println!("Do you want to save this as a read-able clearsigned .toml, not encrypted .gpgtoml (also clearsigned)?");
+    println!("The default (recommended) is GPG protected (.gpgtoml).");
+    println!("Type 'clearsign' to choose clearsign only, anything else (or empty enter) for default (recommended) GPG encrypted.");
+    print!("\nEnter your choice: ");
     
     // Ensure the prompt is displayed immediately
     let _ = io::stdout().flush();
@@ -7877,7 +7878,7 @@ fn prompt_user_for_collaborator_file_format() -> bool {
             // Trim whitespace and convert to lowercase for case-insensitive comparison
             let cleaned_input = input.trim().to_lowercase();
             // Return true only if user explicitly typed "yes"
-            cleaned_input == "yes"
+            cleaned_input == "clearsign"
         }
         Err(e) => {
             eprintln!("Error reading input: {}. Defaulting to GPG encrypted format.", e);
@@ -9252,14 +9253,14 @@ impl CoreNode {
     ) -> Result<CoreNode, ThisProjectError> {
 
         debug_log!("Starting CoreNode::new");
-        debug_log!("Directory path received: {:?}", directory_path);
-        debug_log!("Checking if directory exists: {}", directory_path.exists());
-        debug_log!("Absolute path: {:?}", directory_path.canonicalize().unwrap_or(directory_path.clone()));
+        debug_log!("implCoreNode-new: Directory path received: {:?}", directory_path);
+        debug_log!("implCoreNode-new: Checking if directory exists: {}", directory_path.exists());
+        debug_log!("implCoreNode-new: Absolute path: {:?}", directory_path.canonicalize().unwrap_or(directory_path.clone()));
 
-        debug_log!("About to get current timestamp");
+        debug_log!("implCoreNode-new: About to get current timestamp");
         let expires_at = get_current_unix_timestamp() + 11111111111;
         let updated_at_timestamp = get_current_unix_timestamp();
-        debug_log!("Got timestamps");
+        debug_log!("implCoreNode-new: Got timestamps");
 
         // // TODO update here: this needs to look at .gpgtoml
         // // maybe this in uma.toml
@@ -9287,31 +9288,31 @@ impl CoreNode {
         let full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
             Ok(fingerprint) => fingerprint,
             Err(e) => {
-                eprintln!("Failed to read GPG fingerprint from uma.toml: {}", e);
+                eprintln!("implCoreNode-new: Failed to read GPG fingerprint from uma.toml: {}", e);
                 return Err(ThisProjectError::from(format!(
-                    "Failed to read GPG fingerprint from uma.toml: {}", e
+                    "implCoreNode-new: Failed to read GPG fingerprint from uma.toml: {}", e
                 )));
             }
         };
         
         // 1. Get the salt list using the correct function
-        debug_log!("About to get address book data for owner: {}", owner);
+        debug_log!("implCoreNode-new: About to get address book data for owner: {}", owner);
         let owner_data = match get_addressbook_file_by_username(
             &owner,
             &full_fingerprint_key_id_string,
             ) {
             Ok(data) => {
-                debug_log!("Successfully got address book data");
+                debug_log!("implCoreNode-new: Successfully got address book data");
                 data
             },
             Err(e) => {
-                debug_log!("impl corenode new() Error getting address book data: {:?}", e);
+                debug_log!("implCoreNode-new: impl corenode new() Error getting address book data: {:?}", e);
                 return Err(e);
             }
         };
         let salt_list = owner_data.user_salt_list;
 
-        debug_log!("About to calculate node_unique_id");
+        debug_log!("implCoreNode-new: About to calculate node_unique_id");
         // 2. Calculate the hash
         // TODO add new fields to hash
         let node_unique_id = match calculate_corenode_hashes(
@@ -9321,16 +9322,16 @@ impl CoreNode {
             &salt_list,
         ) {
             Ok(id) => {
-                debug_log!("Successfully calculated node_unique_id");
+                debug_log!("implCoreNode-new: Successfully calculated node_unique_id");
                 id
             },
             Err(e) => {
-                debug_log!("Error calculating node_unique_id: {:?}", e);
+                debug_log!("implCoreNode-new: Error calculating node_unique_id: {:?}", e);
                 return Err(e);
             }
         };
         
-        debug_log!("About to create CoreNode instance");
+        debug_log!("implCoreNode-new: About to create CoreNode instance");
         // 3. Create the CoreNode instance
         let node = CoreNode {
             node_name,
@@ -9545,57 +9546,57 @@ impl CoreNode {
     ///  - File writing
     fn save_node_to_file(&self) -> Result<(), io::Error> {
         // Debug logging for initial state
-        debug_log!("Starting save_node_to_file");
-        debug_log!("Current working directory: {:?}", std::env::current_dir()?);
-        debug_log!("Target directory path: {:?}", self.directory_path);
+        debug_log!("in imple CoreNode: SNTF -> Starting save_node_to_file!");
+        debug_log!("SNTF: Current working directory: {:?}", std::env::current_dir()?);
+        debug_log!("SNTF: Target directory path: {:?}", self.directory_path);
         
         // 1. Verify and create directory structure
         if !self.directory_path.exists() {
-            debug_log!("Directory doesn't exist, creating it");
+            debug_log!("SNTF: Directory doesn't exist, creating it");
             fs::create_dir_all(&self.directory_path)?;
         }
-        debug_log!("Directory now exists: {}", self.directory_path.exists());
+        debug_log!("SNTF: Directory now exists: {}", self.directory_path.exists());
         
         // 2. Verify directory is actually a directory
         if !self.directory_path.is_dir() {
-            debug_log!("Path exists but is not a directory!");
+            debug_log!("SNTF: Path exists but is not a directory!");
             return Err(io::Error::new(
                 io::ErrorKind::Other,
-                "Path exists but is not a directory"
+                "SNTF: Path exists but is not a directory"
             ));
         }
         
         // 3. Serialize the CoreNode struct to a TOML string
         let toml_string = toml::to_string(&self).map_err(|e| {
-            debug_log!("TOML serialization error: {}", e);
+            debug_log!("SNTF: TOML serialization error: {}", e);
             io::Error::new(
                 io::ErrorKind::Other,
-                format!("TOML serialization error: {}", e),
+                format!("SNTF: TOML serialization error: {}", e),
             )
         })?;
-        debug_log!("Successfully serialized CoreNode to TOML");
+        debug_log!("SNTF: Successfully serialized CoreNode to TOML");
 
         // 4. Construct and verify the file path
         let file_path = self.directory_path.join("node.toml");
-        debug_log!("Full file path for node.toml: {:?}", file_path);
+        debug_log!("SNTF: Full file path for node.toml: {:?}", file_path);
         
         // 5. Verify parent directory one more time
         if let Some(parent) = file_path.parent() {
             if !parent.exists() {
-                debug_log!("Parent directory missing, creating: {:?}", parent);
+                debug_log!("SNTF: Parent directory missing, creating: {:?}", parent);
                 fs::create_dir_all(parent)?;
             }
         }
 
         // 6. Write the TOML data to the file 
-        debug_log!("Writing TOML data to file...");
+        debug_log!("SNTF: Writing TOML data to file...");
         fs::write(&file_path, &toml_string)?;
         
         // 7. Verify the file was created
         if file_path.exists() {
-            debug_log!("Successfully created node.toml at: {:?}", file_path);
+            debug_log!("SNTF: Successfully created node.toml at: {:?}", file_path);
         } else {
-            debug_log!("Warning: File write succeeded but file doesn't exist!");
+            debug_log!("SNTF: Warning: File write succeeded but file doesn't exist!");
         }
         
         /*
@@ -9715,17 +9716,32 @@ impl CoreNode {
         Addressbook file: Already clearsigned → Remains unchanged (read-only operation)
         
         */
+        debug_log!("SNTF: Starting convert_tomlfile_without_keyid_into_clearsigntoml_inplace()");
+        
+    
+        // Get armored public key, using key-id (full fingerprint in)
+        let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+    Ok(fingerprint) => fingerprint,
+    Err(e) => {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            format!("implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}", e)
+        ));
+    }
+};
 
+        // TODO addressbook path...not base...
         // In your function that returns Result<(), std::io::Error>
-        convert_tomlfile_without_keyid_into_clearsigntoml_inplace(
+        convert_tomlfile_without_keyid_using_gpgtomlkeyid_into_clearsigntoml_inplace(
             &file_path,
             COLLABORATOR_ADDRESSBOOK_PATH_STR,
+            &gpg_full_fingerprint_key_id_string,
         )
         .map_err(|gpg_err| {
             // Convert GpgError to std::io::Error
             std::io::Error::new(
                 std::io::ErrorKind::Other,
-                format!("GPG operation failed: {:?}", gpg_err),
+                format!("SNTF: GPG into_clearsign operation failed: {:?}", gpg_err),
             )
         })?;
 
@@ -10817,7 +10833,7 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
     use crate::manage_absolute_executable_directory_relative_paths::prepare_file_parent_directories_abs_executabledirectoryrelative;
     
     */
-    debug_log("Starting create_team_channel()");
+    debug_log("Starting CTC create_team_channel()");
     
     // Get the base directory path relative to executable location
     let team_channels_dir_path = match make_input_path_name_abs_executabledirectoryrelative_nocheck(
@@ -10825,21 +10841,21 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
     ) {
         Ok(path) => path,
         Err(e) => {
-            debug_log!("Error creating team_channels_dir path: {}", e);
+            debug_log!("CTC: Error creating team_channels_dir path: {}", e);
             return Err(ThisProjectError::IoError(e));
         }
     };
     
     let new_channel_path = team_channels_dir_path.join(&team_channel_name);
-    debug_log!("New channel path: {:?}", new_channel_path);
+    debug_log!("CTC: New channel path: {:?}", new_channel_path);
 
     // 1. Create Directory Structure (with error handling)
     // Create message_posts_browser directory
     let instant_msg_path = new_channel_path.join("message_posts_browser");
     match fs::create_dir_all(&instant_msg_path) {
-        Ok(_) => debug_log!("Created message_posts_browser directory"),
+        Ok(_) => debug_log!("CTC: Created message_posts_browser directory"),
         Err(e) => {
-            debug_log!("Error creating message_posts_browser directory: {}", e);
+            debug_log!("CTC: Error creating message_posts_browser directory: {}", e);
             return Err(ThisProjectError::IoError(e));
         }
     }
@@ -10847,9 +10863,9 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
     // Create task_browser directory
     let task_browser_path = new_channel_path.join("task_browser");
     match fs::create_dir_all(&task_browser_path) {
-        Ok(_) => debug_log!("Created task_browser directory"),
+        Ok(_) => debug_log!("CTC: Created task_browser directory"),
         Err(e) => {
-            debug_log!("Error creating task_browser directory: {}", e);
+            debug_log!("CTC: Error creating task_browser directory: {}", e);
             return Err(ThisProjectError::IoError(e));
         }
     }
@@ -10859,9 +10875,9 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
     for col_name in column_names.iter() {
         let col_path = task_browser_path.join(col_name);
         match fs::create_dir_all(&col_path) {
-            Ok(_) => debug_log!("Created task column directory: {}", col_name),
+            Ok(_) => debug_log!("CTC: Created task column directory: {}", col_name),
             Err(e) => {
-                debug_log!("Error creating task column directory {}: {}", col_name, e);
+                debug_log!("CTC: Error creating task column directory {}: {}", col_name, e);
                 return Err(ThisProjectError::IoError(e));
             }
         }
@@ -10872,9 +10888,9 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
     let metadata = NodeInstMsgBrowserMetadata::new(&team_channel_name, owner.clone());
     
     match save_toml_to_file(&metadata, &metadata_path) {
-        Ok(_) => debug_log!("Saved metadata to 0.toml"),
+        Ok(_) => debug_log!("CTC: Saved metadata to 0.toml"),
         Err(e) => {
-            debug_log!("Error saving metadata: {}", e);
+            debug_log!("CTC: Error saving metadata: {}", e);
             return Err(ThisProjectError::IoError(e));
         }
     }
@@ -10895,13 +10911,13 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
     full system v1
     */
     // Replace the demo code with this:
-    debug_log!("create_team_channel(): Starting port assignment generation for owner '{}'", owner);
+    debug_log!("CTC: create_team_channel(): Starting port assignment generation for owner '{}'", owner);
 
     // Generate collaborator port assignments with global collision prevention
     let (collaborators, mut abstract_collaborator_port_assignments) = match create_teamchannel_port_assignments(&owner) {
         Ok((collab_list, port_assigns)) => {
             debug_log!(
-                "create_team_channel(): Successfully generated port assignments for {} collaborators with {} pairs",
+                "CTC: create_team_channel(): Successfully generated port assignments for {} collaborators with {} pairs",
                 collab_list.len(),
                 port_assigns.len()
             );
@@ -10909,41 +10925,41 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
         }
         Err(e) => {
             let error_msg = format!(
-                "Failed to create port assignments for team channel: {}",
+                "CTC: Failed to create port assignments for team channel: {}",
                 e.to_string()
             );
-            eprintln!("ERROR: {}", error_msg);
+            eprintln!("CTC: ERROR: {}", error_msg);
             return Err(ThisProjectError::from(error_msg));
         }
     };
 
     // Log the results
-    debug_log!("create_team_channel(): Collaborators with access: {:?}", collaborators);
+    debug_log!("CTC: create_team_channel(): Collaborators with access: {:?}", collaborators);
     for (pair_name, assignments) in &abstract_collaborator_port_assignments {
-        debug_log!("create_team_channel(): Pair '{}' has {} port assignments", 
+        debug_log!("CTC: create_team_channel(): Pair '{}' has {} port assignments", 
             pair_name, 
             assignments.len()
         );
     }
 
     // Continue with the rest of your team channel creation...
-    debug_log!("Retrieving project area data...");
+    debug_log!("CTC: Retrieving project area data...");
         
             
     // Generate collaborator port assignments with global collision prevention
-    debug_log!("create_team_channel(): Starting port assignment generation for owner '{}'", owner);
+    debug_log!("CTC: create_team_channel(): Starting port assignment generation for owner '{}'", owner);
 
     let (collaborators, abstract_collaborator_port_assignments) = match create_teamchannel_port_assignments(&owner) {
         Ok((collab_list, port_assigns)) => {
             debug_log!(
-                "create_team_channel(): Successfully generated port assignments for {} collaborators with {} pairs",
+                "CTC: create_team_channel(): Successfully generated port assignments for {} collaborators with {} pairs",
                 collab_list.len(),
                 port_assigns.len()
             );
             
             // Log details about each pair
             for (pair_name, assignments) in &port_assigns {
-                debug_log!("create_team_channel(): Pair '{}':", pair_name);
+                debug_log!("CTC: create_team_channel(): Pair '{}':", pair_name);
                 for assignment in &assignments[0].collaborator_ports {
                     debug_log!(
                         "  - {}: ready={}, intray={}, gotit={}",
@@ -10959,7 +10975,7 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
         }
         Err(e) => {
             let error_msg = format!(
-                "Failed to create port assignments for team channel: {}",
+                "CTC: Failed to create port assignments for team channel: {}",
                 e.to_string()
             );
             eprintln!("ERROR: {}", error_msg);
@@ -10967,7 +10983,7 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
         }
     };
 
-    debug_log!("create_team_channel(): Port assignments complete. Collaborators: {:?}", collaborators);
+    debug_log!("CTC: create_team_channel(): Port assignments complete. Collaborators: {:?}", collaborators);
             
 
     // // Generate random ports for the owner
@@ -11000,12 +11016,12 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
     // debug_log!("create_team_channel(): owner added to port assignments");
 
     // Retrieve project area data
-    debug_log!("Retrieving project area data...");
+    debug_log!("CTC: Retrieving project area data...");
     
     let pa1_process = match q_and_a_get_pa1_process() {
         Ok(data) => data,
         Err(e) => {
-            debug_log!("Error getting PA1 Process: {}", e);
+            debug_log!("CTC: Error getting PA1 Process: {}", e);
             return Err(e);
         }
     };
@@ -11013,7 +11029,7 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
     let pa2_schedule = match q_and_a_get_pa2_schedule() {
         Ok(data) => data,
         Err(e) => {
-            debug_log!("Error getting PA2 Schedule: {}", e);
+            debug_log!("CTC: Error getting PA2 Schedule: {}", e);
             return Err(e);
         }
     };
@@ -11021,7 +11037,7 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
     let pa3_users = match q_and_a_get_pa3_users() {
         Ok(data) => data,
         Err(e) => {
-            debug_log!("Error getting PA3 Users: {}", e);
+            debug_log!("CTC: Error getting PA3 Users: {}", e);
             return Err(e);
         }
     };
@@ -11029,7 +11045,7 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
     let pa4_features = match q_and_a_get_pa4_features() {
         Ok(data) => data,
         Err(e) => {
-            debug_log!("Error getting PA4 Features: {}", e);
+            debug_log!("CTC: Error getting PA4 Features: {}", e);
             return Err(e);
         }
     };
@@ -11037,7 +11053,7 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
     let pa5_mvp = match q_and_a_get_pa5_mvp() {
         Ok(data) => data,
         Err(e) => {
-            debug_log!("Error getting PA5 MVP: {}", e);
+            debug_log!("CTC: Error getting PA5 MVP: {}", e);
             return Err(e);
         }
     };
@@ -11045,15 +11061,15 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
     let pa6_feedback = match q_and_a_get_pa6_feedback() {
         Ok(data) => data,
         Err(e) => {
-            debug_log!("Error getting PA6 Feedback: {}", e);
+            debug_log!("CTC: Error getting PA6 Feedback: {}", e);
             return Err(e);
         }
     };
     
-    debug_log!("All project area data retrieved successfully");
+    debug_log!("CTC: All project area data retrieved successfully");
     
     // 3. Create and Save CoreNode
-    debug_log!("Creating CoreNode...");
+    debug_log!("CTC: Creating CoreNode...");
     
     let new_node_result = CoreNode::new(
         team_channel_name.clone(),
@@ -11079,12 +11095,12 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
         None,  // message_post_end_date_utc_posix
     );
     
-    debug_log!("CoreNode creation complete, saving...");
+    debug_log!("CTC: CoreNode creation complete, saving...");
     
     // Handle the CoreNode creation result
     match new_node_result {
         Ok(new_node) => {
-            debug_log!("CoreNode created successfully, saving to file...");
+            debug_log!("CoreNode created successfully, saving to file... -> new_node.save_node_to_file()");
             match new_node.save_node_to_file() {
                 Ok(_) => {
                     debug_log!("CoreNode saved successfully");
@@ -27579,7 +27595,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
     int out?
     */
     
-    println!("HERE HERE BREAKPOINT we_love_projects");
+
     
     // Get absolute path to uma.toml configuration file
     let relative_uma_toml_path = UMA_TOML_CONFIGFILE_PATH_STR;

@@ -282,6 +282,8 @@ use std::time::{
 };
 use std::collections::HashMap;
 
+
+
 /// The function reads a single line from a TOML file that starts with a specified field name
 /// and ends with a value. The function returns an empty string if the field is not found, and
 /// does not panic or unwrap in case of errors. The function uses only standard Rust libraries
@@ -1128,6 +1130,149 @@ string
         assert_eq!(result.unwrap(), vec![1, 2, 3, 4, 5]);
         
         std::fs::remove_file(test_file).unwrap();
+    }
+}
+
+/// Gets the path to a clearsigned TOML file, checking for both .toml and .gpgtoml variants.
+///
+/// This function checks for both plain clearsigned `.toml` files and GPG-encrypted `.gpgtoml` 
+/// files, handling the appropriate one based on what exists.
+///
+/// # Behavior
+/// - Takes a base path (with or without extension)
+/// - Checks for both .toml and .gpgtoml files
+/// - If both exist: prefers .toml (already clearsigned)
+/// - If only .gpgtoml exists: decrypts to temporary file
+/// - If only .toml exists: uses it directly
+/// - If neither exists: returns error
+///
+/// # Arguments
+/// * `toml_file_path` - Base path (may include .toml extension which will be stripped)
+/// * `gpg_full_fingerprint_key_id_string` - GPG key fingerprint for decrypting `.gpgtoml` files
+///
+/// # Returns
+/// * `Ok((PathBuf, Option<PathBuf>))` - Tuple of:
+///   - The path to use (original or temp file)
+///   - Optional temp file path that needs cleanup (None for .toml, Some for .gpgtoml)
+/// * `Err(GpgError)` - If neither file exists or decryption fails
+pub fn get_path_to_clearsign_toml_for_gpgtoml_option(
+    toml_file_path: &Path,
+    gpg_full_fingerprint_key_id_string: &str,
+) -> Result<(PathBuf, Option<PathBuf>), GpgError> {
+    // Get base path without extension
+    let base_path = if toml_file_path.extension().is_some_and(|ext| ext == "toml" || ext == "gpgtoml") {
+        toml_file_path.with_extension("")
+    } else {
+        toml_file_path.to_path_buf()
+    };
+    
+    // Construct both possible paths
+    let toml_path = base_path.with_extension("toml");
+    let gpgtoml_path = base_path.with_extension("gpgtoml");
+    
+    println!("GPTCFGO Checking for files:");
+    println!("  - .toml: {}", toml_path.display());
+    println!("  - .gpgtoml: {}", gpgtoml_path.display());
+    
+    // Check which files exist
+    let toml_exists = toml_path.exists();
+    let gpgtoml_exists = gpgtoml_path.exists();
+    
+    println!("GPTCFGO File existence: .toml={}, .gpgtoml={}", toml_exists, gpgtoml_exists);
+    
+    if toml_exists {
+        // Prefer .toml if it exists
+        println!("GPTCFGO Using clearsigned TOML file: {}", toml_path.display());
+        Ok((toml_path, None))
+    } else if gpgtoml_exists {
+        // Use .gpgtoml and decrypt it
+        println!("GPTCFGO Found only .gpgtoml, decrypting: {}", gpgtoml_path.display());
+        
+        // Generate unique temp filename
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|e| GpgError::TempFileError(
+                format!("GPTCFGO Failed to generate timestamp: {}", e)
+            ))?
+            .as_nanos();
+        
+        let temp_filename = format!("gpg_decrypt_temp_{}.toml", timestamp);
+        let temp_path = std::env::temp_dir().join(&temp_filename);
+        
+        println!("GPTCFGO Decrypting to temporary file: {}", temp_path.display());
+        
+        // Execute GPG decryption
+        let output = std::process::Command::new("gpg")
+            .arg("--quiet")
+            .arg("--batch")
+            .arg("--yes")
+            .arg("--local-user")
+            .arg(gpg_full_fingerprint_key_id_string)
+            .arg("--decrypt")
+            .arg("--output")
+            .arg(&temp_path)
+            .arg(&gpgtoml_path)
+            .output()
+            .map_err(|e| GpgError::DecryptionError(
+                format!("GPTCFGO Failed to execute GPG decrypt command: {}", e)
+            ))?;
+        
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(GpgError::DecryptionError(
+                format!("GPTCFGO GPG decryption failed: {}", stderr)
+            ));
+        }
+        
+        // Verify temp file was created
+        if !temp_path.exists() {
+            return Err(GpgError::DecryptionError(
+                "GPTCFGO GPG decryption succeeded but temporary file was not created".to_string()
+            ));
+        }
+        
+        // Set restricted permissions on temp file (Unix only)
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&temp_path, std::fs::Permissions::from_mode(0o600))
+                .map_err(|e| GpgError::FileSystemError(e))?;
+        }
+        
+        println!("GPTCFGO Successfully decrypted to: {}", temp_path.display());
+        Ok((temp_path.clone(), Some(temp_path)))
+    } else {
+        // Neither file exists
+        Err(GpgError::PathError(format!(
+            "GPTCFGO No addressbook file found. Checked:\n  - {}\n  - {}",
+            toml_path.display(),
+            gpgtoml_path.display()
+        )))
+    }
+}
+
+/// Cleans up temporary files created by `get_path_to_clearsign_toml_for_gpgtoml_option`.
+///
+/// This is a convenience function to safely clean up temporary files returned by
+/// the path getter function. It only attempts deletion if a temporary path is provided.
+///
+/// # Arguments
+/// * `temp_path_option` - Optional path to temporary file that needs cleanup
+///
+/// # Note
+/// Errors during cleanup are logged but not propagated, as cleanup failures
+/// shouldn't typically interrupt the main operation flow.
+pub fn cleanup_temp_clearsign_toml(temp_path_option: Option<PathBuf>) {
+    if let Some(temp_path) = temp_path_option {
+        if let Err(e) = std::fs::remove_file(&temp_path) {
+            eprintln!(
+                "Warning: Failed to remove temporary file {}: {}",
+                temp_path.display(),
+                e
+            );
+        } else {
+            println!("Cleaned up temporary file: {}", temp_path.display());
+        }
     }
 }
 
@@ -3751,6 +3896,8 @@ pub fn make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error<P: A
     })
 }
 
+
+
 /// Converts a TOML file into a clearsigned TOML file in-place, using owner-based GPG key lookup.
 ///
 /// # Purpose
@@ -4205,6 +4352,526 @@ pub fn convert_tomlfile_without_keyid_into_clearsigntoml_inplace(
         if let Err(e_remove_temp) = fs::remove_file(&temp_output_path) {
             eprintln!(
                 "Warning: Failed to clean up residual temporary file '{}': {}",
+                temp_output_path.display(),
+                e_remove_temp
+            );
+        }
+    }
+
+    Ok(())
+}
+
+
+/// Converts a TOML file into a clearsigned TOML file in-place, using owner-based GPG key lookup.
+///
+/// # Purpose
+/// This function is designed for signing TOML files where the GPG key ID is not stored within
+/// the file itself, but rather is determined by looking up the file owner's addressbook entry.
+/// This enforces a centralized key management system where:
+/// 1. Each file declares its owner via an `"owner"` field
+/// 2. Each owner has a registered addressbook file containing their GPG key ID
+/// 3. Files can only be signed by their declared owners
+///
+/// Like `convert_toml_filewithkeyid_into_clearsigntoml_inplace`, this function creates a
+/// clearsigned TOML file that recipients can verify for:
+/// 1. **Integrity**: That the file's content has not been altered since signing
+/// 2. **Authenticity**: That the file was signed by the declared owner
+///
+/// # Key Lookup Process
+/// Instead of reading the GPG key ID directly from the target TOML file, this function:
+/// 1. Reads the owner's username from the target file's `"owner"` field
+/// 2. Constructs the path to the owner's addressbook file: `{username}__collaborator.toml`
+/// 3. Reads the GPG key ID from the addressbook file's `"gpg_publickey_id"` field
+/// 4. Uses that key ID to sign the target file
+///
+/// # "In-Place" Operation
+/// The term "in-place" means the original TOML file at `path_to_toml_file` will be
+/// **overwritten** by its clearsigned counterpart. The content changes, but the
+/// filename and location remain the same. This is a destructive operation; ensure
+/// backups are considered if the original unsigned state is important.
+///
+/// # Input TOML File Requirements
+/// The target TOML file (provided via `path_to_toml_file`) **must** contain:
+/// - An `"owner"` field with the username of the file's owner
+/// - This owner must have a corresponding addressbook file in the collaborator directory
+///
+/// The target file **must not** contain a `"gpg_publickey_id"` field, as this function
+/// is specifically for files where the key ID is managed externally.
+///
+/// # Addressbook File Requirements
+/// The owner's addressbook file (`{owner}__collaborator.toml`) must:
+/// - Exist in the collaborator addressbook directory
+/// - Be a valid clearsigned TOML file
+/// - Contain a `"gpg_publickey_id"` field with the owner's GPG key ID
+///
+/// # GPG Private Key Requirement
+/// The GPG keyring on the system executing this function **must** contain the **private key**
+/// corresponding to the GPG key ID found in the owner's addressbook file. This private key
+/// must be available and usable by GPG for signing.
+///
+/// # Process Flow
+/// 1. **Input Validation**:
+///    - Checks if `path_to_toml_file` exists and is a file
+/// 2. **Owner Extraction**:
+///    - Reads the TOML file to find and extract the value of the `"owner"` field
+///    - If this field is missing, empty, or unreadable, returns an error
+/// 3. **Addressbook Path Construction**:
+///    - Builds the absolute path to the collaborator addressbook directory
+///    - Constructs the owner's addressbook filename: `{owner}__collaborator.toml`
+/// 4. **Key ID Lookup**:
+///    - Reads the owner's addressbook file (which is already clearsigned)
+///    - Extracts the `"gpg_publickey_id"` field value
+/// 5. **Signing Key Validation**:
+///    - Validates that the private key for the looked-up key ID exists locally
+/// 6. **Clearsign Operation**:
+///    - Creates a temporary file
+///    - Uses GPG to clearsign the original file with the looked-up key ID
+/// 7. **In-Place Replacement**:
+///    - Deletes the original file
+///    - Renames the temporary clearsigned file to the original filename
+/// 8. **Cleanup**:
+///    - Removes any remaining temporary files
+///
+/// # Arguments
+/// * `path_to_toml_file` - A reference to a `Path` object representing the TOML file
+///   to be converted in-place. Must contain an `"owner"` field.
+///
+/// # Returns
+/// * `Ok(())` - If the TOML file was successfully clearsigned and replaced in-place
+/// * `Err(GpgError)` - If any step in the process fails:
+///   - `PathError`: File not found, invalid path, or path encoding issues
+///   - `GpgOperationError`: Missing fields, GPG command failures, or key lookup failures
+///   - `FileSystemError`: I/O errors during file operations
+///
+/// # Prerequisites
+/// * GnuPG (GPG) must be installed and accessible via PATH
+/// * The collaborator addressbook directory must exist and be accessible
+/// * The owner specified in the file must have a valid addressbook file
+/// * The GPG private key from the addressbook must be in the local keyring
+///
+/// # Security Considerations
+/// * **Centralized Key Management**: Keys are managed via addressbook files, not individual files
+/// * **Owner Enforcement**: Files can only be signed by their declared owners
+/// * **Destructive Operation**: Overwrites the original file
+/// * **Trust Chain**: Security depends on the integrity of the addressbook files
+pub fn convert_tomlfile_without_keyid_using_gpgtomlkeyid_into_clearsigntoml_inplace(
+    path_to_toml_file: &Path,
+    collaborator_files_directory_relative: &str,
+    gpg_full_fingerprint_key_id_string: &str,
+) -> Result<(), GpgError> {
+    // --- Stage 1: Input Validation ---
+    println!(
+        "ctwKUGci Starting in-place clearsign conversion with owner-based key lookup for: {}",
+        path_to_toml_file.display()
+    );
+
+    // Validate that the input path exists and is a file
+    if !path_to_toml_file.exists() {
+        return Err(GpgError::PathError(format!(
+            "ctwKUGci Input TOML file not found: {}",
+            path_to_toml_file.display()
+        )));
+    }
+    if !path_to_toml_file.is_file() {
+        return Err(GpgError::PathError(format!(
+            "ctwKUGci Input path is not a file: {}",
+            path_to_toml_file.display()
+        )));
+    }
+
+    // Convert path to string for TOML reading function
+    let path_str = match path_to_toml_file.to_str() {
+        Some(s) => s,
+        None => {
+            return Err(GpgError::PathError(format!(
+                "ctwKUGci Invalid path encoding for: {}",
+                path_to_toml_file.display()
+            )));
+        }
+    };
+
+    // --- Stage 2: Extract Owner from Target TOML File ---
+    let owner_field_name = "owner";
+    println!(
+        "ctwKUGci Reading file owner from field '{}' in file '{}'",
+        owner_field_name, path_str
+    );
+
+    // Read the owner username from the plain TOML file
+    let file_owner_username = match read_single_line_string_field_from_toml(path_str, owner_field_name) {
+        Ok(username) => {
+            if username.is_empty() {
+                return Err(GpgError::GpgOperationError(format!(
+                    "ctwKUGci Field '{}' is empty in TOML file: {}. File owner is required for key lookup.",
+                    owner_field_name, path_str
+                )));
+            }
+            username
+        }
+        Err(e) => {
+            return Err(GpgError::GpgOperationError(format!(
+                "ctwKUGci Failed to read file owner from field '{}' in TOML file '{}': {}",
+                owner_field_name, path_str, e
+            )));
+        }
+    };
+    println!("ctwKUGci File owner username: '{}'", file_owner_username);
+
+    // --- Stage 3: Construct Addressbook File Path ---
+    println!(
+        "ctwKUGci Constructing path to owner's addressbook file for user: '{}'",
+        file_owner_username
+    );
+
+    // Get the relative path to the collaborator addressbook directory
+    // let collaborator_files_directory_relative = collaborator_addressbook_base_path;
+    
+    // Convert to absolute path and verify the directory exists
+    let collaborator_files_directory_absolute = 
+        match make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(
+            collaborator_files_directory_relative
+        ) {
+            Ok(path) => path,
+            Err(io_error) => {
+                return Err(GpgError::FileSystemError(io_error));
+            }
+        };
+
+    println!(
+        "ctwKUGci Collaborator addressbook directory: {}",
+        collaborator_files_directory_absolute.display()
+    );
+
+    // Construct the filename for this owner's addressbook file
+    let collaborator_filename = format!("{}__collaborator.toml", file_owner_username);
+    let proto_useraddressbook_path = collaborator_files_directory_absolute.join(&collaborator_filename);
+
+    println!(
+        "ctwKUGci Owner's addressbook file path: {}",
+        proto_useraddressbook_path.display()
+    );
+    
+    
+    
+    // // In your existing functions, you can now use:
+    // let (user_addressbook_path, temp_to_cleanup) = get_path_to_clearsign_toml_for_gpgtoml_option(
+    //     &proto_useraddressbook_path,
+    //     &gpg_full_fingerprint_key_id_string
+    // )?;
+        
+    // Better error handling with explicit logging
+    let (user_addressbook_path, temp_to_cleanup) = match get_path_to_clearsign_toml_for_gpgtoml_option(
+        &proto_useraddressbook_path,
+        &gpg_full_fingerprint_key_id_string
+    ) {
+        Ok(result) => {
+            println!("Successfully got path: {:?}", result.0);
+            result
+        }
+        Err(gpg_error) => {
+            // Log the specific error
+            eprintln!("ERROR: get_path_to_clearsign_toml_for_gpgtoml_option failed!");
+            eprintln!("  Input path: {}", proto_useraddressbook_path.display());
+            eprintln!("  GPG key: {}", gpg_full_fingerprint_key_id_string);
+            eprintln!("  Error: {}", gpg_error.to_string());
+            
+            // Convert to the appropriate error type for your function
+            return Err(GpgError::GpgOperationError(format!(
+                "Failed to process addressbook file '{}': {}",
+                proto_useraddressbook_path.display(),
+                gpg_error.to_string()
+            )));
+        }
+    };
+
+    // Add logging to see what's happening
+    println!("Using addressbook path: {}", user_addressbook_path.display());
+    if let Some(ref temp) = temp_to_cleanup {
+        println!("Created temporary file: {}", temp.display());
+    }
+    
+    println!(
+        "ctwKUGci user_addressbook_path: {}",
+        user_addressbook_path.display()
+    );
+    
+    /*
+    NOTE: use this at end of function
+    // At the end, clean up:
+    cleanup_temp_clearsign_toml(temp_to_cleanup);
+    */
+
+    // Use path_to_read for reading operations...
+
+    // Verify the addressbook file exists
+    if !user_addressbook_path.exists() {
+        return Err(GpgError::PathError(format!(
+            "ctwKUGci Addressbook file not found for owner '{}': {}",
+            file_owner_username,
+            user_addressbook_path.display()
+        )));
+    }
+    if !user_addressbook_path.is_file() {
+        return Err(GpgError::PathError(format!(
+            "ctwKUGci Addressbook path is not a file for owner '{}': {}",
+            file_owner_username,
+            user_addressbook_path.display()
+        )));
+    }
+
+    // Convert addressbook path to string for the clearsigned TOML reading function
+    let user_addressbook_path_str = match user_addressbook_path.to_str() {
+        Some(s) => s,
+        None => {
+            return Err(GpgError::PathError(format!(
+                "ctwKUGci Invalid path encoding for addressbook file: {}",
+                user_addressbook_path.display()
+            )));
+        }
+    };
+
+    // --- Stage 4: Extract GPG Key ID from Addressbook File ---
+    let gpg_key_id_field_name = "gpg_publickey_id";
+    println!(
+        "ctwKUGci Reading GPG key ID from clearsigned addressbook file field '{}' in '{}'",
+        gpg_key_id_field_name,
+        user_addressbook_path_str
+    );
+
+    // Read the GPG key ID from the clearsigned addressbook file
+    let signing_key_id = match read_singleline_string_from_clearsigntoml(
+        user_addressbook_path_str,
+        gpg_key_id_field_name
+    ) {
+        Ok(key_id) => {
+            if key_id.is_empty() {
+                return Err(GpgError::GpgOperationError(format!(
+                    "ctwKUGci Field '{}' is empty in addressbook file for owner '{}': {}",
+                    gpg_key_id_field_name,
+                    file_owner_username,
+                    user_addressbook_path_str
+                )));
+            }
+            key_id
+        }
+        Err(e) => {
+            return Err(GpgError::GpgOperationError(format!(
+                "ctwKUGci Failed to read GPG key ID from field '{}' in clearsigned addressbook file '{}': {}",
+                gpg_key_id_field_name,
+                user_addressbook_path_str,
+                e
+            )));
+        }
+    };
+    println!(
+        "ctwKUGci GPG signing key ID for owner '{}': '{}'",
+        file_owner_username, signing_key_id
+    );
+
+    // --- Stage 5: Validate GPG Secret Key Availability ---
+    println!(
+        "ctwKUGci Validating GPG secret key availability for key ID: '{}'",
+        signing_key_id
+    );
+
+    match validate_gpg_secret_key(&signing_key_id) {
+        Ok(true) => {
+            println!(
+                "ctwKUGci GPG secret key for ID '{}' (owner: '{}') is available for signing.",
+                signing_key_id, file_owner_username
+            );
+        }
+        Ok(false) => {
+            return Err(GpgError::GpgOperationError(format!(
+                "ctwKUGci GPG secret key for ID '{}' (from addressbook of owner '{}') not found in keyring or is not usable. Cannot sign file.",
+                signing_key_id,
+                file_owner_username
+            )));
+        }
+        Err(e) => {
+            // Pass through the GpgError from validate_gpg_secret_key
+            return Err(e);
+        }
+    }
+    
+    // And the time is cleanup the time!
+    cleanup_temp_clearsign_toml(temp_to_cleanup);
+
+    // --- Stage 6: Prepare Temporary File Path ---
+    // Create a temporary file path in the same directory for atomic rename
+    let original_file_name = match path_to_toml_file.file_name() {
+        Some(name) => name.to_string_lossy(),
+        None => {
+            return Err(GpgError::PathError(format!(
+                "ctwKUGci: ERROR Could not get filename from path: {}",
+                path_to_toml_file.display()
+            )));
+        }
+    };
+
+    let temp_file_name = format!("{}.tmp_clearsign_{}", original_file_name, generate_timestamp());
+    let temp_output_path = path_to_toml_file.with_file_name(temp_file_name);
+
+    println!(
+        "ctwKUGci Temporary file for clearsigned output: {}",
+        temp_output_path.display()
+    );
+
+    // --- Stage 7: Perform GPG Clearsign Operation ---
+    println!(
+        "ctwKUGci: Performing GPG clearsign operation on '{}' using key ID '{}' (owner: '{}')",
+        path_to_toml_file.display(),
+        signing_key_id,
+        file_owner_username
+    );
+
+    let clearsign_command_result = Command::new("gpg")
+        .arg("--clearsign")              // Perform a clearsign operation
+        .arg("--batch")                  // Ensure no interactive prompts
+        .arg("--yes")                    // Assume "yes" to prompts
+        .arg("--default-key")            // Specify the key to use
+        .arg(&signing_key_id)            // The key ID from addressbook
+        .arg("--output")                 // Specify output file
+        .arg(&temp_output_path)          // Temporary output path
+        .arg(path_to_toml_file)          // Input file to clearsign
+        .output();                       // Execute and get output
+
+    match clearsign_command_result {
+        Ok(output) => {
+            if output.status.success() {
+                println!(
+                    "ctwKUGci: GPG clearsign operation successful. Output written to temporary file: {}",
+                    temp_output_path.display()
+                );
+            } else {
+                // GPG command executed but failed
+                let stderr_output = String::from_utf8_lossy(&output.stderr);
+                // Clean up temporary file if it exists
+                if temp_output_path.exists() {
+                    if let Err(e_remove) = fs::remove_file(&temp_output_path) {
+                        eprintln!(
+                            "ctwKUGci:  Additionally, failed to remove temporary file '{}' after GPG error: {}",
+                            temp_output_path.display(),
+                            e_remove
+                        );
+                    }
+                }
+                return Err(GpgError::GpgOperationError(format!(
+                    "ctwKUGci: GPG clearsign command failed for file '{}' with exit code: {}. GPG stderr: {}",
+                    path_to_toml_file.display(),
+                    output.status,
+                    stderr_output.trim()
+                )));
+            }
+        }
+        Err(e) => {
+            // Failed to execute GPG command
+            if temp_output_path.exists() {
+                if let Err(e_remove) = fs::remove_file(&temp_output_path) {
+                    eprintln!(
+                        "ctwKUGci: Additionally, failed to remove temporary file '{}' after GPG execution error: {}",
+                        temp_output_path.display(),
+                        e_remove
+                    );
+                }
+            }
+            return Err(GpgError::GpgOperationError(format!(
+                "ctwKUGci: Failed to execute GPG clearsign command for file '{}': {}",
+                path_to_toml_file.display(),
+                e
+            )));
+        }
+    }
+
+    // --- Stage 8: In-Place Replacement ---
+    println!(
+        "ctwKUGci: Replacing original file '{}' with its clearsigned version",
+        path_to_toml_file.display()
+    );
+
+    // Read original content as backup in case of catastrophic failure
+    let original_content_backup = match fs::read_to_string(path_to_toml_file) {
+        Ok(content) => content,
+        Err(e) => {
+            return Err(GpgError::FileSystemError(std::io::Error::new(
+                e.kind(),
+                format!(
+                    "ctwKUGci: Failed to read original file for backup before deletion: {}. Error: {}",
+                    path_to_toml_file.display(),
+                    e
+                ),
+            )));
+        }
+    };
+
+    // Delete the original file
+    if let Err(e_remove_orig) = fs::remove_file(path_to_toml_file) {
+        // Critical error: couldn't delete original
+        return Err(GpgError::FileSystemError(std::io::Error::new(
+            e_remove_orig.kind(),
+            format!(
+                "ctwKUGci: Failed to delete original file '{}' before replacing with clearsigned version. Clearsigned data is in '{}'. Error: {}",
+                path_to_toml_file.display(),
+                temp_output_path.display(),
+                e_remove_orig
+            ),
+        )));
+    }
+    println!("ctwKUGci: Original file '{}' deleted.", path_to_toml_file.display());
+
+    // Rename the temporary clearsigned file to the original filename
+    if let Err(e_rename) = fs::rename(&temp_output_path, path_to_toml_file) {
+        // Critical error: rename failed after deleting original
+        eprintln!(
+            "ctwKUGci: Critical: Failed to rename temporary file '{}' to original file path '{}'. Attempting to restore original content.",
+            temp_output_path.display(),
+            path_to_toml_file.display()
+        );
+        
+        // Attempt to restore original content
+        if let Err(e_restore) = fs::write(path_to_toml_file, original_content_backup) {
+            eprintln!(
+                "ctwKUGci: Catastrophic failure: Could not restore original file '{}' after rename failure. Original content might be lost. Clearsigned data is in '{}'. Restore error: {}. Rename error: {}",
+                path_to_toml_file.display(),
+                temp_output_path.display(),
+                e_restore,
+                e_rename
+            );
+        } else {
+            eprintln!(
+                "ctwKUGci: Successfully restored original content to '{}'. Clearsigned data is in '{}'. Rename error: {}",
+                path_to_toml_file.display(),
+                temp_output_path.display(),
+                e_rename
+            );
+        }
+        
+        return Err(GpgError::FileSystemError(std::io::Error::new(
+            e_rename.kind(),
+            format!(
+                "ctwKUGci: Critical: Failed to rename temporary file '{}' to original file path '{}'. Original data was in memory and an attempt to restore was made. Please check file states. Rename Error: {}",
+                temp_output_path.display(),
+                path_to_toml_file.display(),
+                e_rename
+            ),
+        )));
+    }
+
+    println!(
+        "ctwKUGci: Successfully converted '{}' to clearsigned TOML in-place using owner '{}' key.",
+        path_to_toml_file.display(),
+        file_owner_username
+    );
+
+    // --- Stage 9: Cleanup ---
+    if temp_output_path.exists() {
+        println!(
+            "ctwKUGci: Attempting to clean up residual temporary file: {}",
+            temp_output_path.display()
+        );
+        if let Err(e_remove_temp) = fs::remove_file(&temp_output_path) {
+            eprintln!(
+                "ctwKUGci: Warning: Failed to clean up residual temporary file '{}': {}",
                 temp_output_path.display(),
                 e_remove_temp
             );
