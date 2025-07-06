@@ -653,13 +653,60 @@ pub enum SyncError {
 
 #[derive(Debug)]
 enum MyCustomError {
+    /// IO errors from file operations
     IoError(std::io::Error),
+    /// TOML parsing and deserialization errors
     TomlDeserializationError(toml::de::Error),
+    /// Invalid data format or content errors
     InvalidData(String),
-    PortCollision(String), 
-    // ... other variants as needed ...
+    /// Port collision errors when ports are already in use
+    PortCollision(String),
+    /// Custom error messages for general purpose errors
+    Custom(String),
 }
 
+
+// Implement From<ThisProjectError> for MyCustomError
+impl From<ThisProjectError> for MyCustomError {
+    fn from(error: ThisProjectError) -> Self {
+        match error {
+            ThisProjectError::IoError(e) => MyCustomError::IoError(e),
+            ThisProjectError::TomlDeserializationError(e) => MyCustomError::TomlDeserializationError(e),
+            ThisProjectError::InvalidData(msg) => MyCustomError::InvalidData(msg),
+            ThisProjectError::InvalidInput(msg) => MyCustomError::InvalidData(msg), 
+            ThisProjectError::PortCollision(msg) => MyCustomError::PortCollision(msg),
+            // ... add other conversions for your variants ...
+            _ => MyCustomError::InvalidData("Unknown error".to_string()), // Default case
+        }
+    }
+}
+
+impl From<String> for MyCustomError {
+    /// Converts a String into a MyCustomError::Custom variant
+    fn from(error_message: String) -> Self {
+        MyCustomError::Custom(error_message)
+    }
+}
+
+impl From<&str> for MyCustomError {
+    /// Converts a &str into a MyCustomError::Custom variant
+    fn from(error_message: &str) -> Self {
+        MyCustomError::Custom(error_message.to_string())
+    }
+}
+
+// Optional: implement Display trait for better error messages
+impl std::fmt::Display for MyCustomError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MyCustomError::IoError(e) => write!(f, "IO Error: {}", e),
+            MyCustomError::TomlDeserializationError(e) => write!(f, "TOML Error: {}", e),
+            MyCustomError::InvalidData(msg) => write!(f, "Invalid Data: {}", msg),
+            MyCustomError::PortCollision(msg) => write!(f, "Port Collision: {}", msg),
+            MyCustomError::Custom(msg) => write!(f, "Error: {}", msg),
+        }
+    }
+}
 // Implement PartialEq manually:
 impl PartialEq for MyCustomError {
     fn eq(&self, other: &Self) -> bool {
@@ -688,18 +735,18 @@ impl StdError for MyCustomError {
     }
 }
 
-impl std::fmt::Display for MyCustomError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            MyCustomError::IoError(err) => write!(f, "IO Error: {}", err),
-            // MyCustomError::TomlDeserializationError(err) => write!(f, "TOML Error: {}", err),
-            MyCustomError::TomlDeserializationError(err) => write!(f, "TOML Error: {}", err),
-            // &MyCustomError::InvalidData(_) => todo!(),
-            &MyCustomError::InvalidData(_) => todo!(),
-            &MyCustomError::PortCollision(_) => todo!(),
-        }
-    }
-}
+// impl std::fmt::Display for MyCustomError {
+//     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+//         match self {
+//             MyCustomError::IoError(err) => write!(f, "IO Error: {}", err),
+//             // MyCustomError::TomlDeserializationError(err) => write!(f, "TOML Error: {}", err),
+//             MyCustomError::TomlDeserializationError(err) => write!(f, "TOML Error: {}", err),
+//             // &MyCustomError::InvalidData(_) => todo!(),
+//             &MyCustomError::InvalidData(_) => todo!(),
+//             &MyCustomError::PortCollision(_) => todo!(),
+//         }
+//     }
+// }
 
 // Implement the From trait for easy conversion from io::Error and toml::de::Error:
 impl From<io::Error> for MyCustomError {
@@ -816,20 +863,7 @@ impl From<&str> for ThisProjectError {
     }
 }
 
-// Implement From<ThisProjectError> for MyCustomError
-impl From<ThisProjectError> for MyCustomError {
-    fn from(error: ThisProjectError) -> Self {
-        match error {
-            ThisProjectError::IoError(e) => MyCustomError::IoError(e),
-            ThisProjectError::TomlDeserializationError(e) => MyCustomError::TomlDeserializationError(e),
-            ThisProjectError::InvalidData(msg) => MyCustomError::InvalidData(msg),
-            ThisProjectError::InvalidInput(msg) => MyCustomError::InvalidData(msg), 
-            ThisProjectError::PortCollision(msg) => MyCustomError::PortCollision(msg),
-            // ... add other conversions for your variants ...
-            _ => MyCustomError::InvalidData("Unknown error".to_string()), // Default case
-        }
-    }
-}
+
 
 fn remove_duplicates_from_path_array(vec: Vec<PathBuf>) -> Vec<PathBuf> {
     let mut seen = HashSet::new();
@@ -7167,6 +7201,39 @@ struct LocalUserUma {
     /// Refresh rate in seconds for log mode display (default: 1.5)
     log_mode_refresh: f32,
 }
+/*
+Sample:
+
+// Get armored public key, using key-id (full fingerprint in)
+let full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+    Ok(fingerprint) => fingerprint,
+    Err(e) => {
+        eprintln!("Failed to read GPG fingerprint from uma.toml: {}", e);
+        return Err(ThisProjectError::from(format!(
+            "Failed to read GPG fingerprint from uma.toml: {}", e
+        )));
+    }
+};
+
+// Read individual fields when you don't need the whole struct
+let uma_local_owner_user = match LocalUserUma::read_owner_from_file(&uma_toml_path) {
+    Ok(owner) => owner,
+    Err(e) => {
+        eprintln!("Failed to read owner from uma.toml: {}", e);
+        return Ok(false);
+    }
+};
+
+let gpg_fingerprint = match LocalUserUma::read_gpg_fingerprint_from_file(&uma_toml_path) {
+    Ok(fingerprint) => fingerprint,
+    Err(e) => {
+        eprintln!("Failed to read GPG fingerprint from uma.toml: {}", e);
+        return Ok(false);
+    }
+};
+
+debug_log!("Loaded user: {} with GPG key: {}", uma_local_owner_user, gpg_fingerprint);
+*/
 
 impl LocalUserUma {
     /// Creates a new LocalUserUma instance with the specified owner and GPG fingerprint.
@@ -7326,8 +7393,13 @@ log_mode_refresh = {}"#,
     /// # Returns
     /// * `Ok(String)` containing the owner username if found
     /// * `Err(io::Error)` if the file couldn't be read or the field wasn't found
-    fn read_owner_from_file(path: &Path) -> Result<String, io::Error> {
-        let file = fs::File::open(path)?;
+    fn read_owner_from_file() -> Result<String, io::Error> {
+        // Get the absolute path to the flag file relative to the executable
+        let uma_toml_path_exerel_abs = make_input_path_name_abs_executabledirectoryrelative_nocheck(
+            "uma.toml"
+        )?;
+            
+        let file = fs::File::open(uma_toml_path_exerel_abs)?;
         let reader = BufReader::new(file);
 
         for line in reader.lines() {
@@ -7356,8 +7428,14 @@ log_mode_refresh = {}"#,
     /// # Returns
     /// * `Ok(String)` containing the GPG fingerprint if found
     /// * `Err(io::Error)` if the file couldn't be read or the field wasn't found
-    fn read_gpg_fingerprint_from_file(path: &Path) -> Result<String, io::Error> {
-        let file = fs::File::open(path)?;
+    fn read_gpg_fingerprint_from_file() -> Result<String, io::Error> {
+        
+        // Get the absolute path to the flag file relative to the executable
+        let uma_toml_path_exerel_abs = make_input_path_name_abs_executabledirectoryrelative_nocheck(
+            "uma.toml"
+        )?;
+            
+        let file = fs::File::open(uma_toml_path_exerel_abs)?;
         let reader = BufReader::new(file);
 
         for line in reader.lines() {
@@ -9183,18 +9261,38 @@ impl CoreNode {
         let updated_at_timestamp = get_current_unix_timestamp();
         debug_log!("Got timestamps");
 
-        // TODO update here: this needs to look at .gpgtoml
-        // maybe this in uma.toml
-        // Get armored public key, using key-id (full fingerprint in)
-        let mut full_fingerprint_key_id_string = String::new();
-        match q_and_a_user_selects_gpg_key_full_fingerprint() {
-            Ok(temp_fullfingerprint_key_idstring) => {
+        // // TODO update here: this needs to look at .gpgtoml
+        // // maybe this in uma.toml
+        // // Get armored public key, using key-id (full fingerprint in)
+        // let mut full_fingerprint_key_id_string = String::new();
+        // match q_and_a_user_selects_gpg_key_full_fingerprint() {
+        //     Ok(temp_fullfingerprint_key_idstring) => {
 
-                println!("Selected key id (full fingerprint in): {}", temp_fullfingerprint_key_idstring);
-                full_fingerprint_key_id_string = temp_fullfingerprint_key_idstring;
-        }
-            Err(e) => eprintln!("Error selecting full_fingerprint_key_id_string: {}", e.to_string()),
-        }
+        //         println!("Selected key id (full fingerprint in): {}", temp_fullfingerprint_key_idstring);
+        //         full_fingerprint_key_id_string = temp_fullfingerprint_key_idstring;
+        // }
+        //     Err(e) => eprintln!("Error selecting full_fingerprint_key_id_string: {}", e.to_string()),
+        // }
+        
+        // // Get armored public key, using key-id (full fingerprint in)
+        // let mut full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+        //     Ok(fingerprint) => fingerprint,
+        //     Err(e) => {
+        //         eprintln!("Failed to read GPG fingerprint from uma.toml: {}", e);
+        //         // return Ok(false);
+        //     }
+        // };
+        
+        // Get armored public key, using key-id (full fingerprint in)
+        let full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+            Ok(fingerprint) => fingerprint,
+            Err(e) => {
+                eprintln!("Failed to read GPG fingerprint from uma.toml: {}", e);
+                return Err(ThisProjectError::from(format!(
+                    "Failed to read GPG fingerprint from uma.toml: {}", e
+                )));
+            }
+        };
         
         // 1. Get the salt list using the correct function
         debug_log!("About to get address book data for owner: {}", owner);
@@ -15075,7 +15173,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         }
 
         // Get GPG key fingerprint
-        let gpg_fingerprint = match q_and_a_user_selects_gpg_key_full_fingerprint() {
+        let full_fingerprint_key_id_string = match q_and_a_user_selects_gpg_key_full_fingerprint() {
             Ok(fingerprint) => {
                 println!("Selected key id (full fingerprint): {}", fingerprint);
                 fingerprint
@@ -15087,7 +15185,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         };
 
         // Create LocalUserUma instance with both required fields
-        let local_user_metadata = LocalUserUma::new(owner, gpg_fingerprint);
+        let local_user_metadata = LocalUserUma::new(owner, full_fingerprint_key_id_string);
 
         // Save configuration to uma.toml file
         if let Err(e) = local_user_metadata.save_to_uma_toml_file(&uma_toml_path) {
@@ -15119,7 +15217,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
     
     
     // Read only the owner username from uma.toml
-    let uma_local_owner_user = match LocalUserUma::read_owner_from_file(&uma_toml_path) {
+    let uma_local_owner_user = match LocalUserUma::read_owner_from_file() {
         Ok(owner) => {
             debug_log!("Owner username loaded successfully: {}", owner);
             owner
@@ -15698,16 +15796,26 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         
         /// new Q&A workflow, not requiring the user to open a new terminal and use gpg cli
         
-        // Get armored public key, using key-id (full fingerprint in)
-        let mut full_fingerprint_key_id_string = String::new();
-        match q_and_a_user_selects_gpg_key_full_fingerprint() {
-            Ok(temp_fullfingerprint_key_idstring) => {
+        // // Get armored public key, using key-id (full fingerprint in)
+        // let mut full_fingerprint_key_id_string = String::new();
+        // match q_and_a_user_selects_gpg_key_full_fingerprint() {
+        //     Ok(temp_fullfingerprint_key_idstring) => {
                 
-                println!("Selected key id (full fingerprint in): {}", temp_fullfingerprint_key_idstring);
-                full_fingerprint_key_id_string = temp_fullfingerprint_key_idstring;
-        }
-            Err(e) => eprintln!("Error selecting full_fingerprint_key_id_string: {}", e.to_string()),
-        }
+        //         println!("Selected key id (full fingerprint in): {}", temp_fullfingerprint_key_idstring);
+        //         full_fingerprint_key_id_string = temp_fullfingerprint_key_idstring;
+        // }
+        //     Err(e) => eprintln!("Error selecting full_fingerprint_key_id_string: {}", e.to_string()),
+        // }
+        
+        // Get armored public key, using key-id (full fingerprint in)
+        let mut full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+            Ok(fingerprint) => fingerprint,
+            Err(e) => {
+                eprintln!("Failed to read GPG fingerprint from uma.toml: {}", e);
+                return Ok(false);
+            }
+        }; 
+        
         // Get armored public key, using key-id (full fingerprint in)
         let mut gpg_key_public = String::new();
         match get_gpg_armored_public_key_via_key_id(&full_fingerprint_key_id_string) {
@@ -15951,18 +16059,27 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
     
     // Network Detection or Work Offline?
     
-    println!("\nSign-In: You are your GPG: Who are you?");
+    // println!("\nSign-In: You are your GPG: Who are you?");
 
-    // Get armored public key, using key-id (full fingerprint in)
-    let mut full_fingerprint_key_id_string = String::new();
-    match q_and_a_user_selects_gpg_key_full_fingerprint() {
-        Ok(temp_fullfingerprint_key_idstring) => {
+    // // Get armored public key, using key-id (full fingerprint in)
+    // let mut full_fingerprint_key_id_string = String::new();
+    // match q_and_a_user_selects_gpg_key_full_fingerprint() {
+    //     Ok(temp_fullfingerprint_key_idstring) => {
             
-            println!("Selected key id (full fingerprint in): {}", temp_fullfingerprint_key_idstring);
-            full_fingerprint_key_id_string = temp_fullfingerprint_key_idstring;
-    }
-        Err(e) => eprintln!("Error selecting full_fingerprint_key_id_string: {}", e.to_string()),
-    }
+    //         println!("Selected key id (full fingerprint in): {}", temp_fullfingerprint_key_idstring);
+    //         full_fingerprint_key_id_string = temp_fullfingerprint_key_idstring;
+    // }
+    //     Err(e) => eprintln!("Error selecting full_fingerprint_key_id_string: {}", e.to_string()),
+    // }
+    
+    // Get armored public key, using key-id (full fingerprint in)
+    let mut full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+        Ok(fingerprint) => fingerprint,
+        Err(e) => {
+            eprintln!("Failed to read GPG fingerprint from uma.toml: {}", e);
+            return Ok(false);
+        }
+    };
 
     // Call get_band__find_valid_network_index_and_type to retrieve band info and online status
     let (
@@ -21816,18 +21933,39 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
         &filtered_collaboratorsarray
     );
 
-    // TODO this perhaps shou be a parameter for this functions
-    // maybe in uma.toml
-    // Get armored public key, using key-id (full fingerprint in)
-    let mut full_fingerprint_key_id_string = String::new();
-    match q_and_a_user_selects_gpg_key_full_fingerprint() {
-        Ok(temp_fullfingerprint_key_idstring) => {
+    // // TODO this perhaps shou be a parameter for this functions
+    // // maybe in uma.toml
+    // // Get armored public key, using key-id (full fingerprint in)
+    // let mut full_fingerprint_key_id_string = String::new();
+    // match q_and_a_user_selects_gpg_key_full_fingerprint() {
+    //     Ok(temp_fullfingerprint_key_idstring) => {
             
-            println!("Selected key id (full fingerprint in): {}", temp_fullfingerprint_key_idstring);
-            full_fingerprint_key_id_string = temp_fullfingerprint_key_idstring;
-    }
-        Err(e) => eprintln!("Error selecting full_fingerprint_key_id_string: {}", e.to_string()),
-    }
+    //         println!("Selected key id (full fingerprint in): {}", temp_fullfingerprint_key_idstring);
+    //         full_fingerprint_key_id_string = temp_fullfingerprint_key_idstring;
+    // }
+    //     Err(e) => eprintln!("Error selecting full_fingerprint_key_id_string: {}", e.to_string()),
+    // }
+    
+    
+    // // Get armored public key, using key-id (full fingerprint in)
+    // let mut full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+    //     Ok(fingerprint) => fingerprint,
+    //     Err(e) => {
+    //         eprintln!("Failed to read GPG fingerprint from uma.toml: {}", e);
+    //         return Ok(false);
+    //     }
+    // };
+    
+    // Get armored public key, using key-id (full fingerprint in)
+    let full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+        Ok(fingerprint) => fingerprint,
+        Err(e) => {
+            eprintln!("Failed to read GPG fingerprint from uma.toml: {}", e);
+            return Err(MyCustomError::from(format!(
+                "Failed to read GPG fingerprint from uma.toml: {}", e
+            )));
+        }
+    };
     
     // --- Get local user's salt list ---
     let local_user_salt_list = match get_addressbook_file_by_username(
