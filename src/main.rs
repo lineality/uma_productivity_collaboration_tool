@@ -10376,6 +10376,7 @@ fn display_simple_tui_table(headers: &[&str], data: &[Vec<&str>]) {
 
 
 /*
+Under Construction!
 should not use any 3rd party crates
 - pending:
 -- clearsign validate
@@ -21577,6 +21578,7 @@ fn move_node_directory(
     Ok(())
 }
 
+/// TODO update for clearsign...just load_core_node_from_toml_file?
 /// Updates the directory_path in node.toml
 /// Does NOT attempt to move anything
 fn update_node_path_in_toml(new_node_path: &Path) -> Result<(), ThisProjectError> {
