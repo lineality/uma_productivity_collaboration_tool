@@ -9627,14 +9627,14 @@ impl CoreNode {
             
             // Convert the collaborator files directory to an absolute path based on the executable's location
             // AND verify that the directory exists (returns error if not found or not a directory)
-            let collaborator_files_directory_relative = COLLABORATOR_ADDRESSBOOK_PATH_STR;
-            let collaborator_files_directory_absolute = make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(
-                collaborator_files_directory_relative
+            let addressbook_files_directory_relative = COLLABORATOR_ADDRESSBOOK_PATH_STR;
+            let addressbook_files_directory_absolute = make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(
+                addressbook_files_directory_relative
             ).map_err(|io_error| ThisProjectError::IoError(io_error))?;
             
             // Construct the path to the user's collaborator file, which contains their GPG key ID
             let collaborator_filename = format!("{}__collaborator.toml", file_owner_username);
-            let user_config_path = collaborator_files_directory_absolute.join(collaborator_filename);
+            let user_config_path = addressbook_files_directory_absolute.join(collaborator_filename);
             
             debug_log!("user_config_path {}", user_config_path.display());
 
@@ -9730,8 +9730,7 @@ impl CoreNode {
     }
 };
 
-        // TODO addressbook path...not base...
-        // In your function that returns Result<(), std::io::Error>
+
         convert_tomlfile_without_keyid_using_gpgtomlkeyid_into_clearsigntoml_inplace(
             &file_path,
             COLLABORATOR_ADDRESSBOOK_PATH_STR,
@@ -10379,7 +10378,107 @@ fn display_simple_tui_table(headers: &[&str], data: &[Vec<&str>]) {
 Under Construction!
 should not use any 3rd party crates
 - pending:
--- clearsign validate
+-- clearsign validate: new functions in clearsign module 
+-- add new fields for message-post
+
+- only extract values from validated files
+AGAIN: ONLY EXTRACT VALUES FROM VALIDATED FILES!
+AGAIN: ONLY EXTRACT VALUES FROM VALIDATED FILES!!
+NO BACK DOORS
+AGAIN: ONLY EXTRACT VALUES FROM VALIDATED FILES!!!
+NO VALIDATION = NO EXTRACTED VALUE
+NO BACK DOORS!!!!!!!
+NO EXCEPTIONS
+
+use functions from clearsign module
+
+    Get the current-local-user's gpg in this function with something like this:
+            // Get GPG key fingerprint
+            let full_fingerprint_key_id_string = match q_and_a_user_selects_gpg_key_full_fingerprint() {
+                Ok(fingerprint) => {
+                    println!("Selected key id (full fingerprint): {}", fingerprint);
+                    fingerprint
+                }
+                Err(e) => {
+                    eprintln!("Error selecting GPG key fingerprint: {}", e);
+                    return Ok(false);
+                }
+            };
+            
+            
+this is the current core node struct
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+struct CoreNode {
+    /// The name of the node. This is used for display and identification.
+    node_name: String,
+    /// A description of the node, intended for display in the TUI.
+    description_for_tui: String,
+    /// A unique identifier for the node, generated using pearson hashes of the other fields
+    node_unique_id: Vec<u8>,
+    /// The path to the directory on the file system where the node's data is stored.
+    directory_path: PathBuf,
+    /// An order number used to define the node's position within a list or hierarchy.
+    // order_number: u32,
+    /// The priority of the node, which can be High, Medium, or Low.
+    // priority: NodePriority,
+    /// The username of the owner of the node.
+    owner: String,
+    /// The Unix timestamp representing when the node was last updated.
+    updated_at_timestamp: u64,
+    /// The Unix timestamp representing when the node will expire.
+    expires_at: u64,
+    /// A vector of `CoreNode` structs representing the child nodes of this node.
+    // children: Vec<CoreNode>,
+    /// An ordered vector of collaborator usernames associated with this node.
+    teamchannel_collaborators_with_access: Vec<String>,
+    /// A map containing port assignments for each collaborator associated with the node.
+    abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
+
+    // project areas: project module items as task-ish thing
+    pa1_process: String,
+    pa2_schedule: Vec<u64>, 
+    pa3_users: String,
+    pa4_features: String,
+    pa5_mvp: String,
+    pa6_feedback: String,
+    
+    /////////////////
+    // message_posts
+    /////////////////
+    
+    /// Integer validation ranges as tuples (min, max) - inclusive bounds 
+    pub message_post_data_format_specs_integer_ranges_from_to_tuple_array: Option<Vec<(i32, i32)>>, 
+
+    /// Integer-string validation ranges as tuples (min, max) for the integer part 
+    pub message_post_data_format_specs_int_string_ranges_from_to_tuple_array: Option<Vec<(i32, i32)>>, 
+
+    /// Maximum string length for integer-string pairs 
+    pub message_post_data_format_specs_int_string_max_string_length: Option<usize>, 
+
+    /// Whether posts are public or private 
+    pub message_post_is_public_bool: Option<bool>, 
+
+    /// Whether user confirmation is required before posting 
+    pub message_post_user_confirms_bool: Option<bool>, 
+
+    /// Start time for accepting posts (UTC POSIX timestamp) 
+    pub message_post_start_date_utc_posix: Option<i64>, 
+
+    /// End time for accepting posts (UTC POSIX timestamp) 
+    pub message_post_end_date_utc_posix: Option<i64>,
+    
+	// limit of how many posts (or per time duration)
+    // pub max_posts: Option<i64>,
+    // pub duration_for_maxposts: MaxPostsDurationUnitsEnum, // hours, days, weeks
+    // pub n_durations_for_maxposts: Option<i64>, 
+}
+
+    set addressbook_files_directory_relative to the contstant and pass it along
+    the clearsign module does not have the UMA constant, so pass it in.
+    let addressbook_files_directory_relative = COLLABORATOR_ADDRESSBOOK_PATH_STR;
+
+
 */
 /// Loads a `CoreNode` from a TOML file, handling potential errors.
 ///
@@ -16386,6 +16485,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
 //     Ok(result_path)
 // }
 
+
 /// Exports the user's public GPG key to a specified location for sharing.
 /// 
 /// This function performs the following steps:
@@ -16439,14 +16539,14 @@ pub fn export_public_gpg_key_converts_to_abs_path(
     
     // Convert the collaborator files directory to an absolute path based on the executable's location
     // AND verify that the directory exists (returns error if not found or not a directory)
-    let collaborator_files_directory_relative = COLLABORATOR_ADDRESSBOOK_PATH_STR;
-    let collaborator_files_directory_absolute = make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(
-        collaborator_files_directory_relative
+    let addressbook_files_directory_relative = COLLABORATOR_ADDRESSBOOK_PATH_STR;
+    let addressbook_files_directory_absolute = make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(
+        addressbook_files_directory_relative
     ).map_err(|io_error| ThisProjectError::IoError(io_error))?;
     
     // Construct the path to the user's collaborator file, which contains their GPG key ID
     let collaborator_filename = format!("{}__collaborator.toml", uma_localowneruser_username);
-    let user_config_path = collaborator_files_directory_absolute.join(collaborator_filename);
+    let user_config_path = addressbook_files_directory_absolute.join(collaborator_filename);
     
     debug_log!("user_config_path {}", user_config_path.display());
 
