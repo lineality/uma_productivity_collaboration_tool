@@ -2645,7 +2645,7 @@ Seri_Deseri Deserialize From .toml Start
 // /// # Example
 // ///
 // /// ```
-// /// let collaborator_data = read_one_collaborator_setup_toml("alice");
+// /// let collaborator_data = read_one_collaborator_addressbook_toml("alice");
 // ///
 // /// match collaborator_data {
 // ///     Ok(data) => { /* ... process the collaborator data */ },
@@ -2681,7 +2681,7 @@ Seri_Deseri Deserialize From .toml Start
 // /// let username = "alice";
 // ///
 // /// /// Read the collaborator data from the TOML file
-// /// match read_one_collaborator_setup_toml(username) {
+// /// match read_one_collaborator_addressbook_toml(username) {
 // ///     Ok(collaborator) => {
 // ///         // Print the collaborator data
 // ///         println!("Collaborator Data for {}:", username);
@@ -2692,8 +2692,8 @@ Seri_Deseri Deserialize From .toml Start
 // ///         println!("Error reading collaborator data for {}: {}", username, e);
 // ///     }
 // /// }
-// fn read_one_collaborator_setup_toml(collaborator_name: &str) -> Result<CollaboratorTomlData, ThisProjectError> {
-//     debug_log("Starting ROCST: read_one_collaborator_setup_toml()");
+// fn read_one_collaborator_addressbook_toml(collaborator_name: &str) -> Result<CollaboratorTomlData, ThisProjectError> {
+//     debug_log("Starting ROCST: read_one_collaborator_addressbook_toml()");
 
 //     // 1. Construct File Path
 //     let relative_file_path = Path::new(COLLABORATOR_ADDRESSBOOK_PATH_STR)
@@ -2710,7 +2710,7 @@ Seri_Deseri Deserialize From .toml Start
 //         }
 //     };
     
-//     debug_log!("ROCST: read_one_collaborator_setup_toml(), abs_file_path (executable-relative) -> {:?}", abs_file_path);
+//     debug_log!("ROCST: read_one_collaborator_addressbook_toml(), abs_file_path (executable-relative) -> {:?}", abs_file_path);
 
 //     // 2. Read TOML File
 //     let toml_string = fs::read_to_string(&abs_file_path)?; 
@@ -2789,6 +2789,8 @@ Seri_Deseri Deserialize From .toml Start
 //     }
 // }
 
+
+/// TODO: warning - any error should delete the temp file
 /// Reads and parses collaborator setup data from a clearsigned TOML file.
 ///
 /// This function securely reads collaborator data from a clearsigned TOML file by:
@@ -2843,7 +2845,7 @@ Seri_Deseri Deserialize From .toml Start
 ///
 /// # Example Usage
 /// ```rust
-/// match read_one_collaborator_setup_toml("alice") {
+/// match read_one_collaborator_addressbook_toml("alice") {
 ///     Ok(collaborator_data) => {
 ///         println!("Successfully loaded data for: {}", collaborator_data.user_name);
 ///         println!("IP addresses: {:?}", collaborator_data.ipv4_addresses);
@@ -2917,7 +2919,7 @@ Seri_Deseri Deserialize From .toml Start
 ///
 /// # Example
 /// ```no_run
-/// let collaborator_data = read_one_collaborator_setup_toml(
+/// let collaborator_data = read_one_collaborator_addressbook_toml(
 ///     "alice",
 ///     "1234567890ABCDEF1234567890ABCDEF12345678"
 /// )?;
@@ -2927,11 +2929,11 @@ Seri_Deseri Deserialize From .toml Start
 /// - Logs which file type was selected (.toml vs .gpgtoml)
 /// - Logs file paths being processed
 /// - Logs GPG operations and any errors encountered
-fn read_one_collaborator_setup_toml(
+fn read_one_collaborator_addressbook_toml(
     collaborator_name: &str,
     full_fingerprint_key_id_string: &str,
     ) -> Result<CollaboratorTomlData, ThisProjectError> {
-    debug_log("Starting ROCST: read_one_collaborator_setup_toml()");
+    debug_log("Starting ROCST: read_one_collaborator_addressbook_toml()");
 
     // // 1. Construct File Path
     // let relative_file_path = Path::new(COLLABORATOR_ADDRESSBOOK_PATH_STR)
@@ -3032,13 +3034,13 @@ fn read_one_collaborator_setup_toml(
         ));
     };
     
-    debug_log!("ROCST: read_one_collaborator_setup_toml(), abs_file_path -> {:?}", abs_file_path);
+    debug_log!("ROCST: read_one_collaborator_addressbook_toml(), abs_file_path -> {:?}", abs_file_path);
 
 
     /////
     
     
-    debug_log!("ROCST: read_one_collaborator_setup_toml(), abs_file_path (executable-relative) -> {:?}", abs_file_path);
+    debug_log!("ROCST: read_one_collaborator_addressbook_toml(), abs_file_path (executable-relative) -> {:?}", abs_file_path);
 
     // Convert path to string for clearsign functions
     let file_path_str = abs_file_path.to_str()
@@ -4178,7 +4180,7 @@ pub fn global_ports_exclusion_list_generator() -> Result<HashSet<u16>, ThisProje
     Ok(global_port_set)
 }
 
-
+/// WARNING: 'validation' needs to be defined TODO
 /// Interactively collects and validates collaborator names from user input.
 ///
 /// # Purpose
@@ -8500,7 +8502,7 @@ fn add_collaborator_qa(
 
     // Load existing collaborators from files
     // let existing_collaborators = read_a_collaborator_setup_toml().unwrap_or_default();
-    // let (existing_collaborators, errors) = read_one_collaborator_setup_toml().unwrap_or_default(); 
+    // let (existing_collaborators, errors) = read_one_collaborator_addressbook_toml().unwrap_or_default(); 
 
     // Persist the new collaborator
     add_collaborator_setup_file(
@@ -10505,6 +10507,17 @@ fn load_core_node_from_toml_file(file_path: &Path) -> Result<CoreNode, String> {
 
     - functions to read each field of clearsigned node
     - adding new 'modular message-post' fields to navigation state
+    
+    workflow, steps:
+    1. validation: clearsign validation of the node.toml file,
+       which is a file without the gpg-public-key to validate,
+       so use the owner field to get the owners public gpg key
+       from their addressbook file (which will also need to be
+           clearsign validated...after it is .gpg decrypted,
+           using the current-user's gpg-key-id from
+           the uma.toml config file)
+    1.1 get 
+    
 
     */
     
@@ -11278,7 +11291,7 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
 //     // let mut rng = rand::thread_rng(); // Move RNG outside the loop for fewer calls
 
 //     // Load the owner's data
-//     // let owner_data = read_one_collaborator_setup_toml(&owner)?;
+//     // let owner_data = read_one_collaborator_addressbook_toml(&owner)?;
 
 //     // Simplified port generation (move rng outside loop):
 //     // Assign random ports to owner:  Only owner for new channel.
@@ -11621,7 +11634,7 @@ fn create_core_node(
 //     let abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>> = HashMap::new();
 
 //     // Load the owner's data
-//     let owner_data = read_one_collaborator_setup_toml(&owner)?;
+//     let owner_data = read_one_collaborator_addressbook_toml(&owner)?;
 
 //     let mut rng = rand::thread_rng();
 
@@ -14060,7 +14073,7 @@ fn handle_custom_end_date_input(start_date_timestamp: Option<i64>) -> Result<Opt
 //     // let mut rng = rand::thread_rng(); // Move RNG outside the loop for fewer calls
 
 //     // Load the owner's data
-//     let owner_data = read_one_collaborator_setup_toml(&owner)?;
+//     let owner_data = read_one_collaborator_addressbook_toml(&owner)?;
 
 //     // Simplified port generation (move rng outside loop):
 //     // Assign random ports to owner:  Only owner for new channel.
@@ -21164,7 +21177,7 @@ fn get_next_message_file_path(current_path: &Path, username: &str) -> PathBuf {
 
 // /// Loads collaborator data from a TOML file based on the username.
 // ///
-// /// This function uses `read_one_collaborator_setup_toml` to deserialize the collaborator data.
+// /// This function uses `read_one_collaborator_addressbook_toml` to deserialize the collaborator data.
 // ///
 // /// # Arguments
 // ///
@@ -21213,15 +21226,15 @@ fn get_next_message_file_path(current_path: &Path, username: &str) -> PathBuf {
 //             Err(e) => debug_log!("Could not read directory contents: {}", e),
 //         }
 //     }
-//     // Use read_one_collaborator_setup_toml to read and deserialize the data
-//     match read_one_collaborator_setup_toml(username) {
+//     // Use read_one_collaborator_addressbook_toml to read and deserialize the data
+//     match read_one_collaborator_addressbook_toml(username) {
 //         Ok(loaded_collaborator) => {
 //             debug_log!("Collaborator file found ok.");
 //             Ok(loaded_collaborator)
 //         }
 //         Err(e) => {
 //             debug_log!("Collaborator file not found: {:?}", e);
-//             Err(e) // Propagate the error from read_one_collaborator_setup_toml
+//             Err(e) // Propagate the error from read_one_collaborator_addressbook_toml
 //         }
 //     }
 // }
@@ -21309,9 +21322,9 @@ fn get_addressbook_file_by_username(
         }
     }
     
-    // Update the read_one_collaborator_setup_toml function to also use executable-relative paths
+    // Update the read_one_collaborator_addressbook_toml function to also use executable-relative paths
     // Since we don't see its implementation, we'll assume it's a function we need to call
-    match read_one_collaborator_setup_toml(
+    match read_one_collaborator_addressbook_toml(
         username,
         &full_fingerprint_key_id_string,
         ) {

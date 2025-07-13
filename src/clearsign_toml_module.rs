@@ -648,190 +648,190 @@ pub fn read_u64_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str
 }
 
 
-/// Reads an array of u64 bytes from a TOML file into a Vec<u64>.
-/// 
-/// # Purpose
-/// This function parses a TOML file to extract an array of unsigned 8-bit integers (bytes)
-/// defined by the specified field name. It handles arrays in the format:
-/// ```toml
-/// node_unique_id = [160, 167, 195, 169]
-/// ```
-/// 
-/// # Arguments
-/// * `path` - Path to the TOML file
-/// * `name_of_toml_field_key_to_read` - Name of the field to read (must be an array of integers in the TOML file)
-/// 
-/// # Returns
-/// * `Result<Vec<u64>, String>` - A vector containing all bytes in the array if successful,
-///   or an error message if the field is not found or values are out of u64 range (0 to 2^64-1)
-/// 
-/// # Error Handling
-/// This function returns errors when:
-/// * The file cannot be opened or read
-/// * The specified field is not found
-/// * The field is not a valid array format
-/// * Any value in the array is not a valid u64 (outside 0 to 2^64-1 range)
-/// * Any value cannot be parsed as an integer
-/// 
-/// # Example
-/// For a TOML file containing:
-/// ```toml
-/// node_unique_id = [160, 167, 195, 169]
-/// hash_bytes = [255, 0, 128, 64]
-/// ```
-/// 
-/// Usage:
-/// ```
-/// let node_id = read_u64_array_field_from_toml("config.toml", "node_unique_id")?;
-/// // Returns: vec![160, 167, 195, 169]
-/// ```
-/// 
-/// # Implementation Notes
-/// - Values must be in the range 0 to 2^64-1 (valid u64 range)
-/// - Negative numbers will result in an error
-/// - Floating point numbers will result in an error
-/// - The function trims whitespace and handles trailing commas
-pub fn read_u64_array_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<Vec<u64>, String> {
-    // Open the file
-    let file = File::open(path)
-        .map_err(|e| format!("Failed to open file '{}': {}", path, e))?;
+// /// Reads an array of u64 bytes from a TOML file into a Vec<u64>.
+// /// 
+// /// # Purpose
+// /// This function parses a TOML file to extract an array of unsigned 8-bit integers (bytes)
+// /// defined by the specified field name. It handles arrays in the format:
+// /// ```toml
+// /// node_unique_id = [160, 167, 195, 169]
+// /// ```
+// /// 
+// /// # Arguments
+// /// * `path` - Path to the TOML file
+// /// * `name_of_toml_field_key_to_read` - Name of the field to read (must be an array of integers in the TOML file)
+// /// 
+// /// # Returns
+// /// * `Result<Vec<u64>, String>` - A vector containing all bytes in the array if successful,
+// ///   or an error message if the field is not found or values are out of u64 range (0 to 2^64-1)
+// /// 
+// /// # Error Handling
+// /// This function returns errors when:
+// /// * The file cannot be opened or read
+// /// * The specified field is not found
+// /// * The field is not a valid array format
+// /// * Any value in the array is not a valid u64 (outside 0 to 2^64-1 range)
+// /// * Any value cannot be parsed as an integer
+// /// 
+// /// # Example
+// /// For a TOML file containing:
+// /// ```toml
+// /// node_unique_id = [160, 167, 195, 169]
+// /// hash_bytes = [255, 0, 128, 64]
+// /// ```
+// /// 
+// /// Usage:
+// /// ```
+// /// let node_id = read_u64_array_field_from_toml("config.toml", "node_unique_id")?;
+// /// // Returns: vec![160, 167, 195, 169]
+// /// ```
+// /// 
+// /// # Implementation Notes
+// /// - Values must be in the range 0 to 2^64-1 (valid u64 range)
+// /// - Negative numbers will result in an error
+// /// - Floating point numbers will result in an error
+// /// - The function trims whitespace and handles trailing commas
+// pub fn read_u64_array_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<Vec<u64>, String> {
+//     // Open the file
+//     let file = File::open(path)
+//         .map_err(|e| format!("Failed to open file '{}': {}", path, e))?;
     
-    let reader = io::BufReader::new(file);
+//     let reader = io::BufReader::new(file);
     
-    // Process each line looking for our field
-    for (line_number, line_result) in reader.lines().enumerate() {
-        // Handle line reading errors
-        let line = line_result
-            .map_err(|e| format!("Failed to read line {} from file '{}': {}", line_number + 1, path, e))?;
+//     // Process each line looking for our field
+//     for (line_number, line_result) in reader.lines().enumerate() {
+//         // Handle line reading errors
+//         let line = line_result
+//             .map_err(|e| format!("Failed to read line {} from file '{}': {}", line_number + 1, path, e))?;
         
-        let trimmed = line.trim();
+//         let trimmed = line.trim();
         
-        // Skip empty lines and comments
-        if trimmed.is_empty() || trimmed.starts_with('#') {
-            continue;
-        }
+//         // Skip empty lines and comments
+//         if trimmed.is_empty() || trimmed.starts_with('#') {
+//             continue;
+//         }
         
-        // Check if this line contains our field with an array
-        if trimmed.starts_with(&format!("{} = [", name_of_toml_field_key_to_read)) {
-            // Extract the array portion
-            let array_part = trimmed
-                .splitn(2, '=')
-                .nth(1)
-                .ok_or_else(|| format!("Invalid array format for field '{}'", name_of_toml_field_key_to_read))?
-                .trim()
-                .trim_start_matches('[')
-                .trim_end_matches(']')
-                .trim();
+//         // Check if this line contains our field with an array
+//         if trimmed.starts_with(&format!("{} = [", name_of_toml_field_key_to_read)) {
+//             // Extract the array portion
+//             let array_part = trimmed
+//                 .splitn(2, '=')
+//                 .nth(1)
+//                 .ok_or_else(|| format!("Invalid array format for field '{}'", name_of_toml_field_key_to_read))?
+//                 .trim()
+//                 .trim_start_matches('[')
+//                 .trim_end_matches(']')
+//                 .trim();
             
-            // If the array is empty, return an empty vector
-            if array_part.is_empty() {
-                return Ok(Vec::new());
-            }
+//             // If the array is empty, return an empty vector
+//             if array_part.is_empty() {
+//                 return Ok(Vec::new());
+//             }
             
-            // Parse each value as u64
-            let mut byte_values = Vec::new();
+//             // Parse each value as u64
+//             let mut byte_values = Vec::new();
             
-            for (index, value_str) in array_part.split(',').enumerate() {
-                let cleaned_value = value_str.trim();
+//             for (index, value_str) in array_part.split(',').enumerate() {
+//                 let cleaned_value = value_str.trim();
                 
-                if cleaned_value.is_empty() {
-                    continue; // Skip empty entries (e.g., trailing comma)
-                }
+//                 if cleaned_value.is_empty() {
+//                     continue; // Skip empty entries (e.g., trailing comma)
+//                 }
                 
-                // First parse as i32 to check range, then convert to u64
-                match cleaned_value.parse::<i32>() {
-                    Ok(int_value) => {
-                        // Check if value is in valid u64 range (0 to 2^64-1)
-                        if int_value < 0 || int_value > 255 {
-                            return Err(format!(
-                                "Value {} at index {} in array field '{}' is out of valid byte range (0 to 2^64-1)",
-                                int_value, index, name_of_toml_field_key_to_read
-                            ));
-                        }
-                        // Safe to convert to u64 now
-                        byte_values.push(int_value as u64);
-                    }
-                    Err(e) => {
-                        return Err(format!(
-                            "Failed to parse value '{}' at index {} in array field '{}' as integer: {}",
-                            cleaned_value, index, name_of_toml_field_key_to_read, e
-                        ));
-                    }
-                }
-            }
+//                 // First parse as i32 to check range, then convert to u64
+//                 match cleaned_value.parse::<i32>() {
+//                     Ok(int_value) => {
+//                         // Check if value is in valid u64 range (0 to 2^64-1)
+//                         if int_value < 0 || int_value > 255 {
+//                             return Err(format!(
+//                                 "Value {} at index {} in array field '{}' is out of valid byte range (0 to 2^64-1)",
+//                                 int_value, index, name_of_toml_field_key_to_read
+//                             ));
+//                         }
+//                         // Safe to convert to u64 now
+//                         byte_values.push(int_value as u64);
+//                     }
+//                     Err(e) => {
+//                         return Err(format!(
+//                             "Failed to parse value '{}' at index {} in array field '{}' as integer: {}",
+//                             cleaned_value, index, name_of_toml_field_key_to_read, e
+//                         ));
+//                     }
+//                 }
+//             }
             
-            return Ok(byte_values);
-        }
-    }
+//             return Ok(byte_values);
+//         }
+//     }
     
-    // Field not found
-    Err(format!("Byte array field '{}' not found in file '{}'", name_of_toml_field_key_to_read, path))
-}
+//     // Field not found
+//     Err(format!("Byte array field '{}' not found in file '{}'", name_of_toml_field_key_to_read, path))
+// }
 
-/// Reads an array of u64 bytes from a clearsigned TOML file into a Vec<u64>.
-/// 
-/// # Purpose
-/// This function securely reads a byte array from a clearsigned TOML file by:
-/// 1. Extracting the GPG public key from the file
-/// 2. Verifying the clearsign signature
-/// 3. If verification succeeds, reading the requested byte array
-/// 
-/// # Security
-/// This function ensures that the TOML file's content is cryptographically verified 
-/// before any data is extracted, providing integrity protection for the configuration.
-/// No data is returned if signature validation fails.
-/// 
-/// # Arguments
-/// * `path` - Path to the clearsigned TOML file
-/// * `name_of_toml_field_key_to_read` - Name of the field to read (must be an array of bytes in the TOML file)
-/// 
-/// # Returns
-/// * `Result<Vec<u64>, String>` - A vector containing all bytes in the array if successful and verified,
-///   or an error message if verification fails or the field cannot be read
-/// 
-/// # Example
-/// For a clearsigned TOML file containing:
-/// ```toml
-/// node_unique_id = [160, 167, 195, 169]
-/// 
-/// gpg_key_public = """
-/// -----BEGIN PGP PUBLIC KEY BLOCK-----
-/// ...
-/// -----END PGP PUBLIC KEY BLOCK-----
-/// """
-/// ```
-/// 
-/// Usage:
-/// ```
-/// let node_id = read_u64_array_from_clearsigntoml("node_config.toml", "node_unique_id")?;
-/// // Returns: vec![160, 167, 195, 169] if signature verification succeeds
-/// ```
-/// 
-/// # Errors
-/// Returns an error if:
-/// * GPG key extraction fails
-/// * Signature verification fails
-/// * The field doesn't exist or isn't a valid byte array
-/// * Any value is outside the valid u64 range (0 to 2^64-1)
-pub fn read_u64_array_from_clearsigntoml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<Vec<u64>, String> {
-    // Step 1: Extract GPG key from the file
-    let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")
-        .map_err(|e| format!("Failed to extract GPG key from file '{}': {}", path, e))?;
+// /// Reads an array of u64 bytes from a clearsigned TOML file into a Vec<u64>.
+// /// 
+// /// # Purpose
+// /// This function securely reads a byte array from a clearsigned TOML file by:
+// /// 1. Extracting the GPG public key from the file
+// /// 2. Verifying the clearsign signature
+// /// 3. If verification succeeds, reading the requested byte array
+// /// 
+// /// # Security
+// /// This function ensures that the TOML file's content is cryptographically verified 
+// /// before any data is extracted, providing integrity protection for the configuration.
+// /// No data is returned if signature validation fails.
+// /// 
+// /// # Arguments
+// /// * `path` - Path to the clearsigned TOML file
+// /// * `name_of_toml_field_key_to_read` - Name of the field to read (must be an array of bytes in the TOML file)
+// /// 
+// /// # Returns
+// /// * `Result<Vec<u64>, String>` - A vector containing all bytes in the array if successful and verified,
+// ///   or an error message if verification fails or the field cannot be read
+// /// 
+// /// # Example
+// /// For a clearsigned TOML file containing:
+// /// ```toml
+// /// node_unique_id = [160, 167, 195, 169]
+// /// 
+// /// gpg_key_public = """
+// /// -----BEGIN PGP PUBLIC KEY BLOCK-----
+// /// ...
+// /// -----END PGP PUBLIC KEY BLOCK-----
+// /// """
+// /// ```
+// /// 
+// /// Usage:
+// /// ```
+// /// let node_id = read_u64_array_from_clearsigntoml("node_config.toml", "node_unique_id")?;
+// /// // Returns: vec![160, 167, 195, 169] if signature verification succeeds
+// /// ```
+// /// 
+// /// # Errors
+// /// Returns an error if:
+// /// * GPG key extraction fails
+// /// * Signature verification fails
+// /// * The field doesn't exist or isn't a valid byte array
+// /// * Any value is outside the valid u64 range (0 to 2^64-1)
+// pub fn read_u64_array_from_clearsigntoml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<Vec<u64>, String> {
+//     // Step 1: Extract GPG key from the file
+//     let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")
+//         .map_err(|e| format!("Failed to extract GPG key from file '{}': {}", path, e))?;
     
-    // Step 2: Verify the file's clearsign signature
-    let verification_result = verify_clearsign(path, &key)
-        .map_err(|e| format!("Error during signature verification of file '{}': {}", path, e))?;
+//     // Step 2: Verify the file's clearsign signature
+//     let verification_result = verify_clearsign(path, &key)
+//         .map_err(|e| format!("Error during signature verification of file '{}': {}", path, e))?;
     
-    // Step 3: Check if verification was successful
-    if !verification_result {
-        return Err(format!("GPG signature verification failed for file: {}", path));
-    }
+//     // Step 3: Check if verification was successful
+//     if !verification_result {
+//         return Err(format!("GPG signature verification failed for file: {}", path));
+//     }
     
-    // Step 4: If verification succeeded, read the requested byte array field
-    read_u64_array_field_from_toml(path, name_of_toml_field_key_to_read)
-        .map_err(|e| format!("Failed to read byte array '{}' from verified file '{}': {}", 
-                             name_of_toml_field_key_to_read, path, e))
-}
+//     // Step 4: If verification succeeded, read the requested byte array field
+//     read_u64_array_field_from_toml(path, name_of_toml_field_key_to_read)
+//         .map_err(|e| format!("Failed to read byte array '{}' from verified file '{}': {}", 
+//                              name_of_toml_field_key_to_read, path, e))
+// }
 
 
 /// Reads a floating point (f64) value from a TOML file.
@@ -7452,6 +7452,499 @@ malformed = [100, "text", 50]
     // would be similar to existing clearsign tests in the module
 }
 
+/// Reads an array of u64 values from a clearsigned TOML file into a Vec<u64>.
+/// 
+/// # Purpose
+/// This function securely reads a u64 array from a clearsigned TOML file by:
+/// 1. Extracting the GPG public key from the file
+/// 2. Verifying the clearsign signature
+/// 3. If verification succeeds, reading the requested u64 array
+/// 
+/// # Security
+/// This function ensures that the TOML file's content is cryptographically verified 
+/// before any data is extracted, providing integrity protection for the configuration.
+/// No data is returned if signature validation fails.
+/// 
+/// # Arguments
+/// * `path` - Path to the clearsigned TOML file
+/// * `name_of_toml_field_key_to_read` - Name of the field to read (must be an array of u64 values in the TOML file)
+/// 
+/// # Returns
+/// * `Result<Vec<u64>, String>` - A vector containing all u64 values in the array if successful and verified,
+///   or an error message if verification fails or the field cannot be read
+/// 
+/// # Example
+/// For a clearsigned TOML file containing:
+/// ```toml
+/// node_timestamp_array = [1640995200000, 1640995260000, 1640995320000]
+/// large_id_array = [18446744073709551615, 9223372036854775807, 1000000000000000000]
+/// 
+/// gpg_key_public = """
+/// -----BEGIN PGP PUBLIC KEY BLOCK-----
+/// ...
+/// -----END PGP PUBLIC KEY BLOCK-----
+/// """
+/// ```
+/// 
+/// Usage:
+/// ```
+/// let timestamps = read_u64_array_from_clearsigntoml("node_config.toml", "node_timestamp_array")?;
+/// // Returns: vec![1640995200000, 1640995260000, 1640995320000] if signature verification succeeds
+/// ```
+/// 
+/// # Errors
+/// Returns an error if:
+/// * GPG key extraction fails
+/// * Signature verification fails
+/// * The field doesn't exist or isn't a valid u64 array
+/// * Any value is outside the valid u64 range (0 to 18,446,744,073,709,551,615)
+/// * Any value is negative or a floating point number
+pub fn read_u64_array_from_clearsigntoml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<Vec<u64>, String> {
+    // Step 1: Extract GPG key from the file
+    let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")
+        .map_err(|e| format!("Failed to extract GPG key from file '{}': {}", path, e))?;
+    
+    // Step 2: Verify the file's clearsign signature
+    let verification_result = verify_clearsign(path, &key)
+        .map_err(|e| format!("Error during signature verification of file '{}': {}", path, e))?;
+    
+    // Step 3: Check if verification was successful
+    if !verification_result {
+        return Err(format!("GPG signature verification failed for file: {}", path));
+    }
+    
+    // Step 4: If verification succeeded, read the requested u64 array field
+    read_u64_array_field_from_toml(path, name_of_toml_field_key_to_read)
+        .map_err(|e| format!("Failed to read u64 array '{}' from verified file '{}': {}", 
+                             name_of_toml_field_key_to_read, path, e))
+}
+
+/// Reads an array of u64 values from a clearsigned TOML file using a GPG key from a separate config file.
+/// 
+/// # Purpose
+/// This function provides a way to verify and read u64 arrays from clearsigned TOML files
+/// that don't contain their own GPG keys, instead using a key from a separate centralized config file.
+/// This approach helps maintain consistent key management across multiple clearsigned files.
+/// 
+/// # Process Flow
+/// 1. Extracts the GPG public key from the specified config file
+/// 2. Uses this key to verify the signature of the target clearsigned TOML file  
+/// 3. If verification succeeds, reads the requested u64 array field
+/// 4. Returns the u64 array or an appropriate error
+/// 
+/// # Arguments
+/// * `path_str_to_config_file_that_contains_gpg_key` - Path to a clearsigned TOML file containing the GPG public key
+/// * `pathstr_to_target_clearsigned_file` - Path to the clearsigned TOML file to read from (without its own GPG key)
+/// * `name_of_toml_field_key_to_read` - Name of the u64 array field to read from the target file
+/// 
+/// # Returns
+/// * `Ok(Vec<u64>)` - The u64 array values if verification succeeds
+/// * `Err(String)` - Detailed error message if any step fails
+/// 
+/// # Example
+/// ```
+/// let config_path = "security_config.toml";
+/// let node_file = "node_config.toml";
+/// 
+/// let node_timestamps = read_u64_array_using_clearsignedconfig_from_clearsigntoml(
+///     config_path,
+///     node_file, 
+///     "node_timestamp_array"
+/// )?;
+/// // Returns: vec![1640995200000, 1640995260000, 1640995320000] if verification succeeds
+/// ```
+/// 
+/// # Use Cases
+/// * Reading timestamp arrays from node configuration files
+/// * Reading large identifier arrays from verified configuration files
+/// * Reading sequence numbers or version arrays from secure configuration files
+/// * Reading capacity or limit arrays from authenticated configuration files
+pub fn read_u64_array_using_clearsignedconfig_from_clearsigntoml(
+    path_str_to_config_file_that_contains_gpg_key: &str,
+    pathstr_to_target_clearsigned_file: &str, 
+    name_of_toml_field_key_to_read: &str,
+) -> Result<Vec<u64>, String> {
+    // Step 1: Extract GPG key from the config file
+    let key = extract_gpg_key_from_clearsigntoml(path_str_to_config_file_that_contains_gpg_key, "gpg_key_public")
+        .map_err(|e| format!("Failed to extract GPG key from config file '{}': {}", 
+                             path_str_to_config_file_that_contains_gpg_key, e))?;
+
+    // Step 2: Verify the target file using the extracted key
+    let verification_result = verify_clearsign(pathstr_to_target_clearsigned_file, &key)
+        .map_err(|e| format!("Failed during verification process: {}", e))?;
+
+    // Step 3: Check verification result
+    if !verification_result {
+        return Err(format!(
+            "GPG signature verification failed for file '{}' using key from '{}'",
+            pathstr_to_target_clearsigned_file,
+            path_str_to_config_file_that_contains_gpg_key
+        ));
+    }
+
+    // Step 4: Read the requested u64 array field from the verified file
+    read_u64_array_field_from_toml(pathstr_to_target_clearsigned_file, name_of_toml_field_key_to_read)
+        .map_err(|e| format!("Failed to read u64 array '{}' from verified file '{}': {}", 
+                             name_of_toml_field_key_to_read, pathstr_to_target_clearsigned_file, e))
+}
+
+/// Reads an array of u64 values from a TOML file into a Vec<u64>.
+/// 
+/// # Purpose
+/// This function parses a TOML file to extract an array of unsigned 64-bit integers
+/// defined by the specified field name. It handles arrays in the format:
+/// ```toml
+/// node_timestamp_array = [1640995200000, 1640995260000, 1640995320000]
+/// ```
+/// 
+/// # Arguments
+/// * `path` - Path to the TOML file
+/// * `name_of_toml_field_key_to_read` - Name of the field to read (must be an array of integers in the TOML file)
+/// 
+/// # Returns
+/// * `Result<Vec<u64>, String>` - A vector containing all u64 values in the array if successful,
+///   or an error message if the field is not found or values are out of u64 range
+/// 
+/// # Error Handling
+/// This function returns errors when:
+/// * The file cannot be opened or read
+/// * The specified field is not found
+/// * The field is not a valid array format
+/// * Any value in the array is not a valid u64 (outside 0 to 18,446,744,073,709,551,615 range)
+/// * Any value cannot be parsed as an integer
+/// * Any value is negative or a floating point number
+/// 
+/// # Example
+/// For a TOML file containing:
+/// ```toml
+/// node_timestamp_array = [1640995200000, 1640995260000, 1640995320000]
+/// large_numbers = [18446744073709551615, 0, 9223372036854775807]
+/// ```
+/// 
+/// Usage:
+/// ```
+/// let timestamps = read_u64_array_field_from_toml("config.toml", "node_timestamp_array")?;
+/// // Returns: vec![1640995200000, 1640995260000, 1640995320000]
+/// ```
+/// 
+/// # Implementation Notes
+/// - Values must be in the range 0 to 18,446,744,073,709,551,615 (valid u64 range)
+/// - Negative numbers will result in an error
+/// - Floating point numbers will result in an error
+/// - The function trims whitespace and handles trailing commas
+/// - Scientific notation is not supported
+/// - String values in quotes will be rejected
+pub fn read_u64_array_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<Vec<u64>, String> {
+    // Open the file
+    let file = File::open(path)
+        .map_err(|e| format!("Failed to open file '{}': {}", path, e))?;
+    
+    let reader = io::BufReader::new(file);
+    
+    // Process each line looking for our field
+    for (line_number, line_result) in reader.lines().enumerate() {
+        // Handle line reading errors
+        let line = line_result
+            .map_err(|e| format!("Failed to read line {} from file '{}': {}", line_number + 1, path, e))?;
+        
+        let trimmed = line.trim();
+        
+        // Skip empty lines and comments
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        
+        // Check if this line contains our field with an array
+        if trimmed.starts_with(&format!("{} = [", name_of_toml_field_key_to_read)) {
+            // Extract the array portion
+            let array_part = trimmed
+                .splitn(2, '=')
+                .nth(1)
+                .ok_or_else(|| format!("Invalid array format for field '{}'", name_of_toml_field_key_to_read))?
+                .trim()
+                .trim_start_matches('[')
+                .trim_end_matches(']')
+                .trim();
+            
+            // If the array is empty, return an empty vector
+            if array_part.is_empty() {
+                return Ok(Vec::new());
+            }
+            
+            // Parse each value as u64
+            let mut u64_values = Vec::new();
+            
+            for (index, value_str) in array_part.split(',').enumerate() {
+                let cleaned_value = value_str.trim();
+                
+                if cleaned_value.is_empty() {
+                    continue; // Skip empty entries (e.g., trailing comma)
+                }
+                
+                // Check for quoted strings (invalid for u64)
+                if (cleaned_value.starts_with('"') && cleaned_value.ends_with('"')) || 
+                   (cleaned_value.starts_with('\'') && cleaned_value.ends_with('\'')) {
+                    return Err(format!(
+                        "String value '{}' at index {} in array field '{}' cannot be parsed as u64 - strings are not valid for u64 type",
+                        cleaned_value, index, name_of_toml_field_key_to_read
+                    ));
+                }
+                
+                // Check for negative values before parsing
+                if cleaned_value.starts_with('-') {
+                    return Err(format!(
+                        "Negative value '{}' at index {} in array field '{}' is not valid for u64 type",
+                        cleaned_value, index, name_of_toml_field_key_to_read
+                    ));
+                }
+                
+                // Check for floating point notation
+                if cleaned_value.contains('.') || cleaned_value.contains('e') || cleaned_value.contains('E') {
+                    return Err(format!(
+                        "Floating point value '{}' at index {} in array field '{}' is not valid for u64 type",
+                        cleaned_value, index, name_of_toml_field_key_to_read
+                    ));
+                }
+                
+                // Parse as u64 directly
+                match cleaned_value.parse::<u64>() {
+                    Ok(u64_value) => {
+                        u64_values.push(u64_value);
+                    }
+                    Err(e) => {
+                        return Err(format!(
+                            "Failed to parse value '{}' at index {} in array field '{}' as u64: {}",
+                            cleaned_value, index, name_of_toml_field_key_to_read, e
+                        ));
+                    }
+                }
+            }
+            
+            return Ok(u64_values);
+        }
+    }
+    
+    // Field not found
+    Err(format!("u64 array field '{}' not found in file '{}'", name_of_toml_field_key_to_read, path))
+}
+
+#[cfg(test)]
+mod test_u64_array_readers {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn test_read_u64_array_from_toml_valid() {
+        // Create a test TOML file with u64 arrays
+        let test_content = r#"
+# Test TOML file with u64 arrays
+node_timestamp_array = [1640995200000, 1640995260000, 1640995320000]
+empty_array = []
+single_value = [9223372036854775807]
+boundary_values = [0, 18446744073709551615, 1000000000000000000]
+large_numbers = [18446744073709551614, 18446744073709551613, 18446744073709551612]
+"#;
+        let test_file = "test_u64_array.toml";
+        fs::write(test_file, test_content).expect("Failed to write test file");
+
+        // Test normal timestamp array
+        let result = read_u64_array_field_from_toml(test_file, "node_timestamp_array");
+        assert_eq!(result.expect("Failed to read timestamp array"), vec![1640995200000, 1640995260000, 1640995320000]);
+
+        // Test empty array
+        let result = read_u64_array_field_from_toml(test_file, "empty_array");
+        assert_eq!(result.expect("Failed to read empty array"), vec![]);
+
+        // Test single value
+        let result = read_u64_array_field_from_toml(test_file, "single_value");
+        assert_eq!(result.expect("Failed to read single value"), vec![9223372036854775807]);
+
+        // Test boundary values (including max u64)
+        let result = read_u64_array_field_from_toml(test_file, "boundary_values");
+        assert_eq!(result.expect("Failed to read boundary values"), vec![0, 18446744073709551615, 1000000000000000000]);
+
+        // Test large numbers
+        let result = read_u64_array_field_from_toml(test_file, "large_numbers");
+        assert_eq!(result.expect("Failed to read large numbers"), vec![18446744073709551614, 18446744073709551613, 18446744073709551612]);
+
+        // Cleanup
+        fs::remove_file(test_file).expect("Failed to remove test file");
+    }
+
+    #[test]
+    fn test_read_u64_array_invalid_values() {
+        // Create test file with invalid values for u64
+        let test_content = r#"
+negative_values = [-1, -100, -9223372036854775808]
+floating_point = [123.456, 789.012]
+scientific_notation = [1.23e10, 4.56E12]
+mixed_invalid = [100, -50, 200]
+"#;
+        let test_file = "test_u64_array_invalid.toml";
+        fs::write(test_file, test_content).expect("Failed to write test file");
+
+        // Test negative values
+        let result = read_u64_array_field_from_toml(test_file, "negative_values");
+        assert!(result.is_err());
+        let error_msg = result.unwrap_err();
+        assert!(error_msg.contains("Negative value"));
+        assert!(error_msg.contains("not valid for u64 type"));
+
+        // Test floating point values
+        let result = read_u64_array_field_from_toml(test_file, "floating_point");
+        assert!(result.is_err());
+        let error_msg = result.unwrap_err();
+        assert!(error_msg.contains("Floating point value"));
+        assert!(error_msg.contains("not valid for u64 type"));
+
+        // Test scientific notation
+        let result = read_u64_array_field_from_toml(test_file, "scientific_notation");
+        assert!(result.is_err());
+        let error_msg = result.unwrap_err();
+        assert!(error_msg.contains("Floating point value"));
+        assert!(error_msg.contains("not valid for u64 type"));
+
+        // Test mixed valid/invalid values
+        let result = read_u64_array_field_from_toml(test_file, "mixed_invalid");
+        assert!(result.is_err());
+        let error_msg = result.unwrap_err();
+        assert!(error_msg.contains("Negative value"));
+
+        // Cleanup
+        fs::remove_file(test_file).expect("Failed to remove test file");
+    }
+
+    #[test]
+    fn test_read_u64_array_malformed_data() {
+        // Create test file with malformed data
+        let test_content = r#"
+not_array = "this is not an array"
+text_in_array = [100, "hello", 200]
+empty_values = [100, , 200]
+overflow_test = [18446744073709551616]
+"#;
+        let test_file = "test_u64_array_malformed.toml";
+        fs::write(test_file, test_content).expect("Failed to write test file");
+
+        // Test non-array field
+        let result = read_u64_array_field_from_toml(test_file, "not_array");
+        assert!(result.is_err());
+
+        // Test text in array - should now be caught by string detection
+        let result = read_u64_array_field_from_toml(test_file, "text_in_array");
+        assert!(result.is_err());
+        let error_msg = result.unwrap_err();
+        // Updated assertion to match the new error message
+        assert!(error_msg.contains("String value") && error_msg.contains("cannot be parsed as u64"));
+
+        // Test empty values in array (should be skipped)
+        let result = read_u64_array_field_from_toml(test_file, "empty_values");
+        assert_eq!(result.expect("Failed to read array with empty values"), vec![100, 200]);
+
+        // Test overflow (larger than max u64)
+        let result = read_u64_array_field_from_toml(test_file, "overflow_test");
+        assert!(result.is_err());
+        let error_msg = result.unwrap_err();
+        assert!(error_msg.contains("Failed to parse"));
+
+        // Cleanup
+        fs::remove_file(test_file).expect("Failed to remove test file");
+    }
+
+    #[test]
+    fn test_read_u64_array_string_values() {
+        // Test specifically for string values in arrays
+        let test_content = r#"
+double_quoted = [100, "hello", 200]
+single_quoted = [300, 'world', 400]
+mixed_quotes = [500, "test", 'another', 600]
+"#;
+        let test_file = "test_u64_array_strings.toml";
+        fs::write(test_file, test_content).expect("Failed to write test file");
+
+        // Test double quoted strings
+        let result = read_u64_array_field_from_toml(test_file, "double_quoted");
+        assert!(result.is_err());
+        let error_msg = result.unwrap_err();
+        assert!(error_msg.contains("String value"));
+        assert!(error_msg.contains("cannot be parsed as u64"));
+
+        // Test single quoted strings
+        let result = read_u64_array_field_from_toml(test_file, "single_quoted");
+        assert!(result.is_err());
+        let error_msg = result.unwrap_err();
+        assert!(error_msg.contains("String value"));
+        assert!(error_msg.contains("cannot be parsed as u64"));
+
+        // Test mixed quotes
+        let result = read_u64_array_field_from_toml(test_file, "mixed_quotes");
+        assert!(result.is_err());
+        let error_msg = result.unwrap_err();
+        assert!(error_msg.contains("String value"));
+        assert!(error_msg.contains("cannot be parsed as u64"));
+
+        // Cleanup
+        fs::remove_file(test_file).expect("Failed to remove test file");
+    }
+
+    #[test]
+    fn test_read_u64_array_field_not_found() {
+        let test_content = r#"
+other_field = [1, 2, 3]
+another_field = [100, 200, 300]
+"#;
+        let test_file = "test_u64_array_missing.toml";
+        fs::write(test_file, test_content).expect("Failed to write test file");
+
+        // Test missing field
+        let result = read_u64_array_field_from_toml(test_file, "node_timestamp_array");
+        assert!(result.is_err());
+        let error_msg = result.unwrap_err();
+        assert!(error_msg.contains("not found"));
+        assert!(error_msg.contains("node_timestamp_array"));
+
+        // Cleanup
+        fs::remove_file(test_file).expect("Failed to remove test file");
+    }
+
+    #[test]
+    fn test_read_u64_array_file_not_found() {
+        // Test with non-existent file
+        let result = read_u64_array_field_from_toml("non_existent_file.toml", "some_field");
+        assert!(result.is_err());
+        let error_msg = result.unwrap_err();
+        assert!(error_msg.contains("Failed to open file"));
+        assert!(error_msg.contains("non_existent_file.toml"));
+    }
+
+    #[test]
+    fn test_read_u64_array_with_trailing_commas() {
+        // Test array with trailing commas and various spacing
+        let test_content = r#"
+trailing_comma = [100, 200, 300, ]
+extra_spaces = [ 400 , 500 , 600 ]
+mixed_spacing = [700,800, 900 ,1000]
+"#;
+        let test_file = "test_u64_array_spacing.toml";
+        fs::write(test_file, test_content).expect("Failed to write test file");
+
+        // Test trailing comma
+        let result = read_u64_array_field_from_toml(test_file, "trailing_comma");
+        assert_eq!(result.expect("Failed to read trailing comma array"), vec![100, 200, 300]);
+
+        // Test extra spaces
+        let result = read_u64_array_field_from_toml(test_file, "extra_spaces");
+        assert_eq!(result.expect("Failed to read extra spaces array"), vec![400, 500, 600]);
+
+        // Test mixed spacing
+        let result = read_u64_array_field_from_toml(test_file, "mixed_spacing");
+        assert_eq!(result.expect("Failed to read mixed spacing array"), vec![700, 800, 900, 1000]);
+
+        // Cleanup
+        fs::remove_file(test_file).expect("Failed to remove test file");
+    }
+}
+
 /// Reads a path string from a TOML file and converts it to a PathBuf.
 /// 
 /// # Purpose
@@ -8579,6 +9072,193 @@ max_value = 18446744073709551615
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Failed to open file"));
     }
+}
+
+
+/// Reads an optional u64 field from a TOML file into an Option<u64>.
+/// 
+/// # Purpose
+/// This function parses a TOML file to extract an optional signed 64-bit integer value (u64) 
+/// defined by the specified field name. It handles cases where the field may or may not exist, 
+/// returning None if the field is absent and Some(u64) if present with a valid integer value.
+/// This is particularly useful for POSIX timestamps which can be negative (dates before 1970).
+/// 
+/// # Arguments
+/// * `path` - Path to the TOML file
+/// * `name_of_toml_field_key_to_read` - Name of the field to read (may or may not exist in the TOML file)
+/// 
+/// # Returns
+/// * `Ok(None)` - If the field does not exist in the file
+/// * `Ok(Some(value))` - If the field exists and has a valid u64 value
+/// * `Err(String)` - If the file cannot be read or the field has an invalid value
+/// 
+/// # Error Handling
+/// This function returns errors when:
+/// * The file cannot be opened or read
+/// * The field exists but has a non-numeric value
+/// * The field exists but the value is outside the u64 range
+/// * The field exists but has an empty value
+/// 
+/// Note: A missing field is NOT an error - it returns Ok(None)
+/// 
+/// # Example
+/// For a TOML file containing:
+/// ```toml
+/// message_post_start_date_utc_posix = 1672531200
+/// message_post_end_date_utc_posix = 1704067200
+/// past_date = -86400
+/// # missing_date is not present
+/// ```
+/// 
+/// Usage:
+/// ```
+/// let start_date = read_option_u64_field_from_toml("config.toml", "message_post_start_date_utc_posix")?;
+/// // Returns: Some(1672531200)
+/// 
+/// let past_date = read_option_u64_field_from_toml("config.toml", "past_date")?;
+/// // Returns: Some(-86400)
+/// 
+/// let missing = read_option_u64_field_from_toml("config.toml", "missing_date")?;
+/// // Returns: None
+/// ```
+/// 
+/// # Implementation Notes
+/// - Field absence returns None (not an error)
+/// - Both positive and negative integers are valid
+/// - The value must fit within the u64 range (-9223372036854775808 to 9223372036854775807)
+/// - Floating point numbers are not accepted
+pub fn read_option_u64_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<Option<u64>, String> {
+    // Open the file
+    let file = File::open(path)
+        .map_err(|e| format!("Failed to open file '{}': {}", path, e))?;
+    
+    let reader = io::BufReader::new(file);
+    
+    // Process each line looking for our field
+    for (line_number, line_result) in reader.lines().enumerate() {
+        // Handle line reading errors
+        let line = line_result
+            .map_err(|e| format!("Failed to read line {} from file '{}': {}", line_number + 1, path, e))?;
+        
+        let trimmed = line.trim();
+        
+        // Skip empty lines and comments
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        
+        // Check if this line contains our field
+        if let Some(equals_pos) = trimmed.find('=') {
+            let key_part = trimmed[..equals_pos].trim();
+            
+            if key_part == name_of_toml_field_key_to_read {
+                // Found our field, now parse the value
+                let value_part = trimmed[equals_pos + 1..].trim();
+                
+                // Check for empty value
+                if value_part.is_empty() {
+                    return Err(format!(
+                        "Field '{}' in file '{}' has empty value",
+                        name_of_toml_field_key_to_read, path
+                    ));
+                }
+                
+                // Parse the u64 value
+                match value_part.parse::<u64>() {
+                    Ok(value) => {
+                        println!("Read optional u64 field '{}': Some({})", name_of_toml_field_key_to_read, value);
+                        return Ok(Some(value));
+                    },
+                    Err(e) => {
+                        return Err(format!(
+                            "Field '{}' in file '{}' has invalid numeric value: '{}'. Parse error: {}",
+                            name_of_toml_field_key_to_read, path, value_part, e
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    
+    // Field not found - this is OK for optional fields
+    println!("Optional u64 field '{}' not found in file '{}', returning None", name_of_toml_field_key_to_read, path);
+    Ok(None)
+}
+
+/// Reads an optional u64 field from a clearsigned TOML file into an Option<u64>.
+/// 
+/// # Purpose
+/// This function securely reads an optional u64 field from a clearsigned TOML file by:
+/// 1. Extracting the GPG public key from the file
+/// 2. Verifying the clearsign signature
+/// 3. If verification succeeds, reading the optional u64 field
+/// 
+/// # Security
+/// This function ensures that the TOML file's content is cryptographically verified 
+/// before any data is extracted, providing integrity protection for timestamp configurations.
+/// No data is returned if signature validation fails.
+/// 
+/// # Arguments
+/// * `path` - Path to the clearsigned TOML file
+/// * `name_of_toml_field_key_to_read` - Name of the field to read (may or may not exist in the TOML file)
+/// 
+/// # Returns
+/// * `Ok(None)` - If verification succeeds and the field does not exist
+/// * `Ok(Some(value))` - If verification succeeds and the field has a valid u64 value
+/// * `Err(String)` - If verification fails or the field has an invalid value
+/// 
+/// # POSIX Timestamp Support
+/// This function fully supports POSIX timestamps including:
+/// - Positive values (dates after January 1, 1970)
+/// - Negative values (dates before January 1, 1970)
+/// - Zero (exactly January 1, 1970 00:00:00 UTC)
+/// 
+/// # Example
+/// For a clearsigned TOML file containing:
+/// ```toml
+/// message_post_start_date_utc_posix = 1672531200
+/// message_post_end_date_utc_posix = 1704067200
+/// 
+/// gpg_key_public = """
+/// -----BEGIN PGP PUBLIC KEY BLOCK-----
+/// ...
+/// -----END PGP PUBLIC KEY BLOCK-----
+/// """
+/// ```
+/// 
+/// Usage:
+/// ```
+/// let start_date = read_option_u64_from_clearsigntoml("config.toml", "message_post_start_date_utc_posix")?;
+/// // Returns: Some(1672531200) if signature verification succeeds
+/// 
+/// let missing = read_option_u64_from_clearsigntoml("config.toml", "field_not_present")?;
+/// // Returns: None if signature verification succeeds
+/// ```
+/// 
+/// # Errors
+/// Returns an error if:
+/// * GPG key extraction fails
+/// * Signature verification fails
+/// * The field exists but has an invalid numeric value
+/// * The field exists but the value is outside u64 range
+pub fn read_option_u64_from_clearsigntoml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<Option<u64>, String> {
+    // Step 1: Extract GPG key from the file
+    let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")
+        .map_err(|e| format!("Failed to extract GPG key from file '{}': {}", path, e))?;
+    
+    // Step 2: Verify the file's clearsign signature
+    let verification_result = verify_clearsign(path, &key)
+        .map_err(|e| format!("Error during signature verification of file '{}': {}", path, e))?;
+    
+    // Step 3: Check if verification was successful
+    if !verification_result {
+        return Err(format!("GPG signature verification failed for file: {}", path));
+    }
+    
+    // Step 4: If verification succeeded, read the optional u64 field
+    read_option_u64_field_from_toml(path, name_of_toml_field_key_to_read)
+        .map_err(|e| format!("Failed to read optional u64 '{}' from verified file '{}': {}", 
+                             name_of_toml_field_key_to_read, path, e))
 }
 
 /// Reads an optional i64 field from a TOML file into an Option<i64>.
@@ -9775,5 +10455,325 @@ gotit_port = 50006
                 }
             }
         }
+    }
+}
+
+/// gpgtoml
+
+/// Validates and prepares a collaborator's addressbook file for reading.
+///
+/// This function determines whether to use a clearsigned .toml file or an encrypted .gpgtoml file
+/// for the specified collaborator. It prioritizes .toml files over .gpgtoml files for security
+/// and performance reasons. If only a .gpgtoml file exists, it decrypts it to a secure temporary
+/// file that the caller must clean up after use.
+///
+/// # Arguments
+///
+/// * `collaborator_name` - The name of the collaborator whose addressbook file to find.
+///                        Used to construct filenames: `{collaborator_name}__collaborator.toml`
+///                        or `{collaborator_name}__collaborator.gpgtoml`
+///
+/// * `addressbook_files_directory_relative` - The relative path to the directory containing
+///                                           collaborator addressbook files. This path is relative
+///                                           to the executable directory.
+///
+/// * `gpg_full_fingerprint_key_id_string` - The full GPG key fingerprint to use for decryption
+///                                          when processing .gpgtoml files. This should be the
+///                                          full 40-character fingerprint, not a short key ID.
+///
+/// # Returns
+///
+/// Returns `Result<(PathBuf, Option<PathBuf>), GpgError>` where:
+/// - The first `PathBuf` is the absolute path to the file ready for reading (either the original
+///   .toml file or a decrypted temporary file)
+/// - The `Option<PathBuf>` contains `Some(path)` if a temporary file was created that needs cleanup,
+///   or `None` if using the original .toml file
+///
+/// # Errors
+///
+/// Returns `GpgError` in the following cases:
+/// - `ValidationError` - If collaborator_name or gpg_key_id is empty, or if neither .toml nor .gpgtoml exists
+/// - `PathError` - If absolute path conversion fails
+/// - `TempFileError` - If temporary file creation or permission setting fails
+/// - `GpgOperationError` - If GPG decryption fails
+/// - `FileSystemError` - If file system operations fail
+///
+/// # Security Considerations
+///
+/// - Temporary files are created with restricted permissions (0o600 on Unix systems)
+/// - If any error occurs after temporary file creation, the file is automatically deleted
+/// - Decrypted content is never logged or displayed
+/// - The caller MUST clean up any returned temporary file using `cleanup_collaborator_temp_file()`
+///
+/// # Examples
+///
+/// ```rust
+/// // Get the addressbook file ready for reading
+/// let (file_path_to_read, temp_file_to_cleanup) = get_path_to_validated_addressbook_toml_or_gpgtoml(
+///     "alice",
+///     COLLABORATOR_ADDRESSBOOK_PATH_STR,
+///     "1234567890ABCDEF1234567890ABCDEF12345678"
+/// )?;
+///
+/// // Read and process the file at file_path_to_read
+/// let content = std::fs::read_to_string(&file_path_to_read)?;
+///
+/// // Always clean up temporary file if one was created
+/// if let Some(temp_path) = temp_file_to_cleanup {
+///     cleanup_collaborator_temp_file(&temp_path)?;
+/// }
+/// ```
+pub fn get_path_to_validated_addressbook_toml_or_gpgtoml(
+    collaborator_name: &str,
+    addressbook_files_directory_relative: &str,
+    gpg_full_fingerprint_key_id_string: &str,
+) -> Result<(PathBuf, Option<PathBuf>), GpgError> {
+    // Validate input parameters before proceeding
+    if collaborator_name.is_empty() {
+        return Err(GpgError::ValidationError(
+            "Collaborator name cannot be empty".to_string()
+        ));
+    }
+    
+    if gpg_full_fingerprint_key_id_string.is_empty() {
+        return Err(GpgError::ValidationError(
+            "GPG fingerprint key ID cannot be empty".to_string()
+        ));
+    }
+    
+    // Step 1: Construct relative paths for both possible file types
+    // Using the pattern: {collaborator_name}__collaborator.{extension}
+    let toml_filename = format!("{}__collaborator.toml", collaborator_name);
+    let gpgtoml_filename = format!("{}__collaborator.gpgtoml", collaborator_name);
+    
+    let toml_relative_path = Path::new(addressbook_files_directory_relative)
+        .join(&toml_filename);
+    let gpgtoml_relative_path = Path::new(addressbook_files_directory_relative)
+        .join(&gpgtoml_filename);
+    
+    // Step 2: Convert relative paths to absolute paths using the provided helper function
+    let toml_absolute_path = make_input_path_name_abs_executabledirectoryrelative_nocheck(&toml_relative_path)
+        .map_err(|e| GpgError::PathError(
+            format!("Failed to create absolute path for .toml file '{}': {}", toml_filename, e)
+        ))?;
+    
+    let gpgtoml_absolute_path = make_input_path_name_abs_executabledirectoryrelative_nocheck(&gpgtoml_relative_path)
+        .map_err(|e| GpgError::PathError(
+            format!("Failed to create absolute path for .gpgtoml file '{}': {}", gpgtoml_filename, e)
+        ))?;
+    
+    // Step 3: Check which file exists and prepare it for reading
+    if toml_absolute_path.exists() {
+        // Case 1: Clearsigned .toml file exists - use it directly
+        println!("ROCST: Using clearsigned .toml file for collaborator '{}' at path: {:?}", 
+                   collaborator_name, toml_absolute_path);
+        
+        // Return the .toml path with no temporary file to clean up
+        Ok((toml_absolute_path, None))
+        
+    } else if gpgtoml_absolute_path.exists() {
+        // Case 2: Encrypted .gpgtoml file exists - decrypt it to a temporary file
+        println!("ROCST: Found encrypted .gpgtoml file for collaborator '{}' at path: {:?}", 
+                   collaborator_name, gpgtoml_absolute_path);
+        
+        // Variable to track temporary file for cleanup on error
+        let mut temp_file_created: Option<PathBuf> = None;
+        
+        // Use a closure to ensure cleanup on any error after temp file creation
+        let decrypt_result = (|| -> Result<(PathBuf, Option<PathBuf>), GpgError> {
+            // Generate unique temporary filename using timestamp
+            let timestamp_nanos = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_err(|e| GpgError::TempFileError(
+                    format!("Failed to get system time for temp file creation: {}", e)
+                ))?
+                .as_nanos();
+            
+            // Create temporary filename with collaborator name and timestamp for uniqueness
+            let temp_filename = format!("decrypt_collab_{}_{}.toml", collaborator_name, timestamp_nanos);
+            let temp_file_path = std::env::temp_dir().join(&temp_filename);
+            
+            println!("ROCST: Creating temporary file for decrypted content: {:?}", temp_file_path);
+            
+            // Create the temporary file with restricted permissions before decrypting into it
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                
+                // Create empty file first
+                std::fs::File::create(&temp_file_path)
+                    .map_err(|e| GpgError::TempFileError(
+                        format!("Failed to create temporary file '{}': {}", temp_filename, e)
+                    ))?;
+                
+                // Mark that we've created a temp file that needs cleanup on error
+                temp_file_created = Some(temp_file_path.clone());
+                
+                // Set restrictive permissions (owner read/write only)
+                std::fs::set_permissions(&temp_file_path, std::fs::Permissions::from_mode(0o600))
+                    .map_err(|e| GpgError::TempFileError(
+                        format!("Failed to set secure permissions on temporary file: {}", e)
+                    ))?;
+            }
+            
+            #[cfg(not(unix))]
+            {
+                // On non-Unix systems, just create the file
+                std::fs::File::create(&temp_file_path)
+                    .map_err(|e| GpgError::TempFileError(
+                        format!("Failed to create temporary file '{}': {}", temp_filename, e)
+                    ))?;
+                
+                temp_file_created = Some(temp_file_path.clone());
+            }
+            
+            // Execute GPG to decrypt the .gpgtoml file into our temporary file
+            println!("ROCST: Executing GPG to decrypt {} to {}", 
+                       gpgtoml_absolute_path.display(), temp_file_path.display());
+            
+            let gpg_output = std::process::Command::new("gpg")
+                .arg("--quiet")                          // Suppress informational messages
+                .arg("--batch")                          // Non-interactive mode
+                .arg("--yes")                            // Automatically answer yes to prompts
+                .arg("--local-user")                     // Specify which key to use
+                .arg(gpg_full_fingerprint_key_id_string)
+                .arg("--decrypt")                        // Decrypt operation
+                .arg("--output")                         // Output file
+                .arg(&temp_file_path)
+                .arg(&gpgtoml_absolute_path)             // Input file
+                .output()
+                .map_err(|e| {
+                    let error_msg = format!(
+                        "Failed to execute GPG decrypt command for collaborator '{}': {}", 
+                        collaborator_name, e
+                    );
+                    eprintln!("\nERROR: {}", error_msg);
+                    eprintln!("Press Enter to continue...");
+                    let _ = std::io::stdin().read_line(&mut String::new());
+                    GpgError::GpgOperationError(error_msg)
+                })?;
+            
+            // Check if GPG decryption was successful
+            if !gpg_output.status.success() {
+                let stderr_text = String::from_utf8_lossy(&gpg_output.stderr);
+                let error_msg = format!(
+                    "GPG decryption failed for collaborator '{}' file '{}': {}", 
+                    collaborator_name, gpgtoml_absolute_path.display(), stderr_text
+                );
+                eprintln!("\nERROR: {}", error_msg);
+                eprintln!("Press Enter to continue...");
+                let _ = std::io::stdin().read_line(&mut String::new());
+                return Err(GpgError::GpgOperationError(error_msg));
+            }
+            
+            println!("ROCST: Successfully decrypted .gpgtoml file to temporary file");
+            
+            // Return the temporary file path for reading, and also return it for cleanup
+            Ok((temp_file_path.clone(), Some(temp_file_path)))
+        })();
+        
+        // If decryption failed and we created a temp file, clean it up before propagating error
+        match decrypt_result {
+            Ok(result) => Ok(result),
+            Err(e) => {
+                // Clean up temporary file if it was created
+                if let Some(temp_path) = temp_file_created {
+                    println!("ROCST: Error occurred, cleaning up temporary file: {:?}", temp_path);
+                    let _ = std::fs::remove_file(&temp_path); // Ignore cleanup errors
+                }
+                Err(e)
+            }
+        }
+        
+    } else {
+        // Case 3: Neither file exists - this is an error
+        Err(GpgError::ValidationError(format!(
+            "No addressbook file found for collaborator '{}'. Checked for both '{}' and '{}' in directory '{}'",
+            collaborator_name, toml_filename, gpgtoml_filename, addressbook_files_directory_relative
+        )))
+    }
+}
+
+/// Safely removes a temporary file created during addressbook file processing.
+///
+/// This function should be called to clean up temporary files created when decrypting
+/// .gpgtoml files. It includes safety checks and detailed error reporting.
+///
+/// # Arguments
+///
+/// * `temp_file_path` - The absolute path to the temporary file to remove.
+///                      This should be the path returned in the `Option<PathBuf>`
+///                      from `get_path_to_validated_addressbook_toml_or_gpgtoml()`.
+///
+/// # Returns
+///
+/// Returns `Result<(), GpgError>` indicating success or failure of the cleanup operation.
+///
+/// # Errors
+///
+/// Returns `GpgError::TempFileError` if:
+/// - The file exists but cannot be removed due to permissions or file system errors
+/// - The path is invalid or inaccessible
+///
+/// Note: If the file doesn't exist, this function returns `Ok(())` as the goal
+/// of cleanup is already achieved.
+///
+/// # Security Considerations
+///
+/// - Always call this function in a `finally` pattern or before returning from your function
+/// - Temporary files may contain decrypted sensitive data and must not be left on disk
+/// - Even if this function returns an error, the program should continue (log the error)
+///
+/// # Examples
+///
+/// ```rust
+/// // Pattern 1: Simple cleanup after use
+/// let (file_path, temp_to_cleanup) = get_path_to_validated_addressbook_toml_or_gpgtoml(...)?;
+/// 
+/// // Use the file...
+/// 
+/// if let Some(temp_path) = temp_to_cleanup {
+///     if let Err(e) = cleanup_collaborator_temp_file(&temp_path) {
+///         eprintln!("Warning: Failed to cleanup temporary file: {}", e);
+///         // Continue despite cleanup failure
+///     }
+/// }
+/// ```
+///
+/// ```rust
+/// // Pattern 2: Cleanup with early return protection
+/// let (file_path, temp_to_cleanup) = get_path_to_validated_addressbook_toml_or_gpgtoml(...)?;
+/// 
+/// // Ensure cleanup happens even if we return early
+/// let result = process_file(&file_path);
+/// 
+/// if let Some(temp_path) = temp_to_cleanup {
+///     let _ = cleanup_collaborator_temp_file(&temp_path); // Ignore cleanup errors
+/// }
+/// 
+/// result?; // Return any processing error after cleanup
+/// ```
+pub fn cleanup_collaborator_temp_file(temp_file_path: &Path) -> Result<(), GpgError> {
+    println!("ROCST: Attempting to clean up temporary file: {:?}", temp_file_path);
+    
+    // Check if the file exists before attempting removal
+    if temp_file_path.exists() {
+        // Attempt to remove the file
+        std::fs::remove_file(temp_file_path)
+            .map_err(|e| {
+                let error_msg = format!(
+                    "Failed to remove temporary file '{}': {}. File may contain sensitive decrypted data.",
+                    temp_file_path.display(), e
+                );
+                eprintln!("WARNING: {}", error_msg);
+                GpgError::TempFileError(error_msg)
+            })?;
+        
+        println!("ROCST: Successfully removed temporary file");
+        Ok(())
+    } else {
+        // File doesn't exist - this is actually fine, our goal is achieved
+        println!("ROCST: Temporary file does not exist, no cleanup needed: {:?}", temp_file_path);
+        Ok(())
     }
 }
