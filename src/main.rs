@@ -10492,7 +10492,9 @@ struct CoreNode {
 ///
 /// * `Result<CoreNode, String>` - `Ok(CoreNode)` if the node is successfully loaded,
 ///    `Err(String)` containing an error message if an error occurs. 
-fn load_core_node_from_toml_file(file_path: &Path) -> Result<CoreNode, String> {
+fn load_core_node_from_toml_file(
+    file_path: &Path,
+) -> Result<CoreNode, String> {
     
     /*
     1. updating Nodes: Plan A
@@ -10516,7 +10518,29 @@ fn load_core_node_from_toml_file(file_path: &Path) -> Result<CoreNode, String> {
            clearsign validated...after it is .gpg decrypted,
            using the current-user's gpg-key-id from
            the uma.toml config file)
-    1.1 get 
+    1.1 get path to validated addressbook file
+    get_path_to_validated_addressbook_toml_or_gpgtoml(
+    collaborator_name: &str,
+    addressbook_files_directory_relative: &str,
+    gpg_full_fingerprint_key_id_string: &str,
+
+    1.2 get public gpg key from file...
+    
+    extract data from node.toml fields
+    
+    1.3 remove temp file
+    
+    return struct
+    
+
+    
+    
+    
+    note: once decrypted temp file is made, any error should delete that file
+    
+    
+    last (and with any error) remove temp file:
+    fn cleanup_collaborator_temp_file(temp_file_path: &Path) -> Result<(), GpgError> {
     
 
     */

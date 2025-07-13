@@ -10460,12 +10460,34 @@ gotit_port = 50006
 
 /// gpgtoml
 
-/// Validates and prepares a collaborator's addressbook file for reading.
+/// Validates and prepares a collaborator's addressbook file for reading by creating a secure temporary copy.
 ///
-/// This function determines whether to use a clearsigned .toml file or an encrypted .gpgtoml file
-/// for the specified collaborator. It prioritizes .toml files over .gpgtoml files for security
-/// and performance reasons. If only a .gpgtoml file exists, it decrypts it to a secure temporary
-/// file that the caller must clean up after use.
+/// # CRITICAL SAFETY DESIGN
+///
+/// **THIS FUNCTION ALWAYS CREATES A TEMPORARY COPY OF THE FILE, REGARDLESS OF FILE TYPE.**
+///
+/// Whether the source is a .toml file (clearsigned) or .gpgtoml file (encrypted), this function
+/// ALWAYS returns a path to a TEMPORARY FILE that can and MUST be safely deleted after use.
+/// 
+/// This design ensures that:
+/// - The original addressbook files are NEVER at risk of accidental deletion
+/// - The API is consistent regardless of source file type
+/// - Users can always safely delete the returned file path
+/// - No confusion about which files are safe to delete
+///
+/// # File Handling Details
+///
+/// For .toml files:
+/// 1. Reads the original .toml file from the addressbook directory
+/// 2. Creates a temporary copy with restricted permissions
+/// 3. Returns the path to this temporary copy
+/// 4. Original .toml file is never touched or returned
+///
+/// For .gpgtoml files:
+/// 1. Reads the original .gpgtoml file from the addressbook directory  
+/// 2. Decrypts it directly to a new temporary file
+/// 3. Returns the path to this temporary decrypted file
+/// 4. Original .gpgtoml file is never touched or returned
 ///
 /// # Arguments
 ///
@@ -10475,7 +10497,8 @@ gotit_port = 50006
 ///
 /// * `addressbook_files_directory_relative` - The relative path to the directory containing
 ///                                           collaborator addressbook files. This path is relative
-///                                           to the executable directory.
+///                                           to the executable directory. Original files in this
+///                                           directory are NEVER modified or returned.
 ///
 /// * `gpg_full_fingerprint_key_id_string` - The full GPG key fingerprint to use for decryption
 ///                                          when processing .gpgtoml files. This should be the
@@ -10483,51 +10506,62 @@ gotit_port = 50006
 ///
 /// # Returns
 ///
-/// Returns `Result<(PathBuf, Option<PathBuf>), GpgError>` where:
-/// - The first `PathBuf` is the absolute path to the file ready for reading (either the original
-///   .toml file or a decrypted temporary file)
-/// - The `Option<PathBuf>` contains `Some(path)` if a temporary file was created that needs cleanup,
-///   or `None` if using the original .toml file
+/// Returns `Result<(PathBuf, PathBuf), GpgError>` where:
+/// - The first `PathBuf` is the absolute path to a TEMPORARY FILE containing the addressbook data
+/// - The second `PathBuf` is the SAME PATH - provided for consistency and as a reminder that this
+///   temporary file MUST be deleted after use
+///
+/// **BOTH PATHS POINT TO THE SAME TEMPORARY FILE THAT IS SAFE TO DELETE**
 ///
 /// # Errors
 ///
 /// Returns `GpgError` in the following cases:
 /// - `ValidationError` - If collaborator_name or gpg_key_id is empty, or if neither .toml nor .gpgtoml exists
 /// - `PathError` - If absolute path conversion fails
-/// - `TempFileError` - If temporary file creation or permission setting fails
+/// - `TempFileError` - If temporary file creation, copying, or permission setting fails
 /// - `GpgOperationError` - If GPG decryption fails
 /// - `FileSystemError` - If file system operations fail
 ///
 /// # Security Considerations
 ///
+/// - ALL returned files are temporary copies in the system temp directory
 /// - Temporary files are created with restricted permissions (0o600 on Unix systems)
-/// - If any error occurs after temporary file creation, the file is automatically deleted
+/// - Original addressbook files are NEVER returned and cannot be accidentally deleted
+/// - If any error occurs after temporary file creation, the temp file is automatically deleted
 /// - Decrypted content is never logged or displayed
-/// - The caller MUST clean up any returned temporary file using `cleanup_collaborator_temp_file()`
+/// - The caller MUST clean up the returned temporary file using `cleanup_collaborator_temp_file()`
 ///
 /// # Examples
 ///
 /// ```rust
-/// // Get the addressbook file ready for reading
-/// let (file_path_to_read, temp_file_to_cleanup) = get_path_to_validated_addressbook_toml_or_gpgtoml(
+/// // Get a TEMPORARY COPY of the addressbook file ready for reading
+/// let (temp_file_path, same_temp_file_path) = get_path_to_validated_addressbook_toml_or_gpgtoml(
 ///     "alice",
 ///     COLLABORATOR_ADDRESSBOOK_PATH_STR,
 ///     "1234567890ABCDEF1234567890ABCDEF12345678"
 /// )?;
 ///
-/// // Read and process the file at file_path_to_read
-/// let content = std::fs::read_to_string(&file_path_to_read)?;
+/// // Read and process the TEMPORARY file
+/// let content = std::fs::read_to_string(&temp_file_path)?;
 ///
-/// // Always clean up temporary file if one was created
-/// if let Some(temp_path) = temp_file_to_cleanup {
-///     cleanup_collaborator_temp_file(&temp_path)?;
-/// }
+/// // ALWAYS clean up the temporary file - this is ALWAYS safe because it's ALWAYS a temp file
+/// cleanup_collaborator_temp_file(&temp_file_path)?;
+/// // or equivalently:
+/// cleanup_collaborator_temp_file(&same_temp_file_path)?;
 /// ```
+///
+/// # Why Two Identical Paths Are Returned
+///
+/// Both return values are the SAME temporary file path. This redundant design:
+/// 1. Maintains API consistency with other functions that might return different paths
+/// 2. Serves as a reminder that cleanup is required
+/// 3. Makes it impossible to accidentally get confused about which path is safe to delete
+///    (they're both the same temporary file)
 pub fn get_path_to_validated_addressbook_toml_or_gpgtoml(
     collaborator_name: &str,
     addressbook_files_directory_relative: &str,
     gpg_full_fingerprint_key_id_string: &str,
-) -> Result<(PathBuf, Option<PathBuf>), GpgError> {
+) -> Result<(PathBuf, PathBuf), GpgError> {
     // Validate input parameters before proceeding
     if collaborator_name.is_empty() {
         return Err(GpgError::ValidationError(
@@ -10562,58 +10596,110 @@ pub fn get_path_to_validated_addressbook_toml_or_gpgtoml(
             format!("Failed to create absolute path for .gpgtoml file '{}': {}", gpgtoml_filename, e)
         ))?;
     
-    // Step 3: Check which file exists and prepare it for reading
-    if toml_absolute_path.exists() {
-        // Case 1: Clearsigned .toml file exists - use it directly
-        println!("ROCST: Using clearsigned .toml file for collaborator '{}' at path: {:?}", 
-                   collaborator_name, toml_absolute_path);
+    // Variable to track temporary file for cleanup on error
+    let mut temp_file_created: Option<PathBuf> = None;
+    
+    // Use a closure to ensure cleanup on any error after temp file creation
+    let create_temp_result = (|| -> Result<(PathBuf, PathBuf), GpgError> {
+        // Generate unique temporary filename using timestamp
+        let timestamp_nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|e| GpgError::TempFileError(
+                format!("Failed to get system time for temp file creation: {}", e)
+            ))?
+            .as_nanos();
         
-        // Return the .toml path with no temporary file to clean up
-        Ok((toml_absolute_path, None))
+        // Create temporary filename with collaborator name and timestamp for uniqueness
+        // Use .toml extension regardless of source type for consistency
+        let temp_filename = format!("collab_addressbook_{}_{}.toml", collaborator_name, timestamp_nanos);
+        let temp_file_path = std::env::temp_dir().join(&temp_filename);
         
-    } else if gpgtoml_absolute_path.exists() {
-        // Case 2: Encrypted .gpgtoml file exists - decrypt it to a temporary file
-        println!("ROCST: Found encrypted .gpgtoml file for collaborator '{}' at path: {:?}", 
-                   collaborator_name, gpgtoml_absolute_path);
+        println!("ROCST: Creating temporary file for addressbook content: {:?}", temp_file_path);
         
-        // Variable to track temporary file for cleanup on error
-        let mut temp_file_created: Option<PathBuf> = None;
-        
-        // Use a closure to ensure cleanup on any error after temp file creation
-        let decrypt_result = (|| -> Result<(PathBuf, Option<PathBuf>), GpgError> {
-            // Generate unique temporary filename using timestamp
-            let timestamp_nanos = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map_err(|e| GpgError::TempFileError(
-                    format!("Failed to get system time for temp file creation: {}", e)
-                ))?
-                .as_nanos();
+        // Step 3: Check which source file exists and create appropriate temporary copy
+        if toml_absolute_path.exists() {
+            // Case 1: Clearsigned .toml file exists - create a temporary copy
+            println!("ROCST: Found clearsigned .toml file for collaborator '{}' at path: {:?}", 
+                       collaborator_name, toml_absolute_path);
+            println!("ROCST: Creating temporary copy to ensure original file safety");
             
-            // Create temporary filename with collaborator name and timestamp for uniqueness
-            let temp_filename = format!("decrypt_collab_{}_{}.toml", collaborator_name, timestamp_nanos);
-            let temp_file_path = std::env::temp_dir().join(&temp_filename);
+            // Read the original file content
+            let original_content = std::fs::read(&toml_absolute_path)
+                .map_err(|e| GpgError::FileSystemError(
+                    std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        format!("Failed to read original .toml file '{}': {}", toml_absolute_path.display(), e)
+                    )
+                ))?;
             
-            println!("ROCST: Creating temporary file for decrypted content: {:?}", temp_file_path);
-            
-            // Create the temporary file with restricted permissions before decrypting into it
+            // Create the temporary file with restricted permissions
             #[cfg(unix)]
             {
-                use std::os::unix::fs::PermissionsExt;
+                use std::os::unix::fs::OpenOptionsExt;
+                use std::io::Write;
                 
-                // Create empty file first
-                std::fs::File::create(&temp_file_path)
+                // Create file with restricted permissions atomically
+                let mut temp_file = std::fs::OpenOptions::new()
+                    .create(true)
+                    .write(true)
+                    .truncate(true)
+                    .mode(0o600)  // Owner read/write only
+                    .open(&temp_file_path)
                     .map_err(|e| GpgError::TempFileError(
-                        format!("Failed to create temporary file '{}': {}", temp_filename, e)
+                        format!("Failed to create secure temporary file '{}': {}", temp_filename, e)
                     ))?;
                 
                 // Mark that we've created a temp file that needs cleanup on error
                 temp_file_created = Some(temp_file_path.clone());
                 
-                // Set restrictive permissions (owner read/write only)
-                std::fs::set_permissions(&temp_file_path, std::fs::Permissions::from_mode(0o600))
+                // Write the content to the temporary file
+                temp_file.write_all(&original_content)
                     .map_err(|e| GpgError::TempFileError(
-                        format!("Failed to set secure permissions on temporary file: {}", e)
+                        format!("Failed to write content to temporary file: {}", e)
                     ))?;
+                
+                temp_file.flush()
+                    .map_err(|e| GpgError::TempFileError(
+                        format!("Failed to flush temporary file: {}", e)
+                    ))?;
+            }
+            
+            #[cfg(not(unix))]
+            {
+                // On non-Unix systems, create file normally then write content
+                std::fs::write(&temp_file_path, &original_content)
+                    .map_err(|e| GpgError::TempFileError(
+                        format!("Failed to create temporary file '{}': {}", temp_filename, e)
+                    ))?;
+                
+                temp_file_created = Some(temp_file_path.clone());
+            }
+            
+            println!("ROCST: Successfully created temporary copy of .toml file");
+            
+        } else if gpgtoml_absolute_path.exists() {
+            // Case 2: Encrypted .gpgtoml file exists - decrypt to temporary file
+            println!("ROCST: Found encrypted .gpgtoml file for collaborator '{}' at path: {:?}", 
+                       collaborator_name, gpgtoml_absolute_path);
+            
+            // Create empty temporary file with restricted permissions first
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                
+                // Create file with restricted permissions atomically
+                std::fs::OpenOptions::new()
+                    .create(true)
+                    .write(true)
+                    .truncate(true)
+                    .mode(0o600)  // Owner read/write only
+                    .open(&temp_file_path)
+                    .map_err(|e| GpgError::TempFileError(
+                        format!("Failed to create secure temporary file '{}': {}", temp_filename, e)
+                    ))?;
+                
+                // Mark that we've created a temp file that needs cleanup on error
+                temp_file_created = Some(temp_file_path.clone());
             }
             
             #[cfg(not(unix))]
@@ -10628,7 +10714,7 @@ pub fn get_path_to_validated_addressbook_toml_or_gpgtoml(
             }
             
             // Execute GPG to decrypt the .gpgtoml file into our temporary file
-            println!("ROCST: Executing GPG to decrypt {} to {}", 
+            println!("ROCST: Executing GPG to decrypt {} to temporary file {}", 
                        gpgtoml_absolute_path.display(), temp_file_path.display());
             
             let gpg_output = std::process::Command::new("gpg")
@@ -10668,42 +10754,53 @@ pub fn get_path_to_validated_addressbook_toml_or_gpgtoml(
             
             println!("ROCST: Successfully decrypted .gpgtoml file to temporary file");
             
-            // Return the temporary file path for reading, and also return it for cleanup
-            Ok((temp_file_path.clone(), Some(temp_file_path)))
-        })();
-        
-        // If decryption failed and we created a temp file, clean it up before propagating error
-        match decrypt_result {
-            Ok(result) => Ok(result),
-            Err(e) => {
-                // Clean up temporary file if it was created
-                if let Some(temp_path) = temp_file_created {
-                    println!("ROCST: Error occurred, cleaning up temporary file: {:?}", temp_path);
-                    let _ = std::fs::remove_file(&temp_path); // Ignore cleanup errors
-                }
-                Err(e)
-            }
+        } else {
+            // Case 3: Neither file exists - this is an error
+            return Err(GpgError::ValidationError(format!(
+                "No addressbook file found for collaborator '{}'. Checked for both '{}' and '{}' in directory '{}'",
+                collaborator_name, toml_filename, gpgtoml_filename, addressbook_files_directory_relative
+            )));
         }
         
-    } else {
-        // Case 3: Neither file exists - this is an error
-        Err(GpgError::ValidationError(format!(
-            "No addressbook file found for collaborator '{}'. Checked for both '{}' and '{}' in directory '{}'",
-            collaborator_name, toml_filename, gpgtoml_filename, addressbook_files_directory_relative
-        )))
+        // Return the temporary file path TWICE - both values are the same temp file
+        // This makes it crystal clear that this is a temporary file safe to delete
+        Ok((temp_file_path.clone(), temp_file_path))
+    })();
+    
+    // If any error occurred and we created a temp file, clean it up before propagating error
+    match create_temp_result {
+        Ok(result) => {
+            println!("ROCST: Successfully prepared temporary addressbook file: {:?}", result.0);
+            Ok(result)
+        },
+        Err(e) => {
+            // Clean up temporary file if it was created
+            if let Some(temp_path) = temp_file_created {
+                println!("ROCST: Error occurred, cleaning up temporary file: {:?}", temp_path);
+                let _ = std::fs::remove_file(&temp_path); // Ignore cleanup errors
+            }
+            Err(e)
+        }
     }
 }
 
 /// Safely removes a temporary file created during addressbook file processing.
 ///
-/// This function should be called to clean up temporary files created when decrypting
-/// .gpgtoml files. It includes safety checks and detailed error reporting.
+/// This function should be called to clean up temporary files created by
+/// `get_path_to_validated_addressbook_toml_or_gpgtoml()`. It includes safety checks
+/// to ensure only temporary files are deleted.
+///
+/// # CRITICAL SAFETY DESIGN
+///
+/// This function includes a safety check to verify that the file being deleted is actually
+/// in the system temporary directory. This prevents accidental deletion of original addressbook
+/// files if the API is misused.
 ///
 /// # Arguments
 ///
 /// * `temp_file_path` - The absolute path to the temporary file to remove.
-///                      This should be the path returned in the `Option<PathBuf>`
-///                      from `get_path_to_validated_addressbook_toml_or_gpgtoml()`.
+///                      This should be one of the paths returned by
+///                      `get_path_to_validated_addressbook_toml_or_gpgtoml()`.
 ///
 /// # Returns
 ///
@@ -10712,6 +10809,7 @@ pub fn get_path_to_validated_addressbook_toml_or_gpgtoml(
 /// # Errors
 ///
 /// Returns `GpgError::TempFileError` if:
+/// - The file path is not in the system temporary directory (safety check failed)
 /// - The file exists but cannot be removed due to permissions or file system errors
 /// - The path is invalid or inaccessible
 ///
@@ -10720,6 +10818,7 @@ pub fn get_path_to_validated_addressbook_toml_or_gpgtoml(
 ///
 /// # Security Considerations
 ///
+/// - Verifies the file is in the temp directory before deletion as a safety measure
 /// - Always call this function in a `finally` pattern or before returning from your function
 /// - Temporary files may contain decrypted sensitive data and must not be left on disk
 /// - Even if this function returns an error, the program should continue (log the error)
@@ -10727,43 +10826,48 @@ pub fn get_path_to_validated_addressbook_toml_or_gpgtoml(
 /// # Examples
 ///
 /// ```rust
-/// // Pattern 1: Simple cleanup after use
-/// let (file_path, temp_to_cleanup) = get_path_to_validated_addressbook_toml_or_gpgtoml(...)?;
+/// // Safe cleanup pattern - the file is always a temp file from our function
+/// let (temp_file_path, _) = get_path_to_validated_addressbook_toml_or_gpgtoml(...)?;
 /// 
 /// // Use the file...
+/// let content = std::fs::read_to_string(&temp_file_path)?;
 /// 
-/// if let Some(temp_path) = temp_to_cleanup {
-///     if let Err(e) = cleanup_collaborator_temp_file(&temp_path) {
-///         eprintln!("Warning: Failed to cleanup temporary file: {}", e);
-///         // Continue despite cleanup failure
-///     }
+/// // Always cleanup - this is always safe because our function only returns temp files
+/// if let Err(e) = cleanup_collaborator_temp_file(&temp_file_path) {
+///     eprintln!("Warning: Failed to cleanup temporary file: {}", e);
+///     // Continue despite cleanup failure
 /// }
-/// ```
-///
-/// ```rust
-/// // Pattern 2: Cleanup with early return protection
-/// let (file_path, temp_to_cleanup) = get_path_to_validated_addressbook_toml_or_gpgtoml(...)?;
-/// 
-/// // Ensure cleanup happens even if we return early
-/// let result = process_file(&file_path);
-/// 
-/// if let Some(temp_path) = temp_to_cleanup {
-///     let _ = cleanup_collaborator_temp_file(&temp_path); // Ignore cleanup errors
-/// }
-/// 
-/// result?; // Return any processing error after cleanup
 /// ```
 pub fn cleanup_collaborator_temp_file(temp_file_path: &Path) -> Result<(), GpgError> {
     println!("ROCST: Attempting to clean up temporary file: {:?}", temp_file_path);
     
+    // CRITICAL SAFETY CHECK: Verify this file is actually in the temp directory
+    // This prevents accidental deletion of original addressbook files
+    let temp_dir = std::env::temp_dir();
+    let canonical_temp_path = temp_file_path
+        .canonicalize()
+        .map_err(|e| GpgError::TempFileError(
+            format!("Failed to canonicalize temp file path '{}': {}", temp_file_path.display(), e)
+        ))?;
+    
+    // Check if the file path starts with the temp directory path
+    if !canonical_temp_path.starts_with(&temp_dir) {
+        let error_msg = format!(
+            "SAFETY VIOLATION: Refusing to delete file '{}' - not in temp directory '{}'",
+            canonical_temp_path.display(), temp_dir.display()
+        );
+        eprintln!("ERROR: {}", error_msg);
+        return Err(GpgError::TempFileError(error_msg));
+    }
+    
     // Check if the file exists before attempting removal
-    if temp_file_path.exists() {
+    if canonical_temp_path.exists() {
         // Attempt to remove the file
-        std::fs::remove_file(temp_file_path)
+        std::fs::remove_file(&canonical_temp_path)
             .map_err(|e| {
                 let error_msg = format!(
                     "Failed to remove temporary file '{}': {}. File may contain sensitive decrypted data.",
-                    temp_file_path.display(), e
+                    canonical_temp_path.display(), e
                 );
                 eprintln!("WARNING: {}", error_msg);
                 GpgError::TempFileError(error_msg)
@@ -10773,7 +10877,7 @@ pub fn cleanup_collaborator_temp_file(temp_file_path: &Path) -> Result<(), GpgEr
         Ok(())
     } else {
         // File doesn't exist - this is actually fine, our goal is achieved
-        println!("ROCST: Temporary file does not exist, no cleanup needed: {:?}", temp_file_path);
+        println!("ROCST: Temporary file does not exist, no cleanup needed: {:?}", canonical_temp_path);
         Ok(())
     }
 }
