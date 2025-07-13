@@ -1116,7 +1116,7 @@ pub fn read_singleline_string_from_clearsigntoml(path_to_clearsigntoml_with_gpgk
 /// let config_path = "config/security.toml";
 /// let target_path = "data/settings.toml";
 /// 
-/// match read_singleline_string_using_clearsignedconfig_from_clearsigntoml(
+/// match read_singleline_string_from_clearsigntoml_without_keyid(
 ///     config_path, 
 ///     target_path, 
 ///     "api_endpoint"
@@ -1125,7 +1125,7 @@ pub fn read_singleline_string_from_clearsigntoml(path_to_clearsigntoml_with_gpgk
 ///     Err(e) => eprintln!("Error: {}", e)
 /// }
 /// ```
-pub fn read_singleline_string_using_clearsignedconfig_from_clearsigntoml(
+pub fn read_singleline_string_from_clearsigntoml_without_keyid(
     path_str_to_config_file_that_contains_gpg_key: &str,
     pathstr_to_target_clearsigned_file: &str, 
     name_of_toml_field_key_to_read: &str,
@@ -1154,7 +1154,7 @@ pub fn read_singleline_string_using_clearsignedconfig_from_clearsigntoml(
 }
 
 // // DOC String NEEDED
-// pub fn read_singleline_string_using_clearsignedconfig_from_clearsigntoml(
+// pub fn read_singleline_string_from_clearsigntoml_without_keyid(
 //     path_to_config_file_with_gpgkey: &str,
 //     path_to_clearsigntoml_without_gpgkey: &str, 
 //     name_of_toml_field_key_to_read: &str,
@@ -2818,14 +2818,14 @@ pub fn read_str_array_field_clearsigntoml(path: &str, name_of_toml_field_key_to_
 /// let config_path = "security_config.toml";
 /// let addresses_file = "network_config.toml";
 /// 
-/// let ipv4_addresses = read_string_array_using_clearsignedconfig_from_clearsigntoml(
+/// let ipv4_addresses = read_stringarray_from_clearsigntoml_without_keyid(
 ///     config_path,
 ///     addresses_file, 
 ///     "ipv4_addresses"
 /// )?;
 /// // Returns: vec!["10.0.0.213", "192.168.1.1"] if verification succeeds
 /// ```
-pub fn read_stringarray_using_clearsignedconfig_from_clearsigntoml(
+pub fn read_stringarray_from_clearsigntoml_without_keyid(
     path_str_to_config_file_that_contains_gpg_key: &str,
     pathstr_to_target_clearsigned_file: &str, 
     name_of_toml_field_key_to_read: &str,
@@ -7017,7 +7017,7 @@ pub fn read_teamchannel_collaborators_with_access_from_clearsigntoml(
     };
 
     // Use the existing string array reading function with owner-based validation
-    match read_stringarray_using_clearsignedconfig_from_clearsigntoml(
+    match read_stringarray_from_clearsigntoml_without_keyid(
         addressbook_files_directory_relative,  // This should be the config file path
         path_str,                               // This is the target file
         "teamchannel_collaborators_with_access"
@@ -7302,14 +7302,14 @@ pub fn read_u8_array_from_clearsigntoml(path: &str, name_of_toml_field_key_to_re
 /// let config_path = "security_config.toml";
 /// let node_file = "node_config.toml";
 /// 
-/// let node_unique_id = read_u8_array_using_clearsignedconfig_from_clearsigntoml(
+/// let node_unique_id = read_u8_array_from_clearsigntoml_without_keyid(
 ///     config_path,
 ///     node_file, 
 ///     "node_unique_id"
 /// )?;
 /// // Returns: vec![160, 167, 195, 169] if verification succeeds
 /// ```
-pub fn read_u8_array_using_clearsignedconfig_from_clearsigntoml(
+pub fn read_u8_array_from_clearsigntoml_without_keyid(
     path_str_to_config_file_that_contains_gpg_key: &str,
     pathstr_to_target_clearsigned_file: &str, 
     name_of_toml_field_key_to_read: &str,
@@ -7546,7 +7546,7 @@ pub fn read_u64_array_from_clearsigntoml(path: &str, name_of_toml_field_key_to_r
 /// let config_path = "security_config.toml";
 /// let node_file = "node_config.toml";
 /// 
-/// let node_timestamps = read_u64_array_using_clearsignedconfig_from_clearsigntoml(
+/// let node_timestamps = read_u64_array_from_clearsigntoml_without_keyid(
 ///     config_path,
 ///     node_file, 
 ///     "node_timestamp_array"
@@ -7559,7 +7559,7 @@ pub fn read_u64_array_from_clearsigntoml(path: &str, name_of_toml_field_key_to_r
 /// * Reading large identifier arrays from verified configuration files
 /// * Reading sequence numbers or version arrays from secure configuration files
 /// * Reading capacity or limit arrays from authenticated configuration files
-pub fn read_u64_array_using_clearsignedconfig_from_clearsigntoml(
+pub fn read_u64_array_from_clearsigntoml_without_keyid(
     path_str_to_config_file_that_contains_gpg_key: &str,
     pathstr_to_target_clearsigned_file: &str, 
     name_of_toml_field_key_to_read: &str,
@@ -8158,14 +8158,14 @@ pub fn read_pathbuf_from_clearsigntoml(path: &str, name_of_toml_field_key_to_rea
 /// let config_path = "security_config.toml";
 /// let node_file = "node_config.toml";
 /// 
-/// let directory_path = read_pathbuf_using_clearsignedconfig_from_clearsigntoml(
+/// let directory_path = read_pathbuf_from_clearsigntoml_without_keyid(
 ///     config_path,
 ///     node_file, 
 ///     "directory_path"
 /// )?;
 /// // Returns: PathBuf from the verified file
 /// ```
-pub fn read_pathbuf_using_clearsignedconfig_from_clearsigntoml(
+pub fn read_pathbuf_from_clearsigntoml_without_keyid(
     path_str_to_config_file_that_contains_gpg_key: &str,
     pathstr_to_target_clearsigned_file: &str, 
     name_of_toml_field_key_to_read: &str,
@@ -8538,14 +8538,14 @@ pub fn read_option_bool_from_clearsigntoml(path: &str, name_of_toml_field_key_to
 /// let config_path = "security_config.toml";
 /// let settings_file = "message_settings.toml";
 /// 
-/// let is_public = read_option_bool_using_clearsignedconfig_from_clearsigntoml(
+/// let is_public = read_option_bool_from_clearsigntoml_without_keyid(
 ///     config_path,
 ///     settings_file, 
 ///     "message_post_is_public_bool"
 /// )?;
 /// // Returns: Some(true), Some(false), or None depending on the field value
 /// ```
-pub fn read_option_bool_using_clearsignedconfig_from_clearsigntoml(
+pub fn read_option_bool_from_clearsigntoml_without_keyid(
     path_str_to_config_file_that_contains_gpg_key: &str,
     pathstr_to_target_clearsigned_file: &str, 
     name_of_toml_field_key_to_read: &str,
@@ -8902,14 +8902,14 @@ pub fn read_option_usize_from_clearsigntoml(path: &str, name_of_toml_field_key_t
 /// let config_path = "security_config.toml";
 /// let settings_file = "message_settings.toml";
 /// 
-/// let max_string_len = read_option_usize_using_clearsignedconfig_from_clearsigntoml(
+/// let max_string_len = read_option_usize_from_clearsigntoml_without_keyid(
 ///     config_path,
 ///     settings_file, 
 ///     "message_post_data_format_specs_int_string_max_string_length"
 /// )?;
 /// // Returns: Some(256), or None if field doesn't exist
 /// ```
-pub fn read_option_usize_using_clearsignedconfig_from_clearsigntoml(
+pub fn read_option_usize_from_clearsigntoml_without_keyid(
     path_str_to_config_file_that_contains_gpg_key: &str,
     pathstr_to_target_clearsigned_file: &str, 
     name_of_toml_field_key_to_read: &str,
@@ -9475,21 +9475,21 @@ pub fn read_option_i64_from_clearsigntoml(path: &str, name_of_toml_field_key_to_
 /// let config_path = "security_config.toml";
 /// let settings_file = "message_settings.toml";
 /// 
-/// let start_date = read_option_i64_using_clearsignedconfig_from_clearsigntoml(
+/// let start_date = read_option_i64_from_clearsigntoml_without_keyid(
 ///     config_path,
 ///     settings_file, 
 ///     "message_post_start_date_utc_posix"
 /// )?;
 /// // Returns: Some(1672531200), or None if field doesn't exist
 /// 
-/// let end_date = read_option_i64_using_clearsignedconfig_from_clearsigntoml(
+/// let end_date = read_option_i64_from_clearsigntoml_without_keyid(
 ///     config_path,
 ///     settings_file, 
 ///     "message_post_end_date_utc_posix"  
 /// )?;
 /// // Returns: Some(1704067200), or None if field doesn't exist
 /// ```
-pub fn read_option_i64_using_clearsignedconfig_from_clearsigntoml(
+pub fn read_option_i64_from_clearsigntoml_without_keyid(
     path_str_to_config_file_that_contains_gpg_key: &str,
     pathstr_to_target_clearsigned_file: &str, 
     name_of_toml_field_key_to_read: &str,
@@ -10039,14 +10039,14 @@ pub fn read_option_i32_tuple_array_from_clearsigntoml(path: &str, name_of_toml_f
 /// let config_path = "security_config.toml";
 /// let validation_file = "validation_rules.toml";
 /// 
-/// let ranges = read_option_i32_tuple_array_using_clearsignedconfig_from_clearsigntoml(
+/// let ranges = read_option_i32_tuple_array_from_clearsigntoml_without_keyid(
 ///     config_path,
 ///     validation_file, 
 ///     "message_post_data_format_specs_integer_ranges_from_to_tuple_array"
 /// )?;
 /// // Returns: Some(vec![(1, 100), (200, 300)]), or None if field doesn't exist
 /// ```
-pub fn read_option_i32_tuple_array_using_clearsignedconfig_from_clearsigntoml(
+pub fn read_option_i32_tuple_array_from_clearsigntoml_without_keyid(
     path_str_to_config_file_that_contains_gpg_key: &str,
     pathstr_to_target_clearsigned_file: &str, 
     name_of_toml_field_key_to_read: &str,
