@@ -401,6 +401,18 @@ use crate::clearsign_toml_module::{
     decrypt_gpgfile_to_output,
     read_all_collaborator_port_assignments_clearsigntoml_optimized,
     read_teamchannel_collaborators_with_access_from_clearsigntoml,
+    //
+    read_singleline_string_from_clearsigntoml_without_keyid,
+    read_u8_array_from_clearsigntoml_without_keyid,
+    read_pathbuf_from_clearsigntoml_without_keyid,
+    read_u64_from_clearsigntoml_without_keyid,
+    read_stringarray_from_clearsigntoml_without_keyid,
+    read_hashmap_corenode_ports_from_clearsigntoml_without_keyid,
+    read_option_i32_tuple_array_from_clearsigntoml_without_keyid,
+    read_option_usize_from_clearsigntoml_without_keyid,
+    read_option_bool_from_clearsigntoml_without_keyid,
+    read_option_i64_from_clearsigntoml_without_keyid,
+    
 }; 
 
 // // deprecated, code moved to new clearsign_toml_module
@@ -10479,6 +10491,17 @@ struct CoreNode {
     
     functions for datatypes:
     
+    read_singleline_string_from_clearsigntoml_without_keyid,
+    read_u8_array_from_clearsigntoml_without_keyid,
+    read_pathbuf_from_clearsigntoml_without_keyid,
+    read_u64_from_clearsigntoml_without_keyid,
+    read_stringarray_from_clearsigntoml_without_keyid,
+    read_hashmap_corenode_ports_from_clearsigntoml_without_keyid,
+    read_option_i32_tuple_array_from_clearsigntoml_without_keyid,
+    read_option_usize_from_clearsigntoml_without_keyid,
+    read_option_bool_from_clearsigntoml_without_keyid,
+    read_option_i64_from_clearsigntoml_without_keyid,
+    
     
     string
     vec<u8>
@@ -10511,11 +10534,23 @@ struct CoreNode {
 ///
 /// * `Result<CoreNode, String>` - `Ok(CoreNode)` if the node is successfully loaded,
 ///    `Err(String)` containing an error message if an error occurs. 
+///
+///
 fn load_core_node_from_toml_file(
     file_path: &Path,
 ) -> Result<CoreNode, String> {
     
     /*
+    1. Paths & Reading-Copies Part 1: node.toml path and read-copy
+    2. Paths & Reading-Copies Part 2: addressbook path and read-copy
+    3. Validate Part 1: validate addressbook file and get node-owner's public gpg
+    4. Validation Part 2: validate Node (clearsign validation of .toml)
+    5. Field Extraction
+    6. Cleanup
+    7. Return Node Struct (CoreNode)
+    
+    
+    
     1. updating Nodes: Plan A
     -> fn load_core_node_from_toml_file
 
@@ -10571,12 +10606,74 @@ fn load_core_node_from_toml_file(
         file_path,
     );
     
-    // pending
-    /*
-    look up file owner
-    get gpg public key
-    validate clearsign
-    */
+    // // Get armored public key, using key-id (full fingerprint in)
+    // let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+    //     Ok(fingerprint) => fingerprint,
+    //     Err(e) => {
+    //         return Err(io::Error::new(
+    //             io::ErrorKind::Other,
+    //             format!("implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}", e)
+    //         ));
+    //     }
+    // };
+    
+    // //    // 1. Paths & Reading-Copies Part 1: node.toml path and read-copy
+    // let node_readcopy_path = get_path_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
+    //     collaborator_name: &str,
+    //     addressbook_files_directory_relative: &str,
+    //     gpg_full_fingerprint_key_id_string: &str,
+    // )?;
+
+    // //    // simple read string to get owner name
+    // //    // not for extraction and return, just part of validation
+
+
+    // ////////////////////////////////
+    // // Extract Owner for Key Lookup 
+    // ////////////////////////////////
+    // let owner_name_of_toml_field_key_to_read = "owner";
+    // println!(
+    //     "Reading file owner from field '{}' for security validation",
+    //     owner_name_of_toml_field_key_to_read
+    // );
+
+ //    // Read owner from the file (before validation, but we won't use other data until validated)
+ //    let file_owner_username = match read_single_line_string_field_from_toml(path_str, owner_name_of_toml_field_key_to_read) {
+ //        Ok(username) => {
+ //            if username.is_empty() {
+ //                return Err(GpgError::GpgOperationError(format!(
+ //                    "Field '{}' is empty in TOML file. File owner is required for security validation.",
+ //                    owner_name_of_toml_field_key_to_read
+ //                )));
+ //            }
+ //            username
+ //        }
+ //        Err(e) => {
+ //            return Err(GpgError::GpgOperationError(format!(
+ //                "Failed to read file owner from field '{}': {}",
+ //                owner_name_of_toml_field_key_to_read, e
+ //            )));
+ //        }
+ //    };
+ //    println!("File owner: '{}'", file_owner_username);
+    
+	// let addressbook_readcopy_path = get_path_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
+ //        collaborator_name: &str,
+ //        addressbook_files_directory_relative: &str,
+ //        gpg_full_fingerprint_key_id_string: &str,
+ //    );
+    
+
+    // // 2. Paths & Reading-Copies Part 2: addressbook path and read-copy
+    
+
+    
+    // // 3. Validate Part 1: validate addressbook file and get node-owner's public gpg
+    // // 4. Validation Part 2: validate Node (clearsign validation of .toml)
+    // // 5. Field Extraction
+    // // 6. Cleanup
+    // // 7. Return Node Struct (CoreNode)
+    
     
     // 1. Read File Contents 
     let toml_string = match fs::read_to_string(file_path) {
