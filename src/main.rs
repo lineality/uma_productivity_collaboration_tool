@@ -10476,7 +10476,27 @@ struct CoreNode {
     // pub n_durations_for_maxposts: Option<i64>, 
 }
 
-    set addressbook_files_directory_relative to the contstant and pass it along
+    
+    functions for datatypes:
+    
+    
+    string
+    vec<u8>
+    PathBuf
+    u64
+    vec<String>
+    
+   	HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
+    
+    
+    Option<Vec<(i32, i32)>>, 
+    Option<usize>,
+    Option<bool>, 
+    Option<i64>, 
+    
+     
+    
+    set addressbook_files_directory_relative to the constant and pass it along
     the clearsign module does not have the UMA constant, so pass it in.
     let addressbook_files_directory_relative = COLLABORATOR_ADDRESSBOOK_PATH_STR;
 
@@ -10511,26 +10531,28 @@ fn load_core_node_from_toml_file(
     - adding new 'modular message-post' fields to navigation state
     
     workflow, steps:
-    1. validation: clearsign validation of the node.toml file,
+    validation: clearsign validation of the node.toml file,
        which is a file without the gpg-public-key to validate,
        so use the owner field to get the owners public gpg key
        from their addressbook file (which will also need to be
            clearsign validated...after it is .gpg decrypted,
            using the current-user's gpg-key-id from
            the uma.toml config file)
-    1.1 get path to validated addressbook file
-    get_path_to_validated_addressbook_toml_or_gpgtoml(
+           
+    1.1 get path to addressbook file
+    get_path_to_temp_copy_of_addressbook_toml_or_decrypt_gpgtoml(
     collaborator_name: &str,
     addressbook_files_directory_relative: &str,
     gpg_full_fingerprint_key_id_string: &str,
 
-    1.2 get public gpg key from file...
+    2 validate and get public gpg key from file...
+    clearsign multiilne string?
     
-    extract data from node.toml fields
+    3. extract data from node.toml fields
     
-    1.3 remove temp file
+    4. remove temp file
     
-    return struct
+    5. return struct
     
 
     

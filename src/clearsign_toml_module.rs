@@ -10460,104 +10460,118 @@ gotit_port = 50006
 
 /// gpgtoml
 
-/// Validates and prepares a collaborator's addressbook file for reading by creating a secure temporary copy.
+/// Returns a path to a temporary copy of a collaborator's addressbook file.
 ///
-/// # CRITICAL SAFETY DESIGN
+/// # INPUT
+/// * `collaborator_name: &str` - Name of the collaborator (e.g., "alice")
+/// * `addressbook_files_directory_relative: &str` - Directory path relative to executable where addressbook files are stored
+/// * `gpg_full_fingerprint_key_id_string: &str` - Full 40-character GPG fingerprint for decryption
 ///
-/// **THIS FUNCTION ALWAYS CREATES A TEMPORARY COPY OF THE FILE, REGARDLESS OF FILE TYPE.**
+/// # OUTPUT
+/// * Returns: `Result<(PathBuf, PathBuf), GpgError>`
+/// * On success: Two identical PathBuf values, both pointing to the SAME temporary file path
+/// * On error: GpgError describing what went wrong
 ///
-/// Whether the source is a .toml file (clearsigned) or .gpgtoml file (encrypted), this function
-/// ALWAYS returns a path to a TEMPORARY FILE that can and MUST be safely deleted after use.
-/// 
-/// This design ensures that:
-/// - The original addressbook files are NEVER at risk of accidental deletion
-/// - The API is consistent regardless of source file type
-/// - Users can always safely delete the returned file path
-/// - No confusion about which files are safe to delete
+/// The returned PATH points to a temporary file in the system temp directory that:
+/// - Contains the addressbook content ready to read
+/// - Must be deleted by the caller after use
+/// - Is safe to delete (will never be an original file)
 ///
-/// # File Handling Details
+/// # What This Function Does
 ///
-/// For .toml files:
-/// 1. Reads the original .toml file from the addressbook directory
-/// 2. Creates a temporary copy with restricted permissions
-/// 3. Returns the path to this temporary copy
-/// 4. Original .toml file is never touched or returned
+/// This function locates a collaborator's addressbook file (either .toml or .gpgtoml format)
+/// and creates a temporary copy that can be safely read and then deleted. For encrypted
+/// .gpgtoml files, the temporary copy contains the decrypted content. For .toml files,
+/// the temporary copy is an exact copy of the original.
 ///
-/// For .gpgtoml files:
-/// 1. Reads the original .gpgtoml file from the addressbook directory  
-/// 2. Decrypts it directly to a new temporary file
-/// 3. Returns the path to this temporary decrypted file
-/// 4. Original .gpgtoml file is never touched or returned
+/// # IMPORTANT SECURITY NOTE
+///
+/// This function does NOT perform GPG signature verification on .toml files.
+/// It does NOT validate that .toml files are properly clearsigned.
+/// It does NOT check if signatures are from trusted keys.
+/// It ONLY creates temporary copies for safe file handling.
+///
+/// Creates a temporary copy of a collaborator's addressbook file for safe reading.
+///
+/// This function locates a collaborator's addressbook file (either .toml or .gpgtoml format)
+/// and creates a temporary copy that can be safely read and then deleted. For encrypted
+/// .gpgtoml files, the temporary copy contains the decrypted content. For .toml files,
+/// the temporary copy is an exact copy of the original.
+///
+/// # IMPORTANT SECURITY NOTE
+///
+/// This function does NOT perform GPG signature verification on .toml files.
+/// It does NOT validate that .toml files are properly clearsigned.
+/// It does NOT check if signatures are from trusted keys.
+/// It ONLY creates temporary copies for safe file handling.
+///
+/// If you need GPG signature verification, that must be done separately after reading the file.
+///
+/// # What This Function Actually Does
+///
+/// 1. Looks for {collaborator_name}__collaborator.toml (plain text, possibly clearsigned)
+/// 2. If not found, looks for {collaborator_name}__collaborator.gpgtoml (GPG encrypted)
+/// 3. Creates a temporary file in the system temp directory
+/// 4. For .toml: Copies the content to the temp file
+/// 5. For .gpgtoml: Decrypts the content to the temp file using GPG
+/// 6. Returns the path to the temporary file which must be deleted after use
 ///
 /// # Arguments
 ///
-/// * `collaborator_name` - The name of the collaborator whose addressbook file to find.
-///                        Used to construct filenames: `{collaborator_name}__collaborator.toml`
-///                        or `{collaborator_name}__collaborator.gpgtoml`
+/// * `collaborator_name` - The name of the collaborator. Used to construct filenames.
+///                        Must not be empty.
 ///
-/// * `addressbook_files_directory_relative` - The relative path to the directory containing
-///                                           collaborator addressbook files. This path is relative
-///                                           to the executable directory. Original files in this
-///                                           directory are NEVER modified or returned.
+/// * `addressbook_files_directory_relative` - The directory path (relative to executable)
+///                                           where addressbook files are stored.
+///                                           Must not be empty.
 ///
-/// * `gpg_full_fingerprint_key_id_string` - The full GPG key fingerprint to use for decryption
-///                                          when processing .gpgtoml files. This should be the
-///                                          full 40-character fingerprint, not a short key ID.
+/// * `gpg_full_fingerprint_key_id_string` - The full GPG fingerprint for decryption.
+///                                          Only used if a .gpgtoml file is found.
+///                                          Must not be empty.
 ///
 /// # Returns
 ///
-/// Returns `Result<(PathBuf, PathBuf), GpgError>` where:
-/// - The first `PathBuf` is the absolute path to a TEMPORARY FILE containing the addressbook data
-/// - The second `PathBuf` is the SAME PATH - provided for consistency and as a reminder that this
-///   temporary file MUST be deleted after use
+/// Returns `Result<(PathBuf, PathBuf), GpgError>` where both PathBuf values are identical
+/// and point to the same temporary file. This redundancy emphasizes that the file is
+/// temporary and must be cleaned up.
 ///
-/// **BOTH PATHS POINT TO THE SAME TEMPORARY FILE THAT IS SAFE TO DELETE**
+/// The temporary file will be in the system temp directory with a name like:
+/// `temp_addressbook_copy_{collaborator}_{timestamp}.toml`
 ///
 /// # Errors
 ///
-/// Returns `GpgError` in the following cases:
-/// - `ValidationError` - If collaborator_name or gpg_key_id is empty, or if neither .toml nor .gpgtoml exists
-/// - `PathError` - If absolute path conversion fails
-/// - `TempFileError` - If temporary file creation, copying, or permission setting fails
-/// - `GpgOperationError` - If GPG decryption fails
-/// - `FileSystemError` - If file system operations fail
+/// * `GpgError::ValidationError` - If any input parameter is empty or if neither
+///                                .toml nor .gpgtoml file exists
+/// * `GpgError::PathError` - If path resolution to absolute paths fails  
+/// * `GpgError::FileSystemError` - If reading the original file fails
+/// * `GpgError::TempFileError` - If creating or writing the temp file fails
+/// * `GpgError::GpgOperationError` - If GPG decryption fails (only for .gpgtoml files)
 ///
-/// # Security Considerations
+/// # Temporary File Cleanup
 ///
-/// - ALL returned files are temporary copies in the system temp directory
-/// - Temporary files are created with restricted permissions (0o600 on Unix systems)
-/// - Original addressbook files are NEVER returned and cannot be accidentally deleted
-/// - If any error occurs after temporary file creation, the temp file is automatically deleted
-/// - Decrypted content is never logged or displayed
-/// - The caller MUST clean up the returned temporary file using `cleanup_collaborator_temp_file()`
+/// The caller MUST delete the returned temporary file after use. Use the
+/// `cleanup_temp_addressbook_file()` function for safe cleanup.
 ///
-/// # Examples
+/// If this function returns an error after creating a temp file, the temp file
+/// is automatically cleaned up.
+///
+/// # Example Usage
 ///
 /// ```rust
-/// // Get a TEMPORARY COPY of the addressbook file ready for reading
-/// let (temp_file_path, same_temp_file_path) = get_path_to_validated_addressbook_toml_or_gpgtoml(
+/// // Get a temporary copy of the addressbook file
+/// let (temp_file_path, _) = get_temp_copy_of_addressbook_toml_or_decrypt_gpgtoml(
 ///     "alice",
-///     COLLABORATOR_ADDRESSBOOK_PATH_STR,
+///     "config/addressbooks",
 ///     "1234567890ABCDEF1234567890ABCDEF12345678"
 /// )?;
 ///
-/// // Read and process the TEMPORARY file
+/// // Read from the temporary file
 /// let content = std::fs::read_to_string(&temp_file_path)?;
 ///
-/// // ALWAYS clean up the temporary file - this is ALWAYS safe because it's ALWAYS a temp file
-/// cleanup_collaborator_temp_file(&temp_file_path)?;
-/// // or equivalently:
-/// cleanup_collaborator_temp_file(&same_temp_file_path)?;
+/// // IMPORTANT: Clean up the temporary file
+/// cleanup_temp_addressbook_file(&temp_file_path)?;
 /// ```
-///
-/// # Why Two Identical Paths Are Returned
-///
-/// Both return values are the SAME temporary file path. This redundant design:
-/// 1. Maintains API consistency with other functions that might return different paths
-/// 2. Serves as a reminder that cleanup is required
-/// 3. Makes it impossible to accidentally get confused about which path is safe to delete
-///    (they're both the same temporary file)
-pub fn get_path_to_validated_addressbook_toml_or_gpgtoml(
+pub fn get_path_to_temp_copy_of_addressbook_toml_or_decrypt_gpgtoml(
     collaborator_name: &str,
     addressbook_files_directory_relative: &str,
     gpg_full_fingerprint_key_id_string: &str,
