@@ -10488,7 +10488,6 @@ struct CoreNode {
     
    	HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
     
-    
     Option<Vec<(i32, i32)>>, 
     Option<usize>,
     Option<bool>, 

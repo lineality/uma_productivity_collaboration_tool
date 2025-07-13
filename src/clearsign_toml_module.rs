@@ -470,11 +470,11 @@ pub fn read_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str) ->
 /// or if any errors occur.
 ///
 /// # Arguments
-/// * `path` - Path to the TOML file
-/// * `base_name` - Base name to search for (e.g., "prompt" will match "prompt_1", "prompt_2", etc.)
+/// - `path` - Path to the TOML file
+/// - `base_name` - Base name to search for (e.g., "prompt" will match "prompt_1", "prompt_2", etc.)
 ///
 /// # Returns
-/// * `Vec<String>` - Vector containing all values for fields matching the base name
+/// - `Vec<String>` - Vector containing all values for fields matching the base name
 ///
 /// # Example
 /// ```
@@ -549,11 +549,11 @@ pub fn read_basename_fields_from_toml(path: &str, base_name: &str) -> Vec<String
 /// Reads a single-line string field from a TOML file.
 /// 
 /// # Arguments
-/// * `path` - Path to the TOML file
-/// * `name_of_toml_field_key_to_read` - Name of the field to read
+/// - `path` - Path to the TOML file
+/// - `name_of_toml_field_key_to_read` - Name of the field to read
 /// 
 /// # Returns
-/// * `Result<String, String>` - The field value or an error message
+/// - `Result<String, String>` - The field value or an error message
 pub fn read_single_line_string_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<String, String> {
     let file = File::open(path)
         .map_err(|e| format!("Failed to open file: {}", e))?;
@@ -582,11 +582,11 @@ pub fn read_single_line_string_field_from_toml(path: &str, name_of_toml_field_ke
 /// Reads a u8 integer value from a TOML file.
 /// 
 /// # Arguments
-/// * `path` - Path to the TOML file
-/// * `name_of_toml_field_key_to_read` - Name of the field to read
+/// - `path` - Path to the TOML file
+/// - `name_of_toml_field_key_to_read` - Name of the field to read
 /// 
 /// # Returns
-/// * `Result<u8, String>` - The parsed u8 value or an error message
+/// - `Result<u8, String>` - The parsed u8 value or an error message
 pub fn read_u8_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<u8, String> {
     let file = File::open(path)
         .map_err(|e| format!("Failed to open file: {}", e))?;
@@ -616,11 +616,11 @@ pub fn read_u8_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str)
 /// Reads a u64 integer value from a TOML file.
 /// 
 /// # Arguments
-/// * `path` - Path to the TOML file
-/// * `name_of_toml_field_key_to_read` - Name of the field to read
+/// - `path` - Path to the TOML file
+/// - `name_of_toml_field_key_to_read` - Name of the field to read
 /// 
 /// # Returns
-/// * `Result<u64, String>` - The parsed u64 value or an error message
+/// - `Result<u64, String>` - The parsed u64 value or an error message
 pub fn read_u64_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<u64, String> {
     let file = File::open(path)
         .map_err(|e| format!("Failed to open file: {}", e))?;
@@ -647,6 +647,159 @@ pub fn read_u64_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str
     Err(format!("Field '{}' not found", name_of_toml_field_key_to_read))
 }
 
+/// Reads a u64 integer field from a clearsigned TOML file.
+///
+/// # Purpose
+/// This function provides secure reading of u64 values from clearsigned TOML files
+/// by first verifying the GPG signature before accessing the data. The GPG public
+/// key is expected to be embedded within the same file being read.
+///
+/// # Process Flow
+/// 1. Extracts the GPG public key from the clearsigned TOML file
+/// 2. Verifies the file's signature using the extracted key
+/// 3. If verification succeeds, reads and parses the requested u64 field
+/// 4. Returns the parsed value or an appropriate error
+///
+/// # Arguments
+/// - `path_to_clearsigntoml_with_gpgkey` - Path to the clearsigned TOML file containing both data and GPG key
+/// - `name_of_toml_field_key_to_read` - Name of the field containing the u64 value to read
+///
+/// # Returns
+/// - `Ok(u64)` - The parsed u64 value if verification succeeds and field exists
+/// - `Err(String)` - Detailed error message if any step fails
+///
+/// # Errors
+/// This function may return errors in several cases:
+/// - If the file cannot be opened or read
+/// - If the GPG key cannot be extracted from the file
+/// - If the GPG signature verification fails
+/// - If the specified field doesn't exist in the file
+/// - If the field value cannot be parsed as a valid u64
+///
+/// # Security
+/// This function ensures data integrity by verifying the GPG signature before
+/// reading any values. This prevents tampering with numeric configuration values
+/// that might affect system behavior.
+///
+/// # Example
+/// ```
+/// let config_path = "/etc/myapp/config.toml";
+/// 
+/// match read_u64_from_clearsigntoml(config_path, "max_connections") {
+///     Ok(value) => println!("Max connections: {}", value),
+///     Err(e) => eprintln!("Error reading max_connections: {}", e)
+/// }
+/// ```
+pub fn read_u64_from_clearsigntoml(
+    path_to_clearsigntoml_with_gpgkey: &str, 
+    name_of_toml_field_key_to_read: &str
+) -> Result<u64, String> {
+    // Step 1: Extract GPG key from the file
+    let key = extract_gpg_key_from_clearsigntoml(path_to_clearsigntoml_with_gpgkey, "gpg_key_public")
+        .map_err(|e| format!("Failed to extract GPG key from file '{}': {}", 
+                            path_to_clearsigntoml_with_gpgkey, e))?;
+
+    // Step 2: Verify the file and only proceed if verification succeeds
+    let verification_result = verify_clearsign(path_to_clearsigntoml_with_gpgkey, &key)
+        .map_err(|e| format!("Failed during verification process for file '{}': {}", 
+                            path_to_clearsigntoml_with_gpgkey, e))?;
+
+    // Step 3: Check if verification succeeded
+    if !verification_result {
+        return Err(format!("GPG verification failed for file: {}", path_to_clearsigntoml_with_gpgkey));
+    }
+
+    // Step 4: Only read the field if verification succeeded
+    read_u64_field_from_toml(path_to_clearsigntoml_with_gpgkey, name_of_toml_field_key_to_read)
+        .map_err(|e| format!("Failed to read u64 field '{}' from verified file '{}': {}", 
+                            name_of_toml_field_key_to_read, path_to_clearsigntoml_with_gpgkey, e))
+}
+
+
+/// Reads a u64 integer field from a clearsigned TOML file using a GPG key from a separate config file.
+///
+/// # Purpose
+/// This function provides a way to verify and read u64 values from clearsigned TOML files 
+/// that don't contain their own GPG keys, instead using a key from a separate centralized 
+/// config file. This approach helps maintain consistent key management across multiple 
+/// clearsigned files and is particularly useful for numeric configuration values that
+/// require integrity protection.
+///
+/// # Process Flow
+/// 1. Extracts the GPG public key from the specified config file
+/// 2. Uses this key to verify the signature of the target clearsigned TOML file
+/// 3. If verification succeeds, reads and parses the requested u64 field from the verified file
+/// 4. Returns the parsed value or an appropriate error
+///
+/// # Arguments
+/// - `pathstr_to_config_file_that_contains_gpg_key` - Path to a clearsigned TOML file containing the GPG public key
+/// - `pathstr_to_target_clearsigned_file` - Path to the clearsigned TOML file to read from (without its own GPG key)
+/// - `name_of_toml_field_key_to_read` - Name of the field containing the u64 value to read
+///
+/// # Returns
+/// - `Ok(u64)` - The parsed u64 value if verification succeeds and field exists
+/// - `Err(String)` - Detailed error message if any step fails
+///
+/// # Errors
+/// This function may return errors in several cases:
+/// - If the config file cannot be read or doesn't contain a valid GPG key
+/// - If the target file cannot be read or its signature cannot be verified with the provided key
+/// - If the specified field doesn't exist in the target file
+/// - If the field value cannot be parsed as a valid u64 (including overflow conditions)
+///
+/// # Security Considerations
+/// - Ensures that numeric values cannot be tampered with by verifying signatures
+/// - Particularly important for values like ports, timeouts, limits, or other security-sensitive numbers
+/// - The separation of key storage allows for key rotation without modifying data files
+///
+/// # Example
+/// ```
+/// let config_path = "/etc/myapp/security.toml";
+/// let data_path = "/var/myapp/limits.toml";
+/// 
+/// match read_u64_from_clearsigntoml_without_keyid(
+///     config_path, 
+///     data_path, 
+///     "request_timeout_seconds"
+/// ) {
+///     Ok(timeout) => println!("Request timeout: {} seconds", timeout),
+///     Err(e) => eprintln!("Error reading timeout: {}", e)
+/// }
+/// ```
+///
+/// # Notes
+/// - The function name includes "without_keyid" to indicate that the target file doesn't contain its own key
+/// - All paths should be absolute for consistency and to avoid ambiguity
+/// - The u64 type supports values from 0 to 18,446,744,073,709,551,615
+pub fn read_u64_from_clearsigntoml_without_keyid(
+    pathstr_to_config_file_that_contains_gpg_key: &str,
+    pathstr_to_target_clearsigned_file: &str, 
+    name_of_toml_field_key_to_read: &str,
+) -> Result<u64, String> {
+    // Step 1: Extract GPG key from the config file
+    let key = extract_gpg_key_from_clearsigntoml(pathstr_to_config_file_that_contains_gpg_key, "gpg_key_public")
+        .map_err(|e| format!("Failed to extract GPG key from config file '{}': {}", 
+                            pathstr_to_config_file_that_contains_gpg_key, e))?;
+
+    // Step 2: Verify the target file using the extracted key
+    let verification_result = verify_clearsign(pathstr_to_target_clearsigned_file, &key)
+        .map_err(|e| format!("Failed during verification process for target file '{}': {}", 
+                            pathstr_to_target_clearsigned_file, e))?;
+
+    // Step 3: Check verification result
+    if !verification_result {
+        return Err(format!(
+            "GPG signature verification failed for file '{}' using key from '{}'",
+            pathstr_to_target_clearsigned_file,
+            pathstr_to_config_file_that_contains_gpg_key
+        ));
+    }
+
+    // Step 4: Read the requested u64 field from the verified file
+    read_u64_field_from_toml(pathstr_to_target_clearsigned_file, name_of_toml_field_key_to_read)
+        .map_err(|e| format!("Failed to read u64 field '{}' from verified file '{}': {}", 
+                            name_of_toml_field_key_to_read, pathstr_to_target_clearsigned_file, e))
+}
 
 // /// Reads an array of u64 bytes from a TOML file into a Vec<u64>.
 // /// 
@@ -658,20 +811,20 @@ pub fn read_u64_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str
 // /// ```
 // /// 
 // /// # Arguments
-// /// * `path` - Path to the TOML file
-// /// * `name_of_toml_field_key_to_read` - Name of the field to read (must be an array of integers in the TOML file)
+// /// - `path` - Path to the TOML file
+// /// - `name_of_toml_field_key_to_read` - Name of the field to read (must be an array of integers in the TOML file)
 // /// 
 // /// # Returns
-// /// * `Result<Vec<u64>, String>` - A vector containing all bytes in the array if successful,
+// /// - `Result<Vec<u64>, String>` - A vector containing all bytes in the array if successful,
 // ///   or an error message if the field is not found or values are out of u64 range (0 to 2^64-1)
 // /// 
 // /// # Error Handling
 // /// This function returns errors when:
-// /// * The file cannot be opened or read
-// /// * The specified field is not found
-// /// * The field is not a valid array format
-// /// * Any value in the array is not a valid u64 (outside 0 to 2^64-1 range)
-// /// * Any value cannot be parsed as an integer
+// /// - The file cannot be opened or read
+// /// - The specified field is not found
+// /// - The field is not a valid array format
+// /// - Any value in the array is not a valid u64 (outside 0 to 2^64-1 range)
+// /// - Any value cannot be parsed as an integer
 // /// 
 // /// # Example
 // /// For a TOML file containing:
@@ -782,11 +935,11 @@ pub fn read_u64_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str
 // /// No data is returned if signature validation fails.
 // /// 
 // /// # Arguments
-// /// * `path` - Path to the clearsigned TOML file
-// /// * `name_of_toml_field_key_to_read` - Name of the field to read (must be an array of bytes in the TOML file)
+// /// - `path` - Path to the clearsigned TOML file
+// /// - `name_of_toml_field_key_to_read` - Name of the field to read (must be an array of bytes in the TOML file)
 // /// 
 // /// # Returns
-// /// * `Result<Vec<u64>, String>` - A vector containing all bytes in the array if successful and verified,
+// /// - `Result<Vec<u64>, String>` - A vector containing all bytes in the array if successful and verified,
 // ///   or an error message if verification fails or the field cannot be read
 // /// 
 // /// # Example
@@ -809,10 +962,10 @@ pub fn read_u64_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str
 // /// 
 // /// # Errors
 // /// Returns an error if:
-// /// * GPG key extraction fails
-// /// * Signature verification fails
-// /// * The field doesn't exist or isn't a valid byte array
-// /// * Any value is outside the valid u64 range (0 to 2^64-1)
+// /// - GPG key extraction fails
+// /// - Signature verification fails
+// /// - The field doesn't exist or isn't a valid byte array
+// /// - Any value is outside the valid u64 range (0 to 2^64-1)
 // pub fn read_u64_array_from_clearsigntoml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<Vec<u64>, String> {
 //     // Step 1: Extract GPG key from the file
 //     let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")
@@ -837,11 +990,11 @@ pub fn read_u64_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str
 /// Reads a floating point (f64) value from a TOML file.
 /// 
 /// # Arguments
-/// * `path` - Path to the TOML file
-/// * `name_of_toml_field_key_to_read` - Name of the field to read
+/// - `path` - Path to the TOML file
+/// - `name_of_toml_field_key_to_read` - Name of the field to read
 /// 
 /// # Returns
-/// * `Result<f64, String>` - The parsed f64 value or an error message
+/// - `Result<f64, String>` - The parsed f64 value or an error message
 pub fn read_float_f64_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<f64, String> {
     let file = File::open(path)
         .map_err(|e| format!("Failed to open file: {}", e))?;
@@ -871,11 +1024,11 @@ pub fn read_float_f64_field_from_toml(path: &str, name_of_toml_field_key_to_read
 /// Reads a floating point (f32) value from a TOML file.
 /// 
 /// # Arguments
-/// * `path` - Path to the TOML file
-/// * `name_of_toml_field_key_to_read` - Name of the field to read
+/// - `path` - Path to the TOML file
+/// - `name_of_toml_field_key_to_read` - Name of the field to read
 /// 
 /// # Returns
-/// * `Result<f32, String>` - The parsed f32 value or an error message
+/// - `Result<f32, String>` - The parsed f32 value or an error message
 pub fn read_float_f32_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<f32, String> {
     let file = File::open(path)
         .map_err(|e| format!("Failed to open file: {}", e))?;
@@ -905,11 +1058,11 @@ pub fn read_float_f32_field_from_toml(path: &str, name_of_toml_field_key_to_read
 /// Reads a multi-line string field (triple-quoted) from a TOML file.
 /// 
 /// # Arguments
-/// * `path` - Path to the TOML file
-/// * `name_of_toml_field_key_to_read` - Name of the field to read
+/// - `path` - Path to the TOML file
+/// - `name_of_toml_field_key_to_read` - Name of the field to read
 /// 
 /// # Returns
-/// * `Result<String, String>` - The concatenated multi-line value or an error message
+/// - `Result<String, String>` - The concatenated multi-line value or an error message
 pub fn read_multi_line_toml_string(path: &str, name_of_toml_field_key_to_read: &str) -> Result<String, String> {
     let mut file = File::open(path)
         .map_err(|e| format!("Failed to open file: {}", e))?;
@@ -944,11 +1097,11 @@ pub fn read_multi_line_toml_string(path: &str, name_of_toml_field_key_to_read: &
 /// Reads an array of integers from a TOML file into a Vec<u64>.
 /// 
 /// # Arguments
-/// * `path` - Path to the TOML file
-/// * `name_of_toml_field_key_to_read` - Name of the field to read
+/// - `path` - Path to the TOML file
+/// - `name_of_toml_field_key_to_read` - Name of the field to read
 /// 
 /// # Returns
-/// * `Result<Vec<u64>, String>` - The vector of integers or an error message
+/// - `Result<Vec<u64>, String>` - The vector of integers or an error message
 pub fn read_integer_array(path: &str, name_of_toml_field_key_to_read: &str) -> Result<Vec<u64>, String> {
     let file = File::open(path)
         .map_err(|e| format!("Failed to open file: {}", e))?;
@@ -982,11 +1135,11 @@ pub fn read_integer_array(path: &str, name_of_toml_field_key_to_read: &str) -> R
 /// This function assumes the GPG key is stored in a multi-line field.
 ///
 /// # Arguments
-/// * `path` - Path to the TOML file
-/// * `key_field` - Name of the field containing the GPG key
+/// - `path` - Path to the TOML file
+/// - `key_field` - Name of the field containing the GPG key
 ///
 /// # Returns
-/// * `Result<String, String>` - The GPG key or an error message
+/// - `Result<String, String>` - The GPG key or an error message
 fn extract_gpg_key_from_clearsigntoml(path: &str, key_field: &str) -> Result<String, String> {
     read_multi_line_toml_string(path, key_field)
 }
@@ -994,11 +1147,11 @@ fn extract_gpg_key_from_clearsigntoml(path: &str, key_field: &str) -> Result<Str
 // /// Verifies a clearsigned TOML file using GPG.
 // ///
 // /// # Arguments
-// /// * `path` - Path to the TOML file
-// /// * `key` - The GPG key to use for verification
+// /// - `path` - Path to the TOML file
+// /// - `key` - The GPG key to use for verification
 // ///
 // /// # Returns
-// /// * `Result<(), String>` - Success or error message
+// /// - `Result<(), String>` - Success or error message
 // fn verify_clearsign(path: &str, key: &str) -> Result<(), String> {
 //     // Create a temporary file to hold the key
 //     let temp_key_path = format!("{}.key", path);
@@ -1030,11 +1183,11 @@ fn extract_gpg_key_from_clearsigntoml(path: &str, key_field: &str) -> Result<Str
 /// Verifies a clearsigned TOML file using GPG.
 ///
 /// # Arguments
-/// * `path` - Path to the TOML file
-/// * `key` - The GPG key to use for verification
+/// - `path` - Path to the TOML file
+/// - `key` - The GPG key to use for verification
 ///
 /// # Returns
-/// * `Result<bool, String>` - True if verification succeeds, false if it fails, or an error message
+/// - `Result<bool, String>` - True if verification succeeds, false if it fails, or an error message
 fn verify_clearsign(path: &str, key: &str) -> Result<bool, String> {
     // Create a temporary file to hold the key
     let temp_key_path = format!("{}.key", path);
@@ -1062,11 +1215,11 @@ fn verify_clearsign(path: &str, key: &str) -> Result<bool, String> {
 /// Reads a single-line string field from a clearsigned TOML file.
 ///
 /// # Arguments
-/// * `path` - Path to the TOML file
-/// * `name_of_toml_field_key_to_read` - Name of the field to read
+/// - `path` - Path to the TOML file
+/// - `name_of_toml_field_key_to_read` - Name of the field to read
 ///
 /// # Returns
-/// * `Result<String, String>` - The field value or an error message
+/// - `Result<String, String>` - The field value or an error message
 pub fn read_singleline_string_from_clearsigntoml(path_to_clearsigntoml_with_gpgkey: &str, name_of_toml_field_key_to_read: &str) -> Result<String, String> {
     // Extract GPG key from the file
     let key = extract_gpg_key_from_clearsigntoml(path_to_clearsigntoml_with_gpgkey, "gpg_key_public")?;
@@ -1097,19 +1250,19 @@ pub fn read_singleline_string_from_clearsigntoml(path_to_clearsigntoml_with_gpgk
 /// 4. Returns the field value or an appropriate error
 ///
 /// # Arguments
-/// * `path_str_to_config_file_that_contains_gpg_key` - Path to a clearsigned TOML file containing the GPG public key
-/// * `pathstr_to_target_clearsigned_file` - Path to the clearsigned TOML file to read from (without its own GPG key)
-/// * `name_of_toml_field_key_to_read` - Name of the field to read from the target file
+/// - `pathstr_to_config_file_that_contains_gpg_key` - Path to a clearsigned TOML file containing the GPG public key
+/// - `pathstr_to_target_clearsigned_file` - Path to the clearsigned TOML file to read from (without its own GPG key)
+/// - `name_of_toml_field_key_to_read` - Name of the field to read from the target file
 ///
 /// # Returns
-/// * `Ok(String)` - The value of the requested field if verification succeeds
-/// * `Err(String)` - Detailed error message if any step fails
+/// - `Ok(String)` - The value of the requested field if verification succeeds
+/// - `Err(String)` - Detailed error message if any step fails
 ///
 /// # Errors
 /// This function may return errors in several cases:
-/// * If the config file cannot be read or doesn't contain a valid GPG key
-/// * If the target file cannot be read or its signature cannot be verified with the provided key
-/// * If the specified field doesn't exist in the target file or has an invalid format
+/// - If the config file cannot be read or doesn't contain a valid GPG key
+/// - If the target file cannot be read or its signature cannot be verified with the provided key
+/// - If the specified field doesn't exist in the target file or has an invalid format
 ///
 /// # Example
 /// ```
@@ -1125,14 +1278,15 @@ pub fn read_singleline_string_from_clearsigntoml(path_to_clearsigntoml_with_gpgk
 ///     Err(e) => eprintln!("Error: {}", e)
 /// }
 /// ```
+///
 pub fn read_singleline_string_from_clearsigntoml_without_keyid(
-    path_str_to_config_file_that_contains_gpg_key: &str,
+    pathstr_to_config_file_that_contains_gpg_key: &str,
     pathstr_to_target_clearsigned_file: &str, 
     name_of_toml_field_key_to_read: &str,
 ) -> Result<String, String> {
     // Step 1: Extract GPG key from the config file
-    let key = extract_gpg_key_from_clearsigntoml(path_str_to_config_file_that_contains_gpg_key, "gpg_key_public")
-        .map_err(|e| format!("Failed to extract GPG key from config file '{}': {}", path_str_to_config_file_that_contains_gpg_key, e))?;
+    let key = extract_gpg_key_from_clearsigntoml(pathstr_to_config_file_that_contains_gpg_key, "gpg_key_public")
+        .map_err(|e| format!("Failed to extract GPG key from config file '{}': {}", pathstr_to_config_file_that_contains_gpg_key, e))?;
 
     // Step 2: Verify the target file using the extracted key
     let verification_result = verify_clearsign(pathstr_to_target_clearsigned_file, &key)
@@ -1143,7 +1297,7 @@ pub fn read_singleline_string_from_clearsigntoml_without_keyid(
         return Err(format!(
             "GPG signature verification failed for file '{}' using key from '{}'",
             pathstr_to_target_clearsigned_file,
-            path_str_to_config_file_that_contains_gpg_key
+            pathstr_to_config_file_that_contains_gpg_key
         ));
     }
 
@@ -1184,11 +1338,11 @@ pub fn read_singleline_string_from_clearsigntoml_without_keyid(
 /// Reads a multi-line string field from a clearsigned TOML file.
 ///
 /// # Arguments
-/// * `path` - Path to the TOML file
-/// * `name_of_toml_field_key_to_read` - Name of the field to read
+/// - `path` - Path to the TOML file
+/// - `name_of_toml_field_key_to_read` - Name of the field to read
 ///
 /// # Returns
-/// * `Result<String, String>` - The field value or an error message
+/// - `Result<String, String>` - The field value or an error message
 pub fn read_multiline_string_from_clearsigntoml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<String, String> {
     // Extract GPG key from the file
     let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")?;
@@ -1207,11 +1361,11 @@ pub fn read_multiline_string_from_clearsigntoml(path: &str, name_of_toml_field_k
 /// Reads an integer array field from a clearsigned TOML file.
 ///
 /// # Arguments
-/// * `path` - Path to the TOML file
-/// * `name_of_toml_field_key_to_read` - Name of the field to read
+/// - `path` - Path to the TOML file
+/// - `name_of_toml_field_key_to_read` - Name of the field to read
 ///
 /// # Returns
-/// * `Result<Vec<u64>, String>` - The integer array or an error message
+/// - `Result<Vec<u64>, String>` - The integer array or an error message
 pub fn read_integerarray_clearsigntoml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<Vec<u64>, String> {
     // Extract GPG key from the file
     let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")?;
@@ -1388,14 +1542,14 @@ string
 /// - If neither exists: returns error
 ///
 /// # Arguments
-/// * `toml_file_path` - Base path (may include .toml extension which will be stripped)
-/// * `gpg_full_fingerprint_key_id_string` - GPG key fingerprint for decrypting `.gpgtoml` files
+/// - `toml_file_path` - Base path (may include .toml extension which will be stripped)
+/// - `gpg_full_fingerprint_key_id_string` - GPG key fingerprint for decrypting `.gpgtoml` files
 ///
 /// # Returns
-/// * `Ok((PathBuf, Option<PathBuf>))` - Tuple of:
+/// - `Ok((PathBuf, Option<PathBuf>))` - Tuple of:
 ///   - The path to use (original or temp file)
 ///   - Optional temp file path that needs cleanup (None for .toml, Some for .gpgtoml)
-/// * `Err(GpgError)` - If neither file exists or decryption fails
+/// - `Err(GpgError)` - If neither file exists or decryption fails
 pub fn get_path_to_clearsign_toml_for_gpgtoml_option(
     toml_file_path: &Path,
     gpg_full_fingerprint_key_id_string: &str,
@@ -1498,7 +1652,7 @@ pub fn get_path_to_clearsign_toml_for_gpgtoml_option(
 /// the path getter function. It only attempts deletion if a temporary path is provided.
 ///
 /// # Arguments
-/// * `temp_path_option` - Optional path to temporary file that needs cleanup
+/// - `temp_path_option` - Optional path to temporary file that needs cleanup
 ///
 /// # Note
 /// Errors during cleanup are logged but not propagated, as cleanup failures
@@ -1560,13 +1714,13 @@ impl GpgError {
 /// Clearsigns a file with the user's private key and saves the output to a specified location.
 ///
 /// # Arguments
-/// * `input_file_path` - Path to the file that needs to be clearsigned
-/// * `output_file_path` - Path where the clearsigned file will be saved
-/// * `signing_key_id` - GPG key ID to use for signing
+/// - `input_file_path` - Path to the file that needs to be clearsigned
+/// - `output_file_path` - Path where the clearsigned file will be saved
+/// - `signing_key_id` - GPG key ID to use for signing
 ///
 /// # Returns
-/// * `Ok(())` if clearsigning succeeds
-/// * `Err(GpgError)` if any operation fails
+/// - `Ok(())` if clearsigning succeeds
+/// - `Err(GpgError)` if any operation fails
 ///
 /// # Example
 /// ```no_run
@@ -1615,13 +1769,13 @@ pub fn clearsign_filepath_to_path(
 /// Decrypts and validates a clearsigned, encrypted file
 /// 
 /// # Arguments
-/// * `encrypted_file_path` - Path to the encrypted .gpg file
-/// * `validator_key_id` - GPG key ID to validate the clearsign signature
-/// * `output_path` - Where to save the decrypted and verified file
+/// - `encrypted_file_path` - Path to the encrypted .gpg file
+/// - `validator_key_id` - GPG key ID to validate the clearsign signature
+/// - `output_path` - Where to save the decrypted and verified file
 /// 
 /// # Returns
-/// * `Ok(())` if decryption and validation succeed
-/// * `Err(GpgError)` if any operation fails
+/// - `Ok(())` if decryption and validation succeed
+/// - `Err(GpgError)` if any operation fails
 pub fn decrypt_and_validate_file(
     encrypted_file_path: &Path,
     validator_key_id: &str,
@@ -1651,12 +1805,12 @@ pub fn decrypt_and_validate_file(
 /// Decrypts a GPG encrypted file.
 ///
 /// # Arguments
-/// * `encrypted_file_path` - Path to the encrypted GPG file
-/// * `output_path` - Path where the decrypted output will be saved
+/// - `encrypted_file_path` - Path to the encrypted GPG file
+/// - `output_path` - Path where the decrypted output will be saved
 ///
 /// # Returns
-/// * `Ok(())` - If decryption succeeds
-/// * `Err(GpgError)` - If any operation fails
+/// - `Ok(())` - If decryption succeeds
+/// - `Err(GpgError)` - If any operation fails
 ///
 /// # Notes
 /// This function requires that the user has the appropriate private key
@@ -1684,12 +1838,12 @@ pub fn decrypt_gpg_file(
 /// Verifies a clearsigned file's signature.
 ///
 /// # Arguments
-/// * `clearsigned_file_path` - Path to the clearsigned file
-/// * `validator_key_id` - GPG key ID to use for validation
+/// - `clearsigned_file_path` - Path to the clearsigned file
+/// - `validator_key_id` - GPG key ID to use for validation
 ///
 /// # Returns
-/// * `Ok(())` - If signature validation succeeds
-/// * `Err(GpgError)` - If validation fails or any other operation fails
+/// - `Ok(())` - If signature validation succeeds
+/// - `Err(GpgError)` - If validation fails or any other operation fails
 ///
 /// # Notes
 /// This function first checks if the validator key exists in the keyring
@@ -1722,12 +1876,12 @@ fn verify_clearsign_signature(
 /// Extracts the original content from a verified clearsigned file.
 ///
 /// # Arguments
-/// * `clearsigned_file_path` - Path to the verified clearsigned file
-/// * `output_path` - Path where the extracted content will be saved
+/// - `clearsigned_file_path` - Path to the verified clearsigned file
+/// - `output_path` - Path where the extracted content will be saved
 ///
 /// # Returns
-/// * `Ok(())` - If content extraction succeeds
-/// * `Err(GpgError)` - If any operation fails
+/// - `Ok(())` - If content extraction succeeds
+/// - `Err(GpgError)` - If any operation fails
 ///
 /// # Notes
 /// This function parses the clearsigned file to extract only the content
@@ -1766,11 +1920,11 @@ fn extract_verified_content(
 /// Validates that a GPG key ID exists in the keyring.
 ///
 /// # Arguments
-/// * `key_id` - The GPG key ID to check for existence
+/// - `key_id` - The GPG key ID to check for existence
 ///
 /// # Returns
-/// * `Ok(bool)` - True if the key exists, false otherwise
-/// * `Err(GpgError)` - If there was an error executing the GPG command
+/// - `Ok(bool)` - True if the key exists, false otherwise
+/// - `Err(GpgError)` - If there was an error executing the GPG command
 ///
 /// # Example
 /// ```no_run
@@ -1797,13 +1951,13 @@ pub fn validate_gpg_key(key_id: &str) -> Result<bool, GpgError> {
 /// presence of the private key component.
 ///
 /// # Arguments
-/// * `key_id` - The GPG key ID (long format recommended) to check for. This ID typically
+/// - `key_id` - The GPG key ID (long format recommended) to check for. This ID typically
 ///   refers to the public key, but GPG uses it to find the associated secret key.
 ///
 /// # Returns
-/// * `Ok(true)` - If the secret key corresponding to the `key_id` exists in the keyring.
-/// * `Ok(false)` - If the secret key is not found (GPG command succeeds but indicates no such key).
-/// * `Err(GpgError::GpgOperationError)` - If there was an error executing the GPG command itself,
+/// - `Ok(true)` - If the secret key corresponding to the `key_id` exists in the keyring.
+/// - `Ok(false)` - If the secret key is not found (GPG command succeeds but indicates no such key).
+/// - `Err(GpgError::GpgOperationError)` - If there was an error executing the GPG command itself,
 ///   or if the GPG command reported an error other than "key not found".
 ///
 /// # Process
@@ -1888,7 +2042,7 @@ pub enum GpgError {
 /// Generates a current Unix timestamp for unique file naming.
 ///
 /// # Returns
-/// * `u64` - Current Unix timestamp in seconds
+/// - `u64` - Current Unix timestamp in seconds
 ///
 /// # Notes
 /// This function is used internally to create unique filenames
@@ -1903,11 +2057,11 @@ fn generate_timestamp() -> u64 {
 /// Creates a temporary file path with a unique name.
 ///
 /// # Arguments
-/// * `prefix` - Prefix to use for the temporary file name
+/// - `prefix` - Prefix to use for the temporary file name
 ///
 /// # Returns
-/// * `Ok(PathBuf)` - Path to the new temporary file
-/// * `Err(GpgError)` - If there was an error creating the path
+/// - `Ok(PathBuf)` - Path to the new temporary file
+/// - `Err(GpgError)` - If there was an error creating the path
 ///
 /// # Notes
 /// This function creates the parent directory if it doesn't exist
@@ -1930,13 +2084,13 @@ fn create_temp_file_path(prefix: &str) -> Result<PathBuf, GpgError> {
 /// Clearsigns a file using your GPG private key.
 ///
 /// # Arguments
-/// * `input_file_path` - Path to the file to be clearsigned
-/// * `temp_file_path` - Path where the clearsigned output will be saved
-/// * `your_key_id` - Your private key ID for signing
+/// - `input_file_path` - Path to the file to be clearsigned
+/// - `temp_file_path` - Path where the clearsigned output will be saved
+/// - `your_key_id` - Your private key ID for signing
 ///
 /// # Returns
-/// * `Ok(())` - If clearsigning succeeds
-/// * `Err(GpgError)` - If any operation fails
+/// - `Ok(())` - If clearsigning succeeds
+/// - `Err(GpgError)` - If any operation fails
 ///
 /// # Notes
 /// This is an internal function used by higher-level functions
@@ -1967,13 +2121,13 @@ fn clearsign_file_with_private_key(
 /// Encrypts a file using a recipient's public key file.
 ///
 /// # Arguments
-/// * `input_file_path` - Path to the file to be encrypted
-/// * `output_file_path` - Path where the encrypted output will be saved
-/// * `recipient_public_key_path` - Path to the recipient's public key file
+/// - `input_file_path` - Path to the file to be encrypted
+/// - `output_file_path` - Path where the encrypted output will be saved
+/// - `recipient_public_key_path` - Path to the recipient's public key file
 ///
 /// # Returns
-/// * `Ok(())` - If encryption succeeds
-/// * `Err(GpgError)` - If any operation fails
+/// - `Ok(())` - If encryption succeeds
+/// - `Err(GpgError)` - If any operation fails
 ///
 /// # Notes
 /// This function uses GnuPG's "always" trust model to allow
@@ -2035,20 +2189,20 @@ fn encrypt_file_with_public_key(
 /// - Verifies key availability before beginning operations
 ///
 /// # Arguments
-/// * `input_file_path` - Path to the file to be clearsigned and encrypted
-/// * `your_signing_key_id` - Your GPG key ID used for clearsigning (e.g., "7673C969D81E94C63D641CF84ED13C31924928A5")
-/// * `recipient_public_key_path` - Path to the recipient's public key file (ASCII-armored format)
+/// - `input_file_path` - Path to the file to be clearsigned and encrypted
+/// - `your_signing_key_id` - Your GPG key ID used for clearsigning (e.g., "7673C969D81E94C63D641CF84ED13C31924928A5")
+/// - `recipient_public_key_path` - Path to the recipient's public key file (ASCII-armored format)
 ///
 /// # Returns
-/// * `Ok(())` - If the operation completes successfully
-/// * `Err(GpgError)` - If any step fails, with detailed error information
+/// - `Ok(())` - If the operation completes successfully
+/// - `Err(GpgError)` - If any step fails, with detailed error information
 ///
 /// # Errors
 /// May return various `GpgError` types:
-/// * `GpgError::GpgOperationError` - If GPG operations fail (missing keys, invalid keys, etc.)
-/// * `GpgError::FileSystemError` - If file operations fail (permission issues, disk full, etc.)
-/// * `GpgError::PathError` - If path operations fail (invalid paths, missing directories, etc.)
-/// * `GpgError::TempFileError` - If temporary file operations fail
+/// - `GpgError::GpgOperationError` - If GPG operations fail (missing keys, invalid keys, etc.)
+/// - `GpgError::FileSystemError` - If file operations fail (permission issues, disk full, etc.)
+/// - `GpgError::PathError` - If path operations fail (invalid paths, missing directories, etc.)
+/// - `GpgError::TempFileError` - If temporary file operations fail
 ///
 /// # Example
 /// ```
@@ -2068,9 +2222,9 @@ fn encrypt_file_with_public_key(
 /// ```
 ///
 /// # Related Functions
-/// * `clearsign_file_with_private_key()` - Lower-level function to just clearsign a file
-/// * `encrypt_file_with_public_key()` - Lower-level function to just encrypt a file
-/// * `validate_gpg_key()` - Used to check if a GPG key exists in the keyring
+/// - `clearsign_file_with_private_key()` - Lower-level function to just clearsign a file
+/// - `encrypt_file_with_public_key()` - Lower-level function to just encrypt a file
+/// - `validate_gpg_key()` - Used to check if a GPG key exists in the keyring
 ///
 /// # GPG Requirements
 /// - GPG must be installed and available in the system PATH
@@ -2147,8 +2301,8 @@ pub fn clearsign_and_encrypt_file_for_recipient(
 /// 4. Reports results to the user
 ///
 /// # Returns
-/// * `Ok(())` - If the workflow completes successfully
-/// * `Err(GpgError)` - If any step fails
+/// - `Ok(())` - If the workflow completes successfully
+/// - `Err(GpgError)` - If any step fails
 ///
 /// # Notes
 /// Uses default file paths for input and output if not specified.
@@ -2212,8 +2366,8 @@ fn decrypt_and_validate_workflow() -> Result<(), GpgError> {
 /// None - Interactive prompts gather needed information
 /// 
 /// # Returns
-/// * `Ok(())` - Operation completed successfully
-/// * `Err(GpgError)` - Operation failed with specific error details
+/// - `Ok(())` - Operation completed successfully
+/// - `Err(GpgError)` - Operation failed with specific error details
 /// 
 /// # Example Usage
 /// ```no_run
@@ -2260,7 +2414,7 @@ pub fn rust_gpg_tools_interface() -> Result<(), GpgError> {
 ///
 /// # Returns
 ///
-/// * `Result<PathBuf, io::Error>` - The absolute directory path containing the executable or an error
+/// - `Result<PathBuf, io::Error>` - The absolute directory path containing the executable or an error
 ///   if it cannot be determined.
 pub fn gpg_get_absolute_path_to_executable_parentdirectory() -> Result<PathBuf, io::Error> {
     // Get the path to the current executable
@@ -2288,12 +2442,12 @@ pub fn gpg_get_absolute_path_to_executable_parentdirectory() -> Result<PathBuf, 
 ///
 /// # Arguments
 ///
-/// * `path_to_make_absolute` - A path to convert to an absolute path relative to 
+/// - `path_to_make_absolute` - A path to convert to an absolute path relative to 
 ///   the executable's directory location.
 ///
 /// # Returns
 ///
-/// * `Result<PathBuf, io::Error>` - The absolute path based on the executable's directory or an error
+/// - `Result<PathBuf, io::Error>` - The absolute path based on the executable's directory or an error
 ///   if the executable's path cannot be determined or if the path cannot be resolved.
 ///
 /// # Examples
@@ -2338,11 +2492,11 @@ pub fn gpg_make_input_path_name_abs_executabledirectoryrelative_nocheck<P: AsRef
 ///
 /// # Arguments
 ///
-/// * `path_to_check` - The path to check for existence
+/// - `path_to_check` - The path to check for existence
 ///
 /// # Returns
 ///
-/// * `Result<bool, io::Error>` - Whether the path exists or an error
+/// - `Result<bool, io::Error>` - Whether the path exists or an error
 pub fn gpg_abs_executable_directory_relative_exists_boolean_check<P: AsRef<Path>>(path_to_check: P) -> Result<bool, io::Error> {
     let path = path_to_check.as_ref();
     Ok(path.exists())
@@ -2353,12 +2507,12 @@ pub fn gpg_abs_executable_directory_relative_exists_boolean_check<P: AsRef<Path>
 /// and stores the entire clearsigned file (still clearsigned) to the output path.
 ///
 /// # Arguments
-/// * `incoming_gpg_encrypted_path` - Path to the GPG-encrypted file
-/// * `gpg_key_id` - GPG key ID to verify the clearsign signature
-/// * `output_verified_clearsign_path` - Path where to store the verified clearsigned file
+/// - `incoming_gpg_encrypted_path` - Path to the GPG-encrypted file
+/// - `gpg_key_id` - GPG key ID to verify the clearsign signature
+/// - `output_verified_clearsign_path` - Path where to store the verified clearsigned file
 ///
 /// # Returns
-/// * `Result<(), GpgError>` - Success or failure
+/// - `Result<(), GpgError>` - Success or failure
 ///
 /// # Description
 /// This function:
@@ -2462,16 +2616,16 @@ pub fn manual_q_and_a_new_encrypted_clearsigntoml_verification() -> Result<(), S
 /// which allows for examining the decrypted content before validating signatures.
 ///
 /// # Arguments
-/// * `input_file_path` - Path to the GPG-encrypted input file
-/// * `output_file_path` - Path where the decrypted content should be saved
+/// - `input_file_path` - Path to the GPG-encrypted input file
+/// - `output_file_path` - Path where the decrypted content should be saved
 ///
 /// # Returns
-/// * `Ok(())` if the decryption succeeds
-/// * `Err(GpgError)` if the decryption fails
+/// - `Ok(())` if the decryption succeeds
+/// - `Err(GpgError)` if the decryption fails
 ///
 /// # Errors
-/// * `GpgError::PathError` - If the input file doesn't exist or output path is invalid
-/// * `GpgError::GpgOperationError` - If the GPG decryption operation fails
+/// - `GpgError::PathError` - If the input file doesn't exist or output path is invalid
+/// - `GpgError::GpgOperationError` - If the GPG decryption operation fails
 pub fn decrypt_gpgfile_to_output(input_file_path: &Path, output_file_path: &Path) -> Result<(), GpgError> {
     // Debug logging
     println!("Decrypting GPG file: {} to: {}", 
@@ -2550,18 +2704,18 @@ pub fn decrypt_gpgfile_to_output(input_file_path: &Path, output_file_path: &Path
 /// ```
 /// 
 /// # Arguments
-/// * `path` - Path to the TOML file
-/// * `name_of_toml_field_key_to_read` - Name of the field to read (must be an array of strings in the TOML file)
+/// - `path` - Path to the TOML file
+/// - `name_of_toml_field_key_to_read` - Name of the field to read (must be an array of strings in the TOML file)
 /// 
 /// # Returns
-/// * `Result<Vec<String>, String>` - A vector containing all strings in the array if successful,
+/// - `Result<Vec<String>, String>` - A vector containing all strings in the array if successful,
 ///   or an error message if the field is not found or cannot be parsed correctly
 /// 
 /// # Error Handling
 /// This function returns errors when:
-/// * The file cannot be opened or read
-/// * The specified field is not found
-/// * The field is not a valid array format
+/// - The file cannot be opened or read
+/// - The specified field is not found
+/// - The field is not a valid array format
 /// 
 /// # Example
 /// For a TOML file containing:
@@ -2741,11 +2895,11 @@ pub fn read_string_array_field_from_toml(path: &str, name_of_toml_field_key_to_r
 /// 3. If verification succeeds, reading the requested string array
 /// 
 /// # Arguments
-/// * `path` - Path to the clearsigned TOML file
-/// * `name_of_toml_field_key_to_read` - Name of the field to read (must be an array of strings in the TOML file)
+/// - `path` - Path to the clearsigned TOML file
+/// - `name_of_toml_field_key_to_read` - Name of the field to read (must be an array of strings in the TOML file)
 /// 
 /// # Returns
-/// * `Result<Vec<String>, String>` - A vector containing all strings in the array if successful and verified,
+/// - `Result<Vec<String>, String>` - A vector containing all strings in the array if successful and verified,
 ///   or an error message if verification fails or the field cannot be read
 /// 
 /// # Security
@@ -2805,13 +2959,13 @@ pub fn read_str_array_field_clearsigntoml(path: &str, name_of_toml_field_key_to_
 /// 4. Returns the string array or an appropriate error
 /// 
 /// # Arguments
-/// * `path_str_to_config_file_that_contains_gpg_key` - Path to a clearsigned TOML file containing the GPG public key
-/// * `pathstr_to_target_clearsigned_file` - Path to the clearsigned TOML file to read from (without its own GPG key)
-/// * `name_of_toml_field_key_to_read` - Name of the string array field to read from the target file
+/// - `pathstr_to_config_file_that_contains_gpg_key` - Path to a clearsigned TOML file containing the GPG public key
+/// - `pathstr_to_target_clearsigned_file` - Path to the clearsigned TOML file to read from (without its own GPG key)
+/// - `name_of_toml_field_key_to_read` - Name of the string array field to read from the target file
 /// 
 /// # Returns
-/// * `Ok(Vec<String>)` - The string array values if verification succeeds
-/// * `Err(String)` - Detailed error message if any step fails
+/// - `Ok(Vec<String>)` - The string array values if verification succeeds
+/// - `Err(String)` - Detailed error message if any step fails
 /// 
 /// # Example
 /// ```
@@ -2826,14 +2980,14 @@ pub fn read_str_array_field_clearsigntoml(path: &str, name_of_toml_field_key_to_
 /// // Returns: vec!["10.0.0.213", "192.168.1.1"] if verification succeeds
 /// ```
 pub fn read_stringarray_from_clearsigntoml_without_keyid(
-    path_str_to_config_file_that_contains_gpg_key: &str,
+    pathstr_to_config_file_that_contains_gpg_key: &str,
     pathstr_to_target_clearsigned_file: &str, 
     name_of_toml_field_key_to_read: &str,
 ) -> Result<Vec<String>, String> {
     // Step 1: Extract GPG key from the config file
-    let key = extract_gpg_key_from_clearsigntoml(path_str_to_config_file_that_contains_gpg_key, "gpg_key_public")
+    let key = extract_gpg_key_from_clearsigntoml(pathstr_to_config_file_that_contains_gpg_key, "gpg_key_public")
         .map_err(|e| format!("Failed to extract GPG key from config file '{}': {}", 
-                             path_str_to_config_file_that_contains_gpg_key, e))?;
+                             pathstr_to_config_file_that_contains_gpg_key, e))?;
 
     // Step 2: Verify the target file using the extracted key
     let verification_result = verify_clearsign(pathstr_to_target_clearsigned_file, &key)
@@ -2844,7 +2998,7 @@ pub fn read_stringarray_from_clearsigntoml_without_keyid(
         return Err(format!(
             "GPG signature verification failed for file '{}' using key from '{}'",
             pathstr_to_target_clearsigned_file,
-            path_str_to_config_file_that_contains_gpg_key
+            pathstr_to_config_file_that_contains_gpg_key
         ));
     }
 
@@ -2862,18 +3016,18 @@ pub fn read_stringarray_from_clearsigntoml_without_keyid(
 ///    and writes it to the specified output file
 ///
 /// # Arguments
-/// * `clearsigned_input_path` - Path to the clearsigned file to verify
-/// * `public_key_file_path` - Path to the file containing the public key for verification
-/// * `extracted_content_output_path` - Path where the extracted content should be saved
+/// - `clearsigned_input_path` - Path to the clearsigned file to verify
+/// - `public_key_file_path` - Path to the file containing the public key for verification
+/// - `extracted_content_output_path` - Path where the extracted content should be saved
 ///
 /// # Returns
-/// * `Ok(())` if both verification and extraction succeed
-/// * `Err(GpgError)` if either verification or extraction fails
+/// - `Ok(())` if both verification and extraction succeed
+/// - `Err(GpgError)` if either verification or extraction fails
 ///
 /// # Errors
-/// * `GpgError::PathError` - If input files don't exist or paths are invalid
-/// * `GpgError::ValidationError` - If signature verification fails
-/// * `GpgError::GpgOperationError` - If GPG operations fail
+/// - `GpgError::PathError` - If input files don't exist or paths are invalid
+/// - `GpgError::ValidationError` - If signature verification fails
+/// - `GpgError::GpgOperationError` - If GPG operations fail
 pub fn verify_clearsigned_file_and_extract_content_to_output(
     clearsigned_input_path: &Path,
     public_key_file_path: &Path,
@@ -3020,8 +3174,8 @@ pub fn verify_clearsigned_file_and_extract_content_to_output(
 /// not the actual cryptographic key material.
 ///
 /// # Returns
-/// * `Ok(String)` - The selected GPG key ID
-/// * `Err(GpgError)` - If listing keys fails, no keys are available, or user input is invalid
+/// - `Ok(String)` - The selected GPG key ID
+/// - `Err(GpgError)` - If listing keys fails, no keys are available, or user input is invalid
 ///
 /// # Example
 /// ```
@@ -3158,7 +3312,7 @@ struct GpgPublicKeyDisplayInfo {
 /// and then interprets the entire resulting byte sequence as a UTF-8 string.
 ///
 /// # Arguments
-/// * `encoded_uid_string`: A string slice representing the GPG UID, potentially containing
+/// - `encoded_uid_string`: A string slice representing the GPG UID, potentially containing
 ///   percent-encoded sequences.
 ///
 /// # Returns
@@ -3243,13 +3397,13 @@ fn decode_gpg_uid_string(encoded_uid_string: &str) -> String {
 /// that follows it for a given `pub` key.
 ///
 /// # Arguments
-/// * `gpg_output_string`: A string slice containing the raw, colon-delimited output from GPG.
+/// - `gpg_output_string`: A string slice containing the raw, colon-delimited output from GPG.
 ///
 /// # Returns
-/// * `Ok(Vec<GpgPublicKeyDisplayInfo>)`: A vector of `GpgPublicKeyDisplayInfo` structs. Each struct
+/// - `Ok(Vec<GpgPublicKeyDisplayInfo>)`: A vector of `GpgPublicKeyDisplayInfo` structs. Each struct
 ///   represents a public key, containing its fingerprint and primary user identity.
 ///   The vector will be empty if no keys are found or if keys lack necessary information (fingerprint/UID).
-/// * `Err(GpgError::GpgOperationError)`: If the parsing logic determines that no valid key information
+/// - `Err(GpgError::GpgOperationError)`: If the parsing logic determines that no valid key information
 ///   could be extracted (e.g., output is malformed or no keys with UIDs are present).
 fn parse_gpg_public_key_listing(gpg_output_string: &str) -> Result<Vec<GpgPublicKeyDisplayInfo>, GpgError> {
     // Vector to store the information for each successfully parsed public key.
@@ -3375,8 +3529,8 @@ fn parse_gpg_public_key_listing(gpg_output_string: &str) -> Result<Vec<GpgPublic
 ///   not cryptographic secrets.
 ///
 /// # Returns
-/// * `Ok(String)`: The selected GPG public key fingerprint as a string.
-/// * `Err(GpgError)`: If any step fails, such as:
+/// - `Ok(String)`: The selected GPG public key fingerprint as a string.
+/// - `Err(GpgError)`: If any step fails, such as:
 ///     - Failure to execute the GPG command.
 ///     - The GPG command returning an error.
 ///     - Failure to parse the GPG output.
@@ -3526,11 +3680,11 @@ pub fn q_and_a_user_selects_gpg_key_full_fingerprint() -> Result<String, GpgErro
 /// extract only the metadata about keys, never the key material itself.
 ///
 /// # Arguments
-/// * `gpg_colon_output` - String containing the colon-delimited output from GPG
+/// - `gpg_colon_output` - String containing the colon-delimited output from GPG
 ///
 /// # Returns
-/// * `Ok(Vec<(String, String)>)` - Vector of (key_id, user_identity) pairs
-/// * `Err(GpgError)` - If parsing fails
+/// - `Ok(Vec<(String, String)>)` - Vector of (key_id, user_identity) pairs
+/// - `Err(GpgError)` - If parsing fails
 ///
 /// # Format Details
 /// This function expects GPG's colon-delimited format where:
@@ -3583,8 +3737,8 @@ fn parse_gpg_key_id_listing(gpg_colon_output: &str) -> Result<Vec<(String, Strin
 // /// 6. Reports results to the user
 // ///
 // /// # Returns
-// /// * `Ok(())` - If the workflow completes successfully
-// /// * `Err(GpgError)` - If any step fails
+// /// - `Ok(())` - If the workflow completes successfully
+// /// - `Err(GpgError)` - If any step fails
 // fn clearsign_workflow() -> Result<(), GpgError> {
 //     // Get input file path from user
 //     print!("Enter the path to the file you want to clearsign: ");
@@ -3680,8 +3834,8 @@ fn parse_gpg_key_id_listing(gpg_colon_output: &str) -> Result<Vec<(String, Strin
 // /// 6. Reports results to the user
 // ///
 // /// # Returns
-// /// * `Ok(())` - If the workflow completes successfully
-// /// * `Err(GpgError)` - If any step fails
+// /// - `Ok(())` - If the workflow completes successfully
+// /// - `Err(GpgError)` - If any step fails
 // ///
 // /// # Notes
 // /// Output is saved to invites_updates/outgoing/ directory.
@@ -3791,8 +3945,8 @@ fn parse_gpg_key_id_listing(gpg_colon_output: &str) -> Result<Vec<(String, Strin
 /// None - All inputs are collected interactively
 ///
 /// # Returns
-/// * `Ok(())` - If the clearsigning process completes successfully
-/// * `Err(GpgError)` - If any step fails, with specific error information:
+/// - `Ok(())` - If the clearsigning process completes successfully
+/// - `Err(GpgError)` - If any step fails, with specific error information:
 ///   - `GpgError::FileSystemError` - If file operations fail (missing files, permissions)
 ///   - `GpgError::GpgOperationError` - If GPG operations fail
 ///   - `GpgError::PathError` - If path operations fail
@@ -3812,8 +3966,8 @@ fn parse_gpg_key_id_listing(gpg_colon_output: &str) -> Result<Vec<(String, Strin
 /// ```
 ///
 /// # Related Functions
-/// * `select_gpg_signing_shortkey_id()` - Called to allow key ID selection
-/// * `clearsign_filepath_to_path()` - Called to perform the actual clearsigning
+/// - `select_gpg_signing_shortkey_id()` - Called to allow key ID selection
+/// - `clearsign_filepath_to_path()` - Called to perform the actual clearsigning
 fn clearsign_workflow() -> Result<(), GpgError> {
     // Get input file path from user
     print!("Enter the path to the file you want to clearsign: ");
@@ -3906,8 +4060,8 @@ fn clearsign_workflow() -> Result<(), GpgError> {
 /// None - All inputs are collected interactively
 ///
 /// # Returns
-/// * `Ok(())` - If the clearsigning and encryption process completes successfully
-/// * `Err(GpgError)` - If any step fails, with specific error information:
+/// - `Ok(())` - If the clearsigning and encryption process completes successfully
+/// - `Err(GpgError)` - If any step fails, with specific error information:
 ///   - `GpgError::FileSystemError` - If file operations fail (missing files, permissions)
 ///   - `GpgError::GpgOperationError` - If GPG operations fail
 ///   - `GpgError::PathError` - If path operations fail
@@ -3932,8 +4086,8 @@ fn clearsign_workflow() -> Result<(), GpgError> {
 /// directory if it doesn't exist.
 ///
 /// # Related Functions
-/// * `select_gpg_signing_shortkey_id()` - Called to allow key ID selection
-/// * `clearsign_and_encrypt_file_for_recipient()` - Called to perform the actual operations
+/// - `select_gpg_signing_shortkey_id()` - Called to allow key ID selection
+/// - `clearsign_and_encrypt_file_for_recipient()` - Called to perform the actual operations
 fn clearsign_and_encrypt_workflow() -> Result<(), GpgError> {
     // Get input file path from user
     print!("Enter the path to the file you want to clearsign and encrypt: ");
@@ -4011,12 +4165,12 @@ fn clearsign_and_encrypt_workflow() -> Result<(), GpgError> {
 ///
 /// # Arguments
 ///
-/// * `path_to_make_absolute` - A path to convert to an absolute path relative to 
+/// - `path_to_make_absolute` - A path to convert to an absolute path relative to 
 ///   the executable's directory location.
 ///
 /// # Returns
 ///
-/// * `Result<PathBuf, io::Error>` - The absolute path based on the executable's directory or an error
+/// - `Result<PathBuf, io::Error>` - The absolute path based on the executable's directory or an error
 ///   if the executable's path cannot be determined or if the path cannot be resolved.
 ///
 /// # Examples
@@ -4064,11 +4218,11 @@ pub fn make_input_path_name_abs_executabledirectoryrelative_nocheck<P: AsRef<Pat
 ///
 /// # Arguments
 ///
-/// * `path_to_check` - The path to check for existence
+/// - `path_to_check` - The path to check for existence
 ///
 /// # Returns
 ///
-/// * `Result<bool, io::Error>` - Whether the path exists or an error
+/// - `Result<bool, io::Error>` - Whether the path exists or an error
 pub fn abs_executable_directory_relative_exists<P: AsRef<Path>>(path_to_check: P) -> Result<bool, io::Error> {
     let path = path_to_check.as_ref();
     Ok(path.exists())
@@ -4078,7 +4232,7 @@ pub fn abs_executable_directory_relative_exists<P: AsRef<Path>>(path_to_check: P
 ///
 /// # Returns
 ///
-/// * `Result<PathBuf, io::Error>` - The absolute directory path containing the executable or an error
+/// - `Result<PathBuf, io::Error>` - The absolute directory path containing the executable or an error
 ///   if it cannot be determined.
 pub fn get_absolute_path_to_executable_parentdirectory() -> Result<PathBuf, io::Error> {
     // Get the path to the current executable
@@ -4106,12 +4260,12 @@ pub fn get_absolute_path_to_executable_parentdirectory() -> Result<PathBuf, io::
 ///
 /// # Arguments
 ///
-/// * `dir_path` - A directory path to convert to an absolute path relative to 
+/// - `dir_path` - A directory path to convert to an absolute path relative to 
 ///   the executable's directory location.
 ///
 /// # Returns
 ///
-/// * `Result<PathBuf, io::Error>` - The absolute directory path or an error
+/// - `Result<PathBuf, io::Error>` - The absolute directory path or an error
 pub fn make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error<P: AsRef<Path>>(dir_path: P) -> Result<PathBuf, io::Error> {
     let path = make_input_path_name_abs_executabledirectoryrelative_nocheck(dir_path)?;
     
@@ -4210,27 +4364,27 @@ pub fn make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error<P: A
 ///    - Removes any remaining temporary files
 ///
 /// # Arguments
-/// * `path_to_toml_file` - A reference to a `Path` object representing the TOML file
+/// - `path_to_toml_file` - A reference to a `Path` object representing the TOML file
 ///   to be converted in-place. Must contain an `"owner"` field.
 ///
 /// # Returns
-/// * `Ok(())` - If the TOML file was successfully clearsigned and replaced in-place
-/// * `Err(GpgError)` - If any step in the process fails:
+/// - `Ok(())` - If the TOML file was successfully clearsigned and replaced in-place
+/// - `Err(GpgError)` - If any step in the process fails:
 ///   - `PathError`: File not found, invalid path, or path encoding issues
 ///   - `GpgOperationError`: Missing fields, GPG command failures, or key lookup failures
 ///   - `FileSystemError`: I/O errors during file operations
 ///
 /// # Prerequisites
-/// * GnuPG (GPG) must be installed and accessible via PATH
-/// * The collaborator addressbook directory must exist and be accessible
-/// * The owner specified in the file must have a valid addressbook file
-/// * The GPG private key from the addressbook must be in the local keyring
+/// - GnuPG (GPG) must be installed and accessible via PATH
+/// - The collaborator addressbook directory must exist and be accessible
+/// - The owner specified in the file must have a valid addressbook file
+/// - The GPG private key from the addressbook must be in the local keyring
 ///
 /// # Security Considerations
-/// * **Centralized Key Management**: Keys are managed via addressbook files, not individual files
-/// * **Owner Enforcement**: Files can only be signed by their declared owners
-/// * **Destructive Operation**: Overwrites the original file
-/// * **Trust Chain**: Security depends on the integrity of the addressbook files
+/// - **Centralized Key Management**: Keys are managed via addressbook files, not individual files
+/// - **Owner Enforcement**: Files can only be signed by their declared owners
+/// - **Destructive Operation**: Overwrites the original file
+/// - **Trust Chain**: Security depends on the integrity of the addressbook files
 pub fn convert_tomlfile_without_keyid_into_clearsigntoml_inplace(
     path_to_toml_file: &Path,
     addressbook_files_directory_relative: &str,  // pass in constant here
@@ -4674,27 +4828,27 @@ pub fn convert_tomlfile_without_keyid_into_clearsigntoml_inplace(
 ///    - Removes any remaining temporary files
 ///
 /// # Arguments
-/// * `path_to_toml_file` - A reference to a `Path` object representing the TOML file
+/// - `path_to_toml_file` - A reference to a `Path` object representing the TOML file
 ///   to be converted in-place. Must contain an `"owner"` field.
 ///
 /// # Returns
-/// * `Ok(())` - If the TOML file was successfully clearsigned and replaced in-place
-/// * `Err(GpgError)` - If any step in the process fails:
+/// - `Ok(())` - If the TOML file was successfully clearsigned and replaced in-place
+/// - `Err(GpgError)` - If any step in the process fails:
 ///   - `PathError`: File not found, invalid path, or path encoding issues
 ///   - `GpgOperationError`: Missing fields, GPG command failures, or key lookup failures
 ///   - `FileSystemError`: I/O errors during file operations
 ///
 /// # Prerequisites
-/// * GnuPG (GPG) must be installed and accessible via PATH
-/// * The collaborator addressbook directory must exist and be accessible
-/// * The owner specified in the file must have a valid addressbook file
-/// * The GPG private key from the addressbook must be in the local keyring
+/// - GnuPG (GPG) must be installed and accessible via PATH
+/// - The collaborator addressbook directory must exist and be accessible
+/// - The owner specified in the file must have a valid addressbook file
+/// - The GPG private key from the addressbook must be in the local keyring
 ///
 /// # Security Considerations
-/// * **Centralized Key Management**: Keys are managed via addressbook files, not individual files
-/// * **Owner Enforcement**: Files can only be signed by their declared owners
-/// * **Destructive Operation**: Overwrites the original file
-/// * **Trust Chain**: Security depends on the integrity of the addressbook files
+/// - **Centralized Key Management**: Keys are managed via addressbook files, not individual files
+/// - **Owner Enforcement**: Files can only be signed by their declared owners
+/// - **Destructive Operation**: Overwrites the original file
+/// - **Trust Chain**: Security depends on the integrity of the addressbook files
 pub fn convert_tomlfile_without_keyid_using_gpgtomlkeyid_into_clearsigntoml_inplace(
     path_to_toml_file: &Path,
     addressbook_files_directory_relative: &str,  // pass in constant here
@@ -5399,9 +5553,9 @@ pub fn re_clearsign_clearsigntoml_file_without_keyid_into_clearsigntoml_inplace(
 ///     *   The temporary file is removed if it still exists after the process.
 ///
 /// # Output File Characteristics
-/// *   The file at `path_to_toml_file` becomes a standard GPG clearsigned message.
-/// *   Its content is the original TOML data, encapsulated within PGP signature blocks.
-/// *   All original fields, including `gpg_publickey_id` and any `gpg_key_public` field,
+/// -   The file at `path_to_toml_file` becomes a standard GPG clearsigned message.
+/// -   Its content is the original TOML data, encapsulated within PGP signature blocks.
+/// -   All original fields, including `gpg_publickey_id` and any `gpg_key_public` field,
 ///     are part of the signed message, allowing them to be part of the integrity check.
 ///
 /// # Subsequent Verification by Recipients
@@ -5413,24 +5567,24 @@ pub fn re_clearsign_clearsigntoml_file_without_keyid_into_clearsigntoml_inplace(
 /// both integrity and authorship against that specific public key.
 ///
 /// # Arguments
-/// * `path_to_toml_file` - A reference to a `Path` object representing the TOML file
+/// - `path_to_toml_file` - A reference to a `Path` object representing the TOML file
 ///   to be converted in-place by its author.
 ///
 /// # Returns
-/// * `Ok(())` - If the TOML file was successfully clearsigned and replaced in-place.
-/// * `Err(GpgError)` - If any step in the process fails. (Details as previously listed)
+/// - `Ok(())` - If the TOML file was successfully clearsigned and replaced in-place.
+/// - `Err(GpgError)` - If any step in the process fails. (Details as previously listed)
 ///
 /// # Prerequisites for the Author
-/// *   GnuPG (GPG) must be installed on the author's system and accessible via the PATH.
-/// *   The author's GPG private key (corresponding to the `gpg_publickey_id` value
+/// -   GnuPG (GPG) must be installed on the author's system and accessible via the PATH.
+/// -   The author's GPG private key (corresponding to the `gpg_publickey_id` value
 ///     within the input TOML file) must be in their local GPG keyring and usable.
 ///
 /// # Security Considerations
-/// *   **Authorship Assertion**: This function is a tool for an author to assert control
+/// -   **Authorship Assertion**: This function is a tool for an author to assert control
 ///     and authorship over a TOML file. The security relies on the author protecting
 ///     their private GPG key.
-/// *   **Destructive Operation**: Overwrites the original file.
-/// *   **Key Specification**: The signing key is determined by the TOML file's content.
+/// -   **Destructive Operation**: Overwrites the original file.
+/// -   **Key Specification**: The signing key is determined by the TOML file's content.
 ///     The author must ensure the `gpg_publickey_id` field correctly specifies their
 ///     intended signing key ID.
 pub fn convert_toml_filewithkeyid_into_clearsigntoml_inplace(
@@ -5892,13 +6046,13 @@ pub struct CollaboratorPortAssignment {
 /// ```
 ///
 /// # Arguments
-/// * `path_to_clearsigned_toml` - Path to the clearsigned TOML file containing port assignments
-/// * `addressbook_files_directory_relative` - Relative path to the directory containing collaborator addressbook files
-/// * `pair_name` - The name of the collaborator pair (e.g., "alice_bob")
+/// - `path_to_clearsigned_toml` - Path to the clearsigned TOML file containing port assignments
+/// - `addressbook_files_directory_relative` - Relative path to the directory containing collaborator addressbook files
+/// - `pair_name` - The name of the collaborator pair (e.g., "alice_bob")
 ///
 /// # Returns
-/// * `Ok(Vec<CollaboratorPortAssignment>)` - A vector of port assignments for the specified pair
-/// * `Err(GpgError)` - If any step fails:
+/// - `Ok(Vec<CollaboratorPortAssignment>)` - A vector of port assignments for the specified pair
+/// - `Err(GpgError)` - If any step fails:
 ///   - `PathError`: File not found or invalid path
 ///   - `GpgOperationError`: GPG validation failure or missing required fields
 ///   - `FileSystemError`: I/O errors
@@ -6235,11 +6389,11 @@ pub fn read_specific_pair_port_assignments_from_clearsigntoml(
 /// Helper function to extract quoted string values from TOML lines
 ///
 /// # Arguments
-/// * `line` - The line containing the field
-/// * `name_of_toml_field_key_to_read` - The name of the field to extract
+/// - `line` - The line containing the field
+/// - `name_of_toml_field_key_to_read` - The name of the field to extract
 ///
 /// # Returns
-/// * `Option<String>` - The extracted value without quotes, or None if not found
+/// - `Option<String>` - The extracted value without quotes, or None if not found
 fn extract_quoted_value(line: &str, name_of_toml_field_key_to_read: &str) -> Option<String> {
     let field_pattern = format!("{} = ", name_of_toml_field_key_to_read);
     if let Some(start_pos) = line.find(&field_pattern) {
@@ -6261,11 +6415,11 @@ fn extract_quoted_value(line: &str, name_of_toml_field_key_to_read: &str) -> Opt
 /// Helper function to extract port number values from TOML lines
 ///
 /// # Arguments
-/// * `line` - The line containing the field
-/// * `name_of_toml_field_key_to_read` - The name of the field to extract
+/// - `line` - The line containing the field
+/// - `name_of_toml_field_key_to_read` - The name of the field to extract
 ///
 /// # Returns
-/// * `Option<u16>` - The parsed port number, or None if not found or invalid
+/// - `Option<u16>` - The parsed port number, or None if not found or invalid
 fn extract_port_value(line: &str, name_of_toml_field_key_to_read: &str) -> Option<u16> {
     let field_pattern = format!("{} = ", name_of_toml_field_key_to_read);
     if let Some(start_pos) = line.find(&field_pattern) {
@@ -6302,12 +6456,12 @@ fn extract_port_value(line: &str, name_of_toml_field_key_to_read: &str) -> Optio
 /// 4. Aggregates results into a HashMap
 ///
 /// # Arguments
-/// * `path_to_clearsigned_toml` - Path to the clearsigned TOML file containing port assignments
-/// * `addressbook_files_directory_relative` - Relative path to the directory containing collaborator addressbook files
+/// - `path_to_clearsigned_toml` - Path to the clearsigned TOML file containing port assignments
+/// - `addressbook_files_directory_relative` - Relative path to the directory containing collaborator addressbook files
 ///
 /// # Returns
-/// * `Ok(HashMap<String, Vec<CollaboratorPortAssignment>>)` - A map of pair names to their port assignments
-/// * `Err(GpgError)` - If validation fails or no assignments are found
+/// - `Ok(HashMap<String, Vec<CollaboratorPortAssignment>>)` - A map of pair names to their port assignments
+/// - `Err(GpgError)` - If validation fails or no assignments are found
 ///
 /// # Example
 /// ```no_run
@@ -6568,14 +6722,14 @@ pub fn read_abstract_collaborator_port_assignments_from_clearsigntoml(
 /// ```
 ///
 /// # Arguments
-/// * `path_to_clearsigned_toml` - Path to the clearsigned TOML file containing port assignments
-/// * `addressbook_files_directory_relative` - Relative path to the directory containing collaborator addressbook files
+/// - `path_to_clearsigned_toml` - Path to the clearsigned TOML file containing port assignments
+/// - `addressbook_files_directory_relative` - Relative path to the directory containing collaborator addressbook files
 ///
 /// # Returns
-/// * `Ok(HashMap<String, Vec<CollaboratorPortAssignment>>)` - A map where:
+/// - `Ok(HashMap<String, Vec<CollaboratorPortAssignment>>)` - A map where:
 ///   - Keys are collaborator pair names (e.g., "alice_bob")
 ///   - Values are vectors of port assignments for that pair
-/// * `Err(GpgError)` - If any step fails:
+/// - `Err(GpgError)` - If any step fails:
 ///   - `PathError`: File not found, invalid path, or path encoding issues
 ///   - `GpgOperationError`: GPG validation failure, missing required fields, or parsing errors
 ///   - `FileSystemError`: I/O errors during file operations
@@ -6979,12 +7133,12 @@ pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
 /// ```
 ///
 /// # Arguments
-/// * `path_to_clearsigned_toml` - Path to the clearsigned TOML file
-/// * `addressbook_files_directory_relative` - Relative path to the collaborator addressbook directory
+/// - `path_to_clearsigned_toml` - Path to the clearsigned TOML file
+/// - `addressbook_files_directory_relative` - Relative path to the collaborator addressbook directory
 ///
 /// # Returns
-/// * `Ok(Vec<String>)` - A vector of collaborator usernames who have access
-/// * `Err(GpgError)` - If validation fails or the field is not found
+/// - `Ok(Vec<String>)` - A vector of collaborator usernames who have access
+/// - `Err(GpgError)` - If validation fails or the field is not found
 ///
 /// # Example
 /// ```no_run
@@ -7046,12 +7200,12 @@ pub fn read_teamchannel_collaborators_with_access_from_clearsigntoml(
 /// username appearing in port assignments is also listed in `teamchannel_collaborators_with_access`.
 ///
 /// # Arguments
-/// * `port_assignments` - HashMap of pair names to their port assignments
-/// * `authorized_collaborators` - List of collaborators authorized for the team channel
+/// - `port_assignments` - HashMap of pair names to their port assignments
+/// - `authorized_collaborators` - List of collaborators authorized for the team channel
 ///
 /// # Returns
-/// * `Ok(())` - If all collaborators in port assignments are authorized
-/// * `Err(Vec<String>)` - List of unauthorized collaborators found in port assignments
+/// - `Ok(())` - If all collaborators in port assignments are authorized
+/// - `Err(Vec<String>)` - List of unauthorized collaborators found in port assignments
 ///
 /// # Example
 /// ```no_run
@@ -7100,20 +7254,20 @@ pub fn validate_port_assignment_collaborators(
 /// ```
 /// 
 /// # Arguments
-/// * `path` - Path to the TOML file
-/// * `name_of_toml_field_key_to_read` - Name of the field to read (must be an array of integers in the TOML file)
+/// - `path` - Path to the TOML file
+/// - `name_of_toml_field_key_to_read` - Name of the field to read (must be an array of integers in the TOML file)
 /// 
 /// # Returns
-/// * `Result<Vec<u8>, String>` - A vector containing all bytes in the array if successful,
+/// - `Result<Vec<u8>, String>` - A vector containing all bytes in the array if successful,
 ///   or an error message if the field is not found or values are out of u8 range (0-255)
 /// 
 /// # Error Handling
 /// This function returns errors when:
-/// * The file cannot be opened or read
-/// * The specified field is not found
-/// * The field is not a valid array format
-/// * Any value in the array is not a valid u8 (outside 0-255 range)
-/// * Any value cannot be parsed as an integer
+/// - The file cannot be opened or read
+/// - The specified field is not found
+/// - The field is not a valid array format
+/// - Any value in the array is not a valid u8 (outside 0-255 range)
+/// - Any value cannot be parsed as an integer
 /// 
 /// # Example
 /// For a TOML file containing:
@@ -7224,11 +7378,11 @@ pub fn read_u8_array_field_from_toml(path: &str, name_of_toml_field_key_to_read:
 /// No data is returned if signature validation fails.
 /// 
 /// # Arguments
-/// * `path` - Path to the clearsigned TOML file
-/// * `name_of_toml_field_key_to_read` - Name of the field to read (must be an array of bytes in the TOML file)
+/// - `path` - Path to the clearsigned TOML file
+/// - `name_of_toml_field_key_to_read` - Name of the field to read (must be an array of bytes in the TOML file)
 /// 
 /// # Returns
-/// * `Result<Vec<u8>, String>` - A vector containing all bytes in the array if successful and verified,
+/// - `Result<Vec<u8>, String>` - A vector containing all bytes in the array if successful and verified,
 ///   or an error message if verification fails or the field cannot be read
 /// 
 /// # Example
@@ -7251,10 +7405,10 @@ pub fn read_u8_array_field_from_toml(path: &str, name_of_toml_field_key_to_read:
 /// 
 /// # Errors
 /// Returns an error if:
-/// * GPG key extraction fails
-/// * Signature verification fails
-/// * The field doesn't exist or isn't a valid byte array
-/// * Any value is outside the valid u8 range (0-255)
+/// - GPG key extraction fails
+/// - Signature verification fails
+/// - The field doesn't exist or isn't a valid byte array
+/// - Any value is outside the valid u8 range (0-255)
 pub fn read_u8_array_from_clearsigntoml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<Vec<u8>, String> {
     // Step 1: Extract GPG key from the file
     let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")
@@ -7289,13 +7443,13 @@ pub fn read_u8_array_from_clearsigntoml(path: &str, name_of_toml_field_key_to_re
 /// 4. Returns the byte array or an appropriate error
 /// 
 /// # Arguments
-/// * `path_str_to_config_file_that_contains_gpg_key` - Path to a clearsigned TOML file containing the GPG public key
-/// * `pathstr_to_target_clearsigned_file` - Path to the clearsigned TOML file to read from (without its own GPG key)
-/// * `name_of_toml_field_key_to_read` - Name of the byte array field to read from the target file
+/// - `pathstr_to_config_file_that_contains_gpg_key` - Path to a clearsigned TOML file containing the GPG public key
+/// - `pathstr_to_target_clearsigned_file` - Path to the clearsigned TOML file to read from (without its own GPG key)
+/// - `name_of_toml_field_key_to_read` - Name of the byte array field to read from the target file
 /// 
 /// # Returns
-/// * `Ok(Vec<u8>)` - The byte array values if verification succeeds
-/// * `Err(String)` - Detailed error message if any step fails
+/// - `Ok(Vec<u8>)` - The byte array values if verification succeeds
+/// - `Err(String)` - Detailed error message if any step fails
 /// 
 /// # Example
 /// ```
@@ -7310,14 +7464,14 @@ pub fn read_u8_array_from_clearsigntoml(path: &str, name_of_toml_field_key_to_re
 /// // Returns: vec![160, 167, 195, 169] if verification succeeds
 /// ```
 pub fn read_u8_array_from_clearsigntoml_without_keyid(
-    path_str_to_config_file_that_contains_gpg_key: &str,
+    pathstr_to_config_file_that_contains_gpg_key: &str,
     pathstr_to_target_clearsigned_file: &str, 
     name_of_toml_field_key_to_read: &str,
 ) -> Result<Vec<u8>, String> {
     // Step 1: Extract GPG key from the config file
-    let key = extract_gpg_key_from_clearsigntoml(path_str_to_config_file_that_contains_gpg_key, "gpg_key_public")
+    let key = extract_gpg_key_from_clearsigntoml(pathstr_to_config_file_that_contains_gpg_key, "gpg_key_public")
         .map_err(|e| format!("Failed to extract GPG key from config file '{}': {}", 
-                             path_str_to_config_file_that_contains_gpg_key, e))?;
+                             pathstr_to_config_file_that_contains_gpg_key, e))?;
 
     // Step 2: Verify the target file using the extracted key
     let verification_result = verify_clearsign(pathstr_to_target_clearsigned_file, &key)
@@ -7328,7 +7482,7 @@ pub fn read_u8_array_from_clearsigntoml_without_keyid(
         return Err(format!(
             "GPG signature verification failed for file '{}' using key from '{}'",
             pathstr_to_target_clearsigned_file,
-            path_str_to_config_file_that_contains_gpg_key
+            pathstr_to_config_file_that_contains_gpg_key
         ));
     }
 
@@ -7466,11 +7620,11 @@ malformed = [100, "text", 50]
 /// No data is returned if signature validation fails.
 /// 
 /// # Arguments
-/// * `path` - Path to the clearsigned TOML file
-/// * `name_of_toml_field_key_to_read` - Name of the field to read (must be an array of u64 values in the TOML file)
+/// - `path` - Path to the clearsigned TOML file
+/// - `name_of_toml_field_key_to_read` - Name of the field to read (must be an array of u64 values in the TOML file)
 /// 
 /// # Returns
-/// * `Result<Vec<u64>, String>` - A vector containing all u64 values in the array if successful and verified,
+/// - `Result<Vec<u64>, String>` - A vector containing all u64 values in the array if successful and verified,
 ///   or an error message if verification fails or the field cannot be read
 /// 
 /// # Example
@@ -7494,11 +7648,11 @@ malformed = [100, "text", 50]
 /// 
 /// # Errors
 /// Returns an error if:
-/// * GPG key extraction fails
-/// * Signature verification fails
-/// * The field doesn't exist or isn't a valid u64 array
-/// * Any value is outside the valid u64 range (0 to 18,446,744,073,709,551,615)
-/// * Any value is negative or a floating point number
+/// - GPG key extraction fails
+/// - Signature verification fails
+/// - The field doesn't exist or isn't a valid u64 array
+/// - Any value is outside the valid u64 range (0 to 18,446,744,073,709,551,615)
+/// - Any value is negative or a floating point number
 pub fn read_u64_array_from_clearsigntoml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<Vec<u64>, String> {
     // Step 1: Extract GPG key from the file
     let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")
@@ -7533,13 +7687,13 @@ pub fn read_u64_array_from_clearsigntoml(path: &str, name_of_toml_field_key_to_r
 /// 4. Returns the u64 array or an appropriate error
 /// 
 /// # Arguments
-/// * `path_str_to_config_file_that_contains_gpg_key` - Path to a clearsigned TOML file containing the GPG public key
-/// * `pathstr_to_target_clearsigned_file` - Path to the clearsigned TOML file to read from (without its own GPG key)
-/// * `name_of_toml_field_key_to_read` - Name of the u64 array field to read from the target file
+/// - `pathstr_to_config_file_that_contains_gpg_key` - Path to a clearsigned TOML file containing the GPG public key
+/// - `pathstr_to_target_clearsigned_file` - Path to the clearsigned TOML file to read from (without its own GPG key)
+/// - `name_of_toml_field_key_to_read` - Name of the u64 array field to read from the target file
 /// 
 /// # Returns
-/// * `Ok(Vec<u64>)` - The u64 array values if verification succeeds
-/// * `Err(String)` - Detailed error message if any step fails
+/// - `Ok(Vec<u64>)` - The u64 array values if verification succeeds
+/// - `Err(String)` - Detailed error message if any step fails
 /// 
 /// # Example
 /// ```
@@ -7555,19 +7709,19 @@ pub fn read_u64_array_from_clearsigntoml(path: &str, name_of_toml_field_key_to_r
 /// ```
 /// 
 /// # Use Cases
-/// * Reading timestamp arrays from node configuration files
-/// * Reading large identifier arrays from verified configuration files
-/// * Reading sequence numbers or version arrays from secure configuration files
-/// * Reading capacity or limit arrays from authenticated configuration files
+/// - Reading timestamp arrays from node configuration files
+/// - Reading large identifier arrays from verified configuration files
+/// - Reading sequence numbers or version arrays from secure configuration files
+/// - Reading capacity or limit arrays from authenticated configuration files
 pub fn read_u64_array_from_clearsigntoml_without_keyid(
-    path_str_to_config_file_that_contains_gpg_key: &str,
+    pathstr_to_config_file_that_contains_gpg_key: &str,
     pathstr_to_target_clearsigned_file: &str, 
     name_of_toml_field_key_to_read: &str,
 ) -> Result<Vec<u64>, String> {
     // Step 1: Extract GPG key from the config file
-    let key = extract_gpg_key_from_clearsigntoml(path_str_to_config_file_that_contains_gpg_key, "gpg_key_public")
+    let key = extract_gpg_key_from_clearsigntoml(pathstr_to_config_file_that_contains_gpg_key, "gpg_key_public")
         .map_err(|e| format!("Failed to extract GPG key from config file '{}': {}", 
-                             path_str_to_config_file_that_contains_gpg_key, e))?;
+                             pathstr_to_config_file_that_contains_gpg_key, e))?;
 
     // Step 2: Verify the target file using the extracted key
     let verification_result = verify_clearsign(pathstr_to_target_clearsigned_file, &key)
@@ -7578,7 +7732,7 @@ pub fn read_u64_array_from_clearsigntoml_without_keyid(
         return Err(format!(
             "GPG signature verification failed for file '{}' using key from '{}'",
             pathstr_to_target_clearsigned_file,
-            path_str_to_config_file_that_contains_gpg_key
+            pathstr_to_config_file_that_contains_gpg_key
         ));
     }
 
@@ -7598,21 +7752,21 @@ pub fn read_u64_array_from_clearsigntoml_without_keyid(
 /// ```
 /// 
 /// # Arguments
-/// * `path` - Path to the TOML file
-/// * `name_of_toml_field_key_to_read` - Name of the field to read (must be an array of integers in the TOML file)
+/// - `path` - Path to the TOML file
+/// - `name_of_toml_field_key_to_read` - Name of the field to read (must be an array of integers in the TOML file)
 /// 
 /// # Returns
-/// * `Result<Vec<u64>, String>` - A vector containing all u64 values in the array if successful,
+/// - `Result<Vec<u64>, String>` - A vector containing all u64 values in the array if successful,
 ///   or an error message if the field is not found or values are out of u64 range
 /// 
 /// # Error Handling
 /// This function returns errors when:
-/// * The file cannot be opened or read
-/// * The specified field is not found
-/// * The field is not a valid array format
-/// * Any value in the array is not a valid u64 (outside 0 to 18,446,744,073,709,551,615 range)
-/// * Any value cannot be parsed as an integer
-/// * Any value is negative or a floating point number
+/// - The file cannot be opened or read
+/// - The specified field is not found
+/// - The field is not a valid array format
+/// - Any value in the array is not a valid u64 (outside 0 to 18,446,744,073,709,551,615 range)
+/// - Any value cannot be parsed as an integer
+/// - Any value is negative or a floating point number
 /// 
 /// # Example
 /// For a TOML file containing:
@@ -7957,18 +8111,18 @@ mixed_spacing = [700,800, 900 ,1000]
 /// ```
 /// 
 /// # Arguments
-/// * `path` - Path to the TOML file
-/// * `name_of_toml_field_key_to_read` - Name of the field to read (must be a string containing a path in the TOML file)
+/// - `path` - Path to the TOML file
+/// - `name_of_toml_field_key_to_read` - Name of the field to read (must be a string containing a path in the TOML file)
 /// 
 /// # Returns
-/// * `Result<PathBuf, String>` - A PathBuf if successful, or an error message if the field 
+/// - `Result<PathBuf, String>` - A PathBuf if successful, or an error message if the field 
 ///   is not found or cannot be parsed
 /// 
 /// # Error Handling
 /// This function returns errors when:
-/// * The file cannot be opened or read
-/// * The specified field is not found
-/// * The field value is empty or contains only whitespace
+/// - The file cannot be opened or read
+/// - The specified field is not found
+/// - The field value is empty or contains only whitespace
 /// 
 /// # Path Handling
 /// - The function preserves the path exactly as written in the TOML file (after trimming)
@@ -8069,11 +8223,11 @@ pub fn read_pathbuf_field_from_toml(path: &str, name_of_toml_field_key_to_read: 
 /// No data is returned if signature validation fails.
 /// 
 /// # Arguments
-/// * `path` - Path to the clearsigned TOML file
-/// * `name_of_toml_field_key_to_read` - Name of the field to read (must be a string path in the TOML file)
+/// - `path` - Path to the clearsigned TOML file
+/// - `name_of_toml_field_key_to_read` - Name of the field to read (must be a string path in the TOML file)
 /// 
 /// # Returns
-/// * `Result<PathBuf, String>` - A PathBuf if successful and verified,
+/// - `Result<PathBuf, String>` - A PathBuf if successful and verified,
 ///   or an error message if verification fails or the field cannot be read
 /// 
 /// # Path Validation
@@ -8101,10 +8255,10 @@ pub fn read_pathbuf_field_from_toml(path: &str, name_of_toml_field_key_to_read: 
 /// 
 /// # Errors
 /// Returns an error if:
-/// * GPG key extraction fails
-/// * Signature verification fails
-/// * The field doesn't exist
-/// * The field value is empty
+/// - GPG key extraction fails
+/// - Signature verification fails
+/// - The field doesn't exist
+/// - The field value is empty
 pub fn read_pathbuf_from_clearsigntoml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<PathBuf, String> {
     // Step 1: Extract GPG key from the file
     let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")
@@ -8139,13 +8293,13 @@ pub fn read_pathbuf_from_clearsigntoml(path: &str, name_of_toml_field_key_to_rea
 /// 4. Returns the PathBuf or an appropriate error
 /// 
 /// # Arguments
-/// * `path_str_to_config_file_that_contains_gpg_key` - Path to a clearsigned TOML file containing the GPG public key
-/// * `pathstr_to_target_clearsigned_file` - Path to the clearsigned TOML file to read from (without its own GPG key)
-/// * `name_of_toml_field_key_to_read` - Name of the path field to read from the target file
+/// - `pathstr_to_config_file_that_contains_gpg_key` - Path to a clearsigned TOML file containing the GPG public key
+/// - `pathstr_to_target_clearsigned_file` - Path to the clearsigned TOML file to read from (without its own GPG key)
+/// - `name_of_toml_field_key_to_read` - Name of the path field to read from the target file
 /// 
 /// # Returns
-/// * `Ok(PathBuf)` - The path if verification succeeds
-/// * `Err(String)` - Detailed error message if any step fails
+/// - `Ok(PathBuf)` - The path if verification succeeds
+/// - `Err(String)` - Detailed error message if any step fails
 /// 
 /// # Path Handling
 /// - Returns the path exactly as specified in the TOML file
@@ -8166,14 +8320,14 @@ pub fn read_pathbuf_from_clearsigntoml(path: &str, name_of_toml_field_key_to_rea
 /// // Returns: PathBuf from the verified file
 /// ```
 pub fn read_pathbuf_from_clearsigntoml_without_keyid(
-    path_str_to_config_file_that_contains_gpg_key: &str,
+    pathstr_to_config_file_that_contains_gpg_key: &str,
     pathstr_to_target_clearsigned_file: &str, 
     name_of_toml_field_key_to_read: &str,
 ) -> Result<PathBuf, String> {
     // Step 1: Extract GPG key from the config file
-    let key = extract_gpg_key_from_clearsigntoml(path_str_to_config_file_that_contains_gpg_key, "gpg_key_public")
+    let key = extract_gpg_key_from_clearsigntoml(pathstr_to_config_file_that_contains_gpg_key, "gpg_key_public")
         .map_err(|e| format!("Failed to extract GPG key from config file '{}': {}", 
-                             path_str_to_config_file_that_contains_gpg_key, e))?;
+                             pathstr_to_config_file_that_contains_gpg_key, e))?;
 
     // Step 2: Verify the target file using the extracted key
     let verification_result = verify_clearsign(pathstr_to_target_clearsigned_file, &key)
@@ -8184,7 +8338,7 @@ pub fn read_pathbuf_from_clearsigntoml_without_keyid(
         return Err(format!(
             "GPG signature verification failed for file '{}' using key from '{}'",
             pathstr_to_target_clearsigned_file,
-            path_str_to_config_file_that_contains_gpg_key
+            pathstr_to_config_file_that_contains_gpg_key
         ));
     }
 
@@ -8337,20 +8491,20 @@ mixed_separators = "/home/user\\documents/file.txt"
 /// - `false` (lowercase)
 /// 
 /// # Arguments
-/// * `path` - Path to the TOML file
-/// * `name_of_toml_field_key_to_read` - Name of the field to read (may or may not exist in the TOML file)
+/// - `path` - Path to the TOML file
+/// - `name_of_toml_field_key_to_read` - Name of the field to read (may or may not exist in the TOML file)
 /// 
 /// # Returns
-/// * `Ok(None)` - If the field does not exist in the file
-/// * `Ok(Some(true))` - If the field exists and has value `true`
-/// * `Ok(Some(false))` - If the field exists and has value `false`
-/// * `Err(String)` - If the file cannot be read or the field has an invalid value
+/// - `Ok(None)` - If the field does not exist in the file
+/// - `Ok(Some(true))` - If the field exists and has value `true`
+/// - `Ok(Some(false))` - If the field exists and has value `false`
+/// - `Err(String)` - If the file cannot be read or the field has an invalid value
 /// 
 /// # Error Handling
 /// This function returns errors when:
-/// * The file cannot be opened or read
-/// * The field exists but has a non-boolean value
-/// * The field exists but has an invalid format (including empty values)
+/// - The file cannot be opened or read
+/// - The field exists but has a non-boolean value
+/// - The field exists but has an invalid format (including empty values)
 /// 
 /// Note: A missing field is NOT an error - it returns Ok(None)
 /// 
@@ -8457,13 +8611,13 @@ pub fn read_option_bool_field_from_toml(path: &str, name_of_toml_field_key_to_re
 /// No data is returned if signature validation fails.
 /// 
 /// # Arguments
-/// * `path` - Path to the clearsigned TOML file
-/// * `name_of_toml_field_key_to_read` - Name of the field to read (may or may not exist in the TOML file)
+/// - `path` - Path to the clearsigned TOML file
+/// - `name_of_toml_field_key_to_read` - Name of the field to read (may or may not exist in the TOML file)
 /// 
 /// # Returns
-/// * `Ok(None)` - If verification succeeds and the field does not exist
-/// * `Ok(Some(bool))` - If verification succeeds and the field has a valid boolean value
-/// * `Err(String)` - If verification fails or the field has an invalid value
+/// - `Ok(None)` - If verification succeeds and the field does not exist
+/// - `Ok(Some(bool))` - If verification succeeds and the field has a valid boolean value
+/// - `Err(String)` - If verification fails or the field has an invalid value
 /// 
 /// # Example
 /// For a clearsigned TOML file containing:
@@ -8488,9 +8642,9 @@ pub fn read_option_bool_field_from_toml(path: &str, name_of_toml_field_key_to_re
 /// 
 /// # Errors
 /// Returns an error if:
-/// * GPG key extraction fails
-/// * Signature verification fails
-/// * The field exists but has an invalid boolean value
+/// - GPG key extraction fails
+/// - Signature verification fails
+/// - The field exists but has an invalid boolean value
 pub fn read_option_bool_from_clearsigntoml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<Option<bool>, String> {
     // Step 1: Extract GPG key from the file
     let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")
@@ -8524,14 +8678,14 @@ pub fn read_option_bool_from_clearsigntoml(path: &str, name_of_toml_field_key_to
 /// 4. Returns None if field doesn't exist, Some(bool) if it does, or an error
 /// 
 /// # Arguments
-/// * `path_str_to_config_file_that_contains_gpg_key` - Path to a clearsigned TOML file containing the GPG public key
-/// * `pathstr_to_target_clearsigned_file` - Path to the clearsigned TOML file to read from (without its own GPG key)
-/// * `name_of_toml_field_key_to_read` - Name of the optional boolean field to read from the target file
+/// - `pathstr_to_config_file_that_contains_gpg_key` - Path to a clearsigned TOML file containing the GPG public key
+/// - `pathstr_to_target_clearsigned_file` - Path to the clearsigned TOML file to read from (without its own GPG key)
+/// - `name_of_toml_field_key_to_read` - Name of the optional boolean field to read from the target file
 /// 
 /// # Returns
-/// * `Ok(None)` - If verification succeeds and the field does not exist
-/// * `Ok(Some(bool))` - If verification succeeds and the field has a valid boolean value
-/// * `Err(String)` - Detailed error message if any step fails
+/// - `Ok(None)` - If verification succeeds and the field does not exist
+/// - `Ok(Some(bool))` - If verification succeeds and the field has a valid boolean value
+/// - `Err(String)` - Detailed error message if any step fails
 /// 
 /// # Example
 /// ```
@@ -8546,14 +8700,14 @@ pub fn read_option_bool_from_clearsigntoml(path: &str, name_of_toml_field_key_to
 /// // Returns: Some(true), Some(false), or None depending on the field value
 /// ```
 pub fn read_option_bool_from_clearsigntoml_without_keyid(
-    path_str_to_config_file_that_contains_gpg_key: &str,
+    pathstr_to_config_file_that_contains_gpg_key: &str,
     pathstr_to_target_clearsigned_file: &str, 
     name_of_toml_field_key_to_read: &str,
 ) -> Result<Option<bool>, String> {
     // Step 1: Extract GPG key from the config file
-    let key = extract_gpg_key_from_clearsigntoml(path_str_to_config_file_that_contains_gpg_key, "gpg_key_public")
+    let key = extract_gpg_key_from_clearsigntoml(pathstr_to_config_file_that_contains_gpg_key, "gpg_key_public")
         .map_err(|e| format!("Failed to extract GPG key from config file '{}': {}", 
-                             path_str_to_config_file_that_contains_gpg_key, e))?;
+                             pathstr_to_config_file_that_contains_gpg_key, e))?;
 
     // Step 2: Verify the target file using the extracted key
     let verification_result = verify_clearsign(pathstr_to_target_clearsigned_file, &key)
@@ -8564,7 +8718,7 @@ pub fn read_option_bool_from_clearsigntoml_without_keyid(
         return Err(format!(
             "GPG signature verification failed for file '{}' using key from '{}'",
             pathstr_to_target_clearsigned_file,
-            path_str_to_config_file_that_contains_gpg_key
+            pathstr_to_config_file_that_contains_gpg_key
         ));
     }
 
@@ -8697,21 +8851,21 @@ tabbed_bool =	false
 /// None if the field is absent and Some(usize) if present with a valid non-negative integer value.
 /// 
 /// # Arguments
-/// * `path` - Path to the TOML file
-/// * `name_of_toml_field_key_to_read` - Name of the field to read (may or may not exist in the TOML file)
+/// - `path` - Path to the TOML file
+/// - `name_of_toml_field_key_to_read` - Name of the field to read (may or may not exist in the TOML file)
 /// 
 /// # Returns
-/// * `Ok(None)` - If the field does not exist in the file
-/// * `Ok(Some(value))` - If the field exists and has a valid usize value
-/// * `Err(String)` - If the file cannot be read or the field has an invalid value
+/// - `Ok(None)` - If the field does not exist in the file
+/// - `Ok(Some(value))` - If the field exists and has a valid usize value
+/// - `Err(String)` - If the file cannot be read or the field has an invalid value
 /// 
 /// # Error Handling
 /// This function returns errors when:
-/// * The file cannot be opened or read
-/// * The field exists but has a non-numeric value
-/// * The field exists but has a negative value
-/// * The field exists but the value is too large for usize
-/// * The field exists but has an empty value
+/// - The file cannot be opened or read
+/// - The field exists but has a non-numeric value
+/// - The field exists but has a negative value
+/// - The field exists but the value is too large for usize
+/// - The field exists but has an empty value
 /// 
 /// Note: A missing field is NOT an error - it returns Ok(None)
 /// 
@@ -8820,13 +8974,13 @@ pub fn read_option_usize_field_from_toml(path: &str, name_of_toml_field_key_to_r
 /// No data is returned if signature validation fails.
 /// 
 /// # Arguments
-/// * `path` - Path to the clearsigned TOML file
-/// * `name_of_toml_field_key_to_read` - Name of the field to read (may or may not exist in the TOML file)
+/// - `path` - Path to the clearsigned TOML file
+/// - `name_of_toml_field_key_to_read` - Name of the field to read (may or may not exist in the TOML file)
 /// 
 /// # Returns
-/// * `Ok(None)` - If verification succeeds and the field does not exist
-/// * `Ok(Some(value))` - If verification succeeds and the field has a valid usize value
-/// * `Err(String)` - If verification fails or the field has an invalid value
+/// - `Ok(None)` - If verification succeeds and the field does not exist
+/// - `Ok(Some(value))` - If verification succeeds and the field has a valid usize value
+/// - `Err(String)` - If verification fails or the field has an invalid value
 /// 
 /// # Example
 /// For a clearsigned TOML file containing:
@@ -8851,10 +9005,10 @@ pub fn read_option_usize_field_from_toml(path: &str, name_of_toml_field_key_to_r
 /// 
 /// # Errors
 /// Returns an error if:
-/// * GPG key extraction fails
-/// * Signature verification fails
-/// * The field exists but has an invalid numeric value
-/// * The field exists but has a negative value
+/// - GPG key extraction fails
+/// - Signature verification fails
+/// - The field exists but has an invalid numeric value
+/// - The field exists but has a negative value
 pub fn read_option_usize_from_clearsigntoml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<Option<usize>, String> {
     // Step 1: Extract GPG key from the file
     let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")
@@ -8888,14 +9042,14 @@ pub fn read_option_usize_from_clearsigntoml(path: &str, name_of_toml_field_key_t
 /// 4. Returns None if field doesn't exist, Some(usize) if it does, or an error
 /// 
 /// # Arguments
-/// * `path_str_to_config_file_that_contains_gpg_key` - Path to a clearsigned TOML file containing the GPG public key
-/// * `pathstr_to_target_clearsigned_file` - Path to the clearsigned TOML file to read from (without its own GPG key)
-/// * `name_of_toml_field_key_to_read` - Name of the optional usize field to read from the target file
+/// - `pathstr_to_config_file_that_contains_gpg_key` - Path to a clearsigned TOML file containing the GPG public key
+/// - `pathstr_to_target_clearsigned_file` - Path to the clearsigned TOML file to read from (without its own GPG key)
+/// - `name_of_toml_field_key_to_read` - Name of the optional usize field to read from the target file
 /// 
 /// # Returns
-/// * `Ok(None)` - If verification succeeds and the field does not exist
-/// * `Ok(Some(value))` - If verification succeeds and the field has a valid usize value
-/// * `Err(String)` - Detailed error message if any step fails
+/// - `Ok(None)` - If verification succeeds and the field does not exist
+/// - `Ok(Some(value))` - If verification succeeds and the field has a valid usize value
+/// - `Err(String)` - Detailed error message if any step fails
 /// 
 /// # Example
 /// ```
@@ -8910,14 +9064,14 @@ pub fn read_option_usize_from_clearsigntoml(path: &str, name_of_toml_field_key_t
 /// // Returns: Some(256), or None if field doesn't exist
 /// ```
 pub fn read_option_usize_from_clearsigntoml_without_keyid(
-    path_str_to_config_file_that_contains_gpg_key: &str,
+    pathstr_to_config_file_that_contains_gpg_key: &str,
     pathstr_to_target_clearsigned_file: &str, 
     name_of_toml_field_key_to_read: &str,
 ) -> Result<Option<usize>, String> {
     // Step 1: Extract GPG key from the config file
-    let key = extract_gpg_key_from_clearsigntoml(path_str_to_config_file_that_contains_gpg_key, "gpg_key_public")
+    let key = extract_gpg_key_from_clearsigntoml(pathstr_to_config_file_that_contains_gpg_key, "gpg_key_public")
         .map_err(|e| format!("Failed to extract GPG key from config file '{}': {}", 
-                             path_str_to_config_file_that_contains_gpg_key, e))?;
+                             pathstr_to_config_file_that_contains_gpg_key, e))?;
 
     // Step 2: Verify the target file using the extracted key
     let verification_result = verify_clearsign(pathstr_to_target_clearsigned_file, &key)
@@ -8928,7 +9082,7 @@ pub fn read_option_usize_from_clearsigntoml_without_keyid(
         return Err(format!(
             "GPG signature verification failed for file '{}' using key from '{}'",
             pathstr_to_target_clearsigned_file,
-            path_str_to_config_file_that_contains_gpg_key
+            pathstr_to_config_file_that_contains_gpg_key
         ));
     }
 
@@ -9084,20 +9238,20 @@ max_value = 18446744073709551615
 /// This is particularly useful for POSIX timestamps which can be negative (dates before 1970).
 /// 
 /// # Arguments
-/// * `path` - Path to the TOML file
-/// * `name_of_toml_field_key_to_read` - Name of the field to read (may or may not exist in the TOML file)
+/// - `path` - Path to the TOML file
+/// - `name_of_toml_field_key_to_read` - Name of the field to read (may or may not exist in the TOML file)
 /// 
 /// # Returns
-/// * `Ok(None)` - If the field does not exist in the file
-/// * `Ok(Some(value))` - If the field exists and has a valid u64 value
-/// * `Err(String)` - If the file cannot be read or the field has an invalid value
+/// - `Ok(None)` - If the field does not exist in the file
+/// - `Ok(Some(value))` - If the field exists and has a valid u64 value
+/// - `Err(String)` - If the file cannot be read or the field has an invalid value
 /// 
 /// # Error Handling
 /// This function returns errors when:
-/// * The file cannot be opened or read
-/// * The field exists but has a non-numeric value
-/// * The field exists but the value is outside the u64 range
-/// * The field exists but has an empty value
+/// - The file cannot be opened or read
+/// - The field exists but has a non-numeric value
+/// - The field exists but the value is outside the u64 range
+/// - The field exists but has an empty value
 /// 
 /// Note: A missing field is NOT an error - it returns Ok(None)
 /// 
@@ -9199,13 +9353,13 @@ pub fn read_option_u64_field_from_toml(path: &str, name_of_toml_field_key_to_rea
 /// No data is returned if signature validation fails.
 /// 
 /// # Arguments
-/// * `path` - Path to the clearsigned TOML file
-/// * `name_of_toml_field_key_to_read` - Name of the field to read (may or may not exist in the TOML file)
+/// - `path` - Path to the clearsigned TOML file
+/// - `name_of_toml_field_key_to_read` - Name of the field to read (may or may not exist in the TOML file)
 /// 
 /// # Returns
-/// * `Ok(None)` - If verification succeeds and the field does not exist
-/// * `Ok(Some(value))` - If verification succeeds and the field has a valid u64 value
-/// * `Err(String)` - If verification fails or the field has an invalid value
+/// - `Ok(None)` - If verification succeeds and the field does not exist
+/// - `Ok(Some(value))` - If verification succeeds and the field has a valid u64 value
+/// - `Err(String)` - If verification fails or the field has an invalid value
 /// 
 /// # POSIX Timestamp Support
 /// This function fully supports POSIX timestamps including:
@@ -9237,10 +9391,10 @@ pub fn read_option_u64_field_from_toml(path: &str, name_of_toml_field_key_to_rea
 /// 
 /// # Errors
 /// Returns an error if:
-/// * GPG key extraction fails
-/// * Signature verification fails
-/// * The field exists but has an invalid numeric value
-/// * The field exists but the value is outside u64 range
+/// - GPG key extraction fails
+/// - Signature verification fails
+/// - The field exists but has an invalid numeric value
+/// - The field exists but the value is outside u64 range
 pub fn read_option_u64_from_clearsigntoml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<Option<u64>, String> {
     // Step 1: Extract GPG key from the file
     let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")
@@ -9270,20 +9424,20 @@ pub fn read_option_u64_from_clearsigntoml(path: &str, name_of_toml_field_key_to_
 /// This is particularly useful for POSIX timestamps which can be negative (dates before 1970).
 /// 
 /// # Arguments
-/// * `path` - Path to the TOML file
-/// * `name_of_toml_field_key_to_read` - Name of the field to read (may or may not exist in the TOML file)
+/// - `path` - Path to the TOML file
+/// - `name_of_toml_field_key_to_read` - Name of the field to read (may or may not exist in the TOML file)
 /// 
 /// # Returns
-/// * `Ok(None)` - If the field does not exist in the file
-/// * `Ok(Some(value))` - If the field exists and has a valid i64 value
-/// * `Err(String)` - If the file cannot be read or the field has an invalid value
+/// - `Ok(None)` - If the field does not exist in the file
+/// - `Ok(Some(value))` - If the field exists and has a valid i64 value
+/// - `Err(String)` - If the file cannot be read or the field has an invalid value
 /// 
 /// # Error Handling
 /// This function returns errors when:
-/// * The file cannot be opened or read
-/// * The field exists but has a non-numeric value
-/// * The field exists but the value is outside the i64 range
-/// * The field exists but has an empty value
+/// - The file cannot be opened or read
+/// - The field exists but has a non-numeric value
+/// - The field exists but the value is outside the i64 range
+/// - The field exists but has an empty value
 /// 
 /// Note: A missing field is NOT an error - it returns Ok(None)
 /// 
@@ -9385,13 +9539,13 @@ pub fn read_option_i64_field_from_toml(path: &str, name_of_toml_field_key_to_rea
 /// No data is returned if signature validation fails.
 /// 
 /// # Arguments
-/// * `path` - Path to the clearsigned TOML file
-/// * `name_of_toml_field_key_to_read` - Name of the field to read (may or may not exist in the TOML file)
+/// - `path` - Path to the clearsigned TOML file
+/// - `name_of_toml_field_key_to_read` - Name of the field to read (may or may not exist in the TOML file)
 /// 
 /// # Returns
-/// * `Ok(None)` - If verification succeeds and the field does not exist
-/// * `Ok(Some(value))` - If verification succeeds and the field has a valid i64 value
-/// * `Err(String)` - If verification fails or the field has an invalid value
+/// - `Ok(None)` - If verification succeeds and the field does not exist
+/// - `Ok(Some(value))` - If verification succeeds and the field has a valid i64 value
+/// - `Err(String)` - If verification fails or the field has an invalid value
 /// 
 /// # POSIX Timestamp Support
 /// This function fully supports POSIX timestamps including:
@@ -9423,10 +9577,10 @@ pub fn read_option_i64_field_from_toml(path: &str, name_of_toml_field_key_to_rea
 /// 
 /// # Errors
 /// Returns an error if:
-/// * GPG key extraction fails
-/// * Signature verification fails
-/// * The field exists but has an invalid numeric value
-/// * The field exists but the value is outside i64 range
+/// - GPG key extraction fails
+/// - Signature verification fails
+/// - The field exists but has an invalid numeric value
+/// - The field exists but the value is outside i64 range
 pub fn read_option_i64_from_clearsigntoml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<Option<i64>, String> {
     // Step 1: Extract GPG key from the file
     let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")
@@ -9461,14 +9615,14 @@ pub fn read_option_i64_from_clearsigntoml(path: &str, name_of_toml_field_key_to_
 /// 4. Returns None if field doesn't exist, Some(i64) if it does, or an error
 /// 
 /// # Arguments
-/// * `path_str_to_config_file_that_contains_gpg_key` - Path to a clearsigned TOML file containing the GPG public key
-/// * `pathstr_to_target_clearsigned_file` - Path to the clearsigned TOML file to read from (without its own GPG key)
-/// * `name_of_toml_field_key_to_read` - Name of the optional i64 field to read from the target file
+/// - `pathstr_to_config_file_that_contains_gpg_key` - Path to a clearsigned TOML file containing the GPG public key
+/// - `pathstr_to_target_clearsigned_file` - Path to the clearsigned TOML file to read from (without its own GPG key)
+/// - `name_of_toml_field_key_to_read` - Name of the optional i64 field to read from the target file
 /// 
 /// # Returns
-/// * `Ok(None)` - If verification succeeds and the field does not exist
-/// * `Ok(Some(value))` - If verification succeeds and the field has a valid i64 value
-/// * `Err(String)` - Detailed error message if any step fails
+/// - `Ok(None)` - If verification succeeds and the field does not exist
+/// - `Ok(Some(value))` - If verification succeeds and the field has a valid i64 value
+/// - `Err(String)` - Detailed error message if any step fails
 /// 
 /// # Example
 /// ```
@@ -9490,14 +9644,14 @@ pub fn read_option_i64_from_clearsigntoml(path: &str, name_of_toml_field_key_to_
 /// // Returns: Some(1704067200), or None if field doesn't exist
 /// ```
 pub fn read_option_i64_from_clearsigntoml_without_keyid(
-    path_str_to_config_file_that_contains_gpg_key: &str,
+    pathstr_to_config_file_that_contains_gpg_key: &str,
     pathstr_to_target_clearsigned_file: &str, 
     name_of_toml_field_key_to_read: &str,
 ) -> Result<Option<i64>, String> {
     // Step 1: Extract GPG key from the config file
-    let key = extract_gpg_key_from_clearsigntoml(path_str_to_config_file_that_contains_gpg_key, "gpg_key_public")
+    let key = extract_gpg_key_from_clearsigntoml(pathstr_to_config_file_that_contains_gpg_key, "gpg_key_public")
         .map_err(|e| format!("Failed to extract GPG key from config file '{}': {}", 
-                             path_str_to_config_file_that_contains_gpg_key, e))?;
+                             pathstr_to_config_file_that_contains_gpg_key, e))?;
 
     // Step 2: Verify the target file using the extracted key
     let verification_result = verify_clearsign(pathstr_to_target_clearsigned_file, &key)
@@ -9508,7 +9662,7 @@ pub fn read_option_i64_from_clearsigntoml_without_keyid(
         return Err(format!(
             "GPG signature verification failed for file '{}' using key from '{}'",
             pathstr_to_target_clearsigned_file,
-            path_str_to_config_file_that_contains_gpg_key
+            pathstr_to_config_file_that_contains_gpg_key
         ));
     }
 
@@ -9696,22 +9850,22 @@ far_past = -62135596800
 /// ```
 /// 
 /// # Arguments
-/// * `path` - Path to the TOML file
-/// * `name_of_toml_field_key_to_read` - Name of the field to read (may or may not exist in the TOML file)
+/// - `path` - Path to the TOML file
+/// - `name_of_toml_field_key_to_read` - Name of the field to read (may or may not exist in the TOML file)
 /// 
 /// # Returns
-/// * `Ok(None)` - If the field does not exist in the file
-/// * `Ok(Some(vec![]))` - If the field exists but is an empty array
-/// * `Ok(Some(vec![(a,b), ...]))` - If the field exists with valid tuple pairs
-/// * `Err(String)` - If the file cannot be read or the field has invalid format/values
+/// - `Ok(None)` - If the field does not exist in the file
+/// - `Ok(Some(vec![]))` - If the field exists but is an empty array
+/// - `Ok(Some(vec![(a,b), ...]))` - If the field exists with valid tuple pairs
+/// - `Err(String)` - If the file cannot be read or the field has invalid format/values
 /// 
 /// # Error Handling
 /// This function returns errors when:
-/// * The file cannot be opened or read
-/// * The field exists but is not an array
-/// * Any inner array doesn't have exactly 2 elements
-/// * Any value in the tuples is not a valid i32
-/// * The field exists but has an empty value
+/// - The file cannot be opened or read
+/// - The field exists but is not an array
+/// - Any inner array doesn't have exactly 2 elements
+/// - Any value in the tuples is not a valid i32
+/// - The field exists but has an empty value
 /// 
 /// Note: A missing field is NOT an error - it returns Ok(None)
 /// 
@@ -9965,14 +10119,14 @@ fn parse_single_i32_tuple(tuple_str: &str, name_of_toml_field_key_to_read: &str,
 /// No data is returned if signature validation fails.
 /// 
 /// # Arguments
-/// * `path` - Path to the clearsigned TOML file
-/// * `name_of_toml_field_key_to_read` - Name of the field to read (may or may not exist in the TOML file)
+/// - `path` - Path to the clearsigned TOML file
+/// - `name_of_toml_field_key_to_read` - Name of the field to read (may or may not exist in the TOML file)
 /// 
 /// # Returns
-/// * `Ok(None)` - If verification succeeds and the field does not exist
-/// * `Ok(Some(vec![]))` - If verification succeeds and the field is an empty array
-/// * `Ok(Some(vec![(a,b), ...]))` - If verification succeeds and the field has valid tuples
-/// * `Err(String)` - If verification fails or the field has invalid format/values
+/// - `Ok(None)` - If verification succeeds and the field does not exist
+/// - `Ok(Some(vec![]))` - If verification succeeds and the field is an empty array
+/// - `Ok(Some(vec![(a,b), ...]))` - If verification succeeds and the field has valid tuples
+/// - `Err(String)` - If verification fails or the field has invalid format/values
 /// 
 /// # Example
 /// For a clearsigned TOML file containing:
@@ -10025,14 +10179,14 @@ pub fn read_option_i32_tuple_array_from_clearsigntoml(path: &str, name_of_toml_f
 /// 4. Returns None if field doesn't exist, Some(vec) if it does, or an error
 /// 
 /// # Arguments
-/// * `path_str_to_config_file_that_contains_gpg_key` - Path to a clearsigned TOML file containing the GPG public key
-/// * `pathstr_to_target_clearsigned_file` - Path to the clearsigned TOML file to read from (without its own GPG key)
-/// * `name_of_toml_field_key_to_read` - Name of the optional tuple array field to read from the target file
+/// - `pathstr_to_config_file_that_contains_gpg_key` - Path to a clearsigned TOML file containing the GPG public key
+/// - `pathstr_to_target_clearsigned_file` - Path to the clearsigned TOML file to read from (without its own GPG key)
+/// - `name_of_toml_field_key_to_read` - Name of the optional tuple array field to read from the target file
 /// 
 /// # Returns
-/// * `Ok(None)` - If verification succeeds and the field does not exist
-/// * `Ok(Some(vec))` - If verification succeeds and the field has valid tuple array
-/// * `Err(String)` - Detailed error message if any step fails
+/// - `Ok(None)` - If verification succeeds and the field does not exist
+/// - `Ok(Some(vec))` - If verification succeeds and the field has valid tuple array
+/// - `Err(String)` - Detailed error message if any step fails
 /// 
 /// # Example
 /// ```
@@ -10047,14 +10201,14 @@ pub fn read_option_i32_tuple_array_from_clearsigntoml(path: &str, name_of_toml_f
 /// // Returns: Some(vec![(1, 100), (200, 300)]), or None if field doesn't exist
 /// ```
 pub fn read_option_i32_tuple_array_from_clearsigntoml_without_keyid(
-    path_str_to_config_file_that_contains_gpg_key: &str,
+    pathstr_to_config_file_that_contains_gpg_key: &str,
     pathstr_to_target_clearsigned_file: &str, 
     name_of_toml_field_key_to_read: &str,
 ) -> Result<Option<Vec<(i32, i32)>>, String> {
     // Step 1: Extract GPG key from the config file
-    let key = extract_gpg_key_from_clearsigntoml(path_str_to_config_file_that_contains_gpg_key, "gpg_key_public")
+    let key = extract_gpg_key_from_clearsigntoml(pathstr_to_config_file_that_contains_gpg_key, "gpg_key_public")
         .map_err(|e| format!("Failed to extract GPG key from config file '{}': {}", 
-                             path_str_to_config_file_that_contains_gpg_key, e))?;
+                             pathstr_to_config_file_that_contains_gpg_key, e))?;
 
     // Step 2: Verify the target file using the extracted key
     let verification_result = verify_clearsign(pathstr_to_target_clearsigned_file, &key)
@@ -10065,7 +10219,7 @@ pub fn read_option_i32_tuple_array_from_clearsigntoml_without_keyid(
         return Err(format!(
             "GPG signature verification failed for file '{}' using key from '{}'",
             pathstr_to_target_clearsigned_file,
-            path_str_to_config_file_that_contains_gpg_key
+            pathstr_to_config_file_that_contains_gpg_key
         ));
     }
 
@@ -10284,12 +10438,12 @@ pub struct ReadTeamchannelCollaboratorPortsToml {
 /// ```
 /// 
 /// # Arguments
-/// * `path_to_clearsigned_toml` - Path to the clearsigned TOML file containing port assignments
-/// * `addressbook_files_directory_relative` - Relative path to the directory containing collaborator addressbook files
+/// - `path_to_clearsigned_toml` - Path to the clearsigned TOML file containing port assignments
+/// - `addressbook_files_directory_relative` - Relative path to the directory containing collaborator addressbook files
 /// 
 /// # Returns
-/// * `Ok(HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>)` - Port assignments in CoreNode format
-/// * `Err(GpgError)` - If validation fails or parsing errors occur
+/// - `Ok(HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>)` - Port assignments in CoreNode format
+/// - `Err(GpgError)` - If validation fails or parsing errors occur
 /// 
 /// # Example
 /// ```no_run
@@ -10463,14 +10617,14 @@ gotit_port = 50006
 /// Returns a path to a temporary copy of a collaborator's addressbook file.
 ///
 /// # INPUT
-/// * `collaborator_name: &str` - Name of the collaborator (e.g., "alice")
-/// * `addressbook_files_directory_relative: &str` - Directory path relative to executable where addressbook files are stored
-/// * `gpg_full_fingerprint_key_id_string: &str` - Full 40-character GPG fingerprint for decryption
+/// - `collaborator_name: &str` - Name of the collaborator (e.g., "alice")
+/// - `addressbook_files_directory_relative: &str` - Directory path relative to executable where addressbook files are stored
+/// - `gpg_full_fingerprint_key_id_string: &str` - Full 40-character GPG fingerprint for decryption
 ///
 /// # OUTPUT
-/// * Returns: `Result<(PathBuf, PathBuf), GpgError>`
-/// * On success: Two identical PathBuf values, both pointing to the SAME temporary file path
-/// * On error: GpgError describing what went wrong
+/// - Returns: `Result<(PathBuf, PathBuf), GpgError>`
+/// - On success: Two identical PathBuf values, both pointing to the SAME temporary file path
+/// - On error: GpgError describing what went wrong
 ///
 /// The returned PATH points to a temporary file in the system temp directory that:
 /// - Contains the addressbook content ready to read
@@ -10518,14 +10672,14 @@ gotit_port = 50006
 ///
 /// # Arguments
 ///
-/// * `collaborator_name` - The name of the collaborator. Used to construct filenames.
+/// - `collaborator_name` - The name of the collaborator. Used to construct filenames.
 ///                        Must not be empty.
 ///
-/// * `addressbook_files_directory_relative` - The directory path (relative to executable)
+/// - `addressbook_files_directory_relative` - The directory path (relative to executable)
 ///                                           where addressbook files are stored.
 ///                                           Must not be empty.
 ///
-/// * `gpg_full_fingerprint_key_id_string` - The full GPG fingerprint for decryption.
+/// - `gpg_full_fingerprint_key_id_string` - The full GPG fingerprint for decryption.
 ///                                          Only used if a .gpgtoml file is found.
 ///                                          Must not be empty.
 ///
@@ -10540,12 +10694,12 @@ gotit_port = 50006
 ///
 /// # Errors
 ///
-/// * `GpgError::ValidationError` - If any input parameter is empty or if neither
+/// - `GpgError::ValidationError` - If any input parameter is empty or if neither
 ///                                .toml nor .gpgtoml file exists
-/// * `GpgError::PathError` - If path resolution to absolute paths fails  
-/// * `GpgError::FileSystemError` - If reading the original file fails
-/// * `GpgError::TempFileError` - If creating or writing the temp file fails
-/// * `GpgError::GpgOperationError` - If GPG decryption fails (only for .gpgtoml files)
+/// - `GpgError::PathError` - If path resolution to absolute paths fails  
+/// - `GpgError::FileSystemError` - If reading the original file fails
+/// - `GpgError::TempFileError` - If creating or writing the temp file fails
+/// - `GpgError::GpgOperationError` - If GPG decryption fails (only for .gpgtoml files)
 ///
 /// # Temporary File Cleanup
 ///
@@ -10812,7 +10966,7 @@ pub fn get_path_to_temp_copy_of_addressbook_toml_or_decrypt_gpgtoml(
 ///
 /// # Arguments
 ///
-/// * `temp_file_path` - The absolute path to the temporary file to remove.
+/// - `temp_file_path` - The absolute path to the temporary file to remove.
 ///                      This should be one of the paths returned by
 ///                      `get_path_to_validated_addressbook_toml_or_gpgtoml()`.
 ///
