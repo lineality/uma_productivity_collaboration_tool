@@ -382,6 +382,7 @@ use crate::clearsign_toml_module::{
     // read_basename_fields_from_toml,
     convert_tomlfile_without_keyid_into_clearsigntoml_inplace,
     convert_tomlfile_without_keyid_using_gpgtomlkeyid_into_clearsigntoml_inplace,
+    verify_clearsign,
     convert_toml_filewithkeyid_into_clearsigntoml_inplace,
     q_and_a_user_selects_gpg_key_full_fingerprint,
     read_single_line_string_field_from_toml,
@@ -412,6 +413,16 @@ use crate::clearsign_toml_module::{
     read_option_usize_from_clearsigntoml_without_keyid,
     read_option_bool_from_clearsigntoml_without_keyid,
     read_option_i64_from_clearsigntoml_without_keyid,
+    
+    read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml,
+    get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml,
+    get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml,
+    cleanup_collaborator_temp_file,
+    read_u64_array_from_clearsigntoml_without_keyid,
+    
+    //
+    
+    
     
 }; 
 
@@ -3363,9 +3374,9 @@ owner
 );
 // Generate random ports for the owner
 let mut rng = rand::thread_rng();
-let ready_port = rng.gen_range(40000..60000) as u16;
-let tray_port = rng.gen_range(40000..60000) as u16;
-let gotit_port = rng.gen_range(40000..60000) as u16;
+let ready_port = rng.random_range(40000..60000) as u16;
+let tray_port = rng.random_range(40000..60000) as u16;
+let gotit_port = rng.random_range(40000..60000) as u16;
 let abstract_ports_data = AbstractTeamchannelNodeTomlPortsData {
 user_name: owner.clone(),
 ready_port,
@@ -4392,7 +4403,7 @@ fn generate_unique_port(
     const MAX_ATTEMPTS: u32 = 1000;
     
     while attempts < MAX_ATTEMPTS {
-        let port = rng.gen_range(primary_range.0..=primary_range.1);
+        let port = rng.random_range(primary_range.0..=primary_range.1);
         if !exclusion_list.contains(&port) && !local_used_ports.contains(&port) {
             return Ok(port);
         }
@@ -4402,7 +4413,7 @@ fn generate_unique_port(
     // Try fallback range
     attempts = 0;
     while attempts < MAX_ATTEMPTS {
-        let port = rng.gen_range(fallback_range.0..=fallback_range.1);
+        let port = rng.random_range(fallback_range.0..=fallback_range.1);
         if !exclusion_list.contains(&port) && !local_used_ports.contains(&port) {
             debug_log!(
                 "generate_unique_port: Using fallback range for port {}",
@@ -5269,6 +5280,7 @@ pub fn verify_toml_signature(file_path: &Path) -> Result<(), Error> {
 /// Logs a debug message to a log file located relative to the executable directory.
 ///
 /// This function only writes to the log file if the DEBUG_FLAG is set to true.
+/// e.g. const DEBUG_FLAG: bool = true;
 /// The log file (uma.log) will be created in the same directory as the executable
 /// if it doesn't exist, or appended to if it already exists.
 ///
@@ -7443,6 +7455,19 @@ log_mode_refresh = {}"#,
     /// # Returns
     /// * `Ok(String)` containing the GPG fingerprint if found
     /// * `Err(io::Error)` if the file couldn't be read or the field wasn't found
+    ///
+    /// sample
+    ///     // Get armored public key, using key-id (full fingerprint in)
+    /// let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+    ///     Ok(fingerprint) => fingerprint,
+    ///     Err(e) => {
+    ///         return Err(io::Error::new(
+    ///             io::ErrorKind::Other,
+    ///             format!("implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}", e)
+    ///         ));
+    ///     }
+    /// };
+    ///
     fn read_gpg_fingerprint_from_file() -> Result<String, io::Error> {
         
         // Get the absolute path to the flag file relative to the executable
@@ -8598,8 +8623,8 @@ struct GraphNavigationInstanceState {
     /// Integer-string validation ranges as tuples (min, max) for the integer part 
     message_post_data_format_specs_int_string_ranges_from_to_tuple_array: Option<Vec<(i32, i32)>>, 
 
-    /// Maximum string length for integer-string pairs 
-    message_post_data_format_specs_int_string_max_string_length: Option<usize>, 
+    /// Maximum string length 
+    message_post_max_string_length_int: Option<usize>, 
 
     /// Whether posts are public or private 
     message_post_is_public_bool: Option<bool>, 
@@ -8691,6 +8716,8 @@ impl GraphNavigationInstanceState {
             self.current_full_file_path.clone(),
             self.active_team_channel.clone(),
         );
+        
+        // TODO check for node.toml or .gpgtoml
 
         let node_toml_path = self.current_full_file_path.join("node.toml");
         
@@ -8794,7 +8821,7 @@ impl GraphNavigationInstanceState {
                     // Message posting configuration fields (if present in CoreNode)
                     self.message_post_data_format_specs_integer_ranges_from_to_tuple_array = this_node.message_post_data_format_specs_integer_ranges_from_to_tuple_array;
                     self.message_post_data_format_specs_int_string_ranges_from_to_tuple_array = this_node.message_post_data_format_specs_int_string_ranges_from_to_tuple_array;
-                    self.message_post_data_format_specs_int_string_max_string_length = this_node.message_post_data_format_specs_int_string_max_string_length;
+                    self.message_post_max_string_length_int = this_node.message_post_max_string_length_int;
                     self.message_post_is_public_bool = this_node.message_post_is_public_bool;
                     self.message_post_user_confirms_bool = this_node.message_post_user_confirms_bool;
                     self.message_post_start_date_utc_posix = this_node.message_post_start_date_utc_posix;
@@ -9155,8 +9182,8 @@ struct CoreNode {
     /// Integer-string validation ranges as tuples (min, max) for the integer part 
     pub message_post_data_format_specs_int_string_ranges_from_to_tuple_array: Option<Vec<(i32, i32)>>, 
 
-    /// Maximum string length for integer-string pairs 
-    pub message_post_data_format_specs_int_string_max_string_length: Option<usize>, 
+    /// Maximum string length 
+    pub message_post_max_string_length_int: Option<usize>, 
 
     /// Whether posts are public or private 
     pub message_post_is_public_bool: Option<bool>, 
@@ -9236,7 +9263,7 @@ struct CoreNode {
 /// * `pa6_feedback` - Project area 6: feedback description
 /// * `message_post_data_format_specs_integer_ranges_from_to_tuple_array` - Integer validation ranges
 /// * `message_post_data_format_specs_int_string_ranges_from_to_tuple_array` - Integer-string validation ranges
-/// * `message_post_data_format_specs_int_string_max_string_length` - Max string length for int-string pairs
+/// * `message_post_max_string_length_int` - Max string length for int-string pairs
 /// * `message_post_is_public_bool` - Whether posts are public
 /// * `message_post_user_confirms_bool` - Whether user confirmation is required
 /// * `message_post_start_date_utc_posix` - Start date for accepting posts
@@ -9259,7 +9286,7 @@ impl CoreNode {
         // Message Post Configuration
         message_post_data_format_specs_integer_ranges_from_to_tuple_array: Option<Vec<(i32, i32)>>,
         message_post_data_format_specs_int_string_ranges_from_to_tuple_array: Option<Vec<(i32, i32)>>,
-        message_post_data_format_specs_int_string_max_string_length: Option<usize>,
+        message_post_max_string_length_int: Option<usize>,
         message_post_is_public_bool: Option<bool>,
         message_post_user_confirms_bool: Option<bool>,
         message_post_start_date_utc_posix: Option<i64>,
@@ -9367,7 +9394,7 @@ impl CoreNode {
             // Message Post Configuration
             message_post_data_format_specs_integer_ranges_from_to_tuple_array,
             message_post_data_format_specs_int_string_ranges_from_to_tuple_array,
-            message_post_data_format_specs_int_string_max_string_length,
+            message_post_max_string_length_int,
             message_post_is_public_bool,
             message_post_user_confirms_bool,
             message_post_start_date_utc_posix,
@@ -10419,33 +10446,172 @@ use functions from clearsign module
                 }
             };
             
-            
-this is the current core node struct
+# Workflow for reading Nodes (CoreNodes) including team-channels
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+load_core_node_from_toml_file(
+        path,
+    )
+
+get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
+        &file_path,
+        &gpg_full_fingerprint_key_id_string,
+    )
+
+
+The top level summary is more simplified than the actual steps which are more intertwined. Overall the workflow is: get path -> validate/verify file -> extract field. But you cannot validate/verify the node.toml file until you have both validated and extracted data from the addressbook file.
+
+1. Paths & Reading-Copies Part 1: node.toml path and read-copy
+2. Paths & Reading-Copies Part 2: addressbook path and read-copy
+3. Verification/Validation Part 1: validate/verify addressbook file and get node-owner's public gpg
+4. Extraction Part 1: Addressbook field extraction.
+5. Verification/Validation Part 2: validate/verify Node (clearsign validation of .toml)
+6. Extraction Part 2: Node.toml Field Extraction
+7. Cleanup
+8. Return Node Struct (CoreNode)
+
+
+Step 1: Paths & Reading-Copies Part 1: node.toml path and read-copy
+There are several reasons for separate paths and reading-copies.
+While it is somewhat an undesirable swiss-army-knife: a file-to-be-read may be .toml or a .gpgtoml. A simple clearsign-toml is simpler than a .gpgtoml, but the workflow for a .gpgtoml introduces at least two useful robustness steps. 
+
+Reading from a reading-copy rather than from an original file: While collisions are likely to be rare, it is probably a good standard best practice (in general, not without exceptions) for Uma to do all file-reading from reading-copies of files. This should be better in a distributed-graph-database of files where any file owner can move or update a file at any time. Also, the modus-operandi of Uma is that individual files are always small modules, with any larger structure being made of small modular parts, so there should be no issues of copying a large file when there are no large files.
+
+Another benefit of .gpgtoml files is the implicit 'login/signin' step that prevents any hardware-operator (physical or remote) who does not control the local-owner-user's gpg keys from using Uma ('Anti Evil-Maid').
+
+That said, there is a balance between .gpgtoml advantages and the original Aim of Uma being "These are files and folders on your computer." Uma is a narrowly purpose-specific file(system)-sharing system (a distributed graph-database), not a file-hiding system. The whole point of Uma is using and sharing files so that you and chosen collaborators can look at the files you create. The main outlier may be the addressbook files which, while not containing any secrets, are not 'useful project files' and it does add to security-hardening (and 'login') to .gpg encrypt those. Team-channel files are likely an ongoing grey area: some people may prefer to .gpg encrypt these too, but in many cases being able to read and modify these files as files is likely useful. A compromise may be having a minimal team-channel file that is .gpg encrypted and using other nodes for more details. 
+It likely makes sense to leave this up to the team, and to "Nudge" (see book title and association with Kahneman/Tversky) people towards default-more-security that they can opt out of: so addressbook files are definitely .gpgtoml by default, and team-channel files...probably .gpgtoml by default. 
+
+Nodes (node.toml files) like addressbook files can be either clearsign-toml .toml files or gpg encrypted .gpgtoml encrypted clearsigned .toml files
+(encryption is done with the local owner's public key (so the local owner decrypts with their private key using that key's key-id), clearsigning is with the file-owner's private key: so the clearsign is validated/verified using the file-owner's shared public gpg-key (which is in their addressbook file, looked up by the user's name (or 'handle')))
+
+If failing to make a read copy, e.g. due to file collisions with that file being updated or moved at the exact time of read-copy, the procedure should be to wait and try again twice before considering this to be an error/failure. Collisions in uses of files are expected to be rare but are expected.
+
+Every error-section of the function after this point must delete the read-copies as a first step of the error handling process.
+
+
+Step 2. Paths & Reading-Copies Part 2: addressbook path and read-copy
+The owner of the addressbook file cannot be found until the node.toml file is readable and read. 
+
+- use node.toml owner name
+- get Addressbook directory path simplified
+- get real path to read-copy with:
+pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
+    collaborator_name: &str,
+    addressbook_files_directory_relative: &str,
+    gpg_full_fingerprint_key_id_string: &str,
+) -> Result<(PathBuf, PathBuf), GpgError>
+
+
+Step 3. Verification/Validation Part 1: validate addressbook file and get node-owner's public gpg key
+
+node_owners_public_gpg_key = read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml()
+
+
+Step 4. Extraction Part 1: Addressbook field extraction.
+
+In order to validate/verify the node.toml files we need to 
+get the file-owner's public-gpg-key from file-owner's addressbook:
+read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml()
+
+
+Step 5. Verification/Validation Part 2: validate Node file (clearsign validation of .toml) 
+- validate and proceed or delete read-copies and return-error
+
+While some would probably argue for punting on (skipping) gpg-clearsign-validation of the node.toml file on the grounds that later other functions to load data from the unverified file probably include some kind of implicit validation steps, that procrastination/excuse is not good-process and invites potential risks. First see if the file can be clearsign-validated. If the file cannot be clearsign-validated, do not attempt to load any data from a known to be bad and possibly tampered-with file.
+
+The terminology or semantics might be confusing but the workflow should be clear.
+There is no path to export an extracted field value bypassing the validated-extraction process. We have to 'read' the name of the file owner from the file, but that is not stored in a variable capable of returning that as an extracted-output. 
+
+The return-extracted-verified/validated-value process must be used for all 'extracted-to-output' fields. On the one hand this is redundantly reading the field a second time, on the other hand it is applying a uniform process and not skimping on due diligence for the sake of creating a liability and irregular workflows. 
+
+    // // 5. Validation Part 2: validate Node (clearsign validation of .toml)
+    let verify_node_file_result = verify_clearsign(
+    	&node_readcopy_path,
+    	&node_owners_public_gpg_key,
+    );
+
+
+Step 6. Extraction Part 2: Node.toml Field Extraction
+Fields should be individually extracted using a standardized individual validation/verification process.
+
+There need to be individual functions for reading clearsign_toml fields,
+from clearsing-toml files that do not contain the public gpg-key, based on:
+A. the datatype of the 'value' (as in key (field name) and value (data), as in key
+B. if the struct field is 'option' (possibly None)
+
+likely the input parameters will be the same for all such functions:
+(
+    pathstr_to_config_file_that_contains_gpg_key: &str,
+    pathstr_to_target_clearsigned_file: &str, 
+    name_of_toml_field_key_to_read: &str,
+)
+
+Nodes and 'Get-Needed-When-Need' (Get something that is needed when it is needed; not get everything when you do not need it.):
+By default Uma operates on a "Get (what is) needed when (it is) needed." basis, but in this case you actually do need to load all node fields when entering that node. 
+However, the reading of each field is not exempt: reading every struct item from a toml file does NOT mean greedily, lazily, slopily, and dangerously, pulling the entire file into memory. Uma operates by strictly dealing only with specific approved structs and enum structures, period. People will try to put malicious executable code into a 'file to share,' but Uma does not deal with random files or random data: Rust structs within Rust enums are shared with Uma, externatized in the form of (clearsigned and gpg encrypted) .toml files, with strict size and other parameters. Uma is not a random filesharing system.
+
+This will probably evolve over time but to date the datatypes needed are:
+
+Data Types (including 'Option'):
+    string
+    vec<u8>
+    PathBuf
+    u64
+    vec<String>
+    HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
+    Option<Vec<(i32, i32)>>, 
+    Option<usize>,
+    Option<bool>, 
+    Option<i64>, 
+
+Functions: 
+    string -> read_singleline_string_from_clearsigntoml_without_keyid()
+    vec<u8> -> read_u8_array_from_clearsigntoml_without_keyid()
+    PathBuf -> read_pathbuf_from_clearsigntoml_without_keyid()
+    u64 -> read_u64_from_clearsigntoml_without_keyid()
+    vec<String> -> read_stringarray_from_clearsigntoml_without_keyid()
+    
+   HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, 
+-> read_hashmap_corenode_ports_from_clearsigntoml_without_keyid()
+    
+Option<Vec<(i32, i32)>> -> read_option_i32_tuple_array_from_clearsigntoml_without_keyid()
+    Option<usize> -> read_option_usize_from_clearsigntoml_without_keyid()
+    Option<bool> -> read_option_bool_from_clearsigntoml_without_keyid()
+    Option<i64> -> read_option_i64_from_clearsigntoml_without_keyid()
+
+
+For reference, this is the CoreNode struct showing the struct fields that have said datatypes:
 struct CoreNode {
     /// The name of the node. This is used for display and identification.
     node_name: String,
+
     /// A description of the node, intended for display in the TUI.
     description_for_tui: String,
+
     /// A unique identifier for the node, generated using pearson hashes of the other fields
     node_unique_id: Vec<u8>,
+
     /// The path to the directory on the file system where the node's data is stored.
     directory_path: PathBuf,
+
     /// An order number used to define the node's position within a list or hierarchy.
     // order_number: u32,
     /// The priority of the node, which can be High, Medium, or Low.
     // priority: NodePriority,
     /// The username of the owner of the node.
     owner: String,
+
     /// The Unix timestamp representing when the node was last updated.
     updated_at_timestamp: u64,
+
     /// The Unix timestamp representing when the node will expire.
     expires_at: u64,
+
     /// A vector of `CoreNode` structs representing the child nodes of this node.
     // children: Vec<CoreNode>,
     /// An ordered vector of collaborator usernames associated with this node.
     teamchannel_collaborators_with_access: Vec<String>,
+
     /// A map containing port assignments for each collaborator associated with the node.
     abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
 
@@ -10456,7 +10622,8 @@ struct CoreNode {
     pa4_features: String,
     pa5_mvp: String,
     pa6_feedback: String,
-    
+
+
     /////////////////
     // message_posts
     /////////////////
@@ -10467,8 +10634,8 @@ struct CoreNode {
     /// Integer-string validation ranges as tuples (min, max) for the integer part 
     pub message_post_data_format_specs_int_string_ranges_from_to_tuple_array: Option<Vec<(i32, i32)>>, 
 
-    /// Maximum string length for integer-string pairs 
-    pub message_post_data_format_specs_int_string_max_string_length: Option<usize>, 
+    /// Maximum string length 
+    pub message_post_max_string_length_int: Option<usize>, 
 
     /// Whether posts are public or private 
     pub message_post_is_public_bool: Option<bool>, 
@@ -10488,40 +10655,15 @@ struct CoreNode {
     // pub n_durations_for_maxposts: Option<i64>, 
 }
 
-    
-    functions for datatypes:
-    
-    read_singleline_string_from_clearsigntoml_without_keyid,
-    read_u8_array_from_clearsigntoml_without_keyid,
-    read_pathbuf_from_clearsigntoml_without_keyid,
-    read_u64_from_clearsigntoml_without_keyid,
-    read_stringarray_from_clearsigntoml_without_keyid,
-    read_hashmap_corenode_ports_from_clearsigntoml_without_keyid,
-    read_option_i32_tuple_array_from_clearsigntoml_without_keyid,
-    read_option_usize_from_clearsigntoml_without_keyid,
-    read_option_bool_from_clearsigntoml_without_keyid,
-    read_option_i64_from_clearsigntoml_without_keyid,
-    
-    
-    string
-    vec<u8>
-    PathBuf
-    u64
-    vec<String>
-    
-   	HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
-    
-    Option<Vec<(i32, i32)>>, 
-    Option<usize>,
-    Option<bool>, 
-    Option<i64>, 
-    
-     
-    
-    set addressbook_files_directory_relative to the constant and pass it along
-    the clearsign module does not have the UMA constant, so pass it in.
-    let addressbook_files_directory_relative = COLLABORATOR_ADDRESSBOOK_PATH_STR;
 
+Step 7. Cleanup
+If the process gets this far, hopefully it usually does, the temporary read-files are deleted.
+```
+   fn cleanup_collaborator_temp_file(temp_file_path: &Path) -> Result<(), GpgError> {
+```
+
+Step 8. Return Node Struct (struct CoreNode)
+return the struct (after deleting the read-files), or an error (after deleting the read-files).
 
 */
 /// Loads a `CoreNode` from a TOML file, handling potential errors.
@@ -10606,6 +10748,7 @@ fn load_core_node_from_toml_file(
         file_path,
     );
     
+    // TODO error handling?
     // // Get armored public key, using key-id (full fingerprint in)
     // let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
     //     Ok(fingerprint) => fingerprint,
@@ -10616,224 +10759,815 @@ fn load_core_node_from_toml_file(
     //         ));
     //     }
     // };
+        
+    // Get armored public key, using key-id (full fingerprint in)
+    let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+        Ok(fingerprint) => fingerprint,
+        Err(e) => {
+            // Since the function returns Result<CoreNode, String>, we need to return a String error
+            return Err(format!(
+                "implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}", 
+                e
+            ));
+        }
+    };
     
-    // //    // 1. Paths & Reading-Copies Part 1: node.toml path and read-copy
-    // let node_readcopy_path = get_path_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
-    //     collaborator_name: &str,
-    //     addressbook_files_directory_relative: &str,
-    //     gpg_full_fingerprint_key_id_string: &str,
+    // // 1. Paths & Reading-Copies Part 1: node.toml path and read-copy
+    // Read owner from the file (before validation, but we won't use other data until validated)
+    // let node_readcopy_path = get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
+    //     &file_path,
+    //     &gpg_full_fingerprint_key_id_string,
     // )?;
 
+    // Using Debug trait for more detailed error information
+    let node_readcopy_path = get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
+        &file_path,
+        &gpg_full_fingerprint_key_id_string,
+    ).map_err(|e| format!("Failed to get temporary read copy of TOML file: {:?}", e))?;
+    
     // //    // simple read string to get owner name
     // //    // not for extraction and return, just part of validation
 
 
-    // ////////////////////////////////
-    // // Extract Owner for Key Lookup 
-    // ////////////////////////////////
-    // let owner_name_of_toml_field_key_to_read = "owner";
-    // println!(
-    //     "Reading file owner from field '{}' for security validation",
-    //     owner_name_of_toml_field_key_to_read
-    // );
+    ////////////////////////////////
+    // Extract Owner for Key Lookup 
+    ////////////////////////////////
+    let owner_name_of_toml_field_key_to_read = "owner";
+    println!(
+        "Reading file owner from field '{}' for security validation",
+        owner_name_of_toml_field_key_to_read
+    );
 
- //    // Read owner from the file (before validation, but we won't use other data until validated)
- //    let file_owner_username = match read_single_line_string_field_from_toml(path_str, owner_name_of_toml_field_key_to_read) {
- //        Ok(username) => {
- //            if username.is_empty() {
- //                return Err(GpgError::GpgOperationError(format!(
- //                    "Field '{}' is empty in TOML file. File owner is required for security validation.",
- //                    owner_name_of_toml_field_key_to_read
- //                )));
- //            }
- //            username
- //        }
- //        Err(e) => {
- //            return Err(GpgError::GpgOperationError(format!(
- //                "Failed to read file owner from field '{}': {}",
- //                owner_name_of_toml_field_key_to_read, e
- //            )));
- //        }
- //    };
- //    println!("File owner: '{}'", file_owner_username);
+    // get node_owners_public_gpg_key
+
+    // let file_owner_username = match read_single_line_string_field_from_toml(
+    //     &node_readcopy_path,  // TODO convert to string?
+    //     owner_name_of_toml_field_key_to_read,
+    // 	) {
+    //     Ok(username) => {
+    //         if username.is_empty() {
+    //             return Err(GpgError::GpgOperationError(format!(
+    //                 "Field '{}' is empty in TOML file. File owner is required for security validation.",
+    //                 owner_name_of_toml_field_key_to_read
+    //             )));
+    //         }
+    //         username
+    //     }
+    //     Err(e) => {
+    //         return Err(GpgError::GpgOperationError(format!(
+    //             "Failed to read file owner from field '{}': {}",
+    //             owner_name_of_toml_field_key_to_read, e
+    //         )));
+    //     }
+    // };
+    // println!("File owner: '{}'", file_owner_username);
     
-	// let addressbook_readcopy_path = get_path_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
- //        collaborator_name: &str,
- //        addressbook_files_directory_relative: &str,
- //        gpg_full_fingerprint_key_id_string: &str,
+    let file_owner_username = match read_single_line_string_field_from_toml(
+        &node_readcopy_path,  // TODO convert to string?
+        owner_name_of_toml_field_key_to_read,
+    ) {
+        Ok(username) => {
+            if username.is_empty() {
+                // Convert to String error instead of GpgError
+                return Err(format!(
+                    "Field '{}' is empty in TOML file. File owner is required for security validation.",
+                    owner_name_of_toml_field_key_to_read
+                ));
+            }
+            username
+        }
+        Err(e) => {
+            // Convert to String error instead of GpgError
+            return Err(format!(
+                "Failed to read file owner from field '{}': {}",
+                owner_name_of_toml_field_key_to_read, e
+            ));
+        }
+    };
+    println!("File owner: '{}'", file_owner_username);
+    
+    // TODO returns full responce not just string
+    // because the filepath needs to be constructed
+    // this is a separate function
+	// let addressbook_readcopy_path_string = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
+ //        &file_owner_username,
+ //        COLLABORATOR_ADDRESSBOOK_PATH_STR,
+ //        &gpg_full_fingerprint_key_id_string,
  //    );
-    
 
-    // // 2. Paths & Reading-Copies Part 2: addressbook path and read-copy
-    
+    // Extract the addressbook path string with inline error conversion
+    let addressbook_readcopy_path_string = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
+        &file_owner_username,
+        COLLABORATOR_ADDRESSBOOK_PATH_STR,
+        &gpg_full_fingerprint_key_id_string,
+    ).map_err(|e| format!(
+        "Failed to get addressbook path for user '{}': {:?}",
+        file_owner_username,
+        e
+    ))?;
 
+
+    // Define cleanup closure
+    let cleanup = || {
+        cleanup_collaborator_temp_file(&node_readcopy_path);
+        cleanup_collaborator_temp_file(&addressbook_readcopy_path_string);
+    };
+
+
+
+    // use function for general .toml or .gpgtoml readcopy
+    // let node_owners_public_gpg_key = read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml(
+    //     &addressbook_readcopy_path_string, 
+    // );
     
-    // // 3. Validate Part 1: validate addressbook file and get node-owner's public gpg
-    // // 4. Validation Part 2: validate Node (clearsign validation of .toml)
+    let node_owners_public_gpg_key = read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml(
+        &addressbook_readcopy_path_string, 
+    ).map_err(|e| format!(
+        "Failed to get addressbook path for user '{}': {:?}",
+        file_owner_username,
+        e
+    ))?;
+    
+    
+    
+    // // // // 2. Paths & Reading-Copies Part 2: addressbook path and read-copy
+    // // // verify_clearsign_signature(
+    // // //     clearsigned_file_path: &Path,
+    // // //     validator_key_id: &str,
+    // // //     )
+    // let verify_addressbook_file_result = verify_clearsign(
+    // 	&addressbook_readcopy_path_string,
+    // 	&node_owners_public_gpg_key,
+    // ).map_err(|e| format!(
+    //     "Failed to get addressbook path for user '{}': {:?}",
+    //     file_owner_username,
+    //     e
+    // ))?;
+
+    // // // 3. Validate Part 1: validate addressbook file and get node-owner's public gpg
+
+
+    // // // 4. Validation Part 2: validate Node (clearsign validation of .toml)
+    // let verify_node_file_result = verify_clearsign(
+    // 	&node_readcopy_path,
+    // 	&node_owners_public_gpg_key,
+    // ).map_err(|e| format!(
+    //     "Failed to get addressbook path for user '{}': {:?}",
+    //     file_owner_username,
+    //     e
+    // ))?;
+    
+    
+    
+    // // pseudocode validating clearsign files
+    // if !verify_addressbook_file_result | !verify_node_file_result{
+    //     cleanup();
+    // }
+    
+    
+    // 2. Paths & Reading-Copies Part 2: addressbook path and read-copy
+    // Verify the addressbook file's clearsign signature
+    let verify_addressbook_file_result = match verify_clearsign(
+        &addressbook_readcopy_path_string,
+        &node_owners_public_gpg_key,
+    ) {
+        Ok(is_valid) => is_valid,
+        Err(e) => {
+            // Clean up temporary files before returning error
+            cleanup();
+            return Err(format!(
+                "Failed to verify addressbook clearsign signature for user '{}': {:?}",
+                file_owner_username,
+                e
+            ));
+        }
+    };
+
+    // 3. Validate Part 1: validate addressbook file and get node-owner's public gpg
+    // (This section would go here if needed)
+
+    // 4. Validation Part 2: validate Node (clearsign validation of .toml)
+    // Verify the node file's clearsign signature
+    let verify_node_file_result = match verify_clearsign(
+        &node_readcopy_path,
+        &node_owners_public_gpg_key,
+    ) {
+        Ok(is_valid) => is_valid,
+        Err(e) => {
+            // Clean up temporary files before returning error
+            cleanup();
+            return Err(format!(
+                "Failed to verify node file clearsign signature for user '{}': {:?}",
+                file_owner_username,
+                e
+            ));
+        }
+    };
+
+    // Check if both verification results are valid
+    // If either verification failed, clean up and return error
+    if !verify_addressbook_file_result || !verify_node_file_result {
+        // Clean up temporary files
+        cleanup();
+        
+        // Provide detailed error message about which verification failed
+        let mut error_details = Vec::new();
+        if !verify_addressbook_file_result {
+            error_details.push("addressbook file signature verification failed");
+        }
+        if !verify_node_file_result {
+            error_details.push("node file signature verification failed");
+        }
+        
+        return Err(format!(
+            "Clearsign validation failed for user '{}': {}",
+            file_owner_username,
+            error_details.join(" and ")
+        ));
+    }   
+        
+    
     // // 5. Field Extraction
-    // // 6. Cleanup
-    // // 7. Return Node Struct (CoreNode)
+
+    /*
+This will probably evolve over time but to date the datatypes needed are:
+    string
+    vec<u8>
+    PathBuf
+    u64
+    vec<String>
+    
+   	HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
+    
+    Option<Vec<(i32, i32)>>, 
+    Option<usize>,
+    Option<bool>, 
+    Option<i64>, 
+
+Functions: 
+
+all use these parameters:
+    pathstr_to_config_file_that_contains_gpg_key: &str,
+    pathstr_to_target_clearsigned_file: &str, 
+    name_of_toml_field_key_to_read: &str,
+
+
+    string -> read_singleline_string_from_clearsigntoml_without_keyid()
+    vec<u8> -> read_u8_array_from_clearsigntoml_without_keyid()
+    PathBuf -> read_pathbuf_from_clearsigntoml_without_keyid()
+    u64 -> read_u64_from_clearsigntoml_without_keyid()
+    vec<String> -> read_stringarray_from_clearsigntoml_without_keyid()
+    
+   HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, 
+-> read_hashmap_corenode_ports_from_clearsigntoml_without_keyid()
+    
+Option<Vec<(i32, i32)>> -> read_option_i32_tuple_array_from_clearsigntoml_without_keyid()
+    Option<usize> -> read_option_usize_from_clearsigntoml_without_keyid()
+    Option<bool> -> read_option_bool_from_clearsigntoml_without_keyid()
+    Option<i64> -> read_option_i64_from_clearsigntoml_without_keyid()
+    
+struct CoreNode {
+    /// The name of the node. This is used for display and identification.
+    node_name: String,
+    /// A description of the node, intended for display in the TUI.
+    description_for_tui: String,
+    /// A unique identifier for the node, generated using pearson hashes of the other fields
+    node_unique_id: Vec<u8>,
+    /// The path to the directory on the file system where the node's data is stored.
+    directory_path: PathBuf,
+    /// An order number used to define the node's position within a list or hierarchy.
+    // order_number: u32,
+    /// The priority of the node, which can be High, Medium, or Low.
+    // priority: NodePriority,
+    /// The username of the owner of the node.
+    owner: String,
+    /// The Unix timestamp representing when the node was last updated.
+    updated_at_timestamp: u64,
+    /// The Unix timestamp representing when the node will expire.
+    expires_at: u64,
+    /// A vector of `CoreNode` structs representing the child nodes of this node.
+    // children: Vec<CoreNode>,
+    /// An ordered vector of collaborator usernames associated with this node.
+    teamchannel_collaborators_with_access: Vec<String>,
+    /// A map containing port assignments for each collaborator associated with the node.
+    abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
+
+    // project areas: project module items as task-ish thing
+    pa1_process: String,
+    pa2_schedule: Vec<u64>, 
+    pa3_users: String,
+    pa4_features: String,
+    pa5_mvp: String,
+    pa6_feedback: String,
+    
+    /////////////////
+    // message_posts
+    /////////////////
+    
+    /// Integer validation ranges as tuples (min, max) - inclusive bounds 
+    pub message_post_data_format_specs_integer_ranges_from_to_tuple_array: Option<Vec<(i32, i32)>>, 
+
+    /// Integer-string validation ranges as tuples (min, max) for the integer part 
+    pub message_post_data_format_specs_int_string_ranges_from_to_tuple_array: Option<Vec<(i32, i32)>>, 
+
+    /// Maximum string length 
+    pub message_post_max_string_length_int: Option<usize>, 
+
+    /// Whether posts are public or private 
+    pub message_post_is_public_bool: Option<bool>, 
+
+    /// Whether user confirmation is required before posting 
+    pub message_post_user_confirms_bool: Option<bool>, 
+
+    /// Start time for accepting posts (UTC POSIX timestamp) 
+    pub message_post_start_date_utc_posix: Option<i64>, 
+
+    /// End time for accepting posts (UTC POSIX timestamp) 
+    pub message_post_end_date_utc_posix: Option<i64>,
+    
+	// limit of how many posts (or per time duration)
+    // pub max_posts: Option<i64>,
+    // pub duration_for_maxposts: MaxPostsDurationUnitsEnum, // hours, days, weeks
+    // pub n_durations_for_maxposts: Option<i64>, 
+}
+    
+    
+    */
     
     
     // 1. Read File Contents 
-    let toml_string = match fs::read_to_string(file_path) {
-        Ok(content) => content,
-        Err(e) => return Err(format!("Error lcnftf reading file: {} in load_core_node_from_toml_file", e)),
-    };
-
-    // 2. Parse TOML String 
-    let toml_value: Value = match toml_string.parse() {
-        Ok(value) => value,
-        Err(e) => return Err(format!("Error lcnftf parsing TOML in load_core_node_from_toml_file: {}", e)),
-    };
-
-    // 3. Extract node_unique_id as array
-    let node_unique_id = match toml_value.get("node_unique_id").and_then(Value::as_array) {
-        Some(array) => {
-            let mut vec = Vec::new();
-            for value in array {
-                if let Some(num) = value.as_integer() {
-                    if num >= 0 && num <= 255 {
-                        vec.push(num as u8);
-                    } else {
-                        return Err("Invalid byte value in node_unique_id".to_string());
-                    }
-                } else {
-                    return Err("Invalid value in node_unique_id array".to_string());
-                }
-            }
-            vec
-        },
-        None => return Err("Missing or invalid node_unique_id".to_string()),
-    };
-
-    // 4. Extract Project Areas
-    let pa1_process = toml_value
-        .get("pa1_process")
-        .and_then(Value::as_str)
-        .ok_or("Missing or invalid pa1_process")?
-        .to_string();
-
-    let pa2_schedule = toml_value
-        .get("pa2_schedule")
-        .and_then(Value::as_array)
-        .ok_or("Missing or invalid pa2_schedule")?
-        .iter()
-        .map(|v| v.as_integer().ok_or("Invalid integer in pa2_schedule"))
-        .collect::<Result<Vec<i64>, &str>>()?
-        .into_iter()
-        .map(|i| i as u64)
-        .collect();
     
-    let pa3_users = toml_value
-        .get("pa3_users")
-        .and_then(Value::as_str)
-        .ok_or("Missing or invalid pa3_users")?
-        .to_string();
-
-    let pa4_features = toml_value
-        .get("pa4_features")
-        .and_then(Value::as_str)
-        .ok_or("Missing or invalid pa4_features")?
-        .to_string();
-
-    let pa5_mvp = toml_value
-        .get("pa5_mvp")
-        .and_then(Value::as_str)
-        .ok_or("Missing or invalid pa5_mvp")?
-        .to_string();
+    /*
+    /// match read_singleline_string_from_clearsigntoml_without_keyid(
+    ///     config_path, 
+    ///     target_path, 
+    ///     "api_endpoint"
+    /// ) {
+    ///     Ok(value) => println!("API Endpoint: {}", value),
+    ///     Err(e) => eprintln!("Error: {}", e)
+    /// }
+    /// ```
+    ///
+    pub fn read_singleline_string_from_clearsigntoml_without_keyid(
+        pathstr_to_config_file_that_contains_gpg_key: &str,
+        pathstr_to_target_clearsigned_file: &str, 
+        name_of_toml_field_key_to_read: &str,
+    ) -> Result<String, String> {
     
-    let pa6_feedback = toml_value
-        .get("pa6_feedback")
-        .and_then(Value::as_str)
-        .ok_or("Missing or invalid pa6_feedback")?
-        .to_string();
+    */
+    // let toml_string = match fs::read_to_string(file_path) {
+    //     Ok(content) => content,
+    //     Err(e) => return Err(format!("Error lcnftf reading file: {} in load_core_node_from_toml_file", e)),
+    // };
 
-    // 5. Extract Message Post Configuration Fields
+    // // 2. Parse TOML String 
+    // let toml_value: Value = match toml_string.parse() {
+    //     Ok(value) => value,
+    //     Err(e) => return Err(format!("Error lcnftf parsing TOML in load_core_node_from_toml_file: {}", e)),
+    // };
+
+    // // 3. Extract node_unique_id as array
+    // let node_unique_id = match toml_value.get("node_unique_id").and_then(Value::as_array) {
+    //     Some(array) => {
+    //         let mut vec = Vec::new();
+    //         for value in array {
+    //             if let Some(num) = value.as_integer() {
+    //                 if num >= 0 && num <= 255 {
+    //                     vec.push(num as u8);
+    //                 } else {
+    //                     return Err("Invalid byte value in node_unique_id".to_string());
+    //                 }
+    //             } else {
+    //                 return Err("Invalid value in node_unique_id array".to_string());
+    //             }
+    //         }
+    //         vec
+    //     },
+    //     None => return Err("Missing or invalid node_unique_id".to_string()),
+    // };
+
+    // // 4. Extract Project Areas
+    // let pa1_process = toml_value
+    //     .get("pa1_process")
+    //     .and_then(Value::as_str)
+    //     .ok_or("Missing or invalid pa1_process")?
+    //     .to_string();
+
+    // let pa2_schedule = toml_value
+    //     .get("pa2_schedule")
+    //     .and_then(Value::as_array)
+    //     .ok_or("Missing or invalid pa2_schedule")?
+    //     .iter()
+    //     .map(|v| v.as_integer().ok_or("Invalid integer in pa2_schedule"))
+    //     .collect::<Result<Vec<i64>, &str>>()?
+    //     .into_iter()
+    //     .map(|i| i as u64)
+    //     .collect();
     
-    // Helper function to parse integer range tuples from TOML arrays
-    let parse_integer_ranges = |ranges_array: &toml::value::Array| -> Result<Vec<(i32, i32)>, String> {
-        let mut ranges = Vec::new();
-        for range_value in ranges_array {
-            if let Some(range_array) = range_value.as_array() {
-                if range_array.len() == 2 {
-                    let min = range_array[0].as_integer()
-                        .ok_or("Invalid minimum value in range")?;
-                    let max = range_array[1].as_integer()
-                        .ok_or("Invalid maximum value in range")?;
-                    ranges.push((min as i32, max as i32));
-                } else {
-                    return Err("Range must have exactly 2 elements (min, max)".to_string());
-                }
-            } else {
-                return Err("Invalid range format in array".to_string());
-            }
-        }
-        Ok(ranges)
+    // let pa3_users = toml_value
+    //     .get("pa3_users")
+    //     .and_then(Value::as_str)
+    //     .ok_or("Missing or invalid pa3_users")?
+    //     .to_string();
+
+    // let pa4_features = toml_value
+    //     .get("pa4_features")
+    //     .and_then(Value::as_str)
+    //     .ok_or("Missing or invalid pa4_features")?
+    //     .to_string();
+
+    // let pa5_mvp = toml_value
+    //     .get("pa5_mvp")
+    //     .and_then(Value::as_str)
+    //     .ok_or("Missing or invalid pa5_mvp")?
+    //     .to_string();
+    
+    // let pa6_feedback = toml_value
+    //     .get("pa6_feedback")
+    //     .and_then(Value::as_str)
+    //     .ok_or("Missing or invalid pa6_feedback")?
+    //     .to_string();
+
+    // // 5. Extract Message Post Configuration Fields
+    
+    // // Helper function to parse integer range tuples from TOML arrays
+    // let parse_integer_ranges = |ranges_array: &toml::value::Array| -> Result<Vec<(i32, i32)>, String> {
+    //     let mut ranges = Vec::new();
+    //     for range_value in ranges_array {
+    //         if let Some(range_array) = range_value.as_array() {
+    //             if range_array.len() == 2 {
+    //                 let min = range_array[0].as_integer()
+    //                     .ok_or("Invalid minimum value in range")?;
+    //                 let max = range_array[1].as_integer()
+    //                     .ok_or("Invalid maximum value in range")?;
+    //                 ranges.push((min as i32, max as i32));
+    //             } else {
+    //                 return Err("Range must have exactly 2 elements (min, max)".to_string());
+    //             }
+    //         } else {
+    //             return Err("Invalid range format in array".to_string());
+    //         }
+    //     }
+    //     Ok(ranges)
+    // };
+
+    // // Extract message_post_data_format_specs_integer_ranges_from_to_tuple_array
+    // let message_post_data_format_specs_integer_ranges_from_to_tuple_array = 
+    //     match toml_value.get("message_post_data_format_specs_integer_ranges_from_to_tuple_array") {
+    //         Some(value) => {
+    //             if let Some(ranges_array) = value.as_array() {
+    //                 Some(parse_integer_ranges(ranges_array)?)
+    //             } else {
+    //                 None
+    //             }
+    //         },
+    //         None => None,
+    //     };
+
+    // // Extract message_post_data_format_specs_int_string_ranges_from_to_tuple_array
+    // let message_post_data_format_specs_int_string_ranges_from_to_tuple_array = 
+    //     match toml_value.get("message_post_data_format_specs_int_string_ranges_from_to_tuple_array") {
+    //         Some(value) => {
+    //             if let Some(ranges_array) = value.as_array() {
+    //                 Some(parse_integer_ranges(ranges_array)?)
+    //             } else {
+    //                 None
+    //             }
+    //         },
+    //         None => None,
+    //     };
+
+    // // Extract message_post_max_string_length_int
+    // let message_post_max_string_length_int = 
+    //     toml_value.get("message_post_max_string_length_int")
+    //         .and_then(Value::as_integer)
+    //         .map(|i| i as usize);
+
+    // // Extract message_post_is_public_bool
+    // let message_post_is_public_bool = 
+    //     toml_value.get("message_post_is_public_bool")
+    //         .and_then(Value::as_bool);
+
+    // // Extract message_post_user_confirms_bool
+    // let message_post_user_confirms_bool = 
+    //     toml_value.get("message_post_user_confirms_bool")
+    //         .and_then(Value::as_bool);
+
+    // // Extract message_post_start_date_utc_posix
+    // let message_post_start_date_utc_posix = 
+    //     toml_value.get("message_post_start_date_utc_posix")
+    //         .and_then(Value::as_integer);
+
+    // // Extract message_post_end_date_utc_posix
+    // let message_post_end_date_utc_posix = 
+    //     toml_value.get("message_post_end_date_utc_posix")
+    //         .and_then(Value::as_integer);
+
+    /*
+    // Define cleanup closure
+    let cleanup = || {
+        cleanup_collaborator_temp_file(node_readcopy_path);
+        cleanup_collaborator_temp_file(addressbook_readcopy_path_string);
     };
+    
+    // Use the function to read a value - convert Path to &str
+    let file_path_str = file_path.to_str()
+        .ok_or_else(|| {
+            cleanup();
+            "Invalid file path encoding".to_string()
+        })?;
+    
+    // Example: Read node_id from the clearsigned TOML file
+    let node_id = read_singleline_string_from_clearsigntoml_without_keyid(
+        "config/security.toml",  // Config file containing GPG key
+        file_path_str,           // Target clearsigned file
+        "node_id"                // Field to read
+    ).map_err(|e| {
+        cleanup(); // Run cleanup on error
+        format!("Failed to read node_id: {}", e)
+    })?;
+    */
+    
 
-    // Extract message_post_data_format_specs_integer_ranges_from_to_tuple_array
-    let message_post_data_format_specs_integer_ranges_from_to_tuple_array = 
-        match toml_value.get("message_post_data_format_specs_integer_ranges_from_to_tuple_array") {
-            Some(value) => {
-                if let Some(ranges_array) = value.as_array() {
-                    Some(parse_integer_ranges(ranges_array)?)
-                } else {
-                    None
-                }
-            },
-            None => None,
-        };
+    // Example: Read _ from the clearsigned TOML file
+    let node_name = read_singleline_string_from_clearsigntoml_without_keyid(
+        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &node_readcopy_path,           // Target clearsigned file
+        "node_name"                // Field to read
+    ).map_err(|e| {
+        cleanup(); // Run cleanup on error
+        format!("Failed to read node_id: {}", e)
+    })?;
+    
+    
+    // Example: Read _ from the clearsigned TOML file
+    let description_for_tui = read_singleline_string_from_clearsigntoml_without_keyid(
+        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &node_readcopy_path,           // Target clearsigned file
+        "description_for_tui"                // Field to read
+    ).map_err(|e| {
+        cleanup(); // Run cleanup on error
+        format!("Failed to read node_id: {}", e)
+    })?;
 
-    // Extract message_post_data_format_specs_int_string_ranges_from_to_tuple_array
-    let message_post_data_format_specs_int_string_ranges_from_to_tuple_array = 
-        match toml_value.get("message_post_data_format_specs_int_string_ranges_from_to_tuple_array") {
-            Some(value) => {
-                if let Some(ranges_array) = value.as_array() {
-                    Some(parse_integer_ranges(ranges_array)?)
-                } else {
-                    None
-                }
-            },
-            None => None,
-        };
 
-    // Extract message_post_data_format_specs_int_string_max_string_length
-    let message_post_data_format_specs_int_string_max_string_length = 
-        toml_value.get("message_post_data_format_specs_int_string_max_string_length")
-            .and_then(Value::as_integer)
-            .map(|i| i as usize);
+    // Example: Read _ from the clearsigned TOML file
+    let node_unique_id = read_u8_array_from_clearsigntoml_without_keyid(
+        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &node_readcopy_path,           // Target clearsigned file
+        "node_unique_id"                // Field to read
+    ).map_err(|e| {
+        cleanup(); // Run cleanup on error
+        format!("Failed to read node_id: {}", e)
+    })?;
+    
 
-    // Extract message_post_is_public_bool
-    let message_post_is_public_bool = 
-        toml_value.get("message_post_is_public_bool")
-            .and_then(Value::as_bool);
+    // Example: Read _ from the clearsigned TOML file
+    let directory_path = read_pathbuf_from_clearsigntoml_without_keyid(
+        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &node_readcopy_path,           // Target clearsigned file
+        "directory_path"                // Field to read
+    ).map_err(|e| {
+        cleanup(); // Run cleanup on error
+        format!("Failed to read node_id: {}", e)
+    })?;
+    
+    
+    // Example: Read _ from the clearsigned TOML file
+    let owner = read_singleline_string_from_clearsigntoml_without_keyid(
+        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &node_readcopy_path,           // Target clearsigned file
+        "owner"                // Field to read
+    ).map_err(|e| {
+        cleanup(); // Run cleanup on error
+        format!("Failed to read node_id: {}", e)
+    })?;
 
-    // Extract message_post_user_confirms_bool
-    let message_post_user_confirms_bool = 
-        toml_value.get("message_post_user_confirms_bool")
-            .and_then(Value::as_bool);
 
-    // Extract message_post_start_date_utc_posix
-    let message_post_start_date_utc_posix = 
-        toml_value.get("message_post_start_date_utc_posix")
-            .and_then(Value::as_integer);
+    // Example: Read _ from the clearsigned TOML file
+    let updated_at_timestamp = read_u64_from_clearsigntoml_without_keyid(
+        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &node_readcopy_path,           // Target clearsigned file
+        "updated_at_timestamp"                // Field to read
+    ).map_err(|e| {
+        cleanup(); // Run cleanup on error
+        format!("Failed to read node_id: {}", e)
+    })?;
 
-    // Extract message_post_end_date_utc_posix
-    let message_post_end_date_utc_posix = 
-        toml_value.get("message_post_end_date_utc_posix")
-            .and_then(Value::as_integer);
+
+    // Example: Read _ from the clearsigned TOML file
+    let expires_at = read_u64_from_clearsigntoml_without_keyid(
+        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &node_readcopy_path,           // Target clearsigned file
+        "expires_at"                // Field to read
+    ).map_err(|e| {
+        cleanup(); // Run cleanup on error
+        format!("Failed to read node_id: {}", e)
+    })?;
+
+
+    // Example: Read _ from the clearsigned TOML file
+    let teamchannel_collaborators_with_access = read_stringarray_from_clearsigntoml_without_keyid(
+        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &node_readcopy_path,           // Target clearsigned file
+        "teamchannel_collaborators_with_access"                // Field to read
+    ).map_err(|e| {
+        cleanup(); // Run cleanup on error
+        format!("Failed to read node_id: {}", e)
+    })?;
+
+
+    // Example: Read _ from the clearsigned TOML file
+    let abstract_collaborator_port_assignments = read_hashmap_corenode_ports_from_clearsigntoml_without_keyid(
+        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &node_readcopy_path,           // Target clearsigned file
+        "abstract_collaborator_port_assignments"                // Field to read
+    ).map_err(|e| {
+        cleanup(); // Run cleanup on error
+        format!("Failed to read node_id: {}", e)
+    })?;
+
+
+	////?////////////
+	// Project Areas
+	///?/////////////
+
+    // Example: Read _ from the clearsigned TOML file
+    let pa1_process = read_singleline_string_from_clearsigntoml_without_keyid(
+        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &node_readcopy_path,           // Target clearsigned file
+        "pa1_process"                // Field to read
+    ).map_err(|e| {
+        cleanup(); // Run cleanup on error
+        format!("Failed to read node_id: {}", e)
+    })?;
+
+
+    // Example: Read _ from the clearsigned TOML file
+    let pa2_schedule = read_u64_array_from_clearsigntoml_without_keyid(
+        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &node_readcopy_path,           // Target clearsigned file
+        "pa2_schedule"                // Field to read
+    ).map_err(|e| {
+        cleanup(); // Run cleanup on error
+        format!("Failed to read node_id: {}", e)
+    })?;
+
+
+    // Example: Read _ from the clearsigned TOML file
+    let pa3_users = read_singleline_string_from_clearsigntoml_without_keyid(
+        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &node_readcopy_path,           // Target clearsigned file
+        "pa3_users"                // Field to read
+    ).map_err(|e| {
+        cleanup(); // Run cleanup on error
+        format!("Failed to read node_id: {}", e)
+    })?;
+
+
+    // Example: Read _ from the clearsigned TOML file
+    let pa4_features = read_singleline_string_from_clearsigntoml_without_keyid(
+        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &node_readcopy_path,           // Target clearsigned file
+        "pa4_features"                // Field to read
+    ).map_err(|e| {
+        cleanup(); // Run cleanup on error
+        format!("Failed to read node_id: {}", e)
+    })?;
+
+
+    // Example: Read _ from the clearsigned TOML file
+    let pa5_mvp = read_singleline_string_from_clearsigntoml_without_keyid(
+        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &node_readcopy_path,           // Target clearsigned file
+        "pa5_mvp"                // Field to read
+    ).map_err(|e| {
+        cleanup(); // Run cleanup on error
+        format!("Failed to read node_id: {}", e)
+    })?;
+
+
+    // Example: Read _ from the clearsigned TOML file
+    let pa6_feedback = read_singleline_string_from_clearsigntoml_without_keyid(
+        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &node_readcopy_path,           // Target clearsigned file
+        "pa6_feedback"                // Field to read
+    ).map_err(|e| {
+        cleanup(); // Run cleanup on error
+        format!("Failed to read node_id: {}", e)
+    })?;
+
+	////////////////
+	// Message-Post
+	////////////////
+
+    // Example: Read _ from the clearsigned TOML file
+    let message_post_data_format_specs_integer_ranges_from_to_tuple_array = read_option_i32_tuple_array_from_clearsigntoml_without_keyid(
+        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &node_readcopy_path,           // Target clearsigned file
+        "message_post_data_format_specs_integer_ranges_from_to_tuple_array"                // Field to read
+    ).map_err(|e| {
+        cleanup(); // Run cleanup on error
+        format!("Failed to read node_id: {}", e)
+    })?;
+
+
+    // Example: Read _ from the clearsigned TOML file
+    let message_post_data_format_specs_int_string_ranges_from_to_tuple_array = read_option_i32_tuple_array_from_clearsigntoml_without_keyid(
+        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &node_readcopy_path,           // Target clearsigned file
+        "message_post_data_format_specs_int_string_ranges_from_to_tuple_array"                // Field to read
+    ).map_err(|e| {
+        cleanup(); // Run cleanup on error
+        format!("Failed to read node_id: {}", e)
+    })?;
+
+
+    // Example: Read _ from the clearsigned TOML file
+    let message_post_max_string_length_int = read_option_usize_from_clearsigntoml_without_keyid(
+        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &node_readcopy_path,           // Target clearsigned file
+        "message_post_max_string_length_int"                // Field to read
+    ).map_err(|e| {
+        cleanup(); // Run cleanup on error
+        format!("Failed to read node_id: {}", e)
+    })?;
+
+
+    // Example: Read _ from the clearsigned TOML file
+    let message_post_is_public_bool = read_option_bool_from_clearsigntoml_without_keyid(
+        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &node_readcopy_path,           // Target clearsigned file
+        "message_post_is_public_bool"                // Field to read
+    ).map_err(|e| {
+        cleanup(); // Run cleanup on error
+        format!("Failed to read node_id: {}", e)
+    })?;
+
+
+    // Example: Read _ from the clearsigned TOML file
+    let message_post_user_confirms_bool = read_option_bool_from_clearsigntoml_without_keyid(
+        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &node_readcopy_path,           // Target clearsigned file
+        "message_post_user_confirms_bool"                // Field to read
+    ).map_err(|e| {
+        cleanup(); // Run cleanup on error
+        format!("Failed to read node_id: {}", e)
+    })?;
+
+
+    // Example: Read _ from the clearsigned TOML file
+    let message_post_start_date_utc_posix = read_option_i64_from_clearsigntoml_without_keyid(
+        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &node_readcopy_path,           // Target clearsigned file
+        "message_post_start_date_utc_posix"                // Field to read
+    ).map_err(|e| {
+        cleanup(); // Run cleanup on error
+        format!("Failed to read node_id: {}", e)
+    })?;
+
+
+    // Example: Read _ from the clearsigned TOML file
+    let message_post_end_date_utc_posix = read_option_i64_from_clearsigntoml_without_keyid(
+        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &node_readcopy_path,           // Target clearsigned file
+        "message_post_end_date_utc_posix"                // Field to read
+    ).map_err(|e| {
+        cleanup(); // Run cleanup on error
+        format!("Failed to read node_id: {}", e)
+    })?;
+    
+    /*
+    TODO
+    error[E0425]: cannot find value `message_post_max_string_length_int` in this scope
+        --> src/main.rs:11420:9
+        |
+    11420 |         message_post_max_string_length_int,
+        |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not found in this scope
+    
+    */
+
 
     // 6. Deserialize into CoreNode Struct (Manually)
     let mut core_node = CoreNode {
-        node_name: toml_value.get("node_name").and_then(Value::as_str).unwrap_or("").to_string(),
-        description_for_tui: toml_value.get("description_for_tui").and_then(Value::as_str).unwrap_or("").to_string(),
+        // node_name: toml_value.get("node_name").and_then(Value::as_str).unwrap_or("").to_string(),
+        // description_for_tui: toml_value.get("description_for_tui").and_then(Value::as_str).unwrap_or("").to_string(),
+        // node_unique_id: node_unique_id,
+        // directory_path: PathBuf::from(toml_value.get("directory_path").and_then(Value::as_str).unwrap_or("")),
+        // owner: toml_value.get("owner").and_then(Value::as_str).unwrap_or("").to_string(),
+        // updated_at_timestamp: toml_value.get("updated_at_timestamp").and_then(Value::as_integer).unwrap_or(0) as u64,
+        // expires_at: toml_value.get("expires_at").and_then(Value::as_integer).unwrap_or(0) as u64,
+        // teamchannel_collaborators_with_access: toml_value.get("teamchannel_collaborators_with_access").and_then(Value::as_array).map(|arr| arr.iter().filter_map(Value::as_str).map(String::from).collect()).unwrap_or_default(),
+        
+        node_name: node_name,
+        description_for_tui: description_for_tui,
         node_unique_id: node_unique_id,
-        directory_path: PathBuf::from(toml_value.get("directory_path").and_then(Value::as_str).unwrap_or("")),
-        owner: toml_value.get("owner").and_then(Value::as_str).unwrap_or("").to_string(),
-        updated_at_timestamp: toml_value.get("updated_at_timestamp").and_then(Value::as_integer).unwrap_or(0) as u64,
-        expires_at: toml_value.get("expires_at").and_then(Value::as_integer).unwrap_or(0) as u64,
-        teamchannel_collaborators_with_access: toml_value.get("teamchannel_collaborators_with_access").and_then(Value::as_array).map(|arr| arr.iter().filter_map(Value::as_str).map(String::from).collect()).unwrap_or_default(),
+        directory_path: directory_path,
+        owner: owner,
+        updated_at_timestamp: updated_at_timestamp,
+        expires_at: expires_at,
+        teamchannel_collaborators_with_access: teamchannel_collaborators_with_access,
+
         abstract_collaborator_port_assignments: HashMap::new(),
         
         // Project Areas
@@ -10847,39 +11581,48 @@ fn load_core_node_from_toml_file(
         // Message Post Configuration
         message_post_data_format_specs_integer_ranges_from_to_tuple_array,
         message_post_data_format_specs_int_string_ranges_from_to_tuple_array,
-        message_post_data_format_specs_int_string_max_string_length,
+        message_post_max_string_length_int,
         message_post_is_public_bool,
         message_post_user_confirms_bool,
         message_post_start_date_utc_posix,
         message_post_end_date_utc_posix,
     };
 
-    // 7. Handle collaborator port assignments
-    if let Some(collaborator_assignments_table) = toml_value.get("collaborator_port_assignments").and_then(Value::as_table) {
-        for (pair_name, pair_data) in collaborator_assignments_table {
-            debug_log("Looking for 'collaborator_ports' load_core...");
-            if let Some(ports_list) = pair_data.get("collaborator_ports").and_then(Value::as_array) {
-                // Create a vector to hold ReadTeamchannelCollaboratorPortsToml instances for this pair
-                let mut ports_for_pair = Vec::new();
+    // TODO
+    // // 7. Handle collaborator port assignments
+    // if let Some(collaborator_assignments_table) = toml_value.get("collaborator_port_assignments").and_then(Value::as_table) {
+    //     for (pair_name, pair_data) in collaborator_assignments_table {
+    //         debug_log("Looking for 'collaborator_ports' load_core...");
+    //         if let Some(ports_list) = pair_data.get("collaborator_ports").and_then(Value::as_array) {
+    //             // Create a vector to hold ReadTeamchannelCollaboratorPortsToml instances for this pair
+    //             let mut ports_for_pair = Vec::new();
     
-                for port_data in ports_list {
-                    // Deserialize each AbstractTeamchannelNodeTomlPortsData from the array
-                    let port_data_str = toml::to_string(&port_data).unwrap(); // Convert Value to String
-                    let collaborator_port: AbstractTeamchannelNodeTomlPortsData = toml::from_str(&port_data_str).map_err(|e| format!("Error deserializing collaborator port: {}", e))?;
+    //             for port_data in ports_list {
+    //                 // Deserialize each AbstractTeamchannelNodeTomlPortsData from the array
+    //                 let port_data_str = toml::to_string(&port_data).unwrap(); // Convert Value to String
+    //                 let collaborator_port: AbstractTeamchannelNodeTomlPortsData = toml::from_str(&port_data_str).map_err(|e| format!("Error deserializing collaborator port: {}", e))?;
     
-                    // Create ReadTeamchannelCollaboratorPortsToml and add it to the vector
-                    let read_teamchannel_collaborator_ports_toml = ReadTeamchannelCollaboratorPortsToml {
-                        collaborator_ports: vec![collaborator_port], // Wrap in a vector
-                    };
-                    ports_for_pair.push(read_teamchannel_collaborator_ports_toml);
-                }
+    //                 // Create ReadTeamchannelCollaboratorPortsToml and add it to the vector
+    //                 let read_teamchannel_collaborator_ports_toml = ReadTeamchannelCollaboratorPortsToml {
+    //                     collaborator_ports: vec![collaborator_port], // Wrap in a vector
+    //                 };
+    //                 ports_for_pair.push(read_teamchannel_collaborator_ports_toml);
+    //             }
     
-                // Insert the vector of ReadTeamchannelCollaboratorPortsToml into the HashMap
-                core_node.abstract_collaborator_port_assignments.insert(pair_name.clone(), ports_for_pair);
-            }
-        }
-    }
+    //             // Insert the vector of ReadTeamchannelCollaboratorPortsToml into the HashMap
+    //             core_node.abstract_collaborator_port_assignments.insert(pair_name.clone(), ports_for_pair);
+    //         }
+    //     }
+    // }
     
+    
+    // // 6. Cleanup
+    // TODO
+    cleanup_collaborator_temp_file(&node_readcopy_path);
+    cleanup_collaborator_temp_file(&addressbook_readcopy_path_string);
+    
+    
+    // // 7. Return Node Struct (CoreNode)
     Ok(core_node)
 }
 
@@ -11243,9 +11986,9 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
 
     // // Generate random ports for the owner
     // let mut rng = rand::thread_rng();
-    // let ready_port = rng.gen_range(40000..60000) as u16;
-    // let tray_port = rng.gen_range(40000..60000) as u16;
-    // let gotit_port = rng.gen_range(40000..60000) as u16;
+    // let ready_port = rng.random_range(40000..60000) as u16;
+    // let tray_port = rng.random_range(40000..60000) as u16;
+    // let gotit_port = rng.random_range(40000..60000) as u16;
     
     // let abstract_ports_data = AbstractTeamchannelNodeTomlPortsData {
     //     user_name: owner.clone(), 
@@ -11343,7 +12086,7 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
         // Message Post Configuration - all None when no values
         None,  // message_post_data_format_specs_integer_ranges_from_to_tuple_array
         None,  // message_post_data_format_specs_int_string_ranges_from_to_tuple_array
-        None,  // message_post_data_format_specs_int_string_max_string_length
+        None,  // message_post_max_string_length_int
         None,  // message_post_is_public_bool
         None,  // message_post_user_confirms_bool
         None,  // message_post_start_date_utc_posix
@@ -11438,9 +12181,9 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
 //     // Simplified port generation (move rng outside loop):
 //     // Assign random ports to owner:  Only owner for new channel.
 //     let mut rng = rand::thread_rng(); // Move RNG instantiation outside the loop
-//     let ready_port = rng.gen_range(40000..60000) as u16; // Adjust range if needed
-//     let tray_port = rng.gen_range(40000..60000) as u16; // Random u16 port number
-//     let gotit_port = rng.gen_range(40000..60000) as u16; // Random u16 port number
+//     let ready_port = rng.random_range(40000..60000) as u16; // Adjust range if needed
+//     let tray_port = rng.random_range(40000..60000) as u16; // Random u16 port number
+//     let gotit_port = rng.random_range(40000..60000) as u16; // Random u16 port number
 //     let abstract_ports_data = AbstractTeamchannelNodeTomlPortsData {
 //         user_name: owner.clone(), 
 //         ready_port,
@@ -14221,9 +14964,9 @@ fn handle_custom_end_date_input(start_date_timestamp: Option<i64>) -> Result<Opt
 //     // Assign random ports to owner:  Only owner for new channel.
 //     let mut rng = rand::thread_rng(); // Move RNG instantiation outside the loop
     
-//     // let ready_port = rng.gen_range(40000..60000) as u16; // Adjust range if needed
-//     // let tray_port = rng.gen_range(40000..60000) as u16; // Random u16 port number
-//     // let gotit_port = rng.gen_range(40000..60000) as u16; // Random u16 port number
+//     // let ready_port = rng.random_range(40000..60000) as u16; // Adjust range if needed
+//     // let tray_port = rng.random_range(40000..60000) as u16; // Random u16 port number
+//     // let gotit_port = rng.random_range(40000..60000) as u16; // Random u16 port number
 //     // let abstract_ports_data = AbstractTeamchannelNodeTomlPortsData {
 //     //     user_name: owner.clone(), 
 //     //     ready_port,
@@ -20585,12 +21328,12 @@ fn handle_command_main_mode(
 
             //         // Generate random ports for the collaborator 
             //         let mut rng = rand::thread_rng();
-            //         let ready_port__other_collaborator: u16 = rng.gen_range(40000..=50000);
-            //         let intray_port__other_collaborator: u16 = rng.gen_range(40000..=50000);
-            //         let gotit_port__other_collaborator: u16 = rng.gen_range(40000..=50000);
-            //         let ready_port__localowneruser: u16 = rng.gen_range(40000..=50000);
-            //         let intray_port__localowneruser: u16 = rng.gen_range(40000..=50000);
-            //         let gotit_port__localowneruser: u16 = rng.gen_range(40000..=50000);
+            //         let ready_port__other_collaborator: u16 = rng.random_range(40000..=50000);
+            //         let intray_port__other_collaborator: u16 = rng.random_range(40000..=50000);
+            //         let gotit_port__other_collaborator: u16 = rng.random_range(40000..=50000);
+            //         let ready_port__localowneruser: u16 = rng.random_range(40000..=50000);
+            //         let intray_port__localowneruser: u16 = rng.random_range(40000..=50000);
+            //         let gotit_port__localowneruser: u16 = rng.random_range(40000..=50000);
 
             //         // Create ReadTeamchannelCollaboratorPortsToml and insert into the HashMap
             //         abstract_collaborator_port_assignments.insert(
@@ -27987,8 +28730,8 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         /// Integer-string validation ranges as tuples (min, max) for the integer part 
         message_post_data_format_specs_int_string_ranges_from_to_tuple_array: None,
 
-        /// Maximum string length for integer-string pairs 
-        message_post_data_format_specs_int_string_max_string_length: None,
+        /// Maximum string length 
+        message_post_max_string_length_int: None,
 
         /// Whether posts are public or private 
         message_post_is_public_bool: None,
