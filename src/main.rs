@@ -8763,7 +8763,7 @@ impl GraphNavigationInstanceState {
                 let this_node = match load_core_node_from_toml_file(&node_toml_path) { 
                     Ok(node) => node,
                     Err(e) => {
-                        debug_log!("ERROR: nav_graph_look_read_node_toml() Failed to load node.toml: {}", e); 
+                        debug_log!("ERROR: nav_graph_look_read_node_toml(), load_core_node_from_toml_file(), Failed to load node.toml: {}", e); 
                         return; 
                     }
                 };
@@ -10793,7 +10793,7 @@ fn load_core_node_from_toml_file(
     // Extract Owner for Key Lookup 
     ////////////////////////////////
     let owner_name_of_toml_field_key_to_read = "owner";
-    println!(
+    debug_log!(
         "Reading file owner from field '{}' for security validation",
         owner_name_of_toml_field_key_to_read
     );
@@ -10868,7 +10868,7 @@ fn load_core_node_from_toml_file(
 
 
     // Define cleanup closure
-    let cleanup = || {
+    let cleanup_closure = || {
         cleanup_collaborator_temp_file(&node_readcopy_path);
         cleanup_collaborator_temp_file(&addressbook_readcopy_path_string);
     };
@@ -10921,7 +10921,7 @@ fn load_core_node_from_toml_file(
     
     // // pseudocode validating clearsign files
     // if !verify_addressbook_file_result | !verify_node_file_result{
-    //     cleanup();
+    //     cleanup_closure();
     // }
     
     
@@ -10934,7 +10934,7 @@ fn load_core_node_from_toml_file(
         Ok(is_valid) => is_valid,
         Err(e) => {
             // Clean up temporary files before returning error
-            cleanup();
+            cleanup_closure();
             return Err(format!(
                 "Failed to verify addressbook clearsign signature for user '{}': {:?}",
                 file_owner_username,
@@ -10955,7 +10955,7 @@ fn load_core_node_from_toml_file(
         Ok(is_valid) => is_valid,
         Err(e) => {
             // Clean up temporary files before returning error
-            cleanup();
+            cleanup_closure();
             return Err(format!(
                 "Failed to verify node file clearsign signature for user '{}': {:?}",
                 file_owner_username,
@@ -10967,8 +10967,11 @@ fn load_core_node_from_toml_file(
     // Check if both verification results are valid
     // If either verification failed, clean up and return error
     if !verify_addressbook_file_result || !verify_node_file_result {
+        
+        debug_log("Whoops, something faileded...");
+        
         // Clean up temporary files
-        cleanup();
+        cleanup_closure();
         
         // Provide detailed error message about which verification failed
         let mut error_details = Vec::new();
@@ -11273,7 +11276,7 @@ struct CoreNode {
     // Use the function to read a value - convert Path to &str
     let file_path_str = file_path.to_str()
         .ok_or_else(|| {
-            cleanup();
+            cleanup_closure();
             "Invalid file path encoding".to_string()
         })?;
     
@@ -11283,7 +11286,7 @@ struct CoreNode {
         file_path_str,           // Target clearsigned file
         "node_id"                // Field to read
     ).map_err(|e| {
-        cleanup(); // Run cleanup on error
+        cleanup_closure(); // Run cleanup on error
         format!("Failed to read node_id: {}", e)
     })?;
     */
@@ -11291,100 +11294,100 @@ struct CoreNode {
 
     // Example: Read _ from the clearsigned TOML file
     let node_name = read_singleline_string_from_clearsigntoml_without_keyid(
-        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "node_name"                // Field to read
     ).map_err(|e| {
-        cleanup(); // Run cleanup on error
-        format!("Failed to read node_id: {}", e)
+        cleanup_closure(); // Run cleanup on error
+        format!("node_name Failed to read node_name: {}", e)
     })?;
     
     
     // Example: Read _ from the clearsigned TOML file
     let description_for_tui = read_singleline_string_from_clearsigntoml_without_keyid(
-        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "description_for_tui"                // Field to read
     ).map_err(|e| {
-        cleanup(); // Run cleanup on error
-        format!("Failed to read node_id: {}", e)
+        cleanup_closure(); // Run cleanup on error
+        format!("description_for_tui sFailed to read description_for_tui: {}", e)
     })?;
 
 
     // Example: Read _ from the clearsigned TOML file
     let node_unique_id = read_u8_array_from_clearsigntoml_without_keyid(
-        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "node_unique_id"                // Field to read
     ).map_err(|e| {
-        cleanup(); // Run cleanup on error
-        format!("Failed to read node_id: {}", e)
+        cleanup_closure(); // Run cleanup on error
+        format!("node_unique_id Failed to read node_unique_id: {}", e)
     })?;
     
 
     // Example: Read _ from the clearsigned TOML file
     let directory_path = read_pathbuf_from_clearsigntoml_without_keyid(
-        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "directory_path"                // Field to read
     ).map_err(|e| {
-        cleanup(); // Run cleanup on error
-        format!("Failed to read node_id: {}", e)
+        cleanup_closure(); // Run cleanup on error
+        format!("directory_path Failed to read directory_pathe_id: {}", e)
     })?;
     
     
     // Example: Read _ from the clearsigned TOML file
     let owner = read_singleline_string_from_clearsigntoml_without_keyid(
-        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "owner"                // Field to read
     ).map_err(|e| {
-        cleanup(); // Run cleanup on error
-        format!("Failed to read node_id: {}", e)
+        cleanup_closure(); // Run cleanup on error
+        format!("owner Failed to read owner: {}", e)
     })?;
 
 
     // Example: Read _ from the clearsigned TOML file
     let updated_at_timestamp = read_u64_from_clearsigntoml_without_keyid(
-        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "updated_at_timestamp"                // Field to read
     ).map_err(|e| {
-        cleanup(); // Run cleanup on error
-        format!("Failed to read node_id: {}", e)
+        cleanup_closure(); // Run cleanup on error
+        format!("updated_at_timestamp Failed to read updated_at_timestamp: {}", e)
     })?;
 
 
     // Example: Read _ from the clearsigned TOML file
     let expires_at = read_u64_from_clearsigntoml_without_keyid(
-        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "expires_at"                // Field to read
     ).map_err(|e| {
-        cleanup(); // Run cleanup on error
-        format!("Failed to read node_id: {}", e)
+        cleanup_closure(); // Run cleanup on error
+        format!("expires_at Failed to read expires_at: {}", e)
     })?;
 
 
     // Example: Read _ from the clearsigned TOML file
     let teamchannel_collaborators_with_access = read_stringarray_from_clearsigntoml_without_keyid(
-        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "teamchannel_collaborators_with_access"                // Field to read
     ).map_err(|e| {
-        cleanup(); // Run cleanup on error
-        format!("Failed to read node_id: {}", e)
+        cleanup_closure(); // Run cleanup on error
+        format!("teamchannel_collaborators_with_access Failed to read teamchannel_collaborators_with_access: {}", e)
     })?;
 
 
     // Example: Read _ from the clearsigned TOML file
     let abstract_collaborator_port_assignments = read_hashmap_corenode_ports_from_clearsigntoml_without_keyid(
-        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "abstract_collaborator_port_assignments"                // Field to read
     ).map_err(|e| {
-        cleanup(); // Run cleanup on error
-        format!("Failed to read node_id: {}", e)
+        cleanup_closure(); // Run cleanup on error
+        format!("abstract_collaborator_port_assignments Failed to read abstract_collaborator_port_assignments: {}", e)
     })?;
 
 
@@ -11394,67 +11397,67 @@ struct CoreNode {
 
     // Example: Read _ from the clearsigned TOML file
     let pa1_process = read_singleline_string_from_clearsigntoml_without_keyid(
-        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "pa1_process"                // Field to read
     ).map_err(|e| {
-        cleanup(); // Run cleanup on error
-        format!("Failed to read node_id: {}", e)
+        cleanup_closure(); // Run cleanup on error
+        format!("pa1_process Failed to read pa1_process: {}", e)
     })?;
 
 
     // Example: Read _ from the clearsigned TOML file
     let pa2_schedule = read_u64_array_from_clearsigntoml_without_keyid(
-        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "pa2_schedule"                // Field to read
     ).map_err(|e| {
-        cleanup(); // Run cleanup on error
-        format!("Failed to read node_id: {}", e)
+        cleanup_closure(); // Run cleanup on error
+        format!("pa2_schedule Failed to read pa2_schedule: {}", e)
     })?;
 
 
     // Example: Read _ from the clearsigned TOML file
     let pa3_users = read_singleline_string_from_clearsigntoml_without_keyid(
-        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "pa3_users"                // Field to read
     ).map_err(|e| {
-        cleanup(); // Run cleanup on error
-        format!("Failed to read node_id: {}", e)
+        cleanup_closure(); // Run cleanup on error
+        format!("pa3_users Failed to read pa3_users: {}", e)
     })?;
 
 
     // Example: Read _ from the clearsigned TOML file
     let pa4_features = read_singleline_string_from_clearsigntoml_without_keyid(
-        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "pa4_features"                // Field to read
     ).map_err(|e| {
-        cleanup(); // Run cleanup on error
-        format!("Failed to read node_id: {}", e)
+        cleanup_closure(); // Run cleanup on error
+        format!("pa4_features Failed to read pa4_features: {}", e)
     })?;
 
 
     // Example: Read _ from the clearsigned TOML file
     let pa5_mvp = read_singleline_string_from_clearsigntoml_without_keyid(
-        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "pa5_mvp"                // Field to read
     ).map_err(|e| {
-        cleanup(); // Run cleanup on error
-        format!("Failed to read node_id: {}", e)
+        cleanup_closure(); // Run cleanup on error
+        format!("pa5_mvp Failed to read pa5_mvp: {}", e)
     })?;
 
 
     // Example: Read _ from the clearsigned TOML file
     let pa6_feedback = read_singleline_string_from_clearsigntoml_without_keyid(
-        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "pa6_feedback"                // Field to read
     ).map_err(|e| {
-        cleanup(); // Run cleanup on error
-        format!("Failed to read node_id: {}", e)
+        cleanup_closure(); // Run cleanup on error
+        format!("pa6_feedback Failed to read pa6_feedback: {}", e)
     })?;
 
 	////////////////
@@ -11463,78 +11466,78 @@ struct CoreNode {
 
     // Example: Read _ from the clearsigned TOML file
     let message_post_data_format_specs_integer_ranges_from_to_tuple_array = read_option_i32_tuple_array_from_clearsigntoml_without_keyid(
-        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "message_post_data_format_specs_integer_ranges_from_to_tuple_array"                // Field to read
     ).map_err(|e| {
-        cleanup(); // Run cleanup on error
-        format!("Failed to read node_id: {}", e)
+        cleanup_closure(); // Run cleanup on error
+        format!("message_post_data_format_specs_integer_ranges_from_to_tuple_array Failed to read message_post_data_format_specs_integer_ranges_from_to_tuple_array: {}", e)
     })?;
 
 
     // Example: Read _ from the clearsigned TOML file
     let message_post_data_format_specs_int_string_ranges_from_to_tuple_array = read_option_i32_tuple_array_from_clearsigntoml_without_keyid(
-        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "message_post_data_format_specs_int_string_ranges_from_to_tuple_array"                // Field to read
     ).map_err(|e| {
-        cleanup(); // Run cleanup on error
-        format!("Failed to read node_id: {}", e)
+        cleanup_closure(); // Run cleanup on error
+        format!("message_post_data_format_specs_int_string_ranges_from_to_tuple_array Failed to read message_post_data_format_specs_int_string_ranges_from_to_tuple_array: {}", e)
     })?;
 
 
     // Example: Read _ from the clearsigned TOML file
     let message_post_max_string_length_int = read_option_usize_from_clearsigntoml_without_keyid(
-        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "message_post_max_string_length_int"                // Field to read
     ).map_err(|e| {
-        cleanup(); // Run cleanup on error
-        format!("Failed to read node_id: {}", e)
+        cleanup_closure(); // Run cleanup on error
+        format!("message_post_max_string_length_int Failed to read message_post_max_string_length_int: {}", e)
     })?;
 
 
     // Example: Read _ from the clearsigned TOML file
     let message_post_is_public_bool = read_option_bool_from_clearsigntoml_without_keyid(
-        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "message_post_is_public_bool"                // Field to read
     ).map_err(|e| {
-        cleanup(); // Run cleanup on error
-        format!("Failed to read node_id: {}", e)
+        cleanup_closure(); // Run cleanup on error
+        format!("message_post_is_public_bool Failed to read node_imessage_post_is_public_boold: {}", e)
     })?;
 
 
     // Example: Read _ from the clearsigned TOML file
     let message_post_user_confirms_bool = read_option_bool_from_clearsigntoml_without_keyid(
-        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "message_post_user_confirms_bool"                // Field to read
     ).map_err(|e| {
-        cleanup(); // Run cleanup on error
-        format!("Failed to read node_id: {}", e)
+        cleanup_closure(); // Run cleanup on error
+        format!("message_post_user_confirms_bool Failed to read message_post_user_confirms_bool: {}", e)
     })?;
 
 
     // Example: Read _ from the clearsigned TOML file
     let message_post_start_date_utc_posix = read_option_i64_from_clearsigntoml_without_keyid(
-        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "message_post_start_date_utc_posix"                // Field to read
     ).map_err(|e| {
-        cleanup(); // Run cleanup on error
-        format!("Failed to read node_id: {}", e)
+        cleanup_closure(); // Run cleanup on error
+        format!("message_post_start_date_utc_posix Failed to read message_post_start_date_utc_posix: {}", e)
     })?;
 
 
     // Example: Read _ from the clearsigned TOML file
     let message_post_end_date_utc_posix = read_option_i64_from_clearsigntoml_without_keyid(
-        &node_owners_public_gpg_key,  // Config file containing GPG key
+        &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "message_post_end_date_utc_posix"                // Field to read
     ).map_err(|e| {
-        cleanup(); // Run cleanup on error
-        format!("Failed to read node_id: {}", e)
+        cleanup_closure(); // Run cleanup on error
+        format!("message_post_end_date_utc_posix Failed to read message_post_end_date_utc_posix: {}", e)
     })?;
     
     /*
@@ -11568,7 +11571,7 @@ struct CoreNode {
         expires_at: expires_at,
         teamchannel_collaborators_with_access: teamchannel_collaborators_with_access,
 
-        abstract_collaborator_port_assignments: HashMap::new(),
+        abstract_collaborator_port_assignments: abstract_collaborator_port_assignments,
         
         // Project Areas
         pa1_process: pa1_process,
@@ -11617,12 +11620,14 @@ struct CoreNode {
     
     
     // // 6. Cleanup
-    // TODO
+    // 
+    debug_log("Proper cleansup");
     cleanup_collaborator_temp_file(&node_readcopy_path);
     cleanup_collaborator_temp_file(&addressbook_readcopy_path_string);
     
     
     // // 7. Return Node Struct (CoreNode)
+    debug_log("Ending load_core_node_from_toml_file");
     Ok(core_node)
 }
 

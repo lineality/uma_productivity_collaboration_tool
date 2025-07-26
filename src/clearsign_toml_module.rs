@@ -339,6 +339,10 @@ use std::collections::HashMap;
 const DEBUG_FLAG: bool = true;
 
 use crate::debug_log;
+use crate::ReadTeamchannelCollaboratorPortsToml;
+
+// struct
+use crate::AbstractTeamchannelNodeTomlPortsData;
 
 // // //relative path version
 // // fn debug_log(message: &str) {
@@ -492,7 +496,7 @@ pub fn read_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str) ->
         Ok(file) => file,
         Err(e) => {
             // More detailed error reporting
-            debug_log!("Failed to open file at path: {}. Error: {}", path, e);
+            debug_log!("read_field_from_toml Failed to open file at path: {}. Error: {}", path, e);
             return String::new();
         },
     };
@@ -606,7 +610,7 @@ pub fn read_basename_fields_from_toml(path: &str, base_name: &str) -> Vec<String
     let file = match File::open(path) {
         Ok(file) => file,
         Err(e) => {
-            debug_log!("Failed to open file at path: {}. Error: {}", path, e);
+            debug_log!("read_basename_fields_from_toml Failed to open file at path: {}. Error: {}", path, e);
             return values;
         },
     };
@@ -665,7 +669,7 @@ pub fn read_basename_fields_from_toml(path: &str, base_name: &str) -> Vec<String
 /// - `Result<String, String>` - The field value or an error message
 pub fn read_single_line_string_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<String, String> {
     let file = File::open(path)
-        .map_err(|e| format!("Failed to open file: {}", e))?;
+        .map_err(|e| format!("read_single_line_string_field_from_toml Failed to open file: {}", e))?;
     
     let reader = io::BufReader::new(file);
     
@@ -732,7 +736,7 @@ pub fn read_u8_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str)
 /// - `Result<u64, String>` - The parsed u64 value or an error message
 pub fn read_u64_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<u64, String> {
     let file = File::open(path)
-        .map_err(|e| format!("Failed to open file: {}", e))?;
+        .map_err(|e| format!("read_u64_field_from_toml Failed to open file: {}", e))?;
     
     let reader = io::BufReader::new(file);
     
@@ -1106,7 +1110,7 @@ pub fn read_u64_from_clearsigntoml_without_keyid(
 /// - `Result<f64, String>` - The parsed f64 value or an error message
 pub fn read_float_f64_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<f64, String> {
     let file = File::open(path)
-        .map_err(|e| format!("Failed to open file: {}", e))?;
+        .map_err(|e| format!("read_float_f64_field_from_toml Failed to open file: {}", e))?;
     
     let reader = io::BufReader::new(file);
     
@@ -1140,7 +1144,7 @@ pub fn read_float_f64_field_from_toml(path: &str, name_of_toml_field_key_to_read
 /// - `Result<f32, String>` - The parsed f32 value or an error message
 pub fn read_float_f32_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<f32, String> {
     let file = File::open(path)
-        .map_err(|e| format!("Failed to open file: {}", e))?;
+        .map_err(|e| format!("read_float_f32_field_from_toml Failed to open file: {}", e))?;
     
     let reader = io::BufReader::new(file);
     
@@ -1174,7 +1178,7 @@ pub fn read_float_f32_field_from_toml(path: &str, name_of_toml_field_key_to_read
 /// - `Result<String, String>` - The concatenated multi-line value or an error message
 pub fn read_multi_line_toml_string(path: &str, name_of_toml_field_key_to_read: &str) -> Result<String, String> {
     let mut file = File::open(path)
-        .map_err(|e| format!("Failed to open file: {}", e))?;
+        .map_err(|e| format!("read_multi_line_toml_string Failed to open file: {}", e))?;
     
     let mut content = String::new();
     file.read_to_string(&mut content)
@@ -1213,7 +1217,7 @@ pub fn read_multi_line_toml_string(path: &str, name_of_toml_field_key_to_read: &
 /// - `Result<Vec<u64>, String>` - The vector of integers or an error message
 pub fn read_integer_array(path: &str, name_of_toml_field_key_to_read: &str) -> Result<Vec<u64>, String> {
     let file = File::open(path)
-        .map_err(|e| format!("Failed to open file: {}", e))?;
+        .map_err(|e| format!("read_integer_array Failed to open file: {}", e))?;
     
     let reader = io::BufReader::new(file);
     
@@ -1373,7 +1377,7 @@ relevant use example:
         cleanup(); // Run cleanup on error
         format!("Failed to read node_id: {}", e)
     })?;
-
+ 
 */
 
 /// Reads a single-line string field from a clearsigned TOML file using a GPG key from a separate config file.
@@ -1426,16 +1430,16 @@ pub fn read_singleline_string_from_clearsigntoml_without_keyid(
 ) -> Result<String, String> {
     // Step 1: Extract GPG key from the config file
     let key = extract_gpg_key_from_clearsigntoml(pathstr_to_config_file_that_contains_gpg_key, "gpg_key_public")
-        .map_err(|e| format!("Failed to extract GPG key from config file '{}': {}", pathstr_to_config_file_that_contains_gpg_key, e))?;
+        .map_err(|e| format!("read_singleline_string_from_clearsigntoml_without_keyid() -> Failed to extract GPG key from config file pathstr_to_config_file_that_contains_gpg_key->'{}': e->{}", pathstr_to_config_file_that_contains_gpg_key, e))?;
 
     // Step 2: Verify the target file using the extracted key
     let verification_result = verify_clearsign(pathstr_to_target_clearsigned_file, &key)
-        .map_err(|e| format!("Failed during verification process: {}", e))?;
+        .map_err(|e| format!("read_singleline_string_from_clearsigntoml_without_keyid() -> Failed during verification process: {}", e))?;
 
     // Step 3: Check verification result
     if !verification_result {
         return Err(format!(
-            "GPG signature verification failed for file '{}' using key from '{}'",
+            "read_singleline_string_from_clearsigntoml_without_keyid() -> GPG signature verification failed for file '{}' using key from '{}'",
             pathstr_to_target_clearsigned_file,
             pathstr_to_config_file_that_contains_gpg_key
         ));
@@ -1443,7 +1447,7 @@ pub fn read_singleline_string_from_clearsigntoml_without_keyid(
 
     // Step 4: Read the requested field from the verified file
     read_single_line_string_field_from_toml(pathstr_to_target_clearsigned_file, name_of_toml_field_key_to_read)
-        .map_err(|e| format!("Failed to read field '{}' from verified file '{}': {}", 
+        .map_err(|e| format!("read_singleline_string_from_clearsigntoml_without_keyid() -> Failed to read field '{}' from verified file '{}': {}", 
                             name_of_toml_field_key_to_read, pathstr_to_target_clearsigned_file, e))
 }
 
@@ -2905,7 +2909,7 @@ pub fn decrypt_gpgfile_to_output(input_file_path: &Path, output_file_path: &Path
 pub fn read_string_array_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<Vec<String>, String> {
     // Open the file
     let file = File::open(path)
-        .map_err(|e| format!("Failed to open file '{}': {}", path, e))?;
+        .map_err(|e| format!("read_string_array_field_from_toml Failed to open file '{}': {}", path, e))?;
     
     let reader = io::BufReader::new(file);
     
@@ -6169,21 +6173,21 @@ for uma team-channel node and similar struct fields
 - Each assignment includes: `user_name`, `ready_port`, `intray_port`, `gotit_port`
 */
 
-/// Represents a single collaborator's port assignments within a team channel.
-///
-/// This structure holds the network port configuration for a specific collaborator,
-/// including ports for different communication channels (ready, intray, gotit).
-#[derive(Debug, Clone, PartialEq)]
-pub struct CollaboratorPortAssignment {
-    /// The username of the collaborator
-    pub user_name: String,
-    /// The port number for "ready" status communication
-    pub ready_port: u16,
-    /// The port number for "intray" (inbox) communication
-    pub intray_port: u16,
-    /// The port number for "gotit" (acknowledgment) communication
-    pub gotit_port: u16,
-}
+// /// Represents a single collaborator's port assignments within a team channel.
+// ///
+// /// This structure holds the network port configuration for a specific collaborator,
+// /// including ports for different communication channels (ready, intray, gotit).
+// #[derive(Debug, Clone, PartialEq)]
+// pub struct AbstractTeamchannelNodeTomlPortsData {
+//     /// The username of the collaborator
+//     pub user_name: String,
+//     /// The port number for "ready" status communication
+//     pub ready_port: u16,
+//     /// The port number for "intray" (inbox) communication
+//     pub intray_port: u16,
+//     /// The port number for "gotit" (acknowledgment) communication
+//     pub gotit_port: u16,
+// }
 
 /// Reads port assignments for a specific collaborator pair from a clearsigned TOML file using owner-based GPG key lookup.
 ///
@@ -6221,7 +6225,7 @@ pub struct CollaboratorPortAssignment {
 /// - `pair_name` - The name of the collaborator pair (e.g., "alice_bob")
 ///
 /// # Returns
-/// - `Ok(Vec<CollaboratorPortAssignment>)` - A vector of port assignments for the specified pair
+/// - `Ok(Vec<AbstractTeamchannelNodeTomlPortsData>)` - A vector of port assignments for the specified pair
 /// - `Err(GpgError)` - If any step fails:
 ///   - `PathError`: File not found or invalid path
 ///   - `GpgOperationError`: GPG validation failure or missing required fields
@@ -6247,7 +6251,7 @@ pub fn read_specific_pair_port_assignments_from_clearsigntoml(
     path_to_clearsigned_toml: &Path,
     addressbook_files_directory_relative: &str,  // pass in constant here
     pair_name: &str,
-) -> Result<Vec<CollaboratorPortAssignment>, GpgError> {
+) -> Result<Vec<AbstractTeamchannelNodeTomlPortsData>, GpgError> {
     // --- Stage 1: Input Validation ---
     debug_log!(
         "Starting secure port assignment extraction for pair '{}' from: {}",
@@ -6520,7 +6524,7 @@ pub fn read_specific_pair_port_assignments_from_clearsigntoml(
                     // Validate we have all required fields
                     match (entry.user_name, entry.ready_port, entry.intray_port, entry.gotit_port) {
                         (Some(user), Some(ready), Some(intray), Some(gotit)) => {
-                            port_assignments.push(CollaboratorPortAssignment {
+                            port_assignments.push(AbstractTeamchannelNodeTomlPortsData {
                                 user_name: user,
                                 ready_port: ready,
                                 intray_port: intray,
@@ -6630,7 +6634,7 @@ fn extract_port_value(line: &str, name_of_toml_field_key_to_read: &str) -> Optio
 /// - `addressbook_files_directory_relative` - Relative path to the directory containing collaborator addressbook files
 ///
 /// # Returns
-/// - `Ok(HashMap<String, Vec<CollaboratorPortAssignment>>)` - A map of pair names to their port assignments
+/// - `Ok(HashMap<String, Vec<AbstractTeamchannelNodeTomlPortsData>>)` - A map of pair names to their port assignments
 /// - `Err(GpgError)` - If validation fails or no assignments are found
 ///
 /// # Example
@@ -6654,7 +6658,7 @@ fn extract_port_value(line: &str, name_of_toml_field_key_to_read: &str) -> Optio
 pub fn read_abstract_collaborator_port_assignments_from_clearsigntoml(
     path_to_clearsigned_toml: &Path,
     addressbook_files_directory_relative: &str,  // pass in constant here
-) -> Result<HashMap<String, Vec<CollaboratorPortAssignment>>, GpgError> {
+) -> Result<HashMap<String, Vec<AbstractTeamchannelNodeTomlPortsData>>, GpgError> {
     debug_log!(
         "Starting extraction of all collaborator port assignments from: {}",
         path_to_clearsigned_toml.display()
@@ -6896,7 +6900,7 @@ pub fn read_abstract_collaborator_port_assignments_from_clearsigntoml(
 /// - `addressbook_files_directory_relative` - Relative path to the directory containing collaborator addressbook files
 ///
 /// # Returns
-/// - `Ok(HashMap<String, Vec<CollaboratorPortAssignment>>)` - A map where:
+/// - `Ok(HashMap<String, Vec<AbstractTeamchannelNodeTomlPortsData>>)` - A map where:
 ///   - Keys are collaborator pair names (e.g., "alice_bob")
 ///   - Values are vectors of port assignments for that pair
 /// - `Err(GpgError)` - If any step fails:
@@ -6938,7 +6942,7 @@ pub fn read_abstract_collaborator_port_assignments_from_clearsigntoml(
 pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
     path_to_clearsigned_toml: &Path,
     addressbook_files_directory_relative: &str,  // pass in constant here
-) -> Result<HashMap<String, Vec<CollaboratorPortAssignment>>, GpgError> {
+) -> Result<HashMap<String, Vec<AbstractTeamchannelNodeTomlPortsData>>, GpgError> {
     // --- Stage 1: Input Validation ---
     debug_log!(
         "Starting optimized extraction of all collaborator port assignments from: {}",
@@ -7123,12 +7127,12 @@ pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
     let _ = fs::remove_file(&temp_validation_path);
 
     // Parse all collaborator pair sections in one pass
-    let mut all_assignments: HashMap<String, Vec<CollaboratorPortAssignment>> = HashMap::new();
+    let mut all_assignments: HashMap<String, Vec<AbstractTeamchannelNodeTomlPortsData>> = HashMap::new();
     let table_prefix = "[abstract_collaborator_port_assignments.";
     
     // State tracking for parsing
     let mut current_pair_name: Option<String> = None;
-    let mut current_pair_assignments: Vec<CollaboratorPortAssignment> = Vec::new();
+    let mut current_pair_assignments: Vec<AbstractTeamchannelNodeTomlPortsData> = Vec::new();
     let mut in_ports_array = false;
     let mut current_port_entry: Option<PartialPortEntry> = None;
 
@@ -7240,7 +7244,7 @@ pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
                     // Validate we have all required fields
                     match (entry.user_name, entry.ready_port, entry.intray_port, entry.gotit_port) {
                         (Some(user), Some(ready), Some(intray), Some(gotit)) => {
-                            current_pair_assignments.push(CollaboratorPortAssignment {
+                            current_pair_assignments.push(AbstractTeamchannelNodeTomlPortsData {
                                 user_name: user,
                                 ready_port: ready,
                                 intray_port: intray,
@@ -7390,7 +7394,7 @@ pub fn read_teamchannel_collaborators_with_access_from_clearsigntoml(
 /// }
 /// ```
 pub fn validate_port_assignment_collaborators(
-    port_assignments: &HashMap<String, Vec<CollaboratorPortAssignment>>,
+    port_assignments: &HashMap<String, Vec<AbstractTeamchannelNodeTomlPortsData>>,
     authorized_collaborators: &[String],
 ) -> Result<(), Vec<String>> {
     let mut unauthorized_users = Vec::new();
@@ -7462,7 +7466,7 @@ pub fn validate_port_assignment_collaborators(
 pub fn read_u8_array_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<Vec<u8>, String> {
     // Open the file
     let file = File::open(path)
-        .map_err(|e| format!("Failed to open file '{}': {}", path, e))?;
+        .map_err(|e| format!("read_u8_array_field_from_toml Failed to open file '{}': {}", path, e))?;
     
     let reader = io::BufReader::new(file);
     
@@ -7963,7 +7967,7 @@ pub fn read_u64_array_from_clearsigntoml_without_keyid(
 pub fn read_u64_array_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<Vec<u64>, String> {
     // Open the file
     let file = File::open(path)
-        .map_err(|e| format!("Failed to open file '{}': {}", path, e))?;
+        .map_err(|e| format!("read_u64_array_field_from_toml Failed to open file '{}': {}", path, e))?;
     
     let reader = io::BufReader::new(file);
     
@@ -8324,7 +8328,7 @@ mixed_spacing = [700,800, 900 ,1000]
 pub fn read_pathbuf_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<PathBuf, String> {
     // Open the file
     let file = File::open(path)
-        .map_err(|e| format!("Failed to open file '{}': {}", path, e))?;
+        .map_err(|e| format!("read_pathbuf_field_from_toml Failed to open file '{}': {}", path, e))?;
     
     let reader = io::BufReader::new(file);
     
@@ -8708,7 +8712,7 @@ mixed_separators = "/home/user\\documents/file.txt"
 pub fn read_option_bool_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<Option<bool>, String> {
     // Open the file
     let file = File::open(path)
-        .map_err(|e| format!("Failed to open file '{}': {}", path, e))?;
+        .map_err(|e| format!("read_option_bool_field_from_toml Failed to open file '{}': {}", path, e))?;
     
     let reader = io::BufReader::new(file);
     
@@ -9069,7 +9073,7 @@ tabbed_bool =	false
 pub fn read_option_usize_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<Option<usize>, String> {
     // Open the file
     let file = File::open(path)
-        .map_err(|e| format!("Failed to open file '{}': {}", path, e))?;
+        .map_err(|e| format!("read_option_usize_field_from_toml Failed to open file '{}': {}", path, e))?;
     
     let reader = io::BufReader::new(file);
     
@@ -9396,7 +9400,7 @@ max_value = 18446744073709551615
     fn test_read_option_usize_file_not_found() {
         let result = read_option_usize_field_from_toml("nonexistent.toml", "some_field");
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Failed to open file"));
+        assert!(result.unwrap_err().contains("test_read_option_usize_edge_cases ailed to open file"));
     }
 }
 
@@ -9456,7 +9460,7 @@ max_value = 18446744073709551615
 pub fn read_option_u64_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<Option<u64>, String> {
     // Open the file
     let file = File::open(path)
-        .map_err(|e| format!("Failed to open file '{}': {}", path, e))?;
+        .map_err(|e| format!("read_option_u64_field_from_toml Failed to open file '{}': {}", path, e))?;
     
     let reader = io::BufReader::new(file);
     
@@ -9642,7 +9646,7 @@ pub fn read_option_u64_from_clearsigntoml(path: &str, name_of_toml_field_key_to_
 pub fn read_option_i64_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<Option<i64>, String> {
     // Open the file
     let file = File::open(path)
-        .map_err(|e| format!("Failed to open file '{}': {}", path, e))?;
+        .map_err(|e| format!("read_option_i64_field_from_toml Failed to open file '{}': {}", path, e))?;
     
     let reader = io::BufReader::new(file);
     
@@ -9995,7 +9999,7 @@ far_past = -62135596800
     fn test_read_option_i64_file_not_found() {
         let result = read_option_i64_field_from_toml("nonexistent.toml", "some_field");
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Failed to open file"));
+        assert!(result.unwrap_err().contains("test_read_option_i64_invalid_values Failed to open file"));
     }
 }
 
@@ -10071,7 +10075,7 @@ far_past = -62135596800
 pub fn read_option_i32_tuple_array_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<Option<Vec<(i32, i32)>>, String> {
     // Open and read the entire file
     let mut file = File::open(path)
-        .map_err(|e| format!("Failed to open file '{}': {}", path, e))?;
+        .map_err(|e| format!("read_option_i32_tuple_array_field_from_toml Failed to open file '{}': {}", path, e))?;
     
     let mut content = String::new();
     file.read_to_string(&mut content)
@@ -10549,34 +10553,34 @@ zero_width = [[42, 42], [0, 0]]
     }
 }
 
-/// Wrapper struct for reading team channel collaborator ports from TOML files.
-/// 
-/// This struct represents the intermediate TOML structure used when reading
-/// port assignments. In the TOML file, port assignments are organized as
-/// arrays of arrays, where each top-level array element contains a 
-/// `collaborator_ports` array with the actual port assignments.
-/// 
-/// # TOML Structure
-/// ```toml
-/// [[abstract_collaborator_port_assignments.alice_bob]]
-/// 
-/// [[abstract_collaborator_port_assignments.alice_bob.collaborator_ports]]
-/// user_name = "alice"
-/// ready_port = 62002
-/// intray_port = 49595
-/// gotit_port = 49879
-/// 
-/// [[abstract_collaborator_port_assignments.alice_bob.collaborator_ports]]
-/// user_name = "bob"
-/// ready_port = 59980
-/// intray_port = 52755
-/// gotit_port = 60575
-/// ```
-#[derive(Debug, Clone, PartialEq)]
-pub struct ReadTeamchannelCollaboratorPortsToml {
-    /// Vector of port assignments for collaborators in this channel
-    pub collaborator_ports: Vec<CollaboratorPortAssignment>,
-}
+// /// Wrapper struct for reading team channel collaborator ports from TOML files.
+// /// 
+// /// This struct represents the intermediate TOML structure used when reading
+// /// port assignments. In the TOML file, port assignments are organized as
+// /// arrays of arrays, where each top-level array element contains a 
+// /// `collaborator_ports` array with the actual port assignments.
+// /// 
+// /// # TOML Structure
+// /// ```toml
+// /// [[abstract_collaborator_port_assignments.alice_bob]]
+// /// 
+// /// [[abstract_collaborator_port_assignments.alice_bob.collaborator_ports]]
+// /// user_name = "alice"
+// /// ready_port = 62002
+// /// intray_port = 49595
+// /// gotit_port = 49879
+// /// 
+// /// [[abstract_collaborator_port_assignments.alice_bob.collaborator_ports]]
+// /// user_name = "bob"
+// /// ready_port = 59980
+// /// intray_port = 52755
+// /// gotit_port = 60575
+// /// ```
+// #[derive(Debug, Clone, PartialEq)]
+// pub struct ReadTeamchannelCollaboratorPortsToml {
+//     /// Vector of port assignments for collaborators in this channel
+//     pub collaborator_ports: Vec<AbstractTeamchannelNodeTomlPortsData>,
+// }
 
 /// Reads all collaborator port assignments into the format expected by CoreNode.
 /// 
@@ -10864,14 +10868,14 @@ gotit_port = 50006
     #[test]
     fn test_wrapper_struct_usage() {
         // Test that ReadTeamchannelCollaboratorPortsToml works as expected
-        let port1 = CollaboratorPortAssignment {
+        let port1 = AbstractTeamchannelNodeTomlPortsData {
             user_name: "alice".to_string(),
             ready_port: 50001,
             intray_port: 50002,
             gotit_port: 50003,
         };
         
-        let port2 = CollaboratorPortAssignment {
+        let port2 = AbstractTeamchannelNodeTomlPortsData {
             user_name: "bob".to_string(),
             ready_port: 50004,
             intray_port: 50005,
@@ -12738,18 +12742,19 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
     input_toml_absolute_path: &Path,
     gpg_full_fingerprint_key_id_string: &str, // COLLABORATOR_ADDRESSBOOK_PATH_STR
 ) -> Result<String, GpgError> {
+    debug_log("starting gpttrofodg() -> get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml");
     
     // Validate input parameters before proceeding
     if gpg_full_fingerprint_key_id_string.is_empty() {
         return Err(GpgError::ValidationError(
-            "GPG fingerprint key ID cannot be empty".to_string()
+            "gpttrofodg() GPG fingerprint key ID cannot be empty".to_string()
         ));
     }
     
     // Check if the input path exists
     if !input_toml_absolute_path.exists() {
         return Err(GpgError::ValidationError(
-            format!("Input file does not exist: {:?}", input_toml_absolute_path)
+            format!("gpttrofodg() Input file does not exist: {:?}", input_toml_absolute_path)
         ));
     }
     
@@ -12757,13 +12762,13 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
     let extension = input_toml_absolute_path.extension()
         .and_then(|ext| ext.to_str())
         .ok_or_else(|| GpgError::ValidationError(
-            format!("Input file has no extension or invalid extension: {:?}", input_toml_absolute_path)
+            format!("gpttrofodg() Input file has no extension or invalid extension: {:?}", input_toml_absolute_path)
         ))?;
     
     // Validate that the extension is either .toml or .gpgtoml
     if extension != "toml" && extension != "gpgtoml" {
         return Err(GpgError::ValidationError(
-            format!("Input file must have .toml or .gpgtoml extension, found: .{}", extension)
+            format!("gpttrofodg() Input file must have .toml or .gpgtoml extension, found: .{}", extension)
         ));
     }
     
@@ -12781,7 +12786,7 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
         let timestamp_nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_err(|e| GpgError::TempFileError(
-                format!("Failed to get system time for temp file creation: {}", e)
+                format!("gpttrofodg() Failed to get system time for temp file creation: {}", e)
             ))?
             .as_nanos();
         
@@ -12790,14 +12795,14 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
         let temp_filename = format!("temp_toml_copy_{}_{}.toml", filename_stem, timestamp_nanos);
         let temp_file_path = std::env::temp_dir().join(&temp_filename);
         
-        debug_log!("ROCST: Creating temporary file for TOML content: {:?}", temp_file_path);
-        debug_log!("ROCST: Source file: {:?} (type: .{})", input_toml_absolute_path, extension);
+        debug_log!("gpttrofodg() : Creating temporary file for TOML content: {:?}", temp_file_path);
+        debug_log!("gpttrofodg() : Source file: {:?} (type: .{})", input_toml_absolute_path, extension);
         
         // Handle based on file extension
         if extension == "toml" {
             // Case 1: Plain .toml file - create a temporary copy
-            debug_log!("ROCST: Processing plain .toml file: {:?}", input_toml_absolute_path);
-            debug_log!("ROCST: Creating temporary copy to ensure original file safety");
+            debug_log!("gpttrofodg() : Processing plain .toml file: {:?}", input_toml_absolute_path);
+            debug_log!("gpttrofodg() : Creating temporary copy to ensure original file safety");
             
             // Read the original file content with retry mechanism
             // We'll try up to 2 times with a 300ms delay between attempts
@@ -12807,13 +12812,13 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
             let mut last_read_error = None;
             
             for attempt in 1..=max_retry_attempts {
-                debug_log!("ROCST: Attempting to read original file (attempt {} of {})", attempt, max_retry_attempts);
+                debug_log!("gpttrofodg() : Attempting to read original file (attempt {} of {})", attempt, max_retry_attempts);
                 
                 match std::fs::read(input_toml_absolute_path) {
                     Ok(content) => {
                         // Successfully read the file
                         original_content = content;
-                        debug_log!("ROCST: Successfully read original file on attempt {}", attempt);
+                        debug_log!("gpttrofodg() : Successfully read original file on attempt {}", attempt);
                         break;
                     }
                     Err(e) => {
@@ -12822,12 +12827,12 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                         
                         if attempt < max_retry_attempts {
                             // Not the last attempt, wait and retry
-                            debug_log!("ROCST: Failed to read file on attempt {}: {}. Waiting {}ms before retry...", 
+                            debug_log!("gpttrofodg() : Failed to read file on attempt {}: {}. Waiting {}ms before retry...", 
                                        attempt, last_read_error.as_ref().unwrap(), retry_delay_millis);
                             std::thread::sleep(std::time::Duration::from_millis(retry_delay_millis));
                         } else {
                             // Final attempt failed
-                            debug_log!("ROCST: Failed to read file after {} attempts", max_retry_attempts);
+                            debug_log!("gpttrofodg() : Failed to read file after {} attempts", max_retry_attempts);
                         }
                     }
                 }
@@ -12839,7 +12844,7 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                 return Err(GpgError::FileSystemError(
                     std::io::Error::new(
                         std::io::ErrorKind::Other,
-                        format!("Failed to read original .toml file '{}' after {} attempts: {}", 
+                        format!("gpttrofodg() Failed to read original .toml file '{}' after {} attempts: {}", 
                                 input_toml_absolute_path.display(), max_retry_attempts, last_read_error.unwrap())
                     )
                 ));
@@ -12856,7 +12861,7 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                 let mut last_write_error = None;
                 
                 for attempt in 1..=max_retry_attempts {
-                    debug_log!("ROCST: Attempting to write to temporary file (attempt {} of {})", attempt, max_retry_attempts);
+                    debug_log!("gpttrofodg() : Attempting to write to temporary file (attempt {} of {})", attempt, max_retry_attempts);
                     
                     // Try to create and write to the file
                     let write_result = (|| -> Result<(), std::io::Error> {
@@ -12886,7 +12891,7 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                         Ok(()) => {
                             // Successfully wrote the file
                             write_success = true;
-                            debug_log!("ROCST: Successfully wrote temporary file on attempt {}", attempt);
+                            debug_log!("gpttrofodg() : Successfully wrote temporary file on attempt {}", attempt);
                             break;
                         }
                         Err(e) => {
@@ -12895,7 +12900,7 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                             
                             if attempt < max_retry_attempts {
                                 // Not the last attempt, wait and retry
-                                debug_log!("ROCST: Failed to write temporary file on attempt {}: {}. Waiting {}ms before retry...", 
+                                debug_log!("gpttrofodg() : Failed to write temporary file on attempt {}: {}. Waiting {}ms before retry...", 
                                            attempt, last_write_error.as_ref().unwrap(), retry_delay_millis);
                                 std::thread::sleep(std::time::Duration::from_millis(retry_delay_millis));
                                 
@@ -12903,7 +12908,7 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                                 let _ = std::fs::remove_file(&temp_file_path);
                             } else {
                                 // Final attempt failed
-                                debug_log!("ROCST: Failed to write temporary file after {} attempts", max_retry_attempts);
+                                debug_log!("gpttrofodg() : Failed to write temporary file after {} attempts", max_retry_attempts);
                             }
                         }
                     }
@@ -12912,7 +12917,7 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                 if !write_success && last_write_error.is_some() {
                     // All attempts failed
                     return Err(GpgError::TempFileError(
-                        format!("Failed to write content to temporary file after {} attempts: {}", 
+                        format!("gpttrofodg() Failed to write content to temporary file after {} attempts: {}", 
                                 max_retry_attempts, last_write_error.unwrap())
                     ));
                 }
@@ -12925,7 +12930,7 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                 let mut last_write_error = None;
                 
                 for attempt in 1..=max_retry_attempts {
-                    debug_log!("ROCST: Attempting to write to temporary file (attempt {} of {})", attempt, max_retry_attempts);
+                    debug_log!("gpttrofodg() : Attempting to write to temporary file (attempt {} of {})", attempt, max_retry_attempts);
                     
                     match std::fs::write(&temp_file_path, &original_content) {
                         Ok(()) => {
@@ -12934,7 +12939,7 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                             if attempt == 1 {
                                 temp_file_created = Some(temp_file_path.clone());
                             }
-                            debug_log!("ROCST: Successfully wrote temporary file on attempt {}", attempt);
+                            debug_log!("gpttrofodg() : Successfully wrote temporary file on attempt {}", attempt);
                             break;
                         }
                         Err(e) => {
@@ -12943,7 +12948,7 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                             
                             if attempt < max_retry_attempts {
                                 // Not the last attempt, wait and retry
-                                debug_log!("ROCST: Failed to write temporary file on attempt {}: {}. Waiting {}ms before retry...", 
+                                debug_log!("gpttrofodg() : Failed to write temporary file on attempt {}: {}. Waiting {}ms before retry...", 
                                            attempt, last_write_error.as_ref().unwrap(), retry_delay_millis);
                                 std::thread::sleep(std::time::Duration::from_millis(retry_delay_millis));
                                 
@@ -12951,7 +12956,7 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                                 let _ = std::fs::remove_file(&temp_file_path);
                             } else {
                                 // Final attempt failed
-                                debug_log!("ROCST: Failed to write temporary file after {} attempts", max_retry_attempts);
+                                debug_log!("gpttrofodg() : Failed to write temporary file after {} attempts", max_retry_attempts);
                             }
                         }
                     }
@@ -12960,17 +12965,17 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                 if !write_success && last_write_error.is_some() {
                     // All attempts failed
                     return Err(GpgError::TempFileError(
-                        format!("Failed to create temporary file '{}' after {} attempts: {}", 
+                        format!("gpttrofodg() Failed to create temporary file '{}' after {} attempts: {}", 
                                 temp_filename, max_retry_attempts, last_write_error.unwrap())
                     ));
                 }
             }
             
-            debug_log!("ROCST: Successfully created temporary copy of .toml file");
+            debug_log!("gpttrofodg() : Successfully created temporary copy of .toml file");
             
         } else {
             // Case 2: Encrypted .gpgtoml file - decrypt to temporary file
-            debug_log!("ROCST: Processing encrypted .gpgtoml file: {:?}", input_toml_absolute_path);
+            debug_log!("gpttrofodg() : Processing encrypted .gpgtoml file: {:?}", input_toml_absolute_path);
             
             // Create empty temporary file with restricted permissions first
             #[cfg(unix)]
@@ -12985,7 +12990,7 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                     .mode(0o600)  // Owner read/write only
                     .open(&temp_file_path)
                     .map_err(|e| GpgError::TempFileError(
-                        format!("Failed to create secure temporary file '{}': {}", temp_filename, e)
+                        format!("gpttrofodg() failed to create secure temporary file '{}': {}", temp_filename, e)
                     ))?;
                 
                 // Mark that we've created a temp file that needs cleanup on error
@@ -12997,7 +13002,7 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                 // On non-Unix systems, just create the file
                 std::fs::File::create(&temp_file_path)
                     .map_err(|e| GpgError::TempFileError(
-                        format!("Failed to create temporary file '{}': {}", temp_filename, e)
+                        format!("gpttrofodg() Failed to create temporary file '{}': {}", temp_filename, e)
                     ))?;
                 
                 temp_file_created = Some(temp_file_path.clone());
@@ -13005,7 +13010,7 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
             
             // Execute GPG to decrypt the .gpgtoml file into our temporary file
             // Note: GPG operations are not retried as they typically either work or fail definitively
-            debug_log!("ROCST: Executing GPG to decrypt {} to temporary file {}", 
+            debug_log!("gpttrofodg() : Executing GPG to decrypt {} to temporary file {}", 
                        input_toml_absolute_path.display(), temp_file_path.display());
             
             let gpg_output = std::process::Command::new("gpg")
@@ -13021,7 +13026,7 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                 .output()
                 .map_err(|e| {
                     let error_msg = format!(
-                        "Failed to execute GPG decrypt command for file '{}': {}", 
+                        "gpttrofodg() Failed to execute GPG decrypt command for file '{}': {}", 
                         input_toml_absolute_path.display(), e
                     );
                     eprintln!("\nERROR: {}", error_msg);
@@ -13034,7 +13039,7 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
             if !gpg_output.status.success() {
                 let stderr_text = String::from_utf8_lossy(&gpg_output.stderr);
                 let error_msg = format!(
-                    "GPG decryption failed for file '{}': {}", 
+                    "gpttrofodg() GPG decryption failed for file '{}': {}", 
                     input_toml_absolute_path.display(), stderr_text
                 );
                 eprintln!("\nERROR: {}", error_msg);
@@ -13043,7 +13048,7 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                 return Err(GpgError::GpgOperationError(error_msg));
             }
             
-            debug_log!("ROCST: Successfully decrypted .gpgtoml file to temporary file");
+            debug_log!("gpttrofodg() : Successfully decrypted .gpgtoml file to temporary file");
         }
         
         // Return the temporary file path
@@ -13053,18 +13058,18 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
     // If any error occurred and we created a temp file, clean it up before propagating error
     match create_temp_result {
         Ok(result) => {
-            debug_log!("ROCST: Successfully prepared temporary TOML file: {:?}", result);
+            debug_log!("gpttrofodg() : Successfully prepared temporary TOML file: {:?}", result);
             // Ok(result)
             Ok(result.to_str()
                 .ok_or_else(|| GpgError::PathError(
-                    format!("Path conversion error: Path contains invalid UTF-8: {:?}", result)
+                    format!("gpttrofodg() Path conversion error: Path contains invalid UTF-8: {:?}", result)
                 ))?
                 .to_string())
         },
         Err(e) => {
             // Clean up temporary file if it was created
             if let Some(temp_path) = temp_file_created {
-                debug_log!("ROCST: Error occurred, cleaning up temporary file: {:?}", temp_path);
+                debug_log!("gpttrofodg() : Error occurred, cleaning up temporary file: {:?}", temp_path);
                 let _ = std::fs::remove_file(&temp_path); // Ignore cleanup errors
             }
             Err(e)
@@ -13129,11 +13134,11 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
 pub fn cleanup_collaborator_temp_file(
     temp_file_path_string: &String,
 ) -> Result<(), GpgError> {
-    debug_log!("ROCST: Attempting to clean up temporary file: {:?}", temp_file_path_string);
+    debug_log!("cleanup_collaborator_temp_file(): Attempting to clean up temporary file: {:?}", temp_file_path_string);
     
 	// convert string to path
     let temp_file_path: &std::path::Path = if temp_file_path_string.is_empty() {
-        return Err(GpgError::TempFileError("Input path string cannot be empty".to_string()));
+        return Err(GpgError::TempFileError("cleanup_collaborator_temp_file():Input path string cannot be empty".to_string()));
     } else {
         std::path::Path::new(temp_file_path_string)
     };
@@ -13144,16 +13149,16 @@ pub fn cleanup_collaborator_temp_file(
     let canonical_temp_path = temp_file_path
         .canonicalize()
         .map_err(|e| GpgError::TempFileError(
-            format!("Failed to canonicalize temp file path '{}': {}", temp_file_path.display(), e)
+            format!("cleanup_collaborator_temp_file():Failed to canonicalize temp file path '{}': {}", temp_file_path.display(), e)
         ))?;
     
     // Check if the file path starts with the temp directory path
     if !canonical_temp_path.starts_with(&temp_dir) {
         let error_msg = format!(
-            "SAFETY VIOLATION: Refusing to delete file '{}' - not in temp directory '{}'",
+            "SAFETY VIOLATION: cleanup_collaborator_temp_file():Refusing to delete file '{}' - not in temp directory '{}'",
             canonical_temp_path.display(), temp_dir.display()
         );
-        eprintln!("ERROR: {}", error_msg);
+        eprintln!("cleanup_collaborator_temp_file(): ERROR: {}", error_msg);
         return Err(GpgError::TempFileError(error_msg));
     }
     
@@ -13163,18 +13168,18 @@ pub fn cleanup_collaborator_temp_file(
         std::fs::remove_file(&canonical_temp_path)
             .map_err(|e| {
                 let error_msg = format!(
-                    "Failed to remove temporary file '{}': {}. File may contain sensitive decrypted data.",
+                    "cleanup_collaborator_temp_file(): Failed to remove temporary file '{}': {}. File may contain sensitive decrypted data.",
                     canonical_temp_path.display(), e
                 );
-                eprintln!("WARNING: {}", error_msg);
+                eprintln!("cleanup_collaborator_temp_file(): WARNING: {}", error_msg);
                 GpgError::TempFileError(error_msg)
             })?;
         
-        debug_log!("ROCST: Successfully removed temporary file");
+        debug_log!("cleanup_collaborator_temp_file(): Successfully removed temporary file");
         Ok(())
     } else {
         // File doesn't exist - this is actually fine, our goal is achieved
-        debug_log!("ROCST: Temporary file does not exist, no cleanup needed: {:?}", canonical_temp_path);
+        debug_log!("cleanup_collaborator_temp_file(): Temporary file does not exist, no cleanup needed: {:?}", canonical_temp_path);
         Ok(())
     }
 }
