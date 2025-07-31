@@ -6560,53 +6560,53 @@ pub fn read_specific_pair_port_assignments_from_clearsigntoml(
     Ok(port_assignments)
 }
 
-/// Helper function to extract quoted string values from TOML lines
-///
-/// # Arguments
-/// - `line` - The line containing the field
-/// - `name_of_toml_field_key_to_read` - The name of the field to extract
-///
-/// # Returns
-/// - `Option<String>` - The extracted value without quotes, or None if not found
-fn extract_quoted_value(line: &str, name_of_toml_field_key_to_read: &str) -> Option<String> {
-    let field_pattern = format!("{} = ", name_of_toml_field_key_to_read);
-    if let Some(start_pos) = line.find(&field_pattern) {
-        let value_start = start_pos + field_pattern.len();
-        let value_part = &line[value_start..].trim();
+// /// Helper function to extract quoted string values from TOML lines
+// ///
+// /// # Arguments
+// /// - `line` - The line containing the field
+// /// - `name_of_toml_field_key_to_read` - The name of the field to extract
+// ///
+// /// # Returns
+// /// - `Option<String>` - The extracted value without quotes, or None if not found
+// fn extract_quoted_value(line: &str, name_of_toml_field_key_to_read: &str) -> Option<String> {
+//     let field_pattern = format!("{} = ", name_of_toml_field_key_to_read);
+//     if let Some(start_pos) = line.find(&field_pattern) {
+//         let value_start = start_pos + field_pattern.len();
+//         let value_part = &line[value_start..].trim();
         
-        // Remove quotes and any trailing comma
-        let cleaned = value_part
-            .trim_start_matches('"')
-            .trim_end_matches(',')
-            .trim_end_matches('"');
+//         // Remove quotes and any trailing comma
+//         let cleaned = value_part
+//             .trim_start_matches('"')
+//             .trim_end_matches(',')
+//             .trim_end_matches('"');
             
-        Some(cleaned.to_string())
-    } else {
-        None
-    }
-}
+//         Some(cleaned.to_string())
+//     } else {
+//         None
+//     }
+// }
 
-/// Helper function to extract port number values from TOML lines
-///
-/// # Arguments
-/// - `line` - The line containing the field
-/// - `name_of_toml_field_key_to_read` - The name of the field to extract
-///
-/// # Returns
-/// - `Option<u16>` - The parsed port number, or None if not found or invalid
-fn extract_port_value(line: &str, name_of_toml_field_key_to_read: &str) -> Option<u16> {
-    let field_pattern = format!("{} = ", name_of_toml_field_key_to_read);
-    if let Some(start_pos) = line.find(&field_pattern) {
-        let value_start = start_pos + field_pattern.len();
-        let value_part = &line[value_start..].trim();
+// /// Helper function to extract port number values from TOML lines
+// ///
+// /// # Arguments
+// /// - `line` - The line containing the field
+// /// - `name_of_toml_field_key_to_read` - The name of the field to extract
+// ///
+// /// # Returns
+// /// - `Option<u16>` - The parsed port number, or None if not found or invalid
+// fn extract_port_value(line: &str, name_of_toml_field_key_to_read: &str) -> Option<u16> {
+//     let field_pattern = format!("{} = ", name_of_toml_field_key_to_read);
+//     if let Some(start_pos) = line.find(&field_pattern) {
+//         let value_start = start_pos + field_pattern.len();
+//         let value_part = &line[value_start..].trim();
         
-        // Remove any trailing comma and parse
-        let cleaned = value_part.trim_end_matches(',').trim();
-        cleaned.parse::<u16>().ok()
-    } else {
-        None
-    }
-}
+//         // Remove any trailing comma and parse
+//         let cleaned = value_part.trim_end_matches(',').trim();
+//         cleaned.parse::<u16>().ok()
+//     } else {
+//         None
+//     }
+// }
 
 /// Reads all collaborator pair port assignments from a clearsigned TOML file using owner-based GPG key lookup.
 ///
@@ -6943,23 +6943,29 @@ pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
     path_to_clearsigned_toml: &Path,
     addressbook_files_directory_relative: &str,  // pass in constant here
 ) -> Result<HashMap<String, Vec<AbstractTeamchannelNodeTomlPortsData>>, GpgError> {
+    debug_log("starting RACPACO read_all_collaborator_port_assignments_clearsigntoml_optimized() Starting optimized extraction of all collaborator port assignments");
+    
     // --- Stage 1: Input Validation ---
     debug_log!(
-        "Starting optimized extraction of all collaborator port assignments from: {}",
-        path_to_clearsigned_toml.display()
+        "RACPACO from path_to_clearsigned_toml: {}",
+        path_to_clearsigned_toml.display(),
     );
-    debug_log!("This version validates once and extracts all data in a single pass.");
+    debug_log!(
+        "RACPACO addressbook_files_directory_relative: {}",
+        addressbook_files_directory_relative,
+    );
+    debug_log!("RACPACO This version validates once and extracts all data in a single pass.");
 
     // Validate that the input path exists and is a file
     if !path_to_clearsigned_toml.exists() {
         return Err(GpgError::PathError(format!(
-            "Clearsigned TOML file not found: {}",
+            "RACPACO Clearsigned TOML file not found: {}",
             path_to_clearsigned_toml.display()
         )));
     }
     if !path_to_clearsigned_toml.is_file() {
         return Err(GpgError::PathError(format!(
-            "Path is not a file: {}",
+            "RACPACO Path is not a file: {}",
             path_to_clearsigned_toml.display()
         )));
     }
@@ -6969,7 +6975,7 @@ pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
         Some(s) => s,
         None => {
             return Err(GpgError::PathError(format!(
-                "Invalid path encoding for: {}",
+                "RACPACO Invalid path encoding for: {}",
                 path_to_clearsigned_toml.display()
             )));
         }
@@ -6978,7 +6984,7 @@ pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
     // --- Stage 2: Extract Owner for Key Lookup ---
     let owner_name_of_toml_field_key_to_read = "owner";
     debug_log!(
-        "Reading file owner from field '{}' for security validation",
+        "RACPACO Reading file owner from field '{}' for security validation",
         owner_name_of_toml_field_key_to_read
     );
 
@@ -6987,7 +6993,7 @@ pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
         Ok(username) => {
             if username.is_empty() {
                 return Err(GpgError::GpgOperationError(format!(
-                    "Field '{}' is empty in TOML file. File owner is required for security validation.",
+                    "RACPACO Field '{}' is empty in TOML file. File owner is required for security validation.",
                     owner_name_of_toml_field_key_to_read
                 )));
             }
@@ -6995,20 +7001,23 @@ pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
         }
         Err(e) => {
             return Err(GpgError::GpgOperationError(format!(
-                "Failed to read file owner from field '{}': {}",
+                "RACPACO Failed to read file owner from field '{}': {}",
                 owner_name_of_toml_field_key_to_read, e
             )));
         }
     };
-    debug_log!("File owner: '{}'", file_owner_username);
+    debug_log!("RACPACO File owner: '{}'", file_owner_username);
 
     // --- Stage 3: Construct Addressbook Path and Extract GPG Key ---
-    debug_log!("Looking up GPG key for owner '{}' in addressbook", file_owner_username);
+    debug_log!("RACPACO Looking up GPG key for owner '{}' in addressbook", file_owner_username);
 
+    // println!("HERE HERE FLAG 01 TestPoint");
+    debug_log("HERE HERE FLAG 01 TestPoint");
+    
     // Convert collaborator directory to absolute path
     let collaborator_files_directory_absolute = 
         match make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(
-            addressbook_files_directory_relative
+            addressbook_files_directory_relative,
         ) {
             Ok(path) => path,
             Err(io_error) => {
@@ -7016,34 +7025,52 @@ pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
             }
         };
         
-    // TODO: gpg toml?
+    debug_log!("RACPACO collaborator_files_directory_absolute -> {:?}", collaborator_files_directory_absolute.display());
+        
+    // TODO: probably needs to have the .gpgtoml functionality
 
     // Construct addressbook filename
     let collaborator_filename = format!("{}__collaborator.toml", file_owner_username);
+    
+    /*
+    maybe skip to this part where adddressbook
+    readcopy is passed in
+    */
+    
     let user_addressbook_path = collaborator_files_directory_absolute.join(&collaborator_filename);
 
-    debug_log!("Owner's addressbook path: {}", user_addressbook_path.display());
+    debug_log!("RACPACO Owner's addressbook path: {}", user_addressbook_path.display());
 
+    // println!("HERE HERE FLAG 02 TestPoint");
+    debug_log("HERE HERE FLAG 02 TestPoint");
+    
     // Verify addressbook exists
     if !user_addressbook_path.exists() {
         return Err(GpgError::PathError(format!(
-            "Addressbook file not found for owner '{}': {}",
-            file_owner_username,
+            "RACPACO Err Addressbook file not found for user_addressbook_path {}",
             user_addressbook_path.display()
         )));
     }
-
+    
+    // println!("HERE HERE FLAG 03 TestPoint");
+    debug_log("HERE HERE FLAG 03 TestPoint");
+    
     // Convert addressbook path to string
     let user_addressbook_path_str = match user_addressbook_path.to_str() {
         Some(s) => s,
         None => {
             return Err(GpgError::PathError(format!(
-                "Invalid path encoding for addressbook file: {}",
+                "RACPACO Err Invalid path encoding for addressbook file: {}",
                 user_addressbook_path.display()
             )));
         }
     };
+        
+    debug_log!("RACPACO user_addressbook_path_str -> {}", user_addressbook_path_str);
 
+    // println!("HERE HERE FLAG 04 TestPoint");
+    debug_log("HERE HERE FLAG 04 TestPoint");
+    
     // Extract GPG key ID from addressbook (which validates the addressbook's signature)
     let gpg_key_id_name_of_toml_field_key_to_read = "gpg_publickey_id";
     let signing_key_id = match read_singleline_string_from_clearsigntoml(
@@ -7053,26 +7080,26 @@ pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
         Ok(key_id) => {
             if key_id.is_empty() {
                 return Err(GpgError::GpgOperationError(format!(
-                    "GPG key ID is empty in addressbook for owner '{}'",
-                    file_owner_username
+                    "RACPACO GPG key ID is empty in user_addressbook_path_str '{}'",
+                    user_addressbook_path_str,
                 )));
             }
             key_id
         }
         Err(e) => {
             return Err(GpgError::GpgOperationError(format!(
-                "Failed to read GPG key ID from addressbook: {}",
+                "RACPACO Failed to read GPG key ID from addressbook: {}",
                 e
             )));
         }
     };
-    debug_log!("Found GPG key ID for validation: '{}'", signing_key_id);
+    debug_log!("RACPACO Found GPG key ID for validation: '{}'", signing_key_id);
 
     // --- Stage 4: Create Temporary File for Validation ---
     let temp_validation_path = create_temp_file_path("validate_all_ports_optimized")?;
     
     // --- Stage 5: Verify Signature and Extract Content (ONCE) ---
-    debug_log!("Validating clearsigned file signature...");
+    debug_log!("RACPACO Validating clearsigned file signature...");
     
     // Decrypt (which validates) the clearsigned file
     let validation_result = Command::new("gpg")
@@ -7093,19 +7120,19 @@ pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
                 
                 let stderr_output = String::from_utf8_lossy(&output.stderr);
                 return Err(GpgError::GpgOperationError(format!(
-                    "GPG signature validation FAILED. File may be tampered. GPG output: {}",
+                    "RACPACO GPG signature validation FAILED. File may be tampered. GPG output: {}",
                     stderr_output.trim()
                 )));
             }
-            debug_log!("✓ Signature validation PASSED. File integrity confirmed.");
-            debug_log!("Now extracting all port assignments in a single pass...");
+            debug_log!("RACPACO ✓ Signature validation PASSED. File integrity confirmed.");
+            debug_log!("RACPACO Now extracting all port assignments in a single pass...");
         }
         Err(e) => {
             // Cleanup temp file
             let _ = fs::remove_file(&temp_validation_path);
             
             return Err(GpgError::GpgOperationError(format!(
-                "Failed to execute GPG validation: {}",
+                "RACPACO Failed to execute GPG validation: {}",
                 e
             )));
         }
@@ -7198,7 +7225,7 @@ pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
                 // If we had a previous incomplete entry, it's an error
                 if current_port_entry.is_some() {
                     return Err(GpgError::GpgOperationError(format!(
-                        "Malformed port entry in pair '{}'",
+                        "RACPACO Malformed port entry in pair '{}'",
                         current_pair_name.as_ref().unwrap()
                     )));
                 }
@@ -7253,7 +7280,7 @@ pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
                         }
                         _ => {
                             return Err(GpgError::GpgOperationError(format!(
-                                "Incomplete port assignment entry for pair '{}'. Missing required fields.",
+                                "RACPACO Incomplete port assignment entry for pair '{}'. Missing required fields.",
                                 current_pair_name.as_ref().unwrap()
                             )));
                         }
@@ -7273,13 +7300,13 @@ pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
     // --- Stage 7: Validate Results ---
     if all_assignments.is_empty() {
         return Err(GpgError::GpgOperationError(
-            "No collaborator port assignments found in abstract_collaborator_port_assignments".to_string()
+            "RACPACO No collaborator port assignments found in abstract_collaborator_port_assignments".to_string()
         ));
     }
     
     // Log summary
     debug_log!(
-        "✓ Successfully extracted port assignments for {} collaborator pairs:",
+        "RACPACO ✓ Successfully extracted port assignments for {} collaborator pairs:",
         all_assignments.len()
     );
     for (pair_name, assignments) in &all_assignments {
@@ -7288,6 +7315,713 @@ pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
     
     Ok(all_assignments)
 }
+
+/// Reads and validates team channel collaborator port assignments from a clearsigned TOML file.
+///
+/// This function performs the following operations:
+/// 1. Validates the input parameters
+/// 2. Extracts the GPG key ID from the addressbook for signature validation
+/// 3. Verifies the GPG signature of the clearsigned TOML file
+/// 4. Parses the validated content to extract all collaborator port assignments
+/// 5. Returns a HashMap where keys are collaborator pair names and values are vectors of port assignment structures
+///
+/// # Arguments
+///
+/// * `addressbook_readcopy_path_string` - The absolute path to the addressbook file containing the GPG key ID
+/// * `path_to_clearsigned_toml` - The absolute path to the clearsigned TOML file containing port assignments
+///
+/// # Returns
+///
+/// * `Ok(HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>)` - A map of collaborator pairs to their port assignments
+/// * `Err(GpgError)` - If validation fails, file operations fail, or parsing encounters errors
+///
+/// # Security
+///
+/// This function validates GPG signatures to ensure file integrity and authenticity.
+/// The clearsigned file must be signed with the key specified in the addressbook.
+pub fn read_teamchannel_collaborator_ports_clearsigntoml_without_keyid(
+    addressbook_readcopy_path_string: &str,
+    path_to_clearsigned_toml: &str,
+) -> Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, GpgError> {
+    debug_log("starting RATPFT read_teamchannel_collaborator_ports_clearsigntoml_without_keyid() Starting extraction of all collaborator port assignments");
+    
+    // --- Stage 1: Input Validation ---
+    debug_log!(
+        "RATPFT from path_to_clearsigned_toml: {}",
+        path_to_clearsigned_toml,
+    );
+  
+    // println!("HERE HERE FLAG 01 TestPoint");
+    debug_log("HERE HERE FLAG 01 TestPoint");
+    
+    // Extract GPG key ID from addressbook (which validates the addressbook's signature)
+    let gpg_key_id_name_of_toml_field_key_to_read = "gpg_publickey_id";
+    let signing_key_id = match read_singleline_string_from_clearsigntoml(
+        addressbook_readcopy_path_string,
+        gpg_key_id_name_of_toml_field_key_to_read,
+    ) {
+        Ok(key_id) => {
+            if key_id.is_empty() {
+                return Err(GpgError::GpgOperationError(format!(
+                    "RATPFT GPG key ID is empty in addressbook_readcopy_path_string '{}'",
+                    addressbook_readcopy_path_string,
+                )));
+            }
+            key_id
+        }
+        Err(e) => {
+            return Err(GpgError::GpgOperationError(format!(
+                "RATPFT Failed to read GPG key ID from addressbook: {}",
+                e
+            )));
+        }
+    };
+    debug_log!("RATPFT Found GPG key ID for validation: '{}'", signing_key_id);
+
+    // --- Stage 2: Create Temporary File for Validation ---
+    let temp_validation_path = create_temp_file_path("validate_all_ports_optimized")?;
+    
+    // --- Stage 3: Verify Signature and Extract Content (once) ---
+    debug_log!("RATPFT Validating clearsigned file signature...");
+    
+    // Decrypt (which validates) the clearsigned file
+    let validation_result = Command::new("gpg")
+        .arg("--decrypt")
+        .arg("--batch")
+        .arg("--status-fd")
+        .arg("2")
+        .arg("--output")
+        .arg(&temp_validation_path)
+        .arg(path_to_clearsigned_toml)
+        .output();
+
+    match validation_result {
+        Ok(output) => {
+            if !output.status.success() {
+                // Cleanup temp file
+                let _ = fs::remove_file(&temp_validation_path);
+                
+                let stderr_output = String::from_utf8_lossy(&output.stderr);
+                return Err(GpgError::GpgOperationError(format!(
+                    "RATPFT GPG signature validation FAILED. File may be tampered. GPG output: {}",
+                    stderr_output.trim()
+                )));
+            }
+            debug_log!("RATPFT ✓ Signature validation PASSED. File integrity confirmed.");
+            debug_log!("RATPFT Now extracting all port assignments in a single pass...");
+        }
+        Err(e) => {
+            // Cleanup temp file
+            let _ = fs::remove_file(&temp_validation_path);
+            
+            return Err(GpgError::GpgOperationError(format!(
+                "RATPFT Failed to execute GPG validation: {}",
+                e
+            )));
+        }
+    }
+
+    // --- Stage 4: Parse ALL Port Assignments from Validated Content ---
+    
+    // Read the validated content once
+    let validated_content = match fs::read_to_string(&temp_validation_path) {
+        Ok(content) => content,
+        Err(e) => {
+            // Cleanup temp file
+            let _ = fs::remove_file(&temp_validation_path);
+            return Err(GpgError::FileSystemError(e));
+        }
+    };
+
+    // Cleanup temp file immediately after reading
+    let _ = fs::remove_file(&temp_validation_path);
+
+    // Parse all collaborator pair sections in one pass
+    let mut all_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>> = HashMap::new();
+    
+    // State tracking for parsing
+    let mut current_pair_name: Option<String> = None;
+    let mut current_wrapper_entry: Option<Vec<AbstractTeamchannelNodeTomlPortsData>> = None;
+    let mut current_port_entry: Option<PartialPortEntry> = None;
+    let mut pair_wrapper_entries: Vec<ReadTeamchannelCollaboratorPortsToml> = Vec::new();
+    
+    // Helper structure for parsing port entries
+    #[derive(Default)]
+    struct PartialPortEntry {
+        user_name: Option<String>,
+        ready_port: Option<u16>,
+        intray_port: Option<u16>,
+        gotit_port: Option<u16>,
+    }
+
+    // Process each line of the validated content
+    for line in validated_content.lines() {
+        let trimmed = line.trim();
+        
+        // Check for new collaborator pair section (e.g., [[abstract_collaborator_port_assignments.bob_charlotte]])
+        if trimmed.starts_with("[[abstract_collaborator_port_assignments.") && 
+           trimmed.ends_with("]]") && 
+           !trimmed.contains(".collaborator_ports]]") {
+            
+            // Save previous pair's data if any
+            if let Some(pair_name) = current_pair_name.take() {
+                // Save any pending wrapper entry
+                if let Some(ports) = current_wrapper_entry.take() {
+                    if !ports.is_empty() {
+                        pair_wrapper_entries.push(ReadTeamchannelCollaboratorPortsToml {
+                            collaborator_ports: ports,
+                        });
+                    }
+                }
+                
+                // Save all wrapper entries for this pair
+                if !pair_wrapper_entries.is_empty() {
+                    all_assignments.insert(pair_name, pair_wrapper_entries.clone());
+                    pair_wrapper_entries.clear();
+                }
+            }
+            
+            // Extract new pair name
+            let start = "[[abstract_collaborator_port_assignments.".len();
+            let end = trimmed.len() - 2; // Remove the closing ]]
+            current_pair_name = Some(trimmed[start..end].to_string());
+            
+            // Start a new wrapper entry for this pair
+            current_wrapper_entry = Some(Vec::new());
+            
+            debug_log!("  Processing pair: {}", current_pair_name.as_ref().unwrap_or(&"None".to_string()));
+            continue;
+        }
+        
+        // Check for collaborator_ports section within a pair
+        if trimmed.contains("[[abstract_collaborator_port_assignments.") && 
+           trimmed.contains(".collaborator_ports]]") {
+            // This marks the start of a new port entry within the current wrapper
+            continue;
+        }
+        
+        // Skip lines if we're not in a pair section
+        if current_pair_name.is_none() {
+            continue;
+        }
+        
+        // Parse port entry fields
+        if trimmed.contains("user_name = ") {
+            // Start or continue a port entry
+            if current_port_entry.is_none() {
+                current_port_entry = Some(PartialPortEntry::default());
+            }
+            
+            if let Some(ref mut entry) = current_port_entry {
+                if let Some(value) = extract_quoted_value(trimmed, "user_name") {
+                    entry.user_name = Some(value);
+                }
+            }
+        }
+        
+        // Parse ready_port
+        if trimmed.contains("ready_port = ") {
+            if let Some(ref mut entry) = current_port_entry {
+                if let Some(value) = extract_port_value(trimmed, "ready_port") {
+                    entry.ready_port = Some(value);
+                }
+            }
+        }
+        
+        // Parse intray_port
+        if trimmed.contains("intray_port = ") {
+            if let Some(ref mut entry) = current_port_entry {
+                if let Some(value) = extract_port_value(trimmed, "intray_port") {
+                    entry.intray_port = Some(value);
+                }
+            }
+        }
+        
+        // Parse gotit_port
+        if trimmed.contains("gotit_port = ") {
+            if let Some(ref mut entry) = current_port_entry {
+                if let Some(value) = extract_port_value(trimmed, "gotit_port") {
+                    entry.gotit_port = Some(value);
+                }
+                
+                // After gotit_port, we should have a complete entry
+                // Validate and add to current wrapper entry
+                match (entry.user_name.clone(), entry.ready_port, entry.intray_port, entry.gotit_port) {
+                    (Some(user), Some(ready), Some(intray), Some(gotit)) => {
+                        if let Some(ref mut wrapper_ports) = current_wrapper_entry {
+                            wrapper_ports.push(AbstractTeamchannelNodeTomlPortsData {
+                                user_name: user,
+                                ready_port: ready,
+                                intray_port: intray,
+                                gotit_port: gotit,
+                            });
+                        }
+                        
+                        // Clear the current port entry for the next one
+                        current_port_entry = None;
+                    }
+                    _ => {
+                        // If we don't have all fields yet, keep accumulating
+                    }
+                }
+            }
+        }
+    }
+    
+    // Don't forget the last pair if the file doesn't end with another section
+    if let Some(pair_name) = current_pair_name.take() {
+        // Save any pending wrapper entry
+        if let Some(ports) = current_wrapper_entry.take() {
+            if !ports.is_empty() {
+                pair_wrapper_entries.push(ReadTeamchannelCollaboratorPortsToml {
+                    collaborator_ports: ports,
+                });
+            }
+        }
+        
+        // Save all wrapper entries for this pair
+        if !pair_wrapper_entries.is_empty() {
+            all_assignments.insert(pair_name, pair_wrapper_entries);
+        }
+    }
+    
+    // --- Stage 5: Validate Results ---
+    if all_assignments.is_empty() {
+        return Err(GpgError::GpgOperationError(
+            "RATPFT No collaborator port assignments found in abstract_collaborator_port_assignments".to_string()
+        ));
+    }
+    
+    // Log summary
+    debug_log!(
+        "RATPFT ✓ Successfully extracted port assignments for {} collaborator pairs:",
+        all_assignments.len()
+    );
+    for (pair_name, wrapper_entries) in &all_assignments {
+        let total_ports: usize = wrapper_entries.iter()
+            .map(|wrapper| wrapper.collaborator_ports.len())
+            .sum();
+        debug_log!("  - {}: {} wrapper entries with {} total port assignments", 
+                  pair_name, wrapper_entries.len(), total_ports);
+    }
+    
+    Ok(all_assignments)
+}
+
+/// Extracts a quoted string value from a TOML line.
+///
+/// Parses a line like `key = "value"` and extracts the value between quotes.
+///
+/// # Arguments
+///
+/// * `line` - The line to parse
+/// * `key` - The key name to look for
+///
+/// # Returns
+///
+/// * `Some(String)` - The extracted value if found
+/// * `None` - If the key is not found or the value is not properly quoted
+fn extract_quoted_value(line: &str, key: &str) -> Option<String> {
+    // Find the key pattern
+    let key_pattern = format!("{} = ", key);
+    if let Some(start_idx) = line.find(&key_pattern) {
+        let value_start = start_idx + key_pattern.len();
+        let remaining = &line[value_start..];
+        
+        // Find quoted value
+        if remaining.starts_with('"') {
+            let content = &remaining[1..];
+            if let Some(end_quote) = content.find('"') {
+                return Some(content[..end_quote].to_string());
+            }
+        }
+    }
+    None
+}
+
+/// Extracts a port number value from a TOML line.
+///
+/// Parses a line like `key = 12345` and extracts the numeric value.
+///
+/// # Arguments
+///
+/// * `line` - The line to parse
+/// * `key` - The key name to look for
+///
+/// # Returns
+///
+/// * `Some(u16)` - The extracted port number if found and valid
+/// * `None` - If the key is not found or the value is not a valid port number
+fn extract_port_value(line: &str, key: &str) -> Option<u16> {
+    // Find the key pattern
+    let key_pattern = format!("{} = ", key);
+    if let Some(start_idx) = line.find(&key_pattern) {
+        let value_start = start_idx + key_pattern.len();
+        let remaining = &line[value_start..];
+        
+        // Extract number up to next whitespace or comma
+        let mut num_str = String::new();
+        for ch in remaining.chars() {
+            if ch.is_ascii_digit() {
+                num_str.push(ch);
+            } else if ch == ',' || ch.is_whitespace() {
+                break;
+            }
+        }
+        
+        // Parse to u16
+        if !num_str.is_empty() {
+            match num_str.parse::<u16>() {
+                Ok(port) => return Some(port),
+                Err(_) => return None,
+            }
+        }
+    }
+    None
+}
+
+// /// Reads all collaborator pair port assignments from a clearsigned TOML file using owner-based GPG key lookup (optimized version).
+// ///
+// /// # Purpose
+// /// This function extracts network port assignments for ALL collaborator pairs from a
+// /// clearsigned team channel configuration file in a single pass. Unlike the previous version
+// /// that calls the specific function multiple times, this version validates the file once
+// /// and extracts all data efficiently.
+// ///
+// /// # Security Model
+// /// This function implements the same strict security-first approach:
+// /// 1. **Mandatory validation**: The clearsigned file MUST be validated before ANY data extraction
+// /// 2. **Owner-based key management**: Uses the file's owner field to look up the validation key
+// /// 3. **Chain of trust**: Validation uses keys from the collaborator addressbook system
+// /// 4. **Single validation pass**: Optimized to validate once and extract all data
+// ///
+// /// # Validation Process
+// /// 1. Reads the `owner` field from the target clearsigned TOML file
+// /// 2. Constructs the path to the owner's addressbook file: `{owner}__collaborator.toml`
+// /// 3. Extracts the GPG key ID from the addressbook (which is itself clearsigned and validated)
+// /// 4. Uses that key to verify the target file's signature ONCE
+// /// 5. Extracts all port assignments in a single pass through the validated content
+// ///
+// /// # Data Structure Expected
+// /// The function expects the TOML file to contain:
+// /// ```toml
+// /// [abstract_collaborator_port_assignments.alice_bob]
+// /// collaborator_ports = [
+// ///     { user_name = "alice", ready_port = 50001, intray_port = 50002, gotit_port = 50003 },
+// ///     { user_name = "bob", ready_port = 50004, intray_port = 50005, gotit_port = 50006 },
+// /// ]
+// /// 
+// /// [abstract_collaborator_port_assignments.alice_charlotte]
+// /// collaborator_ports = [
+// ///     { user_name = "alice", ready_port = 50007, intray_port = 50008, gotit_port = 50009 },
+// ///     { user_name = "charlotte", ready_port = 50010, intray_port = 50011, gotit_port = 50012 },
+// /// ]
+// /// ```
+// ///
+// /// # Arguments
+// /// - `path_to_clearsigned_toml` - Path to the clearsigned TOML file containing port assignments
+// /// - `addressbook_files_directory_relative` - Relative path to the directory containing collaborator addressbook files
+// ///
+// /// # Returns
+// /// - `Ok(HashMap<String, Vec<AbstractTeamchannelNodeTomlPortsData>>)` - A map where:
+// ///   - Keys are collaborator pair names (e.g., "alice_bob")
+// ///   - Values are vectors of port assignments for that pair
+// /// - `Err(GpgError)` - If any step fails:
+// ///   - `PathError`: File not found, invalid path, or path encoding issues
+// ///   - `GpgOperationError`: GPG validation failure, missing required fields, or parsing errors
+// ///   - `FileSystemError`: I/O errors during file operations
+// ///
+// /// # Performance
+// /// This optimized version:
+// /// - Performs GPG validation only ONCE (vs. once per pair in the previous version)
+// /// - Reads the file content only ONCE
+// /// - Parses all assignments in a single pass
+// /// - Significantly faster for files with many collaborator pairs
+// ///
+// /// # Example
+// /// ```no_run
+// /// let all_assignments = read_all_collaborator_port_assignments_clearsigntoml_optimized(
+// ///     Path::new("team_channel_config.toml"),
+// ///     "collaborators"
+// /// )?;
+// /// 
+// /// // Display all assignments
+// /// for (pair_name, assignments) in &all_assignments {
+// ///     debug_log!("Collaborator pair: {}", pair_name);
+// ///     for assignment in assignments {
+// ///         debug_log!("  {} -> ready: {}, intray: {}, gotit: {}", 
+// ///                  assignment.user_name,
+// ///                  assignment.ready_port,
+// ///                  assignment.intray_port,
+// ///                  assignment.gotit_port);
+// ///     }
+// /// }
+// /// 
+// /// // Access specific pair
+// /// if let Some(alice_bob_ports) = all_assignments.get("alice_bob") {
+// ///     debug_log!("Alice-Bob communication ports: {:?}", alice_bob_ports);
+// /// }
+// /// ```
+// pub fn read_teamchannel_collaborator_ports_clearsigntoml_without_keyid(
+//     addressbook_readcopy_path_string: &str,
+//     path_to_clearsigned_toml: &str,
+//     // addressbook_files_directory_relative: &str,  // pass in constant here
+// ) -> Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, GpgError> {
+//     debug_log("starting RATPFT read_all_collaborator_port_assignments_clearsigntoml_optimized() Starting optimized extraction of all collaborator port assignments");
+    
+//     // --- Stage 1: Input Validation ---
+//     debug_log!(
+//         "RATPFT from path_to_clearsigned_toml: {}",
+//         path_to_clearsigned_toml,
+//     );
+  
+//     println!("HERE HERE FLAG 01 TestPoint");
+//     debug_log("HERE HERE FLAG 01 TestPoint");
+    
+//     // Extract GPG key ID from addressbook (which validates the addressbook's signature)
+//     let gpg_key_id_name_of_toml_field_key_to_read = "gpg_publickey_id";
+//     let signing_key_id = match read_singleline_string_from_clearsigntoml(
+//         addressbook_readcopy_path_string,
+//         gpg_key_id_name_of_toml_field_key_to_read,
+//     ) {
+//         Ok(key_id) => {
+//             if key_id.is_empty() {
+//                 return Err(GpgError::GpgOperationError(format!(
+//                     "RATPFT GPG key ID is empty in addressbook_readcopy_path_string '{}'",
+//                     addressbook_readcopy_path_string,
+//                 )));
+//             }
+//             key_id
+//         }
+//         Err(e) => {
+//             return Err(GpgError::GpgOperationError(format!(
+//                 "RATPFT Failed to read GPG key ID from addressbook: {}",
+//                 e
+//             )));
+//         }
+//     };
+//     debug_log!("RATPFT Found GPG key ID for validation: '{}'", signing_key_id);
+
+//     // --- Stage 4: Create Temporary File for Validation ---
+//     let temp_validation_path = create_temp_file_path("validate_all_ports_optimized")?;
+    
+//     // --- Stage 5: Verify Signature and Extract Content (once) ---
+//     debug_log!("RATPFT Validating clearsigned file signature...");
+    
+//     // Decrypt (which validates) the clearsigned file
+//     let validation_result = Command::new("gpg")
+//         .arg("--decrypt")
+//         .arg("--batch")
+//         .arg("--status-fd")
+//         .arg("2")
+//         .arg("--output")
+//         .arg(&temp_validation_path)
+//         .arg(path_to_clearsigned_toml)
+//         .output();
+
+//     match validation_result {
+//         Ok(output) => {
+//             if !output.status.success() {
+//                 // Cleanup temp file
+//                 let _ = fs::remove_file(&temp_validation_path);
+                
+//                 let stderr_output = String::from_utf8_lossy(&output.stderr);
+//                 return Err(GpgError::GpgOperationError(format!(
+//                     "RATPFT GPG signature validation FAILED. File may be tampered. GPG output: {}",
+//                     stderr_output.trim()
+//                 )));
+//             }
+//             debug_log!("RATPFT ✓ Signature validation PASSED. File integrity confirmed.");
+//             debug_log!("RATPFT Now extracting all port assignments in a single pass...");
+//         }
+//         Err(e) => {
+//             // Cleanup temp file
+//             let _ = fs::remove_file(&temp_validation_path);
+            
+//             return Err(GpgError::GpgOperationError(format!(
+//                 "RATPFT Failed to execute GPG validation: {}",
+//                 e
+//             )));
+//         }
+//     }
+
+//     // --- Stage 6: Parse ALL Port Assignments from Validated Content ---
+    
+//     // Read the validated content once
+//     let validated_content = match fs::read_to_string(&temp_validation_path) {
+//         Ok(content) => content,
+//         Err(e) => {
+//             // Cleanup temp file
+//             let _ = fs::remove_file(&temp_validation_path);
+//             return Err(GpgError::FileSystemError(e));
+//         }
+//     };
+
+//     // Cleanup temp file immediately after reading
+//     let _ = fs::remove_file(&temp_validation_path);
+
+//     // Parse all collaborator pair sections in one pass
+//     let mut all_assignments: HashMap<String, Vec<AbstractTeamchannelNodeTomlPortsData>> = HashMap::new();
+//     let table_prefix = "[abstract_collaborator_port_assignments.";
+    
+//     // State tracking for parsing
+//     let mut current_pair_name: Option<String> = None;
+//     let mut current_pair_assignments: Vec<AbstractTeamchannelNodeTomlPortsData> = Vec::new();
+//     let mut in_ports_array = false;
+//     let mut current_port_entry: Option<PartialPortEntry> = None;
+
+//     // Helper structure for parsing (reused from the specific function)
+//     #[derive(Default)]
+//     struct PartialPortEntry {
+//         user_name: Option<String>,
+//         ready_port: Option<u16>,
+//         intray_port: Option<u16>,
+//         gotit_port: Option<u16>,
+//     }
+
+//     // Process each line of the validated content
+//     for line in validated_content.lines() {
+//         let trimmed = line.trim();
+        
+//         // Check if we're entering a new collaborator pair section
+//         if trimmed.starts_with(table_prefix) && trimmed.ends_with(']') {
+//             // Save previous pair's data if any
+//             if let Some(pair_name) = current_pair_name.take() {
+//                 if !current_pair_assignments.is_empty() {
+//                     all_assignments.insert(pair_name, current_pair_assignments.clone());
+//                     current_pair_assignments.clear();
+//                 }
+//             }
+            
+//             // Extract new pair name
+//             let start = table_prefix.len();
+//             let end = trimmed.len() - 1;
+//             current_pair_name = Some(trimmed[start..end].to_string());
+//             in_ports_array = false;
+//             debug_log!("  Processing pair: {}", current_pair_name.as_ref().unwrap());
+//             continue;
+//         }
+        
+//         // Skip lines if we're not in a pair section
+//         if current_pair_name.is_none() {
+//             continue;
+//         }
+        
+//         // Check for collaborator_ports array start
+//         if trimmed.starts_with("collaborator_ports = [") {
+//             in_ports_array = true;
+            
+//             // Check if it's a single-line array (for simple cases)
+//             if trimmed.contains(']') {
+//                 // TODO: Handle single-line array parsing if needed
+//                 in_ports_array = false;
+//             }
+//             continue;
+//         }
+        
+//         // Check for array end
+//         if in_ports_array && trimmed == "]" {
+//             in_ports_array = false;
+//             continue;
+//         }
+        
+//         // Parse array entries
+//         if in_ports_array {
+//             // Handle start of a new port entry
+//             if trimmed.starts_with('{') || trimmed.contains("{ user_name") {
+//                 // If we had a previous incomplete entry, it's an error
+//                 if current_port_entry.is_some() {
+//                     return Err(GpgError::GpgOperationError(format!(
+//                         "RATPFT Malformed port entry in pair '{}'",
+//                         current_pair_name.as_ref().unwrap()
+//                     )));
+//                 }
+//                 current_port_entry = Some(PartialPortEntry::default());
+//             }
+            
+//             // Parse fields within the entry
+//             if let Some(ref mut entry) = current_port_entry {
+//                 // Parse all fields that might be on this line
+                
+//                 // Parse user_name
+//                 if trimmed.contains("user_name = ") {
+//                     if let Some(value) = extract_quoted_value(trimmed, "user_name") {
+//                         entry.user_name = Some(value);
+//                     }
+//                 }
+                
+//                 // Parse ready_port
+//                 if trimmed.contains("ready_port = ") {
+//                     if let Some(value) = extract_port_value(trimmed, "ready_port") {
+//                         entry.ready_port = Some(value);
+//                     }
+//                 }
+                
+//                 // Parse intray_port
+//                 if trimmed.contains("intray_port = ") {
+//                     if let Some(value) = extract_port_value(trimmed, "intray_port") {
+//                         entry.intray_port = Some(value);
+//                     }
+//                 }
+                
+//                 // Parse gotit_port
+//                 if trimmed.contains("gotit_port = ") {
+//                     if let Some(value) = extract_port_value(trimmed, "gotit_port") {
+//                         entry.gotit_port = Some(value);
+//                     }
+//                 }
+//             }
+            
+//             // Check for end of entry
+//             if trimmed.ends_with("},") || trimmed.ends_with('}') {
+//                 if let Some(entry) = current_port_entry.take() {
+//                     // Validate we have all required fields
+//                     match (entry.user_name, entry.ready_port, entry.intray_port, entry.gotit_port) {
+//                         (Some(user), Some(ready), Some(intray), Some(gotit)) => {
+//                             current_pair_assignments.push(AbstractTeamchannelNodeTomlPortsData {
+//                                 user_name: user,
+//                                 ready_port: ready,
+//                                 intray_port: intray,
+//                                 gotit_port: gotit,
+//                             });
+//                         }
+//                         _ => {
+//                             return Err(GpgError::GpgOperationError(format!(
+//                                 "RATPFT Incomplete port assignment entry for pair '{}'. Missing required fields.",
+//                                 current_pair_name.as_ref().unwrap()
+//                             )));
+//                         }
+//                     }
+//                 }
+//             }
+//         }
+//     }
+    
+//     // Don't forget the last pair if the file doesn't end with another section
+//     if let Some(pair_name) = current_pair_name.take() {
+//         if !current_pair_assignments.is_empty() {
+//             all_assignments.insert(pair_name, current_pair_assignments);
+//         }
+//     }
+    
+//     // --- Stage 7: Validate Results ---
+//     if all_assignments.is_empty() {
+//         return Err(GpgError::GpgOperationError(
+//             "RATPFT No collaborator port assignments found in abstract_collaborator_port_assignments".to_string()
+//         ));
+//     }
+    
+//     // Log summary
+//     debug_log!(
+//         "RATPFT ✓ Successfully extracted port assignments for {} collaborator pairs:",
+//         all_assignments.len()
+//     );
+//     for (pair_name, assignments) in &all_assignments {
+//         debug_log!("  - {}: {} port assignments", pair_name, assignments.len());
+//     }
+    
+//     Ok(all_assignments)
+// }
 
 /// Reads all collaborator usernames who have access to the team channel from a clearsigned TOML file.
 ///
@@ -10638,12 +11372,43 @@ zero_width = [[42, 42], [0, 0]]
 pub fn read_hashmap_corenode_ports_struct_from_clearsigntoml(
     path_to_clearsigned_toml: &Path,
     addressbook_files_directory_relative: &str,  // pass in constant here
+    // addressbook_readcopy_path_string: &Path,
 ) -> Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, GpgError> {
+    
+    debug_log(
+        "RHCPSFC starting read_hashmap_corenode_ports_struct_from_clearsigntoml()",
+    );
+    
+    debug_log!(
+        "RHCPSFC path_to_clearsigned_toml -> {:?}",
+        path_to_clearsigned_toml.display(),
+    );
+    
+    // debug_log!(
+    //     "RHCPSFC addressbook_readcopy_path_string -> {:?}",
+    //     addressbook_readcopy_path_string.display(),
+    // );
+    
+    // // First, use our existing optimized reader to get the data
+    // let raw_assignments = read_all_collaborator_port_assignments_clearsigntoml_optimized(
+    //     path_to_clearsigned_toml,
+    //     // addressbook_files_directory_relative,
+    //     addressbook_readcopy_path_string, //addressbook_readcopy_path_string
+    // )?;
+    
+    
+    debug_log!(
+        "RHCPSFC addressbook_files_directory_relative -> {:?}",
+        addressbook_files_directory_relative,
+    );
+    
     // First, use our existing optimized reader to get the data
     let raw_assignments = read_all_collaborator_port_assignments_clearsigntoml_optimized(
         path_to_clearsigned_toml,
-        addressbook_files_directory_relative,
+        // addressbook_files_directory_relative,
+        addressbook_files_directory_relative, //addressbook_files_directory_relative
     )?;
+    
     
     // Now transform the data into the format CoreNode expects
     let mut corenode_format: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>> = HashMap::new();
@@ -10666,153 +11431,159 @@ pub fn read_hashmap_corenode_ports_struct_from_clearsigntoml(
     Ok(corenode_format)
 }
 
-/// Reads collaborator port assignments from a clearsigned TOML file using a GPG key from a separate config file.
-/// 
-/// # Purpose
-/// This function provides a way to verify and read port assignments from clearsigned TOML files
-/// that don't contain their own GPG keys, instead using a key from a separate centralized config file.
-/// This approach maintains consistent key management across multiple clearsigned files and is useful
-/// when the team channel configuration files don't embed their own GPG keys.
-/// 
-/// # Security Model
-/// This function enforces the same strict security requirements:
-/// 1. Extracts the validation key from a separate config file
-/// 2. Validates the target file's signature using that key
-/// 3. No data is returned if signature validation fails
-/// 4. Maintains complete chain of trust
-/// 
-/// # Process Flow
-/// 1. Extracts the GPG public key from the specified config file
-/// 2. Uses this key to verify the signature of the target clearsigned TOML file  
-/// 3. If verification succeeds, reads the port assignments
-/// 4. Transforms the data into CoreNode's expected format
-/// 5. Returns the HashMap or an appropriate error
-/// 
-/// # Arguments
-/// - `pathstr_to_config_file_that_contains_gpg_key` - Path to a clearsigned TOML file containing the GPG public key
-/// - `pathstr_to_target_clearsigned_file` - Path to the clearsigned TOML file to read from (without its own GPG key)
-/// - `addressbook_files_directory_relative` - Relative path to the directory containing collaborator addressbook files
-/// 
-/// # Returns
-/// - `Ok(HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>)` - Port assignments in CoreNode format if verification succeeds
-/// - `Err(String)` - Detailed error message if any step fails
-/// 
-/// # TOML Structure Expected
-/// The target file should contain sections like:
-/// ```toml
-/// [[abstract_collaborator_port_assignments.alice_bob]]
-/// 
-/// [[abstract_collaborator_port_assignments.alice_bob.collaborator_ports]]
-/// user_name = "alice"
-/// ready_port = 62002
-/// intray_port = 49595
-/// gotit_port = 49879
-/// 
-/// [[abstract_collaborator_port_assignments.alice_bob.collaborator_ports]]
-/// user_name = "bob"
-/// ready_port = 59980
-/// intray_port = 52755
-/// gotit_port = 60575
-/// ```
-/// 
-/// # Example
-/// ```no_run
-/// let config_path = "security_config.toml";
-/// let team_channel_file = "team_channel_config.toml";
-/// 
-/// let port_assignments = read_hashmap_corenode_ports_from_clearsigntoml_without_keyid(
-///     config_path,
-///     team_channel_file,
-///     "collaborators"
-/// )?;
-/// 
-/// // Use with translate_port_assignments
-/// let role_based_ports = translate_port_assignments(
-///     "alice",
-///     "bob", 
-///     port_assignments
-/// )?;
-/// ```
-/// 
-/// # Error Handling
-/// Returns an error if:
-/// - The config file cannot be read or doesn't contain a valid GPG key
-/// - The target file cannot be read or its signature cannot be verified
-/// - The port assignment structure is malformed or missing
-/// - Any collaborator pair has invalid or incomplete port data
-pub fn read_hashmap_corenode_ports_from_clearsigntoml_without_keyid(
-    pathstr_to_config_file_that_contains_gpg_key: &str,
-    pathstr_to_target_clearsigned_file: &str,
-    addressbook_files_directory_relative: &str,
-) -> Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, String> {
-    // Step 1: Extract GPG key from the config file
-    debug_log!(
-        "Extracting GPG key from config file: {}",
-        pathstr_to_config_file_that_contains_gpg_key
-    );
+// // TODO there may be something wrong with this function
+// // the calling of read_hashmap_corenode_ports_struct_from_clearsigntoml
+// // using only relative path input seems wrong
+// /// Reads collaborator port assignments from a clearsigned TOML file using a GPG key from a separate config file.
+// /// 
+// /// # Purpose
+// /// This function provides a way to verify and read port assignments from clearsigned TOML files
+// /// that don't contain their own GPG keys, instead using a key from a separate centralized config file.
+// /// This approach maintains consistent key management across multiple clearsigned files and is useful
+// /// when the team channel configuration files don't embed their own GPG keys.
+// /// 
+// /// # Security Model
+// /// This function enforces the same strict security requirements:
+// /// 1. Extracts the validation key from a separate config file
+// /// 2. Validates the target file's signature using that key
+// /// 3. No data is returned if signature validation fails
+// /// 4. Maintains complete chain of trust
+// /// 
+// /// # Process Flow
+// /// 1. Extracts the GPG public key from the specified config file
+// /// 2. Uses this key to verify the signature of the target clearsigned TOML file  
+// /// 3. If verification succeeds, reads the port assignments
+// /// 4. Transforms the data into CoreNode's expected format
+// /// 5. Returns the HashMap or an appropriate error
+// /// 
+// /// # Arguments
+// /// - `pathstr_to_config_file_that_contains_gpg_key` - Path to a clearsigned TOML file containing the GPG public key
+// /// - `pathstr_to_target_clearsigned_file` - Path to the clearsigned TOML file to read from (without its own GPG key)
+// /// - `addressbook_files_directory_relative` - Relative path to the directory containing collaborator addressbook files
+// /// 
+// /// # Returns
+// /// - `Ok(HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>)` - Port assignments in CoreNode format if verification succeeds
+// /// - `Err(String)` - Detailed error message if any step fails
+// /// 
+// /// # TOML Structure Expected
+// /// The target file should contain sections like:
+// /// ```toml
+// /// [[abstract_collaborator_port_assignments.alice_bob]]
+// /// 
+// /// [[abstract_collaborator_port_assignments.alice_bob.collaborator_ports]]
+// /// user_name = "alice"
+// /// ready_port = 62002
+// /// intray_port = 49595
+// /// gotit_port = 49879
+// /// 
+// /// [[abstract_collaborator_port_assignments.alice_bob.collaborator_ports]]
+// /// user_name = "bob"
+// /// ready_port = 59980
+// /// intray_port = 52755
+// /// gotit_port = 60575
+// /// ```
+// /// 
+// /// # Example
+// /// ```no_run
+// /// let config_path = "security_config.toml";
+// /// let team_channel_file = "team_channel_config.toml";
+// /// 
+// /// let port_assignments = read_hashmap_corenode_ports_from_clearsigntoml_without_keyid(
+// ///     config_path,
+// ///     team_channel_file,
+// ///     "collaborators"
+// /// )?;
+// /// 
+// /// // Use with translate_port_assignments
+// /// let role_based_ports = translate_port_assignments(
+// ///     "alice",
+// ///     "bob", 
+// ///     port_assignments
+// /// )?;
+// /// ```
+// /// 
+// /// # Error Handling
+// /// Returns an error if:
+// /// - The config file cannot be read or doesn't contain a valid GPG key
+// /// - The target file cannot be read or its signature cannot be verified
+// /// - The port assignment structure is malformed or missing
+// /// - Any collaborator pair has invalid or incomplete port data
+// pub fn read_hashmap_corenode_ports_from_clearsigntoml_without_keyid(
+//     pathstr_to_config_file_that_contains_gpg_key: &str,
+//     pathstr_to_target_clearsigned_file: &str,
+// ) -> Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, String> {
+//     // Step 1: Extract GPG key from the config file
+//     debug_log!(
+//         "RHCPFCWK read_hashmap_corenode_ports_from_clearsigntoml_without_keyid Extracting GPG key from config file: {}",
+//         pathstr_to_config_file_that_contains_gpg_key
+//     );
     
-    let key = extract_gpg_key_from_clearsigntoml(
-        pathstr_to_config_file_that_contains_gpg_key, 
-        "gpg_key_public"
-    )
-    .map_err(|e| format!(
-        "Failed to extract GPG key from config file '{}': {}", 
-        pathstr_to_config_file_that_contains_gpg_key, 
-        e
-    ))?;
+//     let key = extract_gpg_key_from_clearsigntoml(
+//         pathstr_to_config_file_that_contains_gpg_key, 
+//         "gpg_key_public"
+//     )
+//     .map_err(|e| format!(
+//         "RHCPFCWK Failed to extract GPG key from config file '{}': {}", 
+//         pathstr_to_config_file_that_contains_gpg_key, 
+//         e
+//     ))?;
 
-    // Step 2: Verify the target file using the extracted key
-    debug_log!(
-        "Verifying signature of target file: {}",
-        pathstr_to_target_clearsigned_file
-    );
+//     // Step 2: Verify the target file using the extracted key
+//     debug_log!(
+//         "RHCPFCWK Verifying signature of target file: {}",
+//         pathstr_to_target_clearsigned_file
+//     );
     
-    let verification_result = verify_clearsign(
-        pathstr_to_target_clearsigned_file, 
-        &key
-    )
-    .map_err(|e| format!(
-        "Failed during verification process for file '{}': {}", 
-        pathstr_to_target_clearsigned_file,
-        e
-    ))?;
+//     let verification_result = verify_clearsign(
+//         pathstr_to_target_clearsigned_file, 
+//         &key
+//     )
+//     .map_err(|e| format!(
+//         "RHCPFCWK Failed during verification process for file '{}': {}", 
+//         pathstr_to_target_clearsigned_file,
+//         e
+//     ))?;
 
-    // Step 3: Check verification result
-    if !verification_result {
-        return Err(format!(
-            "GPG signature verification failed for file '{}' using key from '{}'",
-            pathstr_to_target_clearsigned_file,
-            pathstr_to_config_file_that_contains_gpg_key
-        ));
-    }
+//     // Step 3: Check verification result
+//     if !verification_result {
+//         return Err(format!(
+//             "RHCPFCWK GPG signature verification failed for file '{}' using key from '{}'",
+//             pathstr_to_target_clearsigned_file,
+//             pathstr_to_config_file_that_contains_gpg_key,
+//         ));
+//     }
 
-    debug_log!("Signature verification passed, proceeding to read port assignments");
+//     debug_log!("RHCPFCWK Signature verification passed, proceeding to read port assignments");
 
-    // Step 4: Convert string path to Path for the existing function
-    let target_path = Path::new(pathstr_to_target_clearsigned_file);
+//     // Step 4: Convert string path to Path for the existing function
+//     let path_to_target_clearsigned_ile = Path::new(pathstr_to_target_clearsigned_file);
     
-    // Step 5: Call the existing function to read and transform the port assignments
-    match read_hashmap_corenode_ports_struct_from_clearsigntoml(
-        target_path,
-        addressbook_files_directory_relative,
-    ) {
-        Ok(port_assignments) => {
-            debug_log!(
-                "Successfully read {} collaborator pair port assignments",
-                port_assignments.len()
-            );
-            Ok(port_assignments)
-        }
-        Err(gpg_error) => {
-            // Convert GpgError to String for consistent error type
-            Err(format!(
-                "Failed to read port assignments from verified file '{}': {}",
-                pathstr_to_target_clearsigned_file,
-                gpg_error.to_string()
-            ))
-        }
-    }
-}
+//     // convert: str -> path
+//     let path_to_config_file_that_contains_gpgkey = Path::new(pathstr_to_config_file_that_contains_gpg_key);
+    
+//     // Step 5: Call the existing function to read and transform the port assignments
+//     match read_hashmap_corenode_ports_struct_from_clearsigntoml(
+//         path_to_target_clearsigned_ile,
+//         path_to_config_file_that_contains_gpgkey,
+//         // addressbook_files_directory_relative,
+//     ) {
+//         Ok(port_assignments) => {
+//             debug_log!(
+//                 "RHCPFCWK Successfully read {} collaborator pair port assignments",
+//                 port_assignments.len()
+//             );
+//             Ok(port_assignments)
+//         }
+//         Err(gpg_error) => {
+//             // Convert GpgError to String for consistent error type
+//             Err(format!(
+//                 "Failed to read port assignments from verified file '{}': {}",
+//                 pathstr_to_target_clearsigned_file,
+//                 gpg_error.to_string()
+//             ))
+//         }
+//     }
+// }
 
 #[cfg(test)]
 mod test_corenode_port_readers {

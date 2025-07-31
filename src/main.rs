@@ -408,11 +408,12 @@ use crate::clearsign_toml_module::{
     read_pathbuf_from_clearsigntoml_without_keyid,
     read_u64_from_clearsigntoml_without_keyid,
     read_stringarray_from_clearsigntoml_without_keyid,
-    read_hashmap_corenode_ports_from_clearsigntoml_without_keyid,
+    // read_hashmap_corenode_ports_from_clearsigntoml_without_keyid,
     read_option_i32_tuple_array_from_clearsigntoml_without_keyid,
     read_option_usize_from_clearsigntoml_without_keyid,
     read_option_bool_from_clearsigntoml_without_keyid,
     read_option_i64_from_clearsigntoml_without_keyid,
+    read_teamchannel_collaborator_ports_clearsigntoml_without_keyid,
     
     read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml,
     get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml,
@@ -3705,9 +3706,13 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
     
     // Get collaborator files directory for addressbook lookups
     let collaborator_files_dir_relative = COLLABORATOR_ADDRESSBOOK_PATH_STR;
+    /*
+    Is this not updated for .gpgclearsign?
+    */
     
     // --- Stage 2: Initialize Tracking Structures ---
     
+    // Why is this making a new struct??
     // Track all port assignments with their context for detailed collision reporting
     #[derive(Debug, Clone)]
     struct PortAssignmentContext {
@@ -3752,6 +3757,15 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
         
         println!("Processing channel: {}", channel_name);
         channels_processed += 1;
+        
+        /*
+        pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
+            path_to_clearsigned_toml: &Path,
+            // addressbook_files_directory_relative: &str,  // pass in constant here
+	       readcopy_path_to_addressbook_file: &Path,
+        ) -> Result<HashMap<String, Vec<AbstractTeamchannelNodeTomlPortsData>>, GpgError> {
+        
+        */
         
         // --- Stage 4: Read and Validate Clearsigned Configuration ---
         match read_all_collaborator_port_assignments_clearsigntoml_optimized(
@@ -5453,6 +5467,22 @@ struct AbstractTeamchannelNodeTomlPortsData {
     intray_port: u16,
     gotit_port: u16, // locally: 'you' listen to their port on 'their' desk
 }
+
+/// Represents port assignments for a collaborator in a `CoreNode`.
+///
+/// This struct holds six different ports used for communication and synchronization
+/// between two collaborators. 
+/// Because Rust does not automatically deal with 'list of dicts' in python terms
+/// this struct is a list (array) of 'dictionaries/hashmaps' which are a separate struct
+/// so this list is a single list, that is a list of other structs that are dicts/hashmaps
+#[derive(Debug, Deserialize, Serialize, Clone)]
+struct ReadTeamchannelCollaboratorPortsToml {
+    /// The port used by the REMOTE collaborator to signal readiness to receive data.
+    collaborator_ports: Vec<AbstractTeamchannelNodeTomlPortsData>,
+}
+
+
+
 
 /// Instance-Role-Specific Local-Meeting-Room-Struct
 /// This is no longer for an abstract set of data 
@@ -9060,20 +9090,6 @@ enum NodePriority {
 }
 
 
-/// Represents port assignments for a collaborator in a `CoreNode`.
-///
-/// This struct holds six different ports used for communication and synchronization
-/// between two collaborators. 
-/// Because Rust does not automatically deal with 'list of dicts' in python terms
-/// this struct is a list (array) of 'dictionaries/hashmaps' which are a separate struct
-/// so this list is a single list, that is a list of other structs that are dicts/hashmaps
-#[derive(Debug, Deserialize, Serialize, Clone)]
-struct ReadTeamchannelCollaboratorPortsToml {
-    /// The port used by the REMOTE collaborator to signal readiness to receive data.
-    collaborator_ports: Vec<AbstractTeamchannelNodeTomlPortsData>,
-}
-
-
 
 // // Define the enum
 // #[derive(Debug, Clone)]
@@ -11302,6 +11318,7 @@ struct CoreNode {
         format!("node_name Failed to read node_name: {}", e)
     })?;
     
+
     
     // Example: Read _ from the clearsigned TOML file
     let description_for_tui = read_singleline_string_from_clearsigntoml_without_keyid(
@@ -11314,6 +11331,9 @@ struct CoreNode {
     })?;
 
 
+
+
+    
     // Example: Read _ from the clearsigned TOML file
     let node_unique_id = read_u8_array_from_clearsigntoml_without_keyid(
         &addressbook_readcopy_path_string,  // Config file containing GPG key
@@ -11335,6 +11355,7 @@ struct CoreNode {
         format!("directory_path Failed to read directory_pathe_id: {}", e)
     })?;
     
+
     
     // Example: Read _ from the clearsigned TOML file
     let owner = read_singleline_string_from_clearsigntoml_without_keyid(
@@ -11379,18 +11400,27 @@ struct CoreNode {
         format!("teamchannel_collaborators_with_access Failed to read teamchannel_collaborators_with_access: {}", e)
     })?;
 
+    // println!("HERE HERE TestPoint");
+    debug_log("HERE HERE TestPoint");
+    
+    /*
+    pub fn read_hashmap_corenode_ports_from_clearsigntoml_without_keyid(
+        pathstr_to_config_file_that_contains_gpg_key: &str,
+        pathstr_to_target_clearsigned_file: &str,
+    ) -> Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, String> {
+    */
 
     // Example: Read _ from the clearsigned TOML file
-    let abstract_collaborator_port_assignments = read_hashmap_corenode_ports_from_clearsigntoml_without_keyid(
-        &addressbook_readcopy_path_string,  // Config file containing GPG key
-        &node_readcopy_path,           // Target clearsigned file
-        "abstract_collaborator_port_assignments"                // Field to read
+    let abstract_collaborator_port_assignments = read_teamchannel_collaborator_ports_clearsigntoml_without_keyid(
+        &addressbook_readcopy_path_string,     // Config file containing GPG key
+        &node_readcopy_path,                   // Target clearsigned file
     ).map_err(|e| {
         cleanup_closure(); // Run cleanup on error
         format!("abstract_collaborator_port_assignments Failed to read abstract_collaborator_port_assignments: {}", e)
     })?;
 
 
+	
 	////?////////////
 	// Project Areas
 	///?/////////////
@@ -11406,6 +11436,7 @@ struct CoreNode {
     })?;
 
 
+    
     // Example: Read _ from the clearsigned TOML file
     let pa2_schedule = read_u64_array_from_clearsigntoml_without_keyid(
         &addressbook_readcopy_path_string,  // Config file containing GPG key
@@ -11549,6 +11580,8 @@ struct CoreNode {
         |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not found in this scope
     
     */
+    
+
 
 
     // 6. Deserialize into CoreNode Struct (Manually)
@@ -11618,6 +11651,7 @@ struct CoreNode {
     //     }
     // }
     
+
     
     // // 6. Cleanup
     // 

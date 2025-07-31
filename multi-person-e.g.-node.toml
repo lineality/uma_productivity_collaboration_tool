@@ -1,0 +1,66 @@
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA512
+
+node_name = "tofutown"
+description_for_tui = "tofutown"
+node_unique_id = [140, 156, 155, 52]
+directory_path = "/home/oopsy/code/uma_productivity_collaboration_tool/target/debug/project_graph_data/team_channels/tofutown"
+owner = "alice"
+updated_at_timestamp = 1751244245
+expires_at = 12862355356
+teamchannel_collaborators_with_access = ["alice", "bob", "charlotte"]
+pa1_process = "fish"
+pa2_schedule = [1751244227, 1754873027, 3628800]
+pa3_users = "users"
+pa4_features = "features"
+pa5_mvp = "mvp"
+pa6_feedback = "feedbak"
+
+[[abstract_collaborator_port_assignments.bob_charlotte]]
+
+[[abstract_collaborator_port_assignments.bob_charlotte.collaborator_ports]]
+user_name = "bob"
+ready_port = 56468
+intray_port = 59918
+gotit_port = 49641
+
+[[abstract_collaborator_port_assignments.bob_charlotte.collaborator_ports]]
+user_name = "charlotte"
+ready_port = 58323
+intray_port = 56444
+gotit_port = 63104
+
+[[abstract_collaborator_port_assignments.alice_bob]]
+
+[[abstract_collaborator_port_assignments.alice_bob.collaborator_ports]]
+user_name = "alice"
+ready_port = 62035
+intray_port = 58681
+gotit_port = 59157
+
+[[abstract_collaborator_port_assignments.alice_bob.collaborator_ports]]
+user_name = "bob"
+ready_port = 64655
+intray_port = 54290
+gotit_port = 53950
+
+[[abstract_collaborator_port_assignments.alice_charlotte]]
+
+[[abstract_collaborator_port_assignments.alice_charlotte.collaborator_ports]]
+user_name = "alice"
+ready_port = 64923
+intray_port = 54863
+gotit_port = 52404
+
+[[abstract_collaborator_port_assignments.alice_charlotte.collaborator_ports]]
+user_name = "charlotte"
+ready_port = 57967
+intray_port = 64832
+gotit_port = 62228
+-----BEGIN PGP SIGNATURE-----
+
+iHUEARYKAB0WIQToFQb+F/ow6li2wuE5BE2Mw/ALVwUCaGHd1QAKCRA5BE2Mw/AL
+V6F1AQDN2MtrcIH8Y9n6yBZXJ4hKY13T4MhTGTL6Pdduc1o1BQD/exvrekT4GhIg
+G6dyY484HxIteC3/8ti1JURQWO20qws=
+=dmIF
+-----END PGP SIGNATURE-----
