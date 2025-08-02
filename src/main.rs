@@ -3736,6 +3736,11 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().is_dir())
     {
+        /*
+        workflow:
+        
+        */
+        
         let node_toml_path = entry.path().join("node.toml");
         
         // Skip directories without node.toml
@@ -3979,6 +3984,8 @@ pub fn make_exclusionlist_from_single_team_channel(
         channel_name
     );
     
+    // TODO ? instead use read_teamchannel_collaborator_ports_clearsigntoml_without_keyid()
+    
     // Read and validate the clearsigned configuration
     match read_all_collaborator_port_assignments_clearsigntoml_optimized(
         node_toml_path,
@@ -4039,6 +4046,195 @@ pub fn make_exclusionlist_from_single_team_channel(
     
     Ok(port_set)
 }
+
+// alt
+/// Searches for a node configuration file in the given directory.
+/// 
+/// This function looks for either `node.toml` or `node.gpgtoml` in the specified directory.
+/// It checks for `node.toml` first, and if not found, checks for `node.gpgtoml`.
+/// 
+/// # Arguments
+/// 
+/// * `input_node_parent_path` - The directory path where to search for the node configuration files
+/// 
+/// # Returns
+/// 
+/// * `Some(PathBuf)` - The full path to the found configuration file (either node.toml or node.gpgtoml)
+/// * `None` - Neither configuration file was found in the directory
+/// 
+/// # Example
+/// 
+/// ```
+/// let parent_path = Path::new("/home/user/project");
+/// if let Some(config_path) = find_node_toml_or_gpgtoml_file(parent_path) {
+///     println!("Found configuration at: {:?}", config_path);
+/// } else {
+///     println!("No configuration file found");
+/// }
+/// ```
+fn alt_find_node_toml_or_gpgtoml_file(input_node_parent_path: &Path) -> Option<PathBuf> {
+    // First, try to find node.toml in the parent directory
+    let node_toml = input_node_parent_path.join("node.toml");
+    
+    // Check if node.toml exists and is a regular file (not a directory)
+    if node_toml.exists() && node_toml.is_file() {
+        // Return the path to node.toml if found
+        return Some(node_toml);
+    }
+    
+    // If node.toml wasn't found, try to find node.gpgtoml
+    let node_gpgtoml = input_node_parent_path.join("node.gpgtoml");
+    
+    // Check if node.gpgtoml exists and is a regular file (not a directory)
+    if node_gpgtoml.exists() && node_gpgtoml.is_file() {
+        // Return the path to node.gpgtoml if found
+        return Some(node_gpgtoml);
+    }
+    
+    // Neither file was found in the directory
+    None
+}
+// // Usage example for your specific case:
+// let current_full_file_path = PathBuf::from("/your/actual/path");
+
+// // Call the function to find either node.toml or node.gpgtoml
+// let node_toml_path = match find_node_toml_or_gpgtoml_file(&current_full_file_path) {
+//     Some(path) => {
+//         // Successfully found one of the configuration files
+//         debug_log!(
+//             "nav_graph_look_read_node_toml() node_toml_path -> {:?}",
+//             path.clone()
+//         );
+        
+//         // Add more detailed existence checking
+//         debug_log!("Checking if path exists: {:?}", path.exists());
+//         debug_log!("Checking if path is file: {:?}", path.is_file());
+        
+//         // Return the found path
+//         path
+//     },
+//     None => {
+//         // Neither node.toml nor node.gpgtoml was found
+//         debug_log!(
+//             "nav_graph_look_read_node_toml() no configuration file found in: {:?}",
+//             current_full_file_path
+//         );
+        
+//         // Handle the error case - you need to decide what to do here
+//         // Option 1: Return an error from your function
+//         return Err("No node configuration file found".to_string());
+        
+//         // Option 2: Use a default or panic (not recommended)
+//         // panic!("No node configuration file found");
+//     }
+// };
+
+// // At this point, node_toml_path contains the PathBuf to whichever file was found
+
+/// Searches for a node configuration file in the given directory.
+/// 
+/// This function looks for either `node.toml` or `node.gpgtoml` in the specified directory.
+/// It checks for `node.toml` first, and if not found, checks for `node.gpgtoml`.
+/// 
+/// # Arguments
+/// 
+/// * `input_node_parent_path` - The directory path where to search for the node configuration files
+/// 
+/// # Returns
+/// 
+/// * `Ok(Some(PathBuf))` - The full path to the found configuration file (either node.toml or node.gpgtoml)
+/// * `Ok(None)` - Neither configuration file was found in the directory
+/// * `Err(String)` - An error occurred while checking the files
+/// 
+/// # Example
+/// 
+/// ```
+/// let parent_path = Path::new("/home/user/project");
+/// match find_node_toml_or_gpgtoml_file(parent_path) {
+///     Ok(Some(path)) => println!("Found configuration at: {:?}", path),
+///     Ok(None) => println!("No configuration file found"),
+///     Err(e) => eprintln!("Error: {}", e),
+/// }
+/// ```
+fn find_node_toml_or_gpgtoml_file(input_node_parent_path: &Path) -> Result<Option<PathBuf>, String> {
+    // Validate that the input path exists and is a directory
+    if !input_node_parent_path.exists() {
+        return Err(format!(
+            "Parent directory does not exist: {:?}",
+            input_node_parent_path
+        ));
+    }
+    
+    if !input_node_parent_path.is_dir() {
+        return Err(format!(
+            "Path is not a directory: {:?}",
+            input_node_parent_path
+        ));
+    }
+
+    // First check for node.toml
+    let node_toml_path = input_node_parent_path.join("node.toml");
+    
+    debug_log!(
+        "find_node_toml_or_gpgtoml_file() checking for node.toml at: {:?}",
+        node_toml_path
+    );
+    
+    // Check if node.toml exists and is a file
+    if node_toml_path.exists() && node_toml_path.is_file() {
+        debug_log!(
+            "find_node_toml_or_gpgtoml_file() found node.toml at: {:?}",
+            node_toml_path
+        );
+        return Ok(Some(node_toml_path));
+    }
+    
+    // If node.toml not found, check for node.gpgtoml
+    let node_gpgtoml_path = input_node_parent_path.join("node.gpgtoml");
+    
+    debug_log!(
+        "find_node_toml_or_gpgtoml_file() checking for node.gpgtoml at: {:?}",
+        node_gpgtoml_path
+    );
+    
+    // Check if node.gpgtoml exists and is a file
+    if node_gpgtoml_path.exists() && node_gpgtoml_path.is_file() {
+        debug_log!(
+            "find_node_toml_or_gpgtoml_file() found node.gpgtoml at: {:?}",
+            node_gpgtoml_path
+        );
+        return Ok(Some(node_gpgtoml_path));
+    }
+    
+    // Neither file was found
+    debug_log!(
+        "find_node_toml_or_gpgtoml_file() no configuration file found in: {:?}",
+        input_node_parent_path
+    );
+    
+    Ok(None)
+}
+// // use example
+// let current_full_file_path = PathBuf::from("/home/user/project/nodes/example");
+
+// // Find the configuration file (could be either node.toml OR node.gpgtoml)
+// let node_toml_path = match find_node_toml_or_gpgtoml_file(&current_full_file_path) {
+//     Ok(Some(path)) => {
+//         // This is the path to whichever file was found (node.toml OR node.gpgtoml)
+//         debug_log!("Found configuration file at: {:?}", path);
+//         path  // <-- This could be either file!
+//     },
+//     Ok(None) => {
+//         // No file found - handle the error properly
+//         return Err("Neither node.toml nor node.gpgtoml found".to_string());
+//     },
+//     Err(error_message) => {
+//         // Error occurred - handle it properly
+//         return Err(error_message);
+//     }
+// };
+
+// // node_toml_path now contains the path to whichever file was found
 
 /// Scans ALL team channels and returns a complete exclusion list of all ports in use.
 ///
@@ -4126,6 +4322,27 @@ pub fn global_ports_exclusion_list_generator() -> Result<HashSet<u16>, ThisProje
     
     debug_log!("global_ports_exclusion_list_generator: Starting directory walk...");
     
+    
+    
+    // code from load_core_node...()
+    debug_log!(
+        "Starting: load_core_node_from_toml_file(), team_channels_dir -> {:?}",
+        &team_channels_dir,
+    );
+
+    // Get armored public key, using key-id (full fingerprint in)
+    let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+        Ok(fingerprint) => fingerprint,
+        Err(e) => {
+            // Since the function returns Result<CoreNode, String>, we need to return a String error
+            return Err(format!(
+                "implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}", 
+                e
+            ).into());
+        }
+    };
+    
+    
     // Walk through all team channel directories
     for entry in WalkDir::new(&team_channels_dir)
         .into_iter()
@@ -4137,14 +4354,38 @@ pub fn global_ports_exclusion_list_generator() -> Result<HashSet<u16>, ThisProje
             continue;
         }
         
-        // Construct path to node.toml
-        let node_toml_path = entry.path().join("node.toml");
+        debug_log!("entry.path() {:?}", &entry.path().display());
+        
+        // Construct path to node.toml or node.gpgtoml
+        // Find the configuration file (could be either node.toml OR node.gpgtoml)
+        let node_toml_path = match find_node_toml_or_gpgtoml_file(&entry.path()) {
+            Ok(Some(path)) => {
+                // This is the path to whichever file was found (node.toml OR node.gpgtoml)
+                debug_log!("Found configuration file at: {:?}", path);
+                path  // <-- This could be either file!
+            },
+            Ok(None) => {
+                // No file found - handle the error properly
+                // return Err("Neither node.toml nor node.gpgtoml found".to_string());
+                return Err(ThisProjectError::InvalidInput("Neither node.toml nor node.gpgtoml found".to_string()));
+            },
+            Err(error_message) => {
+                // Error occurred - handle it properly
+                // return Err(error_message);
+                return Err(ThisProjectError::TomlVanillaDeserialStrError(error_message));
+            }
+        };
+
+        // Add more detailed existence checking
+        debug_log!("Checking if path exists: {:?}", node_toml_path.exists());
+        debug_log!("Checking if path is file: {:?}", node_toml_path.is_file());
         
         // Skip directories without node.toml
         if !node_toml_path.exists() {
             continue;
         }
         
+        //?
         // Extract channel name for logging
         let channel_name = entry.path()
             .file_name()
@@ -4156,7 +4397,144 @@ pub fn global_ports_exclusion_list_generator() -> Result<HashSet<u16>, ThisProje
             "global_ports_exclusion_list_generator: Processing channel '{}'",
             channel_name
         );
-        
+
+
+
+
+        // code from load_core_node...()
+
+        // Using Debug trait for more detailed error information
+        let node_readcopy_path = get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
+            &node_toml_path,
+            &gpg_full_fingerprint_key_id_string,
+        ).map_err(|e| format!("Failed to get temporary read copy of TOML file: {:?}", e))?;
+
+        ////////////////////////////////
+        // Extract Owner for Key Lookup 
+        ////////////////////////////////
+        let owner_name_of_toml_field_key_to_read = "owner";
+        debug_log!(
+            "Reading file owner from field '{}' for security validation",
+            owner_name_of_toml_field_key_to_read
+        );
+
+        let file_owner_username = match read_single_line_string_field_from_toml(
+            &node_readcopy_path,  // TODO convert to string?
+            owner_name_of_toml_field_key_to_read,
+        ) {
+            Ok(username) => {
+                if username.is_empty() {
+                    // Convert to String error instead of GpgError
+                    return Err(format!(
+                        "Field '{}' is empty in TOML file. File owner is required for security validation.",
+                        owner_name_of_toml_field_key_to_read
+                    ).into());
+                }
+                username
+            }
+            Err(e) => {
+                // Convert to String error instead of GpgError
+                return Err(format!(
+                    "Failed to read file owner from field '{}': {}",
+                    owner_name_of_toml_field_key_to_read, e
+                // ));
+                ).into());
+            }
+        };
+        println!("File owner: '{}'", file_owner_username);
+
+        // Extract the addressbook path string with inline error conversion
+        let addressbook_readcopy_path_string = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
+            &file_owner_username,
+            COLLABORATOR_ADDRESSBOOK_PATH_STR,
+            &gpg_full_fingerprint_key_id_string,
+        ).map_err(|e| format!(
+            "Failed to get addressbook path for user '{}': {:?}",
+            file_owner_username,
+            e
+        ))?;
+
+        // Define cleanup closure
+        let cleanup_closure = || {
+            cleanup_collaborator_temp_file(&node_readcopy_path);
+            cleanup_collaborator_temp_file(&addressbook_readcopy_path_string);
+        };
+
+        let node_owners_public_gpg_key = read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml(
+            &addressbook_readcopy_path_string, 
+        ).map_err(|e| format!(
+            "Failed to get addressbook path for user '{}': {:?}",
+            file_owner_username,
+            e
+        ))?;
+
+        // 2. Paths & Reading-Copies Part 2: addressbook path and read-copy
+        // Verify the addressbook file's clearsign signature
+        let verify_addressbook_file_result = match verify_clearsign(
+            &addressbook_readcopy_path_string,
+            &node_owners_public_gpg_key,
+        ) {
+            Ok(is_valid) => is_valid,
+            Err(e) => {
+                // Clean up temporary files before returning error
+                cleanup_closure();
+                return Err(format!(
+                    "Failed to verify addressbook clearsign signature for user '{}': {:?}",
+                    file_owner_username,
+                    e
+                ).into());
+            }
+        };
+
+        // 3. Validate Part 1: validate addressbook file and get node-owner's public gpg
+        // (This section would go here if needed)
+
+        // 4. Validation Part 2: validate Node (clearsign validation of .toml)
+        // Verify the node file's clearsign signature
+        let verify_node_file_result = match verify_clearsign(
+            &node_readcopy_path,
+            &node_owners_public_gpg_key,
+        ) {
+            Ok(is_valid) => is_valid,
+            Err(e) => {
+                // Clean up temporary files before returning error
+                cleanup_closure();
+                return Err(format!(
+                    "Failed to verify node file clearsign signature for user '{}': {:?}",
+                    file_owner_username,
+                    e
+                ).into());
+            }
+        };
+
+        // Check if both verification results are valid
+        // If either verification failed, clean up and return error
+        if !verify_addressbook_file_result || !verify_node_file_result {
+            
+            debug_log("Whoops, something faileded...");
+            
+            // Clean up temporary files
+            cleanup_closure();
+            
+            // Provide detailed error message about which verification failed
+            let mut error_details = Vec::new();
+            if !verify_addressbook_file_result {
+                error_details.push("addressbook file signature verification failed");
+            }
+            if !verify_node_file_result {
+                error_details.push("node file signature verification failed");
+            }
+            
+            return Err(format!(
+                "Clearsign validation failed for user '{}': {}",
+                file_owner_username,
+                error_details.join(" and ")
+            ).into());
+        }
+
+
+
+
         // Process this channel's ports
         match make_exclusionlist_from_single_team_channel(
             &node_toml_path,
@@ -8749,7 +9127,37 @@ impl GraphNavigationInstanceState {
         
         // TODO check for node.toml or .gpgtoml
 
-        let node_toml_path = self.current_full_file_path.join("node.toml");
+        // Construct path to node.toml or node.gpgtoml
+        // Find the configuration file (could be either node.toml OR node.gpgtoml)
+        let node_toml_path = match find_node_toml_or_gpgtoml_file(
+            &self.current_full_file_path,
+            ) {
+            Ok(Some(path)) => {
+                // This is the path to whichever file was found (node.toml OR node.gpgtoml)
+                debug_log!("Found configuration file at: {:?}", path);
+                path  // <-- This could be either file!
+            },
+            Ok(None) => {
+                // No file found - handle the error properly
+                debug_log("Neither node.toml nor node.gpgtoml found");
+                return;
+            },
+            Err(e) => {
+                // Error occurred - handle it properly
+                debug_log!("Neither node.toml nor node.gpgtoml found >> {}", e);
+                return;
+            }
+        };
+
+        // Now you have node_toml_path available for use
+        debug_log!(
+            "nav_graph_look_read_node_toml() node_toml_path -> {:?}",
+            node_toml_path.clone()
+        );
+
+        // Add more detailed existence checking
+        debug_log!("Checking if path exists: {:?}", node_toml_path.exists());
+        debug_log!("Checking if path is file: {:?}", node_toml_path.is_file());
         
         debug_log!(
             "nav_graph_look_read_node_toml() node_toml_path -> {:?}",
