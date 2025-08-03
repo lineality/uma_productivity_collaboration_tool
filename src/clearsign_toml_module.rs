@@ -6608,6 +6608,534 @@ pub fn read_specific_pair_port_assignments_from_clearsigntoml(
 //     }
 // }
 
+/// Reads abstract collaborator port assignments from a clearsigned TOML file without requiring key ID lookup.
+///
+/// This function combines the input handling approach of direct addressbook path usage with
+/// the flatter output structure that directly returns port assignment data without wrapper structs.
+/// It performs comprehensive validation and extracts all collaborator pair port assignments
+/// in a single optimized pass through the validated content.
+///
+/// # Security Model
+///
+/// This function implements strict security validation:
+/// - Mandatory GPG signature verification before any data extraction
+/// - Uses the GPG key ID from the provided addressbook for validation
+/// - The addressbook itself must be clearsigned and is validated when reading the key ID
+/// - Single validation pass for efficiency while maintaining security
+///
+/// # Arguments
+///
+/// * `addressbook_readcopy_path_string` - The absolute path to the addressbook file containing
+///   the GPG key ID used for validating the target TOML file
+/// * `path_to_clearsigned_toml` - The absolute path to the clearsigned TOML file containing
+///   the collaborator port assignments to extract
+///
+/// # Returns
+///
+/// * `Ok(HashMap<String, Vec<AbstractTeamchannelNodeTomlPortsData>>)` - A HashMap where:
+///   - Keys are collaborator pair names (e.g., "alice_bob", "bob_charlotte")
+///   - Values are vectors of port assignment structures containing user_name and port numbers
+/// * `Err(GpgError)` - If any validation or parsing step fails:
+///   - `PathError`: File not found or invalid path
+///   - `GpgOperationError`: GPG validation failure or missing required fields
+///   - `FileSystemError`: I/O errors during file operations
+///
+/// # Expected TOML Structure
+///
+/// The function expects the clearsigned TOML to contain sections like:
+/// ```toml
+/// [[abstract_collaborator_port_assignments.alice_bob]]
+/// [[abstract_collaborator_port_assignments.alice_bob.collaborator_ports]]
+/// user_name = "alice"
+/// ready_port = 50001
+/// intray_port = 50002
+/// gotit_port = 50003
+///
+/// [[abstract_collaborator_port_assignments.alice_bob.collaborator_ports]]
+/// user_name = "bob"
+/// ready_port = 50004
+/// intray_port = 50005
+/// gotit_port = 50006
+/// ```
+///
+/// # Example Usage
+///
+/// ```no_run
+/// let port_assignments = read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyid(
+///     "/path/to/alice__collaborator.toml",
+///     "/path/to/team_channel_config.toml"
+/// )?;
+///
+/// // Access ports for specific collaborator pair
+/// if let Some(alice_bob_ports) = port_assignments.get("alice_bob") {
+///     for port_data in alice_bob_ports {
+///         println!("{}: ready={}, intray={}, gotit={}", 
+///                  port_data.user_name,
+///                  port_data.ready_port, 
+///                  port_data.intray_port,
+///                  port_data.gotit_port);
+///     }
+/// }
+/// ```
+pub fn read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyid(
+    addressbook_readcopy_path_string: &str,
+    path_to_clearsigned_toml: &str,
+) -> Result<HashMap<String, Vec<AbstractTeamchannelNodeTomlPortsData>>, GpgError> {
+    debug_log("Starting RACPFTW read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyid()");
+    debug_log("RACPFTW Beginning extraction of all collaborator port assignments with direct output format");
+    
+    // --- Stage 1: Input Validation ---
+    debug_log!(
+        "RACPFTW Validating input parameters:",
+    );
+    debug_log!(
+        "RACPFTW   addressbook_readcopy_path_string: {}",
+        addressbook_readcopy_path_string,
+    );
+    debug_log!(
+        "RACPFTW   path_to_clearsigned_toml: {}",
+        path_to_clearsigned_toml,
+    );
+
+    // Validate addressbook path
+    if addressbook_readcopy_path_string.is_empty() {
+        return Err(GpgError::PathError(
+            "RACPFTW Addressbook path cannot be empty".to_string()
+        ));
+    }
+
+    // Validate clearsigned TOML path
+    if path_to_clearsigned_toml.is_empty() {
+        return Err(GpgError::PathError(
+            "RACPFTW Clearsigned TOML path cannot be empty".to_string()
+        ));
+    }
+
+    // --- Stage 2: Extract GPG Key ID from Addressbook ---
+    debug_log("RACPFTW Extracting GPG key ID from addressbook for signature validation");
+    
+    let gpg_key_id_field_name = "gpg_publickey_id";
+    let signing_key_id = match read_singleline_string_from_clearsigntoml(
+        addressbook_readcopy_path_string,
+        gpg_key_id_field_name,
+    ) {
+        Ok(key_id) => {
+            if key_id.is_empty() {
+                return Err(GpgError::GpgOperationError(format!(
+                    "RACPFTW GPG key ID field '{}' is empty in addressbook at '{}'",
+                    gpg_key_id_field_name,
+                    addressbook_readcopy_path_string,
+                )));
+            }
+            key_id
+        }
+        Err(e) => {
+            return Err(GpgError::GpgOperationError(format!(
+                "RACPFTW Failed to read GPG key ID from addressbook at '{}': {}",
+                addressbook_readcopy_path_string,
+                e
+            )));
+        }
+    };
+    
+    debug_log!(
+        "RACPFTW Successfully extracted GPG key ID for validation: '{}'",
+        signing_key_id
+    );
+
+    // --- Stage 3: Create Temporary File for GPG Validation Output ---
+    let temp_validation_path = match create_temp_file_path("racpftw_validate_ports") {
+        Ok(path) => path,
+        Err(e) => {
+            return Err(GpgError::GpgOperationError(format!(
+                "RACPFTW Failed to create temporary file for validation: {}",
+                e
+            )));
+        }
+    };
+    
+    debug_log!(
+        "RACPFTW Created temporary validation file at: {:?}",
+        temp_validation_path
+    );
+
+    // --- Stage 4: Perform GPG Signature Validation ---
+    debug_log!("RACPFTW Performing GPG signature validation on clearsigned file...");
+    
+    let validation_result = Command::new("gpg")
+        .arg("--decrypt")
+        .arg("--batch")
+        .arg("--status-fd")
+        .arg("2")
+        .arg("--output")
+        .arg(&temp_validation_path)
+        .arg(path_to_clearsigned_toml)
+        .output();
+
+    let validation_output = match validation_result {
+        Ok(output) => output,
+        Err(e) => {
+            // Clean up temporary file on error
+            let _ = fs::remove_file(&temp_validation_path);
+            return Err(GpgError::GpgOperationError(format!(
+                "RACPFTW Failed to execute GPG validation command: {}",
+                e
+            )));
+        }
+    };
+
+    // Check validation success
+    if !validation_output.status.success() {
+        // Clean up temporary file
+        let _ = fs::remove_file(&temp_validation_path);
+        
+        let stderr_text = String::from_utf8_lossy(&validation_output.stderr);
+        return Err(GpgError::GpgOperationError(format!(
+            "RACPFTW GPG signature validation FAILED. File may be tampered or corrupted. GPG stderr: {}",
+            stderr_text.trim()
+        )));
+    }
+    
+    debug_log!("RACPFTW ✓ GPG signature validation PASSED. File integrity confirmed.");
+
+    // --- Stage 5: Read and Parse Validated Content ---
+    debug_log!("RACPFTW Reading validated content for parsing...");
+    
+    let validated_content = match fs::read_to_string(&temp_validation_path) {
+        Ok(content) => content,
+        Err(e) => {
+            // Clean up temporary file
+            let _ = fs::remove_file(&temp_validation_path);
+            return Err(GpgError::FileSystemError(e));
+        }
+    };
+
+    // Clean up temporary file immediately after reading
+    if let Err(e) = fs::remove_file(&temp_validation_path) {
+        debug_log!(
+            "RACPFTW Warning: Failed to remove temporary file '{:?}': {:?}",
+            temp_validation_path,
+            e
+        );
+    }
+
+    debug_log!(
+        "RACPFTW Successfully read {} bytes of validated content",
+        validated_content.len()
+    );
+
+    // --- Stage 6: Parse All Collaborator Port Assignments ---
+    debug_log!("RACPFTW Parsing all collaborator port assignments from validated content...");
+    
+    // Initialize result storage
+    let mut all_assignments: HashMap<String, Vec<AbstractTeamchannelNodeTomlPortsData>> = HashMap::new();
+    
+    // State tracking for parsing
+    let mut current_pair_name: Option<String> = None;
+    let mut current_pair_ports: Vec<AbstractTeamchannelNodeTomlPortsData> = Vec::new();
+    let mut current_port_entry: Option<PartialPortEntry> = None;
+    
+    // Helper structure for accumulating port entry fields
+    #[derive(Default, Debug)]
+    struct PartialPortEntry {
+        user_name: Option<String>,
+        ready_port: Option<u16>,
+        intray_port: Option<u16>,
+        gotit_port: Option<u16>,
+    }
+
+    // Process each line of the validated content
+    for (line_number, line) in validated_content.lines().enumerate() {
+        let trimmed = line.trim();
+        
+        // Skip empty lines and comments
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        
+        // Check for new collaborator pair section header
+        // Format: [[abstract_collaborator_port_assignments.pair_name]]
+        if trimmed.starts_with("[[abstract_collaborator_port_assignments.") && 
+           trimmed.ends_with("]]") && 
+           !trimmed.contains(".collaborator_ports]]") {
+            
+            // Save previous pair's data if exists
+            if let Some(pair_name) = current_pair_name.take() {
+                if !current_pair_ports.is_empty() {
+                    debug_log!(
+                        "RACPFTW   Saving {} port assignments for pair '{}'",
+                        current_pair_ports.len(),
+                        pair_name
+                    );
+                    all_assignments.insert(pair_name, current_pair_ports.clone());
+                    current_pair_ports.clear();
+                }
+            }
+            
+            // Extract new pair name
+            let prefix_len = "[[abstract_collaborator_port_assignments.".len();
+            let suffix_len = 2; // Length of "]]"
+            let pair_name = trimmed[prefix_len..trimmed.len() - suffix_len].to_string();
+            
+            debug_log!("RACPFTW Found new collaborator pair section: '{}'", pair_name);
+            current_pair_name = Some(pair_name);
+            continue;
+        }
+        
+        // Check for collaborator_ports subsection
+        // Format: [[abstract_collaborator_port_assignments.pair_name.collaborator_ports]]
+        if trimmed.contains("[[abstract_collaborator_port_assignments.") && 
+           trimmed.contains(".collaborator_ports]]") {
+            // This marks the start of a new port entry
+            if current_port_entry.is_some() {
+                debug_log!(
+                    "RACPFTW Warning: Incomplete port entry at line {} - starting new entry",
+                    line_number
+                );
+            }
+            current_port_entry = Some(PartialPortEntry::default());
+            continue;
+        }
+        
+        // Skip lines if we're not in a pair section
+        if current_pair_name.is_none() {
+            continue;
+        }
+        
+        // Parse port entry fields
+        if let Some(ref mut entry) = current_port_entry {
+            // Parse user_name field
+            if trimmed.starts_with("user_name = ") {
+                match extract_quoted_value(trimmed, "user_name") {
+                    Some(value) => {
+                        entry.user_name = Some(value);
+                        debug_log!("RACPFTW     Found user_name: '{}'", entry.user_name.as_ref().unwrap());
+                    }
+                    None => {
+                        debug_log!("RACPFTW Warning: Failed to parse user_name at line {}", line_number);
+                    }
+                }
+            }
+            
+            // Parse ready_port field
+            else if trimmed.starts_with("ready_port = ") {
+                match extract_port_value(trimmed, "ready_port") {
+                    Some(value) => {
+                        entry.ready_port = Some(value);
+                        debug_log!("RACPFTW     Found ready_port: {}", value);
+                    }
+                    None => {
+                        debug_log!("RACPFTW Warning: Failed to parse ready_port at line {}", line_number);
+                    }
+                }
+            }
+            
+            // Parse intray_port field
+            else if trimmed.starts_with("intray_port = ") {
+                match extract_port_value(trimmed, "intray_port") {
+                    Some(value) => {
+                        entry.intray_port = Some(value);
+                        debug_log!("RACPFTW     Found intray_port: {}", value);
+                    }
+                    None => {
+                        debug_log!("RACPFTW Warning: Failed to parse intray_port at line {}", line_number);
+                    }
+                }
+            }
+            
+            // Parse gotit_port field
+            else if trimmed.starts_with("gotit_port = ") {
+                match extract_port_value(trimmed, "gotit_port") {
+                    Some(value) => {
+                        entry.gotit_port = Some(value);
+                        debug_log!("RACPFTW     Found gotit_port: {}", value);
+                        
+                        // After gotit_port, we should have a complete entry
+                        // Validate and add to current pair's ports
+                        match (
+                            entry.user_name.clone(),
+                            entry.ready_port,
+                            entry.intray_port,
+                            entry.gotit_port
+                        ) {
+                            (Some(user), Some(ready), Some(intray), Some(gotit)) => {
+                                let port_assignment = AbstractTeamchannelNodeTomlPortsData {
+                                    user_name: user.clone(),
+                                    ready_port: ready,
+                                    intray_port: intray,
+                                    gotit_port: gotit,
+                                };
+                                
+                                debug_log!(
+                                    "RACPFTW     ✓ Complete port assignment for user '{}': ready={}, intray={}, gotit={}",
+                                    user, ready, intray, gotit
+                                );
+                                
+                                current_pair_ports.push(port_assignment);
+                                
+                                // Reset for next port entry
+                                current_port_entry = None;
+                            }
+                            _ => {
+                                debug_log!(
+                                    "RACPFTW Warning: Incomplete port entry at line {} - missing fields",
+                                    line_number
+                                );
+                            }
+                        }
+                    }
+                    None => {
+                        debug_log!("RACPFTW Warning: Failed to parse gotit_port at line {}", line_number);
+                    }
+                }
+            }
+        }
+    }
+    
+    // Don't forget to save the last pair if file doesn't end with another section
+    if let Some(pair_name) = current_pair_name.take() {
+        if !current_pair_ports.is_empty() {
+            debug_log!(
+                "RACPFTW   Saving {} port assignments for final pair '{}'",
+                current_pair_ports.len(),
+                pair_name
+            );
+            all_assignments.insert(pair_name, current_pair_ports);
+        }
+    }
+    
+    // --- Stage 7: Validate Results ---
+    if all_assignments.is_empty() {
+        return Err(GpgError::GpgOperationError(
+            "RACPFTW No collaborator port assignments found in validated content. Expected sections starting with '[[abstract_collaborator_port_assignments.'".to_string()
+        ));
+    }
+    
+    // Log final summary
+    debug_log!(
+        "RACPFTW ✓ Successfully extracted port assignments for {} collaborator pairs",
+        all_assignments.len()
+    );
+    
+    let mut total_port_count = 0;
+    for (pair_name, ports) in &all_assignments {
+        debug_log!(
+            "RACPFTW   - Pair '{}': {} port assignments",
+            pair_name,
+            ports.len()
+        );
+        total_port_count += ports.len();
+    }
+    
+    debug_log!(
+        "RACPFTW Total port assignments extracted: {}",
+        total_port_count
+    );
+    
+    Ok(all_assignments)
+}
+
+// /// Extracts a quoted string value from a TOML line.
+// ///
+// /// This helper function looks for a field name followed by an equals sign and a quoted value.
+// /// It handles both single and double quotes and trims whitespace appropriately.
+// ///
+// /// # Arguments
+// ///
+// /// * `line` - The line of text to parse
+// /// * `field_name` - The name of the field to extract (e.g., "user_name")
+// ///
+// /// # Returns
+// ///
+// /// * `Some(String)` - The extracted value without quotes
+// /// * `None` - If the field is not found or the value is not properly quoted
+// ///
+// /// # Example
+// ///
+// /// ```no_run
+// /// let line = r#"user_name = "alice""#;
+// /// let value = extract_quoted_value(line, "user_name");
+// /// assert_eq!(value, Some("alice".to_string()));
+// /// ```
+// fn extract_quoted_value(line: &str, field_name: &str) -> Option<String> {
+//     let field_prefix = format!("{} = ", field_name);
+//     if !line.contains(&field_prefix) {
+//         return None;
+//     }
+    
+//     // Find the start of the value after the equals sign
+//     let value_start_index = match line.find(&field_prefix) {
+//         Some(index) => index + field_prefix.len(),
+//         None => return None,
+//     };
+    
+//     let value_part = &line[value_start_index..].trim();
+    
+//     // Check for quoted value (single or double quotes)
+//     if (value_part.starts_with('"') && value_part.len() >= 2) {
+//         // Find the closing quote
+//         if let Some(end_index) = value_part[1..].find('"') {
+//             return Some(value_part[1..end_index + 1].to_string());
+//         }
+//     } else if (value_part.starts_with('\'') && value_part.len() >= 2) {
+//         // Find the closing quote
+//         if let Some(end_index) = value_part[1..].find('\'') {
+//             return Some(value_part[1..end_index + 1].to_string());
+//         }
+//     }
+    
+//     None
+// }
+
+// /// Extracts a port number value from a TOML line.
+// ///
+// /// This helper function looks for a field name followed by an equals sign and a numeric value.
+// /// It validates that the number is within the valid port range (1-65535).
+// ///
+// /// # Arguments
+// ///
+// /// * `line` - The line of text to parse
+// /// * `field_name` - The name of the port field to extract (e.g., "ready_port")
+// ///
+// /// # Returns
+// ///
+// /// * `Some(u16)` - The extracted port number
+// /// * `None` - If the field is not found or the value is not a valid port number
+// ///
+// /// # Example
+// ///
+// /// ```no_run
+// /// let line = "ready_port = 50001";
+// /// let port = extract_port_value(line, "ready_port");
+// /// assert_eq!(port, Some(50001));
+// /// ```
+// fn extract_port_value(line: &str, field_name: &str) -> Option<u16> {
+//     let field_prefix = format!("{} = ", field_name);
+//     if !line.contains(&field_prefix) {
+//         return None;
+//     }
+    
+//     // Find the start of the value after the equals sign
+//     let value_start_index = match line.find(&field_prefix) {
+//         Some(index) => index + field_prefix.len(),
+//         None => return None,
+//     };
+    
+//     let value_part = &line[value_start_index..].trim();
+    
+//     // Extract the numeric part (stop at comma, space, or end of string)
+//     let numeric_part: String = value_part
+//         .chars()
+//         .take_while(|c| c.is_ascii_digit())
+//         .collect();
+    
+//     // Parse as u16
+//     match numeric_part.parse::<u16>() {
+//         Ok(port) if port > 0 => Some(port),
+//         _ => None,
+//     }
+// }
+
 /// Reads all collaborator pair port assignments from a clearsigned TOML file using owner-based GPG key lookup.
 ///
 /// # Purpose

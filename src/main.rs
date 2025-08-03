@@ -401,6 +401,7 @@ use crate::clearsign_toml_module::{
     gpg_make_input_path_name_abs_executabledirectoryrelative_nocheck,
     decrypt_gpgfile_to_output,
     read_all_collaborator_port_assignments_clearsigntoml_optimized,
+    read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyid,
     read_teamchannel_collaborators_with_access_from_clearsigntoml,
     //
     read_singleline_string_from_clearsigntoml_without_keyid,
@@ -3374,7 +3375,7 @@ debug_log!(
 owner
 );
 // Generate random ports for the owner
-let mut rng = rand::thread_rng();
+let mut rng = rand::rng();
 let ready_port = rng.random_range(40000..60000) as u16;
 let tray_port = rng.random_range(40000..60000) as u16;
 let gotit_port = rng.random_range(40000..60000) as u16;
@@ -3954,26 +3955,26 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
 ///     COLLABORATOR_ADDRESSBOOK_PATH_STR
 /// )?;
 /// println!("Found {} unique ports in use", ports.len());
-///
+/// node_toml_path
 pub fn make_exclusionlist_from_single_team_channel(
-    node_toml_path: &Path,
-    collaborator_files_dir_relative: &str,
+    addressbook_readcopy_path_string: &str,
+    node_readcopy_path: &Path,  // node_readcopy_path
 ) -> Result<HashSet<u16>, ThisProjectError> {
     // Initialize the port set
     let mut port_set: HashSet<u16> = HashSet::new();
     
     // Check if the file exists
-    if !node_toml_path.exists() {
+    if !node_readcopy_path.exists() {
         debug_log!(
             "make_exclusionlist_from_single_team_channel: File does not exist: {}",
-            node_toml_path.display()
+            node_readcopy_path.display()
         );
         // Return empty set for non-existent files
         return Ok(port_set);
     }
     
     // Extract channel name for logging
-    let channel_name = node_toml_path
+    let channel_name = node_readcopy_path
         .parent()
         .and_then(|p| p.file_name())
         .and_then(|n| n.to_str())
@@ -3986,10 +3987,16 @@ pub fn make_exclusionlist_from_single_team_channel(
     
     // TODO ? instead use read_teamchannel_collaborator_ports_clearsigntoml_without_keyid()
     
+    /*
+    addressbook_readcopy_path_string: &str,
+    path_to_clearsigned_toml: &str,
+    
+    */
     // Read and validate the clearsigned configuration
-    match read_all_collaborator_port_assignments_clearsigntoml_optimized(
-        node_toml_path,
-        collaborator_files_dir_relative,
+    // match read_all_collaborator_port_assignments_clearsigntoml_optimized(
+    match read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyid(
+        &addressbook_readcopy_path_string, // addressbook_readcopy_path_string
+        &node_readcopy_path.display().to_string(), // path_to_clearsigned_toml
     ) {
         Ok(port_assignments) => {
             debug_log!(
@@ -4532,13 +4539,13 @@ pub fn global_ports_exclusion_list_generator() -> Result<HashSet<u16>, ThisProje
             ).into());
         }
 
-
-
+		// make type path
+        let node_readcopy_pathtype = Path::new(&node_readcopy_path);
 
         // Process this channel's ports
         match make_exclusionlist_from_single_team_channel(
-            &node_toml_path,
-            collaborator_files_dir_relative,
+            &addressbook_readcopy_path_string,
+            &node_readcopy_pathtype,
         ) {
             Ok(channel_ports) => {
                 let port_count = channel_ports.len();
@@ -4847,7 +4854,7 @@ fn generate_unique_port(
     
 //     let mut port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>> = HashMap::new();
 //     let mut local_used_ports: HashSet<u16> = HashSet::new();
-//     let mut rng = rand::thread_rng();
+//     let mut rng = rand::rng();
     
 //     // Define port ranges
 //     const PRIMARY_RANGE: (u16, u16) = (49152, 65535);
@@ -5001,7 +5008,7 @@ pub fn generate_pairwise_port_assignments(
     
     let mut port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>> = HashMap::new();
     let mut local_used_ports: HashSet<u16> = HashSet::new();
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     
     // Define port ranges
     const PRIMARY_RANGE: (u16, u16) = (49152, 65535);
@@ -8862,7 +8869,7 @@ fn add_collaborator_qa(
     } else {
         // Generate 4 random u128 salts
         (0..4)
-            .map(|_| rand::thread_rng().random())
+            .map(|_| rand::rng().random())
             .collect()
     };
     
@@ -12432,7 +12439,7 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
             
 
     // // Generate random ports for the owner
-    // let mut rng = rand::thread_rng();
+    // let mut rng = rand::rng();
     // let ready_port = rng.random_range(40000..60000) as u16;
     // let tray_port = rng.random_range(40000..60000) as u16;
     // let gotit_port = rng.random_range(40000..60000) as u16;
@@ -12620,14 +12627,14 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
 //         collaborators,
 //         );
 
-//     // let mut rng = rand::thread_rng(); // Move RNG outside the loop for fewer calls
+//     // let mut rng = rand::rng(); // Move RNG outside the loop for fewer calls
 
 //     // Load the owner's data
 //     // let owner_data = read_one_collaborator_addressbook_toml(&owner)?;
 
 //     // Simplified port generation (move rng outside loop):
 //     // Assign random ports to owner:  Only owner for new channel.
-//     let mut rng = rand::thread_rng(); // Move RNG instantiation outside the loop
+//     let mut rng = rand::rng(); // Move RNG instantiation outside the loop
 //     let ready_port = rng.random_range(40000..60000) as u16; // Adjust range if needed
 //     let tray_port = rng.random_range(40000..60000) as u16; // Random u16 port number
 //     let gotit_port = rng.random_range(40000..60000) as u16; // Random u16 port number
@@ -12968,7 +12975,7 @@ fn create_core_node(
 //     // Load the owner's data
 //     let owner_data = read_one_collaborator_addressbook_toml(&owner)?;
 
-//     let mut rng = rand::thread_rng();
+//     let mut rng = rand::rng();
 
 //     // 3. Create and Save CoreNode (handling Result)
 //     let new_node_result = CoreNode::new(
@@ -15402,14 +15409,14 @@ fn handle_custom_end_date_input(start_date_timestamp: Option<i64>) -> Result<Opt
 //     collaborators.push(owner.clone());
 //     debug_log!("create_team_channel(): owner 'added' to collaborators");
 
-//     // let mut rng = rand::thread_rng(); // Move RNG outside the loop for fewer calls
+//     // let mut rng = rand::rng(); // Move RNG outside the loop for fewer calls
 
 //     // Load the owner's data
 //     let owner_data = read_one_collaborator_addressbook_toml(&owner)?;
 
 //     // Simplified port generation (move rng outside loop):
 //     // Assign random ports to owner:  Only owner for new channel.
-//     let mut rng = rand::thread_rng(); // Move RNG instantiation outside the loop
+//     let mut rng = rand::rng(); // Move RNG instantiation outside the loop
     
 //     // let ready_port = rng.random_range(40000..60000) as u16; // Adjust range if needed
 //     // let tray_port = rng.random_range(40000..60000) as u16; // Random u16 port number
@@ -17344,7 +17351,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         // // load names of current collaborators to check for collisions: TODO
         // if check_collaborator_name_collision();
 
-        // let mut rng = rand::thread_rng(); 
+        // let mut rng = rand::rng(); 
         
         // let updated_at_timestamp = get_current_unix_timestamp()
         
@@ -17353,7 +17360,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         debug_log("Salt List");
         // Generate salt list (4 random u128 values)
         let new_usersalt_list: Vec<u128> = (0..4)
-            .map(|_| rand::thread_rng().random())
+            .map(|_| rand::rng().random())
             .collect();
         
         // println!("Salt List: Press Enter for random, or type 'manual' for manual input");
@@ -17377,7 +17384,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         // } else {
         //     // Generate 4 random u128 salts
         //     (0..4)
-        //         .map(|_| rand::thread_rng().random())
+        //         .map(|_| rand::rng().random())
         //         .collect()
         // };
 
@@ -21640,7 +21647,7 @@ fn handle_command_main_mode(
     command-list/legend
     */
 
-    debug_log(&format!("fun handle_command_main_mode(), input->{:?}", input));
+    debug_log(&format!("handle_command_main_mode(), input->{:?}", input));
     // First, try to handle numeric input
     if let Ok(index) = input.trim().parse::<usize>() {
         let item_index = index - 1; // Adjust for 0-based indexing
@@ -21774,7 +21781,7 @@ fn handle_command_main_mode(
             //         };
 
             //         // Generate random ports for the collaborator 
-            //         let mut rng = rand::thread_rng();
+            //         let mut rng = rand::rng();
             //         let ready_port__other_collaborator: u16 = rng.random_range(40000..=50000);
             //         let intray_port__other_collaborator: u16 = rng.random_range(40000..=50000);
             //         let gotit_port__other_collaborator: u16 = rng.random_range(40000..=50000);
@@ -22675,7 +22682,7 @@ fn get_addressbook_file_by_username(
 /// to store the u128 salt for salted pearson hash
 /// in the toml file as hex-string
 fn generate_random_salt() -> String {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     let salt: u128 = rng.random(); // Generate a random u128
     format!("0x{:X}", salt) // Convert to hexadecimal string with "0x" prefix
 }
@@ -23940,6 +23947,11 @@ fn sync_flag_ok_or_wait(wait_this_many_seconds: u64) {
                 continue;
             }
         };
+        
+        debug_log!(
+            "sync_flag_ok_or_wait(), sync_flag_path -> {:?}",
+            sync_flag_path,
+            );
 
         // Read the sync flag file
         let is_sync_enabled = match fs::read_to_string(&sync_flag_path) {
@@ -25330,7 +25342,7 @@ fn read_rc_latest_received_from_rc_filetimestamp_plaintextstatefile(
     // Retry loop
     loop { 
         // Generate a random pause duration within the specified range
-        let pause_duration = Duration::from_secs(rand::thread_rng().gen_range(FILE_READWRITE_RETRY_SEC_PAUSE_MIN..=FILE_READWRITE_RETRY_SEC_PAUSE_MAX));
+        let pause_duration = Duration::from_secs(rand::rng().random_range(FILE_READWRITE_RETRY_SEC_PAUSE_MIN..=FILE_READWRITE_RETRY_SEC_PAUSE_MAX));
 
         match read_to_string(&file_path) {
             Ok(timestamp_str) => {
@@ -25477,7 +25489,7 @@ fn write_save_latest_received_from_rc_file_timestamp_plaintext(
 
     loop {
         // Random pause duration
-        let pause_duration = Duration::from_secs(rand::thread_rng().gen_range(FILE_READWRITE_RETRY_SEC_PAUSE_MIN..=FILE_READWRITE_RETRY_SEC_PAUSE_MAX));
+        let pause_duration = Duration::from_secs(rand::rng().random_range(FILE_READWRITE_RETRY_SEC_PAUSE_MIN..=FILE_READWRITE_RETRY_SEC_PAUSE_MAX));
         
         // Attempt to write to the file
         match std::fs::write(&file_path, timestamp.to_string()) { // Note the &
