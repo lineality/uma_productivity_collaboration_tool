@@ -187,7 +187,7 @@ clearsign_and_encrypt_file_for_recipient(
 
 ### Receiving a File
 ```rust
-let encrypted_file = Path::new("invites_updates/outgoing/config.toml.gpg");
+let encrypted_file = Path::new("invites_updates/outgoing/config.gpgtoml");
 let validator_key = "1234567890ABCDEF";
 let output_file = Path::new("decrypted_config.toml");
 
@@ -2482,7 +2482,7 @@ pub fn clearsign_and_encrypt_file_for_recipient(
 /// Uses default file paths for input and output if not specified.
 fn decrypt_and_validate_workflow() -> Result<(), GpgError> {
     // Specify the default encrypted file path
-    let encrypted_file = Path::new("invites_updates/outgoing/test.toml.gpg");
+    let encrypted_file = Path::new("invites_updates/outgoing/test.gpgtoml");
     
     // Specify where the decrypted and verified file will be saved
     let output_file = Path::new("invites_updates/decrypted_and_verified.toml");
