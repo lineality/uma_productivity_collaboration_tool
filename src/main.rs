@@ -18513,6 +18513,8 @@ fn generic_share_address_book(recipient_name: &str) -> Result<(), GpgError> {
 /// remote collaborator's public GPG key.
 /// 
 /// The process follows these steps:
+/// note: steps also involve ready-copy making functions
+/// that add-to and combine some overall steps
 /// 1. Locate the team channel's node.toml file
 /// 2. Read local owner username from uma.toml
 /// 3. Get local owner's GPG key ID from their address book file
@@ -18542,10 +18544,7 @@ fn share_team_channel_with_existing_collaborator_converts_to_abs(
     debug_log!("TCS: Starting team channel sharing process");
     debug_log!("TCS: Remote collaborator username: {}", remote_collaborator_username);
     debug_log!("TCS: Team channel name: {}", team_channel_name);
-    
-    
 
-    
     // ======== STEP 1: Locate the team channel node.toml file ========
     debug_log!("TCS: STEP 1 - Locating team channel node.toml file");
     
@@ -18611,7 +18610,8 @@ fn share_team_channel_with_existing_collaborator_converts_to_abs(
     
     debug_log!("TCS: Successfully read local owner username: {}", local_owner_username);
     
-
+    // ======== STEP 3  read-copy ========
+    
     ///////////////////////////////////////
     // make read-copy of .gpgtoml or .toml
     ///////////////////////////////////////
@@ -18647,45 +18647,9 @@ fn share_team_channel_with_existing_collaborator_converts_to_abs(
     })?;
     
     let local_owner_addressbookreadcopy_path = Path::new(&local_owner_addressbook_readcopy_path_string);
-    
-    // // ======== STEP 3: Locate collaborator files directory ========
-    // debug_log!("TCS: STEP 3 - Locating collaborator files directory");
-    
-    // // Get absolute path to collaborator files directory
-    // let relative_collaborator_files_directory_path = COLLABORATOR_ADDRESSBOOK_PATH_STR;
-    // let absolute_collaborator_files_directory_path = gpg_make_input_path_name_abs_executabledirectoryrelative_nocheck(relative_collaborator_files_directory_path)
-    //     .map_err(|e| GpgError::PathError(format!(
-    //         "TCS: Failed to locate collaborator files directory: {}", e
-    //     )))?;
-    
-    // debug_log!("TCS: Collaborator files directory absolute path: {}", 
-    //            absolute_collaborator_files_directory_path.display());
-    
-    // // ======== STEP 4: Get local owner's GPG key ID from their address book ========
-    // debug_log!("TCS: STEP 4 - Getting local owner's GPG key ID");
-    
-    // // Create path to local owner's address book file
-    // let local_owner_address_book_filename = format!("{}__collaborator.toml", local_owner_username);
-    // let absolute_local_owner_address_book_path = absolute_collaborator_files_directory_path.join(&local_owner_address_book_filename);
-    
-    // debug_log!("TCS: Local owner's address book path: {}", 
-    //            absolute_local_owner_address_book_path.display());
-    
-    // // Verify local owner's address book file exists
-    // if !absolute_local_owner_address_book_path.exists() {
-    //     return Err(GpgError::PathError(format!(
-    //         "TCS: Local owner's address book file not found at: {}", 
-    //         absolute_local_owner_address_book_path.display()
-    //     )));
-    // }
-    
-    // // Convert PathBuf to string for TOML reading functions
-    // let absolute_local_owner_address_book_path_string = absolute_local_owner_address_book_path
-    //     .to_str()
-    //     .ok_or_else(|| GpgError::PathError(format!(
-    //         "TCS: Unable to convert local owner's address book path to string: {}", 
-    //         absolute_local_owner_address_book_path.display()
-    //     )))?;
+
+
+    // ======== STEP 4 Read local owner's GPG key ID  ========
     
     // Read local owner's GPG key ID from their address book
     let local_owner_gpg_key_id = read_singleline_string_from_clearsigntoml(
@@ -18706,29 +18670,7 @@ fn share_team_channel_with_existing_collaborator_converts_to_abs(
     // ======== STEP 5: Get remote collaborator's public GPG key ========
     debug_log!("TCS: STEP 5 - Getting remote collaborator's public GPG key");
     
-    // // Create path to remote collaborator's address book file
-    // let remote_collaborator_address_book_filename = format!("{}__collaborator.toml", remote_collaborator_username);
-    // let absolute_remote_collaborator_address_book_path = absolute_collaborator_files_directory_path.join(&remote_collaborator_address_book_filename);
-    
-    // debug_log!("TCS: Remote collaborator's address book path: {}", 
-    //            absolute_remote_collaborator_address_book_path.display());
-    
-    // // Verify remote collaborator's address book file exists
-    // if !absolute_remote_collaborator_address_book_path.exists() {
-    //     return Err(GpgError::PathError(format!(
-    //         "TCS: Remote collaborator's address book file not found at: {}", 
-    //         absolute_remote_collaborator_address_book_path.display()
-    //     )));
-    // }
-    
-    // // Convert PathBuf to string for TOML reading functions
-    // let absolute_remote_collaborator_address_book_path_string = absolute_remote_collaborator_address_book_path
-    //     .to_str()
-    //     .ok_or_else(|| GpgError::PathError(format!(
-    //         "TCS: Unable to convert remote collaborator's address book path to string: {}", 
-    //         absolute_remote_collaborator_address_book_path.display()
-    //     )))?;
-    
+    // // read cpoy of collaborator's address book file
     // Extract the addressbook path string with proper error conversion to GpgError
     let remote_collaborator_addressbook_readcopy_path_string = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
         &remote_collaborator_username,
@@ -19114,6 +19056,75 @@ fn share_lou_address_book_with_existingcollaborator(recipient_name: &str) -> Res
     Ok(())
 }
 
+/// Prompts the user to choose between saving encrypted or clearsigned format
+///
+/// This function presents a choice to the user about how to save the validated
+/// collaborator addressbook file. The encrypted format (.gpgtoml) is recommended
+/// and is the default choice.
+///
+/// # Returns
+/// * `Ok(true)` - User chose to keep encrypted .gpgtoml format (default/recommended)
+/// * `Ok(false)` - User chose to save as clearsigned .toml (readable but not encrypted)
+/// * `Err(GpgError)` - If there's an error reading user input
+///
+/// # Behavior
+/// - Pressing Enter (empty input) selects the default encrypted format
+/// - Any input starting with 'y' or 'Y' selects encrypted format
+/// - Any input starting with 'n' or 'N' selects clearsigned format
+/// - Any other input re-prompts the user
+fn prompt_user_for_save_format_choice() -> Result<bool, GpgError> {
+    loop {
+        // Display the choice prompt with clear guidance
+        println!("\n=== File Format Choice ===");
+        println!("The incoming encrypted file has been successfully validated and verified.");
+        println!("\nHow would you like to save this collaborator's addressbook?");
+        println!();
+        println!("  1. Keep encrypted .gpgtoml format (RECOMMENDED, DEFAULT)");
+        println!("     - Maintains encryption at rest");
+        println!("     - More secure storage");
+        println!("     - Press Enter or type 'yes'");
+        println!();
+        println!("  2. Save as clearsigned .toml file");
+        println!("     - Human-readable format");
+        println!("     - Still signed but NOT encrypted");
+        println!("     - Type 'no' to select this option");
+        println!();
+        println!("Choice: Press Enter for encrypted (default), or type 'no' for clearsigned:");
+        
+        // Read user input
+        let mut user_input = String::new();
+        io::stdin()
+            .read_line(&mut user_input)
+            .map_err(|e| {
+                let error_msg = format!("Failed to read user input for format choice: {}", e);
+                println!("Error: {}", error_msg);
+                GpgError::ValidationError(error_msg)
+            })?;
+        
+        // Trim whitespace and convert to lowercase for comparison
+        let trimmed_input = user_input.trim().to_lowercase();
+        
+        // Process user choice
+        match trimmed_input.as_str() {
+            // Empty input (just Enter) or explicit yes = encrypted format
+            "" | "y" | "yes" | "1" => {
+                println!("Selected: Encrypted .gpgtoml format (recommended)");
+                return Ok(true);
+            },
+            // Explicit no = clearsigned format
+            "n" | "no" | "2" => {
+                println!("Selected: Clearsigned .toml format (not encrypted)");
+                return Ok(false);
+            },
+            // Invalid input - loop again
+            _ => {
+                println!("Invalid choice. Please press Enter for default, or type 'no' for clearsigned.");
+                continue;
+            }
+        }
+    }
+}
+
 /// Process an incoming encrypted collaborator addressbook file
 ///
 /// This function handles the secure processing of a GPG-encrypted clearsigned file
@@ -19132,6 +19143,24 @@ fn share_lou_address_book_with_existingcollaborator(recipient_name: &str) -> Res
 /// - The LOCAL OWNER USER's GPG key ID is read from their own addressbook file
 /// - This key ID is needed to identify which private key to use for decryption
 /// - Both decryption and signature verification must succeed for the process to complete
+///
+/// # File Format Options
+/// After successful validation and verification, users can choose how to save the file:
+/// 
+/// * **Encrypted Format (.gpgtoml)** - DEFAULT/RECOMMENDED
+///   - Keeps the original GPG-encrypted file as received
+///   - Maintains encryption at rest for better security
+///   - File remains encrypted with the recipient's public key
+///   - Saved as: `{REMOTE_COLLABORATOR}__collaborator.gpgtoml`
+/// 
+/// * **Clearsigned Format (.toml)** - OPTIONAL
+///   - Extracts and saves the clearsigned TOML content
+///   - Human-readable but NOT encrypted
+///   - Still contains GPG signature for authenticity
+///   - Saved as: `{REMOTE_COLLABORATOR}__collaborator.toml`
+/// 
+/// The choice is presented after verification succeeds. Pressing Enter selects 
+/// the default encrypted format for maximum security.
 ///
 /// # Path Handling
 /// All file and directory paths are resolved relative to the executable's directory location,
@@ -19426,7 +19455,53 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
     println!("File successfully decrypted and signature verified!");
     debug_log!("PIECA Successfully decrypted and verified file");
     
-    // STEP 7: Extract collaborator username from the verified content
+    // // STEP 7: Extract collaborator username from the verified content
+    // debug_log!("PIECA Step 7: Extracting collaborator username from verified content");
+    
+    // // Convert temporary file path to string for TOML reading
+    // let temp_clearsigned_path_str = temp_clearsigned_path
+    //     .to_str()
+    //     .ok_or_else(|| {
+    //         let error_msg = "PIECA Unable to convert temp file path to string".to_string();
+    //         println!("Error: {}", error_msg);
+    //         GpgError::PathError(error_msg)
+    //     })?;
+    
+    // // Read the username from the clearsigned TOML
+    // // This is the remote collaborator whose addressbook we just received
+    // let remote_collaborator_username = read_singleline_string_from_clearsigntoml(
+    //     temp_clearsigned_path_str,
+    //     "user_name"
+    // ).map_err(|e| {
+    //     let error_msg = format!("PIECA Failed to read remote collaborator's username: {}", e);
+    //     println!("Error: {}", error_msg);
+    //     println!("The decrypted file doesn't contain a valid 'user_name' field.");
+    //     GpgError::ValidationError(error_msg)
+    // })?;
+    
+    // debug_log!("PIECA Extracted remote collaborator's username: {}", remote_collaborator_username);
+    // println!("Received addressbook from collaborator: {}", remote_collaborator_username);
+    
+    // // STEP 8: Save the verified clearsigned file to the collaborator directory
+    // debug_log!("PIECA Step 8: Saving verified clearsigned file to collaborator directory");
+    
+    // // Create the output filename using the extracted username
+    // let output_filename = format!("{}__collaborator.toml", remote_collaborator_username);
+    // let output_file_path = absolute_collab_dir.join(&output_filename);
+    
+    // debug_log!("PIECA Saving verified clearsigned file to: {}", output_file_path.display());
+    
+    // // Copy the verified clearsigned file to the collaborator directory
+    // fs::copy(&temp_clearsigned_path, &output_file_path)
+    //     .map_err(|e| {
+    //         let error_msg = format!("PIECA Failed to save verified clearsigned file: {}", e);
+    //         println!("Error: {}", error_msg);
+    //         GpgError::GpgOperationError(error_msg)
+    //     })?;
+    
+    // println!("Successfully saved collaborator addressbook to: {}", output_file_path.display());
+    
+// STEP 7: Extract collaborator username from the verified content
     debug_log!("PIECA Step 7: Extracting collaborator username from verified content");
     
     // Convert temporary file path to string for TOML reading
@@ -19453,24 +19528,55 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
     debug_log!("PIECA Extracted remote collaborator's username: {}", remote_collaborator_username);
     println!("Received addressbook from collaborator: {}", remote_collaborator_username);
     
-    // STEP 8: Save the verified clearsigned file to the collaborator directory
-    debug_log!("PIECA Step 8: Saving verified clearsigned file to collaborator directory");
+    // STEP 7.5: Ask user for preferred save format
+    debug_log!("PIECA Step 7.5: Prompting user for save format preference");
     
-    // Create the output filename using the extracted username
-    let output_filename = format!("{}__collaborator.toml", remote_collaborator_username);
-    let output_file_path = absolute_collab_dir.join(&output_filename);
-    
-    debug_log!("PIECA Saving verified clearsigned file to: {}", output_file_path.display());
-    
-    // Copy the verified clearsigned file to the collaborator directory
-    fs::copy(&temp_clearsigned_path, &output_file_path)
+    let save_encrypted_format = prompt_user_for_save_format_choice()
         .map_err(|e| {
-            let error_msg = format!("PIECA Failed to save verified clearsigned file: {}", e);
+            let error_msg = format!("PIECA Failed to get user format choice: {}", e);
             println!("Error: {}", error_msg);
-            GpgError::GpgOperationError(error_msg)
+            e
         })?;
     
-    println!("Successfully saved collaborator addressbook to: {}", output_file_path.display());
+    // STEP 8: Save the file in the user's chosen format
+    debug_log!("PIECA Step 8: Saving file in {} format to collaborator directory", 
+              if save_encrypted_format { "encrypted .gpgtoml" } else { "clearsigned .toml" });
+    
+    // Create the output filename based on user's choice
+    let output_filename = if save_encrypted_format {
+        // User chose to keep the encrypted format
+        format!("{}__collaborator.gpgtoml", remote_collaborator_username)
+    } else {
+        // User chose clearsigned format (current behavior)
+        format!("{}__collaborator.toml", remote_collaborator_username)
+    };
+    
+    let output_file_path = absolute_collab_dir.join(&output_filename);
+    
+    debug_log!("PIECA Saving file to: {}", output_file_path.display());
+    
+    // Save the file based on user's choice
+    if save_encrypted_format {
+        // Copy the original encrypted file directly (it's already been validated)
+        debug_log!("PIECA Copying original encrypted .gpgtoml file");
+        fs::copy(&encrypted_file_path, &output_file_path)
+            .map_err(|e| {
+                let error_msg = format!("PIECA Failed to save encrypted .gpgtoml file: {}", e);
+                println!("Error: {}", error_msg);
+                GpgError::GpgOperationError(error_msg)
+            })?;
+        println!("Successfully saved encrypted collaborator addressbook to: {}", output_file_path.display());
+    } else {
+        // Copy the verified clearsigned file (original behavior)
+        debug_log!("PIECA Copying extracted clearsigned .toml file");
+        fs::copy(&temp_clearsigned_path, &output_file_path)
+            .map_err(|e| {
+                let error_msg = format!("PIECA Failed to save clearsigned .toml file: {}", e);
+                println!("Error: {}", error_msg);
+                GpgError::GpgOperationError(error_msg)
+            })?;
+        println!("Successfully saved clearsigned collaborator addressbook to: {}", output_file_path.display());
+    }
     
     // STEP 9: Move the original encrypted file to the processed directory
     debug_log!("PIECA Step 9: Moving original encrypted file to processed directory");
@@ -19506,6 +19612,9 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
     io::stdin()
         .read_line(&mut input)
         .map_err(|e| format!("Failed to read input: {:?}", e));
+    
+    // OK!
+    debug_log("PIECA PIECA!!");
     
     Ok(())
 }
@@ -20722,14 +20831,35 @@ fn share_lou_addressbook_with_incomingkey() -> Result<(), GpgError> {
 /// 6. Locates the team channel owner's addressbook file to extract their GPG public key
 /// 7. Verifies the clearsign signature using the team channel owner's public key
 /// 8. Extracts the team channel name from the verified content
-/// 9. Creates the team channel directory structure and saves the verified files
-/// 10. Moves the original encrypted file to the processed directory
+/// 9. Creates the team channel directory structure and prompts for save format
+/// 10. Saves the team channel file in the user's chosen format (encrypted or clearsigned)
+/// 11. Moves the original encrypted file to the processed directory
 ///
 /// # Path Handling
 /// All file and directory paths are resolved relative to the executable's directory location,
 /// NOT the current working directory. This ensures consistent behavior regardless of where 
 /// the program is executed from.
 ///
+/// # File Format Options
+/// After successful validation and verification, users can choose how to save the team channel file:
+/// 
+/// * **Encrypted Format (node.gpgtoml)** - DEFAULT/RECOMMENDED
+///   - Keeps the original GPG-encrypted file as received
+///   - Maintains encryption at rest for better security
+///   - File remains encrypted with the recipient's public key
+///   - Saved as: `{TEAM_CHANNEL_NAME}/node.gpgtoml`
+/// 
+/// * **Clearsigned Format (node.toml)** - OPTIONAL
+///   - Saves the clearsigned TOML content
+///   - Human-readable but NOT encrypted
+///   - Still contains GPG signature for authenticity
+///   - Saved as: `{TEAM_CHANNEL_NAME}/node.toml`
+/// 
+/// The choice is presented after verification succeeds. Pressing Enter selects 
+/// the default encrypted format for maximum security. Only one file format is saved
+/// based on the user's choice (unlike earlier versions that saved both).
+///
+
 /// # Returns
 /// * `Ok(())` if the operation succeeds
 /// * `Err(GpgError)` if any operation fails
@@ -21253,37 +21383,108 @@ pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
     let node_toml_path = absolute_specific_team_channel_dir.join("node.toml");
     let node_gpg_path = absolute_specific_team_channel_dir.join("node.gpg");
     
-    // STEP 13: Save verified content as node.toml
-    debug_log!("PIET Step 13: Saving verified content as node.toml");
+    // // STEP 13: Save verified content as node.toml
+    // debug_log!("PIET Step 13: Saving verified content as node.toml");
     
-    // Copy verified content to node.toml
-    if let Err(e) = fs::copy(&temp_verified_path, &node_toml_path) {
-        let error_msg = format!("PIET Failed to save node.toml: {}", e);
-        println!("Error: {}", error_msg);
+    // // Copy verified content to node.toml
+    // if let Err(e) = fs::copy(&temp_verified_path, &node_toml_path) {
+    //     let error_msg = format!("PIET Failed to save node.toml: {}", e);
+    //     println!("Error: {}", error_msg);
         
-        // Clean up temp directory before returning
-        let _ = fs::remove_dir_all(&temp_dir);
+    //     // Clean up temp directory before returning
+    //     let _ = fs::remove_dir_all(&temp_dir);
         
-        return Err(GpgError::GpgOperationError(error_msg));
+    //     return Err(GpgError::GpgOperationError(error_msg));
+    // }
+    
+    // debug_log!("PIET Saved node.toml to: {}", node_toml_path.display());
+    
+    // // STEP 14: Save original encrypted file as node.gpg
+    // debug_log!("PIET Step 14: Saving original encrypted file as node.gpg");
+    
+    // // Copy original encrypted file to node.gpg
+    // if let Err(e) = fs::copy(&encrypted_file_path, &node_gpg_path) {
+    //     let error_msg = format!("PIET Failed to save node.gpg: {}", e);
+    //     println!("Error: {}", error_msg);
+        
+    //     // Clean up temp directory before returning
+    //     let _ = fs::remove_dir_all(&temp_dir);
+        
+    //     return Err(GpgError::GpgOperationError(error_msg));
+    // }
+    
+    // debug_log!("PIET Saved node.gpg to: {}", node_gpg_path.display());
+    
+// STEP 12.5: Ask user for preferred save format
+    debug_log!("PIET Step 12.5: Prompting user for save format preference");
+    
+    let save_encrypted_format = prompt_user_for_save_format_choice()
+        .map_err(|e| {
+            let error_msg = format!("PIET Failed to get user format choice: {}", e);
+            println!("Error: {}", error_msg);
+            
+            // Clean up temp directory before returning
+            let _ = fs::remove_dir_all(&temp_dir);
+            
+            e
+        })?;
+    
+    // STEP 13: Save the team channel file in the user's chosen format
+    debug_log!("PIET Step 13: Saving team channel file in {} format", 
+              if save_encrypted_format { "encrypted .gpgtoml" } else { "clearsigned .toml" });
+    
+    // Determine the output filename based on user's choice
+    let node_filename = if save_encrypted_format {
+        // User chose to keep the encrypted format
+        "node.gpgtoml"
+    } else {
+        // User chose clearsigned format
+        "node.toml"
+    };
+    
+    let node_file_path = absolute_specific_team_channel_dir.join(node_filename);
+    
+    debug_log!("PIET Saving team channel file to: {}", node_file_path.display());
+    
+    // Save the file based on user's choice
+    if save_encrypted_format {
+        // Copy the original encrypted file directly (it's already been validated)
+        debug_log!("PIET Copying original encrypted .gpgtoml file");
+        
+        if let Err(e) = fs::copy(&encrypted_file_path, &node_file_path) {
+            let error_msg = format!("PIET Failed to save encrypted node.gpgtoml: {}", e);
+            println!("Error: {}", error_msg);
+            
+            // Clean up temp directory before returning
+            let _ = fs::remove_dir_all(&temp_dir);
+            
+            return Err(GpgError::GpgOperationError(error_msg));
+        }
+        
+        println!("Successfully saved encrypted team channel file to: {}", node_file_path.display());
+        debug_log!("PIET Saved node.gpgtoml to: {}", node_file_path.display());
+    } else {
+        // Copy the verified clearsigned content
+        debug_log!("PIET Copying extracted clearsigned .toml file");
+        
+        // First, we need to copy the clearsigned content (not just the extracted TOML)
+        // The temp_decrypted_path contains the clearsigned version
+        if let Err(e) = fs::copy(&temp_decrypted_path, &node_file_path) {
+            let error_msg = format!("PIET Failed to save clearsigned node.toml: {}", e);
+            println!("Error: {}", error_msg);
+            
+            // Clean up temp directory before returning
+            let _ = fs::remove_dir_all(&temp_dir);
+            
+            return Err(GpgError::GpgOperationError(error_msg));
+        }
+        
+        println!("Successfully saved clearsigned team channel file to: {}", node_file_path.display());
+        debug_log!("PIET Saved node.toml to: {}", node_file_path.display());
     }
     
-    debug_log!("PIET Saved node.toml to: {}", node_toml_path.display());
+    // STEP 14 is now removed - we no longer save both formats
     
-    // STEP 14: Save original encrypted file as node.gpg
-    debug_log!("PIET Step 14: Saving original encrypted file as node.gpg");
-    
-    // Copy original encrypted file to node.gpg
-    if let Err(e) = fs::copy(&encrypted_file_path, &node_gpg_path) {
-        let error_msg = format!("PIET Failed to save node.gpg: {}", e);
-        println!("Error: {}", error_msg);
-        
-        // Clean up temp directory before returning
-        let _ = fs::remove_dir_all(&temp_dir);
-        
-        return Err(GpgError::GpgOperationError(error_msg));
-    }
-    
-    debug_log!("PIET Saved node.gpg to: {}", node_gpg_path.display());
     
     // STEP 15: Move original encrypted file to processed directory
     debug_log!("PIET Step 15: Moving original encrypted file to processed directory");
@@ -21354,12 +21555,12 @@ pub fn invite_wizard() -> Result<(), GpgError> {
     println!("1. sharing gpg");
     println!("2. sharing address-book file");
     println!("3. sharing team-channel");
-    println!("4. update team-channel");
+    println!("4. update a team-channel that you own");
     println!("\nQ: Which step do you want to do now?");
     println!("(Enter: number + enter)");
 
     let mut input = String::new();
-    io::stdin().read_line(&mut input).expect("Failed to read line");
+    io::stdin().read_line(&mut input).expect("invite-wiz: failed to read line");
 
     let mainchoice: u32 = match input.trim().parse() {
         Ok(num) => num,
@@ -21368,7 +21569,7 @@ pub fn invite_wizard() -> Result<(), GpgError> {
             // println!("1. share gpg");
             // println!("2. share address-book file");
             // println!("3. share team-channel (if you own it)");
-            println!("Please try again entering a number.");
+            println!("Please try again entering a number ->");
             return Ok(());
         }
     };
@@ -21418,11 +21619,12 @@ pub fn invite_wizard() -> Result<(), GpgError> {
 
         2 => {
             println!("\n\n-- Option 2: Sharing an Address-Book-File --");    
-            println!("\nAre you sharing your address book file with...");
+            println!("\nFROM you, TO them, <-outgoing->");
+            println!("Are you sharing your address book file with...");
             println!(" 1. an existing remote-collaborator? or ");
             println!(" 2. a new remote-collaborator?");
             println!(" ");
-            println!("Or ");
+            println!("Or: FROM them TO you, ->incoming<- ");
             println!(" 3. Do you want to import an address-book-file");
             println!("    being shared with you (by a remote collaborator)?");
             println!(" ");
@@ -21509,7 +21711,7 @@ pub fn invite_wizard() -> Result<(), GpgError> {
 
                 3 => {
                     println!(" --- FROM a remote collaborator, TO you --- ");
-                    println!("Please put their FILENAME.asc file in the");
+                    println!("Please put their FILENAME.gpgtoml file in the");
                     println!("```path");
                     println!("invites_updates/incoming/ ");
                     println!("```");
@@ -21720,7 +21922,7 @@ pub fn invite_wizard() -> Result<(), GpgError> {
                     
                     */
                     
-                    // THIS IS NEW BEING MADE NOW
+                    // 
                     process_incoming_encrypted_teamchannel();
 
                     }
