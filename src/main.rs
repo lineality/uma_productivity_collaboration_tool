@@ -4419,11 +4419,17 @@ pub fn global_ports_exclusion_list_generator() -> Result<HashSet<u16>, ThisProje
 
 
         // code from load_core_node...()
+        // Get the UME temp directory path with proper GpgError conversion
+        let base_ume_temp_directory_path = get_base_ume_temp_directory_path()
+            .map_err(|io_err| GpgError::ValidationError(
+                format!("Failed to get UME temp directory path: {}", io_err)
+            ))?;
 
         // Using Debug trait for more detailed error information
         let node_readcopy_path = get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
             &node_toml_path,
             &gpg_full_fingerprint_key_id_string,
+            &base_ume_temp_directory_path,
         ).map_err(|e| format!("Failed to get temporary read copy of TOML file: {:?}", e))?;
 
         ////////////////////////////////
@@ -11226,11 +11232,28 @@ fn load_core_node_from_toml_file(
     //     &file_path,
     //     &gpg_full_fingerprint_key_id_string,
     // )?;
+    
+    // // Get the UME temp directory path with proper GpgError conversion
+    // let base_ume_temp_directory_path = get_base_ume_temp_directory_path()
+    //     .map_err(|io_err| GpgError::ValidationError(
+    //         format!("Failed to get UME temp directory path: {}", io_err)
+    //     ))?;
+        
+    // Get the UME temp directory path with explicit String conversion
+    let base_ume_temp_directory_path = get_base_ume_temp_directory_path()
+        .map_err(|io_err| {
+            let gpg_error = GpgError::ValidationError(
+                format!("Failed to get UME temp directory path: {}", io_err)
+            );
+            // Convert GpgError to String for the function's return type
+            format!("{:?}", gpg_error)
+        })?;
 
     // Using Debug trait for more detailed error information
     let node_readcopy_path = get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
         &file_path,
         &gpg_full_fingerprint_key_id_string,
+        &base_ume_temp_directory_path,
     ).map_err(|e| format!("Failed to get temporary read copy of TOML file: {:?}", e))?;
     
     // //    // simple read string to get owner name
@@ -18658,7 +18681,7 @@ fn share_team_channel_with_existing_collaborator_converts_to_abs(
     };
     
     // Get the UME temp directory path with proper GpgError conversion
-    let ume_temp_directory_path = get_base_ume_temp_directory_path()
+    let base_ume_temp_directory_path = get_base_ume_temp_directory_path()
         .map_err(|io_err| GpgError::ValidationError(
             format!("Failed to get UME temp directory path: {}", io_err)
         ))?;
@@ -18668,7 +18691,7 @@ fn share_team_channel_with_existing_collaborator_converts_to_abs(
         &local_owner_username,
         COLLABORATOR_ADDRESSBOOK_PATH_STR,
         &gpg_full_fingerprint_key_id_string,
-        &ume_temp_directory_path,
+        &base_ume_temp_directory_path,
     ).map_err(|e| {
         // Convert the error to GpgError
         GpgError::ValidationError(format!(

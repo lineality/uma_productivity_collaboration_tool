@@ -12732,10 +12732,17 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
             ))?
             .as_nanos();
         
+        // // Create temporary filename with collaborator name and timestamp for uniqueness
+        // // Use .toml extension regardless of source type for consistency
+        // let temp_filename = format!("collab_addressbook_{}_{}.toml", collaborator_name, timestamp_nanos);
+        // let temp_file_path = std::env::temp_dir().join(&temp_filename);
+        
         // Create temporary filename with collaborator name and timestamp for uniqueness
         // Use .toml extension regardless of source type for consistency
         let temp_filename = format!("collab_addressbook_{}_{}.toml", collaborator_name, timestamp_nanos);
-        let temp_file_path = std::env::temp_dir().join(&temp_filename);
+        
+        // Use the provided UME temp directory path instead of system temp directory
+        let temp_file_path = base_ume_temp_directory_path.join(&temp_filename);
         
         debug_log!("ROCST: Creating temporary file for addressbook content: {:?}", temp_file_path);
         
@@ -13143,7 +13150,7 @@ pub fn get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
     collaborator_name: &str,
     addressbook_files_directory_relative: &str,
     gpg_full_fingerprint_key_id_string: &str,
-    ume_temp_directory_path: &Path,
+    base_ume_temp_directory_path: &Path,
 ) -> Result<String, GpgError> {
     /*
     use fn get_base_ume_temp_directory_path() 
@@ -13200,17 +13207,20 @@ pub fn get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
         //
         // ume_temp_directory_path
 
-        // Create temporary filename with collaborator name and timestamp for uniqueness
-        // Use .toml extension regardless of source type for consistency
-        let temp_filename = format!("collab_addressbook_{}_{}.toml", collaborator_name, timestamp_nanos);
-        
-        // Use the provided UME temp directory path instead of system temp directory
-        let temp_file_path = ume_temp_directory_path.join(&temp_filename);
-                        
         // // Create temporary filename with collaborator name and timestamp for uniqueness
         // // Use .toml extension regardless of source type for consistency
         // let temp_filename = format!("collab_addressbook_{}_{}.toml", collaborator_name, timestamp_nanos);
+        
+        // // Use the provided UME temp directory path instead of system temp directory
+        // let temp_file_path = base_ume_temp_directory_path.join(&temp_filename);
+                        
+        // Create temporary filename with collaborator name and timestamp for uniqueness
+        // Use .toml extension regardless of source type for consistency
+        let temp_filename = format!("collab_addressbook_{}_{}.toml", collaborator_name, timestamp_nanos);
         // let temp_file_path = std::env::temp_dir().join(&temp_filename);
+        
+        // Use the provided UME temp directory path instead of system temp directory
+        let temp_file_path = base_ume_temp_directory_path.join(&temp_filename);
         
         debug_log!("ROCST: Creating temporary file for addressbook content: {:?}", temp_file_path);
         
@@ -13617,6 +13627,7 @@ pub fn get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
 pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
     input_toml_absolute_path: &Path,
     gpg_full_fingerprint_key_id_string: &str, // COLLABORATOR_ADDRESSBOOK_PATH_STR
+    base_ume_temp_directory_path: &Path,
 ) -> Result<PathBuf, GpgError> {
     
     // Validate input parameters before proceeding
@@ -13668,7 +13679,11 @@ pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
         // Create temporary filename with source filename stem and timestamp for uniqueness
         // Always use .toml extension for temp file regardless of source type for consistency
         let temp_filename = format!("temp_toml_copy_{}_{}.toml", filename_stem, timestamp_nanos);
-        let temp_file_path = std::env::temp_dir().join(&temp_filename);
+        // let temp_file_path = std::env::temp_dir().join(&temp_filename);
+        
+        // Create temporary filename with collaborator name and timestamp for uniqueness        
+        // Use the provided UME temp directory path instead of system temp directory
+        let temp_file_path = base_ume_temp_directory_path.join(&temp_filename);
         
         debug_log!("ROCST: Creating temporary file for TOML content: {:?}", temp_file_path);
         debug_log!("ROCST: Source file: {:?} (type: .{})", input_toml_absolute_path, extension);
@@ -14062,6 +14077,7 @@ pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
 pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
     input_toml_absolute_path: &Path,
     gpg_full_fingerprint_key_id_string: &str, // COLLABORATOR_ADDRESSBOOK_PATH_STR
+    base_ume_temp_directory_path: &Path,
 ) -> Result<String, GpgError> {
     debug_log("starting gpttrofodg() -> get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml");
     
@@ -14114,7 +14130,9 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
         // Create temporary filename with source filename stem and timestamp for uniqueness
         // Always use .toml extension for temp file regardless of source type for consistency
         let temp_filename = format!("temp_toml_copy_{}_{}.toml", filename_stem, timestamp_nanos);
-        let temp_file_path = std::env::temp_dir().join(&temp_filename);
+        // let temp_file_path = std::env::temp_dir().join(&temp_filename);
+        // Use the provided UME temp directory path instead of system temp directory
+        let temp_file_path = base_ume_temp_directory_path.join(&temp_filename);
         
         debug_log!("gpttrofodg() : Creating temporary file for TOML content: {:?}", temp_file_path);
         debug_log!("gpttrofodg() : Source file: {:?} (type: .{})", input_toml_absolute_path, extension);
