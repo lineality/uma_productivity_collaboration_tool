@@ -12676,7 +12676,14 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
     collaborator_name: &str,
     addressbook_files_directory_relative: &str,
     gpg_full_fingerprint_key_id_string: &str,
+    base_ume_temp_directory_path: &Path, //
 ) -> Result<PathBuf, GpgError> {
+    /*
+    for base_ume_temp_directory_path
+    use get_base_ume_temp_directory_path()
+    using TEMP_DIR_BASE_UMA_PATH_STR
+    */
+    
     
     // Validate input parameters before proceeding
     if collaborator_name.is_empty() {
@@ -13136,7 +13143,12 @@ pub fn get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
     collaborator_name: &str,
     addressbook_files_directory_relative: &str,
     gpg_full_fingerprint_key_id_string: &str,
+    ume_temp_directory_path: &Path,
 ) -> Result<String, GpgError> {
+    /*
+    use fn get_base_ume_temp_directory_path() 
+    to get/set ume_temp_directory_path 
+    */
     
     // Validate input parameters before proceeding
     if collaborator_name.is_empty() {
@@ -13184,11 +13196,21 @@ pub fn get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                 format!("Failed to get system time for temp file creation: {}", e)
             ))?
             .as_nanos();
-        
+            
+        //
+        // ume_temp_directory_path
+
         // Create temporary filename with collaborator name and timestamp for uniqueness
         // Use .toml extension regardless of source type for consistency
         let temp_filename = format!("collab_addressbook_{}_{}.toml", collaborator_name, timestamp_nanos);
-        let temp_file_path = std::env::temp_dir().join(&temp_filename);
+        
+        // Use the provided UME temp directory path instead of system temp directory
+        let temp_file_path = ume_temp_directory_path.join(&temp_filename);
+                        
+        // // Create temporary filename with collaborator name and timestamp for uniqueness
+        // // Use .toml extension regardless of source type for consistency
+        // let temp_filename = format!("collab_addressbook_{}_{}.toml", collaborator_name, timestamp_nanos);
+        // let temp_file_path = std::env::temp_dir().join(&temp_filename);
         
         debug_log!("ROCST: Creating temporary file for addressbook content: {:?}", temp_file_path);
         
@@ -14375,6 +14397,17 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
         }
     }
 }
+
+/*
+Maybe:
+When std::env::temp_dir() makes sense:
+Only use system temp when:
+
+Creating truly temporary files that the OS should clean up
+You need OS-standard behavior
+Files are short-lived and don't need regular cleanup
+You're not doing bulk deletions
+*/
 
 /// Safely removes a temporary file created during addressbook file processing.
 ///
