@@ -12619,6 +12619,904 @@ fn create_team_channel(team_channel_name: String, owner: String) -> Result<(), T
     }
 }
 
+/// Updates an existing CoreNode by walking the user through optional field updates.
+/// 
+/// This function loads an existing CoreNode from disk, presents the current values of
+/// updatable fields to the user, and allows them to optionally update each field through
+/// a Q&A process. The user can choose to keep existing values (default) or enter new ones.
+/// After all updates are collected, the modified node is saved back to disk.
+/// 
+/// # Updatable Fields
+/// 
+/// The following fields can be updated:
+/// - **Team channel collaborators list** (primary update field)
+/// - **Port assignments** (regenerated if collaborators change)
+/// - **Project Areas**: pa1_process, pa2_schedule, pa3_users, pa4_features, pa5_mvp, pa6_feedback
+/// - **Message Post Configuration**: All Option fields for message post settings
+/// 
+/// # Preserved Fields
+/// 
+/// The following fields are NOT modified:
+/// - Core identity fields (owner, node_name, node_unique_id, directory_path)
+/// - Directory structure (no filesystem changes except the node TOML file)
+/// 
+/// # Arguments
+/// 
+/// * `node_path` - The absolute path to the CoreNode TOML file to update
+/// 
+/// # Returns
+/// 
+/// * `Result<(), ThisProjectError>` - `Ok(())` on successful update and save,
+///   or a `ThisProjectError` describing what went wrong
+/// 
+/// # Errors
+/// 
+/// This function can fail with a `ThisProjectError` in the following cases:
+/// * If the node file cannot be loaded from the specified path
+/// * If the node file cannot be parsed as a valid CoreNode
+/// * If saving the updated node back to disk fails
+/// * If user input cannot be read during Q&A
+/// * If port assignment generation fails when collaborators are updated
+/// 
+/// # Example
+/// 
+/// ```
+/// let node_path = PathBuf::from("/absolute/path/to/node.toml");
+/// match update_core_node(node_path) {
+///     Ok(()) => println!("Node updated successfully"),
+///     Err(e) => eprintln!("Failed to update node: {}", e),
+/// }
+/// ```
+fn update_core_node(
+    node_path: PathBuf,
+) -> Result<(), ThisProjectError> {
+    // Log function entry
+    debug_log!("UCN: Starting update_core_node for path: {:?}", node_path);
+    
+    // Step 1: Load the existing CoreNode from disk
+    // Uses load_core_node_from_toml_file to read and parse the node.toml file
+    let mut existing_node = match load_core_node_from_toml_file(&node_path) {
+        Ok(node) => {
+            debug_log!("UCN: Successfully loaded CoreNode from {:?}", node_path);
+            node
+        }
+        Err(e) => {
+            debug_log!("UCN: Failed to load CoreNode from {:?}: {}", node_path, e);
+            // Map the error to ThisProjectError::InvalidData as per the error handling pattern
+            return Err(ThisProjectError::InvalidData(e));
+        }
+    };
+    
+    println!("\n=== CoreNode Update Wizard ===");
+    println!("Node: {}", existing_node.node_name);
+    println!("Description: {}", existing_node.description_for_tui);
+    println!("Owner: {}", existing_node.owner);
+    println!("\nYou will be prompted to update various fields.");
+    println!("Press Enter to keep existing values, or type new values when prompted.\n");
+    
+    // Step 2: Update Team Channel Collaborators (main field)
+    println!("\n--- TEAM CHANNEL COLLABORATORS UPDATE ---");
+    println!("Current collaborators with access: {:?}", existing_node.teamchannel_collaborators_with_access);
+    print!("Do you want to update the collaborators list? [y/N]: ");
+    
+    // Flush stdout to ensure prompt appears
+    use std::io::{self, Write};
+    io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let mut input = String::new();
+    io::stdin().read_line(&mut input).map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let update_collaborators = input.trim().to_lowercase() == "y";
+    let mut collaborators_changed = false;
+    
+    if update_collaborators {
+        // Get new collaborators list
+        println!("Enter new collaborators (comma-separated usernames):");
+        println!("Note: The owner '{}' will be automatically included.", existing_node.owner);
+        print!("> ");
+        io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+        
+        let mut collab_input = String::new();
+        io::stdin().read_line(&mut collab_input).map_err(|e| ThisProjectError::IoError(e))?;
+        
+        // Parse collaborators, ensuring owner is included
+        let mut new_collaborators: Vec<String> = collab_input
+            .trim()
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        
+        // Ensure owner is in the list
+        if !new_collaborators.contains(&existing_node.owner) {
+            new_collaborators.insert(0, existing_node.owner.clone());
+        }
+        
+        // Check if collaborators actually changed
+        collaborators_changed = new_collaborators != existing_node.teamchannel_collaborators_with_access;
+        
+        if collaborators_changed {
+            existing_node.teamchannel_collaborators_with_access = new_collaborators;
+            debug_log!("UCN: Team channel collaborators updated to: {:?}", existing_node.teamchannel_collaborators_with_access);
+            
+            // Step 3: Regenerate port assignments if collaborators changed
+            println!("\nRegenerating port assignments for updated collaborators...");
+            
+            let (updated_collaborators, new_port_assignments) = 
+                match create_teamchannel_port_assignments(&existing_node.owner) {
+                    Ok((collab_list, port_assigns)) => {
+                        debug_log!(
+                            "UCN: Successfully regenerated port assignments for {} collaborators",
+                            collab_list.len()
+                        );
+                        (collab_list, port_assigns)
+                    }
+                    Err(e) => {
+                        let error_msg = format!(
+                            "UCN: Failed to regenerate port assignments: {}",
+                            e.to_string()
+                        );
+                        eprintln!("ERROR: {}", error_msg);
+                        return Err(ThisProjectError::from(error_msg));
+                    }
+                };
+            
+            // Update the node with new port assignments
+            existing_node.teamchannel_collaborators_with_access = updated_collaborators;
+            existing_node.abstract_collaborator_port_assignments = new_port_assignments;
+            println!("Port assignments regenerated successfully.");
+        } else {
+            println!("Collaborators unchanged.");
+        }
+    }
+    
+    // Step 4: Optionally update port assignments (if collaborators didn't change)
+    if !collaborators_changed {
+        println!("\n--- PORT ASSIGNMENTS UPDATE ---");
+        print!("Do you want to regenerate port assignments? [y/N]: ");
+        io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+        
+        let mut port_input = String::new();
+        io::stdin().read_line(&mut port_input).map_err(|e| ThisProjectError::IoError(e))?;
+        
+        if port_input.trim().to_lowercase() == "y" {
+            println!("Regenerating port assignments...");
+            
+            let (_, new_port_assignments) = 
+                match create_teamchannel_port_assignments(&existing_node.owner) {
+                    Ok((collab_list, port_assigns)) => {
+                        debug_log!("UCN: Port assignments regenerated");
+                        (collab_list, port_assigns)
+                    }
+                    Err(e) => {
+                        let error_msg = format!(
+                            "UCN: Failed to regenerate port assignments: {}",
+                            e.to_string()
+                        );
+                        eprintln!("ERROR: {}", error_msg);
+                        return Err(ThisProjectError::from(error_msg));
+                    }
+                };
+            
+            existing_node.abstract_collaborator_port_assignments = new_port_assignments;
+            println!("Port assignments regenerated successfully.");
+        }
+    }
+    
+    // Step 5: Update Project Areas
+    println!("\n--- PROJECT AREAS UPDATE ---");
+    
+    // PA1 Process
+    println!("\nPA1 Process (current value: {})", existing_node.pa1_process);
+    print!("Update PA1 Process? [y/N]: ");
+    io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let mut pa1_input = String::new();
+    io::stdin().read_line(&mut pa1_input).map_err(|e| ThisProjectError::IoError(e))?;
+    
+    if pa1_input.trim().to_lowercase() == "y" {
+        existing_node.pa1_process = match q_and_a_get_pa1_process() {
+            Ok(data) => {
+                debug_log!("UCN: PA1 Process updated");
+                data
+            }
+            Err(e) => {
+                debug_log!("UCN: Error updating PA1 Process: {}", e);
+                return Err(e);
+            }
+        };
+    }
+    
+    // PA2 Schedule (Vec<u64> - needs Debug formatting)
+    println!("\nPA2 Schedule (current value: {:?})", existing_node.pa2_schedule);
+    print!("Update PA2 Schedule? [y/N]: ");
+    io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let mut pa2_input = String::new();
+    io::stdin().read_line(&mut pa2_input).map_err(|e| ThisProjectError::IoError(e))?;
+    
+    if pa2_input.trim().to_lowercase() == "y" {
+        existing_node.pa2_schedule = match q_and_a_get_pa2_schedule() {
+            Ok(data) => {
+                debug_log!("UCN: PA2 Schedule updated");
+                data
+            }
+            Err(e) => {
+                debug_log!("UCN: Error updating PA2 Schedule: {}", e);
+                return Err(e);
+            }
+        };
+    }
+    
+    // PA3 Users
+    println!("\nPA3 Users (current value: {})", existing_node.pa3_users);
+    print!("Update PA3 Users? [y/N]: ");
+    io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let mut pa3_input = String::new();
+    io::stdin().read_line(&mut pa3_input).map_err(|e| ThisProjectError::IoError(e))?;
+    
+    if pa3_input.trim().to_lowercase() == "y" {
+        existing_node.pa3_users = match q_and_a_get_pa3_users() {
+            Ok(data) => {
+                debug_log!("UCN: PA3 Users updated");
+                data
+            }
+            Err(e) => {
+                debug_log!("UCN: Error updating PA3 Users: {}", e);
+                return Err(e);
+            }
+        };
+    }
+    
+    // PA4 Features
+    println!("\nPA4 Features (current value: {})", existing_node.pa4_features);
+    print!("Update PA4 Features? [y/N]: ");
+    io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let mut pa4_input = String::new();
+    io::stdin().read_line(&mut pa4_input).map_err(|e| ThisProjectError::IoError(e))?;
+    
+    if pa4_input.trim().to_lowercase() == "y" {
+        existing_node.pa4_features = match q_and_a_get_pa4_features() {
+            Ok(data) => {
+                debug_log!("UCN: PA4 Features updated");
+                data
+            }
+            Err(e) => {
+                debug_log!("UCN: Error updating PA4 Features: {}", e);
+                return Err(e);
+            }
+        };
+    }
+    
+    // PA5 MVP
+    println!("\nPA5 MVP (current value: {})", existing_node.pa5_mvp);
+    print!("Update PA5 MVP? [y/N]: ");
+    io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let mut pa5_input = String::new();
+    io::stdin().read_line(&mut pa5_input).map_err(|e| ThisProjectError::IoError(e))?;
+    
+    if pa5_input.trim().to_lowercase() == "y" {
+        existing_node.pa5_mvp = match q_and_a_get_pa5_mvp() {
+            Ok(data) => {
+                debug_log!("UCN: PA5 MVP updated");
+                data
+            }
+            Err(e) => {
+                debug_log!("UCN: Error updating PA5 MVP: {}", e);
+                return Err(e);
+            }
+        };
+    }
+    
+    // PA6 Feedback
+    println!("\nPA6 Feedback (current value: {})", existing_node.pa6_feedback);
+    print!("Update PA6 Feedback? [y/N]: ");
+    io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let mut pa6_input = String::new();
+    io::stdin().read_line(&mut pa6_input).map_err(|e| ThisProjectError::IoError(e))?;
+    
+    if pa6_input.trim().to_lowercase() == "y" {
+        existing_node.pa6_feedback = match q_and_a_get_pa6_feedback() {
+            Ok(data) => {
+                debug_log!("UCN: PA6 Feedback updated");
+                data
+            }
+            Err(e) => {
+                debug_log!("UCN: Error updating PA6 Feedback: {}", e);
+                return Err(e);
+            }
+        };
+    }
+    
+    // Step 6: Update Message Post Configuration (Optional fields)
+    println!("\n--- MESSAGE POST CONFIGURATION UPDATE ---");
+    print!("Update message post configuration fields? [y/N]: ");
+    io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+    let mut msg_config_input = String::new();
+    io::stdin().read_line(&mut msg_config_input).map_err(|e| ThisProjectError::IoError(e))?;
+    
+    if msg_config_input.trim().to_lowercase() == "y" {
+        // Helper function to update optional fields
+        // For now, we'll provide simple text input for these fields
+        // In a real implementation, you might want more sophisticated Q&A functions
+        
+        println!("\nNote: Press Enter to keep existing value, or enter new value.");
+        
+        // Max string length
+        print!("Max string length (current: {:?}): ", existing_node.message_post_max_string_length_int);
+        io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+        
+        let mut max_len_input = String::new();
+        io::stdin().read_line(&mut max_len_input).map_err(|e| ThisProjectError::IoError(e))?;
+        
+        if !max_len_input.trim().is_empty() {
+            match max_len_input.trim().parse::<usize>() {
+                Ok(val) => {
+                    existing_node.message_post_max_string_length_int = Some(val);
+                    debug_log!("UCN: Max string length updated to: {}", val);
+                }
+                Err(_) => {
+                    println!("Invalid number, keeping existing value.");
+                }
+            }
+        }
+        
+        // Is public boolean
+        print!("Is public? (true/false, current: {:?}): ", existing_node.message_post_is_public_bool);
+        io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+        
+        let mut is_public_input = String::new();
+        io::stdin().read_line(&mut is_public_input).map_err(|e| ThisProjectError::IoError(e))?;
+        
+        if !is_public_input.trim().is_empty() {
+            match is_public_input.trim().parse::<bool>() {
+                Ok(val) => {
+                    existing_node.message_post_is_public_bool = Some(val);
+                    debug_log!("UCN: Is public updated to: {}", val);
+                }
+                Err(_) => {
+                    println!("Invalid boolean, keeping existing value.");
+                }
+            }
+        }
+        
+        // User confirms boolean
+        print!("User confirms? (true/false, current: {:?}): ", existing_node.message_post_user_confirms_bool);
+        io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+        
+        let mut user_confirms_input = String::new();
+        io::stdin().read_line(&mut user_confirms_input).map_err(|e| ThisProjectError::IoError(e))?;
+        
+        if !user_confirms_input.trim().is_empty() {
+            match user_confirms_input.trim().parse::<bool>() {
+                Ok(val) => {
+                    existing_node.message_post_user_confirms_bool = Some(val);
+                    debug_log!("UCN: User confirms updated to: {}", val);
+                }
+                Err(_) => {
+                    println!("Invalid boolean, keeping existing value.");
+                }
+            }
+        }
+        
+        // Start date (POSIX timestamp)
+        print!("Start date (POSIX timestamp, current: {:?}): ", existing_node.message_post_start_date_utc_posix);
+        io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+        
+        let mut start_date_input = String::new();
+        io::stdin().read_line(&mut start_date_input).map_err(|e| ThisProjectError::IoError(e))?;
+        
+        if !start_date_input.trim().is_empty() {
+            match start_date_input.trim().parse::<i64>() {
+                Ok(val) => {
+                    existing_node.message_post_start_date_utc_posix = Some(val);
+                    debug_log!("UCN: Start date updated to: {}", val);
+                }
+                Err(_) => {
+                    println!("Invalid timestamp, keeping existing value.");
+                }
+            }
+        }
+        
+        // End date (POSIX timestamp)
+        print!("End date (POSIX timestamp, current: {:?}): ", existing_node.message_post_end_date_utc_posix);
+        io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+        
+        let mut end_date_input = String::new();
+        io::stdin().read_line(&mut end_date_input).map_err(|e| ThisProjectError::IoError(e))?;
+        
+        if !end_date_input.trim().is_empty() {
+            match end_date_input.trim().parse::<i64>() {
+                Ok(val) => {
+                    existing_node.message_post_end_date_utc_posix = Some(val);
+                    debug_log!("UCN: End date updated to: {}", val);
+                }
+                Err(_) => {
+                    println!("Invalid timestamp, keeping existing value.");
+                }
+            }
+        }
+        
+        // Note: The integer ranges and string ranges fields would need more complex parsing
+        // For now, leaving them as-is unless you have specific Q&A functions for them
+        println!("\nNote: Integer ranges and string ranges configuration not updated in this version.");
+    }
+    
+    // Update the timestamp to reflect the modification
+    use std::time::{SystemTime, UNIX_EPOCH};
+    existing_node.updated_at_timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| ThisProjectError::from(format!("System time error: {}", e)))?
+        .as_secs();
+    
+    // Step 7: Save the updated node back to disk
+    println!("\n--- SAVING UPDATES ---");
+    println!("Saving updated CoreNode to {:?}...", node_path);
+    
+    match existing_node.save_node_to_file() {
+        Ok(_) => {
+            debug_log!("UCN: CoreNode successfully saved to {:?}", node_path);
+            println!("CoreNode updated and saved successfully!");
+            Ok(())
+        }
+        Err(e) => {
+            debug_log!("UCN: Failed to save CoreNode: {}", e);
+            eprintln!("ERROR: Failed to save updated node: {}", e);
+            Err(ThisProjectError::IoError(e))
+        }
+    }
+}
+
+// /// Updates an existing CoreNode by walking the user through optional field updates.
+// /// 
+// /// This function loads an existing CoreNode from disk, presents the current values of
+// /// updatable fields to the user, and allows them to optionally update each field through
+// /// a Q&A process. The user can choose to keep existing values (default) or enter new ones.
+// /// After all updates are collected, the modified node is saved back to disk.
+// /// 
+// /// # Updatable Fields
+// /// 
+// /// The following fields can be updated:
+// /// - **Collaborators list** (primary update field)
+// /// - **Port assignments** (regenerated if collaborators change)
+// /// - **Project Areas**: pa1_process, pa2_schedule, pa3_users, pa4_features, pa5_mvp, pa6_feedback
+// /// - **Message Post Configuration**: All Option fields for message post settings
+// /// 
+// /// # Preserved Fields
+// /// 
+// /// The following fields are NOT modified:
+// /// - Core identity fields (owner, node_name, display_name, node_path)
+// /// - Directory structure (no filesystem changes except the node TOML file)
+// /// 
+// /// # Arguments
+// /// 
+// /// * `node_path` - The absolute path to the CoreNode TOML file to update
+// /// 
+// /// # Returns
+// /// 
+// /// * `Result<(), ThisProjectError>` - `Ok(())` on successful update and save,
+// ///   or a `ThisProjectError` describing what went wrong
+// /// 
+// /// # Errors
+// /// 
+// /// This function can fail with a `ThisProjectError` in the following cases:
+// /// * If the node file cannot be loaded from the specified path
+// /// * If the node file cannot be parsed as a valid CoreNode
+// /// * If saving the updated node back to disk fails
+// /// * If user input cannot be read during Q&A
+// /// * If port assignment generation fails when collaborators are updated
+// /// 
+// /// # Example
+// /// 
+// /// ```
+// /// let node_path = PathBuf::from("/absolute/path/to/node.toml");
+// /// match update_core_node(node_path) {
+// ///     Ok(()) => println!("Node updated successfully"),
+// ///     Err(e) => eprintln!("Failed to update node: {}", e),
+// /// }
+// /// ```
+// fn update_core_node(
+//     node_path: PathBuf,
+// ) -> Result<(), ThisProjectError> {
+//     // Log function entry
+//     debug_log!("UCN: Starting update_core_node for path: {:?}", node_path);
+    
+//     // Step 1: Load the existing CoreNode from disk
+//         // Uses load_core_node_from_toml_file to read and parse the node.toml file
+//         let mut existing_node = match load_core_node_from_toml_file(&node_path) {
+//             Ok(node) => {
+//                 debug_log!("UCN: Successfully loaded CoreNode from {:?}", node_path);
+//                 node
+//             }
+//             Err(e) => {
+//                 debug_log!("UCN: Failed to load CoreNode from {:?}: {}", node_path, e);
+//                 // Map the error to ThisProjectError::InvalidData as per the error handling pattern
+//                 return Err(ThisProjectError::InvalidData(e));
+//             }
+//         };
+    
+//     println!("\n=== CoreNode Update Wizard ===");
+//     println!("Node: {}", existing_node.display_name);
+//     println!("Owner: {}", existing_node.owner);
+//     println!("\nYou will be prompted to update various fields.");
+//     println!("Press Enter to keep existing values, or type new values when prompted.\n");
+    
+//     // Step 2: Update Collaborators (main field)
+//     println!("\n--- COLLABORATORS UPDATE ---");
+//     println!("Current collaborators: {:?}", existing_node.collaborators);
+//     print!("Do you want to update the collaborators list? [y/N]: ");
+    
+//     // Flush stdout to ensure prompt appears
+//     use std::io::{self, Write};
+//     io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+//     let mut input = String::new();
+//     io::stdin().read_line(&mut input).map_err(|e| ThisProjectError::IoError(e))?;
+    
+//     let update_collaborators = input.trim().to_lowercase() == "y";
+//     let mut collaborators_changed = false;
+    
+//     if update_collaborators {
+//         // Get new collaborators list
+//         println!("Enter new collaborators (comma-separated usernames):");
+//         println!("Note: The owner '{}' will be automatically included.", existing_node.owner);
+//         print!("> ");
+//         io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+        
+//         let mut collab_input = String::new();
+//         io::stdin().read_line(&mut collab_input).map_err(|e| ThisProjectError::IoError(e))?;
+        
+//         // Parse collaborators, ensuring owner is included
+//         let mut new_collaborators: Vec<String> = collab_input
+//             .trim()
+//             .split(',')
+//             .map(|s| s.trim().to_string())
+//             .filter(|s| !s.is_empty())
+//             .collect();
+        
+//         // Ensure owner is in the list
+//         if !new_collaborators.contains(&existing_node.owner) {
+//             new_collaborators.insert(0, existing_node.owner.clone());
+//         }
+        
+//         // Check if collaborators actually changed
+//         collaborators_changed = new_collaborators != existing_node.collaborators;
+        
+//         if collaborators_changed {
+//             existing_node.collaborators = new_collaborators;
+//             debug_log!("UCN: Collaborators updated to: {:?}", existing_node.collaborators);
+            
+//             // Step 3: Regenerate port assignments if collaborators changed
+//             println!("\nRegenerating port assignments for updated collaborators...");
+            
+//             let (updated_collaborators, new_port_assignments) = 
+//                 match create_teamchannel_port_assignments(&existing_node.owner) {
+//                     Ok((collab_list, port_assigns)) => {
+//                         debug_log!(
+//                             "UCN: Successfully regenerated port assignments for {} collaborators",
+//                             collab_list.len()
+//                         );
+//                         (collab_list, port_assigns)
+//                     }
+//                     Err(e) => {
+//                         let error_msg = format!(
+//                             "UCN: Failed to regenerate port assignments: {}",
+//                             e.to_string()
+//                         );
+//                         eprintln!("ERROR: {}", error_msg);
+//                         return Err(ThisProjectError::from(error_msg));
+//                     }
+//                 };
+            
+//             // Update the node with new port assignments
+//             existing_node.collaborators = updated_collaborators;
+//             existing_node.abstract_collaborator_port_assignments = new_port_assignments;
+//             println!("Port assignments regenerated successfully.");
+//         } else {
+//             println!("Collaborators unchanged.");
+//         }
+//     }
+    
+//     // Step 4: Optionally update port assignments (if collaborators didn't change)
+//     if !collaborators_changed {
+//         println!("\n--- PORT ASSIGNMENTS UPDATE ---");
+//         print!("Do you want to regenerate port assignments? [y/N]: ");
+//         io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+        
+//         let mut port_input = String::new();
+//         io::stdin().read_line(&mut port_input).map_err(|e| ThisProjectError::IoError(e))?;
+        
+//         if port_input.trim().to_lowercase() == "y" {
+//             println!("Regenerating port assignments...");
+            
+//             let (_, new_port_assignments) = 
+//                 match create_teamchannel_port_assignments(&existing_node.owner) {
+//                     Ok((collab_list, port_assigns)) => {
+//                         debug_log!("UCN: Port assignments regenerated");
+//                         (collab_list, port_assigns)
+//                     }
+//                     Err(e) => {
+//                         let error_msg = format!(
+//                             "UCN: Failed to regenerate port assignments: {}",
+//                             e.to_string()
+//                         );
+//                         eprintln!("ERROR: {}", error_msg);
+//                         return Err(ThisProjectError::from(error_msg));
+//                     }
+//                 };
+            
+//             existing_node.abstract_collaborator_port_assignments = new_port_assignments;
+//             println!("Port assignments regenerated successfully.");
+//         }
+//     }
+    
+//     // Step 5: Update Project Areas
+//     println!("\n--- PROJECT AREAS UPDATE ---");
+    
+//     // PA1 Process
+//     println!("\nPA1 Process (current value: {})", existing_node.pa1_process);
+//     print!("Update PA1 Process? [y/N]: ");
+//     io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+//     let mut pa1_input = String::new();
+//     io::stdin().read_line(&mut pa1_input).map_err(|e| ThisProjectError::IoError(e))?;
+    
+//     if pa1_input.trim().to_lowercase() == "y" {
+//         existing_node.pa1_process = match q_and_a_get_pa1_process() {
+//             Ok(data) => {
+//                 debug_log!("UCN: PA1 Process updated");
+//                 data
+//             }
+//             Err(e) => {
+//                 debug_log!("UCN: Error updating PA1 Process: {}", e);
+//                 return Err(e);
+//             }
+//         };
+//     }
+    
+//     // PA2 Schedule
+//     println!("\nPA2 Schedule (current value: {})", existing_node.pa2_schedule);
+//     print!("Update PA2 Schedule? [y/N]: ");
+//     io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+//     let mut pa2_input = String::new();
+//     io::stdin().read_line(&mut pa2_input).map_err(|e| ThisProjectError::IoError(e))?;
+    
+//     if pa2_input.trim().to_lowercase() == "y" {
+//         existing_node.pa2_schedule = match q_and_a_get_pa2_schedule() {
+//             Ok(data) => {
+//                 debug_log!("UCN: PA2 Schedule updated");
+//                 data
+//             }
+//             Err(e) => {
+//                 debug_log!("UCN: Error updating PA2 Schedule: {}", e);
+//                 return Err(e);
+//             }
+//         };
+//     }
+    
+//     // PA3 Users
+//     println!("\nPA3 Users (current value: {})", existing_node.pa3_users);
+//     print!("Update PA3 Users? [y/N]: ");
+//     io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+//     let mut pa3_input = String::new();
+//     io::stdin().read_line(&mut pa3_input).map_err(|e| ThisProjectError::IoError(e))?;
+    
+//     if pa3_input.trim().to_lowercase() == "y" {
+//         existing_node.pa3_users = match q_and_a_get_pa3_users() {
+//             Ok(data) => {
+//                 debug_log!("UCN: PA3 Users updated");
+//                 data
+//             }
+//             Err(e) => {
+//                 debug_log!("UCN: Error updating PA3 Users: {}", e);
+//                 return Err(e);
+//             }
+//         };
+//     }
+    
+//     // PA4 Features
+//     println!("\nPA4 Features (current value: {})", existing_node.pa4_features);
+//     print!("Update PA4 Features? [y/N]: ");
+//     io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+//     let mut pa4_input = String::new();
+//     io::stdin().read_line(&mut pa4_input).map_err(|e| ThisProjectError::IoError(e))?;
+    
+//     if pa4_input.trim().to_lowercase() == "y" {
+//         existing_node.pa4_features = match q_and_a_get_pa4_features() {
+//             Ok(data) => {
+//                 debug_log!("UCN: PA4 Features updated");
+//                 data
+//             }
+//             Err(e) => {
+//                 debug_log!("UCN: Error updating PA4 Features: {}", e);
+//                 return Err(e);
+//             }
+//         };
+//     }
+    
+//     // PA5 MVP
+//     println!("\nPA5 MVP (current value: {})", existing_node.pa5_mvp);
+//     print!("Update PA5 MVP? [y/N]: ");
+//     io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+//     let mut pa5_input = String::new();
+//     io::stdin().read_line(&mut pa5_input).map_err(|e| ThisProjectError::IoError(e))?;
+    
+//     if pa5_input.trim().to_lowercase() == "y" {
+//         existing_node.pa5_mvp = match q_and_a_get_pa5_mvp() {
+//             Ok(data) => {
+//                 debug_log!("UCN: PA5 MVP updated");
+//                 data
+//             }
+//             Err(e) => {
+//                 debug_log!("UCN: Error updating PA5 MVP: {}", e);
+//                 return Err(e);
+//             }
+//         };
+//     }
+    
+//     // PA6 Feedback
+//     println!("\nPA6 Feedback (current value: {})", existing_node.pa6_feedback);
+//     print!("Update PA6 Feedback? [y/N]: ");
+//     io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+//     let mut pa6_input = String::new();
+//     io::stdin().read_line(&mut pa6_input).map_err(|e| ThisProjectError::IoError(e))?;
+    
+//     if pa6_input.trim().to_lowercase() == "y" {
+//         existing_node.pa6_feedback = match q_and_a_get_pa6_feedback() {
+//             Ok(data) => {
+//                 debug_log!("UCN: PA6 Feedback updated");
+//                 data
+//             }
+//             Err(e) => {
+//                 debug_log!("UCN: Error updating PA6 Feedback: {}", e);
+//                 return Err(e);
+//             }
+//         };
+//     }
+    
+//     // Step 6: Update Message Post Configuration (Optional fields)
+//     println!("\n--- MESSAGE POST CONFIGURATION UPDATE ---");
+//     print!("Update message post configuration fields? [y/N]: ");
+//     io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+    
+//     let mut msg_config_input = String::new();
+//     io::stdin().read_line(&mut msg_config_input).map_err(|e| ThisProjectError::IoError(e))?;
+    
+//     if msg_config_input.trim().to_lowercase() == "y" {
+//         // Helper function to update optional fields
+//         // For now, we'll provide simple text input for these fields
+//         // In a real implementation, you might want more sophisticated Q&A functions
+        
+//         println!("\nNote: Press Enter to keep existing value, or enter new value.");
+        
+//         // Max string length
+//         print!("Max string length (current: {:?}): ", existing_node.message_post_max_string_length_int);
+//         io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+        
+//         let mut max_len_input = String::new();
+//         io::stdin().read_line(&mut max_len_input).map_err(|e| ThisProjectError::IoError(e))?;
+        
+//         if !max_len_input.trim().is_empty() {
+//             match max_len_input.trim().parse::<usize>() {
+//                 Ok(val) => {
+//                     existing_node.message_post_max_string_length_int = Some(val);
+//                     debug_log!("UCN: Max string length updated to: {}", val);
+//                 }
+//                 Err(_) => {
+//                     println!("Invalid number, keeping existing value.");
+//                 }
+//             }
+//         }
+        
+//         // Is public boolean
+//         print!("Is public? (true/false, current: {:?}): ", existing_node.message_post_is_public_bool);
+//         io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+        
+//         let mut is_public_input = String::new();
+//         io::stdin().read_line(&mut is_public_input).map_err(|e| ThisProjectError::IoError(e))?;
+        
+//         if !is_public_input.trim().is_empty() {
+//             match is_public_input.trim().parse::<bool>() {
+//                 Ok(val) => {
+//                     existing_node.message_post_is_public_bool = Some(val);
+//                     debug_log!("UCN: Is public updated to: {}", val);
+//                 }
+//                 Err(_) => {
+//                     println!("Invalid boolean, keeping existing value.");
+//                 }
+//             }
+//         }
+        
+//         // User confirms boolean
+//         print!("User confirms? (true/false, current: {:?}): ", existing_node.message_post_user_confirms_bool);
+//         io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+        
+//         let mut user_confirms_input = String::new();
+//         io::stdin().read_line(&mut user_confirms_input).map_err(|e| ThisProjectError::IoError(e))?;
+        
+//         if !user_confirms_input.trim().is_empty() {
+//             match user_confirms_input.trim().parse::<bool>() {
+//                 Ok(val) => {
+//                     existing_node.message_post_user_confirms_bool = Some(val);
+//                     debug_log!("UCN: User confirms updated to: {}", val);
+//                 }
+//                 Err(_) => {
+//                     println!("Invalid boolean, keeping existing value.");
+//                 }
+//             }
+//         }
+        
+//         // Start date (POSIX timestamp)
+//         print!("Start date (POSIX timestamp, current: {:?}): ", existing_node.message_post_start_date_utc_posix);
+//         io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+        
+//         let mut start_date_input = String::new();
+//         io::stdin().read_line(&mut start_date_input).map_err(|e| ThisProjectError::IoError(e))?;
+        
+//         if !start_date_input.trim().is_empty() {
+//             match start_date_input.trim().parse::<i64>() {
+//                 Ok(val) => {
+//                     existing_node.message_post_start_date_utc_posix = Some(val);
+//                     debug_log!("UCN: Start date updated to: {}", val);
+//                 }
+//                 Err(_) => {
+//                     println!("Invalid timestamp, keeping existing value.");
+//                 }
+//             }
+//         }
+        
+//         // End date (POSIX timestamp)
+//         print!("End date (POSIX timestamp, current: {:?}): ", existing_node.message_post_end_date_utc_posix);
+//         io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+        
+//         let mut end_date_input = String::new();
+//         io::stdin().read_line(&mut end_date_input).map_err(|e| ThisProjectError::IoError(e))?;
+        
+//         if !end_date_input.trim().is_empty() {
+//             match end_date_input.trim().parse::<i64>() {
+//                 Ok(val) => {
+//                     existing_node.message_post_end_date_utc_posix = Some(val);
+//                     debug_log!("UCN: End date updated to: {}", val);
+//                 }
+//                 Err(_) => {
+//                     println!("Invalid timestamp, keeping existing value.");
+//                 }
+//             }
+//         }
+        
+//         // Note: The integer ranges and string ranges fields would need more complex parsing
+//         // For now, leaving them as-is unless you have specific Q&A functions for them
+//         println!("\nNote: Integer ranges and string ranges configuration not updated in this version.");
+//     }
+    
+//     // Step 7: Save the updated node back to disk
+//     println!("\n--- SAVING UPDATES ---");
+//     println!("Saving updated CoreNode to {:?}...", node_path);
+    
+//     match existing_node.save_node_to_file() {
+//         Ok(_) => {
+//             debug_log!("UCN: CoreNode successfully saved to {:?}", node_path);
+//             println!("CoreNode updated and saved successfully!");
+//             Ok(())
+//         }
+//         Err(e) => {
+//             debug_log!("UCN: Failed to save CoreNode: {}", e);
+//             eprintln!("ERROR: Failed to save updated node: {}", e);
+//             Err(ThisProjectError::IoError(e))
+//         }
+//     }
+// }
+
 // old relative path version
 // /// Creates a new team-channel directory, subdirectories, and metadata files.
 // /// Handles errors and returns a Result to indicate success or failure.
@@ -21625,7 +22523,7 @@ pub fn invite_wizard() -> Result<(), GpgError> {
     println!("1. sharing gpg");
     println!("2. sharing address-book file");
     println!("3. sharing team-channel");
-    println!("4. update a team-channel that you own");
+    println!("4. update a team-channel that you own");  // update_core_node()
     println!("\nQ: Which step do you want to do now?");
     println!("(Enter: number + enter)");
 
@@ -22002,7 +22900,12 @@ pub fn invite_wizard() -> Result<(), GpgError> {
                     println!("Invalid option. Please select 1, 2, or 3.");
                 }
             }
-
+/*
+    somewhere around here:
+    1. pick node
+    2. 
+    println!("4. update a team-channel that you own");  // update_core_node()
+*/
             // Similar implementation to share_address_book() but with team channel file
             // Would use the same clearsign_and_encrypt_file_for_recipient() function
         },
