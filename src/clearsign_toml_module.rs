@@ -12676,25 +12676,37 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
     collaborator_name: &str,
     addressbook_files_directory_relative: &str,
     gpg_full_fingerprint_key_id_string: &str,
-    base_ume_temp_directory_path: &Path, //
+    base_uma_temp_directory_path: &Path, //
 ) -> Result<PathBuf, GpgError> {
     /*
-    for base_ume_temp_directory_path
-    use get_base_ume_temp_directory_path()
+    for base_uma_temp_directory_path
+    use get_base_uma_temp_directory_path()
     using TEMP_DIR_BASE_UMA_PATH_STR
     */
+    debug_log("gaPATHBUFFttrotodg: starting get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml ");
     
+    // ensure temp dir exists
+    // Ensure the base UME temp directory exists
+    if !base_uma_temp_directory_path.exists() {
+        debug_log!("gaPATHBUFFttrotodg() : Base UME temp directory does not exist, creating: {:?}", base_uma_temp_directory_path);
+        std::fs::create_dir_all(base_uma_temp_directory_path)
+            .map_err(|e| GpgError::TempFileError(
+                format!("gaPATHBUFFttrotodg() Failed to create base UME temp directory '{}': {}", 
+                        base_uma_temp_directory_path.display(), e)
+            ))?;
+        debug_log!("gaPATHBUFFttrotodg() : Successfully created base UME temp directory");
+    }
     
     // Validate input parameters before proceeding
     if collaborator_name.is_empty() {
         return Err(GpgError::ValidationError(
-            "Collaborator name cannot be empty".to_string()
+            "gaPATHBUFFttrotodg error Collaborator name cannot be empty".to_string()
         ));
     }
     
     if gpg_full_fingerprint_key_id_string.is_empty() {
         return Err(GpgError::ValidationError(
-            "GPG fingerprint key ID cannot be empty".to_string()
+            "gaPATHBUFFttrotodg error GPG fingerprint key ID cannot be empty".to_string()
         ));
     }
     
@@ -12711,12 +12723,12 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
     // Step 2: Convert relative paths to absolute paths using the provided helper function
     let toml_absolute_path = make_input_path_name_abs_executabledirectoryrelative_nocheck(&toml_relative_path)
         .map_err(|e| GpgError::PathError(
-            format!("Failed to create absolute path for .toml file '{}': {}", toml_filename, e)
+            format!("gaPATHBUFFttrotodg error Failed to create absolute path for .toml file '{}': {}", toml_filename, e)
         ))?;
     
     let gpgtoml_absolute_path = make_input_path_name_abs_executabledirectoryrelative_nocheck(&gpgtoml_relative_path)
         .map_err(|e| GpgError::PathError(
-            format!("Failed to create absolute path for .gpgtoml file '{}': {}", gpgtoml_filename, e)
+            format!("gaPATHBUFFttrotodg error Failed to create absolute path for .gpgtoml file '{}': {}", gpgtoml_filename, e)
         ))?;
     
     // Variable to track temporary file for cleanup on error
@@ -12728,7 +12740,7 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
         let timestamp_nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_err(|e| GpgError::TempFileError(
-                format!("Failed to get system time for temp file creation: {}", e)
+                format!("gaPATHBUFFttrotodg error Failed to get system time for temp file creation: {}", e)
             ))?
             .as_nanos();
         
@@ -12742,16 +12754,16 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
         let temp_filename = format!("collab_addressbook_{}_{}.toml", collaborator_name, timestamp_nanos);
         
         // Use the provided UME temp directory path instead of system temp directory
-        let temp_file_path = base_ume_temp_directory_path.join(&temp_filename);
+        let temp_file_path = base_uma_temp_directory_path.join(&temp_filename);
         
-        debug_log!("ROCST: Creating temporary file for addressbook content: {:?}", temp_file_path);
+        debug_log!("gaPATHBUFFttrotodg: Creating temporary file for addressbook content: {:?}", temp_file_path);
         
         // Step 3: Check which source file exists and create appropriate temporary copy
         if toml_absolute_path.exists() {
             // Case 1: Clearsigned .toml file exists - create a temporary copy
-            debug_log!("ROCST: Found clearsigned .toml file for collaborator '{}' at path: {:?}", 
+            debug_log!("gaPATHBUFFttrotodg: Found clearsigned .toml file for collaborator '{}' at path: {:?}", 
                        collaborator_name, toml_absolute_path);
-            debug_log!("ROCST: Creating temporary copy to ensure original file safety");
+            debug_log!("gaPATHBUFFttrotodg: Creating temporary copy to ensure original file safety");
             
             // Read the original file content with retry mechanism
             // We'll try up to 2 times with a 300ms delay between attempts
@@ -12761,13 +12773,13 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
             let mut last_read_error = None;
             
             for attempt in 1..=max_retry_attempts {
-                debug_log!("ROCST: Attempting to read original file (attempt {} of {})", attempt, max_retry_attempts);
+                debug_log!("gaPATHBUFFttrotodg: Attempting to read original file (attempt {} of {})", attempt, max_retry_attempts);
                 
                 match std::fs::read(&toml_absolute_path) {
                     Ok(content) => {
                         // Successfully read the file
                         original_content = content;
-                        debug_log!("ROCST: Successfully read original file on attempt {}", attempt);
+                        debug_log!("gaPATHBUFFttrotodg: Successfully read original file on attempt {}", attempt);
                         break;
                     }
                     Err(e) => {
@@ -12776,12 +12788,12 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                         
                         if attempt < max_retry_attempts {
                             // Not the last attempt, wait and retry
-                            debug_log!("ROCST: Failed to read file on attempt {}: {}. Waiting {}ms before retry...", 
+                            debug_log!("gaPATHBUFFttrotodg: Failed to read file on attempt {}: {}. Waiting {}ms before retry...", 
                                        attempt, last_read_error.as_ref().unwrap(), retry_delay_millis);
                             std::thread::sleep(std::time::Duration::from_millis(retry_delay_millis));
                         } else {
                             // Final attempt failed
-                            debug_log!("ROCST: Failed to read file after {} attempts", max_retry_attempts);
+                            debug_log!("gaPATHBUFFttrotodg: Failed to read file after {} attempts", max_retry_attempts);
                         }
                     }
                 }
@@ -12810,7 +12822,7 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                 let mut last_write_error = None;
                 
                 for attempt in 1..=max_retry_attempts {
-                    debug_log!("ROCST: Attempting to write to temporary file (attempt {} of {})", attempt, max_retry_attempts);
+                    debug_log!("gaPATHBUFFttrotodg: Attempting to write to temporary file (attempt {} of {})", attempt, max_retry_attempts);
                     
                     // Try to create and write to the file
                     let write_result = (|| -> Result<(), std::io::Error> {
@@ -12840,7 +12852,7 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                         Ok(()) => {
                             // Successfully wrote the file
                             write_success = true;
-                            debug_log!("ROCST: Successfully wrote temporary file on attempt {}", attempt);
+                            debug_log!("gaPATHBUFFttrotodg: Successfully wrote temporary file on attempt {}", attempt);
                             break;
                         }
                         Err(e) => {
@@ -12849,7 +12861,7 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                             
                             if attempt < max_retry_attempts {
                                 // Not the last attempt, wait and retry
-                                debug_log!("ROCST: Failed to write temporary file on attempt {}: {}. Waiting {}ms before retry...", 
+                                debug_log!("gaPATHBUFFttrotodg: Failed to write temporary file on attempt {}: {}. Waiting {}ms before retry...", 
                                            attempt, last_write_error.as_ref().unwrap(), retry_delay_millis);
                                 std::thread::sleep(std::time::Duration::from_millis(retry_delay_millis));
                                 
@@ -12857,7 +12869,7 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                                 let _ = std::fs::remove_file(&temp_file_path);
                             } else {
                                 // Final attempt failed
-                                debug_log!("ROCST: Failed to write temporary file after {} attempts", max_retry_attempts);
+                                debug_log!("gaPATHBUFFttrotodg: Failed to write temporary file after {} attempts", max_retry_attempts);
                             }
                         }
                     }
@@ -12879,7 +12891,7 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                 let mut last_write_error = None;
                 
                 for attempt in 1..=max_retry_attempts {
-                    debug_log!("ROCST: Attempting to write to temporary file (attempt {} of {})", attempt, max_retry_attempts);
+                    debug_log!("gaPATHBUFFttrotodg: Attempting to write to temporary file (attempt {} of {})", attempt, max_retry_attempts);
                     
                     match std::fs::write(&temp_file_path, &original_content) {
                         Ok(()) => {
@@ -12888,7 +12900,7 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                             if attempt == 1 {
                                 temp_file_created = Some(temp_file_path.clone());
                             }
-                            debug_log!("ROCST: Successfully wrote temporary file on attempt {}", attempt);
+                            debug_log!("gaPATHBUFFttrotodg: Successfully wrote temporary file on attempt {}", attempt);
                             break;
                         }
                         Err(e) => {
@@ -12897,7 +12909,7 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                             
                             if attempt < max_retry_attempts {
                                 // Not the last attempt, wait and retry
-                                debug_log!("ROCST: Failed to write temporary file on attempt {}: {}. Waiting {}ms before retry...", 
+                                debug_log!("gaPATHBUFFttrotodg: Failed to write temporary file on attempt {}: {}. Waiting {}ms before retry...", 
                                            attempt, last_write_error.as_ref().unwrap(), retry_delay_millis);
                                 std::thread::sleep(std::time::Duration::from_millis(retry_delay_millis));
                                 
@@ -12905,7 +12917,7 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                                 let _ = std::fs::remove_file(&temp_file_path);
                             } else {
                                 // Final attempt failed
-                                debug_log!("ROCST: Failed to write temporary file after {} attempts", max_retry_attempts);
+                                debug_log!("gaPATHBUFFttrotodg: Failed to write temporary file after {} attempts", max_retry_attempts);
                             }
                         }
                     }
@@ -12920,11 +12932,11 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                 }
             }
             
-            debug_log!("ROCST: Successfully created temporary copy of .toml file");
+            debug_log!("gaPATHBUFFttrotodg: Successfully created temporary copy of .toml file");
             
         } else if gpgtoml_absolute_path.exists() {
             // Case 2: Encrypted .gpgtoml file exists - decrypt to temporary file
-            debug_log!("ROCST: Found encrypted .gpgtoml file for collaborator '{}' at path: {:?}", 
+            debug_log!("gaPATHBUFFttrotodg: Found encrypted .gpgtoml file for collaborator '{}' at path: {:?}", 
                        collaborator_name, gpgtoml_absolute_path);
             
             // Create empty temporary file with restricted permissions first
@@ -12960,7 +12972,7 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
             
             // Execute GPG to decrypt the .gpgtoml file into our temporary file
             // Note: GPG operations are not retried as they typically either work or fail definitively
-            debug_log!("ROCST: Executing GPG to decrypt {} to temporary file {}", 
+            debug_log!("gaPATHBUFFttrotodg: Executing GPG to decrypt {} to temporary file {}", 
                        gpgtoml_absolute_path.display(), temp_file_path.display());
             
             let gpg_output = std::process::Command::new("gpg")
@@ -12998,7 +13010,7 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                 return Err(GpgError::GpgOperationError(error_msg));
             }
             
-            debug_log!("ROCST: Successfully decrypted .gpgtoml file to temporary file");
+            debug_log!("gaPATHBUFFttrotodg: Successfully decrypted .gpgtoml file to temporary file");
             
         } else {
             // Case 3: Neither file exists - this is an error
@@ -13015,13 +13027,13 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
     // If any error occurred and we created a temp file, clean it up before propagating error
     match create_temp_result {
         Ok(result) => {
-            debug_log!("ROCST: Successfully prepared temporary addressbook file: {:?}", result);
+            debug_log!("gaPATHBUFFttrotodg: Successfully prepared temporary addressbook file: {:?}", result);
             Ok(result)
         },
         Err(e) => {
             // Clean up temporary file if it was created
             if let Some(temp_path) = temp_file_created {
-                debug_log!("ROCST: Error occurred, cleaning up temporary file: {:?}", temp_path);
+                debug_log!("gaPATHBUFFttrotodg: Error occurred, cleaning up temporary file: {:?}", temp_path);
                 let _ = std::fs::remove_file(&temp_path); // Ignore cleanup errors
             }
             Err(e)
@@ -13150,10 +13162,10 @@ pub fn get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
     collaborator_name: &str,
     addressbook_files_directory_relative: &str,
     gpg_full_fingerprint_key_id_string: &str,
-    base_ume_temp_directory_path: &Path,
+    base_uma_temp_directory_path: &Path,
 ) -> Result<String, GpgError> {
     /*
-    use fn get_base_ume_temp_directory_path() 
+    use fn get_base_uma_temp_directory_path() 
     to get/set ume_temp_directory_path 
     */
     
@@ -13212,7 +13224,7 @@ pub fn get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
         // let temp_filename = format!("collab_addressbook_{}_{}.toml", collaborator_name, timestamp_nanos);
         
         // // Use the provided UME temp directory path instead of system temp directory
-        // let temp_file_path = base_ume_temp_directory_path.join(&temp_filename);
+        // let temp_file_path = base_uma_temp_directory_path.join(&temp_filename);
                         
         // Create temporary filename with collaborator name and timestamp for uniqueness
         // Use .toml extension regardless of source type for consistency
@@ -13220,7 +13232,7 @@ pub fn get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
         // let temp_file_path = std::env::temp_dir().join(&temp_filename);
         
         // Use the provided UME temp directory path instead of system temp directory
-        let temp_file_path = base_ume_temp_directory_path.join(&temp_filename);
+        let temp_file_path = base_uma_temp_directory_path.join(&temp_filename);
         
         debug_log!("ROCST: Creating temporary file for addressbook content: {:?}", temp_file_path);
         
@@ -13627,7 +13639,7 @@ pub fn get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
 pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
     input_toml_absolute_path: &Path,
     gpg_full_fingerprint_key_id_string: &str, // COLLABORATOR_ADDRESSBOOK_PATH_STR
-    base_ume_temp_directory_path: &Path,
+    base_uma_temp_directory_path: &Path,
 ) -> Result<PathBuf, GpgError> {
     
     // Validate input parameters before proceeding
@@ -13683,16 +13695,21 @@ pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
         
         // Create temporary filename with collaborator name and timestamp for uniqueness        
         // Use the provided UME temp directory path instead of system temp directory
-        let temp_file_path = base_ume_temp_directory_path.join(&temp_filename);
-        
-        debug_log!("ROCST: Creating temporary file for TOML content: {:?}", temp_file_path);
-        debug_log!("ROCST: Source file: {:?} (type: .{})", input_toml_absolute_path, extension);
+        let temp_file_path = base_uma_temp_directory_path.join(&temp_filename);
+
+        // Add this debug logging:
+        debug_log!("gpBUFFttrofodg() : Base temp directory exists: {}", base_uma_temp_directory_path.exists());
+        debug_log!("gpBUFFttrofodg() : Base temp directory path: {:?}", base_uma_temp_directory_path);
+        debug_log!("gpBUFFttrofodg() : Full temp file path: {:?}", temp_file_path);
+                
+        debug_log!("gpBUFFttrofodg(): Creating temporary file for TOML content: {:?}", temp_file_path);
+        debug_log!("gpBUFFttrofodg(): Source file: {:?} (type: .{})", input_toml_absolute_path, extension);
         
         // Handle based on file extension
         if extension == "toml" {
             // Case 1: Plain .toml file - create a temporary copy
-            debug_log!("ROCST: Processing plain .toml file: {:?}", input_toml_absolute_path);
-            debug_log!("ROCST: Creating temporary copy to ensure original file safety");
+            debug_log!("gpBUFFttrofodg():(): Processing plain .toml file: {:?}", input_toml_absolute_path);
+            debug_log!("gpBUFFttrofodg():(): Creating temporary copy to ensure original file safety");
             
             // Read the original file content with retry mechanism
             // We'll try up to 2 times with a 300ms delay between attempts
@@ -13702,13 +13719,13 @@ pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
             let mut last_read_error = None;
             
             for attempt in 1..=max_retry_attempts {
-                debug_log!("ROCST: Attempting to read original file (attempt {} of {})", attempt, max_retry_attempts);
+                debug_log!("gpBUFFttrofodg():(): Attempting to read original file (attempt {} of {})", attempt, max_retry_attempts);
                 
                 match std::fs::read(input_toml_absolute_path) {
                     Ok(content) => {
                         // Successfully read the file
                         original_content = content;
-                        debug_log!("ROCST: Successfully read original file on attempt {}", attempt);
+                        debug_log!("gpBUFFttrofodg():(): Successfully read original file on attempt {}", attempt);
                         break;
                     }
                     Err(e) => {
@@ -13717,12 +13734,12 @@ pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                         
                         if attempt < max_retry_attempts {
                             // Not the last attempt, wait and retry
-                            debug_log!("ROCST: Failed to read file on attempt {}: {}. Waiting {}ms before retry...", 
+                            debug_log!("gpBUFFttrofodg():(): Failed to read file on attempt {}: {}. Waiting {}ms before retry...", 
                                        attempt, last_read_error.as_ref().unwrap(), retry_delay_millis);
                             std::thread::sleep(std::time::Duration::from_millis(retry_delay_millis));
                         } else {
                             // Final attempt failed
-                            debug_log!("ROCST: Failed to read file after {} attempts", max_retry_attempts);
+                            debug_log!("gpBUFFttrofodg():(): Failed to read file after {} attempts", max_retry_attempts);
                         }
                     }
                 }
@@ -13751,7 +13768,7 @@ pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                 let mut last_write_error = None;
                 
                 for attempt in 1..=max_retry_attempts {
-                    debug_log!("ROCST: Attempting to write to temporary file (attempt {} of {})", attempt, max_retry_attempts);
+                    debug_log!("gpBUFFttrofodg():(): Attempting to write to temporary file (attempt {} of {})", attempt, max_retry_attempts);
                     
                     // Try to create and write to the file
                     let write_result = (|| -> Result<(), std::io::Error> {
@@ -13781,7 +13798,7 @@ pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                         Ok(()) => {
                             // Successfully wrote the file
                             write_success = true;
-                            debug_log!("ROCST: Successfully wrote temporary file on attempt {}", attempt);
+                            debug_log!("gpBUFFttrofodg():(): Successfully wrote temporary file on attempt {}", attempt);
                             break;
                         }
                         Err(e) => {
@@ -13790,7 +13807,7 @@ pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                             
                             if attempt < max_retry_attempts {
                                 // Not the last attempt, wait and retry
-                                debug_log!("ROCST: Failed to write temporary file on attempt {}: {}. Waiting {}ms before retry...", 
+                                debug_log!("gpBUFFttrofodg():(): Failed to write temporary file on attempt {}: {}. Waiting {}ms before retry...", 
                                            attempt, last_write_error.as_ref().unwrap(), retry_delay_millis);
                                 std::thread::sleep(std::time::Duration::from_millis(retry_delay_millis));
                                 
@@ -13798,7 +13815,7 @@ pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                                 let _ = std::fs::remove_file(&temp_file_path);
                             } else {
                                 // Final attempt failed
-                                debug_log!("ROCST: Failed to write temporary file after {} attempts", max_retry_attempts);
+                                debug_log!("gpBUFFttrofodg(): Failed to write temporary file after {} attempts", max_retry_attempts);
                             }
                         }
                     }
@@ -13820,7 +13837,7 @@ pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                 let mut last_write_error = None;
                 
                 for attempt in 1..=max_retry_attempts {
-                    debug_log!("ROCST: Attempting to write to temporary file (attempt {} of {})", attempt, max_retry_attempts);
+                    debug_log!("gpBUFFttrofodg(): Attempting to write to temporary file (attempt {} of {})", attempt, max_retry_attempts);
                     
                     match std::fs::write(&temp_file_path, &original_content) {
                         Ok(()) => {
@@ -13829,7 +13846,7 @@ pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                             if attempt == 1 {
                                 temp_file_created = Some(temp_file_path.clone());
                             }
-                            debug_log!("ROCST: Successfully wrote temporary file on attempt {}", attempt);
+                            debug_log!("gpBUFFttrofodg(): Successfully wrote temporary file on attempt {}", attempt);
                             break;
                         }
                         Err(e) => {
@@ -13838,7 +13855,7 @@ pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                             
                             if attempt < max_retry_attempts {
                                 // Not the last attempt, wait and retry
-                                debug_log!("ROCST: Failed to write temporary file on attempt {}: {}. Waiting {}ms before retry...", 
+                                debug_log!("gpBUFFttrofodg(): Failed to write temporary file on attempt {}: {}. Waiting {}ms before retry...", 
                                            attempt, last_write_error.as_ref().unwrap(), retry_delay_millis);
                                 std::thread::sleep(std::time::Duration::from_millis(retry_delay_millis));
                                 
@@ -13846,7 +13863,7 @@ pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                                 let _ = std::fs::remove_file(&temp_file_path);
                             } else {
                                 // Final attempt failed
-                                debug_log!("ROCST: Failed to write temporary file after {} attempts", max_retry_attempts);
+                                debug_log!("gpBUFFttrofodg(): Failed to write temporary file after {} attempts", max_retry_attempts);
                             }
                         }
                     }
@@ -13861,11 +13878,11 @@ pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                 }
             }
             
-            debug_log!("ROCST: Successfully created temporary copy of .toml file");
+            debug_log!("gpBUFFttrofodg(): Successfully created temporary copy of .toml file");
             
         } else {
             // Case 2: Encrypted .gpgtoml file - decrypt to temporary file
-            debug_log!("ROCST: Processing encrypted .gpgtoml file: {:?}", input_toml_absolute_path);
+            debug_log!("gpBUFFttrofodg(): Processing encrypted .gpgtoml file: {:?}", input_toml_absolute_path);
             
             // Create empty temporary file with restricted permissions first
             #[cfg(unix)]
@@ -13900,7 +13917,7 @@ pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
             
             // Execute GPG to decrypt the .gpgtoml file into our temporary file
             // Note: GPG operations are not retried as they typically either work or fail definitively
-            debug_log!("ROCST: Executing GPG to decrypt {} to temporary file {}", 
+            debug_log!("gpBUFFttrofodg(): Executing GPG to decrypt {} to temporary file {}", 
                        input_toml_absolute_path.display(), temp_file_path.display());
             
             let gpg_output = std::process::Command::new("gpg")
@@ -13938,7 +13955,7 @@ pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                 return Err(GpgError::GpgOperationError(error_msg));
             }
             
-            debug_log!("ROCST: Successfully decrypted .gpgtoml file to temporary file");
+            debug_log!("gpBUFFttrofodg(): Successfully decrypted .gpgtoml file to temporary file");
         }
         
         // Return the temporary file path
@@ -13948,13 +13965,13 @@ pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
     // If any error occurred and we created a temp file, clean it up before propagating error
     match create_temp_result {
         Ok(result) => {
-            debug_log!("ROCST: Successfully prepared temporary TOML file: {:?}", result);
+            debug_log!("gpBUFFttrofodg(): Successfully prepared temporary TOML file: {:?}", result);
             Ok(result)
         },
         Err(e) => {
             // Clean up temporary file if it was created
             if let Some(temp_path) = temp_file_created {
-                debug_log!("ROCST: Error occurred, cleaning up temporary file: {:?}", temp_path);
+                debug_log!("gpBUFFttrofodg(): Error occurred, cleaning up temporary file: {:?}", temp_path);
                 let _ = std::fs::remove_file(&temp_path); // Ignore cleanup errors
             }
             Err(e)
@@ -13962,7 +13979,7 @@ pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
     }
 }
 
-
+// note: updating path to use exe-parent temp directory
 /// Returns a path to a temporary copy of a TOML or GPG-encrypted TOML file.
 ///
 /// # INPUT
@@ -14077,7 +14094,7 @@ pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
 pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
     input_toml_absolute_path: &Path,
     gpg_full_fingerprint_key_id_string: &str, // COLLABORATOR_ADDRESSBOOK_PATH_STR
-    base_ume_temp_directory_path: &Path,
+    base_uma_temp_directory_path: &Path,
 ) -> Result<String, GpgError> {
     debug_log("starting gpttrofodg() -> get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml");
     
@@ -14132,7 +14149,7 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
         let temp_filename = format!("temp_toml_copy_{}_{}.toml", filename_stem, timestamp_nanos);
         // let temp_file_path = std::env::temp_dir().join(&temp_filename);
         // Use the provided UME temp directory path instead of system temp directory
-        let temp_file_path = base_ume_temp_directory_path.join(&temp_filename);
+        let temp_file_path = base_uma_temp_directory_path.join(&temp_filename);
         
         debug_log!("gpttrofodg() : Creating temporary file for TOML content: {:?}", temp_file_path);
         debug_log!("gpttrofodg() : Source file: {:?} (type: .{})", input_toml_absolute_path, extension);
@@ -14256,8 +14273,11 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                 if !write_success && last_write_error.is_some() {
                     // All attempts failed
                     return Err(GpgError::TempFileError(
-                        format!("gpttrofodg() Failed to write content to temporary file after {} attempts: {}", 
-                                max_retry_attempts, last_write_error.unwrap())
+                        format!(
+                            "gpttrofodg() Failed to write content to temporary file after {} attempts: {}", 
+                            max_retry_attempts, 
+                            last_write_error.unwrap(),
+                            )
                     ));
                 }
             }
@@ -14483,32 +14503,44 @@ You're not doing bulk deletions
 /// ```
 pub fn cleanup_collaborator_temp_file(
     temp_file_path_string: &String,
+    base_temp_directory_path: &Path,
 ) -> Result<(), GpgError> {
-    debug_log!("cleanup_collaborator_temp_file(): Attempting to clean up temporary file: {:?}", temp_file_path_string);
+    debug_log!("CCTF(): Attempting to clean up temporary file: {:?}", temp_file_path_string);
     
 	// convert string to path
     let temp_file_path: &std::path::Path = if temp_file_path_string.is_empty() {
-        return Err(GpgError::TempFileError("cleanup_collaborator_temp_file():Input path string cannot be empty".to_string()));
+        return Err(GpgError::TempFileError("CCTF():Input path string cannot be empty".to_string()));
     } else {
         std::path::Path::new(temp_file_path_string)
     };
     
+    // // TODO should be using this dir
+    // // Get the UME temp directory path with explicit String conversion
+    // let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
+    //     .map_err(|io_err| {
+    //         let gpg_error = GpgError::ValidationError(
+    //             format!("Failed to get UME temp directory path: {}", io_err)
+    //         );
+    //         // Convert GpgError to String for the function's return type
+    //         format!("{:?}", gpg_error)
+    //     })?;
+    
     // CRITICAL SAFETY CHECK: Verify this file is actually in the temp directory
     // This prevents accidental deletion of original addressbook files
-    let temp_dir = std::env::temp_dir();
+    // let temp_dir = std::env::temp_dir();  // TODO -> not this dir
     let canonical_temp_path = temp_file_path
         .canonicalize()
         .map_err(|e| GpgError::TempFileError(
-            format!("cleanup_collaborator_temp_file():Failed to canonicalize temp file path '{}': {}", temp_file_path.display(), e)
+            format!("CCTF():Failed to canonicalize temp file path '{}': {}", temp_file_path.display(), e)
         ))?;
     
     // Check if the file path starts with the temp directory path
-    if !canonical_temp_path.starts_with(&temp_dir) {
+    if !canonical_temp_path.starts_with(&base_temp_directory_path) {
         let error_msg = format!(
-            "SAFETY VIOLATION: cleanup_collaborator_temp_file():Refusing to delete file '{}' - not in temp directory '{}'",
-            canonical_temp_path.display(), temp_dir.display()
+            "SAFETY VIOLATION: CCTF():Refusing to delete file '{}' - not in temp directory '{}'",
+            canonical_temp_path.display(), base_temp_directory_path.display()
         );
-        eprintln!("cleanup_collaborator_temp_file(): ERROR: {}", error_msg);
+        eprintln!("CCTF(): ERROR: {}", error_msg);
         return Err(GpgError::TempFileError(error_msg));
     }
     
@@ -14518,18 +14550,18 @@ pub fn cleanup_collaborator_temp_file(
         std::fs::remove_file(&canonical_temp_path)
             .map_err(|e| {
                 let error_msg = format!(
-                    "cleanup_collaborator_temp_file(): Failed to remove temporary file '{}': {}. File may contain sensitive decrypted data.",
+                    "CCTF(): Failed to remove temporary file '{}': {}. File may contain sensitive decrypted data.",
                     canonical_temp_path.display(), e
                 );
-                eprintln!("cleanup_collaborator_temp_file(): WARNING: {}", error_msg);
+                eprintln!("CCTFle(): WARNING: {}", error_msg);
                 GpgError::TempFileError(error_msg)
             })?;
         
-        debug_log!("cleanup_collaborator_temp_file(): Successfully removed temporary file");
+        debug_log!("CCTF(): Successfully removed temporary file");
         Ok(())
     } else {
         // File doesn't exist - this is actually fine, our goal is achieved
-        debug_log!("cleanup_collaborator_temp_file(): Temporary file does not exist, no cleanup needed: {:?}", canonical_temp_path);
+        debug_log!("CCTF(): Temporary file does not exist, no cleanup needed: {:?}", canonical_temp_path);
         Ok(())
     }
 }

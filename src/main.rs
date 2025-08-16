@@ -485,7 +485,7 @@ const INCOMING_PUBLICGPG_KEYASC_FILEPATH_STR: &str = "invites_updates/incoming/k
 
 /// Gets the absolute path to temp directory
 /// executible-parent-relative-aboslute path
-pub fn get_base_ume_temp_directory_path() -> io::Result<PathBuf> {
+pub fn get_base_uma_temp_directory_path() -> io::Result<PathBuf> {
     make_input_path_name_abs_executabledirectoryrelative_nocheck(
         TEMP_DIR_BASE_UMA_PATH_STR
     )
@@ -4420,7 +4420,7 @@ pub fn global_ports_exclusion_list_generator() -> Result<HashSet<u16>, ThisProje
 
         // code from load_core_node...()
         // Get the UME temp directory path with proper GpgError conversion
-        let base_ume_temp_directory_path = get_base_ume_temp_directory_path()
+        let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
             .map_err(|io_err| GpgError::ValidationError(
                 format!("Failed to get UME temp directory path: {}", io_err)
             ))?;
@@ -4429,7 +4429,7 @@ pub fn global_ports_exclusion_list_generator() -> Result<HashSet<u16>, ThisProje
         let node_readcopy_path = get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
             &node_toml_path,
             &gpg_full_fingerprint_key_id_string,
-            &base_ume_temp_directory_path,
+            &base_uma_temp_directory_path,
         ).map_err(|e| format!("Failed to get temporary read copy of TOML file: {:?}", e))?;
 
         ////////////////////////////////
@@ -4467,7 +4467,7 @@ pub fn global_ports_exclusion_list_generator() -> Result<HashSet<u16>, ThisProje
         println!("File owner: '{}'", file_owner_username);
 
         // Get the UME temp directory path with proper GpgError conversion
-        let ume_temp_directory_path = get_base_ume_temp_directory_path()
+        let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
             .map_err(|io_err| GpgError::ValidationError(
                 format!("Failed to get UME temp directory path: {}", io_err)
             ))?;
@@ -4477,7 +4477,7 @@ pub fn global_ports_exclusion_list_generator() -> Result<HashSet<u16>, ThisProje
             &file_owner_username,
             COLLABORATOR_ADDRESSBOOK_PATH_STR,
             &gpg_full_fingerprint_key_id_string,
-            &ume_temp_directory_path,
+            &base_uma_temp_directory_path,
         ).map_err(|e| format!(
             "Failed to get addressbook path for user '{}': {:?}",
             file_owner_username,
@@ -4486,8 +4486,14 @@ pub fn global_ports_exclusion_list_generator() -> Result<HashSet<u16>, ThisProje
 
         // Define cleanup closure
         let cleanup_closure = || {
-            cleanup_collaborator_temp_file(&node_readcopy_path);
-            cleanup_collaborator_temp_file(&addressbook_readcopy_path_string);
+            cleanup_collaborator_temp_file(
+                &node_readcopy_path,
+                &base_uma_temp_directory_path,
+                );
+            cleanup_collaborator_temp_file(
+                &addressbook_readcopy_path_string,
+                &base_uma_temp_directory_path,
+                );
         };
 
         let node_owners_public_gpg_key = read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml(
@@ -11234,13 +11240,13 @@ fn load_core_node_from_toml_file(
     // )?;
     
     // // Get the UME temp directory path with proper GpgError conversion
-    // let base_ume_temp_directory_path = get_base_ume_temp_directory_path()
+    // let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
     //     .map_err(|io_err| GpgError::ValidationError(
     //         format!("Failed to get UME temp directory path: {}", io_err)
     //     ))?;
         
     // Get the UME temp directory path with explicit String conversion
-    let base_ume_temp_directory_path = get_base_ume_temp_directory_path()
+    let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
         .map_err(|io_err| {
             let gpg_error = GpgError::ValidationError(
                 format!("Failed to get UME temp directory path: {}", io_err)
@@ -11253,7 +11259,7 @@ fn load_core_node_from_toml_file(
     let node_readcopy_path = get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
         &file_path,
         &gpg_full_fingerprint_key_id_string,
-        &base_ume_temp_directory_path,
+        &base_uma_temp_directory_path,
     ).map_err(|e| format!("Failed to get temporary read copy of TOML file: {:?}", e))?;
     
     // //    // simple read string to get owner name
@@ -11327,7 +11333,7 @@ fn load_core_node_from_toml_file(
     //    );
 
     // Get the UME temp directory path with error handling
-    let ume_temp_directory_path = get_base_ume_temp_directory_path()
+    let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
         .map_err(|io_err| format!(
             "Failed to get UME temp directory path: {:?}",
             io_err
@@ -11338,7 +11344,7 @@ fn load_core_node_from_toml_file(
         &file_owner_username,
         COLLABORATOR_ADDRESSBOOK_PATH_STR,
         &gpg_full_fingerprint_key_id_string,
-        &ume_temp_directory_path,
+        &base_uma_temp_directory_path,
     ).map_err(|e| format!(
         "Failed to get addressbook path for user '{}': {:?}",
         file_owner_username,
@@ -11348,8 +11354,14 @@ fn load_core_node_from_toml_file(
 
     // Define cleanup closure
     let cleanup_closure = || {
-        cleanup_collaborator_temp_file(&node_readcopy_path);
-        cleanup_collaborator_temp_file(&addressbook_readcopy_path_string);
+        cleanup_collaborator_temp_file(
+            &node_readcopy_path,
+            &base_uma_temp_directory_path,
+            );
+        cleanup_collaborator_temp_file(
+            &addressbook_readcopy_path_string,
+            &base_uma_temp_directory_path,
+            );
     };
 
 
@@ -12119,9 +12131,15 @@ struct CoreNode {
     // // 6. Cleanup
     // 
     debug_log("Proper cleansup");
-    cleanup_collaborator_temp_file(&node_readcopy_path);
-    cleanup_collaborator_temp_file(&addressbook_readcopy_path_string);
-    
+    cleanup_collaborator_temp_file(
+        &node_readcopy_path,
+        &base_uma_temp_directory_path,
+        );
+    cleanup_collaborator_temp_file(
+        &addressbook_readcopy_path_string,
+        &base_uma_temp_directory_path,
+        );
+
     
     // // 7. Return Node Struct (CoreNode)
     debug_log("Ending load_core_node_from_toml_file");
@@ -17999,6 +18017,20 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
     debug_log!("IUA: team_channels_dir -> {:?}", team_channels_dir);
 
     
+    // Get the UME temp directory path with error handling
+    let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
+        .map_err(|io_err| format!(
+            "Failed to get UME temp directory path: {:?}",
+            io_err
+        ))?;
+    
+    // Ensure base_uma_temp_directory_path exists
+    if !base_uma_temp_directory_path.exists() {
+        fs::create_dir_all(&base_uma_temp_directory_path).expect("Failed to create base_uma_temp_directory_path directory");
+    }
+    
+    debug_log!("IUA: base_uma_temp_directory_path -> {:?}", base_uma_temp_directory_path);    
+    
     // // using path relative to exe-parent:
     // // Ensure directory exists relative to the executable
     // let team_channelsdir_result = make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path("team_channels");
@@ -19579,7 +19611,7 @@ fn share_team_channel_with_existing_collaborator_converts_to_abs(
     };
     
     // Get the UME temp directory path with proper GpgError conversion
-    let base_ume_temp_directory_path = get_base_ume_temp_directory_path()
+    let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
         .map_err(|io_err| GpgError::ValidationError(
             format!("Failed to get UME temp directory path: {}", io_err)
         ))?;
@@ -19589,7 +19621,7 @@ fn share_team_channel_with_existing_collaborator_converts_to_abs(
         &local_owner_username,
         COLLABORATOR_ADDRESSBOOK_PATH_STR,
         &gpg_full_fingerprint_key_id_string,
-        &base_ume_temp_directory_path,
+        &base_uma_temp_directory_path,
     ).map_err(|e| {
         // Convert the error to GpgError
         GpgError::ValidationError(format!(
@@ -19615,7 +19647,10 @@ fn share_team_channel_with_existing_collaborator_converts_to_abs(
         ))
     })?;
     // remove temp file
-    cleanup_collaborator_temp_file(&local_owner_addressbook_readcopy_path_string);
+    cleanup_collaborator_temp_file(
+        &local_owner_addressbook_readcopy_path_string,
+        &base_uma_temp_directory_path,
+        );
     
     debug_log!("TCS: Successfully read local owner's GPG key ID: {}", local_owner_gpg_key_id);
     println!("Local owner's GPG key ID (for signing): {}", local_owner_gpg_key_id);
@@ -19625,7 +19660,7 @@ fn share_team_channel_with_existing_collaborator_converts_to_abs(
     
     
     // Get the UME temp directory path with proper GpgError conversion
-    let ume_temp_directory_path = get_base_ume_temp_directory_path()
+    let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
         .map_err(|io_err| GpgError::ValidationError(
             format!("Failed to get UME temp directory path: {}", io_err)
         ))?;
@@ -19636,7 +19671,7 @@ fn share_team_channel_with_existing_collaborator_converts_to_abs(
         &remote_collaborator_username,
         COLLABORATOR_ADDRESSBOOK_PATH_STR,
         &gpg_full_fingerprint_key_id_string,
-        &ume_temp_directory_path,
+        &base_uma_temp_directory_path,
     ).map_err(|e| {
         // Convert the error to GpgError
         GpgError::ValidationError(format!(
@@ -19663,7 +19698,10 @@ fn share_team_channel_with_existing_collaborator_converts_to_abs(
     )))?;
     
     // remove temp file
-    cleanup_collaborator_temp_file(&remote_collaborator_addressbook_readcopy_path_string);
+    cleanup_collaborator_temp_file(
+        &remote_collaborator_addressbook_readcopy_path_string,
+        &base_uma_temp_directory_path,
+        );
     
     debug_log!("TCS: Successfully read remote collaborator's public GPG key");
     
@@ -19885,7 +19923,7 @@ fn share_lou_address_book_with_existingcollaborator(recipient_name: &str) -> Res
     };
     
     // Get the UME temp directory path with proper GpgError conversion
-    let ume_temp_directory_path = get_base_ume_temp_directory_path()
+    let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
         .map_err(|io_err| GpgError::ValidationError(
             format!("Failed to get UME temp directory path: {}", io_err)
         ))?;
@@ -19895,7 +19933,7 @@ fn share_lou_address_book_with_existingcollaborator(recipient_name: &str) -> Res
         &local_owner_user_name,
         COLLABORATOR_ADDRESSBOOK_PATH_STR,
         &gpg_full_fingerprint_key_id_string,
-        &ume_temp_directory_path,
+        &base_uma_temp_directory_path,
     ).map_err(|e| {
         // Convert the error to GpgError
         GpgError::ValidationError(format!(
@@ -20007,7 +20045,10 @@ fn share_lou_address_book_with_existingcollaborator(recipient_name: &str) -> Res
     )?;
     
     // remove temp file
-    cleanup_collaborator_temp_file(&addressbook_readcopy_path_string);
+    cleanup_collaborator_temp_file(
+        &addressbook_readcopy_path_string,
+        &base_uma_temp_directory_path,
+        );
     
     // Clean up the temporary key file
     if let Err(e) = fs::remove_file(&temp_key_path) {
