@@ -9,6 +9,7 @@ archive/
 uma_archive/
 sync_data/
 invites/
+invites_updates/
 
 # uma files
 uma.toml
