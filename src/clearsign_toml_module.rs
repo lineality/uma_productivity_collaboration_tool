@@ -2,10 +2,10 @@
 //! This is a module. You can import functions
 //! from this module as the examples below.
 //!
-//! this is vanilla rust code for managing clearsign-toml files, 
+//! this is vanilla rust code for managing clearsign-toml files,
 //! .toml files that are stay clearsigned as they are used
 //! including gpg decrytpion of newly recieved files
-//! 
+//!
 //! GPG handling code for clearsigning and encrypting files.
 //! This module provides functionality to clearsign files with your private key
 //! and encrypt them with a recipient's public key file.
@@ -14,14 +14,14 @@
 mod clearsign_toml_module;  // This declares the module and tells Rust to look for clearsign_toml_module.rs
 use crate::clearsign_toml_module::{
     manual_q_and_a_new_encrypted_clearsigntoml_verification,
-}; 
+};
 
 fn main() -> Result<(), String> {
     debug_log!("=== GPG Clearsigned TOML File Processor ===");
     println!("This tool helps process encrypted clearsigned TOML files");
     println!("Make sure GPG is properly installed on your system");
     println!("-----------------------------------------------");
-    
+
     match manual_q_and_a_new_encrypted_clearsigntoml_verification() {
         Ok(()) => {
             println!("Operation completed successfully!");
@@ -53,7 +53,7 @@ allow validation, reading, and more private sharing of fiels in stanardized form
     workflow:
     the public gpg key is NOT in this type of clearsigned toml
     but ~pointer information about where to find that public gpg key is
-    in this type of clearsigned toml. 
+    in this type of clearsigned toml.
     the name of the owner is in this file, and that owner has an addresbook
     file that contains that owner's public gpg key. (likely the addressbook
         file is a .gpgtoml (both encrypted with the local-user's public key
@@ -67,11 +67,11 @@ allow validation, reading, and more private sharing of fiels in stanardized form
 
 3. .gpgtoml -> use the current-user's key-id to decrypt-extract a (clearsigned) .toml from
     a fully gpg encrypted file: that file then behaves like either of the above clearsign toml files
-    
+
     a .gogtoml is encrypted with the current user's pubic key,
-    so is decrypted with the private key, the key-id for which 
+    so is decrypted with the private key, the key-id for which
     is obtained from this function:
-    
+
     Get the current-local-user's gpg with something like this:
             // Get GPG key fingerprint
             let full_fingerprint_key_id_string = match q_and_a_user_selects_gpg_key_full_fingerprint() {
@@ -198,7 +198,7 @@ decrypt_and_validate_file(
 )?;
 ```
 
-## Process Flow 
+## Process Flow
 
 ### Sending
 1. Validate signing key exists
@@ -267,8 +267,8 @@ use std::io::{self, Write};
 
 mod clearsign_toml_module;  // This declares the module and tells Rust to look for handle_gpg.rs
 use crate::clearsign_toml_module::{
-    GpgError, 
-    clearsign_and_encrypt_file_for_recipient, 
+    GpgError,
+    clearsign_and_encrypt_file_for_recipient,
     decrypt_and_validate_file,
     rust_gpg_tools_interface,
 };
@@ -281,7 +281,7 @@ pub fn main() -> Result<(), GpgError> {
 */
 
 /*
-Sample use 
+Sample use
 mod read_toml_field;  // This declares the module and tells Rust to look for handle_gpg.rs
 use crate::read_toml_field::{
     read_field_from_toml,
@@ -291,12 +291,12 @@ use crate::read_toml_field::{
     read_integer_array,
     read_singleline_string_from_clearsigntoml,
     read_multiline_string_from_clearsigntoml,
-}; 
+};
 
 fn main() -> Result<(), String> {
     let value = read_field_from_toml("test.toml", "fieldname");
     println!("Field value -> {}", value);
-    
+
     // Read all prompt fields
     let prompt_values = read_basename_fields_from_toml("config.toml", "prompt");
     println!("Prompts: {:?}", prompt_values);
@@ -304,11 +304,11 @@ fn main() -> Result<(), String> {
     let single_line = read_single_line_string_field_from_toml("config.toml", "promptsdir_1")?;
     let multi_line = read_multi_line_toml_string("config.toml", "multi_line")?;
     let integer_array = read_integer_array("config.toml", "schedule_duration_start_end")?;
-    
+
     println!("Single line: {}", single_line);
     println!("Multi line: {}", multi_line);
     println!("Numbers: {:?}", integer_array);
-    
+
     Ok(())
 }
 
@@ -316,9 +316,9 @@ fn main() -> Result<(), String> {
 use std::error::Error as StdError;
 use std::fmt;
 use std::io::{
-    self, 
-    Write, 
-    BufRead, 
+    self,
+    Write,
+    BufRead,
     Read,
 };
 use std::fs::{
@@ -326,7 +326,7 @@ use std::fs::{
     File,
 };
 use std::path::{
-    Path, 
+    Path,
     PathBuf,
 };
 use std::process::Command;
@@ -352,7 +352,7 @@ use crate::AbstractTeamchannelNodeTomlPortsData;
 // //             .create(true)
 // //             .open("uma.log")
 // //             .expect("Failed to open log file");
-    
+
 // //         writeln!(file, "{}", message).expect("Failed to write to log file");
 // //     }
 // // }
@@ -375,28 +375,28 @@ use crate::AbstractTeamchannelNodeTomlPortsData;
 //     if DEBUG_FLAG {
 //         // Get the log file path relative to the executable
 //         let log_file_path_result = make_input_path_name_abs_executabledirectoryrelative_nocheck("uma.log");
-        
+
 //         if let Err(path_error) = log_file_path_result {
 //             // Print error but don't panic
 //             eprintln!("Failed to determine log file path: {}", path_error);
 //             return;
 //         }
-        
+
 //         let log_file_path = log_file_path_result.unwrap(); // Safe after check
-        
+
 //         // Open the log file
 //         let file_result = std::fs::OpenOptions::new()
 //             .append(true)
 //             .create(true)
 //             .open(&log_file_path);
-            
+
 //         if let Err(file_error) = file_result {
 //             eprintln!("Failed to open log file at {}: {}", log_file_path.display(), file_error);
 //             return;
 //         }
-        
+
 //         let mut file = file_result.unwrap(); // Safe after check
-        
+
 //         // Write to the log file
 //         if let Err(write_error) = writeln!(file, "{}", message) {
 //             eprintln!("Failed to write to log file: {}", write_error);
@@ -422,14 +422,14 @@ use crate::AbstractTeamchannelNodeTomlPortsData;
 //         if DEBUG_FLAG {
 //             // Get the log file path relative to the executable
 //             let log_file_path_result = crate::manage_absolute_executable_directory_relative_paths::make_input_path_name_abs_executabledirectoryrelative_nocheck("uma.log");
-            
+
 //             match log_file_path_result {
 //                 Ok(log_file_path) => {
 //                     // Open the log file in append mode, creating it if it doesn't exist
 //                     match std::fs::OpenOptions::new()
 //                         .append(true)
 //                         .create(true)
-//                         .open(&log_file_path) 
+//                         .open(&log_file_path)
 //                     {
 //                         Ok(mut file) => {
 //                             // Write the formatted message to the file
@@ -438,7 +438,7 @@ use crate::AbstractTeamchannelNodeTomlPortsData;
 //                             }
 //                         },
 //                         Err(open_err) => {
-//                             eprintln!("Failed to open log file at {}: {}", 
+//                             eprintln!("Failed to open log file at {}: {}",
 //                                 log_file_path.display(), open_err);
 //                         }
 //                     }
@@ -466,7 +466,7 @@ use crate::AbstractTeamchannelNodeTomlPortsData;
 /// 6. remove "fieldname = " from the beginning
 /// 7. remove '" ' and trailing spaces from the end
 /// 8. return that string, if any
-/// by default, return an empty string, if anything goes wrong, 
+/// by default, return an empty string, if anything goes wrong,
 /// handle the error, and return an empty string
 ///
 /// requires:
@@ -562,7 +562,7 @@ pub fn read_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str) ->
 
             // Clean up the value: remove quotes and trim spaces
             let cleaned_value = value.trim().trim_matches('"').trim();
-            
+
             // Verify the cleaned value isn't empty
             if cleaned_value.is_empty() {
                 debug_log!("Warning: Value became empty after cleaning for field '{}'", name_of_toml_field_key_to_read);
@@ -644,10 +644,10 @@ pub fn read_basename_fields_from_toml(path: &str, base_name: &str) -> Vec<String
             }
 
             let value = parts[1].trim();
-            
+
             // Clean up the value: remove quotes and trim spaces
             let cleaned_value = value.trim().trim_matches('"').trim();
-            
+
             if !cleaned_value.is_empty() {
                 values.push(cleaned_value.to_string());
             }
@@ -660,23 +660,23 @@ pub fn read_basename_fields_from_toml(path: &str, base_name: &str) -> Vec<String
 }
 
 /// Reads a single-line string field from a TOML file.
-/// 
+///
 /// # Arguments
 /// - `path` - Path to the TOML file
 /// - `name_of_toml_field_key_to_read` - Name of the field to read
-/// 
+///
 /// # Returns
 /// - `Result<String, String>` - The field value or an error message
 pub fn read_single_line_string_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<String, String> {
     let file = File::open(path)
         .map_err(|e| format!("read_single_line_string_field_from_toml Failed to open file: {}", e))?;
-    
+
     let reader = io::BufReader::new(file);
-    
+
     for line in reader.lines() {
         let line = line.map_err(|e| format!("Failed to read line: {}", e))?;
         let trimmed = line.trim();
-        
+
         if trimmed.starts_with(&format!("{} = ", name_of_toml_field_key_to_read)) {
             return Ok(trimmed
                 .splitn(2, '=')
@@ -687,76 +687,76 @@ pub fn read_single_line_string_field_from_toml(path: &str, name_of_toml_field_ke
                 .to_string());
         }
     }
-    
+
     Err(format!("Field '{}' not found", name_of_toml_field_key_to_read))
 }
 
 
 /// Reads a u8 integer value from a TOML file.
-/// 
+///
 /// # Arguments
 /// - `path` - Path to the TOML file
 /// - `name_of_toml_field_key_to_read` - Name of the field to read
-/// 
+///
 /// # Returns
 /// - `Result<u8, String>` - The parsed u8 value or an error message
 pub fn read_u8_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<u8, String> {
     let file = File::open(path)
         .map_err(|e| format!("Failed to open file: {}", e))?;
-    
+
     let reader = io::BufReader::new(file);
-    
+
     for line in reader.lines() {
         let line = line.map_err(|e| format!("Failed to read line: {}", e))?;
         let trimmed = line.trim();
-        
+
         if trimmed.starts_with(&format!("{} = ", name_of_toml_field_key_to_read)) {
             let value_str = trimmed
                 .splitn(2, '=')
                 .nth(1)
                 .ok_or_else(|| format!("Invalid format for field '{}'", name_of_toml_field_key_to_read))?
                 .trim();
-                
+
             // Parse the value as u8
             return value_str.parse::<u8>()
                 .map_err(|e| format!("Failed to parse '{}' as u8: {}", value_str, e));
         }
     }
-    
+
     Err(format!("Field '{}' not found", name_of_toml_field_key_to_read))
 }
 
 /// Reads a u64 integer value from a TOML file.
-/// 
+///
 /// # Arguments
 /// - `path` - Path to the TOML file
 /// - `name_of_toml_field_key_to_read` - Name of the field to read
-/// 
+///
 /// # Returns
 /// - `Result<u64, String>` - The parsed u64 value or an error message
 pub fn read_u64_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<u64, String> {
     let file = File::open(path)
         .map_err(|e| format!("read_u64_field_from_toml Failed to open file: {}", e))?;
-    
+
     let reader = io::BufReader::new(file);
-    
+
     for line in reader.lines() {
         let line = line.map_err(|e| format!("Failed to read line: {}", e))?;
         let trimmed = line.trim();
-        
+
         if trimmed.starts_with(&format!("{} = ", name_of_toml_field_key_to_read)) {
             let value_str = trimmed
                 .splitn(2, '=')
                 .nth(1)
                 .ok_or_else(|| format!("Invalid format for field '{}'", name_of_toml_field_key_to_read))?
                 .trim();
-                
+
             // Parse the value as u64
             return value_str.parse::<u64>()
                 .map_err(|e| format!("Failed to parse '{}' as u64: {}", value_str, e));
         }
     }
-    
+
     Err(format!("Field '{}' not found", name_of_toml_field_key_to_read))
 }
 
@@ -797,24 +797,24 @@ pub fn read_u64_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str
 /// # Example
 /// ```
 /// let config_path = "/etc/myapp/config.toml";
-/// 
+///
 /// match read_u64_from_clearsigntoml(config_path, "max_connections") {
 ///     Ok(value) => debug_log("Max connections: {}", value),
 ///     Err(e) => eprintln!("Error reading max_connections: {}", e)
 /// }
 /// ```
 pub fn read_u64_from_clearsigntoml(
-    path_to_clearsigntoml_with_gpgkey: &str, 
+    path_to_clearsigntoml_with_gpgkey: &str,
     name_of_toml_field_key_to_read: &str
 ) -> Result<u64, String> {
     // Step 1: Extract GPG key from the file
     let key = extract_gpg_key_from_clearsigntoml(path_to_clearsigntoml_with_gpgkey, "gpg_key_public")
-        .map_err(|e| format!("Failed to extract GPG key from file '{}': {}", 
+        .map_err(|e| format!("Failed to extract GPG key from file '{}': {}",
                             path_to_clearsigntoml_with_gpgkey, e))?;
 
     // Step 2: Verify the file and only proceed if verification succeeds
     let verification_result = verify_clearsign(path_to_clearsigntoml_with_gpgkey, &key)
-        .map_err(|e| format!("Failed during verification process for file '{}': {}", 
+        .map_err(|e| format!("Failed during verification process for file '{}': {}",
                             path_to_clearsigntoml_with_gpgkey, e))?;
 
     // Step 3: Check if verification succeeded
@@ -824,17 +824,17 @@ pub fn read_u64_from_clearsigntoml(
 
     // Step 4: Only read the field if verification succeeded
     read_u64_field_from_toml(path_to_clearsigntoml_with_gpgkey, name_of_toml_field_key_to_read)
-        .map_err(|e| format!("Failed to read u64 field '{}' from verified file '{}': {}", 
+        .map_err(|e| format!("Failed to read u64 field '{}' from verified file '{}': {}",
                             name_of_toml_field_key_to_read, path_to_clearsigntoml_with_gpgkey, e))
 }
 
 
-/// Reads a u64 integer field from a clearsigned TOML file using a GPG key from a separate config file.
+/// Reads a u64 integer field from a clearsigned TOML file using a public GPG key from a separate config file.
 ///
 /// # Purpose
-/// This function provides a way to verify and read u64 values from clearsigned TOML files 
-/// that don't contain their own GPG keys, instead using a key from a separate centralized 
-/// config file. This approach helps maintain consistent key management across multiple 
+/// This function provides a way to verify and read u64 values from clearsigned TOML files
+/// that don't contain their own public GPG key, instead using a key from a separate centralized
+/// config file. This approach helps maintain consistent key management across multiple
 /// clearsigned files and is particularly useful for numeric configuration values that
 /// require integrity protection.
 ///
@@ -869,10 +869,10 @@ pub fn read_u64_from_clearsigntoml(
 /// ```
 /// let config_path = "/etc/myapp/security.toml";
 /// let data_path = "/var/myapp/limits.toml";
-/// 
-/// match read_u64_from_clearsigntoml_without_keyid(
-///     config_path, 
-///     data_path, 
+///
+/// match read_u64_from_clearsigntoml_without_publicgpgkey(
+///     config_path,
+///     data_path,
 ///     "request_timeout_seconds"
 /// ) {
 ///     Ok(timeout) => println!("Request timeout: {} seconds", timeout),
@@ -881,22 +881,21 @@ pub fn read_u64_from_clearsigntoml(
 /// ```
 ///
 /// # Notes
-/// - The function name includes "without_keyid" to indicate that the target file doesn't contain its own key
 /// - All paths should be absolute for consistency and to avoid ambiguity
 /// - The u64 type supports values from 0 to 18,446,744,073,709,551,615
-pub fn read_u64_from_clearsigntoml_without_keyid(
+pub fn read_u64_from_clearsigntoml_without_publicgpgkey(
     pathstr_to_config_file_that_contains_gpg_key: &str,
-    pathstr_to_target_clearsigned_file: &str, 
+    pathstr_to_target_clearsigned_file: &str,
     name_of_toml_field_key_to_read: &str,
 ) -> Result<u64, String> {
     // Step 1: Extract GPG key from the config file
     let key = extract_gpg_key_from_clearsigntoml(pathstr_to_config_file_that_contains_gpg_key, "gpg_key_public")
-        .map_err(|e| format!("Failed to extract GPG key from config file '{}': {}", 
+        .map_err(|e| format!("Failed to extract GPG key from config file '{}': {}",
                             pathstr_to_config_file_that_contains_gpg_key, e))?;
 
     // Step 2: Verify the target file using the extracted key
     let verification_result = verify_clearsign(pathstr_to_target_clearsigned_file, &key)
-        .map_err(|e| format!("Failed during verification process for target file '{}': {}", 
+        .map_err(|e| format!("Failed during verification process for target file '{}': {}",
                             pathstr_to_target_clearsigned_file, e))?;
 
     // Step 3: Check verification result
@@ -910,27 +909,27 @@ pub fn read_u64_from_clearsigntoml_without_keyid(
 
     // Step 4: Read the requested u64 field from the verified file
     read_u64_field_from_toml(pathstr_to_target_clearsigned_file, name_of_toml_field_key_to_read)
-        .map_err(|e| format!("Failed to read u64 field '{}' from verified file '{}': {}", 
+        .map_err(|e| format!("Failed to read u64 field '{}' from verified file '{}': {}",
                             name_of_toml_field_key_to_read, pathstr_to_target_clearsigned_file, e))
 }
 
 // /// Reads an array of u64 bytes from a TOML file into a Vec<u64>.
-// /// 
+// ///
 // /// # Purpose
 // /// This function parses a TOML file to extract an array of unsigned 8-bit integers (bytes)
 // /// defined by the specified field name. It handles arrays in the format:
 // /// ```toml
 // /// node_unique_id = [160, 167, 195, 169]
 // /// ```
-// /// 
+// ///
 // /// # Arguments
 // /// - `path` - Path to the TOML file
 // /// - `name_of_toml_field_key_to_read` - Name of the field to read (must be an array of integers in the TOML file)
-// /// 
+// ///
 // /// # Returns
 // /// - `Result<Vec<u64>, String>` - A vector containing all bytes in the array if successful,
 // ///   or an error message if the field is not found or values are out of u64 range (0 to 2^64-1)
-// /// 
+// ///
 // /// # Error Handling
 // /// This function returns errors when:
 // /// - The file cannot be opened or read
@@ -938,20 +937,20 @@ pub fn read_u64_from_clearsigntoml_without_keyid(
 // /// - The field is not a valid array format
 // /// - Any value in the array is not a valid u64 (outside 0 to 2^64-1 range)
 // /// - Any value cannot be parsed as an integer
-// /// 
+// ///
 // /// # Example
 // /// For a TOML file containing:
 // /// ```toml
 // /// node_unique_id = [160, 167, 195, 169]
 // /// hash_bytes = [255, 0, 128, 64]
 // /// ```
-// /// 
+// ///
 // /// Usage:
 // /// ```
 // /// let node_id = read_u64_array_field_from_toml("config.toml", "node_unique_id")?;
 // /// // Returns: vec![160, 167, 195, 169]
 // /// ```
-// /// 
+// ///
 // /// # Implementation Notes
 // /// - Values must be in the range 0 to 2^64-1 (valid u64 range)
 // /// - Negative numbers will result in an error
@@ -961,22 +960,22 @@ pub fn read_u64_from_clearsigntoml_without_keyid(
 //     // Open the file
 //     let file = File::open(path)
 //         .map_err(|e| format!("Failed to open file '{}': {}", path, e))?;
-    
+
 //     let reader = io::BufReader::new(file);
-    
+
 //     // Process each line looking for our field
 //     for (line_number, line_result) in reader.lines().enumerate() {
 //         // Handle line reading errors
 //         let line = line_result
 //             .map_err(|e| format!("Failed to read line {} from file '{}': {}", line_number + 1, path, e))?;
-        
+
 //         let trimmed = line.trim();
-        
+
 //         // Skip empty lines and comments
 //         if trimmed.is_empty() || trimmed.starts_with('#') {
 //             continue;
 //         }
-        
+
 //         // Check if this line contains our field with an array
 //         if trimmed.starts_with(&format!("{} = [", name_of_toml_field_key_to_read)) {
 //             // Extract the array portion
@@ -988,22 +987,22 @@ pub fn read_u64_from_clearsigntoml_without_keyid(
 //                 .trim_start_matches('[')
 //                 .trim_end_matches(']')
 //                 .trim();
-            
+
 //             // If the array is empty, return an empty vector
 //             if array_part.is_empty() {
 //                 return Ok(Vec::new());
 //             }
-            
+
 //             // Parse each value as u64
 //             let mut byte_values = Vec::new();
-            
+
 //             for (index, value_str) in array_part.split(',').enumerate() {
 //                 let cleaned_value = value_str.trim();
-                
+
 //                 if cleaned_value.is_empty() {
 //                     continue; // Skip empty entries (e.g., trailing comma)
 //                 }
-                
+
 //                 // First parse as i32 to check range, then convert to u64
 //                 match cleaned_value.parse::<i32>() {
 //                     Ok(int_value) => {
@@ -1025,54 +1024,54 @@ pub fn read_u64_from_clearsigntoml_without_keyid(
 //                     }
 //                 }
 //             }
-            
+
 //             return Ok(byte_values);
 //         }
 //     }
-    
+
 //     // Field not found
 //     Err(format!("Byte array field '{}' not found in file '{}'", name_of_toml_field_key_to_read, path))
 // }
 
 // /// Reads an array of u64 bytes from a clearsigned TOML file into a Vec<u64>.
-// /// 
+// ///
 // /// # Purpose
 // /// This function securely reads a byte array from a clearsigned TOML file by:
 // /// 1. Extracting the GPG public key from the file
 // /// 2. Verifying the clearsign signature
 // /// 3. If verification succeeds, reading the requested byte array
-// /// 
+// ///
 // /// # Security
-// /// This function ensures that the TOML file's content is cryptographically verified 
+// /// This function ensures that the TOML file's content is cryptographically verified
 // /// before any data is extracted, providing integrity protection for the configuration.
 // /// No data is returned if signature validation fails.
-// /// 
+// ///
 // /// # Arguments
 // /// - `path` - Path to the clearsigned TOML file
 // /// - `name_of_toml_field_key_to_read` - Name of the field to read (must be an array of bytes in the TOML file)
-// /// 
+// ///
 // /// # Returns
 // /// - `Result<Vec<u64>, String>` - A vector containing all bytes in the array if successful and verified,
 // ///   or an error message if verification fails or the field cannot be read
-// /// 
+// ///
 // /// # Example
 // /// For a clearsigned TOML file containing:
 // /// ```toml
 // /// node_unique_id = [160, 167, 195, 169]
-// /// 
+// ///
 // /// gpg_key_public = """
 // /// -----BEGIN PGP PUBLIC KEY BLOCK-----
 // /// ...
 // /// -----END PGP PUBLIC KEY BLOCK-----
 // /// """
 // /// ```
-// /// 
+// ///
 // /// Usage:
 // /// ```
 // /// let node_id = read_u64_array_from_clearsigntoml("node_config.toml", "node_unique_id")?;
 // /// // Returns: vec![160, 167, 195, 169] if signature verification succeeds
 // /// ```
-// /// 
+// ///
 // /// # Errors
 // /// Returns an error if:
 // /// - GPG key extraction fails
@@ -1083,103 +1082,103 @@ pub fn read_u64_from_clearsigntoml_without_keyid(
 //     // Step 1: Extract GPG key from the file
 //     let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")
 //         .map_err(|e| format!("Failed to extract GPG key from file '{}': {}", path, e))?;
-    
+
 //     // Step 2: Verify the file's clearsign signature
 //     let verification_result = verify_clearsign(path, &key)
 //         .map_err(|e| format!("Error during signature verification of file '{}': {}", path, e))?;
-    
+
 //     // Step 3: Check if verification was successful
 //     if !verification_result {
 //         return Err(format!("GPG signature verification failed for file: {}", path));
 //     }
-    
+
 //     // Step 4: If verification succeeded, read the requested byte array field
 //     read_u64_array_field_from_toml(path, name_of_toml_field_key_to_read)
-//         .map_err(|e| format!("Failed to read byte array '{}' from verified file '{}': {}", 
+//         .map_err(|e| format!("Failed to read byte array '{}' from verified file '{}': {}",
 //                              name_of_toml_field_key_to_read, path, e))
 // }
 
 
 /// Reads a floating point (f64) value from a TOML file.
-/// 
+///
 /// # Arguments
 /// - `path` - Path to the TOML file
 /// - `name_of_toml_field_key_to_read` - Name of the field to read
-/// 
+///
 /// # Returns
 /// - `Result<f64, String>` - The parsed f64 value or an error message
 pub fn read_float_f64_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<f64, String> {
     let file = File::open(path)
         .map_err(|e| format!("read_float_f64_field_from_toml Failed to open file: {}", e))?;
-    
+
     let reader = io::BufReader::new(file);
-    
+
     for line in reader.lines() {
         let line = line.map_err(|e| format!("Failed to read line: {}", e))?;
         let trimmed = line.trim();
-        
+
         if trimmed.starts_with(&format!("{} = ", name_of_toml_field_key_to_read)) {
             let value_str = trimmed
                 .splitn(2, '=')
                 .nth(1)
                 .ok_or_else(|| format!("Invalid format for field '{}'", name_of_toml_field_key_to_read))?
                 .trim();
-                
+
             // Parse the value as f64
             return value_str.parse::<f64>()
                 .map_err(|e| format!("Failed to parse '{}' as floating point number: {}", value_str, e));
         }
     }
-    
+
     Err(format!("Field '{}' not found", name_of_toml_field_key_to_read))
 }
 
 /// Reads a floating point (f32) value from a TOML file.
-/// 
+///
 /// # Arguments
 /// - `path` - Path to the TOML file
 /// - `name_of_toml_field_key_to_read` - Name of the field to read
-/// 
+///
 /// # Returns
 /// - `Result<f32, String>` - The parsed f32 value or an error message
 pub fn read_float_f32_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<f32, String> {
     let file = File::open(path)
         .map_err(|e| format!("read_float_f32_field_from_toml Failed to open file: {}", e))?;
-    
+
     let reader = io::BufReader::new(file);
-    
+
     for line in reader.lines() {
         let line = line.map_err(|e| format!("Failed to read line: {}", e))?;
         let trimmed = line.trim();
-        
+
         if trimmed.starts_with(&format!("{} = ", name_of_toml_field_key_to_read)) {
             let value_str = trimmed
                 .splitn(2, '=')
                 .nth(1)
                 .ok_or_else(|| format!("Invalid format for field '{}'", name_of_toml_field_key_to_read))?
                 .trim();
-                
+
             // Parse the value as f32
             return value_str.parse::<f32>()
                 .map_err(|e| format!("Failed to parse '{}' as 32-bit floating point number: {}", value_str, e));
         }
     }
-    
+
     Err(format!("Field '{}' not found", name_of_toml_field_key_to_read))
 }
 
 /// Reads a multi-line string field (triple-quoted) from a TOML file.
-/// 
+///
 /// # Arguments
 /// - `path` - Path to the TOML file
 /// - `name_of_toml_field_key_to_read` - Name of the field to read
-/// 
+///
 /// # Returns
 /// - `Result<String, String>` - The concatenated multi-line value or an error message
 pub fn read_multi_line_toml_string(path: &str, name_of_toml_field_key_to_read: &str) -> Result<String, String> {
     let mut file = File::open(path)
         .map_err(|e| format!("read_multi_line_toml_string Failed to open file: {}", e))?;
-    
+
     let mut content = String::new();
     file.read_to_string(&mut content)
         .map_err(|e| format!("Failed to read file: {}", e))?;
@@ -1208,23 +1207,23 @@ pub fn read_multi_line_toml_string(path: &str, name_of_toml_field_key_to_read: &
 }
 
 /// Reads an array of integers from a TOML file into a Vec<u64>.
-/// 
+///
 /// # Arguments
 /// - `path` - Path to the TOML file
 /// - `name_of_toml_field_key_to_read` - Name of the field to read
-/// 
+///
 /// # Returns
 /// - `Result<Vec<u64>, String>` - The vector of integers or an error message
 pub fn read_integer_array(path: &str, name_of_toml_field_key_to_read: &str) -> Result<Vec<u64>, String> {
     let file = File::open(path)
         .map_err(|e| format!("read_integer_array Failed to open file: {}", e))?;
-    
+
     let reader = io::BufReader::new(file);
-    
+
     for line in reader.lines() {
         let line = line.map_err(|e| format!("Failed to read line: {}", e))?;
         let trimmed = line.trim();
-        
+
         if trimmed.starts_with(&format!("{} = [", name_of_toml_field_key_to_read)) {
             let array_part = trimmed
                 .splitn(2, '=')
@@ -1232,7 +1231,7 @@ pub fn read_integer_array(path: &str, name_of_toml_field_key_to_read: &str) -> R
                 .ok_or("Invalid array format")?
                 .trim()
                 .trim_matches(|c| c == '[' || c == ']');
-                
+
             return array_part
                 .split(',')
                 .map(|s| s.trim().parse::<u64>()
@@ -1240,7 +1239,7 @@ pub fn read_integer_array(path: &str, name_of_toml_field_key_to_read: &str) -> R
                 .collect::<Result<Vec<u64>, String>>();
         }
     }
-    
+
     Err(format!("Array field '{}' not found", name_of_toml_field_key_to_read))
 }
 
@@ -1293,6 +1292,50 @@ fn extract_gpg_key_from_clearsigntoml(path: &str, key_field: &str) -> Result<Str
 //     Ok(())
 // }
 
+/// TODO: check this in various tests
+/// Verifies a clearsigned TOML file using GPG with a provided public key.
+///
+/// This function performs GPG signature verification by:
+/// 1. Writing the provided public key to a temporary file named `{path}.key`
+/// 2. Invoking GPG with `--keyring` pointing to this temporary file
+/// 3. GPG verifies the signature in the clearsigned file against the provided key
+/// 4. Removing the temporary key file
+/// 5. Returning true if GPG's exit status is 0 (successful verification)
+///
+/// # How GPG Verification Works
+/// - The `--keyring` flag tells GPG to use the specified file as its keyring
+/// - GPG reads the clearsigned file and extracts the signature
+/// - GPG checks if the signature was made by the key in the provided keyring
+/// - Returns success (exit 0) only if the signature matches the key
+///
+/// # Arguments
+/// - `path` - Path to the clearsigned TOML file to verify
+/// - `key` - The GPG public key as a string (ASCII-armored or binary format)
+///
+/// # Returns
+/// - `Ok(true)` - The signature in the file was made by the provided key
+/// - `Ok(false)` - The signature does not match the provided key or is invalid
+/// - `Err(String)` - Failed to write temporary file or execute GPG
+///
+/// # Example
+/// ```rust
+/// let clearsigned_file = "/path/to/signed_document.toml";
+/// let sender_public_key = "-----BEGIN PGP PUBLIC KEY BLOCK-----\n...\n-----END PGP PUBLIC KEY BLOCK-----";
+///
+/// match verify_clearsign(clearsigned_file, sender_public_key) {
+///     Ok(true) => println!("Document was signed by the expected sender"),
+///     Ok(false) => println!("Document signature does not match the sender's key"),
+///     Err(e) => eprintln!("Verification error: {}", e),
+/// }
+/// ```
+///
+/// # Technical Details
+/// - Uses `--batch` and `--no-tty` for non-interactive operation
+/// - The temporary key file (`{path}.key`) exists only during verification
+/// - Requires `gpg` command available in system PATH
+///
+/// TODO above section may be wrong
+///
 /// Verifies a clearsigned TOML file using GPG.
 ///
 /// # Arguments
@@ -1324,8 +1367,54 @@ pub fn verify_clearsign(
     // Clean up the temporary key file
     let _ = std::fs::remove_file(temp_key_path);
 
+    // // Inspection: You don't like green eggs and ham?
+    // println!(
+    //     "verify_clearsign -> {:?}, output.status.success() -> {:?}",
+    //     path,
+    //     output.status.success(),
+    // );
+
     // Return the verification result
     Ok(output.status.success())
+}
+
+
+/// Verifies a clearsigned file's signature.
+///
+/// # Arguments
+/// - `clearsigned_file_path` - Path to the clearsigned file
+/// - `validator_key_id` - GPG key ID to use for validation
+///
+/// # Returns
+/// - `Ok(())` - If signature validation succeeds
+/// - `Err(GpgError)` - If validation fails or any other operation fails
+///
+/// # Notes
+/// This function first checks if the validator key exists in the keyring
+/// before attempting to verify the signature.
+fn verify_clearsign_signature(
+    clearsigned_file_path: &Path,
+    validator_key_id: &str,
+) -> Result<(), GpgError> {
+    // First check if the validator key exists
+    if !validate_gpg_key(validator_key_id)? {
+        return Err(GpgError::ValidationError(
+            format!("Validator key '{}' not found in keyring", validator_key_id)
+        ));
+    }
+
+    let verify_output = Command::new("gpg")
+        .arg("--verify")
+        .arg(clearsigned_file_path)
+        .output()
+        .map_err(|e| GpgError::ValidationError(e.to_string()))?;
+
+    if !verify_output.status.success() {
+        let error_message = String::from_utf8_lossy(&verify_output.stderr);
+        return Err(GpgError::ValidationError(error_message.to_string()));
+    }
+
+    Ok(())
 }
 
 /// Reads a single-line string field from a clearsigned TOML file.
@@ -1360,16 +1449,16 @@ relevant use example:
         cleanup_collaborator_temp_file(node_readcopy_path);
         cleanup_collaborator_temp_file(addressbook_readcopy_path);
     };
-    
+
     // Use the function to read a value - convert Path to &str
     let file_path_str = file_path.to_str()
         .ok_or_else(|| {
             cleanup();
             "Invalid file path encoding".to_string()
         })?;
-    
+
     // Example: Read node_id from the clearsigned TOML file
-    let node_id = read_singleline_string_from_clearsigntoml_without_keyid(
+    let node_id = read_singleline_string_from_clearsigntoml_without_publicgpgkey(
         "config/security.toml",  // Config file containing GPG key
         file_path_str,           // Target clearsigned file
         "node_id"                // Field to read
@@ -1377,7 +1466,7 @@ relevant use example:
         cleanup(); // Run cleanup on error
         format!("Failed to read node_id: {}", e)
     })?;
- 
+
 */
 
 /// Reads a single-line string field from a clearsigned TOML file using a GPG key from a separate config file.
@@ -1412,10 +1501,10 @@ relevant use example:
 /// ```
 /// let config_path = "config/security.toml";
 /// let target_path = "data/settings.toml";
-/// 
-/// match read_singleline_string_from_clearsigntoml_without_keyid(
-///     config_path, 
-///     target_path, 
+///
+/// match read_singleline_string_from_clearsigntoml_without_publicgpgkey(
+///     config_path,
+///     target_path,
 ///     "api_endpoint"
 /// ) {
 ///     Ok(value) => println!("API Endpoint: {}", value),
@@ -1423,23 +1512,23 @@ relevant use example:
 /// }
 /// ```
 ///
-pub fn read_singleline_string_from_clearsigntoml_without_keyid(
+pub fn read_singleline_string_from_clearsigntoml_without_publicgpgkey(
     pathstr_to_config_file_that_contains_gpg_key: &str,
-    pathstr_to_target_clearsigned_file: &str, 
+    pathstr_to_target_clearsigned_file: &str,
     name_of_toml_field_key_to_read: &str,
 ) -> Result<String, String> {
     // Step 1: Extract GPG key from the config file
     let key = extract_gpg_key_from_clearsigntoml(pathstr_to_config_file_that_contains_gpg_key, "gpg_key_public")
-        .map_err(|e| format!("read_singleline_string_from_clearsigntoml_without_keyid() -> Failed to extract GPG key from config file pathstr_to_config_file_that_contains_gpg_key->'{}': e->{}", pathstr_to_config_file_that_contains_gpg_key, e))?;
+        .map_err(|e| format!("read_singleline_string_from_clearsigntoml_without_publicgpgkey() -> Failed to extract GPG key from config file pathstr_to_config_file_that_contains_gpg_key->'{}': e->{}", pathstr_to_config_file_that_contains_gpg_key, e))?;
 
     // Step 2: Verify the target file using the extracted key
     let verification_result = verify_clearsign(pathstr_to_target_clearsigned_file, &key)
-        .map_err(|e| format!("read_singleline_string_from_clearsigntoml_without_keyid() -> Failed during verification process: {}", e))?;
+        .map_err(|e| format!("read_singleline_string_from_clearsigntoml_without_publicgpgkey() -> Failed during verification process: {}", e))?;
 
     // Step 3: Check verification result
     if !verification_result {
         return Err(format!(
-            "read_singleline_string_from_clearsigntoml_without_keyid() -> GPG signature verification failed for file '{}' using key from '{}'",
+            "read_singleline_string_from_clearsigntoml_without_publicgpgkey() -> GPG signature verification failed for file '{}' using key from '{}'",
             pathstr_to_target_clearsigned_file,
             pathstr_to_config_file_that_contains_gpg_key
         ));
@@ -1447,14 +1536,14 @@ pub fn read_singleline_string_from_clearsigntoml_without_keyid(
 
     // Step 4: Read the requested field from the verified file
     read_single_line_string_field_from_toml(pathstr_to_target_clearsigned_file, name_of_toml_field_key_to_read)
-        .map_err(|e| format!("read_singleline_string_from_clearsigntoml_without_keyid() -> Failed to read field '{}' from verified file '{}': {}", 
+        .map_err(|e| format!("read_singleline_string_from_clearsigntoml_without_publicgpgkey() -> Failed to read field '{}' from verified file '{}': {}",
                             name_of_toml_field_key_to_read, pathstr_to_target_clearsigned_file, e))
 }
 
 // // DOC String NEEDED
-// pub fn read_singleline_string_from_clearsigntoml_without_keyid(
+// pub fn read_singleline_string_from_clearsigntoml_without_publicgpgkey(
 //     path_to_config_file_with_gpgkey: &str,
-//     path_to_clearsigntoml_without_gpgkey: &str, 
+//     path_to_clearsigntoml_without_gpgkey: &str,
 //     name_of_toml_field_key_to_read: &str,
 //     ) -> Result<String, String> {
 //     // Extract GPG key from the file
@@ -1473,7 +1562,7 @@ pub fn read_singleline_string_from_clearsigntoml_without_keyid(
 
 //     // Only read the field if verification succeeded
 //     read_single_line_string_field_from_toml(
-//         path_to_clearsigntoml_without_gpgkey, 
+//         path_to_clearsigntoml_without_gpgkey,
 //         name_of_toml_field_key_to_read
 //     )
 // }
@@ -1489,21 +1578,21 @@ pub fn read_singleline_string_from_clearsigntoml_without_keyid(
 /// # Returns
 /// - `Result<String, String>` - The field value or an error message
 pub fn read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml(
-    path: &str, 
+    path: &str,
 ) -> Result<String, String> {
     // Extract GPG key from the file
     let key = extract_gpg_key_from_clearsigntoml(
-        path, 
+        path,
         "gpg_key_public"
     )?;
-    
+
     // Verify the file and only proceed if verification succeeds
     let verification_result = verify_clearsign(path, &key)?;
-    
+
     if !verification_result {
         return Err(format!("GPG verification failed for file: {}", path));
     }
-    
+
     // Only read the field if verification succeeded
     read_multi_line_toml_string(path, "gpg_key_public")
 }
@@ -1519,14 +1608,14 @@ pub fn read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntom
 pub fn read_multiline_string_from_clearsigntoml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<String, String> {
     // Extract GPG key from the file
     let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")?;
-    
+
     // Verify the file and only proceed if verification succeeds
     let verification_result = verify_clearsign(path, &key)?;
-    
+
     if !verification_result {
         return Err(format!("GPG verification failed for file: {}", path));
     }
-    
+
     // Only read the field if verification succeeded
     read_multi_line_toml_string(path, name_of_toml_field_key_to_read)
 }
@@ -1542,14 +1631,14 @@ pub fn read_multiline_string_from_clearsigntoml(path: &str, name_of_toml_field_k
 pub fn read_integerarray_clearsigntoml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<Vec<u64>, String> {
     // Extract GPG key from the file
     let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")?;
-    
+
     // Verify the file and only proceed if verification succeeds
     let verification_result = verify_clearsign(path, &key)?;
-    
+
     if !verification_result {
         return Err(format!("GPG verification failed for file: {}", path));
     }
-    
+
     // Only read the field if verification succeeded
     read_integer_array(path, name_of_toml_field_key_to_read)
 }
@@ -1560,14 +1649,14 @@ pub fn read_integerarray_clearsigntoml(path: &str, name_of_toml_field_key_to_rea
 pub fn read_str_array_clearsigntoml(path: &str, name_of_toml_field_key_to_read: &str) -> Result<Vec<u64>, String> {
     // Extract GPG key from the file
     let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")?;
-    
+
     // Verify the file and only proceed if verification succeeds
     let verification_result = verify_clearsign(path, &key)?;
-    
+
     if !verification_result {
         return Err(format!("GPG verification failed for file: {}", path));
     }
-    
+
     // Only read the field if verification succeeded
     read_string_array_field_from_toml(path, name_of_toml_field_key_to_read)
 }
@@ -1608,7 +1697,7 @@ mod tests {
             """
             schedule_duration_start_end = [1, 2, 3, 4]
         "#;
-        
+
         let test_file = "test_clearsign.toml";
         write(test_file, test_content).unwrap();
 
@@ -1636,7 +1725,7 @@ mod tests {
 
         // Test reading basename fields
         let values = read_basename_fields_from_toml(test_file, "prompt");
-        
+
         // Clean up
         let _ = remove_file(test_file);
 
@@ -1648,7 +1737,7 @@ mod tests {
         let values = read_basename_fields_from_toml("", "prompt");
         assert!(values.is_empty());
     }
-    
+
     #[test]
     fn test_single_line_string() {
         let test_content = r#"
@@ -1657,13 +1746,13 @@ mod tests {
         "#;
         let test_file = "test_single.toml";
         write(test_file, test_content).unwrap();
-        
+
         let result = read_single_line_string_field_from_toml(test_file, "field1");
         assert_eq!(result.unwrap(), "value1");
-        
+
         std::fs::remove_file(test_file).unwrap();
     }
-    
+
 
     #[test]
     fn test_multi_line_string() {
@@ -1676,16 +1765,16 @@ string
 "#;
         let test_file = "test_multi.toml";
         write(test_file, test_content).unwrap();
-        
+
         let result = read_multi_line_toml_string(test_file, "description");
         assert!(result.is_ok());
         let content = result.unwrap();
         assert!(content.contains("multi-line"));
         assert_eq!(content, "This is a\nmulti-line\nstring");
-        
+
         std::fs::remove_file(test_file).unwrap();
     }
-    
+
     #[test]
     fn test_integer_array() {
         let test_content = r#"
@@ -1693,17 +1782,17 @@ string
         "#;
         let test_file = "test_array.toml";
         write(test_file, test_content).unwrap();
-        
+
         let result = read_integer_array(test_file, "numbers");
         assert_eq!(result.unwrap(), vec![1, 2, 3, 4, 5]);
-        
+
         std::fs::remove_file(test_file).unwrap();
     }
 }
 
 /// Gets the path to a clearsigned TOML file, checking for both .toml and .gpgtoml variants.
 ///
-/// This function checks for both plain clearsigned `.toml` files and GPG-encrypted `.gpgtoml` 
+/// This function checks for both plain clearsigned `.toml` files and GPG-encrypted `.gpgtoml`
 /// files, handling the appropriate one based on what exists.
 ///
 /// # Behavior
@@ -1733,21 +1822,21 @@ pub fn get_path_to_clearsign_toml_for_gpgtoml_option(
     } else {
         toml_file_path.to_path_buf()
     };
-    
+
     // Construct both possible paths
     let toml_path = base_path.with_extension("toml");
     let gpgtoml_path = base_path.with_extension("gpgtoml");
-    
+
     debug_log("GPTCFGO Checking for files:");
     debug_log!("  - .toml: {}", toml_path.display());
     debug_log!("  - .gpgtoml: {}", gpgtoml_path.display());
-    
+
     // Check which files exist
     let toml_exists = toml_path.exists();
     let gpgtoml_exists = gpgtoml_path.exists();
-    
+
     debug_log!("GPTCFGO File existence: .toml={}, .gpgtoml={}", toml_exists, gpgtoml_exists);
-    
+
     if toml_exists {
         // Prefer .toml if it exists
         debug_log!("GPTCFGO Using clearsigned TOML file: {}", toml_path.display());
@@ -1755,7 +1844,7 @@ pub fn get_path_to_clearsign_toml_for_gpgtoml_option(
     } else if gpgtoml_exists {
         // Use .gpgtoml and decrypt it
         debug_log!("GPTCFGO Found only .gpgtoml, decrypting: {}", gpgtoml_path.display());
-        
+
         // Generate unique temp filename
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -1763,12 +1852,12 @@ pub fn get_path_to_clearsign_toml_for_gpgtoml_option(
                 format!("GPTCFGO Failed to generate timestamp: {}", e)
             ))?
             .as_nanos();
-        
+
         let temp_filename = format!("gpg_decrypt_temp_{}.toml", timestamp);
         let temp_path = std::env::temp_dir().join(&temp_filename);
-        
+
         debug_log!("GPTCFGO Decrypting to temporary file: {}", temp_path.display());
-        
+
         // Execute GPG decryption
         let output = std::process::Command::new("gpg")
             .arg("--quiet")
@@ -1784,21 +1873,21 @@ pub fn get_path_to_clearsign_toml_for_gpgtoml_option(
             .map_err(|e| GpgError::DecryptionError(
                 format!("GPTCFGO Failed to execute GPG decrypt command: {}", e)
             ))?;
-        
+
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(GpgError::DecryptionError(
                 format!("GPTCFGO GPG decryption failed: {}", stderr)
             ));
         }
-        
+
         // Verify temp file was created
         if !temp_path.exists() {
             return Err(GpgError::DecryptionError(
                 "GPTCFGO GPG decryption succeeded but temporary file was not created".to_string()
             ));
         }
-        
+
         // Set restricted permissions on temp file (Unix only)
         #[cfg(unix)]
         {
@@ -1806,7 +1895,7 @@ pub fn get_path_to_clearsign_toml_for_gpgtoml_option(
             std::fs::set_permissions(&temp_path, std::fs::Permissions::from_mode(0o600))
                 .map_err(|e| GpgError::FileSystemError(e))?;
         }
-        
+
         debug_log!("GPTCFGO Successfully decrypted to: {}", temp_path.display());
         Ok((temp_path.clone(), Some(temp_path)))
     } else {
@@ -1914,13 +2003,13 @@ pub fn clearsign_filepath_to_path(
             format!("Signing key '{}' not found in keyring", signing_key_id)
         ));
     }
-    
+
     // Ensure the output directory exists
     if let Some(parent) = output_file_path.parent() {
         fs::create_dir_all(parent)
             .map_err(|e| GpgError::FileSystemError(e))?;
     }
-    
+
     // Directly clearsign the file to the specified output path
     let clearsign_output = Command::new("gpg")
         .arg("--clearsign")
@@ -1941,12 +2030,12 @@ pub fn clearsign_filepath_to_path(
 }
 
 /// Decrypts and validates a clearsigned, encrypted file
-/// 
+///
 /// # Arguments
 /// - `encrypted_file_path` - Path to the encrypted .gpg file
 /// - `validator_key_id` - GPG key ID to validate the clearsign signature
 /// - `output_path` - Where to save the decrypted and verified file
-/// 
+///
 /// # Returns
 /// - `Ok(())` if decryption and validation succeed
 /// - `Err(GpgError)` if any operation fails
@@ -1957,22 +2046,22 @@ pub fn decrypt_and_validate_file(
 ) -> Result<(), GpgError> {
     // Create temporary paths for intermediate files
     let decrypted_temp_path = create_temp_file_path("decrypted_temp")?;
-    
+
     // First decrypt the file
     decrypt_gpg_file(encrypted_file_path, &decrypted_temp_path)?;
-    
+
     // Then verify the clearsign signature
     verify_clearsign_signature(&decrypted_temp_path, validator_key_id)?;
-    
+
     // If verification succeeded, extract the original content
     extract_verified_content(&decrypted_temp_path, output_path)?;
-    
+
     // Cleanup
     if decrypted_temp_path.exists() {
         fs::remove_file(&decrypted_temp_path)
             .map_err(|e| GpgError::TempFileError(e.to_string()))?;
     }
-    
+
     Ok(())
 }
 
@@ -2009,44 +2098,6 @@ pub fn decrypt_gpg_file(
     Ok(())
 }
 
-/// Verifies a clearsigned file's signature.
-///
-/// # Arguments
-/// - `clearsigned_file_path` - Path to the clearsigned file
-/// - `validator_key_id` - GPG key ID to use for validation
-///
-/// # Returns
-/// - `Ok(())` - If signature validation succeeds
-/// - `Err(GpgError)` - If validation fails or any other operation fails
-///
-/// # Notes
-/// This function first checks if the validator key exists in the keyring
-/// before attempting to verify the signature.
-fn verify_clearsign_signature(
-    clearsigned_file_path: &Path,
-    validator_key_id: &str,
-) -> Result<(), GpgError> {
-    // First check if the validator key exists
-    if !validate_gpg_key(validator_key_id)? {
-        return Err(GpgError::ValidationError(
-            format!("Validator key '{}' not found in keyring", validator_key_id)
-        ));
-    }
-
-    let verify_output = Command::new("gpg")
-        .arg("--verify")
-        .arg(clearsigned_file_path)
-        .output()
-        .map_err(|e| GpgError::ValidationError(e.to_string()))?;
-
-    if !verify_output.status.success() {
-        let error_message = String::from_utf8_lossy(&verify_output.stderr);
-        return Err(GpgError::ValidationError(error_message.to_string()));
-    }
-
-    Ok(())
-}
-
 /// Extracts the original content from a verified clearsigned file.
 ///
 /// # Arguments
@@ -2067,7 +2118,7 @@ fn extract_verified_content(
     // Read the clearsigned file
     let content = fs::read_to_string(clearsigned_file_path)
         .map_err(|e| GpgError::FileSystemError(e))?;
-    
+
     // Extract the content between the clearsign markers
     let content_lines: Vec<&str> = content.lines().collect();
     let mut extracted_content = Vec::new();
@@ -2245,13 +2296,13 @@ fn create_temp_file_path(prefix: &str) -> Result<PathBuf, GpgError> {
     let timestamp = generate_timestamp();
     let temp_filename = format!("gpg_temp_{}_{}", timestamp, prefix);
     temp_dir.push(temp_filename);
-    
+
     // Ensure the parent directory exists
     if let Some(parent) = temp_dir.parent() {
         fs::create_dir_all(parent)
             .map_err(|e| GpgError::TempFileError(format!("Failed to create temp directory: {}", e)))?;
     }
-    
+
     Ok(temp_dir)
 }
 
@@ -2381,7 +2432,7 @@ fn encrypt_file_with_public_key(
 /// # Example
 /// ```
 /// use std::path::Path;
-/// 
+///
 /// // Clearsign and encrypt a configuration file for a collaborator
 /// let result = clearsign_and_encrypt_file_for_recipient(
 ///     &Path::new("/path/to/config.toml"),
@@ -2422,30 +2473,30 @@ pub fn clearsign_and_encrypt_file_for_recipient(
         .file_name()
         .and_then(|n| n.to_str())
         .ok_or_else(|| GpgError::PathError("Invalid input file name".to_string()))?;
-    
+
     // Create a simple temp file name without directory paths embedded in it
     let clearsigned_temp_path = create_temp_file_path(&format!("clearsigned_{}", original_filename))?;
-    
+
     // Create absolute path for the output directory relative to executable
     let relative_output_dir = "invites_updates/outgoing";
     let absolute_output_dir = gpg_make_input_path_name_abs_executabledirectoryrelative_nocheck(relative_output_dir)
         .map_err(|e| GpgError::PathError(format!("Failed to resolve output directory path: {}", e)))?;
-    
+
     // Ensure the output directory exists
     fs::create_dir_all(&absolute_output_dir)
         .map_err(|e| GpgError::FileSystemError(e))?;
-    
+
     // Create the final output path
     let final_output_path = absolute_output_dir.join(format!("{}.gpg", original_filename));
-    
+
     // Log the paths being used
     println!("Input file: {}", input_file_path.display());
     println!("Temporary clearsigned file: {}", clearsigned_temp_path.display());
     println!("Final output path: {}", final_output_path.display());
-    
+
     // Clearsign with your private key
     clearsign_file_with_private_key(input_file_path, &clearsigned_temp_path, your_signing_key_id)?;
-    
+
     // Encrypt with recipient's public key
     encrypt_file_with_public_key(&clearsigned_temp_path, &final_output_path, recipient_public_key_path)?;
 
@@ -2458,7 +2509,7 @@ pub fn clearsign_and_encrypt_file_for_recipient(
     // Log completion
     println!("\nSuccessfully completed clearsigning and encryption");
     println!("Output file: {}", final_output_path.display());
-    
+
     Ok(())
 }
 
@@ -2483,7 +2534,7 @@ pub fn clearsign_and_encrypt_file_for_recipient(
 fn decrypt_and_validate_workflow() -> Result<(), GpgError> {
     // Specify the default encrypted file path
     let encrypted_file = Path::new("invites_updates/outgoing/test.gpgtoml");
-    
+
     // Specify where the decrypted and verified file will be saved
     let output_file = Path::new("invites_updates/decrypted_and_verified.toml");
 
@@ -2492,7 +2543,7 @@ fn decrypt_and_validate_workflow() -> Result<(), GpgError> {
     print!("Enter validator's GPG key ID: ");
     io::stdout().flush()
         .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
-    
+
     // Get the validator's key ID from user input
     let mut validator_key_id = String::new();
     io::stdin()
@@ -2515,41 +2566,41 @@ fn decrypt_and_validate_workflow() -> Result<(), GpgError> {
 
     // Perform the decryption and validation
     decrypt_and_validate_file(encrypted_file, &validator_key_id, output_file)?;
-    
+
     // Confirm successful completion
     println!("\nSuccess: File has been decrypted and signature verified!");
     println!("Decrypted file location: {}", output_file.display());
-    
+
     Ok(())
 }
 
 /// Main entry point for GPG file decryption and validation.
-/// 
+///
 /// # Purpose
 /// Provides an interactive command-line interface for decrypting and validating
 /// GPG encrypted files that have been clearsigned.
-/// 
+///
 /// # Process
 /// 1. Prompts for necessary GPG key information
 /// 2. Validates input parameters
 /// 3. Decrypts the specified encrypted file
 /// 4. Verifies the clearsign signature
 /// 5. Outputs the decrypted and verified file
-/// 
+///
 /// # Arguments
 /// None - Interactive prompts gather needed information
-/// 
+///
 /// # Returns
 /// - `Ok(())` - Operation completed successfully
 /// - `Err(GpgError)` - Operation failed with specific error details
-/// 
+///
 /// # Example Usage
 /// ```no_run
 /// fn main() -> Result<(), GpgError> {
 ///     // ... function contents ...
 /// }
 /// ```
-/// 
+///
 /// # Notes
 /// - Requires GPG to be installed and configured
 /// - Requires appropriate private keys to be available in the GPG keyring
@@ -2561,23 +2612,23 @@ pub fn rust_gpg_tools_interface() -> Result<(), GpgError> {
     println!("1. Decrypt and validate an encrypted file");
     println!("2. Clearsign a file");
     println!("3. Clearsign and encrypt a file for a recipient");
-    
+
     print!("\nSelect an operation (1-3): ");
     io::stdout().flush()
         .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
-    
+
     let mut operation = String::new();
     io::stdin()
         .read_line(&mut operation)
         .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
-    
+
     match operation.trim() {
         "1" => decrypt_and_validate_workflow()?,
         "2" => clearsign_workflow()?,
         "3" => clearsign_and_encrypt_workflow()?,
         _ => return Err(GpgError::ValidationError("Invalid selection".to_string())),
     }
-    
+
     Ok(())
 }
 
@@ -2598,7 +2649,7 @@ pub fn gpg_get_absolute_path_to_executable_parentdirectory() -> Result<PathBuf, 
             format!("Failed to determine current executable path: {}", e),
         )
     })?;
-    
+
     // Get the directory containing the executable
     let executable_directory = executable_path.parent().ok_or_else(|| {
         io::Error::new(
@@ -2606,7 +2657,7 @@ pub fn gpg_get_absolute_path_to_executable_parentdirectory() -> Result<PathBuf, 
             "Failed to determine parent directory of executable",
         )
     })?;
-    
+
     Ok(executable_directory.to_path_buf())
 }
 
@@ -2616,7 +2667,7 @@ pub fn gpg_get_absolute_path_to_executable_parentdirectory() -> Result<PathBuf, 
 ///
 /// # Arguments
 ///
-/// - `path_to_make_absolute` - A path to convert to an absolute path relative to 
+/// - `path_to_make_absolute` - A path to convert to an absolute path relative to
 ///   the executable's directory location.
 ///
 /// # Returns
@@ -2636,10 +2687,10 @@ pub fn gpg_get_absolute_path_to_executable_parentdirectory() -> Result<PathBuf, 
 pub fn gpg_make_input_path_name_abs_executabledirectoryrelative_nocheck<P: AsRef<Path>>(path_to_make_absolute: P) -> Result<PathBuf, io::Error> {
     // Get the directory where the executable is located
     let executable_directory = gpg_get_absolute_path_to_executable_parentdirectory()?;
-    
+
     // Create a path by joining the executable directory with the provided path
     let target_path = executable_directory.join(path_to_make_absolute);
-    
+
     // If the path doesn't exist, we still return the absolute path without trying to canonicalize
     if !gpg_abs_executable_directory_relative_exists_boolean_check(&target_path)? {
         // Ensure the path is absolute (it should be since we joined with executable_directory)
@@ -2652,7 +2703,7 @@ pub fn gpg_make_input_path_name_abs_executabledirectoryrelative_nocheck<P: AsRef
             ));
         }
     }
-    
+
     // Path exists, so we can canonicalize it to resolve any ".." or "." segments
     target_path.canonicalize().map_err(|e| {
         io::Error::new(
@@ -2705,52 +2756,52 @@ pub fn extract_verify_store_gpg_encrypted_clearsign_toml(
 ) -> Result<(), GpgError> {
     // Step 1: Create a temporary path for the decrypted file
     let decrypted_temp_path = create_temp_file_path("decrypted_clearsign")?;
-    
+
     // Step 2: Decrypt the GPG file
     decrypt_gpg_file(incoming_gpg_encrypted_path, &decrypted_temp_path)?;
-    
+
     // Step 3: Verify the clearsign signature
     verify_clearsign_signature(&decrypted_temp_path, gpg_key_id)?;
-    
+
     // Step 4: If verification succeeded, ensure the output directory exists
     if let Some(parent) = output_verified_clearsign_path.parent() {
         fs::create_dir_all(parent)
             .map_err(|e| GpgError::FileSystemError(e))?;
     }
-    
+
     // Step 5: Copy the entire clearsigned file to the output location
     fs::copy(&decrypted_temp_path, output_verified_clearsign_path)
         .map_err(|e| GpgError::FileSystemError(e))?;
-    
+
     // Step 6: Clean up the temporary file
     if decrypted_temp_path.exists() {
         fs::remove_file(&decrypted_temp_path)
             .map_err(|e| GpgError::TempFileError(e.to_string()))?;
     }
-    
+
     // Success - the verified clearsigned file has been stored to the output path
-    println!("Successfully verified and stored clearsigned file to: {}", 
+    println!("Successfully verified and stored clearsigned file to: {}",
              output_verified_clearsign_path.display());
-    
+
     Ok(())
 }
 
 pub fn manual_q_and_a_new_encrypted_clearsigntoml_verification() -> Result<(), String> {
     println!("GPG Encrypted Clearsigned TOML File Processor");
     println!("---------------------------------------------");
-    
+
     // Get input file path from user
     print!("Enter path to the GPG-encrypted file: ");
     io::stdout().flush().map_err(|e| e.to_string())?;
     let mut input_path = String::new();
     io::stdin().read_line(&mut input_path).map_err(|e| e.to_string())?;
     let input_path = Path::new(input_path.trim());
-    
+
     // Verify the file exists
     if !input_path.exists() {
         return Err(format!("Error: File not found at {}", input_path.display()));
     }
-    
+
     // Get GPG key ID for verification
     println!("\nTo find your GPG key ID, run: gpg --list-keys --keyid-format=long");
     print!("Enter the GPG key ID to verify the signature: ");
@@ -2758,28 +2809,28 @@ pub fn manual_q_and_a_new_encrypted_clearsigntoml_verification() -> Result<(), S
     let mut key_id = String::new();
     io::stdin().read_line(&mut key_id).map_err(|e| e.to_string())?;
     let key_id = key_id.trim();
-    
+
     // Get output file path
     print!("Enter path where to save the verified clearsigned file: ");
     io::stdout().flush().map_err(|e| e.to_string())?;
     let mut output_path = String::new();
     io::stdin().read_line(&mut output_path).map_err(|e| e.to_string())?;
     let output_path = Path::new(output_path.trim());
-    
+
     // Display the parameters
     println!("\nProcessing with the following parameters:");
     println!("Input encrypted file: {}", input_path.display());
     println!("GPG key ID for verification: {}", key_id);
     println!("Output path for verified clearsigned file: {}", output_path.display());
     println!("\nProcessing...");
-    
+
     // Call the function from the module
     extract_verify_store_gpg_encrypted_clearsign_toml(
         input_path,
         key_id,
         output_path
     ).map_err(|e| e.to_string())?;
-    
+
     println!("Done! The verified clearsigned file has been saved.");
     Ok(())
 }
@@ -2802,32 +2853,32 @@ pub fn manual_q_and_a_new_encrypted_clearsigntoml_verification() -> Result<(), S
 /// - `GpgError::GpgOperationError` - If the GPG decryption operation fails
 pub fn decrypt_gpgfile_to_output(input_file_path: &Path, output_file_path: &Path) -> Result<(), GpgError> {
     // Debug logging
-    debug_log!("Decrypting GPG file: {} to: {}", 
+    debug_log!("Decrypting GPG file: {} to: {}",
                input_file_path.display(), output_file_path.display());
-    
+
     // Check if input file exists
     if !input_file_path.exists() {
         return Err(GpgError::PathError(format!(
-            "Input file does not exist: {}", 
+            "Input file does not exist: {}",
             input_file_path.display()
         )));
     }
-    
+
     // Convert paths to strings for the command
     let input_path_str = input_file_path
         .to_str()
         .ok_or_else(|| GpgError::PathError(format!(
-            "Failed to convert input path to string: {}", 
+            "Failed to convert input path to string: {}",
             input_file_path.display()
         )))?;
-    
+
     let output_path_str = output_file_path
         .to_str()
         .ok_or_else(|| GpgError::PathError(format!(
-            "Failed to convert output path to string: {}", 
+            "Failed to convert output path to string: {}",
             output_file_path.display()
         )))?;
-    
+
     // Create the GPG command to decrypt the file
     let mut command = Command::new("gpg");
     command
@@ -2837,36 +2888,36 @@ pub fn decrypt_gpgfile_to_output(input_file_path: &Path, output_file_path: &Path
         .arg("--output")
         .arg(output_path_str)
         .arg(input_path_str);
-    
+
     debug_log!("GPG decrypt command: {:?}", command);
-    
+
     // Execute the command and check for success
     let output = command.output()
         .map_err(|e| GpgError::GpgOperationError(format!(
             "Failed to execute GPG command: {}", e
         )))?;
-    
+
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(GpgError::GpgOperationError(format!(
             "GPG decryption failed: {}", stderr
         )));
     }
-    
+
     // Verify the output file was created
     if !output_file_path.exists() {
         return Err(GpgError::PathError(format!(
-            "Error in decrypt_gpgfile_to_output(): Decryption succeeded but output file was not created: {}", 
+            "Error in decrypt_gpgfile_to_output(): Decryption succeeded but output file was not created: {}",
             output_file_path.display()
         )));
     }
-    
+
     debug_log!("Successfully decrypted file");
     Ok(())
 }
 
 /// Reads an array of strings from a TOML file into a Vec<String>.
-/// 
+///
 /// # Purpose
 /// This function parses a TOML file to extract an array of strings defined by the specified field name.
 /// It handles both single-line arrays (`field = ["value1", "value2"]`) and multi-line arrays:
@@ -2876,21 +2927,21 @@ pub fn decrypt_gpgfile_to_output(input_file_path: &Path, output_file_path: &Path
 ///     "value2",
 /// ]
 /// ```
-/// 
+///
 /// # Arguments
 /// - `path` - Path to the TOML file
 /// - `name_of_toml_field_key_to_read` - Name of the field to read (must be an array of strings in the TOML file)
-/// 
+///
 /// # Returns
 /// - `Result<Vec<String>, String>` - A vector containing all strings in the array if successful,
 ///   or an error message if the field is not found or cannot be parsed correctly
-/// 
+///
 /// # Error Handling
 /// This function returns errors when:
 /// - The file cannot be opened or read
 /// - The specified field is not found
 /// - The field is not a valid array format
-/// 
+///
 /// # Example
 /// For a TOML file containing:
 /// ```toml
@@ -2900,7 +2951,7 @@ pub fn decrypt_gpgfile_to_output(input_file_path: &Path, output_file_path: &Path
 ///     "blue"
 /// ]
 /// ```
-/// 
+///
 /// Usage:
 /// ```
 /// let colors = read_string_array_field_from_toml("config.toml", "colors")?;
@@ -2910,47 +2961,47 @@ pub fn read_string_array_field_from_toml(path: &str, name_of_toml_field_key_to_r
     // Open the file
     let file = File::open(path)
         .map_err(|e| format!("read_string_array_field_from_toml Failed to open file '{}': {}", path, e))?;
-    
+
     let reader = io::BufReader::new(file);
-    
+
     // Variables to track multi-line array parsing
     let mut in_array = false;
     let mut array_values = Vec::new();
     let array_start_pattern = format!("{} = [", name_of_toml_field_key_to_read);
-    
+
     // Process each line
     for line_result in reader.lines() {
         // Handle line reading errors
         let line = line_result
             .map_err(|e| format!("Failed to read line from file '{}': {}", path, e))?;
         let trimmed = line.trim();
-        
+
         // Skip empty lines and comments
         if trimmed.is_empty() || trimmed.starts_with('#') {
             continue;
         }
-        
+
         // Case 1: Check if we're starting an array definition
         if !in_array && trimmed.starts_with(&array_start_pattern) {
             in_array = true;
-            
+
             // Check if this is a single-line array definition (starts and ends on same line)
             if trimmed.contains(']') {
                 // Extract everything between the brackets
-                let bracket_start = trimmed.find('[').ok_or_else(|| 
+                let bracket_start = trimmed.find('[').ok_or_else(||
                     format!("Malformed array format for field '{}': opening bracket missing", name_of_toml_field_key_to_read))?;
-                
-                let bracket_end = trimmed.rfind(']').ok_or_else(|| 
+
+                let bracket_end = trimmed.rfind(']').ok_or_else(||
                     format!("Malformed array format for field '{}': closing bracket missing", name_of_toml_field_key_to_read))?;
-                
+
                 // Make sure closing bracket comes after opening bracket
                 if bracket_end <= bracket_start {
                     return Err(format!("Malformed array format for field '{}'", name_of_toml_field_key_to_read));
                 }
-                
+
                 // Extract array content between brackets
                 let array_content = &trimmed[bracket_start + 1..bracket_end].trim();
-                
+
                 // If the array is not empty, parse its elements
                 if !array_content.is_empty() {
                     // Split by commas and process each value
@@ -2965,16 +3016,16 @@ pub fn read_string_array_field_from_toml(path: &str, name_of_toml_field_key_to_r
                         .filter(|s| !s.is_empty()) // Skip empty entries
                         .collect();
                 }
-                
+
                 // We've processed a single-line array, so return the result
                 return Ok(array_values);
             }
-            
+
             // If we get here, this is the start of a multi-line array
             // Check if there's a value on the same line as the opening bracket
             if let Some(first_element_pos) = trimmed.find('[') {
                 let after_bracket = &trimmed[first_element_pos + 1..].trim();
-                
+
                 // If there's content after the opening bracket
                 if !after_bracket.is_empty() && !after_bracket.starts_with(']') {
                     // Check if there's a comma in this content (could be multiple values)
@@ -2995,10 +3046,10 @@ pub fn read_string_array_field_from_toml(path: &str, name_of_toml_field_key_to_r
                     }
                 }
             }
-            
+
             continue;
         }
-        
+
         // Case 2: If we're inside a multi-line array definition
         if in_array {
             // Check if this line is just the closing bracket
@@ -3006,15 +3057,15 @@ pub fn read_string_array_field_from_toml(path: &str, name_of_toml_field_key_to_r
                 // We've reached the end of the array
                 return Ok(array_values);
             }
-            
+
             // This is an array element line - check if it contains a closing bracket
             let has_closing_bracket = trimmed.contains(']');
-            
+
             if has_closing_bracket {
                 // Extract content before the closing bracket
                 let parts: Vec<&str> = trimmed.split(']').collect();
                 let value_part = parts[0].trim();
-                
+
                 // Handle case where value and closing bracket are on same line
                 if !value_part.is_empty() {
                     // Clean the value (remove comma and quotes)
@@ -3023,12 +3074,12 @@ pub fn read_string_array_field_from_toml(path: &str, name_of_toml_field_key_to_r
                         .trim()
                         .trim_matches('"')
                         .to_string();
-                    
+
                     if !clean_value.is_empty() {
                         array_values.push(clean_value);
                     }
                 }
-                
+
                 // End array processing since we found the closing bracket
                 return Ok(array_values);
             } else {
@@ -3039,14 +3090,14 @@ pub fn read_string_array_field_from_toml(path: &str, name_of_toml_field_key_to_r
                     .trim()
                     .trim_matches('"')
                     .to_string();
-                
+
                 if !clean_value.is_empty() {
                     array_values.push(clean_value);
                 }
             }
         }
     }
-    
+
     // If we parsed array values but didn't find the closing bracket
     if !array_values.is_empty() {
         // This is technically a malformed TOML file, but we'll return what we found
@@ -3055,31 +3106,31 @@ pub fn read_string_array_field_from_toml(path: &str, name_of_toml_field_key_to_r
                 name_of_toml_field_key_to_read, path);
         return Ok(array_values);
     }
-    
+
     // If we get here, we didn't find the array
     Err(format!("String array field '{}' not found in file '{}'", name_of_toml_field_key_to_read, path))
 }
 
 /// Reads an array of strings from a clearsigned TOML file into a Vec<String>.
-/// 
+///
 /// # Purpose
 /// This function securely reads a string array from a clearsigned TOML file by:
 /// 1. Extracting the GPG public key from the file
 /// 2. Verifying the clearsign signature
 /// 3. If verification succeeds, reading the requested string array
-/// 
+///
 /// # Arguments
 /// - `path` - Path to the clearsigned TOML file
 /// - `name_of_toml_field_key_to_read` - Name of the field to read (must be an array of strings in the TOML file)
-/// 
+///
 /// # Returns
 /// - `Result<Vec<String>, String>` - A vector containing all strings in the array if successful and verified,
 ///   or an error message if verification fails or the field cannot be read
-/// 
+///
 /// # Security
-/// This function ensures that the TOML file's content is cryptographically verified 
+/// This function ensures that the TOML file's content is cryptographically verified
 /// before any data is extracted, providing integrity protection for the configuration.
-/// 
+///
 /// # Example
 /// For a clearsigned TOML file containing:
 /// ```toml
@@ -3087,14 +3138,14 @@ pub fn read_string_array_field_from_toml(path: &str, name_of_toml_field_key_to_r
 ///     "10.0.0.213",
 ///     "192.168.1.1"
 /// ]
-/// 
+///
 /// gpg_key_public = """
 /// -----BEGIN PGP PUBLIC KEY BLOCK-----
 /// ...
 /// -----END PGP PUBLIC KEY BLOCK-----
 /// """
 /// ```
-/// 
+///
 /// Calling:
 /// ```
 /// let addresses = read_string_array_clearsigntoml("secure_config.toml", "ipv4_addresses")?;
@@ -3104,63 +3155,63 @@ pub fn read_str_array_field_clearsigntoml(path: &str, name_of_toml_field_key_to_
     // Step 1: Extract GPG key from the file
     let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")
         .map_err(|e| format!("in read_str_array_field_clearsigntoml() Failed to extract GPG key from file '{}': {}", path, e))?;
-    
+
     // Step 2: Verify the file's clearsign signature
     let verification_result = verify_clearsign(path, &key)
         .map_err(|e| format!("in read_str_array_field_clearsigntoml()  Error during signature verification of file '{}': {}", path, e))?;
-    
+
     // Step 3: Check if verification was successful
     if !verification_result {
         return Err(format!("in read_str_array_field_clearsigntoml()  GPG signature verification failed for file: {}", path));
     }
-    
+
     // Step 4: If verification succeeded, read the requested field
     read_string_array_field_from_toml(path, name_of_toml_field_key_to_read)
-        .map_err(|e| format!("in read_str_array_field_clearsigntoml()  Failed to read string array '{}' from verified file '{}': {}", 
+        .map_err(|e| format!("in read_str_array_field_clearsigntoml()  Failed to read string array '{}' from verified file '{}': {}",
                              name_of_toml_field_key_to_read, path, e))
 }
 
 /// Reads an array of strings from a clearsigned TOML file using a GPG key from a separate config file.
-/// 
+///
 /// # Purpose
 /// This function provides a way to verify and read string arrays from clearsigned TOML files
 /// that don't contain their own GPG keys, instead using a key from a separate centralized config file.
-/// 
+///
 /// # Process Flow
 /// 1. Extracts the GPG public key from the specified config file
 /// 2. Uses this key to verify the signature of the target clearsigned TOML file
 /// 3. If verification succeeds, reads the requested string array field
 /// 4. Returns the string array or an appropriate error
-/// 
+///
 /// # Arguments
 /// - `pathstr_to_config_file_that_contains_gpg_key` - Path to a clearsigned TOML file containing the GPG public key
 /// - `pathstr_to_target_clearsigned_file` - Path to the clearsigned TOML file to read from (without its own GPG key)
 /// - `name_of_toml_field_key_to_read` - Name of the string array field to read from the target file
-/// 
+///
 /// # Returns
 /// - `Ok(Vec<String>)` - The string array values if verification succeeds
 /// - `Err(String)` - Detailed error message if any step fails
-/// 
+///
 /// # Example
 /// ```
 /// let config_path = "security_config.toml";
 /// let addresses_file = "network_config.toml";
-/// 
-/// let ipv4_addresses = read_stringarray_from_clearsigntoml_without_keyid(
+///
+/// let ipv4_addresses = read_stringarray_from_clearsigntoml_without_publicgpgkey(
 ///     config_path,
-///     addresses_file, 
+///     addresses_file,
 ///     "ipv4_addresses"
 /// )?;
 /// // Returns: vec!["10.0.0.213", "192.168.1.1"] if verification succeeds
 /// ```
-pub fn read_stringarray_from_clearsigntoml_without_keyid(
+pub fn read_stringarray_from_clearsigntoml_without_publicgpgkey(
     pathstr_to_config_file_that_contains_gpg_key: &str,
-    pathstr_to_target_clearsigned_file: &str, 
+    pathstr_to_target_clearsigned_file: &str,
     name_of_toml_field_key_to_read: &str,
 ) -> Result<Vec<String>, String> {
     // Step 1: Extract GPG key from the config file
     let key = extract_gpg_key_from_clearsigntoml(pathstr_to_config_file_that_contains_gpg_key, "gpg_key_public")
-        .map_err(|e| format!("Failed to extract GPG key from config file '{}': {}", 
+        .map_err(|e| format!("Failed to extract GPG key from config file '{}': {}",
                              pathstr_to_config_file_that_contains_gpg_key, e))?;
 
     // Step 2: Verify the target file using the extracted key
@@ -3178,7 +3229,7 @@ pub fn read_stringarray_from_clearsigntoml_without_keyid(
 
     // Step 4: Read the requested field from the verified file
     read_string_array_field_from_toml(pathstr_to_target_clearsigned_file, name_of_toml_field_key_to_read)
-        .map_err(|e| format!("Failed to read string array '{}' from verified file '{}': {}", 
+        .map_err(|e| format!("Failed to read string array '{}' from verified file '{}': {}",
                              name_of_toml_field_key_to_read, pathstr_to_target_clearsigned_file, e))
 }
 
@@ -3212,22 +3263,22 @@ pub fn verify_clearsigned_file_and_extract_content_to_output(
     debug_log!("Clearsigned input file: {}", clearsigned_input_path.display());
     debug_log!("Public key file: {}", public_key_file_path.display());
     debug_log!("Output file for extracted content: {}", extracted_content_output_path.display());
-    
+
     // STEP 1: Validate input file paths exist
     if !clearsigned_input_path.exists() {
         return Err(GpgError::PathError(format!(
-            "Clearsigned input file does not exist: {}", 
+            "Clearsigned input file does not exist: {}",
             clearsigned_input_path.display()
         )));
     }
-    
+
     if !public_key_file_path.exists() {
         return Err(GpgError::PathError(format!(
-            "Public key file does not exist: {}", 
+            "Public key file does not exist: {}",
             public_key_file_path.display()
         )));
     }
-    
+
     // STEP 2: Read the content of the public key file
     let public_key = match fs::read_to_string(public_key_file_path) {
         Ok(key) => key,
@@ -3235,22 +3286,22 @@ pub fn verify_clearsigned_file_and_extract_content_to_output(
             "Failed to read public key file: {}", e
         )))
     };
-    
+
     // STEP 3: Convert input file path to string for the verify_clearsign function
     let clearsigned_input_path_str = clearsigned_input_path
         .to_str()
         .ok_or_else(|| GpgError::PathError(format!(
-            "Failed to convert input file path to string: {}", 
+            "Failed to convert input file path to string: {}",
             clearsigned_input_path.display()
         )))?;
-    
+
     // STEP 4: Verify the signature using the existing verify_clearsign function
     debug_log("Verifying clearsigned file signature");
     let verification_result = verify_clearsign(clearsigned_input_path_str, &public_key)
         .map_err(|e| GpgError::GpgOperationError(format!(
             "Failed to verify clearsigned file: {}", e
         )))?;
-    
+
     // STEP 5: Check verification result, abort if verification failed
     if !verification_result {
         debug_log("Signature verification failed");
@@ -3258,9 +3309,9 @@ pub fn verify_clearsigned_file_and_extract_content_to_output(
             "Signature verification failed".to_string()
         ));
     }
-    
+
     debug_log("Signature verification succeeded");
-    
+
     // STEP 6: Read the content of the input file for extraction
     let clearsigned_content = match fs::read_to_string(clearsigned_input_path) {
         Ok(content) => content,
@@ -3268,19 +3319,19 @@ pub fn verify_clearsigned_file_and_extract_content_to_output(
             "Failed to read clearsigned file for content extraction: {}", e
         )))
     };
-    
+
     // STEP 7: Identify the clearsigned format markers
     // Clearsigned files have this structure:
     // -----BEGIN PGP SIGNED MESSAGE-----
     // Hash: SHA256
-    // 
+    //
     // [actual content]
     // -----BEGIN PGP SIGNATURE-----
     // [signature data]
     // -----END PGP SIGNATURE-----
     let begin_content_marker = "-----BEGIN PGP SIGNED MESSAGE-----";
     let begin_signature_marker = "-----BEGIN PGP SIGNATURE-----";
-    
+
     // STEP 8: Validate the file has the expected clearsigned format
     if !clearsigned_content.contains(begin_content_marker) || !clearsigned_content.contains(begin_signature_marker) {
         debug_log!("Input file does not have the expected clearsigned format");
@@ -3288,7 +3339,7 @@ pub fn verify_clearsigned_file_and_extract_content_to_output(
             "Input file does not have the expected clearsigned format".to_string()
         ));
     }
-    
+
     // STEP 9: Find where the actual content starts (after the header and empty line)
     debug_log("Extracting content portion from clearsigned file");
     let content_start = clearsigned_content
@@ -3301,22 +3352,22 @@ pub fn verify_clearsigned_file_and_extract_content_to_output(
         .ok_or_else(|| GpgError::ValidationError(
             "Failed to locate content section in clearsigned file".to_string()
         ))?;
-    
+
     // STEP 10: Find where the signature starts
     let signature_start = clearsigned_content
         .find(begin_signature_marker)
         .ok_or_else(|| GpgError::ValidationError(
             "Failed to locate signature section in clearsigned file".to_string()
         ))?;
-    
+
     // STEP 11: Extract only the content portion (between header and signature)
     let extracted_content = clearsigned_content[content_start..signature_start].trim();
-    
+
     // STEP 12: Write the extracted content to the output file
     debug_log("Writing extracted content to output file");
     match fs::write(extracted_content_output_path, extracted_content) {
         Ok(_) => {
-            debug_log!("Successfully verified clearsigned file and extracted content to: {}", 
+            debug_log!("Successfully verified clearsigned file and extracted content to: {}",
                       extracted_content_output_path.display());
             Ok(())
         },
@@ -3328,7 +3379,7 @@ pub fn verify_clearsigned_file_and_extract_content_to_output(
 
 
 /// Lists available GPG key IDs and prompts the user to select one for signing operations.
-/// 
+///
 /// # Purpose
 /// This function provides an interactive interface for users to select which GPG key ID
 /// to use for signing operations. It lists available key IDs with their associated user
@@ -3425,14 +3476,14 @@ pub fn select_gpg_signing_shortkey_id() -> Result<String, GpgError> {
             // Valid selection - return the corresponding key ID
             let selected_index = selected_number - 1;
             let selected_key_id = &key_id_list[selected_index].0;
-            println!("Using key ID: {} ({})", 
+            println!("Using key ID: {} ({})",
                      selected_key_id, key_id_list[selected_index].1);
             Ok(selected_key_id.clone())
         },
         _ => {
             // Invalid selection
             Err(GpgError::GpgOperationError(format!(
-                "Invalid selection: '{}'. Please enter a number between 1 and {}.", 
+                "Invalid selection: '{}'. Please enter a number between 1 and {}.",
                 trimmed_input, key_id_list.len()
             )))
         }
@@ -3501,7 +3552,7 @@ fn decode_gpg_uid_string(encoded_uid_string: &str) -> String {
     // Pre-allocate vector with capacity based on the input string length.
     // Decoded string is unlikely to be much larger, usually same size or smaller.
     let mut decoded_bytes: Vec<u8> = Vec::with_capacity(encoded_uid_string.len());
-    
+
     // Iterate over characters of the input string.
     let mut char_iterator = encoded_uid_string.chars();
 
@@ -3552,7 +3603,7 @@ fn decode_gpg_uid_string(encoded_uid_string: &str) -> String {
             decoded_bytes.extend_from_slice(current_char.encode_utf8(&mut char_encode_buffer).as_bytes());
         }
     }
-    
+
     // Convert the accumulated byte vector to a String.
     // `from_utf8_lossy` replaces any invalid UTF-8 sequences with U+FFFD.
     String::from_utf8_lossy(&decoded_bytes).into_owned()
@@ -3582,7 +3633,7 @@ fn decode_gpg_uid_string(encoded_uid_string: &str) -> String {
 fn parse_gpg_public_key_listing(gpg_output_string: &str) -> Result<Vec<GpgPublicKeyDisplayInfo>, GpgError> {
     // Vector to store the information for each successfully parsed public key.
     let mut parsed_keys_info: Vec<GpgPublicKeyDisplayInfo> = Vec::new();
-    
+
     // Holds the fingerprint of the current public key block being processed.
     // This is populated when an "fpr" record is encountered after a "pub" record,
     // and cleared when the fingerprint is associated with a UID or a new "pub" record starts.
@@ -3631,7 +3682,7 @@ fn parse_gpg_public_key_listing(gpg_output_string: &str) -> Result<Vec<GpgPublic
                         let raw_user_id_string = fields[9];
                         // Decode the UID string in case it contains percent-encoded characters.
                         let decoded_user_id_string = decode_gpg_uid_string(raw_user_id_string);
-                        
+
                         // Store the paired fingerprint and user identity.
                         parsed_keys_info.push(GpgPublicKeyDisplayInfo {
                             fingerprint: fingerprint_for_this_key,
@@ -3760,7 +3811,7 @@ pub fn q_and_a_user_selects_gpg_key_full_fingerprint() -> Result<String, GpgErro
     // Step 3: Parse the GPG output (stdout) to extract fingerprints and user identities.
     // stdout is expected to be UTF-8 encoded.
     let gpg_output_stdout_string = String::from_utf8_lossy(&gpg_command_output.stdout);
-    
+
     // `parse_gpg_public_key_listing` handles the parsing and returns a list of keys
     // or an error if no suitable keys are found or parsing fails.
     let available_keys_list = parse_gpg_public_key_listing(&gpg_output_stdout_string)?;
@@ -3847,7 +3898,7 @@ pub fn q_and_a_user_selects_gpg_key_full_fingerprint() -> Result<String, GpgErro
 
 
 /// Parses the colon-delimited output from GPG's list-secret-keys command.
-/// 
+///
 /// # Purpose
 /// Extracts key ID and user identity information from GPG's machine-readable output.
 /// This function processes output from `gpg --list-secret-keys --with-colons` to
@@ -3868,30 +3919,30 @@ pub fn q_and_a_user_selects_gpg_key_full_fingerprint() -> Result<String, GpgErro
 fn parse_gpg_key_id_listing(gpg_colon_output: &str) -> Result<Vec<(String, String)>, GpgError> {
     let mut key_id_pairs = Vec::new();
     let mut current_key_id = None;
-    
+
     // Process each line of the GPG output
     for line in gpg_colon_output.lines() {
         // Split the line by colons to get fields
         let fields: Vec<&str> = line.split(':').collect();
-        
+
         // Process secret key records (contain key IDs)
         if fields.len() > 4 && fields[0] == "sec" {
             // Field 4 contains the key ID
             current_key_id = Some(fields[4].to_string());
         }
-        
+
         // Process user ID records (contain user identities)
         else if fields.len() > 9 && fields[0] == "uid" && current_key_id.is_some() {
             // Field 9 contains the user identity
             let user_identity = fields[9].to_string();
-            
+
             // Store the key ID and user identity pair
             if let Some(key_id) = current_key_id.clone() {
                 key_id_pairs.push((key_id, user_identity));
             }
         }
     }
-    
+
     Ok(key_id_pairs)
 }
 
@@ -3918,37 +3969,37 @@ fn parse_gpg_key_id_listing(gpg_colon_output: &str) -> Result<Vec<(String, Strin
 //     print!("Enter the path to the file you want to clearsign: ");
 //     io::stdout().flush()
 //         .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
-    
+
 //     let mut input_file_path_str = String::new();
 //     io::stdin()
 //         .read_line(&mut input_file_path_str)
 //         .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
 //     let input_file_path = Path::new(input_file_path_str.trim());
-    
+
 //     // Validate input file exists
 //     if !input_file_path.exists() {
 //         return Err(GpgError::FileSystemError(
 //             std::io::Error::new(std::io::ErrorKind::NotFound, "Input file not found")
 //         ));
 //     }
-    
+
 //     // Get output file path (use default if empty)
 //     print!("Enter the output file path (or press Enter for default): ");
 //     io::stdout().flush()
 //         .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
-    
+
 //     let mut output_file_path_str = String::new();
 //     io::stdin()
 //         .read_line(&mut output_file_path_str)
 //         .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
-    
+
 //     let output_file_path = if output_file_path_str.trim().is_empty() {
 //         // Create default output file path with .asc extension
 //         let input_filename = input_file_path
 //             .file_name()
 //             .and_then(|n| n.to_str())
 //             .ok_or_else(|| GpgError::PathError("Invalid input file name".to_string()))?;
-            
+
 //         let mut output_path = PathBuf::from("clearsigned");
 //         fs::create_dir_all(&output_path)
 //             .map_err(|e| GpgError::FileSystemError(e))?;
@@ -3957,39 +4008,39 @@ fn parse_gpg_key_id_listing(gpg_colon_output: &str) -> Result<Vec<(String, Strin
 //     } else {
 //         PathBuf::from(output_file_path_str.trim())
 //     };
-    
+
 //     // Get signing key ID
 //     println!("\nTo get your signing key ID, run: $ gpg --list-secret-keys --keyid-format=long");
 //     print!("Enter your GPG signing key ID: ");
 //     io::stdout().flush()
 //         .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
-    
+
 //     let mut signing_key_id = String::new();
 //     io::stdin()
 //         .read_line(&mut signing_key_id)
 //         .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
 //     let signing_key_id = signing_key_id.trim();
-    
+
 //     // Validate that a key ID was provided
 //     if signing_key_id.is_empty() {
 //         return Err(GpgError::ValidationError(
 //             "No signing key ID provided".to_string()
 //         ));
 //     }
-    
+
 //     // Display the parameters that will be used
 //     println!("\nProcessing with the following parameters:");
 //     println!("Input file path: {}", input_file_path.display());
 //     println!("Output file path: {}", output_file_path.display());
 //     println!("Signing key ID: {}", signing_key_id);
-    
+
 //     // Perform the clearsigning
 //     clearsign_file(input_file_path, &output_file_path, &signing_key_id)?;
-    
+
 //     // Confirm successful completion
 //     println!("\nSuccess: File has been clearsigned!");
 //     println!("Clearsigned file location: {}", output_file_path.display());
-    
+
 //     Ok(())
 // }
 
@@ -4018,83 +4069,83 @@ fn parse_gpg_key_id_listing(gpg_colon_output: &str) -> Result<Vec<(String, Strin
 //     print!("Enter the path to the file you want to clearsign and encrypt: ");
 //     io::stdout().flush()
 //         .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
-    
+
 //     let mut input_file_path_str = String::new();
 //     io::stdin()
 //         .read_line(&mut input_file_path_str)
 //         .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
 //     let input_file_path = Path::new(input_file_path_str.trim());
-    
+
 //     // Validate input file exists
 //     if !input_file_path.exists() {
 //         return Err(GpgError::FileSystemError(
 //             std::io::Error::new(std::io::ErrorKind::NotFound, "Input file not found")
 //         ));
 //     }
-    
+
 //     // Get signing key ID
 //     println!("\nTo get your signing key ID, run: $ gpg --list-secret-keys --keyid-format=long");
 //     print!("Enter your GPG signing key ID: ");
 //     io::stdout().flush()
 //         .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
-    
+
 //     let mut signing_key_id = String::new();
 //     io::stdin()
 //         .read_line(&mut signing_key_id)
 //         .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
 //     let signing_key_id = signing_key_id.trim();
-    
+
 //     // Validate that a key ID was provided
 //     if signing_key_id.is_empty() {
 //         return Err(GpgError::ValidationError(
 //             "No signing key ID provided".to_string()
 //         ));
 //     }
-    
+
 //     // Get recipient's public key path
 //     print!("Enter path to recipient's public key file: ");
 //     io::stdout().flush()
 //         .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
-    
+
 //     let mut recipient_key_path_str = String::new();
 //     io::stdin()
 //         .read_line(&mut recipient_key_path_str)
 //         .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
 //     let recipient_key_path = Path::new(recipient_key_path_str.trim());
-    
+
 //     // Validate recipient key exists
 //     if !recipient_key_path.exists() {
 //         return Err(GpgError::FileSystemError(
 //             std::io::Error::new(std::io::ErrorKind::NotFound, "Recipient key file not found")
 //         ));
 //     }
-    
+
 //     // Display the parameters that will be used
 //     println!("\nProcessing with the following parameters:");
 //     println!("Input file path: {}", input_file_path.display());
 //     println!("Signing key ID: {}", signing_key_id);
 //     println!("Recipient public key path: {}", recipient_key_path.display());
 //     println!("Output will be saved to: invites_updates/outgoing/");
-    
+
 //     // Perform the clearsigning and encryption
 //     clearsign_and_encrypt_file_for_recipient(
 //         input_file_path,
 //         &signing_key_id,
 //         recipient_key_path
 //     )?;
-    
+
 //     // Calculate the output path for display
 //     let original_filename = input_file_path
 //         .file_name()
 //         .and_then(|n| n.to_str())
 //         .ok_or_else(|| GpgError::PathError("Invalid input file name".to_string()))?;
-    
+
 //     let output_path = PathBuf::from(format!("invites_updates/outgoing/{}.gpg", original_filename));
-    
+
 //     // Confirm successful completion
 //     println!("\nSuccess: File has been clearsigned and encrypted!");
 //     println!("Encrypted file location: {}", output_path.display());
-    
+
 //     Ok(())
 // }
 
@@ -4147,32 +4198,32 @@ fn clearsign_workflow() -> Result<(), GpgError> {
     print!("Enter the path to the file you want to clearsign: ");
     io::stdout().flush()
         .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
-    
+
     // Read the input file path
     let mut input_file_path_str = String::new();
     io::stdin()
         .read_line(&mut input_file_path_str)
         .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
     let input_file_path = Path::new(input_file_path_str.trim());
-    
+
     // Validate input file exists to provide early error feedback
     if !input_file_path.exists() {
         return Err(GpgError::FileSystemError(
             std::io::Error::new(std::io::ErrorKind::NotFound, "Input file not found")
         ));
     }
-    
+
     // Get output file path (use default if empty)
     print!("Enter the output file path (or press Enter for default): ");
     io::stdout().flush()
         .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
-    
+
     // Read the output file path
     let mut output_file_path_str = String::new();
     io::stdin()
         .read_line(&mut output_file_path_str)
         .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
-    
+
     // Process output path - use default or user-provided path
     let output_file_path = if output_file_path_str.trim().is_empty() {
         // Create default output file path with .asc extension
@@ -4180,35 +4231,35 @@ fn clearsign_workflow() -> Result<(), GpgError> {
             .file_name()
             .and_then(|n| n.to_str())
             .ok_or_else(|| GpgError::PathError("Invalid input file name".to_string()))?;
-            
+
         // Create clearsigned directory if it doesn't exist
         let mut output_path = PathBuf::from("clearsigned");
         fs::create_dir_all(&output_path)
             .map_err(|e| GpgError::FileSystemError(e))?;
-        
+
         // Add filename with .asc extension
         output_path.push(format!("{}.asc", input_filename));
         output_path
     } else {
         PathBuf::from(output_file_path_str.trim())
     };
-    
+
     // Present GPG key ID selection menu and get user's choice
     let signing_key_id = select_gpg_signing_shortkey_id()?;
-    
+
     // Display the parameters that will be used to confirm with user
     debug_log("\nProcessing with the following parameters:");
     debug_log!("Input file path: {}", input_file_path.display());
     debug_log!("Output file path: {}", output_file_path.display());
     debug_log!("Signing key ID: {}", signing_key_id);
-    
+
     // Perform the clearsigning operation
     clearsign_filepath_to_path(input_file_path, &output_file_path, &signing_key_id)?;
-    
+
     // Confirm successful completion
     debug_log!("\nSuccess: File has been clearsigned!");
     debug_log!("Clearsigned file location: {}", output_file_path.display());
-    
+
     Ok(())
 }
 
@@ -4267,69 +4318,69 @@ fn clearsign_and_encrypt_workflow() -> Result<(), GpgError> {
     print!("Enter the path to the file you want to clearsign and encrypt: ");
     io::stdout().flush()
         .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
-    
+
     // Read the input file path
     let mut input_file_path_str = String::new();
     io::stdin()
         .read_line(&mut input_file_path_str)
         .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
     let input_file_path = Path::new(input_file_path_str.trim());
-    
+
     // Validate input file exists to provide early error feedback
     if !input_file_path.exists() {
         return Err(GpgError::FileSystemError(
             std::io::Error::new(std::io::ErrorKind::NotFound, "Input file not found")
         ));
     }
-    
+
     // Present GPG key ID selection menu and get user's choice
     let signing_key_id = select_gpg_signing_shortkey_id()?;
-    
+
     // Get recipient's public key path
     print!("Enter path to recipient's public key file: ");
     io::stdout().flush()
         .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
-    
+
     // Read the recipient key path
     let mut recipient_key_path_str = String::new();
     io::stdin()
         .read_line(&mut recipient_key_path_str)
         .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
     let recipient_key_path = Path::new(recipient_key_path_str.trim());
-    
+
     // Validate recipient key exists to provide early error feedback
     if !recipient_key_path.exists() {
         return Err(GpgError::FileSystemError(
             std::io::Error::new(std::io::ErrorKind::NotFound, "Recipient key file not found")
         ));
     }
-    
+
     // Display the parameters that will be used to confirm with user
     println!("\nProcessing with the following parameters:");
     println!("Input file path: {}", input_file_path.display());
     println!("Signing key ID: {}", signing_key_id);
     println!("Recipient public key path: {}", recipient_key_path.display());
     println!("Output will be saved to: invites_updates/outgoing/");
-    
+
     // Perform the clearsigning and encryption operations
     clearsign_and_encrypt_file_for_recipient(
         input_file_path,
         &signing_key_id,
         recipient_key_path
     )?;
-    
+
     // Calculate the output path for display to user
     let original_filename = input_file_path
         .file_name()
         .and_then(|n| n.to_str())
         .ok_or_else(|| GpgError::PathError("Invalid input file name".to_string()))?;
-    
+
     let output_path = PathBuf::from(format!("invites_updates/outgoing/{}.gpg", original_filename));
-    
+
     // Confirm successful completion
     println!("\nSuccess: File has been clearsigned and encrypted!");
     println!("Encrypted file location: {}", output_path.display());
-    
+
     Ok(())
 }
 
@@ -4339,7 +4390,7 @@ fn clearsign_and_encrypt_workflow() -> Result<(), GpgError> {
 ///
 /// # Arguments
 ///
-/// - `path_to_make_absolute` - A path to convert to an absolute path relative to 
+/// - `path_to_make_absolute` - A path to convert to an absolute path relative to
 ///   the executable's directory location.
 ///
 /// # Returns
@@ -4359,10 +4410,10 @@ fn clearsign_and_encrypt_workflow() -> Result<(), GpgError> {
 pub fn make_input_path_name_abs_executabledirectoryrelative_nocheck<P: AsRef<Path>>(path_to_make_absolute: P) -> Result<PathBuf, io::Error> {
     // Get the directory where the executable is located
     let executable_directory = get_absolute_path_to_executable_parentdirectory()?;
-    
+
     // Create a path by joining the executable directory with the provided path
     let target_path = executable_directory.join(path_to_make_absolute);
-    
+
     // If the path doesn't exist, we still return the absolute path without trying to canonicalize
     if !abs_executable_directory_relative_exists(&target_path)? {
         // Ensure the path is absolute (it should be since we joined with executable_directory)
@@ -4375,7 +4426,7 @@ pub fn make_input_path_name_abs_executabledirectoryrelative_nocheck<P: AsRef<Pat
             ));
         }
     }
-    
+
     // Path exists, so we can canonicalize it to resolve any ".." or "." segments
     target_path.canonicalize().map_err(|e| {
         io::Error::new(
@@ -4416,7 +4467,7 @@ pub fn get_absolute_path_to_executable_parentdirectory() -> Result<PathBuf, io::
             format!("Failed to determine current executable path: {}", e),
         )
     })?;
-    
+
     // Get the directory containing the executable
     let executable_directory = executable_path.parent().ok_or_else(|| {
         io::Error::new(
@@ -4424,7 +4475,7 @@ pub fn get_absolute_path_to_executable_parentdirectory() -> Result<PathBuf, io::
             "Failed to determine parent directory of executable",
         )
     })?;
-    
+
     Ok(executable_directory.to_path_buf())
 }
 
@@ -4434,7 +4485,7 @@ pub fn get_absolute_path_to_executable_parentdirectory() -> Result<PathBuf, io::
 ///
 /// # Arguments
 ///
-/// - `dir_path` - A directory path to convert to an absolute path relative to 
+/// - `dir_path` - A directory path to convert to an absolute path relative to
 ///   the executable's directory location.
 ///
 /// # Returns
@@ -4442,7 +4493,7 @@ pub fn get_absolute_path_to_executable_parentdirectory() -> Result<PathBuf, io::
 /// - `Result<PathBuf, io::Error>` - The absolute directory path or an error
 pub fn make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error<P: AsRef<Path>>(dir_path: P) -> Result<PathBuf, io::Error> {
     let path = make_input_path_name_abs_executabledirectoryrelative_nocheck(dir_path)?;
-    
+
     // Check if the path exists and is a directory
     if !abs_executable_directory_relative_exists(&path)? {
         return Err(io::Error::new(
@@ -4455,7 +4506,7 @@ pub fn make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error<P: A
             "Path exists but is not a directory",
         ));
     }
-    
+
     // Canonicalize the path (should succeed because we've verified it exists)
     path.canonicalize().map_err(|e| {
         io::Error::new(
@@ -4629,9 +4680,9 @@ pub fn convert_tomlfile_without_keyid_into_clearsigntoml_inplace(
 
     // Get the relative path to the collaborator addressbook directory
     // let addressbook_files_directory_relative = collaborator_addressbook_base_path;
-    
+
     // Convert to absolute path and verify the directory exists
-    let collaborator_files_directory_absolute = 
+    let collaborator_files_directory_absolute =
         match make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(
             addressbook_files_directory_relative
         ) {
@@ -4876,7 +4927,7 @@ pub fn convert_tomlfile_without_keyid_into_clearsigntoml_inplace(
             temp_output_path.display(),
             path_to_toml_file.display()
         );
-        
+
         // Attempt to restore original content
         if let Err(e_restore) = fs::write(path_to_toml_file, original_content_backup) {
             eprintln!(
@@ -4894,7 +4945,7 @@ pub fn convert_tomlfile_without_keyid_into_clearsigntoml_inplace(
                 e_rename
             );
         }
-        
+
         return Err(GpgError::FileSystemError(std::io::Error::new(
             e_rename.kind(),
             format!(
@@ -5094,9 +5145,9 @@ pub fn convert_tomlfile_without_keyid_using_gpgtomlkeyid_into_clearsigntoml_inpl
 
     // Get the relative path to the collaborator addressbook directory
     // let addressbook_files_directory_relative = collaborator_addressbook_base_path;
-    
+
     // Convert to absolute path and verify the directory exists
-    let collaborator_files_directory_absolute = 
+    let collaborator_files_directory_absolute =
         match make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(
             addressbook_files_directory_relative
         ) {
@@ -5119,15 +5170,15 @@ pub fn convert_tomlfile_without_keyid_using_gpgtomlkeyid_into_clearsigntoml_inpl
         "ctwKUGci Owner's addressbook file path: {}",
         proto_useraddressbook_path.display()
     );
-    
-    
-    
+
+
+
     // // In your existing functions, you can now use:
     // let (user_addressbook_path, temp_to_cleanup) = get_path_to_clearsign_toml_for_gpgtoml_option(
     //     &proto_useraddressbook_path,
     //     &gpg_full_fingerprint_key_id_string
     // )?;
-        
+
     // Better error handling with explicit logging
     let (user_addressbook_path, temp_to_cleanup) = match get_path_to_clearsign_toml_for_gpgtoml_option(
         &proto_useraddressbook_path,
@@ -5143,7 +5194,7 @@ pub fn convert_tomlfile_without_keyid_using_gpgtomlkeyid_into_clearsigntoml_inpl
             eprintln!("  Input path: {}", proto_useraddressbook_path.display());
             eprintln!("  GPG key: {}", gpg_full_fingerprint_key_id_string);
             eprintln!("  Error: {}", gpg_error.to_string());
-            
+
             // Convert to the appropriate error type for your function
             return Err(GpgError::GpgOperationError(format!(
                 "Failed to process addressbook file '{}': {}",
@@ -5158,12 +5209,12 @@ pub fn convert_tomlfile_without_keyid_using_gpgtomlkeyid_into_clearsigntoml_inpl
     if let Some(ref temp) = temp_to_cleanup {
         debug_log!("Created temporary file: {}", temp.display());
     }
-    
+
     debug_log!(
         "ctwKUGci user_addressbook_path: {}",
         user_addressbook_path.display()
     );
-    
+
     /*
     NOTE: use this at end of function
     // At the end, clean up:
@@ -5262,7 +5313,7 @@ pub fn convert_tomlfile_without_keyid_using_gpgtomlkeyid_into_clearsigntoml_inpl
             return Err(e);
         }
     }
-    
+
     // And the time is cleanup the time!
     cleanup_temp_clearsign_toml(temp_to_cleanup);
 
@@ -5396,7 +5447,7 @@ pub fn convert_tomlfile_without_keyid_using_gpgtomlkeyid_into_clearsigntoml_inpl
             temp_output_path.display(),
             path_to_toml_file.display()
         );
-        
+
         // Attempt to restore original content
         if let Err(e_restore) = fs::write(path_to_toml_file, original_content_backup) {
             eprintln!(
@@ -5414,7 +5465,7 @@ pub fn convert_tomlfile_without_keyid_using_gpgtomlkeyid_into_clearsigntoml_inpl
                 e_rename
             );
         }
-        
+
         return Err(GpgError::FileSystemError(std::io::Error::new(
             e_rename.kind(),
             format!(
@@ -5465,7 +5516,7 @@ pub fn convert_tomlfile_without_keyid_using_gpgtomlkeyid_into_clearsigntoml_inpl
 /// - The file hasn't been tampered with
 /// - The previous signature was valid
 /// - We maintain a chain of trust
-/// 
+///
 /// This is especially important in educational environments where:
 /// - Students need to learn proper security practices
 /// - File integrity must be maintained
@@ -5519,7 +5570,7 @@ pub fn re_clearsign_clearsigntoml_file_without_keyid_into_clearsigntoml_inplace(
 
     // --- Stage 2: Read Existing Clearsigned Content for Backup ---
     println!("Reading existing clearsigned content for backup...");
-    
+
     let original_clearsigned_backup = fs::read_to_string(path_to_clearsigned_toml_file)
         .map_err(|e| {
             GpgError::FileSystemError(std::io::Error::new(
@@ -5535,10 +5586,10 @@ pub fn re_clearsign_clearsigntoml_file_without_keyid_into_clearsigntoml_inplace(
     // --- Stage 3: Validate Signature and Extract Content ---
     println!("Validating existing signature and extracting content...");
     println!("This ensures the file hasn't been tampered with.");
-    
+
     // Create a temporary file for GPG verification output
     let temp_verify_file = path_to_clearsigned_toml_file.with_extension("tmp_verify");
-    
+
     // Run GPG verification and extraction
     // Using --decrypt which both verifies and extracts
     let verify_result = Command::new("gpg")
@@ -5556,7 +5607,7 @@ pub fn re_clearsign_clearsigntoml_file_without_keyid_into_clearsigntoml_inplace(
         Ok(output) => {
             if output.status.success() {
                 println!("✓ Signature validation PASSED. File integrity confirmed.");
-                
+
                 // Read the extracted content
                 let content = fs::read_to_string(&temp_verify_file).map_err(|e| {
                     // Clean up temp file
@@ -5566,17 +5617,17 @@ pub fn re_clearsign_clearsigntoml_file_without_keyid_into_clearsigntoml_inplace(
                         format!("Failed to read extracted content: {}", e),
                     ))
                 })?;
-                
+
                 // Clean up temp file
                 if let Err(e) = fs::remove_file(&temp_verify_file) {
                     eprintln!("Warning: Failed to remove temporary file: {}", e);
                 }
-                
+
                 content
             } else {
                 // Clean up temp file if it exists
                 let _ = fs::remove_file(&temp_verify_file);
-                
+
                 let stderr_output = String::from_utf8_lossy(&output.stderr);
                 return Err(GpgError::GpgOperationError(format!(
                     "GPG signature validation FAILED for '{}'. \
@@ -5591,7 +5642,7 @@ pub fn re_clearsign_clearsigntoml_file_without_keyid_into_clearsigntoml_inplace(
         Err(e) => {
             // Clean up temp file if it exists
             let _ = fs::remove_file(&temp_verify_file);
-            
+
             return Err(GpgError::GpgOperationError(format!(
                 "Failed to execute GPG verify command: {}. \
                  Ensure GPG is installed and accessible.",
@@ -5607,7 +5658,7 @@ pub fn re_clearsign_clearsigntoml_file_without_keyid_into_clearsigntoml_inplace(
 
     // --- Stage 4: Temporarily Replace File with Plain Content ---
     println!("Preparing file for re-signing...");
-    
+
     // Write the plain TOML content to the file
     // This is necessary because the signing function expects plain TOML
     if let Err(e) = fs::write(path_to_clearsigned_toml_file, &plain_toml_content) {
@@ -5623,7 +5674,7 @@ pub fn re_clearsign_clearsigntoml_file_without_keyid_into_clearsigntoml_inplace(
 
     // --- Stage 5: Re-sign the File Using Owner-based Lookup ---
     println!("Re-signing file using owner-based key lookup...");
-    
+
     // Call the existing function to sign the now-plain TOML file
     match convert_tomlfile_without_keyid_into_clearsigntoml_inplace(
         path_to_clearsigned_toml_file,
@@ -5642,7 +5693,7 @@ pub fn re_clearsign_clearsigntoml_file_without_keyid_into_clearsigntoml_inplace(
             eprintln!(
                 "Re-signing failed. Attempting to restore original clearsigned content..."
             );
-            
+
             if let Err(restore_err) = fs::write(
                 path_to_clearsigned_toml_file,
                 &original_clearsigned_backup,
@@ -5656,7 +5707,7 @@ pub fn re_clearsign_clearsigntoml_file_without_keyid_into_clearsigntoml_inplace(
             } else {
                 println!("✓ Original clearsigned content restored after signing failure.");
             }
-            
+
             // Return the original error
             Err(e)
         }
@@ -6020,7 +6071,7 @@ mod tests_inplace_conversion {
         let content = format!("{} = \"{}\"\n{}", key_id_field, key_id_value, other_content);
         fs::write(path, content)
     }
-    
+
     // Helper to check if GPG is available for skipping tests.
     fn is_gpg_available() -> bool {
         Command::new("gpg").arg("--version").status().map_or(false, |s| s.success())
@@ -6047,7 +6098,7 @@ mod tests_inplace_conversion {
             // Consider this a soft skip or an ignored test if not configured.
             // For robust testing, this should be a hard requirement or use a mock.
             // Since no third-party crates are allowed, mocking GPG is non-trivial.
-            return; 
+            return;
         }
 
 
@@ -6062,7 +6113,7 @@ mod tests_inplace_conversion {
 
         // Run the conversion
         let conversion_result = convert_toml_filewithkeyid_into_clearsigntoml_inplace(&test_file_path);
-        
+
         // Assert success
         assert!(conversion_result.is_ok(), "In-place conversion failed: {:?}", conversion_result.err());
 
@@ -6076,7 +6127,7 @@ mod tests_inplace_conversion {
             },
             Err(e) => panic!("Failed to open converted file: {}", e),
         }
-        
+
         assert!(file_content.contains("-----BEGIN PGP SIGNED MESSAGE-----"), "Output file is not clearsigned (missing header)");
         assert!(file_content.contains("-----BEGIN PGP SIGNATURE-----"), "Output file is not clearsigned (missing signature)");
         assert!(file_content.contains(original_other_content), "Original content not found in clearsigned file");
@@ -6097,15 +6148,15 @@ mod tests_inplace_conversion {
             panic!("Expected PathError for non-existent file, got {:?}", result);
         }
     }
-    
+
     #[test]
     fn test_convert_toml_inplace_missing_key_id_field() {
         let test_file_name = "test_missing_key_id.toml";
         let test_file_path = PathBuf::from(test_file_name);
-        
+
         // Create TOML without the required gpg_publickey_id field
         fs::write(&test_file_path, "some_other_field = \"value\"").unwrap();
-        
+
         let result = convert_toml_filewithkeyid_into_clearsigntoml_inplace(&test_file_path);
         assert!(result.is_err());
         if let Err(GpgError::GpgOperationError(msg)) = result {
@@ -6114,7 +6165,7 @@ mod tests_inplace_conversion {
         } else {
             panic!("Expected GpgOperationError for missing key ID field, got {:?}", result);
         }
-        
+
         let _ = fs::remove_file(&test_file_path);
     }
 
@@ -6127,9 +6178,9 @@ mod tests_inplace_conversion {
         let test_file_name = "test_invalid_signing_key.toml";
         let test_file_path = PathBuf::from(test_file_name);
         let invalid_key_id = "THIS_IS_NOT_A_VALID_GPG_KEY_ID_AT_ALL_NO_WAY_JOSE";
-        
+
         create_test_toml_file(&test_file_path, "gpg_publickey_id", invalid_key_id, "content = \"test\"").unwrap();
-        
+
         let result = convert_toml_filewithkeyid_into_clearsigntoml_inplace(&test_file_path);
         assert!(result.is_err());
         if let Err(GpgError::GpgOperationError(msg)) = result {
@@ -6138,7 +6189,7 @@ mod tests_inplace_conversion {
         } else {
             panic!("Expected GpgOperationError for invalid signing key, got {:?}", result);
         }
-        
+
         let _ = fs::remove_file(&test_file_path);
     }
 }
@@ -6153,7 +6204,7 @@ for uma team-channel node and similar struct fields
 
 **Key Requirements**:
 1. **Security-First**: The function MUST validate the clearsign signature before reading ANY data
-2. **Owner-Based Key Lookup**: 
+2. **Owner-Based Key Lookup**:
    - The target TOML file contains an `owner` field
    - The owner's GPG key is stored in their addressbook file: `{owner}__collaborator.toml`
    - The addressbook file contains the `gpg_publickey_id` used to verify the signature
@@ -6238,10 +6289,10 @@ for uma team-channel node and similar struct fields
 ///     "collaborators",
 ///     "alice_bob"
 /// )?;
-/// 
+///
 /// for assignment in assignments {
-///     println!("{}: ready={}, intray={}, gotit={}", 
-///              assignment.user_name, 
+///     println!("{}: ready={}, intray={}, gotit={}",
+///              assignment.user_name,
 ///              assignment.ready_port,
 ///              assignment.intray_port,
 ///              assignment.gotit_port);
@@ -6316,7 +6367,7 @@ pub fn read_specific_pair_port_assignments_from_clearsigntoml(
     debug_log!("Looking up GPG key for owner '{}' in addressbook", file_owner_username);
 
     // Convert collaborator directory to absolute path
-    let collaborator_files_directory_absolute = 
+    let collaborator_files_directory_absolute =
         match make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(
             addressbook_files_directory_relative
         ) {
@@ -6378,10 +6429,10 @@ pub fn read_specific_pair_port_assignments_from_clearsigntoml(
 
     // --- Stage 4: Create Temporary File for Validation ---
     let temp_validation_path = create_temp_file_path("validate_ports")?;
-    
+
     // --- Stage 5: Verify Signature and Extract Content ---
     debug_log!("Validating clearsigned file signature...");
-    
+
     // Decrypt (which validates) the clearsigned file
     let validation_result = Command::new("gpg")
         .arg("--decrypt")
@@ -6398,7 +6449,7 @@ pub fn read_specific_pair_port_assignments_from_clearsigntoml(
             if !output.status.success() {
                 // Cleanup temp file
                 let _ = fs::remove_file(&temp_validation_path);
-                
+
                 let stderr_output = String::from_utf8_lossy(&output.stderr);
                 return Err(GpgError::GpgOperationError(format!(
                     "GPG signature validation FAILED. File may be tampered. GPG output: {}",
@@ -6410,7 +6461,7 @@ pub fn read_specific_pair_port_assignments_from_clearsigntoml(
         Err(e) => {
             // Cleanup temp file
             let _ = fs::remove_file(&temp_validation_path);
-            
+
             return Err(GpgError::GpgOperationError(format!(
                 "Failed to execute GPG validation: {}",
                 e
@@ -6420,7 +6471,7 @@ pub fn read_specific_pair_port_assignments_from_clearsigntoml(
 
     // --- Stage 6: Parse Port Assignments from Validated Content ---
     debug_log!("Extracting port assignments for pair '{}'", pair_name);
-    
+
     // Now we can safely read from the validated content
     let validated_content = match fs::read_to_string(&temp_validation_path) {
         Ok(content) => content,
@@ -6452,41 +6503,41 @@ pub fn read_specific_pair_port_assignments_from_clearsigntoml(
 
     for line in validated_content.lines() {
         let trimmed = line.trim();
-        
+
         // Check if we're entering our target section
         if trimmed == table_header {
             in_target_section = true;
             continue;
         }
-        
+
         // Check if we're leaving our section (new section starts)
         if in_target_section && trimmed.starts_with('[') && trimmed != table_header {
             break; // We've passed our section
         }
-        
+
         // Skip if not in our section
         if !in_target_section {
             continue;
         }
-        
+
         // Check for collaborator_ports array start
         if trimmed.starts_with("collaborator_ports = [") {
             in_ports_array = true;
             continue;
         }
-        
+
         // Check for array end
         if in_ports_array && trimmed == "]" {
             break; // End of our data
         }
-        
+
         // Parse array entries
         if in_ports_array {
             // Handle start of a new port entry
             if trimmed.starts_with('{') || trimmed.contains("{ user_name") {
                 current_port_entry = Some(PartialPortEntry::default());
             }
-            
+
             // Parse fields within the entry
             if let Some(ref mut entry) = current_port_entry {
                 // Parse user_name
@@ -6495,21 +6546,21 @@ pub fn read_specific_pair_port_assignments_from_clearsigntoml(
                         entry.user_name = Some(value);
                     }
                 }
-                
+
                 // Parse ready_port
                 if trimmed.contains("ready_port = ") {
                     if let Some(value) = extract_port_value(trimmed, "ready_port") {
                         entry.ready_port = Some(value);
                     }
                 }
-                
+
                 // Parse intray_port
                 if trimmed.contains("intray_port = ") {
                     if let Some(value) = extract_port_value(trimmed, "intray_port") {
                         entry.intray_port = Some(value);
                     }
                 }
-                
+
                 // Parse gotit_port
                 if trimmed.contains("gotit_port = ") {
                     if let Some(value) = extract_port_value(trimmed, "gotit_port") {
@@ -6517,7 +6568,7 @@ pub fn read_specific_pair_port_assignments_from_clearsigntoml(
                     }
                 }
             }
-            
+
             // Check for end of entry
             if trimmed.ends_with("},") || trimmed.ends_with('}') {
                 if let Some(entry) = current_port_entry.take() {
@@ -6573,13 +6624,13 @@ pub fn read_specific_pair_port_assignments_from_clearsigntoml(
 //     if let Some(start_pos) = line.find(&field_pattern) {
 //         let value_start = start_pos + field_pattern.len();
 //         let value_part = &line[value_start..].trim();
-        
+
 //         // Remove quotes and any trailing comma
 //         let cleaned = value_part
 //             .trim_start_matches('"')
 //             .trim_end_matches(',')
 //             .trim_end_matches('"');
-            
+
 //         Some(cleaned.to_string())
 //     } else {
 //         None
@@ -6599,7 +6650,7 @@ pub fn read_specific_pair_port_assignments_from_clearsigntoml(
 //     if let Some(start_pos) = line.find(&field_pattern) {
 //         let value_start = start_pos + field_pattern.len();
 //         let value_part = &line[value_start..].trim();
-        
+
 //         // Remove any trailing comma and parse
 //         let cleaned = value_part.trim_end_matches(',').trim();
 //         cleaned.parse::<u16>().ok()
@@ -6669,9 +6720,9 @@ pub fn read_specific_pair_port_assignments_from_clearsigntoml(
 /// // Access ports for specific collaborator pair
 /// if let Some(alice_bob_ports) = port_assignments.get("alice_bob") {
 ///     for port_data in alice_bob_ports {
-///         println!("{}: ready={}, intray={}, gotit={}", 
+///         println!("{}: ready={}, intray={}, gotit={}",
 ///                  port_data.user_name,
-///                  port_data.ready_port, 
+///                  port_data.ready_port,
 ///                  port_data.intray_port,
 ///                  port_data.gotit_port);
 ///     }
@@ -6683,7 +6734,7 @@ pub fn read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyi
 ) -> Result<HashMap<String, Vec<AbstractTeamchannelNodeTomlPortsData>>, GpgError> {
     debug_log("Starting RACPFTW read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyid()");
     debug_log("RACPFTW Beginning extraction of all collaborator port assignments with direct output format");
-    
+
     // --- Stage 1: Input Validation ---
     debug_log!(
         "RACPFTW Validating input parameters:",
@@ -6713,7 +6764,7 @@ pub fn read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyi
 
     // --- Stage 2: Extract GPG Key ID from Addressbook ---
     debug_log("RACPFTW Extracting GPG key ID from addressbook for signature validation");
-    
+
     let gpg_key_id_field_name = "gpg_publickey_id";
     let signing_key_id = match read_singleline_string_from_clearsigntoml(
         addressbook_readcopy_path_string,
@@ -6737,7 +6788,7 @@ pub fn read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyi
             )));
         }
     };
-    
+
     debug_log!(
         "RACPFTW Successfully extracted GPG key ID for validation: '{}'",
         signing_key_id
@@ -6753,7 +6804,7 @@ pub fn read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyi
             )));
         }
     };
-    
+
     debug_log!(
         "RACPFTW Created temporary validation file at: {:?}",
         temp_validation_path
@@ -6761,7 +6812,7 @@ pub fn read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyi
 
     // --- Stage 4: Perform GPG Signature Validation ---
     debug_log!("RACPFTW Performing GPG signature validation on clearsigned file...");
-    
+
     let validation_result = Command::new("gpg")
         .arg("--decrypt")
         .arg("--batch")
@@ -6788,19 +6839,19 @@ pub fn read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyi
     if !validation_output.status.success() {
         // Clean up temporary file
         let _ = fs::remove_file(&temp_validation_path);
-        
+
         let stderr_text = String::from_utf8_lossy(&validation_output.stderr);
         return Err(GpgError::GpgOperationError(format!(
             "RACPFTW GPG signature validation FAILED. File may be tampered or corrupted. GPG stderr: {}",
             stderr_text.trim()
         )));
     }
-    
+
     debug_log!("RACPFTW ✓ GPG signature validation PASSED. File integrity confirmed.");
 
     // --- Stage 5: Read and Parse Validated Content ---
     debug_log!("RACPFTW Reading validated content for parsing...");
-    
+
     let validated_content = match fs::read_to_string(&temp_validation_path) {
         Ok(content) => content,
         Err(e) => {
@@ -6826,15 +6877,15 @@ pub fn read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyi
 
     // --- Stage 6: Parse All Collaborator Port Assignments ---
     debug_log!("RACPFTW Parsing all collaborator port assignments from validated content...");
-    
+
     // Initialize result storage
     let mut all_assignments: HashMap<String, Vec<AbstractTeamchannelNodeTomlPortsData>> = HashMap::new();
-    
+
     // State tracking for parsing
     let mut current_pair_name: Option<String> = None;
     let mut current_pair_ports: Vec<AbstractTeamchannelNodeTomlPortsData> = Vec::new();
     let mut current_port_entry: Option<PartialPortEntry> = None;
-    
+
     // Helper structure for accumulating port entry fields
     #[derive(Default, Debug)]
     struct PartialPortEntry {
@@ -6847,18 +6898,18 @@ pub fn read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyi
     // Process each line of the validated content
     for (line_number, line) in validated_content.lines().enumerate() {
         let trimmed = line.trim();
-        
+
         // Skip empty lines and comments
         if trimmed.is_empty() || trimmed.starts_with('#') {
             continue;
         }
-        
+
         // Check for new collaborator pair section header
         // Format: [[abstract_collaborator_port_assignments.pair_name]]
-        if trimmed.starts_with("[[abstract_collaborator_port_assignments.") && 
-           trimmed.ends_with("]]") && 
+        if trimmed.starts_with("[[abstract_collaborator_port_assignments.") &&
+           trimmed.ends_with("]]") &&
            !trimmed.contains(".collaborator_ports]]") {
-            
+
             // Save previous pair's data if exists
             if let Some(pair_name) = current_pair_name.take() {
                 if !current_pair_ports.is_empty() {
@@ -6871,20 +6922,20 @@ pub fn read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyi
                     current_pair_ports.clear();
                 }
             }
-            
+
             // Extract new pair name
             let prefix_len = "[[abstract_collaborator_port_assignments.".len();
             let suffix_len = 2; // Length of "]]"
             let pair_name = trimmed[prefix_len..trimmed.len() - suffix_len].to_string();
-            
+
             debug_log!("RACPFTW Found new collaborator pair section: '{}'", pair_name);
             current_pair_name = Some(pair_name);
             continue;
         }
-        
+
         // Check for collaborator_ports subsection
         // Format: [[abstract_collaborator_port_assignments.pair_name.collaborator_ports]]
-        if trimmed.contains("[[abstract_collaborator_port_assignments.") && 
+        if trimmed.contains("[[abstract_collaborator_port_assignments.") &&
            trimmed.contains(".collaborator_ports]]") {
             // This marks the start of a new port entry
             if current_port_entry.is_some() {
@@ -6896,12 +6947,12 @@ pub fn read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyi
             current_port_entry = Some(PartialPortEntry::default());
             continue;
         }
-        
+
         // Skip lines if we're not in a pair section
         if current_pair_name.is_none() {
             continue;
         }
-        
+
         // Parse port entry fields
         if let Some(ref mut entry) = current_port_entry {
             // Parse user_name field
@@ -6916,7 +6967,7 @@ pub fn read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyi
                     }
                 }
             }
-            
+
             // Parse ready_port field
             else if trimmed.starts_with("ready_port = ") {
                 match extract_port_value(trimmed, "ready_port") {
@@ -6929,7 +6980,7 @@ pub fn read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyi
                     }
                 }
             }
-            
+
             // Parse intray_port field
             else if trimmed.starts_with("intray_port = ") {
                 match extract_port_value(trimmed, "intray_port") {
@@ -6942,14 +6993,14 @@ pub fn read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyi
                     }
                 }
             }
-            
+
             // Parse gotit_port field
             else if trimmed.starts_with("gotit_port = ") {
                 match extract_port_value(trimmed, "gotit_port") {
                     Some(value) => {
                         entry.gotit_port = Some(value);
                         debug_log!("RACPFTW     Found gotit_port: {}", value);
-                        
+
                         // After gotit_port, we should have a complete entry
                         // Validate and add to current pair's ports
                         match (
@@ -6965,14 +7016,14 @@ pub fn read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyi
                                     intray_port: intray,
                                     gotit_port: gotit,
                                 };
-                                
+
                                 debug_log!(
                                     "RACPFTW     ✓ Complete port assignment for user '{}': ready={}, intray={}, gotit={}",
                                     user, ready, intray, gotit
                                 );
-                                
+
                                 current_pair_ports.push(port_assignment);
-                                
+
                                 // Reset for next port entry
                                 current_port_entry = None;
                             }
@@ -6991,7 +7042,7 @@ pub fn read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyi
             }
         }
     }
-    
+
     // Don't forget to save the last pair if file doesn't end with another section
     if let Some(pair_name) = current_pair_name.take() {
         if !current_pair_ports.is_empty() {
@@ -7003,20 +7054,20 @@ pub fn read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyi
             all_assignments.insert(pair_name, current_pair_ports);
         }
     }
-    
+
     // --- Stage 7: Validate Results ---
     if all_assignments.is_empty() {
         return Err(GpgError::GpgOperationError(
             "RACPFTW No collaborator port assignments found in validated content. Expected sections starting with '[[abstract_collaborator_port_assignments.'".to_string()
         ));
     }
-    
+
     // Log final summary
     debug_log!(
         "RACPFTW ✓ Successfully extracted port assignments for {} collaborator pairs",
         all_assignments.len()
     );
-    
+
     let mut total_port_count = 0;
     for (pair_name, ports) in &all_assignments {
         debug_log!(
@@ -7026,12 +7077,12 @@ pub fn read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyi
         );
         total_port_count += ports.len();
     }
-    
+
     debug_log!(
         "RACPFTW Total port assignments extracted: {}",
         total_port_count
     );
-    
+
     Ok(all_assignments)
 }
 
@@ -7062,15 +7113,15 @@ pub fn read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyi
 //     if !line.contains(&field_prefix) {
 //         return None;
 //     }
-    
+
 //     // Find the start of the value after the equals sign
 //     let value_start_index = match line.find(&field_prefix) {
 //         Some(index) => index + field_prefix.len(),
 //         None => return None,
 //     };
-    
+
 //     let value_part = &line[value_start_index..].trim();
-    
+
 //     // Check for quoted value (single or double quotes)
 //     if (value_part.starts_with('"') && value_part.len() >= 2) {
 //         // Find the closing quote
@@ -7083,7 +7134,7 @@ pub fn read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyi
 //             return Some(value_part[1..end_index + 1].to_string());
 //         }
 //     }
-    
+
 //     None
 // }
 
@@ -7114,21 +7165,21 @@ pub fn read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyi
 //     if !line.contains(&field_prefix) {
 //         return None;
 //     }
-    
+
 //     // Find the start of the value after the equals sign
 //     let value_start_index = match line.find(&field_prefix) {
 //         Some(index) => index + field_prefix.len(),
 //         None => return None,
 //     };
-    
+
 //     let value_part = &line[value_start_index..].trim();
-    
+
 //     // Extract the numeric part (stop at comma, space, or end of string)
 //     let numeric_part: String = value_part
 //         .chars()
 //         .take_while(|c| c.is_ascii_digit())
 //         .collect();
-    
+
 //     // Parse as u16
 //     match numeric_part.parse::<u16>() {
 //         Ok(port) if port > 0 => Some(port),
@@ -7171,11 +7222,11 @@ pub fn read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyi
 ///     Path::new("team_channel_config.toml"),
 ///     "collaborators"
 /// )?;
-/// 
+///
 /// for (pair_name, assignments) in all_assignments {
 ///     debug_log!("Pair: {}", pair_name);
 ///     for assignment in assignments {
-///         debug_log!("  {}: ports {}, {}, {}", 
+///         debug_log!("  {}: ports {}, {}, {}",
 ///                  assignment.user_name,
 ///                  assignment.ready_port,
 ///                  assignment.intray_port,
@@ -7194,10 +7245,10 @@ pub fn read_abstract_collaborator_port_assignments_from_clearsigntoml(
 
     // First, we need to validate the file and get the list of pairs
     // We'll do this by reading the validated content once to find all pairs
-    
+
     // Perform the same validation steps as the specific function
     // This code is duplicated for clarity and to ensure independent validation
-    
+
     // --- Stage 1: Input Validation ---
     if !path_to_clearsigned_toml.exists() {
         return Err(GpgError::PathError(format!(
@@ -7243,7 +7294,7 @@ pub fn read_abstract_collaborator_port_assignments_from_clearsigntoml(
     };
 
     // Get collaborator directory and addressbook path
-    let collaborator_files_directory_absolute = 
+    let collaborator_files_directory_absolute =
         match make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(
             addressbook_files_directory_relative
         ) {
@@ -7284,7 +7335,7 @@ pub fn read_abstract_collaborator_port_assignments_from_clearsigntoml(
 
     // --- Stage 3: Validate and Extract Content Once ---
     let temp_validation_path = create_temp_file_path("validate_all_ports")?;
-    
+
     let validation_result = Command::new("gpg")
         .arg("--decrypt")
         .arg("--batch")
@@ -7321,14 +7372,14 @@ pub fn read_abstract_collaborator_port_assignments_from_clearsigntoml(
             return Err(GpgError::FileSystemError(e));
         }
     };
-    
+
     // Cleanup temp file
     let _ = fs::remove_file(&temp_validation_path);
 
     // --- Stage 4: Find All Collaborator Pairs ---
     let mut pair_names = Vec::new();
     let table_prefix = "[abstract_collaborator_port_assignments.";
-    
+
     for line in validated_content.lines() {
         let trimmed = line.trim();
         if trimmed.starts_with(table_prefix) && trimmed.ends_with(']') {
@@ -7339,21 +7390,21 @@ pub fn read_abstract_collaborator_port_assignments_from_clearsigntoml(
             pair_names.push(pair_name.to_string());
         }
     }
-    
+
     if pair_names.is_empty() {
         return Err(GpgError::GpgOperationError(
             "No collaborator pairs found in abstract_collaborator_port_assignments".to_string()
         ));
     }
-    
+
     debug_log!("Found {} collaborator pairs to process", pair_names.len());
 
     // --- Stage 5: Call Specific Function for Each Pair ---
     let mut all_assignments = HashMap::new();
-    
+
     for pair_name in pair_names {
         debug_log!("Processing pair: {}", pair_name);
-        
+
         match read_specific_pair_port_assignments_from_clearsigntoml(
             path_to_clearsigned_toml,
             addressbook_files_directory_relative,
@@ -7370,18 +7421,18 @@ pub fn read_abstract_collaborator_port_assignments_from_clearsigntoml(
             }
         }
     }
-    
+
     if all_assignments.is_empty() {
         return Err(GpgError::GpgOperationError(
             "No port assignments could be extracted from any collaborator pairs".to_string()
         ));
     }
-    
+
     debug_log!(
         "Successfully extracted port assignments for {} pairs",
         all_assignments.len()
     );
-    
+
     Ok(all_assignments)
 }
 
@@ -7415,7 +7466,7 @@ pub fn read_abstract_collaborator_port_assignments_from_clearsigntoml(
 ///     { user_name = "alice", ready_port = 50001, intray_port = 50002, gotit_port = 50003 },
 ///     { user_name = "bob", ready_port = 50004, intray_port = 50005, gotit_port = 50006 },
 /// ]
-/// 
+///
 /// [abstract_collaborator_port_assignments.alice_charlotte]
 /// collaborator_ports = [
 ///     { user_name = "alice", ready_port = 50007, intray_port = 50008, gotit_port = 50009 },
@@ -7449,19 +7500,19 @@ pub fn read_abstract_collaborator_port_assignments_from_clearsigntoml(
 ///     Path::new("team_channel_config.toml"),
 ///     "collaborators"
 /// )?;
-/// 
+///
 /// // Display all assignments
 /// for (pair_name, assignments) in &all_assignments {
 ///     debug_log!("Collaborator pair: {}", pair_name);
 ///     for assignment in assignments {
-///         debug_log!("  {} -> ready: {}, intray: {}, gotit: {}", 
+///         debug_log!("  {} -> ready: {}, intray: {}, gotit: {}",
 ///                  assignment.user_name,
 ///                  assignment.ready_port,
 ///                  assignment.intray_port,
 ///                  assignment.gotit_port);
 ///     }
 /// }
-/// 
+///
 /// // Access specific pair
 /// if let Some(alice_bob_ports) = all_assignments.get("alice_bob") {
 ///     debug_log!("Alice-Bob communication ports: {:?}", alice_bob_ports);
@@ -7472,7 +7523,7 @@ pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
     addressbook_files_directory_relative: &str,  // pass in constant here
 ) -> Result<HashMap<String, Vec<AbstractTeamchannelNodeTomlPortsData>>, GpgError> {
     debug_log("starting RACPACO read_all_collaborator_port_assignments_clearsigntoml_optimized() Starting optimized extraction of all collaborator port assignments");
-    
+
     // --- Stage 1: Input Validation ---
     debug_log!(
         "RACPACO from path_to_clearsigned_toml: {}",
@@ -7541,9 +7592,9 @@ pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
 
     // println!("HERE HERE FLAG 01 TestPoint");
     debug_log("HERE HERE FLAG 01 TestPoint");
-    
+
     // Convert collaborator directory to absolute path
-    let collaborator_files_directory_absolute = 
+    let collaborator_files_directory_absolute =
         match make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(
             addressbook_files_directory_relative,
         ) {
@@ -7552,26 +7603,26 @@ pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
                 return Err(GpgError::FileSystemError(io_error));
             }
         };
-        
+
     debug_log!("RACPACO collaborator_files_directory_absolute -> {:?}", collaborator_files_directory_absolute.display());
-        
+
     // TODO: probably needs to have the .gpgtoml functionality
 
     // Construct addressbook filename
     let collaborator_filename = format!("{}__collaborator.toml", file_owner_username);
-    
+
     /*
     maybe skip to this part where adddressbook
     readcopy is passed in
     */
-    
+
     let user_addressbook_path = collaborator_files_directory_absolute.join(&collaborator_filename);
 
     debug_log!("RACPACO Owner's addressbook path: {}", user_addressbook_path.display());
 
     // println!("HERE HERE FLAG 02 TestPoint");
     debug_log("HERE HERE FLAG 02 TestPoint");
-    
+
     // Verify addressbook exists
     if !user_addressbook_path.exists() {
         return Err(GpgError::PathError(format!(
@@ -7579,10 +7630,10 @@ pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
             user_addressbook_path.display()
         )));
     }
-    
+
     // println!("HERE HERE FLAG 03 TestPoint");
     debug_log("HERE HERE FLAG 03 TestPoint");
-    
+
     // Convert addressbook path to string
     let user_addressbook_path_str = match user_addressbook_path.to_str() {
         Some(s) => s,
@@ -7593,12 +7644,12 @@ pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
             )));
         }
     };
-        
+
     debug_log!("RACPACO user_addressbook_path_str -> {}", user_addressbook_path_str);
 
     // println!("HERE HERE FLAG 04 TestPoint");
     debug_log("HERE HERE FLAG 04 TestPoint");
-    
+
     // Extract GPG key ID from addressbook (which validates the addressbook's signature)
     let gpg_key_id_name_of_toml_field_key_to_read = "gpg_publickey_id";
     let signing_key_id = match read_singleline_string_from_clearsigntoml(
@@ -7625,10 +7676,10 @@ pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
 
     // --- Stage 4: Create Temporary File for Validation ---
     let temp_validation_path = create_temp_file_path("validate_all_ports_optimized")?;
-    
+
     // --- Stage 5: Verify Signature and Extract Content (ONCE) ---
     debug_log!("RACPACO Validating clearsigned file signature...");
-    
+
     // Decrypt (which validates) the clearsigned file
     let validation_result = Command::new("gpg")
         .arg("--decrypt")
@@ -7645,7 +7696,7 @@ pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
             if !output.status.success() {
                 // Cleanup temp file
                 let _ = fs::remove_file(&temp_validation_path);
-                
+
                 let stderr_output = String::from_utf8_lossy(&output.stderr);
                 return Err(GpgError::GpgOperationError(format!(
                     "RACPACO GPG signature validation FAILED. File may be tampered. GPG output: {}",
@@ -7658,7 +7709,7 @@ pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
         Err(e) => {
             // Cleanup temp file
             let _ = fs::remove_file(&temp_validation_path);
-            
+
             return Err(GpgError::GpgOperationError(format!(
                 "RACPACO Failed to execute GPG validation: {}",
                 e
@@ -7667,7 +7718,7 @@ pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
     }
 
     // --- Stage 6: Parse ALL Port Assignments from Validated Content ---
-    
+
     // Read the validated content once
     let validated_content = match fs::read_to_string(&temp_validation_path) {
         Ok(content) => content,
@@ -7684,7 +7735,7 @@ pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
     // Parse all collaborator pair sections in one pass
     let mut all_assignments: HashMap<String, Vec<AbstractTeamchannelNodeTomlPortsData>> = HashMap::new();
     let table_prefix = "[abstract_collaborator_port_assignments.";
-    
+
     // State tracking for parsing
     let mut current_pair_name: Option<String> = None;
     let mut current_pair_assignments: Vec<AbstractTeamchannelNodeTomlPortsData> = Vec::new();
@@ -7703,7 +7754,7 @@ pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
     // Process each line of the validated content
     for line in validated_content.lines() {
         let trimmed = line.trim();
-        
+
         // Check if we're entering a new collaborator pair section
         if trimmed.starts_with(table_prefix) && trimmed.ends_with(']') {
             // Save previous pair's data if any
@@ -7713,7 +7764,7 @@ pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
                     current_pair_assignments.clear();
                 }
             }
-            
+
             // Extract new pair name
             let start = table_prefix.len();
             let end = trimmed.len() - 1;
@@ -7722,16 +7773,16 @@ pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
             debug_log!("  Processing pair: {}", current_pair_name.as_ref().unwrap());
             continue;
         }
-        
+
         // Skip lines if we're not in a pair section
         if current_pair_name.is_none() {
             continue;
         }
-        
+
         // Check for collaborator_ports array start
         if trimmed.starts_with("collaborator_ports = [") {
             in_ports_array = true;
-            
+
             // Check if it's a single-line array (for simple cases)
             if trimmed.contains(']') {
                 // TODO: Handle single-line array parsing if needed
@@ -7739,13 +7790,13 @@ pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
             }
             continue;
         }
-        
+
         // Check for array end
         if in_ports_array && trimmed == "]" {
             in_ports_array = false;
             continue;
         }
-        
+
         // Parse array entries
         if in_ports_array {
             // Handle start of a new port entry
@@ -7759,32 +7810,32 @@ pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
                 }
                 current_port_entry = Some(PartialPortEntry::default());
             }
-            
+
             // Parse fields within the entry
             if let Some(ref mut entry) = current_port_entry {
                 // Parse all fields that might be on this line
-                
+
                 // Parse user_name
                 if trimmed.contains("user_name = ") {
                     if let Some(value) = extract_quoted_value(trimmed, "user_name") {
                         entry.user_name = Some(value);
                     }
                 }
-                
+
                 // Parse ready_port
                 if trimmed.contains("ready_port = ") {
                     if let Some(value) = extract_port_value(trimmed, "ready_port") {
                         entry.ready_port = Some(value);
                     }
                 }
-                
+
                 // Parse intray_port
                 if trimmed.contains("intray_port = ") {
                     if let Some(value) = extract_port_value(trimmed, "intray_port") {
                         entry.intray_port = Some(value);
                     }
                 }
-                
+
                 // Parse gotit_port
                 if trimmed.contains("gotit_port = ") {
                     if let Some(value) = extract_port_value(trimmed, "gotit_port") {
@@ -7792,7 +7843,7 @@ pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
                     }
                 }
             }
-            
+
             // Check for end of entry
             if trimmed.ends_with("},") || trimmed.ends_with('}') {
                 if let Some(entry) = current_port_entry.take() {
@@ -7817,21 +7868,21 @@ pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
             }
         }
     }
-    
+
     // Don't forget the last pair if the file doesn't end with another section
     if let Some(pair_name) = current_pair_name.take() {
         if !current_pair_assignments.is_empty() {
             all_assignments.insert(pair_name, current_pair_assignments);
         }
     }
-    
+
     // --- Stage 7: Validate Results ---
     if all_assignments.is_empty() {
         return Err(GpgError::GpgOperationError(
             "RACPACO No collaborator port assignments found in abstract_collaborator_port_assignments".to_string()
         ));
     }
-    
+
     // Log summary
     debug_log!(
         "RACPACO ✓ Successfully extracted port assignments for {} collaborator pairs:",
@@ -7840,7 +7891,7 @@ pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
     for (pair_name, assignments) in &all_assignments {
         debug_log!("  - {}: {} port assignments", pair_name, assignments.len());
     }
-    
+
     Ok(all_assignments)
 }
 
@@ -7872,16 +7923,16 @@ pub fn read_teamchannel_collaborator_ports_clearsigntoml_without_keyid(
     path_to_clearsigned_toml: &str,
 ) -> Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, GpgError> {
     debug_log("starting RATPFT read_teamchannel_collaborator_ports_clearsigntoml_without_keyid() Starting extraction of all collaborator port assignments");
-    
+
     // --- Stage 1: Input Validation ---
     debug_log!(
         "RATPFT from path_to_clearsigned_toml: {}",
         path_to_clearsigned_toml,
     );
-  
+
     // println!("HERE HERE FLAG 01 TestPoint");
     debug_log("HERE HERE FLAG 01 TestPoint");
-    
+
     // Extract GPG key ID from addressbook (which validates the addressbook's signature)
     let gpg_key_id_name_of_toml_field_key_to_read = "gpg_publickey_id";
     let signing_key_id = match read_singleline_string_from_clearsigntoml(
@@ -7908,10 +7959,10 @@ pub fn read_teamchannel_collaborator_ports_clearsigntoml_without_keyid(
 
     // --- Stage 2: Create Temporary File for Validation ---
     let temp_validation_path = create_temp_file_path("validate_all_ports_optimized")?;
-    
+
     // --- Stage 3: Verify Signature and Extract Content (once) ---
     debug_log!("RATPFT Validating clearsigned file signature...");
-    
+
     // Decrypt (which validates) the clearsigned file
     let validation_result = Command::new("gpg")
         .arg("--decrypt")
@@ -7928,7 +7979,7 @@ pub fn read_teamchannel_collaborator_ports_clearsigntoml_without_keyid(
             if !output.status.success() {
                 // Cleanup temp file
                 let _ = fs::remove_file(&temp_validation_path);
-                
+
                 let stderr_output = String::from_utf8_lossy(&output.stderr);
                 return Err(GpgError::GpgOperationError(format!(
                     "RATPFT GPG signature validation FAILED. File may be tampered. GPG output: {}",
@@ -7941,7 +7992,7 @@ pub fn read_teamchannel_collaborator_ports_clearsigntoml_without_keyid(
         Err(e) => {
             // Cleanup temp file
             let _ = fs::remove_file(&temp_validation_path);
-            
+
             return Err(GpgError::GpgOperationError(format!(
                 "RATPFT Failed to execute GPG validation: {}",
                 e
@@ -7950,7 +8001,7 @@ pub fn read_teamchannel_collaborator_ports_clearsigntoml_without_keyid(
     }
 
     // --- Stage 4: Parse ALL Port Assignments from Validated Content ---
-    
+
     // Read the validated content once
     let validated_content = match fs::read_to_string(&temp_validation_path) {
         Ok(content) => content,
@@ -7966,13 +8017,13 @@ pub fn read_teamchannel_collaborator_ports_clearsigntoml_without_keyid(
 
     // Parse all collaborator pair sections in one pass
     let mut all_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>> = HashMap::new();
-    
+
     // State tracking for parsing
     let mut current_pair_name: Option<String> = None;
     let mut current_wrapper_entry: Option<Vec<AbstractTeamchannelNodeTomlPortsData>> = None;
     let mut current_port_entry: Option<PartialPortEntry> = None;
     let mut pair_wrapper_entries: Vec<ReadTeamchannelCollaboratorPortsToml> = Vec::new();
-    
+
     // Helper structure for parsing port entries
     #[derive(Default)]
     struct PartialPortEntry {
@@ -7985,12 +8036,12 @@ pub fn read_teamchannel_collaborator_ports_clearsigntoml_without_keyid(
     // Process each line of the validated content
     for line in validated_content.lines() {
         let trimmed = line.trim();
-        
+
         // Check for new collaborator pair section (e.g., [[abstract_collaborator_port_assignments.bob_charlotte]])
-        if trimmed.starts_with("[[abstract_collaborator_port_assignments.") && 
-           trimmed.ends_with("]]") && 
+        if trimmed.starts_with("[[abstract_collaborator_port_assignments.") &&
+           trimmed.ends_with("]]") &&
            !trimmed.contains(".collaborator_ports]]") {
-            
+
             // Save previous pair's data if any
             if let Some(pair_name) = current_pair_name.take() {
                 // Save any pending wrapper entry
@@ -8001,52 +8052,52 @@ pub fn read_teamchannel_collaborator_ports_clearsigntoml_without_keyid(
                         });
                     }
                 }
-                
+
                 // Save all wrapper entries for this pair
                 if !pair_wrapper_entries.is_empty() {
                     all_assignments.insert(pair_name, pair_wrapper_entries.clone());
                     pair_wrapper_entries.clear();
                 }
             }
-            
+
             // Extract new pair name
             let start = "[[abstract_collaborator_port_assignments.".len();
             let end = trimmed.len() - 2; // Remove the closing ]]
             current_pair_name = Some(trimmed[start..end].to_string());
-            
+
             // Start a new wrapper entry for this pair
             current_wrapper_entry = Some(Vec::new());
-            
+
             debug_log!("  Processing pair: {}", current_pair_name.as_ref().unwrap_or(&"None".to_string()));
             continue;
         }
-        
+
         // Check for collaborator_ports section within a pair
-        if trimmed.contains("[[abstract_collaborator_port_assignments.") && 
+        if trimmed.contains("[[abstract_collaborator_port_assignments.") &&
            trimmed.contains(".collaborator_ports]]") {
             // This marks the start of a new port entry within the current wrapper
             continue;
         }
-        
+
         // Skip lines if we're not in a pair section
         if current_pair_name.is_none() {
             continue;
         }
-        
+
         // Parse port entry fields
         if trimmed.contains("user_name = ") {
             // Start or continue a port entry
             if current_port_entry.is_none() {
                 current_port_entry = Some(PartialPortEntry::default());
             }
-            
+
             if let Some(ref mut entry) = current_port_entry {
                 if let Some(value) = extract_quoted_value(trimmed, "user_name") {
                     entry.user_name = Some(value);
                 }
             }
         }
-        
+
         // Parse ready_port
         if trimmed.contains("ready_port = ") {
             if let Some(ref mut entry) = current_port_entry {
@@ -8055,7 +8106,7 @@ pub fn read_teamchannel_collaborator_ports_clearsigntoml_without_keyid(
                 }
             }
         }
-        
+
         // Parse intray_port
         if trimmed.contains("intray_port = ") {
             if let Some(ref mut entry) = current_port_entry {
@@ -8064,14 +8115,14 @@ pub fn read_teamchannel_collaborator_ports_clearsigntoml_without_keyid(
                 }
             }
         }
-        
+
         // Parse gotit_port
         if trimmed.contains("gotit_port = ") {
             if let Some(ref mut entry) = current_port_entry {
                 if let Some(value) = extract_port_value(trimmed, "gotit_port") {
                     entry.gotit_port = Some(value);
                 }
-                
+
                 // After gotit_port, we should have a complete entry
                 // Validate and add to current wrapper entry
                 match (entry.user_name.clone(), entry.ready_port, entry.intray_port, entry.gotit_port) {
@@ -8084,7 +8135,7 @@ pub fn read_teamchannel_collaborator_ports_clearsigntoml_without_keyid(
                                 gotit_port: gotit,
                             });
                         }
-                        
+
                         // Clear the current port entry for the next one
                         current_port_entry = None;
                     }
@@ -8095,7 +8146,7 @@ pub fn read_teamchannel_collaborator_ports_clearsigntoml_without_keyid(
             }
         }
     }
-    
+
     // Don't forget the last pair if the file doesn't end with another section
     if let Some(pair_name) = current_pair_name.take() {
         // Save any pending wrapper entry
@@ -8106,20 +8157,20 @@ pub fn read_teamchannel_collaborator_ports_clearsigntoml_without_keyid(
                 });
             }
         }
-        
+
         // Save all wrapper entries for this pair
         if !pair_wrapper_entries.is_empty() {
             all_assignments.insert(pair_name, pair_wrapper_entries);
         }
     }
-    
+
     // --- Stage 5: Validate Results ---
     if all_assignments.is_empty() {
         return Err(GpgError::GpgOperationError(
             "RATPFT No collaborator port assignments found in abstract_collaborator_port_assignments".to_string()
         ));
     }
-    
+
     // Log summary
     debug_log!(
         "RATPFT ✓ Successfully extracted port assignments for {} collaborator pairs:",
@@ -8129,10 +8180,10 @@ pub fn read_teamchannel_collaborator_ports_clearsigntoml_without_keyid(
         let total_ports: usize = wrapper_entries.iter()
             .map(|wrapper| wrapper.collaborator_ports.len())
             .sum();
-        debug_log!("  - {}: {} wrapper entries with {} total port assignments", 
+        debug_log!("  - {}: {} wrapper entries with {} total port assignments",
                   pair_name, wrapper_entries.len(), total_ports);
     }
-    
+
     Ok(all_assignments)
 }
 
@@ -8155,7 +8206,7 @@ fn extract_quoted_value(line: &str, key: &str) -> Option<String> {
     if let Some(start_idx) = line.find(&key_pattern) {
         let value_start = start_idx + key_pattern.len();
         let remaining = &line[value_start..];
-        
+
         // Find quoted value
         if remaining.starts_with('"') {
             let content = &remaining[1..];
@@ -8186,7 +8237,7 @@ fn extract_port_value(line: &str, key: &str) -> Option<u16> {
     if let Some(start_idx) = line.find(&key_pattern) {
         let value_start = start_idx + key_pattern.len();
         let remaining = &line[value_start..];
-        
+
         // Extract number up to next whitespace or comma
         let mut num_str = String::new();
         for ch in remaining.chars() {
@@ -8196,7 +8247,7 @@ fn extract_port_value(line: &str, key: &str) -> Option<u16> {
                 break;
             }
         }
-        
+
         // Parse to u16
         if !num_str.is_empty() {
             match num_str.parse::<u16>() {
@@ -8238,7 +8289,7 @@ fn extract_port_value(line: &str, key: &str) -> Option<u16> {
 // ///     { user_name = "alice", ready_port = 50001, intray_port = 50002, gotit_port = 50003 },
 // ///     { user_name = "bob", ready_port = 50004, intray_port = 50005, gotit_port = 50006 },
 // /// ]
-// /// 
+// ///
 // /// [abstract_collaborator_port_assignments.alice_charlotte]
 // /// collaborator_ports = [
 // ///     { user_name = "alice", ready_port = 50007, intray_port = 50008, gotit_port = 50009 },
@@ -8272,19 +8323,19 @@ fn extract_port_value(line: &str, key: &str) -> Option<u16> {
 // ///     Path::new("team_channel_config.toml"),
 // ///     "collaborators"
 // /// )?;
-// /// 
+// ///
 // /// // Display all assignments
 // /// for (pair_name, assignments) in &all_assignments {
 // ///     debug_log!("Collaborator pair: {}", pair_name);
 // ///     for assignment in assignments {
-// ///         debug_log!("  {} -> ready: {}, intray: {}, gotit: {}", 
+// ///         debug_log!("  {} -> ready: {}, intray: {}, gotit: {}",
 // ///                  assignment.user_name,
 // ///                  assignment.ready_port,
 // ///                  assignment.intray_port,
 // ///                  assignment.gotit_port);
 // ///     }
 // /// }
-// /// 
+// ///
 // /// // Access specific pair
 // /// if let Some(alice_bob_ports) = all_assignments.get("alice_bob") {
 // ///     debug_log!("Alice-Bob communication ports: {:?}", alice_bob_ports);
@@ -8296,16 +8347,16 @@ fn extract_port_value(line: &str, key: &str) -> Option<u16> {
 //     // addressbook_files_directory_relative: &str,  // pass in constant here
 // ) -> Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, GpgError> {
 //     debug_log("starting RATPFT read_all_collaborator_port_assignments_clearsigntoml_optimized() Starting optimized extraction of all collaborator port assignments");
-    
+
 //     // --- Stage 1: Input Validation ---
 //     debug_log!(
 //         "RATPFT from path_to_clearsigned_toml: {}",
 //         path_to_clearsigned_toml,
 //     );
-  
+
 //     println!("HERE HERE FLAG 01 TestPoint");
 //     debug_log("HERE HERE FLAG 01 TestPoint");
-    
+
 //     // Extract GPG key ID from addressbook (which validates the addressbook's signature)
 //     let gpg_key_id_name_of_toml_field_key_to_read = "gpg_publickey_id";
 //     let signing_key_id = match read_singleline_string_from_clearsigntoml(
@@ -8332,10 +8383,10 @@ fn extract_port_value(line: &str, key: &str) -> Option<u16> {
 
 //     // --- Stage 4: Create Temporary File for Validation ---
 //     let temp_validation_path = create_temp_file_path("validate_all_ports_optimized")?;
-    
+
 //     // --- Stage 5: Verify Signature and Extract Content (once) ---
 //     debug_log!("RATPFT Validating clearsigned file signature...");
-    
+
 //     // Decrypt (which validates) the clearsigned file
 //     let validation_result = Command::new("gpg")
 //         .arg("--decrypt")
@@ -8352,7 +8403,7 @@ fn extract_port_value(line: &str, key: &str) -> Option<u16> {
 //             if !output.status.success() {
 //                 // Cleanup temp file
 //                 let _ = fs::remove_file(&temp_validation_path);
-                
+
 //                 let stderr_output = String::from_utf8_lossy(&output.stderr);
 //                 return Err(GpgError::GpgOperationError(format!(
 //                     "RATPFT GPG signature validation FAILED. File may be tampered. GPG output: {}",
@@ -8365,7 +8416,7 @@ fn extract_port_value(line: &str, key: &str) -> Option<u16> {
 //         Err(e) => {
 //             // Cleanup temp file
 //             let _ = fs::remove_file(&temp_validation_path);
-            
+
 //             return Err(GpgError::GpgOperationError(format!(
 //                 "RATPFT Failed to execute GPG validation: {}",
 //                 e
@@ -8374,7 +8425,7 @@ fn extract_port_value(line: &str, key: &str) -> Option<u16> {
 //     }
 
 //     // --- Stage 6: Parse ALL Port Assignments from Validated Content ---
-    
+
 //     // Read the validated content once
 //     let validated_content = match fs::read_to_string(&temp_validation_path) {
 //         Ok(content) => content,
@@ -8391,7 +8442,7 @@ fn extract_port_value(line: &str, key: &str) -> Option<u16> {
 //     // Parse all collaborator pair sections in one pass
 //     let mut all_assignments: HashMap<String, Vec<AbstractTeamchannelNodeTomlPortsData>> = HashMap::new();
 //     let table_prefix = "[abstract_collaborator_port_assignments.";
-    
+
 //     // State tracking for parsing
 //     let mut current_pair_name: Option<String> = None;
 //     let mut current_pair_assignments: Vec<AbstractTeamchannelNodeTomlPortsData> = Vec::new();
@@ -8410,7 +8461,7 @@ fn extract_port_value(line: &str, key: &str) -> Option<u16> {
 //     // Process each line of the validated content
 //     for line in validated_content.lines() {
 //         let trimmed = line.trim();
-        
+
 //         // Check if we're entering a new collaborator pair section
 //         if trimmed.starts_with(table_prefix) && trimmed.ends_with(']') {
 //             // Save previous pair's data if any
@@ -8420,7 +8471,7 @@ fn extract_port_value(line: &str, key: &str) -> Option<u16> {
 //                     current_pair_assignments.clear();
 //                 }
 //             }
-            
+
 //             // Extract new pair name
 //             let start = table_prefix.len();
 //             let end = trimmed.len() - 1;
@@ -8429,16 +8480,16 @@ fn extract_port_value(line: &str, key: &str) -> Option<u16> {
 //             debug_log!("  Processing pair: {}", current_pair_name.as_ref().unwrap());
 //             continue;
 //         }
-        
+
 //         // Skip lines if we're not in a pair section
 //         if current_pair_name.is_none() {
 //             continue;
 //         }
-        
+
 //         // Check for collaborator_ports array start
 //         if trimmed.starts_with("collaborator_ports = [") {
 //             in_ports_array = true;
-            
+
 //             // Check if it's a single-line array (for simple cases)
 //             if trimmed.contains(']') {
 //                 // TODO: Handle single-line array parsing if needed
@@ -8446,13 +8497,13 @@ fn extract_port_value(line: &str, key: &str) -> Option<u16> {
 //             }
 //             continue;
 //         }
-        
+
 //         // Check for array end
 //         if in_ports_array && trimmed == "]" {
 //             in_ports_array = false;
 //             continue;
 //         }
-        
+
 //         // Parse array entries
 //         if in_ports_array {
 //             // Handle start of a new port entry
@@ -8466,32 +8517,32 @@ fn extract_port_value(line: &str, key: &str) -> Option<u16> {
 //                 }
 //                 current_port_entry = Some(PartialPortEntry::default());
 //             }
-            
+
 //             // Parse fields within the entry
 //             if let Some(ref mut entry) = current_port_entry {
 //                 // Parse all fields that might be on this line
-                
+
 //                 // Parse user_name
 //                 if trimmed.contains("user_name = ") {
 //                     if let Some(value) = extract_quoted_value(trimmed, "user_name") {
 //                         entry.user_name = Some(value);
 //                     }
 //                 }
-                
+
 //                 // Parse ready_port
 //                 if trimmed.contains("ready_port = ") {
 //                     if let Some(value) = extract_port_value(trimmed, "ready_port") {
 //                         entry.ready_port = Some(value);
 //                     }
 //                 }
-                
+
 //                 // Parse intray_port
 //                 if trimmed.contains("intray_port = ") {
 //                     if let Some(value) = extract_port_value(trimmed, "intray_port") {
 //                         entry.intray_port = Some(value);
 //                     }
 //                 }
-                
+
 //                 // Parse gotit_port
 //                 if trimmed.contains("gotit_port = ") {
 //                     if let Some(value) = extract_port_value(trimmed, "gotit_port") {
@@ -8499,7 +8550,7 @@ fn extract_port_value(line: &str, key: &str) -> Option<u16> {
 //                     }
 //                 }
 //             }
-            
+
 //             // Check for end of entry
 //             if trimmed.ends_with("},") || trimmed.ends_with('}') {
 //                 if let Some(entry) = current_port_entry.take() {
@@ -8524,21 +8575,21 @@ fn extract_port_value(line: &str, key: &str) -> Option<u16> {
 //             }
 //         }
 //     }
-    
+
 //     // Don't forget the last pair if the file doesn't end with another section
 //     if let Some(pair_name) = current_pair_name.take() {
 //         if !current_pair_assignments.is_empty() {
 //             all_assignments.insert(pair_name, current_pair_assignments);
 //         }
 //     }
-    
+
 //     // --- Stage 7: Validate Results ---
 //     if all_assignments.is_empty() {
 //         return Err(GpgError::GpgOperationError(
 //             "RATPFT No collaborator port assignments found in abstract_collaborator_port_assignments".to_string()
 //         ));
 //     }
-    
+
 //     // Log summary
 //     debug_log!(
 //         "RATPFT ✓ Successfully extracted port assignments for {} collaborator pairs:",
@@ -8547,7 +8598,7 @@ fn extract_port_value(line: &str, key: &str) -> Option<u16> {
 //     for (pair_name, assignments) in &all_assignments {
 //         debug_log!("  - {}: {} port assignments", pair_name, assignments.len());
 //     }
-    
+
 //     Ok(all_assignments)
 // }
 
@@ -8584,7 +8635,7 @@ fn extract_port_value(line: &str, key: &str) -> Option<u16> {
 ///     Path::new("team_channel_config.toml"),
 ///     "collaborators"
 /// )?;
-/// 
+///
 /// debug_log!("Team channel collaborators: {:?}", collaborators);
 /// // Output: ["alice", "bob", "charlotte"]
 /// ```
@@ -8609,7 +8660,7 @@ pub fn read_teamchannel_collaborators_with_access_from_clearsigntoml(
     };
 
     // Use the existing string array reading function with owner-based validation
-    match read_stringarray_from_clearsigntoml_without_keyid(
+    match read_stringarray_from_clearsigntoml_without_publicgpgkey(
         addressbook_files_directory_relative,  // This should be the config file path
         path_str,                               // This is the target file
         "teamchannel_collaborators_with_access"
@@ -8649,7 +8700,7 @@ pub fn read_teamchannel_collaborators_with_access_from_clearsigntoml(
 /// ```no_run
 /// let authorized = vec!["alice".to_string(), "bob".to_string()];
 /// let assignments = read_all_collaborator_port_assignments_clearsigntoml_optimized(...)?;
-/// 
+///
 /// match validate_port_assignment_collaborators(&assignments, &authorized) {
 ///     Ok(()) => debug_log!("All collaborators are authorized"),
 ///     Err(unauthorized) => debug_log!("Unauthorized collaborators: {:?}", unauthorized),
@@ -8661,7 +8712,7 @@ pub fn validate_port_assignment_collaborators(
 ) -> Result<(), Vec<String>> {
     let mut unauthorized_users = Vec::new();
     let authorized_set: std::collections::HashSet<&String> = authorized_collaborators.iter().collect();
-    
+
     // Check each port assignment
     for (pair_name, assignments) in port_assignments {
         for assignment in assignments {
@@ -8670,11 +8721,11 @@ pub fn validate_port_assignment_collaborators(
             }
         }
     }
-    
+
     // Remove duplicates
     unauthorized_users.sort();
     unauthorized_users.dedup();
-    
+
     if unauthorized_users.is_empty() {
         Ok(())
     } else {
@@ -8683,22 +8734,22 @@ pub fn validate_port_assignment_collaborators(
 }
 
 /// Reads an array of u8 bytes from a TOML file into a Vec<u8>.
-/// 
+///
 /// # Purpose
 /// This function parses a TOML file to extract an array of unsigned 8-bit integers (bytes)
 /// defined by the specified field name. It handles arrays in the format:
 /// ```toml
 /// node_unique_id = [160, 167, 195, 169]
 /// ```
-/// 
+///
 /// # Arguments
 /// - `path` - Path to the TOML file
 /// - `name_of_toml_field_key_to_read` - Name of the field to read (must be an array of integers in the TOML file)
-/// 
+///
 /// # Returns
 /// - `Result<Vec<u8>, String>` - A vector containing all bytes in the array if successful,
 ///   or an error message if the field is not found or values are out of u8 range (0-255)
-/// 
+///
 /// # Error Handling
 /// This function returns errors when:
 /// - The file cannot be opened or read
@@ -8706,20 +8757,20 @@ pub fn validate_port_assignment_collaborators(
 /// - The field is not a valid array format
 /// - Any value in the array is not a valid u8 (outside 0-255 range)
 /// - Any value cannot be parsed as an integer
-/// 
+///
 /// # Example
 /// For a TOML file containing:
 /// ```toml
 /// node_unique_id = [160, 167, 195, 169]
 /// hash_bytes = [255, 0, 128, 64]
 /// ```
-/// 
+///
 /// Usage:
 /// ```
 /// let node_id = read_u8_array_field_from_toml("config.toml", "node_unique_id")?;
 /// // Returns: vec![160, 167, 195, 169]
 /// ```
-/// 
+///
 /// # Implementation Notes
 /// - Values must be in the range 0-255 (valid u8 range)
 /// - Negative numbers will result in an error
@@ -8729,22 +8780,22 @@ pub fn read_u8_array_field_from_toml(path: &str, name_of_toml_field_key_to_read:
     // Open the file
     let file = File::open(path)
         .map_err(|e| format!("read_u8_array_field_from_toml Failed to open file '{}': {}", path, e))?;
-    
+
     let reader = io::BufReader::new(file);
-    
+
     // Process each line looking for our field
     for (line_number, line_result) in reader.lines().enumerate() {
         // Handle line reading errors
         let line = line_result
             .map_err(|e| format!("Failed to read line {} from file '{}': {}", line_number + 1, path, e))?;
-        
+
         let trimmed = line.trim();
-        
+
         // Skip empty lines and comments
         if trimmed.is_empty() || trimmed.starts_with('#') {
             continue;
         }
-        
+
         // Check if this line contains our field with an array
         if trimmed.starts_with(&format!("{} = [", name_of_toml_field_key_to_read)) {
             // Extract the array portion
@@ -8756,22 +8807,22 @@ pub fn read_u8_array_field_from_toml(path: &str, name_of_toml_field_key_to_read:
                 .trim_start_matches('[')
                 .trim_end_matches(']')
                 .trim();
-            
+
             // If the array is empty, return an empty vector
             if array_part.is_empty() {
                 return Ok(Vec::new());
             }
-            
+
             // Parse each value as u8
             let mut byte_values = Vec::new();
-            
+
             for (index, value_str) in array_part.split(',').enumerate() {
                 let cleaned_value = value_str.trim();
-                
+
                 if cleaned_value.is_empty() {
                     continue; // Skip empty entries (e.g., trailing comma)
                 }
-                
+
                 // First parse as i32 to check range, then convert to u8
                 match cleaned_value.parse::<i32>() {
                     Ok(int_value) => {
@@ -8793,54 +8844,54 @@ pub fn read_u8_array_field_from_toml(path: &str, name_of_toml_field_key_to_read:
                     }
                 }
             }
-            
+
             return Ok(byte_values);
         }
     }
-    
+
     // Field not found
     Err(format!("Byte array field '{}' not found in file '{}'", name_of_toml_field_key_to_read, path))
 }
 
 /// Reads an array of u8 bytes from a clearsigned TOML file into a Vec<u8>.
-/// 
+///
 /// # Purpose
 /// This function securely reads a byte array from a clearsigned TOML file by:
 /// 1. Extracting the GPG public key from the file
 /// 2. Verifying the clearsign signature
 /// 3. If verification succeeds, reading the requested byte array
-/// 
+///
 /// # Security
-/// This function ensures that the TOML file's content is cryptographically verified 
+/// This function ensures that the TOML file's content is cryptographically verified
 /// before any data is extracted, providing integrity protection for the configuration.
 /// No data is returned if signature validation fails.
-/// 
+///
 /// # Arguments
 /// - `path` - Path to the clearsigned TOML file
 /// - `name_of_toml_field_key_to_read` - Name of the field to read (must be an array of bytes in the TOML file)
-/// 
+///
 /// # Returns
 /// - `Result<Vec<u8>, String>` - A vector containing all bytes in the array if successful and verified,
 ///   or an error message if verification fails or the field cannot be read
-/// 
+///
 /// # Example
 /// For a clearsigned TOML file containing:
 /// ```toml
 /// node_unique_id = [160, 167, 195, 169]
-/// 
+///
 /// gpg_key_public = """
 /// -----BEGIN PGP PUBLIC KEY BLOCK-----
 /// ...
 /// -----END PGP PUBLIC KEY BLOCK-----
 /// """
 /// ```
-/// 
+///
 /// Usage:
 /// ```
 /// let node_id = read_u8_array_from_clearsigntoml("node_config.toml", "node_unique_id")?;
 /// // Returns: vec![160, 167, 195, 169] if signature verification succeeds
 /// ```
-/// 
+///
 /// # Errors
 /// Returns an error if:
 /// - GPG key extraction fails
@@ -8851,64 +8902,64 @@ pub fn read_u8_array_from_clearsigntoml(path: &str, name_of_toml_field_key_to_re
     // Step 1: Extract GPG key from the file
     let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")
         .map_err(|e| format!("Failed to extract GPG key from file '{}': {}", path, e))?;
-    
+
     // Step 2: Verify the file's clearsign signature
     let verification_result = verify_clearsign(path, &key)
         .map_err(|e| format!("Error during signature verification of file '{}': {}", path, e))?;
-    
+
     // Step 3: Check if verification was successful
     if !verification_result {
         return Err(format!("GPG signature verification failed for file: {}", path));
     }
-    
+
     // Step 4: If verification succeeded, read the requested byte array field
     read_u8_array_field_from_toml(path, name_of_toml_field_key_to_read)
-        .map_err(|e| format!("Failed to read byte array '{}' from verified file '{}': {}", 
+        .map_err(|e| format!("Failed to read byte array '{}' from verified file '{}': {}",
                              name_of_toml_field_key_to_read, path, e))
 }
 
 /// Reads an array of u8 bytes from a clearsigned TOML file using a GPG key from a separate config file.
-/// 
+///
 /// # Purpose
 /// This function provides a way to verify and read byte arrays from clearsigned TOML files
 /// that don't contain their own GPG keys, instead using a key from a separate centralized config file.
 /// This approach helps maintain consistent key management across multiple clearsigned files.
-/// 
+///
 /// # Process Flow
 /// 1. Extracts the GPG public key from the specified config file
-/// 2. Uses this key to verify the signature of the target clearsigned TOML file  
+/// 2. Uses this key to verify the signature of the target clearsigned TOML file
 /// 3. If verification succeeds, reads the requested byte array field
 /// 4. Returns the byte array or an appropriate error
-/// 
+///
 /// # Arguments
 /// - `pathstr_to_config_file_that_contains_gpg_key` - Path to a clearsigned TOML file containing the GPG public key
 /// - `pathstr_to_target_clearsigned_file` - Path to the clearsigned TOML file to read from (without its own GPG key)
 /// - `name_of_toml_field_key_to_read` - Name of the byte array field to read from the target file
-/// 
+///
 /// # Returns
 /// - `Ok(Vec<u8>)` - The byte array values if verification succeeds
 /// - `Err(String)` - Detailed error message if any step fails
-/// 
+///
 /// # Example
 /// ```
 /// let config_path = "security_config.toml";
 /// let node_file = "node_config.toml";
-/// 
-/// let node_unique_id = read_u8_array_from_clearsigntoml_without_keyid(
+///
+/// let node_unique_id = read_u8_array_from_clearsigntoml_without_publicgpgkey(
 ///     config_path,
-///     node_file, 
+///     node_file,
 ///     "node_unique_id"
 /// )?;
 /// // Returns: vec![160, 167, 195, 169] if verification succeeds
 /// ```
-pub fn read_u8_array_from_clearsigntoml_without_keyid(
+pub fn read_u8_array_from_clearsigntoml_without_publicgpgkey(
     pathstr_to_config_file_that_contains_gpg_key: &str,
-    pathstr_to_target_clearsigned_file: &str, 
+    pathstr_to_target_clearsigned_file: &str,
     name_of_toml_field_key_to_read: &str,
 ) -> Result<Vec<u8>, String> {
     // Step 1: Extract GPG key from the config file
     let key = extract_gpg_key_from_clearsigntoml(pathstr_to_config_file_that_contains_gpg_key, "gpg_key_public")
-        .map_err(|e| format!("Failed to extract GPG key from config file '{}': {}", 
+        .map_err(|e| format!("Failed to extract GPG key from config file '{}': {}",
                              pathstr_to_config_file_that_contains_gpg_key, e))?;
 
     // Step 2: Verify the target file using the extracted key
@@ -8926,7 +8977,7 @@ pub fn read_u8_array_from_clearsigntoml_without_keyid(
 
     // Step 4: Read the requested byte array field from the verified file
     read_u8_array_field_from_toml(pathstr_to_target_clearsigned_file, name_of_toml_field_key_to_read)
-        .map_err(|e| format!("Failed to read byte array '{}' from verified file '{}': {}", 
+        .map_err(|e| format!("Failed to read byte array '{}' from verified file '{}': {}",
                              name_of_toml_field_key_to_read, pathstr_to_target_clearsigned_file, e))
 }
 
@@ -9045,45 +9096,45 @@ malformed = [100, "text", 50]
 }
 
 /// Reads an array of u64 values from a clearsigned TOML file into a Vec<u64>.
-/// 
+///
 /// # Purpose
 /// This function securely reads a u64 array from a clearsigned TOML file by:
 /// 1. Extracting the GPG public key from the file
 /// 2. Verifying the clearsign signature
 /// 3. If verification succeeds, reading the requested u64 array
-/// 
+///
 /// # Security
-/// This function ensures that the TOML file's content is cryptographically verified 
+/// This function ensures that the TOML file's content is cryptographically verified
 /// before any data is extracted, providing integrity protection for the configuration.
 /// No data is returned if signature validation fails.
-/// 
+///
 /// # Arguments
 /// - `path` - Path to the clearsigned TOML file
 /// - `name_of_toml_field_key_to_read` - Name of the field to read (must be an array of u64 values in the TOML file)
-/// 
+///
 /// # Returns
 /// - `Result<Vec<u64>, String>` - A vector containing all u64 values in the array if successful and verified,
 ///   or an error message if verification fails or the field cannot be read
-/// 
+///
 /// # Example
 /// For a clearsigned TOML file containing:
 /// ```toml
 /// node_timestamp_array = [1640995200000, 1640995260000, 1640995320000]
 /// large_id_array = [18446744073709551615, 9223372036854775807, 1000000000000000000]
-/// 
+///
 /// gpg_key_public = """
 /// -----BEGIN PGP PUBLIC KEY BLOCK-----
 /// ...
 /// -----END PGP PUBLIC KEY BLOCK-----
 /// """
 /// ```
-/// 
+///
 /// Usage:
 /// ```
 /// let timestamps = read_u64_array_from_clearsigntoml("node_config.toml", "node_timestamp_array")?;
 /// // Returns: vec![1640995200000, 1640995260000, 1640995320000] if signature verification succeeds
 /// ```
-/// 
+///
 /// # Errors
 /// Returns an error if:
 /// - GPG key extraction fails
@@ -9095,70 +9146,70 @@ pub fn read_u64_array_from_clearsigntoml(path: &str, name_of_toml_field_key_to_r
     // Step 1: Extract GPG key from the file
     let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")
         .map_err(|e| format!("Failed to extract GPG key from file '{}': {}", path, e))?;
-    
+
     // Step 2: Verify the file's clearsign signature
     let verification_result = verify_clearsign(path, &key)
         .map_err(|e| format!("Error during signature verification of file '{}': {}", path, e))?;
-    
+
     // Step 3: Check if verification was successful
     if !verification_result {
         return Err(format!("GPG signature verification failed for file: {}", path));
     }
-    
+
     // Step 4: If verification succeeded, read the requested u64 array field
     read_u64_array_field_from_toml(path, name_of_toml_field_key_to_read)
-        .map_err(|e| format!("Failed to read u64 array '{}' from verified file '{}': {}", 
+        .map_err(|e| format!("Failed to read u64 array '{}' from verified file '{}': {}",
                              name_of_toml_field_key_to_read, path, e))
 }
 
 /// Reads an array of u64 values from a clearsigned TOML file using a GPG key from a separate config file.
-/// 
+///
 /// # Purpose
 /// This function provides a way to verify and read u64 arrays from clearsigned TOML files
 /// that don't contain their own GPG keys, instead using a key from a separate centralized config file.
 /// This approach helps maintain consistent key management across multiple clearsigned files.
-/// 
+///
 /// # Process Flow
 /// 1. Extracts the GPG public key from the specified config file
-/// 2. Uses this key to verify the signature of the target clearsigned TOML file  
+/// 2. Uses this key to verify the signature of the target clearsigned TOML file
 /// 3. If verification succeeds, reads the requested u64 array field
 /// 4. Returns the u64 array or an appropriate error
-/// 
+///
 /// # Arguments
 /// - `pathstr_to_config_file_that_contains_gpg_key` - Path to a clearsigned TOML file containing the GPG public key
 /// - `pathstr_to_target_clearsigned_file` - Path to the clearsigned TOML file to read from (without its own GPG key)
 /// - `name_of_toml_field_key_to_read` - Name of the u64 array field to read from the target file
-/// 
+///
 /// # Returns
 /// - `Ok(Vec<u64>)` - The u64 array values if verification succeeds
 /// - `Err(String)` - Detailed error message if any step fails
-/// 
+///
 /// # Example
 /// ```
 /// let config_path = "security_config.toml";
 /// let node_file = "node_config.toml";
-/// 
-/// let node_timestamps = read_u64_array_from_clearsigntoml_without_keyid(
+///
+/// let node_timestamps = read_u64_array_from_clearsigntoml_without_publicgpgkey(
 ///     config_path,
-///     node_file, 
+///     node_file,
 ///     "node_timestamp_array"
 /// )?;
 /// // Returns: vec![1640995200000, 1640995260000, 1640995320000] if verification succeeds
 /// ```
-/// 
+///
 /// # Use Cases
 /// - Reading timestamp arrays from node configuration files
 /// - Reading large identifier arrays from verified configuration files
 /// - Reading sequence numbers or version arrays from secure configuration files
 /// - Reading capacity or limit arrays from authenticated configuration files
-pub fn read_u64_array_from_clearsigntoml_without_keyid(
+pub fn read_u64_array_from_clearsigntoml_without_publicgpgkey(
     pathstr_to_config_file_that_contains_gpg_key: &str,
-    pathstr_to_target_clearsigned_file: &str, 
+    pathstr_to_target_clearsigned_file: &str,
     name_of_toml_field_key_to_read: &str,
 ) -> Result<Vec<u64>, String> {
     // Step 1: Extract GPG key from the config file
     let key = extract_gpg_key_from_clearsigntoml(pathstr_to_config_file_that_contains_gpg_key, "gpg_key_public")
-        .map_err(|e| format!("Failed to extract GPG key from config file '{}': {}", 
+        .map_err(|e| format!("Failed to extract GPG key from config file '{}': {}",
                              pathstr_to_config_file_that_contains_gpg_key, e))?;
 
     // Step 2: Verify the target file using the extracted key
@@ -9176,27 +9227,27 @@ pub fn read_u64_array_from_clearsigntoml_without_keyid(
 
     // Step 4: Read the requested u64 array field from the verified file
     read_u64_array_field_from_toml(pathstr_to_target_clearsigned_file, name_of_toml_field_key_to_read)
-        .map_err(|e| format!("Failed to read u64 array '{}' from verified file '{}': {}", 
+        .map_err(|e| format!("Failed to read u64 array '{}' from verified file '{}': {}",
                              name_of_toml_field_key_to_read, pathstr_to_target_clearsigned_file, e))
 }
 
 /// Reads an array of u64 values from a TOML file into a Vec<u64>.
-/// 
+///
 /// # Purpose
 /// This function parses a TOML file to extract an array of unsigned 64-bit integers
 /// defined by the specified field name. It handles arrays in the format:
 /// ```toml
 /// node_timestamp_array = [1640995200000, 1640995260000, 1640995320000]
 /// ```
-/// 
+///
 /// # Arguments
 /// - `path` - Path to the TOML file
 /// - `name_of_toml_field_key_to_read` - Name of the field to read (must be an array of integers in the TOML file)
-/// 
+///
 /// # Returns
 /// - `Result<Vec<u64>, String>` - A vector containing all u64 values in the array if successful,
 ///   or an error message if the field is not found or values are out of u64 range
-/// 
+///
 /// # Error Handling
 /// This function returns errors when:
 /// - The file cannot be opened or read
@@ -9205,20 +9256,20 @@ pub fn read_u64_array_from_clearsigntoml_without_keyid(
 /// - Any value in the array is not a valid u64 (outside 0 to 18,446,744,073,709,551,615 range)
 /// - Any value cannot be parsed as an integer
 /// - Any value is negative or a floating point number
-/// 
+///
 /// # Example
 /// For a TOML file containing:
 /// ```toml
 /// node_timestamp_array = [1640995200000, 1640995260000, 1640995320000]
 /// large_numbers = [18446744073709551615, 0, 9223372036854775807]
 /// ```
-/// 
+///
 /// Usage:
 /// ```
 /// let timestamps = read_u64_array_field_from_toml("config.toml", "node_timestamp_array")?;
 /// // Returns: vec![1640995200000, 1640995260000, 1640995320000]
 /// ```
-/// 
+///
 /// # Implementation Notes
 /// - Values must be in the range 0 to 18,446,744,073,709,551,615 (valid u64 range)
 /// - Negative numbers will result in an error
@@ -9230,22 +9281,22 @@ pub fn read_u64_array_field_from_toml(path: &str, name_of_toml_field_key_to_read
     // Open the file
     let file = File::open(path)
         .map_err(|e| format!("read_u64_array_field_from_toml Failed to open file '{}': {}", path, e))?;
-    
+
     let reader = io::BufReader::new(file);
-    
+
     // Process each line looking for our field
     for (line_number, line_result) in reader.lines().enumerate() {
         // Handle line reading errors
         let line = line_result
             .map_err(|e| format!("Failed to read line {} from file '{}': {}", line_number + 1, path, e))?;
-        
+
         let trimmed = line.trim();
-        
+
         // Skip empty lines and comments
         if trimmed.is_empty() || trimmed.starts_with('#') {
             continue;
         }
-        
+
         // Check if this line contains our field with an array
         if trimmed.starts_with(&format!("{} = [", name_of_toml_field_key_to_read)) {
             // Extract the array portion
@@ -9257,31 +9308,31 @@ pub fn read_u64_array_field_from_toml(path: &str, name_of_toml_field_key_to_read
                 .trim_start_matches('[')
                 .trim_end_matches(']')
                 .trim();
-            
+
             // If the array is empty, return an empty vector
             if array_part.is_empty() {
                 return Ok(Vec::new());
             }
-            
+
             // Parse each value as u64
             let mut u64_values = Vec::new();
-            
+
             for (index, value_str) in array_part.split(',').enumerate() {
                 let cleaned_value = value_str.trim();
-                
+
                 if cleaned_value.is_empty() {
                     continue; // Skip empty entries (e.g., trailing comma)
                 }
-                
+
                 // Check for quoted strings (invalid for u64)
-                if (cleaned_value.starts_with('"') && cleaned_value.ends_with('"')) || 
+                if (cleaned_value.starts_with('"') && cleaned_value.ends_with('"')) ||
                    (cleaned_value.starts_with('\'') && cleaned_value.ends_with('\'')) {
                     return Err(format!(
                         "String value '{}' at index {} in array field '{}' cannot be parsed as u64 - strings are not valid for u64 type",
                         cleaned_value, index, name_of_toml_field_key_to_read
                     ));
                 }
-                
+
                 // Check for negative values before parsing
                 if cleaned_value.starts_with('-') {
                     return Err(format!(
@@ -9289,7 +9340,7 @@ pub fn read_u64_array_field_from_toml(path: &str, name_of_toml_field_key_to_read
                         cleaned_value, index, name_of_toml_field_key_to_read
                     ));
                 }
-                
+
                 // Check for floating point notation
                 if cleaned_value.contains('.') || cleaned_value.contains('e') || cleaned_value.contains('E') {
                     return Err(format!(
@@ -9297,7 +9348,7 @@ pub fn read_u64_array_field_from_toml(path: &str, name_of_toml_field_key_to_read
                         cleaned_value, index, name_of_toml_field_key_to_read
                     ));
                 }
-                
+
                 // Parse as u64 directly
                 match cleaned_value.parse::<u64>() {
                     Ok(u64_value) => {
@@ -9311,11 +9362,11 @@ pub fn read_u64_array_field_from_toml(path: &str, name_of_toml_field_key_to_read
                     }
                 }
             }
-            
+
             return Ok(u64_values);
         }
     }
-    
+
     // Field not found
     Err(format!("u64 array field '{}' not found in file '{}'", name_of_toml_field_key_to_read, path))
 }
@@ -9538,7 +9589,7 @@ mixed_spacing = [700,800, 900 ,1000]
 }
 
 /// Reads a path string from a TOML file and converts it to a PathBuf.
-/// 
+///
 /// # Purpose
 /// This function parses a TOML file to extract a path string defined by the specified field name
 /// and converts it to a PathBuf. It handles paths in the format:
@@ -9547,21 +9598,21 @@ mixed_spacing = [700,800, 900 ,1000]
 /// relative_path = "config/settings"
 /// windows_path = "C:\\Users\\Documents\\project"
 /// ```
-/// 
+///
 /// # Arguments
 /// - `path` - Path to the TOML file
 /// - `name_of_toml_field_key_to_read` - Name of the field to read (must be a string containing a path in the TOML file)
-/// 
+///
 /// # Returns
-/// - `Result<PathBuf, String>` - A PathBuf if successful, or an error message if the field 
+/// - `Result<PathBuf, String>` - A PathBuf if successful, or an error message if the field
 ///   is not found or cannot be parsed
-/// 
+///
 /// # Error Handling
 /// This function returns errors when:
 /// - The file cannot be opened or read
 /// - The specified field is not found
 /// - The field value is empty or contains only whitespace
-/// 
+///
 /// # Path Handling
 /// - The function preserves the path exactly as written in the TOML file (after trimming)
 /// - It does NOT check if the path exists
@@ -9569,20 +9620,20 @@ mixed_spacing = [700,800, 900 ,1000]
 /// - Both absolute and relative paths are accepted
 /// - Platform-specific path separators are handled by PathBuf
 /// - Leading and trailing whitespace is trimmed
-/// 
+///
 /// # Example
 /// For a TOML file containing:
 /// ```toml
 /// directory_path = "/42/uma_productivity_collaboration_tool/target/debug/project_graph_data/team_channels/tofu"
 /// config_dir = "./config"
 /// ```
-/// 
+///
 /// Usage:
 /// ```
 /// let dir_path = read_pathbuf_field_from_toml("config.toml", "directory_path")?;
 /// // Returns: PathBuf from "/42/uma_productivity_collaboration_tool/target/debug/project_graph_data/team_channels/tofu"
 /// ```
-/// 
+///
 /// # Implementation Notes
 /// - Empty strings or whitespace-only strings result in an error
 /// - The path is not validated or normalized
@@ -9591,22 +9642,22 @@ pub fn read_pathbuf_field_from_toml(path: &str, name_of_toml_field_key_to_read: 
     // Open the file
     let file = File::open(path)
         .map_err(|e| format!("read_pathbuf_field_from_toml Failed to open file '{}': {}", path, e))?;
-    
+
     let reader = io::BufReader::new(file);
-    
+
     // Process each line looking for our field
     for (line_number, line_result) in reader.lines().enumerate() {
         // Handle line reading errors
         let line = line_result
             .map_err(|e| format!("Failed to read line {} from file '{}': {}", line_number + 1, path, e))?;
-        
+
         let trimmed = line.trim();
-        
+
         // Skip empty lines and comments
         if trimmed.is_empty() || trimmed.starts_with('#') {
             continue;
         }
-        
+
         // Check if this line contains our field
         if trimmed.starts_with(&format!("{} = ", name_of_toml_field_key_to_read)) {
             // Extract the value after the equals sign
@@ -9615,13 +9666,13 @@ pub fn read_pathbuf_field_from_toml(path: &str, name_of_toml_field_key_to_read: 
                 .nth(1)
                 .ok_or_else(|| format!("Invalid format for field '{}'", name_of_toml_field_key_to_read))?
                 .trim();
-            
+
             // Remove surrounding quotes if present and trim whitespace
             let path_str = value_part
                 .trim_matches('"')
                 .trim_matches('\'')
                 .trim(); // Add trim() here to remove whitespace
-            
+
             // Check for empty path (including whitespace-only)
             if path_str.is_empty() {
                 return Err(format!(
@@ -9629,68 +9680,68 @@ pub fn read_pathbuf_field_from_toml(path: &str, name_of_toml_field_key_to_read: 
                     name_of_toml_field_key_to_read, path
                 ));
             }
-            
+
             // Convert to PathBuf
             let path_buf = PathBuf::from(path_str);
-            
+
             // Log what we found for debugging
             debug_log!(
                 "Read path field '{}': '{}'",
                 name_of_toml_field_key_to_read, path_buf.display()
             );
-            
+
             return Ok(path_buf);
         }
     }
-    
+
     // Field not found
     Err(format!("Path field '{}' not found in file '{}'", name_of_toml_field_key_to_read, path))
 }
 
 /// Reads a path from a clearsigned TOML file and converts it to a PathBuf.
-/// 
+///
 /// # Purpose
 /// This function securely reads a path from a clearsigned TOML file by:
 /// 1. Extracting the GPG public key from the file
 /// 2. Verifying the clearsign signature
 /// 3. If verification succeeds, reading the requested path field
-/// 
+///
 /// # Security
-/// This function ensures that the TOML file's content is cryptographically verified 
+/// This function ensures that the TOML file's content is cryptographically verified
 /// before any data is extracted, providing integrity protection for path configurations.
 /// No data is returned if signature validation fails.
-/// 
+///
 /// # Arguments
 /// - `path` - Path to the clearsigned TOML file
 /// - `name_of_toml_field_key_to_read` - Name of the field to read (must be a string path in the TOML file)
-/// 
+///
 /// # Returns
 /// - `Result<PathBuf, String>` - A PathBuf if successful and verified,
 ///   or an error message if verification fails or the field cannot be read
-/// 
+///
 /// # Path Validation
 /// - The function does NOT check if the path exists
 /// - The function does NOT canonicalize the path
 /// - It returns the path exactly as specified in the TOML file
-/// 
+///
 /// # Example
 /// For a clearsigned TOML file containing:
 /// ```toml
 /// directory_path = "/42/uma_productivity_collaboration_tool/target/debug/project_graph_data/team_channels/tofu"
-/// 
+///
 /// gpg_key_public = """
 /// -----BEGIN PGP PUBLIC KEY BLOCK-----
 /// ...
 /// -----END PGP PUBLIC KEY BLOCK-----
 /// """
 /// ```
-/// 
+///
 /// Usage:
 /// ```
 /// let dir_path = read_pathbuf_from_clearsigntoml("node_config.toml", "directory_path")?;
 /// // Returns: PathBuf if signature verification succeeds
 /// ```
-/// 
+///
 /// # Errors
 /// Returns an error if:
 /// - GPG key extraction fails
@@ -9701,70 +9752,70 @@ pub fn read_pathbuf_from_clearsigntoml(path: &str, name_of_toml_field_key_to_rea
     // Step 1: Extract GPG key from the file
     let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")
         .map_err(|e| format!("Failed to extract GPG key from file '{}': {}", path, e))?;
-    
+
     // Step 2: Verify the file's clearsign signature
     let verification_result = verify_clearsign(path, &key)
         .map_err(|e| format!("Error during signature verification of file '{}': {}", path, e))?;
-    
+
     // Step 3: Check if verification was successful
     if !verification_result {
         return Err(format!("GPG signature verification failed for file: {}", path));
     }
-    
+
     // Step 4: If verification succeeded, read the requested path field
     read_pathbuf_field_from_toml(path, name_of_toml_field_key_to_read)
-        .map_err(|e| format!("Failed to read path '{}' from verified file '{}': {}", 
+        .map_err(|e| format!("Failed to read path '{}' from verified file '{}': {}",
                              name_of_toml_field_key_to_read, path, e))
 }
 
 /// Reads a path from a clearsigned TOML file using a GPG key from a separate config file.
-/// 
+///
 /// # Purpose
 /// This function provides a way to verify and read paths from clearsigned TOML files
 /// that don't contain their own GPG keys, instead using a key from a separate centralized config file.
 /// This approach helps maintain consistent key management across multiple clearsigned files.
-/// 
+///
 /// # Process Flow
 /// 1. Extracts the GPG public key from the specified config file
-/// 2. Uses this key to verify the signature of the target clearsigned TOML file  
+/// 2. Uses this key to verify the signature of the target clearsigned TOML file
 /// 3. If verification succeeds, reads the requested path field
 /// 4. Returns the PathBuf or an appropriate error
-/// 
+///
 /// # Arguments
 /// - `pathstr_to_config_file_that_contains_gpg_key` - Path to a clearsigned TOML file containing the GPG public key
 /// - `pathstr_to_target_clearsigned_file` - Path to the clearsigned TOML file to read from (without its own GPG key)
 /// - `name_of_toml_field_key_to_read` - Name of the path field to read from the target file
-/// 
+///
 /// # Returns
 /// - `Ok(PathBuf)` - The path if verification succeeds
 /// - `Err(String)` - Detailed error message if any step fails
-/// 
+///
 /// # Path Handling
 /// - Returns the path exactly as specified in the TOML file
 /// - Does NOT verify the path exists
 /// - Does NOT canonicalize or resolve the path
 /// - Both absolute and relative paths are preserved as-is
-/// 
+///
 /// # Example
 /// ```
 /// let config_path = "security_config.toml";
 /// let node_file = "node_config.toml";
-/// 
-/// let directory_path = read_pathbuf_from_clearsigntoml_without_keyid(
+///
+/// let directory_path = read_pathbuf_from_clearsigntoml_without_publicgpgkey(
 ///     config_path,
-///     node_file, 
+///     node_file,
 ///     "directory_path"
 /// )?;
 /// // Returns: PathBuf from the verified file
 /// ```
-pub fn read_pathbuf_from_clearsigntoml_without_keyid(
+pub fn read_pathbuf_from_clearsigntoml_without_publicgpgkey(
     pathstr_to_config_file_that_contains_gpg_key: &str,
-    pathstr_to_target_clearsigned_file: &str, 
+    pathstr_to_target_clearsigned_file: &str,
     name_of_toml_field_key_to_read: &str,
 ) -> Result<PathBuf, String> {
     // Step 1: Extract GPG key from the config file
     let key = extract_gpg_key_from_clearsigntoml(pathstr_to_config_file_that_contains_gpg_key, "gpg_key_public")
-        .map_err(|e| format!("Failed to extract GPG key from config file '{}': {}", 
+        .map_err(|e| format!("Failed to extract GPG key from config file '{}': {}",
                              pathstr_to_config_file_that_contains_gpg_key, e))?;
 
     // Step 2: Verify the target file using the extracted key
@@ -9782,7 +9833,7 @@ pub fn read_pathbuf_from_clearsigntoml_without_keyid(
 
     // Step 4: Read the requested path field from the verified file
     read_pathbuf_field_from_toml(pathstr_to_target_clearsigned_file, name_of_toml_field_key_to_read)
-        .map_err(|e| format!("Failed to read path '{}' from verified file '{}': {}", 
+        .map_err(|e| format!("Failed to read path '{}' from verified file '{}': {}",
                              name_of_toml_field_key_to_read, pathstr_to_target_clearsigned_file, e))
 }
 
@@ -9810,7 +9861,7 @@ quoted_path = "/path/with spaces/folder"
         assert!(result.is_ok());
         let path = result.unwrap();
         assert_eq!(
-            path.to_str().unwrap(), 
+            path.to_str().unwrap(),
             "/42/uma_productivity_collaboration_tool/target/debug/project_graph_data/team_channels/tofu"
         );
 
@@ -9917,35 +9968,35 @@ mixed_separators = "/home/user\\documents/file.txt"
 }
 
 /// Reads an optional boolean field from a TOML file into an Option<bool>.
-/// 
+///
 /// # Purpose
-/// This function parses a TOML file to extract an optional boolean value defined by the 
+/// This function parses a TOML file to extract an optional boolean value defined by the
 /// specified field name. It handles cases where the field may or may not exist, returning
 /// None if the field is absent and Some(bool) if present with a valid boolean value.
-/// 
+///
 /// # TOML Boolean Format
 /// Valid TOML boolean values are:
 /// - `true` (lowercase)
 /// - `false` (lowercase)
-/// 
+///
 /// # Arguments
 /// - `path` - Path to the TOML file
 /// - `name_of_toml_field_key_to_read` - Name of the field to read (may or may not exist in the TOML file)
-/// 
+///
 /// # Returns
 /// - `Ok(None)` - If the field does not exist in the file
 /// - `Ok(Some(true))` - If the field exists and has value `true`
 /// - `Ok(Some(false))` - If the field exists and has value `false`
 /// - `Err(String)` - If the file cannot be read or the field has an invalid value
-/// 
+///
 /// # Error Handling
 /// This function returns errors when:
 /// - The file cannot be opened or read
 /// - The field exists but has a non-boolean value
 /// - The field exists but has an invalid format (including empty values)
-/// 
+///
 /// Note: A missing field is NOT an error - it returns Ok(None)
-/// 
+///
 /// # Example
 /// For a TOML file containing:
 /// ```toml
@@ -9953,19 +10004,19 @@ mixed_separators = "/home/user\\documents/file.txt"
 /// message_post_user_confirms_bool = false
 /// # field_not_present is missing
 /// ```
-/// 
+///
 /// Usage:
 /// ```
 /// let is_public = read_option_bool_field_from_toml("config.toml", "message_post_is_public_bool")?;
 /// // Returns: Some(true)
-/// 
+///
 /// let confirms = read_option_bool_field_from_toml("config.toml", "message_post_user_confirms_bool")?;
 /// // Returns: Some(false)
-/// 
+///
 /// let missing = read_option_bool_field_from_toml("config.toml", "field_not_present")?;
 /// // Returns: None
 /// ```
-/// 
+///
 /// # Implementation Notes
 /// - Field absence returns None (not an error)
 /// - Boolean values must be lowercase `true` or `false`
@@ -9975,31 +10026,31 @@ pub fn read_option_bool_field_from_toml(path: &str, name_of_toml_field_key_to_re
     // Open the file
     let file = File::open(path)
         .map_err(|e| format!("read_option_bool_field_from_toml Failed to open file '{}': {}", path, e))?;
-    
+
     let reader = io::BufReader::new(file);
-    
+
     // Process each line looking for our field
     for (line_number, line_result) in reader.lines().enumerate() {
         // Handle line reading errors
         let line = line_result
             .map_err(|e| format!("Failed to read line {} from file '{}': {}", line_number + 1, path, e))?;
-        
+
         let trimmed = line.trim();
-        
+
         // Skip empty lines and comments
         if trimmed.is_empty() || trimmed.starts_with('#') {
             continue;
         }
-        
+
         // Check if this line contains our field (more flexible parsing)
         // Split by = and check if the first part matches our field name
         if let Some(equals_pos) = trimmed.find('=') {
             let key_part = trimmed[..equals_pos].trim();
-            
+
             if key_part == name_of_toml_field_key_to_read {
                 // Found our field, now parse the value
                 let value_part = trimmed[equals_pos + 1..].trim();
-                
+
                 // Check for empty value
                 if value_part.is_empty() {
                     return Err(format!(
@@ -10007,7 +10058,7 @@ pub fn read_option_bool_field_from_toml(path: &str, name_of_toml_field_key_to_re
                         name_of_toml_field_key_to_read, path
                     ));
                 }
-                
+
                 // Parse the boolean value
                 match value_part {
                     "true" => {
@@ -10029,55 +10080,55 @@ pub fn read_option_bool_field_from_toml(path: &str, name_of_toml_field_key_to_re
             }
         }
     }
-    
+
     // Field not found - this is OK for optional fields
     debug_log!("Optional boolean field '{}' not found in file '{}', returning None", name_of_toml_field_key_to_read, path);
     Ok(None)
 }
 
 /// Reads an optional boolean field from a clearsigned TOML file into an Option<bool>.
-/// 
+///
 /// # Purpose
 /// This function securely reads an optional boolean field from a clearsigned TOML file by:
 /// 1. Extracting the GPG public key from the file
 /// 2. Verifying the clearsign signature
 /// 3. If verification succeeds, reading the optional boolean field
-/// 
+///
 /// # Security
-/// This function ensures that the TOML file's content is cryptographically verified 
+/// This function ensures that the TOML file's content is cryptographically verified
 /// before any data is extracted, providing integrity protection for configuration.
 /// No data is returned if signature validation fails.
-/// 
+///
 /// # Arguments
 /// - `path` - Path to the clearsigned TOML file
 /// - `name_of_toml_field_key_to_read` - Name of the field to read (may or may not exist in the TOML file)
-/// 
+///
 /// # Returns
 /// - `Ok(None)` - If verification succeeds and the field does not exist
 /// - `Ok(Some(bool))` - If verification succeeds and the field has a valid boolean value
 /// - `Err(String)` - If verification fails or the field has an invalid value
-/// 
+///
 /// # Example
 /// For a clearsigned TOML file containing:
 /// ```toml
 /// message_post_is_public_bool = true
-/// 
+///
 /// gpg_key_public = """
 /// -----BEGIN PGP PUBLIC KEY BLOCK-----
 /// ...
 /// -----END PGP PUBLIC KEY BLOCK-----
 /// """
 /// ```
-/// 
+///
 /// Usage:
 /// ```
 /// let is_public = read_option_bool_from_clearsigntoml("config.toml", "message_post_is_public_bool")?;
 /// // Returns: Some(true) if signature verification succeeds
-/// 
+///
 /// let missing = read_option_bool_from_clearsigntoml("config.toml", "field_not_present")?;
 /// // Returns: None if signature verification succeeds
 /// ```
-/// 
+///
 /// # Errors
 /// Returns an error if:
 /// - GPG key extraction fails
@@ -10087,64 +10138,64 @@ pub fn read_option_bool_from_clearsigntoml(path: &str, name_of_toml_field_key_to
     // Step 1: Extract GPG key from the file
     let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")
         .map_err(|e| format!("Failed to extract GPG key from file '{}': {}", path, e))?;
-    
+
     // Step 2: Verify the file's clearsign signature
     let verification_result = verify_clearsign(path, &key)
         .map_err(|e| format!("Error during signature verification of file '{}': {}", path, e))?;
-    
+
     // Step 3: Check if verification was successful
     if !verification_result {
         return Err(format!("GPG signature verification failed for file: {}", path));
     }
-    
+
     // Step 4: If verification succeeded, read the optional boolean field
     read_option_bool_field_from_toml(path, name_of_toml_field_key_to_read)
-        .map_err(|e| format!("Failed to read optional boolean '{}' from verified file '{}': {}", 
+        .map_err(|e| format!("Failed to read optional boolean '{}' from verified file '{}': {}",
                              name_of_toml_field_key_to_read, path, e))
 }
 
 /// Reads an optional boolean field from a clearsigned TOML file using a GPG key from a separate config file.
-/// 
+///
 /// # Purpose
 /// This function provides a way to verify and read optional boolean fields from clearsigned TOML files
 /// that don't contain their own GPG keys, instead using a key from a separate centralized config file.
-/// 
+///
 /// # Process Flow
 /// 1. Extracts the GPG public key from the specified config file
-/// 2. Uses this key to verify the signature of the target clearsigned TOML file  
+/// 2. Uses this key to verify the signature of the target clearsigned TOML file
 /// 3. If verification succeeds, reads the optional boolean field
 /// 4. Returns None if field doesn't exist, Some(bool) if it does, or an error
-/// 
+///
 /// # Arguments
 /// - `pathstr_to_config_file_that_contains_gpg_key` - Path to a clearsigned TOML file containing the GPG public key
 /// - `pathstr_to_target_clearsigned_file` - Path to the clearsigned TOML file to read from (without its own GPG key)
 /// - `name_of_toml_field_key_to_read` - Name of the optional boolean field to read from the target file
-/// 
+///
 /// # Returns
 /// - `Ok(None)` - If verification succeeds and the field does not exist
 /// - `Ok(Some(bool))` - If verification succeeds and the field has a valid boolean value
 /// - `Err(String)` - Detailed error message if any step fails
-/// 
+///
 /// # Example
 /// ```
 /// let config_path = "security_config.toml";
 /// let settings_file = "message_settings.toml";
-/// 
-/// let is_public = read_option_bool_from_clearsigntoml_without_keyid(
+///
+/// let is_public = read_option_bool_from_clearsigntoml_without_publicgpgkey(
 ///     config_path,
-///     settings_file, 
+///     settings_file,
 ///     "message_post_is_public_bool"
 /// )?;
 /// // Returns: Some(true), Some(false), or None depending on the field value
 /// ```
-pub fn read_option_bool_from_clearsigntoml_without_keyid(
+pub fn read_option_bool_from_clearsigntoml_without_publicgpgkey(
     pathstr_to_config_file_that_contains_gpg_key: &str,
-    pathstr_to_target_clearsigned_file: &str, 
+    pathstr_to_target_clearsigned_file: &str,
     name_of_toml_field_key_to_read: &str,
 ) -> Result<Option<bool>, String> {
     // Step 1: Extract GPG key from the config file
     let key = extract_gpg_key_from_clearsigntoml(pathstr_to_config_file_that_contains_gpg_key, "gpg_key_public")
-        .map_err(|e| format!("Failed to extract GPG key from config file '{}': {}", 
+        .map_err(|e| format!("Failed to extract GPG key from config file '{}': {}",
                              pathstr_to_config_file_that_contains_gpg_key, e))?;
 
     // Step 2: Verify the target file using the extracted key
@@ -10162,7 +10213,7 @@ pub fn read_option_bool_from_clearsigntoml_without_keyid(
 
     // Step 4: Read the optional boolean field from the verified file
     read_option_bool_field_from_toml(pathstr_to_target_clearsigned_file, name_of_toml_field_key_to_read)
-        .map_err(|e| format!("Failed to read optional boolean '{}' from verified file '{}': {}", 
+        .map_err(|e| format!("Failed to read optional boolean '{}' from verified file '{}': {}",
                              name_of_toml_field_key_to_read, pathstr_to_target_clearsigned_file, e))
 }
 
@@ -10212,7 +10263,7 @@ invalid_bool1 = "true"
 invalid_bool2 = True
 invalid_bool3 = 1
 invalid_bool4 = yes
-empty_value = 
+empty_value =
 "#;
         let test_file = "test_option_bool_invalid.toml";
         fs::write(test_file, test_content).unwrap();
@@ -10282,21 +10333,21 @@ tabbed_bool =	false
 }
 
 /// Reads an optional usize field from a TOML file into an Option<usize>.
-/// 
+///
 /// # Purpose
-/// This function parses a TOML file to extract an optional unsigned size value (usize) defined 
+/// This function parses a TOML file to extract an optional unsigned size value (usize) defined
 /// by the specified field name. It handles cases where the field may or may not exist, returning
 /// None if the field is absent and Some(usize) if present with a valid non-negative integer value.
-/// 
+///
 /// # Arguments
 /// - `path` - Path to the TOML file
 /// - `name_of_toml_field_key_to_read` - Name of the field to read (may or may not exist in the TOML file)
-/// 
+///
 /// # Returns
 /// - `Ok(None)` - If the field does not exist in the file
 /// - `Ok(Some(value))` - If the field exists and has a valid usize value
 /// - `Err(String)` - If the file cannot be read or the field has an invalid value
-/// 
+///
 /// # Error Handling
 /// This function returns errors when:
 /// - The file cannot be opened or read
@@ -10304,9 +10355,9 @@ tabbed_bool =	false
 /// - The field exists but has a negative value
 /// - The field exists but the value is too large for usize
 /// - The field exists but has an empty value
-/// 
+///
 /// Note: A missing field is NOT an error - it returns Ok(None)
-/// 
+///
 /// # Example
 /// For a TOML file containing:
 /// ```toml
@@ -10314,19 +10365,19 @@ tabbed_bool =	false
 /// small_limit = 10
 /// # missing_limit is not present
 /// ```
-/// 
+///
 /// Usage:
 /// ```
 /// let max_len = read_option_usize_field_from_toml("config.toml", "message_post_max_string_length_int")?;
 /// // Returns: Some(256)
-/// 
+///
 /// let small = read_option_usize_field_from_toml("config.toml", "small_limit")?;
 /// // Returns: Some(10)
-/// 
+///
 /// let missing = read_option_usize_field_from_toml("config.toml", "missing_limit")?;
 /// // Returns: None
 /// ```
-/// 
+///
 /// # Implementation Notes
 /// - Field absence returns None (not an error)
 /// - Only non-negative integers are valid
@@ -10336,30 +10387,30 @@ pub fn read_option_usize_field_from_toml(path: &str, name_of_toml_field_key_to_r
     // Open the file
     let file = File::open(path)
         .map_err(|e| format!("read_option_usize_field_from_toml Failed to open file '{}': {}", path, e))?;
-    
+
     let reader = io::BufReader::new(file);
-    
+
     // Process each line looking for our field
     for (line_number, line_result) in reader.lines().enumerate() {
         // Handle line reading errors
         let line = line_result
             .map_err(|e| format!("Failed to read line {} from file '{}': {}", line_number + 1, path, e))?;
-        
+
         let trimmed = line.trim();
-        
+
         // Skip empty lines and comments
         if trimmed.is_empty() || trimmed.starts_with('#') {
             continue;
         }
-        
+
         // Check if this line contains our field
         if let Some(equals_pos) = trimmed.find('=') {
             let key_part = trimmed[..equals_pos].trim();
-            
+
             if key_part == name_of_toml_field_key_to_read {
                 // Found our field, now parse the value
                 let value_part = trimmed[equals_pos + 1..].trim();
-                
+
                 // Check for empty value
                 if value_part.is_empty() {
                     return Err(format!(
@@ -10367,7 +10418,7 @@ pub fn read_option_usize_field_from_toml(path: &str, name_of_toml_field_key_to_r
                         name_of_toml_field_key_to_read, path
                     ));
                 }
-                
+
                 // Parse the usize value
                 match value_part.parse::<usize>() {
                     Ok(value) => {
@@ -10392,55 +10443,55 @@ pub fn read_option_usize_field_from_toml(path: &str, name_of_toml_field_key_to_r
             }
         }
     }
-    
+
     // Field not found - this is OK for optional fields
     debug_log!("Optional usize field '{}' not found in file '{}', returning None", name_of_toml_field_key_to_read, path);
     Ok(None)
 }
 
 /// Reads an optional usize field from a clearsigned TOML file into an Option<usize>.
-/// 
+///
 /// # Purpose
 /// This function securely reads an optional usize field from a clearsigned TOML file by:
 /// 1. Extracting the GPG public key from the file
 /// 2. Verifying the clearsign signature
 /// 3. If verification succeeds, reading the optional usize field
-/// 
+///
 /// # Security
-/// This function ensures that the TOML file's content is cryptographically verified 
+/// This function ensures that the TOML file's content is cryptographically verified
 /// before any data is extracted, providing integrity protection for size/length configurations.
 /// No data is returned if signature validation fails.
-/// 
+///
 /// # Arguments
 /// - `path` - Path to the clearsigned TOML file
 /// - `name_of_toml_field_key_to_read` - Name of the field to read (may or may not exist in the TOML file)
-/// 
+///
 /// # Returns
 /// - `Ok(None)` - If verification succeeds and the field does not exist
 /// - `Ok(Some(value))` - If verification succeeds and the field has a valid usize value
 /// - `Err(String)` - If verification fails or the field has an invalid value
-/// 
+///
 /// # Example
 /// For a clearsigned TOML file containing:
 /// ```toml
 /// message_post_max_string_length_int = 256
-/// 
+///
 /// gpg_key_public = """
 /// -----BEGIN PGP PUBLIC KEY BLOCK-----
 /// ...
 /// -----END PGP PUBLIC KEY BLOCK-----
 /// """
 /// ```
-/// 
+///
 /// Usage:
 /// ```
 /// let max_len = read_option_usize_from_clearsigntoml("config.toml", "message_post_max_string_length_int")?;
 /// // Returns: Some(256) if signature verification succeeds
-/// 
+///
 /// let missing = read_option_usize_from_clearsigntoml("config.toml", "field_not_present")?;
 /// // Returns: None if signature verification succeeds
 /// ```
-/// 
+///
 /// # Errors
 /// Returns an error if:
 /// - GPG key extraction fails
@@ -10451,64 +10502,64 @@ pub fn read_option_usize_from_clearsigntoml(path: &str, name_of_toml_field_key_t
     // Step 1: Extract GPG key from the file
     let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")
         .map_err(|e| format!("Failed to extract GPG key from file '{}': {}", path, e))?;
-    
+
     // Step 2: Verify the file's clearsign signature
     let verification_result = verify_clearsign(path, &key)
         .map_err(|e| format!("Error during signature verification of file '{}': {}", path, e))?;
-    
+
     // Step 3: Check if verification was successful
     if !verification_result {
         return Err(format!("GPG signature verification failed for file: {}", path));
     }
-    
+
     // Step 4: If verification succeeded, read the optional usize field
     read_option_usize_field_from_toml(path, name_of_toml_field_key_to_read)
-        .map_err(|e| format!("Failed to read optional usize '{}' from verified file '{}': {}", 
+        .map_err(|e| format!("Failed to read optional usize '{}' from verified file '{}': {}",
                              name_of_toml_field_key_to_read, path, e))
 }
 
 /// Reads an optional usize field from a clearsigned TOML file using a GPG key from a separate config file.
-/// 
+///
 /// # Purpose
 /// This function provides a way to verify and read optional usize fields from clearsigned TOML files
 /// that don't contain their own GPG keys, instead using a key from a separate centralized config file.
-/// 
+///
 /// # Process Flow
 /// 1. Extracts the GPG public key from the specified config file
-/// 2. Uses this key to verify the signature of the target clearsigned TOML file  
+/// 2. Uses this key to verify the signature of the target clearsigned TOML file
 /// 3. If verification succeeds, reads the optional usize field
 /// 4. Returns None if field doesn't exist, Some(usize) if it does, or an error
-/// 
+///
 /// # Arguments
 /// - `pathstr_to_config_file_that_contains_gpg_key` - Path to a clearsigned TOML file containing the GPG public key
 /// - `pathstr_to_target_clearsigned_file` - Path to the clearsigned TOML file to read from (without its own GPG key)
 /// - `name_of_toml_field_key_to_read` - Name of the optional usize field to read from the target file
-/// 
+///
 /// # Returns
 /// - `Ok(None)` - If verification succeeds and the field does not exist
 /// - `Ok(Some(value))` - If verification succeeds and the field has a valid usize value
 /// - `Err(String)` - Detailed error message if any step fails
-/// 
+///
 /// # Example
 /// ```
 /// let config_path = "security_config.toml";
 /// let settings_file = "message_settings.toml";
-/// 
-/// let max_string_len = read_option_usize_from_clearsigntoml_without_keyid(
+///
+/// let max_string_len = read_option_usize_from_clearsigntoml_without_publicgpgkey(
 ///     config_path,
-///     settings_file, 
+///     settings_file,
 ///     "message_post_max_string_length_int"
 /// )?;
 /// // Returns: Some(256), or None if field doesn't exist
 /// ```
-pub fn read_option_usize_from_clearsigntoml_without_keyid(
+pub fn read_option_usize_from_clearsigntoml_without_publicgpgkey(
     pathstr_to_config_file_that_contains_gpg_key: &str,
-    pathstr_to_target_clearsigned_file: &str, 
+    pathstr_to_target_clearsigned_file: &str,
     name_of_toml_field_key_to_read: &str,
 ) -> Result<Option<usize>, String> {
     // Step 1: Extract GPG key from the config file
     let key = extract_gpg_key_from_clearsigntoml(pathstr_to_config_file_that_contains_gpg_key, "gpg_key_public")
-        .map_err(|e| format!("Failed to extract GPG key from config file '{}': {}", 
+        .map_err(|e| format!("Failed to extract GPG key from config file '{}': {}",
                              pathstr_to_config_file_that_contains_gpg_key, e))?;
 
     // Step 2: Verify the target file using the extracted key
@@ -10526,7 +10577,7 @@ pub fn read_option_usize_from_clearsigntoml_without_keyid(
 
     // Step 4: Read the optional usize field from the verified file
     read_option_usize_field_from_toml(pathstr_to_target_clearsigned_file, name_of_toml_field_key_to_read)
-        .map_err(|e| format!("Failed to read optional usize '{}' from verified file '{}': {}", 
+        .map_err(|e| format!("Failed to read optional usize '{}' from verified file '{}': {}",
                              name_of_toml_field_key_to_read, pathstr_to_target_clearsigned_file, e))
 }
 
@@ -10585,7 +10636,7 @@ negative_value = -10
 float_value = 10.5
 string_value = "not a number"
 quoted_number = "100"
-empty_value = 
+empty_value =
 hex_value = 0xFF
 "#;
         let test_file = "test_option_usize_invalid.toml";
@@ -10668,31 +10719,31 @@ max_value = 18446744073709551615
 
 
 /// Reads an optional u64 field from a TOML file into an Option<u64>.
-/// 
+///
 /// # Purpose
-/// This function parses a TOML file to extract an optional signed 64-bit integer value (u64) 
-/// defined by the specified field name. It handles cases where the field may or may not exist, 
+/// This function parses a TOML file to extract an optional signed 64-bit integer value (u64)
+/// defined by the specified field name. It handles cases where the field may or may not exist,
 /// returning None if the field is absent and Some(u64) if present with a valid integer value.
 /// This is particularly useful for POSIX timestamps which can be negative (dates before 1970).
-/// 
+///
 /// # Arguments
 /// - `path` - Path to the TOML file
 /// - `name_of_toml_field_key_to_read` - Name of the field to read (may or may not exist in the TOML file)
-/// 
+///
 /// # Returns
 /// - `Ok(None)` - If the field does not exist in the file
 /// - `Ok(Some(value))` - If the field exists and has a valid u64 value
 /// - `Err(String)` - If the file cannot be read or the field has an invalid value
-/// 
+///
 /// # Error Handling
 /// This function returns errors when:
 /// - The file cannot be opened or read
 /// - The field exists but has a non-numeric value
 /// - The field exists but the value is outside the u64 range
 /// - The field exists but has an empty value
-/// 
+///
 /// Note: A missing field is NOT an error - it returns Ok(None)
-/// 
+///
 /// # Example
 /// For a TOML file containing:
 /// ```toml
@@ -10701,19 +10752,19 @@ max_value = 18446744073709551615
 /// past_date = -86400
 /// # missing_date is not present
 /// ```
-/// 
+///
 /// Usage:
 /// ```
 /// let start_date = read_option_u64_field_from_toml("config.toml", "message_post_start_date_utc_posix")?;
 /// // Returns: Some(1672531200)
-/// 
+///
 /// let past_date = read_option_u64_field_from_toml("config.toml", "past_date")?;
 /// // Returns: Some(-86400)
-/// 
+///
 /// let missing = read_option_u64_field_from_toml("config.toml", "missing_date")?;
 /// // Returns: None
 /// ```
-/// 
+///
 /// # Implementation Notes
 /// - Field absence returns None (not an error)
 /// - Both positive and negative integers are valid
@@ -10723,30 +10774,30 @@ pub fn read_option_u64_field_from_toml(path: &str, name_of_toml_field_key_to_rea
     // Open the file
     let file = File::open(path)
         .map_err(|e| format!("read_option_u64_field_from_toml Failed to open file '{}': {}", path, e))?;
-    
+
     let reader = io::BufReader::new(file);
-    
+
     // Process each line looking for our field
     for (line_number, line_result) in reader.lines().enumerate() {
         // Handle line reading errors
         let line = line_result
             .map_err(|e| format!("Failed to read line {} from file '{}': {}", line_number + 1, path, e))?;
-        
+
         let trimmed = line.trim();
-        
+
         // Skip empty lines and comments
         if trimmed.is_empty() || trimmed.starts_with('#') {
             continue;
         }
-        
+
         // Check if this line contains our field
         if let Some(equals_pos) = trimmed.find('=') {
             let key_part = trimmed[..equals_pos].trim();
-            
+
             if key_part == name_of_toml_field_key_to_read {
                 // Found our field, now parse the value
                 let value_part = trimmed[equals_pos + 1..].trim();
-                
+
                 // Check for empty value
                 if value_part.is_empty() {
                     return Err(format!(
@@ -10754,7 +10805,7 @@ pub fn read_option_u64_field_from_toml(path: &str, name_of_toml_field_key_to_rea
                         name_of_toml_field_key_to_read, path
                     ));
                 }
-                
+
                 // Parse the u64 value
                 match value_part.parse::<u64>() {
                     Ok(value) => {
@@ -10771,62 +10822,62 @@ pub fn read_option_u64_field_from_toml(path: &str, name_of_toml_field_key_to_rea
             }
         }
     }
-    
+
     // Field not found - this is OK for optional fields
     debug_log!("Optional u64 field '{}' not found in file '{}', returning None", name_of_toml_field_key_to_read, path);
     Ok(None)
 }
 
 /// Reads an optional u64 field from a clearsigned TOML file into an Option<u64>.
-/// 
+///
 /// # Purpose
 /// This function securely reads an optional u64 field from a clearsigned TOML file by:
 /// 1. Extracting the GPG public key from the file
 /// 2. Verifying the clearsign signature
 /// 3. If verification succeeds, reading the optional u64 field
-/// 
+///
 /// # Security
-/// This function ensures that the TOML file's content is cryptographically verified 
+/// This function ensures that the TOML file's content is cryptographically verified
 /// before any data is extracted, providing integrity protection for timestamp configurations.
 /// No data is returned if signature validation fails.
-/// 
+///
 /// # Arguments
 /// - `path` - Path to the clearsigned TOML file
 /// - `name_of_toml_field_key_to_read` - Name of the field to read (may or may not exist in the TOML file)
-/// 
+///
 /// # Returns
 /// - `Ok(None)` - If verification succeeds and the field does not exist
 /// - `Ok(Some(value))` - If verification succeeds and the field has a valid u64 value
 /// - `Err(String)` - If verification fails or the field has an invalid value
-/// 
+///
 /// # POSIX Timestamp Support
 /// This function fully supports POSIX timestamps including:
 /// - Positive values (dates after January 1, 1970)
 /// - Negative values (dates before January 1, 1970)
 /// - Zero (exactly January 1, 1970 00:00:00 UTC)
-/// 
+///
 /// # Example
 /// For a clearsigned TOML file containing:
 /// ```toml
 /// message_post_start_date_utc_posix = 1672531200
 /// message_post_end_date_utc_posix = 1704067200
-/// 
+///
 /// gpg_key_public = """
 /// -----BEGIN PGP PUBLIC KEY BLOCK-----
 /// ...
 /// -----END PGP PUBLIC KEY BLOCK-----
 /// """
 /// ```
-/// 
+///
 /// Usage:
 /// ```
 /// let start_date = read_option_u64_from_clearsigntoml("config.toml", "message_post_start_date_utc_posix")?;
 /// // Returns: Some(1672531200) if signature verification succeeds
-/// 
+///
 /// let missing = read_option_u64_from_clearsigntoml("config.toml", "field_not_present")?;
 /// // Returns: None if signature verification succeeds
 /// ```
-/// 
+///
 /// # Errors
 /// Returns an error if:
 /// - GPG key extraction fails
@@ -10837,48 +10888,48 @@ pub fn read_option_u64_from_clearsigntoml(path: &str, name_of_toml_field_key_to_
     // Step 1: Extract GPG key from the file
     let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")
         .map_err(|e| format!("Failed to extract GPG key from file '{}': {}", path, e))?;
-    
+
     // Step 2: Verify the file's clearsign signature
     let verification_result = verify_clearsign(path, &key)
         .map_err(|e| format!("Error during signature verification of file '{}': {}", path, e))?;
-    
+
     // Step 3: Check if verification was successful
     if !verification_result {
         return Err(format!("GPG signature verification failed for file: {}", path));
     }
-    
+
     // Step 4: If verification succeeded, read the optional u64 field
     read_option_u64_field_from_toml(path, name_of_toml_field_key_to_read)
-        .map_err(|e| format!("Failed to read optional u64 '{}' from verified file '{}': {}", 
+        .map_err(|e| format!("Failed to read optional u64 '{}' from verified file '{}': {}",
                              name_of_toml_field_key_to_read, path, e))
 }
 
 /// Reads an optional i64 field from a TOML file into an Option<i64>.
-/// 
+///
 /// # Purpose
-/// This function parses a TOML file to extract an optional signed 64-bit integer value (i64) 
-/// defined by the specified field name. It handles cases where the field may or may not exist, 
+/// This function parses a TOML file to extract an optional signed 64-bit integer value (i64)
+/// defined by the specified field name. It handles cases where the field may or may not exist,
 /// returning None if the field is absent and Some(i64) if present with a valid integer value.
 /// This is particularly useful for POSIX timestamps which can be negative (dates before 1970).
-/// 
+///
 /// # Arguments
 /// - `path` - Path to the TOML file
 /// - `name_of_toml_field_key_to_read` - Name of the field to read (may or may not exist in the TOML file)
-/// 
+///
 /// # Returns
 /// - `Ok(None)` - If the field does not exist in the file
 /// - `Ok(Some(value))` - If the field exists and has a valid i64 value
 /// - `Err(String)` - If the file cannot be read or the field has an invalid value
-/// 
+///
 /// # Error Handling
 /// This function returns errors when:
 /// - The file cannot be opened or read
 /// - The field exists but has a non-numeric value
 /// - The field exists but the value is outside the i64 range
 /// - The field exists but has an empty value
-/// 
+///
 /// Note: A missing field is NOT an error - it returns Ok(None)
-/// 
+///
 /// # Example
 /// For a TOML file containing:
 /// ```toml
@@ -10887,19 +10938,19 @@ pub fn read_option_u64_from_clearsigntoml(path: &str, name_of_toml_field_key_to_
 /// past_date = -86400
 /// # missing_date is not present
 /// ```
-/// 
+///
 /// Usage:
 /// ```
 /// let start_date = read_option_i64_field_from_toml("config.toml", "message_post_start_date_utc_posix")?;
 /// // Returns: Some(1672531200)
-/// 
+///
 /// let past_date = read_option_i64_field_from_toml("config.toml", "past_date")?;
 /// // Returns: Some(-86400)
-/// 
+///
 /// let missing = read_option_i64_field_from_toml("config.toml", "missing_date")?;
 /// // Returns: None
 /// ```
-/// 
+///
 /// # Implementation Notes
 /// - Field absence returns None (not an error)
 /// - Both positive and negative integers are valid
@@ -10909,30 +10960,30 @@ pub fn read_option_i64_field_from_toml(path: &str, name_of_toml_field_key_to_rea
     // Open the file
     let file = File::open(path)
         .map_err(|e| format!("read_option_i64_field_from_toml Failed to open file '{}': {}", path, e))?;
-    
+
     let reader = io::BufReader::new(file);
-    
+
     // Process each line looking for our field
     for (line_number, line_result) in reader.lines().enumerate() {
         // Handle line reading errors
         let line = line_result
             .map_err(|e| format!("Failed to read line {} from file '{}': {}", line_number + 1, path, e))?;
-        
+
         let trimmed = line.trim();
-        
+
         // Skip empty lines and comments
         if trimmed.is_empty() || trimmed.starts_with('#') {
             continue;
         }
-        
+
         // Check if this line contains our field
         if let Some(equals_pos) = trimmed.find('=') {
             let key_part = trimmed[..equals_pos].trim();
-            
+
             if key_part == name_of_toml_field_key_to_read {
                 // Found our field, now parse the value
                 let value_part = trimmed[equals_pos + 1..].trim();
-                
+
                 // Check for empty value
                 if value_part.is_empty() {
                     return Err(format!(
@@ -10940,7 +10991,7 @@ pub fn read_option_i64_field_from_toml(path: &str, name_of_toml_field_key_to_rea
                         name_of_toml_field_key_to_read, path
                     ));
                 }
-                
+
                 // Parse the i64 value
                 match value_part.parse::<i64>() {
                     Ok(value) => {
@@ -10957,62 +11008,62 @@ pub fn read_option_i64_field_from_toml(path: &str, name_of_toml_field_key_to_rea
             }
         }
     }
-    
+
     // Field not found - this is OK for optional fields
     debug_log!("Optional i64 field '{}' not found in file '{}', returning None", name_of_toml_field_key_to_read, path);
     Ok(None)
 }
 
 /// Reads an optional i64 field from a clearsigned TOML file into an Option<i64>.
-/// 
+///
 /// # Purpose
 /// This function securely reads an optional i64 field from a clearsigned TOML file by:
 /// 1. Extracting the GPG public key from the file
 /// 2. Verifying the clearsign signature
 /// 3. If verification succeeds, reading the optional i64 field
-/// 
+///
 /// # Security
-/// This function ensures that the TOML file's content is cryptographically verified 
+/// This function ensures that the TOML file's content is cryptographically verified
 /// before any data is extracted, providing integrity protection for timestamp configurations.
 /// No data is returned if signature validation fails.
-/// 
+///
 /// # Arguments
 /// - `path` - Path to the clearsigned TOML file
 /// - `name_of_toml_field_key_to_read` - Name of the field to read (may or may not exist in the TOML file)
-/// 
+///
 /// # Returns
 /// - `Ok(None)` - If verification succeeds and the field does not exist
 /// - `Ok(Some(value))` - If verification succeeds and the field has a valid i64 value
 /// - `Err(String)` - If verification fails or the field has an invalid value
-/// 
+///
 /// # POSIX Timestamp Support
 /// This function fully supports POSIX timestamps including:
 /// - Positive values (dates after January 1, 1970)
 /// - Negative values (dates before January 1, 1970)
 /// - Zero (exactly January 1, 1970 00:00:00 UTC)
-/// 
+///
 /// # Example
 /// For a clearsigned TOML file containing:
 /// ```toml
 /// message_post_start_date_utc_posix = 1672531200
 /// message_post_end_date_utc_posix = 1704067200
-/// 
+///
 /// gpg_key_public = """
 /// -----BEGIN PGP PUBLIC KEY BLOCK-----
 /// ...
 /// -----END PGP PUBLIC KEY BLOCK-----
 /// """
 /// ```
-/// 
+///
 /// Usage:
 /// ```
 /// let start_date = read_option_i64_from_clearsigntoml("config.toml", "message_post_start_date_utc_posix")?;
 /// // Returns: Some(1672531200) if signature verification succeeds
-/// 
+///
 /// let missing = read_option_i64_from_clearsigntoml("config.toml", "field_not_present")?;
 /// // Returns: None if signature verification succeeds
 /// ```
-/// 
+///
 /// # Errors
 /// Returns an error if:
 /// - GPG key extraction fails
@@ -11023,72 +11074,72 @@ pub fn read_option_i64_from_clearsigntoml(path: &str, name_of_toml_field_key_to_
     // Step 1: Extract GPG key from the file
     let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")
         .map_err(|e| format!("Failed to extract GPG key from file '{}': {}", path, e))?;
-    
+
     // Step 2: Verify the file's clearsign signature
     let verification_result = verify_clearsign(path, &key)
         .map_err(|e| format!("Error during signature verification of file '{}': {}", path, e))?;
-    
+
     // Step 3: Check if verification was successful
     if !verification_result {
         return Err(format!("GPG signature verification failed for file: {}", path));
     }
-    
+
     // Step 4: If verification succeeded, read the optional i64 field
     read_option_i64_field_from_toml(path, name_of_toml_field_key_to_read)
-        .map_err(|e| format!("Failed to read optional i64 '{}' from verified file '{}': {}", 
+        .map_err(|e| format!("Failed to read optional i64 '{}' from verified file '{}': {}",
                              name_of_toml_field_key_to_read, path, e))
 }
 
 /// Reads an optional i64 field from a clearsigned TOML file using a GPG key from a separate config file.
-/// 
+///
 /// # Purpose
 /// This function provides a way to verify and read optional i64 fields from clearsigned TOML files
 /// that don't contain their own GPG keys, instead using a key from a separate centralized config file.
 /// This is particularly useful for timestamp fields that need secure storage and transmission.
-/// 
+///
 /// # Process Flow
 /// 1. Extracts the GPG public key from the specified config file
-/// 2. Uses this key to verify the signature of the target clearsigned TOML file  
+/// 2. Uses this key to verify the signature of the target clearsigned TOML file
 /// 3. If verification succeeds, reads the optional i64 field
 /// 4. Returns None if field doesn't exist, Some(i64) if it does, or an error
-/// 
+///
 /// # Arguments
 /// - `pathstr_to_config_file_that_contains_gpg_key` - Path to a clearsigned TOML file containing the GPG public key
 /// - `pathstr_to_target_clearsigned_file` - Path to the clearsigned TOML file to read from (without its own GPG key)
 /// - `name_of_toml_field_key_to_read` - Name of the optional i64 field to read from the target file
-/// 
+///
 /// # Returns
 /// - `Ok(None)` - If verification succeeds and the field does not exist
 /// - `Ok(Some(value))` - If verification succeeds and the field has a valid i64 value
 /// - `Err(String)` - Detailed error message if any step fails
-/// 
+///
 /// # Example
 /// ```
 /// let config_path = "security_config.toml";
 /// let settings_file = "message_settings.toml";
-/// 
-/// let start_date = read_option_i64_from_clearsigntoml_without_keyid(
+///
+/// let start_date = read_option_i64_from_clearsigntoml_without_publicgpgkey(
 ///     config_path,
-///     settings_file, 
+///     settings_file,
 ///     "message_post_start_date_utc_posix"
 /// )?;
 /// // Returns: Some(1672531200), or None if field doesn't exist
-/// 
-/// let end_date = read_option_i64_from_clearsigntoml_without_keyid(
+///
+/// let end_date = read_option_i64_from_clearsigntoml_without_publicgpgkey(
 ///     config_path,
-///     settings_file, 
-///     "message_post_end_date_utc_posix"  
+///     settings_file,
+///     "message_post_end_date_utc_posix"
 /// )?;
 /// // Returns: Some(1704067200), or None if field doesn't exist
 /// ```
-pub fn read_option_i64_from_clearsigntoml_without_keyid(
+pub fn read_option_i64_from_clearsigntoml_without_publicgpgkey(
     pathstr_to_config_file_that_contains_gpg_key: &str,
-    pathstr_to_target_clearsigned_file: &str, 
+    pathstr_to_target_clearsigned_file: &str,
     name_of_toml_field_key_to_read: &str,
 ) -> Result<Option<i64>, String> {
     // Step 1: Extract GPG key from the config file
     let key = extract_gpg_key_from_clearsigntoml(pathstr_to_config_file_that_contains_gpg_key, "gpg_key_public")
-        .map_err(|e| format!("Failed to extract GPG key from config file '{}': {}", 
+        .map_err(|e| format!("Failed to extract GPG key from config file '{}': {}",
                              pathstr_to_config_file_that_contains_gpg_key, e))?;
 
     // Step 2: Verify the target file using the extracted key
@@ -11106,7 +11157,7 @@ pub fn read_option_i64_from_clearsigntoml_without_keyid(
 
     // Step 4: Read the optional i64 field from the verified file
     read_option_i64_field_from_toml(pathstr_to_target_clearsigned_file, name_of_toml_field_key_to_read)
-        .map_err(|e| format!("Failed to read optional i64 '{}' from verified file '{}': {}", 
+        .map_err(|e| format!("Failed to read optional i64 '{}' from verified file '{}': {}",
                              name_of_toml_field_key_to_read, pathstr_to_target_clearsigned_file, e))
 }
 
@@ -11174,7 +11225,7 @@ large_negative = -9223372036854775808
 float_value = 10.5
 string_value = "not a number"
 quoted_number = "1672531200"
-empty_value = 
+empty_value =
 hex_value = 0xFF
 too_large = 9223372036854775808
 "#;
@@ -11227,7 +11278,7 @@ tabbed_value =	1000000
 year_2038 = 2147483648
 # Far future timestamp
 far_future = 253402300799
-# Far past timestamp  
+# Far past timestamp
 far_past = -62135596800
 "#;
         let test_file = "test_option_i64_edge.toml";
@@ -11266,13 +11317,13 @@ far_past = -62135596800
 }
 
 /// Reads an optional array of i32 tuples from a TOML file into an Option<Vec<(i32, i32)>>.
-/// 
+///
 /// # Purpose
 /// This function parses a TOML file to extract an optional array of integer tuples (pairs)
 /// defined by the specified field name. Each tuple represents a range or pair of i32 values.
-/// It handles cases where the field may or may not exist, returning None if the field is 
+/// It handles cases where the field may or may not exist, returning None if the field is
 /// absent and Some(Vec<(i32, i32)>) if present with valid tuple values.
-/// 
+///
 /// # TOML Format
 /// The expected TOML format is an array of arrays, where each inner array has exactly 2 elements:
 /// ```toml
@@ -11286,17 +11337,17 @@ far_past = -62135596800
 ///     [50, 100]
 /// ]
 /// ```
-/// 
+///
 /// # Arguments
 /// - `path` - Path to the TOML file
 /// - `name_of_toml_field_key_to_read` - Name of the field to read (may or may not exist in the TOML file)
-/// 
+///
 /// # Returns
 /// - `Ok(None)` - If the field does not exist in the file
 /// - `Ok(Some(vec![]))` - If the field exists but is an empty array
 /// - `Ok(Some(vec![(a,b), ...]))` - If the field exists with valid tuple pairs
 /// - `Err(String)` - If the file cannot be read or the field has invalid format/values
-/// 
+///
 /// # Error Handling
 /// This function returns errors when:
 /// - The file cannot be opened or read
@@ -11304,9 +11355,9 @@ far_past = -62135596800
 /// - Any inner array doesn't have exactly 2 elements
 /// - Any value in the tuples is not a valid i32
 /// - The field exists but has an empty value
-/// 
+///
 /// Note: A missing field is NOT an error - it returns Ok(None)
-/// 
+///
 /// # Example
 /// For a TOML file containing:
 /// ```toml
@@ -11315,19 +11366,19 @@ far_past = -62135596800
 /// empty_ranges = []
 /// # missing_ranges is not present
 /// ```
-/// 
+///
 /// Usage:
 /// ```
 /// let ranges = read_option_i32_tuple_array_field_from_toml("config.toml", "message_post_data_format_specs_integer_ranges_from_to_tuple_array")?;
 /// // Returns: Some(vec![(1, 100), (-50, 50)])
-/// 
+///
 /// let empty = read_option_i32_tuple_array_field_from_toml("config.toml", "empty_ranges")?;
 /// // Returns: Some(vec![])
-/// 
+///
 /// let missing = read_option_i32_tuple_array_field_from_toml("config.toml", "missing_ranges")?;
 /// // Returns: None
 /// ```
-/// 
+///
 /// # Implementation Notes
 /// - Field absence returns None (not an error)
 /// - Empty arrays are valid and return Some(vec![])
@@ -11338,31 +11389,31 @@ pub fn read_option_i32_tuple_array_field_from_toml(path: &str, name_of_toml_fiel
     // Open and read the entire file
     let mut file = File::open(path)
         .map_err(|e| format!("read_option_i32_tuple_array_field_from_toml Failed to open file '{}': {}", path, e))?;
-    
+
     let mut content = String::new();
     file.read_to_string(&mut content)
         .map_err(|e| format!("Failed to read file '{}': {}", path, e))?;
-    
+
     // Split into lines but keep track of line endings for reconstruction
     let lines: Vec<&str> = content.lines().collect();
-    
+
     // Find the line with our field
     for (idx, line) in lines.iter().enumerate() {
         let trimmed = line.trim();
-        
+
         // Skip empty lines and comments
         if trimmed.is_empty() || trimmed.starts_with('#') {
             continue;
         }
-        
+
         // Check if this line contains our field
         if let Some(equals_pos) = trimmed.find('=') {
             let key_part = trimmed[..equals_pos].trim();
-            
+
             if key_part == name_of_toml_field_key_to_read {
                 // Found our field
                 let value_part = trimmed[equals_pos + 1..].trim();
-                
+
                 // Check for empty value
                 if value_part.is_empty() {
                     return Err(format!(
@@ -11370,7 +11421,7 @@ pub fn read_option_i32_tuple_array_field_from_toml(path: &str, name_of_toml_fiel
                         name_of_toml_field_key_to_read, path
                     ));
                 }
-                
+
                 // Check if it's a single-line array
                 if value_part.starts_with('[') {
                     // Count brackets to see if it's complete on this line
@@ -11382,7 +11433,7 @@ pub fn read_option_i32_tuple_array_field_from_toml(path: &str, name_of_toml_fiel
                             _ => {}
                         }
                     }
-                    
+
                     if bracket_count == 0 {
                         // Complete single-line array
                         debug_log!("Parsing single-line tuple array for field '{}': {}", name_of_toml_field_key_to_read, value_part);
@@ -11390,11 +11441,11 @@ pub fn read_option_i32_tuple_array_field_from_toml(path: &str, name_of_toml_fiel
                     } else {
                         // Multi-line array - collect all lines until brackets balance
                         let mut array_content = String::from(value_part);
-                        
+
                         for line in lines.iter().skip(idx + 1) {
                             array_content.push('\n');
                             array_content.push_str(line);
-                            
+
                             // Update bracket count
                             for ch in line.chars() {
                                 match ch {
@@ -11403,14 +11454,14 @@ pub fn read_option_i32_tuple_array_field_from_toml(path: &str, name_of_toml_fiel
                                     _ => {}
                                 }
                             }
-                            
+
                             if bracket_count == 0 {
                                 // Found the end
                                 debug_log!("Parsing multi-line tuple array for field '{}'", name_of_toml_field_key_to_read);
                                 return parse_i32_tuple_array_simple(&array_content, name_of_toml_field_key_to_read, path).map(Some);
                             }
                         }
-                        
+
                         return Err(format!(
                             "Field '{}' in file '{}' has unclosed array brackets",
                             name_of_toml_field_key_to_read, path
@@ -11425,7 +11476,7 @@ pub fn read_option_i32_tuple_array_field_from_toml(path: &str, name_of_toml_fiel
             }
         }
     }
-    
+
     // Field not found - this is OK for optional fields
     debug_log!("Optional i32 tuple array field '{}' not found in file '{}', returning None", name_of_toml_field_key_to_read, path);
     Ok(None)
@@ -11434,7 +11485,7 @@ pub fn read_option_i32_tuple_array_field_from_toml(path: &str, name_of_toml_fiel
 /// Simplified helper function to parse an i32 tuple array from a string
 fn parse_i32_tuple_array_simple(array_str: &str, name_of_toml_field_key_to_read: &str, file_path: &str) -> Result<Vec<(i32, i32)>, String> {
     let trimmed = array_str.trim();
-    
+
     // Verify it's wrapped in brackets
     if !trimmed.starts_with('[') || !trimmed.ends_with(']') {
         return Err(format!(
@@ -11442,20 +11493,20 @@ fn parse_i32_tuple_array_simple(array_str: &str, name_of_toml_field_key_to_read:
             name_of_toml_field_key_to_read, file_path
         ));
     }
-    
+
     // Remove outer brackets and trim
     let inner_content = trimmed[1..trimmed.len()-1].trim();
-    
+
     // Handle empty array
     if inner_content.is_empty() {
         return Ok(Vec::new());
     }
-    
+
     // For robustness, let's manually parse the tuples
     let mut tuples = Vec::new();
     let mut current_tuple = String::new();
     let mut bracket_depth = 0;
-    
+
     for ch in inner_content.chars() {
         match ch {
             '[' => {
@@ -11465,7 +11516,7 @@ fn parse_i32_tuple_array_simple(array_str: &str, name_of_toml_field_key_to_read:
             ']' => {
                 bracket_depth -= 1;
                 current_tuple.push(ch);
-                
+
                 // If we've closed a tuple
                 if bracket_depth == 0 && !current_tuple.trim().is_empty() {
                     let parsed = parse_single_i32_tuple(&current_tuple.trim(), name_of_toml_field_key_to_read, file_path)?;
@@ -11490,7 +11541,7 @@ fn parse_i32_tuple_array_simple(array_str: &str, name_of_toml_field_key_to_read:
             }
         }
     }
-    
+
     // Handle any remaining tuple
     if !current_tuple.trim().is_empty() {
         return Err(format!(
@@ -11498,7 +11549,7 @@ fn parse_i32_tuple_array_simple(array_str: &str, name_of_toml_field_key_to_read:
             name_of_toml_field_key_to_read, file_path
         ));
     }
-    
+
     Ok(tuples)
 }
 
@@ -11506,7 +11557,7 @@ fn parse_i32_tuple_array_simple(array_str: &str, name_of_toml_field_key_to_read:
 /// Helper function to parse a single i32 tuple from a string like "[1, 10]"
 fn parse_single_i32_tuple(tuple_str: &str, name_of_toml_field_key_to_read: &str, file_path: &str) -> Result<(i32, i32), String> {
     let trimmed = tuple_str.trim();
-    
+
     // Remove brackets
     if !trimmed.starts_with('[') || !trimmed.ends_with(']') {
         return Err(format!(
@@ -11514,70 +11565,70 @@ fn parse_single_i32_tuple(tuple_str: &str, name_of_toml_field_key_to_read: &str,
             name_of_toml_field_key_to_read, file_path, tuple_str
         ));
     }
-    
+
     let inner = trimmed[1..trimmed.len()-1].trim();
-    
+
     // Split by comma
     let parts: Vec<&str> = inner.split(',').collect();
-    
+
     if parts.len() != 2 {
         return Err(format!(
             "Tuple in field '{}' in file '{}' must have exactly 2 elements, found {}: '{}'",
             name_of_toml_field_key_to_read, file_path, parts.len(), tuple_str
         ));
     }
-    
+
     // Parse the two values
     let first = parts[0].trim().parse::<i32>()
         .map_err(|e| format!(
             "First element '{}' in tuple of field '{}' in file '{}' is not a valid i32: {}",
             parts[0].trim(), name_of_toml_field_key_to_read, file_path, e
         ))?;
-        
+
     let second = parts[1].trim().parse::<i32>()
         .map_err(|e| format!(
             "Second element '{}' in tuple of field '{}' in file '{}' is not a valid i32: {}",
             parts[1].trim(), name_of_toml_field_key_to_read, file_path, e
         ))?;
-    
+
     Ok((first, second))
 }
 
 /// Reads an optional array of i32 tuples from a clearsigned TOML file into an Option<Vec<(i32, i32)>>.
-/// 
+///
 /// # Purpose
 /// This function securely reads an optional array of i32 tuples from a clearsigned TOML file by:
 /// 1. Extracting the GPG public key from the file
 /// 2. Verifying the clearsign signature
 /// 3. If verification succeeds, reading the optional tuple array field
-/// 
+///
 /// # Security
-/// This function ensures that the TOML file's content is cryptographically verified 
+/// This function ensures that the TOML file's content is cryptographically verified
 /// before any data is extracted, providing integrity protection for range configurations.
 /// No data is returned if signature validation fails.
-/// 
+///
 /// # Arguments
 /// - `path` - Path to the clearsigned TOML file
 /// - `name_of_toml_field_key_to_read` - Name of the field to read (may or may not exist in the TOML file)
-/// 
+///
 /// # Returns
 /// - `Ok(None)` - If verification succeeds and the field does not exist
 /// - `Ok(Some(vec![]))` - If verification succeeds and the field is an empty array
 /// - `Ok(Some(vec![(a,b), ...]))` - If verification succeeds and the field has valid tuples
 /// - `Err(String)` - If verification fails or the field has invalid format/values
-/// 
+///
 /// # Example
 /// For a clearsigned TOML file containing:
 /// ```toml
 /// message_post_data_format_specs_integer_ranges_from_to_tuple_array = [[1, 100], [-50, 50]]
-/// 
+///
 /// gpg_key_public = """
 /// -----BEGIN PGP PUBLIC KEY BLOCK-----
 /// ...
 /// -----END PGP PUBLIC KEY BLOCK-----
 /// """
 /// ```
-/// 
+///
 /// Usage:
 /// ```
 /// let ranges = read_option_i32_tuple_array_from_clearsigntoml("config.toml", "message_post_data_format_specs_integer_ranges_from_to_tuple_array")?;
@@ -11587,65 +11638,65 @@ pub fn read_option_i32_tuple_array_from_clearsigntoml(path: &str, name_of_toml_f
     // Step 1: Extract GPG key from the file
     let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")
         .map_err(|e| format!("Failed to extract GPG key from file '{}': {}", path, e))?;
-    
+
     // Step 2: Verify the file's clearsign signature
     let verification_result = verify_clearsign(path, &key)
         .map_err(|e| format!("Error during signature verification of file '{}': {}", path, e))?;
-    
+
     // Step 3: Check if verification was successful
     if !verification_result {
         return Err(format!("GPG signature verification failed for file: {}", path));
     }
-    
+
     // Step 4: If verification succeeded, read the optional tuple array field
     read_option_i32_tuple_array_field_from_toml(path, name_of_toml_field_key_to_read)
-        .map_err(|e| format!("Failed to read optional i32 tuple array '{}' from verified file '{}': {}", 
+        .map_err(|e| format!("Failed to read optional i32 tuple array '{}' from verified file '{}': {}",
                              name_of_toml_field_key_to_read, path, e))
 }
 
 /// Reads an optional array of i32 tuples from a clearsigned TOML file using a GPG key from a separate config file.
-/// 
+///
 /// # Purpose
-/// This function provides a way to verify and read optional tuple array fields from clearsigned 
-/// TOML files that don't contain their own GPG keys, instead using a key from a separate 
+/// This function provides a way to verify and read optional tuple array fields from clearsigned
+/// TOML files that don't contain their own GPG keys, instead using a key from a separate
 /// centralized config file. This is useful for range specifications and validation rules.
-/// 
+///
 /// # Process Flow
 /// 1. Extracts the GPG public key from the specified config file
-/// 2. Uses this key to verify the signature of the target clearsigned TOML file  
+/// 2. Uses this key to verify the signature of the target clearsigned TOML file
 /// 3. If verification succeeds, reads the optional tuple array field
 /// 4. Returns None if field doesn't exist, Some(vec) if it does, or an error
-/// 
+///
 /// # Arguments
 /// - `pathstr_to_config_file_that_contains_gpg_key` - Path to a clearsigned TOML file containing the GPG public key
 /// - `pathstr_to_target_clearsigned_file` - Path to the clearsigned TOML file to read from (without its own GPG key)
 /// - `name_of_toml_field_key_to_read` - Name of the optional tuple array field to read from the target file
-/// 
+///
 /// # Returns
 /// - `Ok(None)` - If verification succeeds and the field does not exist
 /// - `Ok(Some(vec))` - If verification succeeds and the field has valid tuple array
 /// - `Err(String)` - Detailed error message if any step fails
-/// 
+///
 /// # Example
 /// ```
 /// let config_path = "security_config.toml";
 /// let validation_file = "validation_rules.toml";
-/// 
-/// let ranges = read_option_i32_tuple_array_from_clearsigntoml_without_keyid(
+///
+/// let ranges = read_option_i32_tuple_array_from_clearsigntoml_without_publicgpgkey(
 ///     config_path,
-///     validation_file, 
+///     validation_file,
 ///     "message_post_data_format_specs_integer_ranges_from_to_tuple_array"
 /// )?;
 /// // Returns: Some(vec![(1, 100), (200, 300)]), or None if field doesn't exist
 /// ```
-pub fn read_option_i32_tuple_array_from_clearsigntoml_without_keyid(
+pub fn read_option_i32_tuple_array_from_clearsigntoml_without_publicgpgkey(
     pathstr_to_config_file_that_contains_gpg_key: &str,
-    pathstr_to_target_clearsigned_file: &str, 
+    pathstr_to_target_clearsigned_file: &str,
     name_of_toml_field_key_to_read: &str,
 ) -> Result<Option<Vec<(i32, i32)>>, String> {
     // Step 1: Extract GPG key from the config file
     let key = extract_gpg_key_from_clearsigntoml(pathstr_to_config_file_that_contains_gpg_key, "gpg_key_public")
-        .map_err(|e| format!("Failed to extract GPG key from config file '{}': {}", 
+        .map_err(|e| format!("Failed to extract GPG key from config file '{}': {}",
                              pathstr_to_config_file_that_contains_gpg_key, e))?;
 
     // Step 2: Verify the target file using the extracted key
@@ -11663,7 +11714,7 @@ pub fn read_option_i32_tuple_array_from_clearsigntoml_without_keyid(
 
     // Step 4: Read the optional tuple array field from the verified file
     read_option_i32_tuple_array_field_from_toml(pathstr_to_target_clearsigned_file, name_of_toml_field_key_to_read)
-        .map_err(|e| format!("Failed to read optional i32 tuple array '{}' from verified file '{}': {}", 
+        .map_err(|e| format!("Failed to read optional i32 tuple array '{}' from verified file '{}': {}",
                              name_of_toml_field_key_to_read, pathstr_to_target_clearsigned_file, e))
 }
 
@@ -11789,7 +11840,7 @@ single_value_tuple = [[42]]
 # Negative ranges
 negative_ranges = [[-100, -50], [-10, 10], [0, 100]]
 
-# Large values  
+# Large values
 large_ranges = [[-2147483648, 2147483647]]
 
 # Same values (zero-width range)
@@ -11816,22 +11867,22 @@ zero_width = [[42, 42], [0, 0]]
 }
 
 // /// Wrapper struct for reading team channel collaborator ports from TOML files.
-// /// 
+// ///
 // /// This struct represents the intermediate TOML structure used when reading
 // /// port assignments. In the TOML file, port assignments are organized as
-// /// arrays of arrays, where each top-level array element contains a 
+// /// arrays of arrays, where each top-level array element contains a
 // /// `collaborator_ports` array with the actual port assignments.
-// /// 
+// ///
 // /// # TOML Structure
 // /// ```toml
 // /// [[abstract_collaborator_port_assignments.alice_bob]]
-// /// 
+// ///
 // /// [[abstract_collaborator_port_assignments.alice_bob.collaborator_ports]]
 // /// user_name = "alice"
 // /// ready_port = 62002
 // /// intray_port = 49595
 // /// gotit_port = 49879
-// /// 
+// ///
 // /// [[abstract_collaborator_port_assignments.alice_bob.collaborator_ports]]
 // /// user_name = "bob"
 // /// ready_port = 59980
@@ -11845,55 +11896,55 @@ zero_width = [[42, 42], [0, 0]]
 // }
 
 /// Reads all collaborator port assignments into the format expected by CoreNode.
-/// 
+///
 /// # Purpose
 /// This function reads the port assignments from a clearsigned TOML file and returns
 /// them in the exact format needed by CoreNode's `abstract_collaborator_port_assignments`
 /// field, which is `HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>`.
-/// 
+///
 /// # Security Model
 /// This function enforces the same strict security requirements:
 /// 1. Validates the clearsigned file using owner-based key lookup
 /// 2. No data is returned if signature validation fails
 /// 3. Maintains complete chain of trust
-/// 
+///
 /// # TOML Structure Expected
 /// The function expects the TOML file to contain sections like:
 /// ```toml
 /// [[abstract_collaborator_port_assignments.alice_bob]]
-/// 
+///
 /// [[abstract_collaborator_port_assignments.alice_bob.collaborator_ports]]
 /// user_name = "alice"
 /// ready_port = 62002
 /// intray_port = 49595
 /// gotit_port = 49879
-/// 
+///
 /// [[abstract_collaborator_port_assignments.alice_bob.collaborator_ports]]
 /// user_name = "bob"
 /// ready_port = 59980
 /// intray_port = 52755
 /// gotit_port = 60575
 /// ```
-/// 
+///
 /// # Arguments
 /// - `path_to_clearsigned_toml` - Path to the clearsigned TOML file containing port assignments
 /// - `addressbook_files_directory_relative` - Relative path to the directory containing collaborator addressbook files
-/// 
+///
 /// # Returns
 /// - `Ok(HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>)` - Port assignments in CoreNode format
 /// - `Err(GpgError)` - If validation fails or parsing errors occur
-/// 
+///
 /// # Example
 /// ```no_run
 /// let port_assignments = read_hashmap_corenode_ports_struct_from_clearsigntoml(
 ///     Path::new("team_channel_config.toml"),
 ///     "collaborators"
 /// )?;
-/// 
+///
 /// // Use with translate_port_assignments
 /// let role_based_ports = translate_port_assignments(
 ///     "alice",
-///     "bob", 
+///     "bob",
 ///     port_assignments
 /// )?;
 /// ```
@@ -11902,60 +11953,60 @@ pub fn read_hashmap_corenode_ports_struct_from_clearsigntoml(
     addressbook_files_directory_relative: &str,  // pass in constant here
     // addressbook_readcopy_path_string: &Path,
 ) -> Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, GpgError> {
-    
+
     debug_log(
         "RHCPSFC starting read_hashmap_corenode_ports_struct_from_clearsigntoml()",
     );
-    
+
     debug_log!(
         "RHCPSFC path_to_clearsigned_toml -> {:?}",
         path_to_clearsigned_toml.display(),
     );
-    
+
     // debug_log!(
     //     "RHCPSFC addressbook_readcopy_path_string -> {:?}",
     //     addressbook_readcopy_path_string.display(),
     // );
-    
+
     // // First, use our existing optimized reader to get the data
     // let raw_assignments = read_all_collaborator_port_assignments_clearsigntoml_optimized(
     //     path_to_clearsigned_toml,
     //     // addressbook_files_directory_relative,
     //     addressbook_readcopy_path_string, //addressbook_readcopy_path_string
     // )?;
-    
-    
+
+
     debug_log!(
         "RHCPSFC addressbook_files_directory_relative -> {:?}",
         addressbook_files_directory_relative,
     );
-    
+
     // First, use our existing optimized reader to get the data
     let raw_assignments = read_all_collaborator_port_assignments_clearsigntoml_optimized(
         path_to_clearsigned_toml,
         // addressbook_files_directory_relative,
         addressbook_files_directory_relative, //addressbook_files_directory_relative
     )?;
-    
-    
+
+
     // Now transform the data into the format CoreNode expects
     let mut corenode_format: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>> = HashMap::new();
-    
+
     for (pair_name, collaborator_assignments) in raw_assignments {
         // Create a single ReadTeamchannelCollaboratorPortsToml that contains all collaborators for this pair
         let wrapper = ReadTeamchannelCollaboratorPortsToml {
             collaborator_ports: collaborator_assignments,
         };
-        
+
         // Store it in a Vec (even though there's only one element, to match the expected type)
         corenode_format.insert(pair_name, vec![wrapper]);
     }
-    
+
     debug_log!(
         "Transformed {} collaborator pairs into CoreNode format",
         corenode_format.len()
     );
-    
+
     Ok(corenode_format)
 }
 
@@ -11963,80 +12014,80 @@ pub fn read_hashmap_corenode_ports_struct_from_clearsigntoml(
 // // the calling of read_hashmap_corenode_ports_struct_from_clearsigntoml
 // // using only relative path input seems wrong
 // /// Reads collaborator port assignments from a clearsigned TOML file using a GPG key from a separate config file.
-// /// 
+// ///
 // /// # Purpose
 // /// This function provides a way to verify and read port assignments from clearsigned TOML files
 // /// that don't contain their own GPG keys, instead using a key from a separate centralized config file.
 // /// This approach maintains consistent key management across multiple clearsigned files and is useful
 // /// when the team channel configuration files don't embed their own GPG keys.
-// /// 
+// ///
 // /// # Security Model
 // /// This function enforces the same strict security requirements:
 // /// 1. Extracts the validation key from a separate config file
 // /// 2. Validates the target file's signature using that key
 // /// 3. No data is returned if signature validation fails
 // /// 4. Maintains complete chain of trust
-// /// 
+// ///
 // /// # Process Flow
 // /// 1. Extracts the GPG public key from the specified config file
-// /// 2. Uses this key to verify the signature of the target clearsigned TOML file  
+// /// 2. Uses this key to verify the signature of the target clearsigned TOML file
 // /// 3. If verification succeeds, reads the port assignments
 // /// 4. Transforms the data into CoreNode's expected format
 // /// 5. Returns the HashMap or an appropriate error
-// /// 
+// ///
 // /// # Arguments
 // /// - `pathstr_to_config_file_that_contains_gpg_key` - Path to a clearsigned TOML file containing the GPG public key
 // /// - `pathstr_to_target_clearsigned_file` - Path to the clearsigned TOML file to read from (without its own GPG key)
 // /// - `addressbook_files_directory_relative` - Relative path to the directory containing collaborator addressbook files
-// /// 
+// ///
 // /// # Returns
 // /// - `Ok(HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>)` - Port assignments in CoreNode format if verification succeeds
 // /// - `Err(String)` - Detailed error message if any step fails
-// /// 
+// ///
 // /// # TOML Structure Expected
 // /// The target file should contain sections like:
 // /// ```toml
 // /// [[abstract_collaborator_port_assignments.alice_bob]]
-// /// 
+// ///
 // /// [[abstract_collaborator_port_assignments.alice_bob.collaborator_ports]]
 // /// user_name = "alice"
 // /// ready_port = 62002
 // /// intray_port = 49595
 // /// gotit_port = 49879
-// /// 
+// ///
 // /// [[abstract_collaborator_port_assignments.alice_bob.collaborator_ports]]
 // /// user_name = "bob"
 // /// ready_port = 59980
 // /// intray_port = 52755
 // /// gotit_port = 60575
 // /// ```
-// /// 
+// ///
 // /// # Example
 // /// ```no_run
 // /// let config_path = "security_config.toml";
 // /// let team_channel_file = "team_channel_config.toml";
-// /// 
-// /// let port_assignments = read_hashmap_corenode_ports_from_clearsigntoml_without_keyid(
+// ///
+// /// let port_assignments = read_hashmap_corenode_ports_from_clearsigntoml_without_publicgpgkey(
 // ///     config_path,
 // ///     team_channel_file,
 // ///     "collaborators"
 // /// )?;
-// /// 
+// ///
 // /// // Use with translate_port_assignments
 // /// let role_based_ports = translate_port_assignments(
 // ///     "alice",
-// ///     "bob", 
+// ///     "bob",
 // ///     port_assignments
 // /// )?;
 // /// ```
-// /// 
+// ///
 // /// # Error Handling
 // /// Returns an error if:
 // /// - The config file cannot be read or doesn't contain a valid GPG key
 // /// - The target file cannot be read or its signature cannot be verified
 // /// - The port assignment structure is malformed or missing
 // /// - Any collaborator pair has invalid or incomplete port data
-// pub fn read_hashmap_corenode_ports_from_clearsigntoml_without_keyid(
+// pub fn read_hashmap_corenode_ports_from_clearsigntoml_without_publicgpgkey(
 //     pathstr_to_config_file_that_contains_gpg_key: &str,
 //     pathstr_to_target_clearsigned_file: &str,
 // ) -> Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, String> {
@@ -12045,14 +12096,14 @@ pub fn read_hashmap_corenode_ports_struct_from_clearsigntoml(
 //         "RHCPFCWK read_hashmap_corenode_ports_from_clearsigntoml_without_keyid Extracting GPG key from config file: {}",
 //         pathstr_to_config_file_that_contains_gpg_key
 //     );
-    
+
 //     let key = extract_gpg_key_from_clearsigntoml(
-//         pathstr_to_config_file_that_contains_gpg_key, 
+//         pathstr_to_config_file_that_contains_gpg_key,
 //         "gpg_key_public"
 //     )
 //     .map_err(|e| format!(
-//         "RHCPFCWK Failed to extract GPG key from config file '{}': {}", 
-//         pathstr_to_config_file_that_contains_gpg_key, 
+//         "RHCPFCWK Failed to extract GPG key from config file '{}': {}",
+//         pathstr_to_config_file_that_contains_gpg_key,
 //         e
 //     ))?;
 
@@ -12061,13 +12112,13 @@ pub fn read_hashmap_corenode_ports_struct_from_clearsigntoml(
 //         "RHCPFCWK Verifying signature of target file: {}",
 //         pathstr_to_target_clearsigned_file
 //     );
-    
+
 //     let verification_result = verify_clearsign(
-//         pathstr_to_target_clearsigned_file, 
+//         pathstr_to_target_clearsigned_file,
 //         &key
 //     )
 //     .map_err(|e| format!(
-//         "RHCPFCWK Failed during verification process for file '{}': {}", 
+//         "RHCPFCWK Failed during verification process for file '{}': {}",
 //         pathstr_to_target_clearsigned_file,
 //         e
 //     ))?;
@@ -12085,10 +12136,10 @@ pub fn read_hashmap_corenode_ports_struct_from_clearsigntoml(
 
 //     // Step 4: Convert string path to Path for the existing function
 //     let path_to_target_clearsigned_ile = Path::new(pathstr_to_target_clearsigned_file);
-    
+
 //     // convert: str -> path
 //     let path_to_config_file_that_contains_gpgkey = Path::new(pathstr_to_config_file_that_contains_gpg_key);
-    
+
 //     // Step 5: Call the existing function to read and transform the port assignments
 //     match read_hashmap_corenode_ports_struct_from_clearsigntoml(
 //         path_to_target_clearsigned_ile,
@@ -12121,7 +12172,7 @@ mod test_corenode_port_readers {
     #[test]
     fn test_read_corenode_port_assignments_structure() {
         // This test verifies the structure matches what translate_port_assignments expects
-        
+
         // Create a test TOML file with the exact structure from the sample
         let test_content = r#"
 owner = "alice"
@@ -12159,11 +12210,11 @@ gotit_port = 50006
 
         // Note: This would need GPG setup to actually test
         // For unit testing, we'd test the transformation logic separately
-        
+
         // Cleanup
         fs::remove_file(test_file).unwrap();
     }
-    
+
     #[test]
     fn test_wrapper_struct_usage() {
         // Test that ReadTeamchannelCollaboratorPortsToml works as expected
@@ -12173,27 +12224,27 @@ gotit_port = 50006
             intray_port: 50002,
             gotit_port: 50003,
         };
-        
+
         let port2 = AbstractTeamchannelNodeTomlPortsData {
             user_name: "bob".to_string(),
             ready_port: 50004,
             intray_port: 50005,
             gotit_port: 50006,
         };
-        
+
         let wrapper = ReadTeamchannelCollaboratorPortsToml {
             collaborator_ports: vec![port1.clone(), port2.clone()],
         };
-        
+
         // Verify we can access the nested data as translate_port_assignments does
         assert_eq!(wrapper.collaborator_ports.len(), 2);
         assert_eq!(wrapper.collaborator_ports[0].user_name, "alice");
         assert_eq!(wrapper.collaborator_ports[1].user_name, "bob");
-        
+
         // Test the HashMap structure
         let mut test_map: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>> = HashMap::new();
         test_map.insert("alice_bob".to_string(), vec![wrapper]);
-        
+
         // Simulate how translate_port_assignments accesses the data
         let meeting_room_ports = test_map.get("alice_bob").unwrap();
         for port_data in meeting_room_ports {
@@ -12292,7 +12343,7 @@ gotit_port = 50006
 // ///
 // /// - `GpgError::ValidationError` - If any input parameter is empty or if neither
 // ///                                .toml nor .gpgtoml file exists
-// /// - `GpgError::PathError` - If path resolution to absolute paths fails  
+// /// - `GpgError::PathError` - If path resolution to absolute paths fails
 // /// - `GpgError::FileSystemError` - If reading the original file fails
 // /// - `GpgError::TempFileError` - If creating or writing the temp file fails
 // /// - `GpgError::GpgOperationError` - If GPG decryption fails (only for .gpgtoml files)
@@ -12326,51 +12377,51 @@ gotit_port = 50006
 //     addressbook_files_directory_relative: &str,
 //     gpg_full_fingerprint_key_id_string: &str,
 // ) -> Result<PathBuf, GpgError> {
-    
+
 //     // TODO add 2x retry after maybe .3 sec?
 //     //     to make read-copy of file
 //     // maybe use...standard temp dir to be deleted routinely?
-    
+
 //     // new version get_path_to_temp_readcopy_of_toml_or_decrypt_gpgtoml
 //     // not formatting for name-in-file-name{}
-                
+
 //     // Validate input parameters before proceeding
 //     if collaborator_name.is_empty() {
 //         return Err(GpgError::ValidationError(
 //             "Collaborator name cannot be empty".to_string()
 //         ));
 //     }
-    
+
 //     if gpg_full_fingerprint_key_id_string.is_empty() {
 //         return Err(GpgError::ValidationError(
 //             "GPG fingerprint key ID cannot be empty".to_string()
 //         ));
 //     }
-    
+
 //     // Step 1: Construct relative paths for both possible file types
 //     // Using the pattern: {collaborator_name}__collaborator.{extension}
 //     let toml_filename = format!("{}__collaborator.toml", collaborator_name);
 //     let gpgtoml_filename = format!("{}__collaborator.gpgtoml", collaborator_name);
-    
+
 //     let toml_relative_path = Path::new(addressbook_files_directory_relative)
 //         .join(&toml_filename);
 //     let gpgtoml_relative_path = Path::new(addressbook_files_directory_relative)
 //         .join(&gpgtoml_filename);
-    
+
 //     // Step 2: Convert relative paths to absolute paths using the provided helper function
 //     let toml_absolute_path = make_input_path_name_abs_executabledirectoryrelative_nocheck(&toml_relative_path)
 //         .map_err(|e| GpgError::PathError(
 //             format!("Failed to create absolute path for .toml file '{}': {}", toml_filename, e)
 //         ))?;
-    
+
 //     let gpgtoml_absolute_path = make_input_path_name_abs_executabledirectoryrelative_nocheck(&gpgtoml_relative_path)
 //         .map_err(|e| GpgError::PathError(
 //             format!("Failed to create absolute path for .gpgtoml file '{}': {}", gpgtoml_filename, e)
 //         ))?;
-    
+
 //     // Variable to track temporary file for cleanup on error
 //     let mut temp_file_created: Option<PathBuf> = None;
-    
+
 //     // Use a closure to ensure cleanup on any error after temp file creation
 //     let create_temp_result = (|| -> Result<PathBuf, GpgError> {
 //         // Generate unique temporary filename using timestamp
@@ -12380,21 +12431,21 @@ gotit_port = 50006
 //                 format!("Failed to get system time for temp file creation: {}", e)
 //             ))?
 //             .as_nanos();
-        
+
 //         // Create temporary filename with collaborator name and timestamp for uniqueness
 //         // Use .toml extension regardless of source type for consistency
 //         let temp_filename = format!("collab_addressbook_{}_{}.toml", collaborator_name, timestamp_nanos);
 //         let temp_file_path = std::env::temp_dir().join(&temp_filename);
-        
+
 //         debug_log!("ROCST: Creating temporary file for addressbook content: {:?}", temp_file_path);
-        
+
 //         // Step 3: Check which source file exists and create appropriate temporary copy
 //         if toml_absolute_path.exists() {
 //             // Case 1: Clearsigned .toml file exists - create a temporary copy
-//             debug_log!("ROCST: Found clearsigned .toml file for collaborator '{}' at path: {:?}", 
+//             debug_log!("ROCST: Found clearsigned .toml file for collaborator '{}' at path: {:?}",
 //                        collaborator_name, toml_absolute_path);
 //             debug_log!("ROCST: Creating temporary copy to ensure original file safety");
-            
+
 //             // Read the original file content
 //             let original_content = std::fs::read(&toml_absolute_path)
 //                 .map_err(|e| GpgError::FileSystemError(
@@ -12403,13 +12454,13 @@ gotit_port = 50006
 //                         format!("Failed to read original .toml file '{}': {}", toml_absolute_path.display(), e)
 //                     )
 //                 ))?;
-            
+
 //             // Create the temporary file with restricted permissions
 //             #[cfg(unix)]
 //             {
 //                 use std::os::unix::fs::OpenOptionsExt;
 //                 use std::io::Write;
-                
+
 //                 // Create file with restricted permissions atomically
 //                 let mut temp_file = std::fs::OpenOptions::new()
 //                     .create(true)
@@ -12420,22 +12471,22 @@ gotit_port = 50006
 //                     .map_err(|e| GpgError::TempFileError(
 //                         format!("Failed to create secure temporary file '{}': {}", temp_filename, e)
 //                     ))?;
-                
+
 //                 // Mark that we've created a temp file that needs cleanup on error
 //                 temp_file_created = Some(temp_file_path.clone());
-                
+
 //                 // Write the content to the temporary file
 //                 temp_file.write_all(&original_content)
 //                     .map_err(|e| GpgError::TempFileError(
 //                         format!("Failed to write content to temporary file: {}", e)
 //                     ))?;
-                
+
 //                 temp_file.flush()
 //                     .map_err(|e| GpgError::TempFileError(
 //                         format!("Failed to flush temporary file: {}", e)
 //                     ))?;
 //             }
-            
+
 //             #[cfg(not(unix))]
 //             {
 //                 // On non-Unix systems, create file normally then write content
@@ -12443,22 +12494,22 @@ gotit_port = 50006
 //                     .map_err(|e| GpgError::TempFileError(
 //                         format!("Failed to create temporary file '{}': {}", temp_filename, e)
 //                     ))?;
-                
+
 //                 temp_file_created = Some(temp_file_path.clone());
 //             }
-            
+
 //             debug_log!("ROCST: Successfully created temporary copy of .toml file");
-            
+
 //         } else if gpgtoml_absolute_path.exists() {
 //             // Case 2: Encrypted .gpgtoml file exists - decrypt to temporary file
-//             debug_log!("ROCST: Found encrypted .gpgtoml file for collaborator '{}' at path: {:?}", 
+//             debug_log!("ROCST: Found encrypted .gpgtoml file for collaborator '{}' at path: {:?}",
 //                        collaborator_name, gpgtoml_absolute_path);
-            
+
 //             // Create empty temporary file with restricted permissions first
 //             #[cfg(unix)]
 //             {
 //                 use std::os::unix::fs::OpenOptionsExt;
-                
+
 //                 // Create file with restricted permissions atomically
 //                 std::fs::OpenOptions::new()
 //                     .create(true)
@@ -12469,11 +12520,11 @@ gotit_port = 50006
 //                     .map_err(|e| GpgError::TempFileError(
 //                         format!("Failed to create secure temporary file '{}': {}", temp_filename, e)
 //                     ))?;
-                
+
 //                 // Mark that we've created a temp file that needs cleanup on error
 //                 temp_file_created = Some(temp_file_path.clone());
 //             }
-            
+
 //             #[cfg(not(unix))]
 //             {
 //                 // On non-Unix systems, just create the file
@@ -12481,14 +12532,14 @@ gotit_port = 50006
 //                     .map_err(|e| GpgError::TempFileError(
 //                         format!("Failed to create temporary file '{}': {}", temp_filename, e)
 //                     ))?;
-                
+
 //                 temp_file_created = Some(temp_file_path.clone());
 //             }
-            
+
 //             // Execute GPG to decrypt the .gpgtoml file into our temporary file
-//             debug_log!("ROCST: Executing GPG to decrypt {} to temporary file {}", 
+//             debug_log!("ROCST: Executing GPG to decrypt {} to temporary file {}",
 //                        gpgtoml_absolute_path.display(), temp_file_path.display());
-            
+
 //             let gpg_output = std::process::Command::new("gpg")
 //                 .arg("--quiet")                          // Suppress informational messages
 //                 .arg("--batch")                          // Non-interactive mode
@@ -12502,7 +12553,7 @@ gotit_port = 50006
 //                 .output()
 //                 .map_err(|e| {
 //                     let error_msg = format!(
-//                         "Failed to execute GPG decrypt command for collaborator '{}': {}", 
+//                         "Failed to execute GPG decrypt command for collaborator '{}': {}",
 //                         collaborator_name, e
 //                     );
 //                     eprintln!("\nERROR: {}", error_msg);
@@ -12510,12 +12561,12 @@ gotit_port = 50006
 //                     let _ = std::io::stdin().read_line(&mut String::new());
 //                     GpgError::GpgOperationError(error_msg)
 //                 })?;
-            
+
 //             // Check if GPG decryption was successful
 //             if !gpg_output.status.success() {
 //                 let stderr_text = String::from_utf8_lossy(&gpg_output.stderr);
 //                 let error_msg = format!(
-//                     "GPG decryption failed for collaborator '{}' file '{}': {}", 
+//                     "GPG decryption failed for collaborator '{}' file '{}': {}",
 //                     collaborator_name, gpgtoml_absolute_path.display(), stderr_text
 //                 );
 //                 eprintln!("\nERROR: {}", error_msg);
@@ -12523,9 +12574,9 @@ gotit_port = 50006
 //                 let _ = std::io::stdin().read_line(&mut String::new());
 //                 return Err(GpgError::GpgOperationError(error_msg));
 //             }
-            
+
 //             debug_log!("ROCST: Successfully decrypted .gpgtoml file to temporary file");
-            
+
 //         } else {
 //             // Case 3: Neither file exists - this is an error
 //             return Err(GpgError::ValidationError(format!(
@@ -12533,12 +12584,12 @@ gotit_port = 50006
 //                 collaborator_name, toml_filename, gpgtoml_filename, addressbook_files_directory_relative
 //             )));
 //         }
-        
+
 //         // Return the temporary file path TWICE - both values are the same temp file
 //         // This makes it crystal clear that this is a temporary file safe to delete
 //         Ok(temp_file_path)
 //     })();
-    
+
 //     // If any error occurred and we created a temp file, clean it up before propagating error
 //     match create_temp_result {
 //         Ok(result) => {
@@ -12643,7 +12694,7 @@ gotit_port = 50006
 ///
 /// - `GpgError::ValidationError` - If any input parameter is empty or if neither
 ///                                .toml nor .gpgtoml file exists
-/// - `GpgError::PathError` - If path resolution to absolute paths fails  
+/// - `GpgError::PathError` - If path resolution to absolute paths fails
 /// - `GpgError::FileSystemError` - If reading the original file fails after retry attempts
 /// - `GpgError::TempFileError` - If creating or writing the temp file fails after retry attempts
 /// - `GpgError::GpgOperationError` - If GPG decryption fails (only for .gpgtoml files)
@@ -12684,56 +12735,56 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
     using TEMP_DIR_BASE_UMA_PATH_STR
     */
     debug_log("gaPATHBUFFttrotodg: starting get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml ");
-    
+
     // ensure temp dir exists
     // Ensure the base UME temp directory exists
     if !base_uma_temp_directory_path.exists() {
         debug_log!("gaPATHBUFFttrotodg() : Base UME temp directory does not exist, creating: {:?}", base_uma_temp_directory_path);
         std::fs::create_dir_all(base_uma_temp_directory_path)
             .map_err(|e| GpgError::TempFileError(
-                format!("gaPATHBUFFttrotodg() Failed to create base UME temp directory '{}': {}", 
+                format!("gaPATHBUFFttrotodg() Failed to create base UME temp directory '{}': {}",
                         base_uma_temp_directory_path.display(), e)
             ))?;
         debug_log!("gaPATHBUFFttrotodg() : Successfully created base UME temp directory");
     }
-    
+
     // Validate input parameters before proceeding
     if collaborator_name.is_empty() {
         return Err(GpgError::ValidationError(
             "gaPATHBUFFttrotodg error Collaborator name cannot be empty".to_string()
         ));
     }
-    
+
     if gpg_full_fingerprint_key_id_string.is_empty() {
         return Err(GpgError::ValidationError(
             "gaPATHBUFFttrotodg error GPG fingerprint key ID cannot be empty".to_string()
         ));
     }
-    
+
     // Step 1: Construct relative paths for both possible file types
     // Using the pattern: {collaborator_name}__collaborator.{extension}
     let toml_filename = format!("{}__collaborator.toml", collaborator_name);
     let gpgtoml_filename = format!("{}__collaborator.gpgtoml", collaborator_name);
-    
+
     let toml_relative_path = Path::new(addressbook_files_directory_relative)
         .join(&toml_filename);
     let gpgtoml_relative_path = Path::new(addressbook_files_directory_relative)
         .join(&gpgtoml_filename);
-    
+
     // Step 2: Convert relative paths to absolute paths using the provided helper function
     let toml_absolute_path = make_input_path_name_abs_executabledirectoryrelative_nocheck(&toml_relative_path)
         .map_err(|e| GpgError::PathError(
             format!("gaPATHBUFFttrotodg error Failed to create absolute path for .toml file '{}': {}", toml_filename, e)
         ))?;
-    
+
     let gpgtoml_absolute_path = make_input_path_name_abs_executabledirectoryrelative_nocheck(&gpgtoml_relative_path)
         .map_err(|e| GpgError::PathError(
             format!("gaPATHBUFFttrotodg error Failed to create absolute path for .gpgtoml file '{}': {}", gpgtoml_filename, e)
         ))?;
-    
+
     // Variable to track temporary file for cleanup on error
     let mut temp_file_created: Option<PathBuf> = None;
-    
+
     // Use a closure to ensure cleanup on any error after temp file creation
     let create_temp_result = (|| -> Result<PathBuf, GpgError> {
         // Generate unique temporary filename using timestamp
@@ -12743,38 +12794,38 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                 format!("gaPATHBUFFttrotodg error Failed to get system time for temp file creation: {}", e)
             ))?
             .as_nanos();
-        
+
         // // Create temporary filename with collaborator name and timestamp for uniqueness
         // // Use .toml extension regardless of source type for consistency
         // let temp_filename = format!("collab_addressbook_{}_{}.toml", collaborator_name, timestamp_nanos);
         // let temp_file_path = std::env::temp_dir().join(&temp_filename);
-        
+
         // Create temporary filename with collaborator name and timestamp for uniqueness
         // Use .toml extension regardless of source type for consistency
         let temp_filename = format!("collab_addressbook_{}_{}.toml", collaborator_name, timestamp_nanos);
-        
+
         // Use the provided UME temp directory path instead of system temp directory
         let temp_file_path = base_uma_temp_directory_path.join(&temp_filename);
-        
+
         debug_log!("gaPATHBUFFttrotodg: Creating temporary file for addressbook content: {:?}", temp_file_path);
-        
+
         // Step 3: Check which source file exists and create appropriate temporary copy
         if toml_absolute_path.exists() {
             // Case 1: Clearsigned .toml file exists - create a temporary copy
-            debug_log!("gaPATHBUFFttrotodg: Found clearsigned .toml file for collaborator '{}' at path: {:?}", 
+            debug_log!("gaPATHBUFFttrotodg: Found clearsigned .toml file for collaborator '{}' at path: {:?}",
                        collaborator_name, toml_absolute_path);
             debug_log!("gaPATHBUFFttrotodg: Creating temporary copy to ensure original file safety");
-            
+
             // Read the original file content with retry mechanism
             // We'll try up to 2 times with a 300ms delay between attempts
             let mut original_content = Vec::new();
             let max_retry_attempts = 2;
             let retry_delay_millis = 300;
             let mut last_read_error = None;
-            
+
             for attempt in 1..=max_retry_attempts {
                 debug_log!("gaPATHBUFFttrotodg: Attempting to read original file (attempt {} of {})", attempt, max_retry_attempts);
-                
+
                 match std::fs::read(&toml_absolute_path) {
                     Ok(content) => {
                         // Successfully read the file
@@ -12785,10 +12836,10 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                     Err(e) => {
                         // Failed to read file
                         last_read_error = Some(e);
-                        
+
                         if attempt < max_retry_attempts {
                             // Not the last attempt, wait and retry
-                            debug_log!("gaPATHBUFFttrotodg: Failed to read file on attempt {}: {}. Waiting {}ms before retry...", 
+                            debug_log!("gaPATHBUFFttrotodg: Failed to read file on attempt {}: {}. Waiting {}ms before retry...",
                                        attempt, last_read_error.as_ref().unwrap(), retry_delay_millis);
                             std::thread::sleep(std::time::Duration::from_millis(retry_delay_millis));
                         } else {
@@ -12798,32 +12849,32 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                     }
                 }
             }
-            
+
             // Check if we successfully read the file
             if original_content.is_empty() && last_read_error.is_some() {
                 // All attempts failed
                 return Err(GpgError::FileSystemError(
                     std::io::Error::new(
                         std::io::ErrorKind::Other,
-                        format!("Failed to read original .toml file '{}' after {} attempts: {}", 
+                        format!("Failed to read original .toml file '{}' after {} attempts: {}",
                                 toml_absolute_path.display(), max_retry_attempts, last_read_error.unwrap())
                     )
                 ));
             }
-            
+
             // Create the temporary file with restricted permissions
             #[cfg(unix)]
             {
                 use std::os::unix::fs::OpenOptionsExt;
                 use std::io::Write;
-                
+
                 // Write to temporary file with retry mechanism
                 let mut write_success = false;
                 let mut last_write_error = None;
-                
+
                 for attempt in 1..=max_retry_attempts {
                     debug_log!("gaPATHBUFFttrotodg: Attempting to write to temporary file (attempt {} of {})", attempt, max_retry_attempts);
-                    
+
                     // Try to create and write to the file
                     let write_result = (|| -> Result<(), std::io::Error> {
                         // Create file with restricted permissions atomically
@@ -12833,21 +12884,21 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                             .truncate(true)
                             .mode(0o600)  // Owner read/write only
                             .open(&temp_file_path)?;
-                        
+
                         // Mark that we've created a temp file that needs cleanup on error
                         if attempt == 1 {
                             temp_file_created = Some(temp_file_path.clone());
                         }
-                        
+
                         // Write the content to the temporary file
                         temp_file.write_all(&original_content)?;
-                        
+
                         // Ensure all data is written to disk
                         temp_file.flush()?;
-                        
+
                         Ok(())
                     })();
-                    
+
                     match write_result {
                         Ok(()) => {
                             // Successfully wrote the file
@@ -12858,13 +12909,13 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                         Err(e) => {
                             // Failed to write file
                             last_write_error = Some(e);
-                            
+
                             if attempt < max_retry_attempts {
                                 // Not the last attempt, wait and retry
-                                debug_log!("gaPATHBUFFttrotodg: Failed to write temporary file on attempt {}: {}. Waiting {}ms before retry...", 
+                                debug_log!("gaPATHBUFFttrotodg: Failed to write temporary file on attempt {}: {}. Waiting {}ms before retry...",
                                            attempt, last_write_error.as_ref().unwrap(), retry_delay_millis);
                                 std::thread::sleep(std::time::Duration::from_millis(retry_delay_millis));
-                                
+
                                 // Clean up the failed temp file before retry
                                 let _ = std::fs::remove_file(&temp_file_path);
                             } else {
@@ -12874,25 +12925,25 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                         }
                     }
                 }
-                
+
                 if !write_success && last_write_error.is_some() {
                     // All attempts failed
                     return Err(GpgError::TempFileError(
-                        format!("Failed to write content to temporary file after {} attempts: {}", 
+                        format!("Failed to write content to temporary file after {} attempts: {}",
                                 max_retry_attempts, last_write_error.unwrap())
                     ));
                 }
             }
-            
+
             #[cfg(not(unix))]
             {
                 // On non-Unix systems, create file normally then write content with retry
                 let mut write_success = false;
                 let mut last_write_error = None;
-                
+
                 for attempt in 1..=max_retry_attempts {
                     debug_log!("gaPATHBUFFttrotodg: Attempting to write to temporary file (attempt {} of {})", attempt, max_retry_attempts);
-                    
+
                     match std::fs::write(&temp_file_path, &original_content) {
                         Ok(()) => {
                             // Successfully wrote the file
@@ -12906,13 +12957,13 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                         Err(e) => {
                             // Failed to write file
                             last_write_error = Some(e);
-                            
+
                             if attempt < max_retry_attempts {
                                 // Not the last attempt, wait and retry
-                                debug_log!("gaPATHBUFFttrotodg: Failed to write temporary file on attempt {}: {}. Waiting {}ms before retry...", 
+                                debug_log!("gaPATHBUFFttrotodg: Failed to write temporary file on attempt {}: {}. Waiting {}ms before retry...",
                                            attempt, last_write_error.as_ref().unwrap(), retry_delay_millis);
                                 std::thread::sleep(std::time::Duration::from_millis(retry_delay_millis));
-                                
+
                                 // Clean up the failed temp file before retry
                                 let _ = std::fs::remove_file(&temp_file_path);
                             } else {
@@ -12922,28 +12973,28 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                         }
                     }
                 }
-                
+
                 if !write_success && last_write_error.is_some() {
                     // All attempts failed
                     return Err(GpgError::TempFileError(
-                        format!("Failed to create temporary file '{}' after {} attempts: {}", 
+                        format!("Failed to create temporary file '{}' after {} attempts: {}",
                                 temp_filename, max_retry_attempts, last_write_error.unwrap())
                     ));
                 }
             }
-            
+
             debug_log!("gaPATHBUFFttrotodg: Successfully created temporary copy of .toml file");
-            
+
         } else if gpgtoml_absolute_path.exists() {
             // Case 2: Encrypted .gpgtoml file exists - decrypt to temporary file
-            debug_log!("gaPATHBUFFttrotodg: Found encrypted .gpgtoml file for collaborator '{}' at path: {:?}", 
+            debug_log!("gaPATHBUFFttrotodg: Found encrypted .gpgtoml file for collaborator '{}' at path: {:?}",
                        collaborator_name, gpgtoml_absolute_path);
-            
+
             // Create empty temporary file with restricted permissions first
             #[cfg(unix)]
             {
                 use std::os::unix::fs::OpenOptionsExt;
-                
+
                 // Create file with restricted permissions atomically
                 std::fs::OpenOptions::new()
                     .create(true)
@@ -12954,11 +13005,11 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                     .map_err(|e| GpgError::TempFileError(
                         format!("Failed to create secure temporary file '{}': {}", temp_filename, e)
                     ))?;
-                
+
                 // Mark that we've created a temp file that needs cleanup on error
                 temp_file_created = Some(temp_file_path.clone());
             }
-            
+
             #[cfg(not(unix))]
             {
                 // On non-Unix systems, just create the file
@@ -12966,15 +13017,15 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                     .map_err(|e| GpgError::TempFileError(
                         format!("Failed to create temporary file '{}': {}", temp_filename, e)
                     ))?;
-                
+
                 temp_file_created = Some(temp_file_path.clone());
             }
-            
+
             // Execute GPG to decrypt the .gpgtoml file into our temporary file
             // Note: GPG operations are not retried as they typically either work or fail definitively
-            debug_log!("gaPATHBUFFttrotodg: Executing GPG to decrypt {} to temporary file {}", 
+            debug_log!("gaPATHBUFFttrotodg: Executing GPG to decrypt {} to temporary file {}",
                        gpgtoml_absolute_path.display(), temp_file_path.display());
-            
+
             let gpg_output = std::process::Command::new("gpg")
                 .arg("--quiet")                          // Suppress informational messages
                 .arg("--batch")                          // Non-interactive mode
@@ -12988,7 +13039,7 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                 .output()
                 .map_err(|e| {
                     let error_msg = format!(
-                        "Failed to execute GPG decrypt command for collaborator '{}': {}", 
+                        "Failed to execute GPG decrypt command for collaborator '{}': {}",
                         collaborator_name, e
                     );
                     eprintln!("\nERROR: {}", error_msg);
@@ -12996,12 +13047,12 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                     let _ = std::io::stdin().read_line(&mut String::new());
                     GpgError::GpgOperationError(error_msg)
                 })?;
-            
+
             // Check if GPG decryption was successful
             if !gpg_output.status.success() {
                 let stderr_text = String::from_utf8_lossy(&gpg_output.stderr);
                 let error_msg = format!(
-                    "GPG decryption failed for collaborator '{}' file '{}': {}", 
+                    "GPG decryption failed for collaborator '{}' file '{}': {}",
                     collaborator_name, gpgtoml_absolute_path.display(), stderr_text
                 );
                 eprintln!("\nERROR: {}", error_msg);
@@ -13009,9 +13060,9 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                 let _ = std::io::stdin().read_line(&mut String::new());
                 return Err(GpgError::GpgOperationError(error_msg));
             }
-            
+
             debug_log!("gaPATHBUFFttrotodg: Successfully decrypted .gpgtoml file to temporary file");
-            
+
         } else {
             // Case 3: Neither file exists - this is an error
             return Err(GpgError::ValidationError(format!(
@@ -13019,11 +13070,11 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                 collaborator_name, toml_filename, gpgtoml_filename, addressbook_files_directory_relative
             )));
         }
-        
+
         // Return the temporary file path
         Ok(temp_file_path)
     })();
-    
+
     // If any error occurred and we created a temp file, clean it up before propagating error
     match create_temp_result {
         Ok(result) => {
@@ -13129,7 +13180,7 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
 ///
 /// - `GpgError::ValidationError` - If any input parameter is empty or if neither
 ///                                .toml nor .gpgtoml file exists
-/// - `GpgError::PathError` - If path resolution to absolute paths fails  
+/// - `GpgError::PathError` - If path resolution to absolute paths fails
 /// - `GpgError::FileSystemError` - If reading the original file fails after retry attempts
 /// - `GpgError::TempFileError` - If creating or writing the temp file fails after retry attempts
 /// - `GpgError::GpgOperationError` - If GPG decryption fails (only for .gpgtoml files)
@@ -13165,47 +13216,47 @@ pub fn get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
     base_uma_temp_directory_path: &Path,
 ) -> Result<String, GpgError> {
     /*
-    use fn get_base_uma_temp_directory_path() 
-    to get/set ume_temp_directory_path 
+    use fn get_base_uma_temp_directory_path()
+    to get/set ume_temp_directory_path
     */
-    
+
     // Validate input parameters before proceeding
     if collaborator_name.is_empty() {
         return Err(GpgError::ValidationError(
             "Collaborator name cannot be empty".to_string()
         ));
     }
-    
+
     if gpg_full_fingerprint_key_id_string.is_empty() {
         return Err(GpgError::ValidationError(
             "GPG fingerprint key ID cannot be empty".to_string()
         ));
     }
-    
+
     // Step 1: Construct relative paths for both possible file types
     // Using the pattern: {collaborator_name}__collaborator.{extension}
     let toml_filename = format!("{}__collaborator.toml", collaborator_name);
     let gpgtoml_filename = format!("{}__collaborator.gpgtoml", collaborator_name);
-    
+
     let toml_relative_path = Path::new(addressbook_files_directory_relative)
         .join(&toml_filename);
     let gpgtoml_relative_path = Path::new(addressbook_files_directory_relative)
         .join(&gpgtoml_filename);
-    
+
     // Step 2: Convert relative paths to absolute paths using the provided helper function
     let toml_absolute_path = make_input_path_name_abs_executabledirectoryrelative_nocheck(&toml_relative_path)
         .map_err(|e| GpgError::PathError(
             format!("Failed to create absolute path for .toml file '{}': {}", toml_filename, e)
         ))?;
-    
+
     let gpgtoml_absolute_path = make_input_path_name_abs_executabledirectoryrelative_nocheck(&gpgtoml_relative_path)
         .map_err(|e| GpgError::PathError(
             format!("Failed to create absolute path for .gpgtoml file '{}': {}", gpgtoml_filename, e)
         ))?;
-    
+
     // Variable to track temporary file for cleanup on error
     let mut temp_file_created: Option<PathBuf> = None;
-    
+
     // Use a closure to ensure cleanup on any error after temp file creation
     let create_temp_result = (|| -> Result<PathBuf, GpgError> {
         // Generate unique temporary filename using timestamp
@@ -13215,44 +13266,44 @@ pub fn get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                 format!("Failed to get system time for temp file creation: {}", e)
             ))?
             .as_nanos();
-            
+
         //
         // ume_temp_directory_path
 
         // // Create temporary filename with collaborator name and timestamp for uniqueness
         // // Use .toml extension regardless of source type for consistency
         // let temp_filename = format!("collab_addressbook_{}_{}.toml", collaborator_name, timestamp_nanos);
-        
+
         // // Use the provided UME temp directory path instead of system temp directory
         // let temp_file_path = base_uma_temp_directory_path.join(&temp_filename);
-                        
+
         // Create temporary filename with collaborator name and timestamp for uniqueness
         // Use .toml extension regardless of source type for consistency
         let temp_filename = format!("collab_addressbook_{}_{}.toml", collaborator_name, timestamp_nanos);
         // let temp_file_path = std::env::temp_dir().join(&temp_filename);
-        
+
         // Use the provided UME temp directory path instead of system temp directory
         let temp_file_path = base_uma_temp_directory_path.join(&temp_filename);
-        
+
         debug_log!("ROCST: Creating temporary file for addressbook content: {:?}", temp_file_path);
-        
+
         // Step 3: Check which source file exists and create appropriate temporary copy
         if toml_absolute_path.exists() {
             // Case 1: Clearsigned .toml file exists - create a temporary copy
-            debug_log!("ROCST: Found clearsigned .toml file for collaborator '{}' at path: {:?}", 
+            debug_log!("ROCST: Found clearsigned .toml file for collaborator '{}' at path: {:?}",
                        collaborator_name, toml_absolute_path);
             debug_log!("ROCST: Creating temporary copy to ensure original file safety");
-            
+
             // Read the original file content with retry mechanism
             // We'll try up to 2 times with a 300ms delay between attempts
             let mut original_content = Vec::new();
             let max_retry_attempts = 2;
             let retry_delay_millis = 300;
             let mut last_read_error = None;
-            
+
             for attempt in 1..=max_retry_attempts {
                 debug_log!("ROCST: Attempting to read original file (attempt {} of {})", attempt, max_retry_attempts);
-                
+
                 match std::fs::read(&toml_absolute_path) {
                     Ok(content) => {
                         // Successfully read the file
@@ -13263,10 +13314,10 @@ pub fn get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                     Err(e) => {
                         // Failed to read file
                         last_read_error = Some(e);
-                        
+
                         if attempt < max_retry_attempts {
                             // Not the last attempt, wait and retry
-                            debug_log!("ROCST: Failed to read file on attempt {}: {}. Waiting {}ms before retry...", 
+                            debug_log!("ROCST: Failed to read file on attempt {}: {}. Waiting {}ms before retry...",
                                        attempt, last_read_error.as_ref().unwrap(), retry_delay_millis);
                             std::thread::sleep(std::time::Duration::from_millis(retry_delay_millis));
                         } else {
@@ -13276,32 +13327,32 @@ pub fn get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                     }
                 }
             }
-            
+
             // Check if we successfully read the file
             if original_content.is_empty() && last_read_error.is_some() {
                 // All attempts failed
                 return Err(GpgError::FileSystemError(
                     std::io::Error::new(
                         std::io::ErrorKind::Other,
-                        format!("Failed to read original .toml file '{}' after {} attempts: {}", 
+                        format!("Failed to read original .toml file '{}' after {} attempts: {}",
                                 toml_absolute_path.display(), max_retry_attempts, last_read_error.unwrap())
                     )
                 ));
             }
-            
+
             // Create the temporary file with restricted permissions
             #[cfg(unix)]
             {
                 use std::os::unix::fs::OpenOptionsExt;
                 use std::io::Write;
-                
+
                 // Write to temporary file with retry mechanism
                 let mut write_success = false;
                 let mut last_write_error = None;
-                
+
                 for attempt in 1..=max_retry_attempts {
                     debug_log!("ROCST: Attempting to write to temporary file (attempt {} of {})", attempt, max_retry_attempts);
-                    
+
                     // Try to create and write to the file
                     let write_result = (|| -> Result<(), std::io::Error> {
                         // Create file with restricted permissions atomically
@@ -13311,21 +13362,21 @@ pub fn get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                             .truncate(true)
                             .mode(0o600)  // Owner read/write only
                             .open(&temp_file_path)?;
-                        
+
                         // Mark that we've created a temp file that needs cleanup on error
                         if attempt == 1 {
                             temp_file_created = Some(temp_file_path.clone());
                         }
-                        
+
                         // Write the content to the temporary file
                         temp_file.write_all(&original_content)?;
-                        
+
                         // Ensure all data is written to disk
                         temp_file.flush()?;
-                        
+
                         Ok(())
                     })();
-                    
+
                     match write_result {
                         Ok(()) => {
                             // Successfully wrote the file
@@ -13336,13 +13387,13 @@ pub fn get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                         Err(e) => {
                             // Failed to write file
                             last_write_error = Some(e);
-                            
+
                             if attempt < max_retry_attempts {
                                 // Not the last attempt, wait and retry
-                                debug_log!("ROCST: Failed to write temporary file on attempt {}: {}. Waiting {}ms before retry...", 
+                                debug_log!("ROCST: Failed to write temporary file on attempt {}: {}. Waiting {}ms before retry...",
                                            attempt, last_write_error.as_ref().unwrap(), retry_delay_millis);
                                 std::thread::sleep(std::time::Duration::from_millis(retry_delay_millis));
-                                
+
                                 // Clean up the failed temp file before retry
                                 let _ = std::fs::remove_file(&temp_file_path);
                             } else {
@@ -13352,25 +13403,25 @@ pub fn get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                         }
                     }
                 }
-                
+
                 if !write_success && last_write_error.is_some() {
                     // All attempts failed
                     return Err(GpgError::TempFileError(
-                        format!("Failed to write content to temporary file after {} attempts: {}", 
+                        format!("Failed to write content to temporary file after {} attempts: {}",
                                 max_retry_attempts, last_write_error.unwrap())
                     ));
                 }
             }
-            
+
             #[cfg(not(unix))]
             {
                 // On non-Unix systems, create file normally then write content with retry
                 let mut write_success = false;
                 let mut last_write_error = None;
-                
+
                 for attempt in 1..=max_retry_attempts {
                     debug_log!("ROCST: Attempting to write to temporary file (attempt {} of {})", attempt, max_retry_attempts);
-                    
+
                     match std::fs::write(&temp_file_path, &original_content) {
                         Ok(()) => {
                             // Successfully wrote the file
@@ -13384,13 +13435,13 @@ pub fn get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                         Err(e) => {
                             // Failed to write file
                             last_write_error = Some(e);
-                            
+
                             if attempt < max_retry_attempts {
                                 // Not the last attempt, wait and retry
-                                debug_log!("ROCST: Failed to write temporary file on attempt {}: {}. Waiting {}ms before retry...", 
+                                debug_log!("ROCST: Failed to write temporary file on attempt {}: {}. Waiting {}ms before retry...",
                                            attempt, last_write_error.as_ref().unwrap(), retry_delay_millis);
                                 std::thread::sleep(std::time::Duration::from_millis(retry_delay_millis));
-                                
+
                                 // Clean up the failed temp file before retry
                                 let _ = std::fs::remove_file(&temp_file_path);
                             } else {
@@ -13400,28 +13451,28 @@ pub fn get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                         }
                     }
                 }
-                
+
                 if !write_success && last_write_error.is_some() {
                     // All attempts failed
                     return Err(GpgError::TempFileError(
-                        format!("Failed to create temporary file '{}' after {} attempts: {}", 
+                        format!("Failed to create temporary file '{}' after {} attempts: {}",
                                 temp_filename, max_retry_attempts, last_write_error.unwrap())
                     ));
                 }
             }
-            
+
             debug_log!("ROCST: Successfully created temporary copy of .toml file");
-            
+
         } else if gpgtoml_absolute_path.exists() {
             // Case 2: Encrypted .gpgtoml file exists - decrypt to temporary file
-            debug_log!("ROCST: Found encrypted .gpgtoml file for collaborator '{}' at path: {:?}", 
+            debug_log!("ROCST: Found encrypted .gpgtoml file for collaborator '{}' at path: {:?}",
                        collaborator_name, gpgtoml_absolute_path);
-            
+
             // Create empty temporary file with restricted permissions first
             #[cfg(unix)]
             {
                 use std::os::unix::fs::OpenOptionsExt;
-                
+
                 // Create file with restricted permissions atomically
                 std::fs::OpenOptions::new()
                     .create(true)
@@ -13432,11 +13483,11 @@ pub fn get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                     .map_err(|e| GpgError::TempFileError(
                         format!("Failed to create secure temporary file '{}': {}", temp_filename, e)
                     ))?;
-                
+
                 // Mark that we've created a temp file that needs cleanup on error
                 temp_file_created = Some(temp_file_path.clone());
             }
-            
+
             #[cfg(not(unix))]
             {
                 // On non-Unix systems, just create the file
@@ -13444,15 +13495,15 @@ pub fn get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                     .map_err(|e| GpgError::TempFileError(
                         format!("Failed to create temporary file '{}': {}", temp_filename, e)
                     ))?;
-                
+
                 temp_file_created = Some(temp_file_path.clone());
             }
-            
+
             // Execute GPG to decrypt the .gpgtoml file into our temporary file
             // Note: GPG operations are not retried as they typically either work or fail definitively
-            debug_log!("ROCST: Executing GPG to decrypt {} to temporary file {}", 
+            debug_log!("ROCST: Executing GPG to decrypt {} to temporary file {}",
                        gpgtoml_absolute_path.display(), temp_file_path.display());
-            
+
             let gpg_output = std::process::Command::new("gpg")
                 .arg("--quiet")                          // Suppress informational messages
                 .arg("--batch")                          // Non-interactive mode
@@ -13466,7 +13517,7 @@ pub fn get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                 .output()
                 .map_err(|e| {
                     let error_msg = format!(
-                        "Failed to execute GPG decrypt command for collaborator '{}': {}", 
+                        "Failed to execute GPG decrypt command for collaborator '{}': {}",
                         collaborator_name, e
                     );
                     eprintln!("\nERROR: {}", error_msg);
@@ -13474,12 +13525,12 @@ pub fn get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                     let _ = std::io::stdin().read_line(&mut String::new());
                     GpgError::GpgOperationError(error_msg)
                 })?;
-            
+
             // Check if GPG decryption was successful
             if !gpg_output.status.success() {
                 let stderr_text = String::from_utf8_lossy(&gpg_output.stderr);
                 let error_msg = format!(
-                    "GPG decryption failed for collaborator '{}' file '{}': {}", 
+                    "GPG decryption failed for collaborator '{}' file '{}': {}",
                     collaborator_name, gpgtoml_absolute_path.display(), stderr_text
                 );
                 eprintln!("\nERROR: {}", error_msg);
@@ -13487,9 +13538,9 @@ pub fn get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                 let _ = std::io::stdin().read_line(&mut String::new());
                 return Err(GpgError::GpgOperationError(error_msg));
             }
-            
+
             debug_log!("ROCST: Successfully decrypted .gpgtoml file to temporary file");
-            
+
         } else {
             // Case 3: Neither file exists - this is an error
             return Err(GpgError::ValidationError(format!(
@@ -13497,11 +13548,11 @@ pub fn get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                 collaborator_name, toml_filename, gpgtoml_filename, addressbook_files_directory_relative
             )));
         }
-        
+
         // Return the temporary file path
         Ok(temp_file_path)
     })();
-    
+
     // If any error occurred and we created a temp file, clean it up before propagating error
     match create_temp_result {
         Ok(result) => {
@@ -13641,43 +13692,43 @@ pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
     gpg_full_fingerprint_key_id_string: &str, // COLLABORATOR_ADDRESSBOOK_PATH_STR
     base_uma_temp_directory_path: &Path,
 ) -> Result<PathBuf, GpgError> {
-    
+
     // Validate input parameters before proceeding
     if gpg_full_fingerprint_key_id_string.is_empty() {
         return Err(GpgError::ValidationError(
             "GPG fingerprint key ID cannot be empty".to_string()
         ));
     }
-    
+
     // Check if the input path exists
     if !input_toml_absolute_path.exists() {
         return Err(GpgError::ValidationError(
             format!("Input file does not exist: {:?}", input_toml_absolute_path)
         ));
     }
-    
+
     // Get the file extension to determine file type
     let extension = input_toml_absolute_path.extension()
         .and_then(|ext| ext.to_str())
         .ok_or_else(|| GpgError::ValidationError(
             format!("Input file has no extension or invalid extension: {:?}", input_toml_absolute_path)
         ))?;
-    
+
     // Validate that the extension is either .toml or .gpgtoml
     if extension != "toml" && extension != "gpgtoml" {
         return Err(GpgError::ValidationError(
             format!("Input file must have .toml or .gpgtoml extension, found: .{}", extension)
         ));
     }
-    
+
     // Get the filename stem for use in temporary filename
     let filename_stem = input_toml_absolute_path.file_stem()
         .and_then(|stem| stem.to_str())
         .unwrap_or("unknown");
-    
+
     // Variable to track temporary file for cleanup on error
     let mut temp_file_created: Option<PathBuf> = None;
-    
+
     // Use a closure to ensure cleanup on any error after temp file creation
     let create_temp_result = (|| -> Result<PathBuf, GpgError> {
         // Generate unique temporary filename using timestamp
@@ -13687,13 +13738,13 @@ pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                 format!("Failed to get system time for temp file creation: {}", e)
             ))?
             .as_nanos();
-        
+
         // Create temporary filename with source filename stem and timestamp for uniqueness
         // Always use .toml extension for temp file regardless of source type for consistency
         let temp_filename = format!("temp_toml_copy_{}_{}.toml", filename_stem, timestamp_nanos);
         // let temp_file_path = std::env::temp_dir().join(&temp_filename);
-        
-        // Create temporary filename with collaborator name and timestamp for uniqueness        
+
+        // Create temporary filename with collaborator name and timestamp for uniqueness
         // Use the provided UME temp directory path instead of system temp directory
         let temp_file_path = base_uma_temp_directory_path.join(&temp_filename);
 
@@ -13701,26 +13752,26 @@ pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
         debug_log!("gpBUFFttrofodg() : Base temp directory exists: {}", base_uma_temp_directory_path.exists());
         debug_log!("gpBUFFttrofodg() : Base temp directory path: {:?}", base_uma_temp_directory_path);
         debug_log!("gpBUFFttrofodg() : Full temp file path: {:?}", temp_file_path);
-                
+
         debug_log!("gpBUFFttrofodg(): Creating temporary file for TOML content: {:?}", temp_file_path);
         debug_log!("gpBUFFttrofodg(): Source file: {:?} (type: .{})", input_toml_absolute_path, extension);
-        
+
         // Handle based on file extension
         if extension == "toml" {
             // Case 1: Plain .toml file - create a temporary copy
             debug_log!("gpBUFFttrofodg():(): Processing plain .toml file: {:?}", input_toml_absolute_path);
             debug_log!("gpBUFFttrofodg():(): Creating temporary copy to ensure original file safety");
-            
+
             // Read the original file content with retry mechanism
             // We'll try up to 2 times with a 300ms delay between attempts
             let mut original_content = Vec::new();
             let max_retry_attempts = 2;
             let retry_delay_millis = 300;
             let mut last_read_error = None;
-            
+
             for attempt in 1..=max_retry_attempts {
                 debug_log!("gpBUFFttrofodg():(): Attempting to read original file (attempt {} of {})", attempt, max_retry_attempts);
-                
+
                 match std::fs::read(input_toml_absolute_path) {
                     Ok(content) => {
                         // Successfully read the file
@@ -13731,10 +13782,10 @@ pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                     Err(e) => {
                         // Failed to read file
                         last_read_error = Some(e);
-                        
+
                         if attempt < max_retry_attempts {
                             // Not the last attempt, wait and retry
-                            debug_log!("gpBUFFttrofodg():(): Failed to read file on attempt {}: {}. Waiting {}ms before retry...", 
+                            debug_log!("gpBUFFttrofodg():(): Failed to read file on attempt {}: {}. Waiting {}ms before retry...",
                                        attempt, last_read_error.as_ref().unwrap(), retry_delay_millis);
                             std::thread::sleep(std::time::Duration::from_millis(retry_delay_millis));
                         } else {
@@ -13744,32 +13795,32 @@ pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                     }
                 }
             }
-            
+
             // Check if we successfully read the file
             if original_content.is_empty() && last_read_error.is_some() {
                 // All attempts failed
                 return Err(GpgError::FileSystemError(
                     std::io::Error::new(
                         std::io::ErrorKind::Other,
-                        format!("Failed to read original .toml file '{}' after {} attempts: {}", 
+                        format!("Failed to read original .toml file '{}' after {} attempts: {}",
                                 input_toml_absolute_path.display(), max_retry_attempts, last_read_error.unwrap())
                     )
                 ));
             }
-            
+
             // Create the temporary file with restricted permissions
             #[cfg(unix)]
             {
                 use std::os::unix::fs::OpenOptionsExt;
                 use std::io::Write;
-                
+
                 // Write to temporary file with retry mechanism
                 let mut write_success = false;
                 let mut last_write_error = None;
-                
+
                 for attempt in 1..=max_retry_attempts {
                     debug_log!("gpBUFFttrofodg():(): Attempting to write to temporary file (attempt {} of {})", attempt, max_retry_attempts);
-                    
+
                     // Try to create and write to the file
                     let write_result = (|| -> Result<(), std::io::Error> {
                         // Create file with restricted permissions atomically
@@ -13779,21 +13830,21 @@ pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                             .truncate(true)
                             .mode(0o600)  // Owner read/write only
                             .open(&temp_file_path)?;
-                        
+
                         // Mark that we've created a temp file that needs cleanup on error
                         if attempt == 1 {
                             temp_file_created = Some(temp_file_path.clone());
                         }
-                        
+
                         // Write the content to the temporary file
                         temp_file.write_all(&original_content)?;
-                        
+
                         // Ensure all data is written to disk
                         temp_file.flush()?;
-                        
+
                         Ok(())
                     })();
-                    
+
                     match write_result {
                         Ok(()) => {
                             // Successfully wrote the file
@@ -13804,13 +13855,13 @@ pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                         Err(e) => {
                             // Failed to write file
                             last_write_error = Some(e);
-                            
+
                             if attempt < max_retry_attempts {
                                 // Not the last attempt, wait and retry
-                                debug_log!("gpBUFFttrofodg():(): Failed to write temporary file on attempt {}: {}. Waiting {}ms before retry...", 
+                                debug_log!("gpBUFFttrofodg():(): Failed to write temporary file on attempt {}: {}. Waiting {}ms before retry...",
                                            attempt, last_write_error.as_ref().unwrap(), retry_delay_millis);
                                 std::thread::sleep(std::time::Duration::from_millis(retry_delay_millis));
-                                
+
                                 // Clean up the failed temp file before retry
                                 let _ = std::fs::remove_file(&temp_file_path);
                             } else {
@@ -13820,25 +13871,25 @@ pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                         }
                     }
                 }
-                
+
                 if !write_success && last_write_error.is_some() {
                     // All attempts failed
                     return Err(GpgError::TempFileError(
-                        format!("Failed to write content to temporary file after {} attempts: {}", 
+                        format!("Failed to write content to temporary file after {} attempts: {}",
                                 max_retry_attempts, last_write_error.unwrap())
                     ));
                 }
             }
-            
+
             #[cfg(not(unix))]
             {
                 // On non-Unix systems, create file normally then write content with retry
                 let mut write_success = false;
                 let mut last_write_error = None;
-                
+
                 for attempt in 1..=max_retry_attempts {
                     debug_log!("gpBUFFttrofodg(): Attempting to write to temporary file (attempt {} of {})", attempt, max_retry_attempts);
-                    
+
                     match std::fs::write(&temp_file_path, &original_content) {
                         Ok(()) => {
                             // Successfully wrote the file
@@ -13852,13 +13903,13 @@ pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                         Err(e) => {
                             // Failed to write file
                             last_write_error = Some(e);
-                            
+
                             if attempt < max_retry_attempts {
                                 // Not the last attempt, wait and retry
-                                debug_log!("gpBUFFttrofodg(): Failed to write temporary file on attempt {}: {}. Waiting {}ms before retry...", 
+                                debug_log!("gpBUFFttrofodg(): Failed to write temporary file on attempt {}: {}. Waiting {}ms before retry...",
                                            attempt, last_write_error.as_ref().unwrap(), retry_delay_millis);
                                 std::thread::sleep(std::time::Duration::from_millis(retry_delay_millis));
-                                
+
                                 // Clean up the failed temp file before retry
                                 let _ = std::fs::remove_file(&temp_file_path);
                             } else {
@@ -13868,27 +13919,27 @@ pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                         }
                     }
                 }
-                
+
                 if !write_success && last_write_error.is_some() {
                     // All attempts failed
                     return Err(GpgError::TempFileError(
-                        format!("Failed to create temporary file '{}' after {} attempts: {}", 
+                        format!("Failed to create temporary file '{}' after {} attempts: {}",
                                 temp_filename, max_retry_attempts, last_write_error.unwrap())
                     ));
                 }
             }
-            
+
             debug_log!("gpBUFFttrofodg(): Successfully created temporary copy of .toml file");
-            
+
         } else {
             // Case 2: Encrypted .gpgtoml file - decrypt to temporary file
             debug_log!("gpBUFFttrofodg(): Processing encrypted .gpgtoml file: {:?}", input_toml_absolute_path);
-            
+
             // Create empty temporary file with restricted permissions first
             #[cfg(unix)]
             {
                 use std::os::unix::fs::OpenOptionsExt;
-                
+
                 // Create file with restricted permissions atomically
                 std::fs::OpenOptions::new()
                     .create(true)
@@ -13899,11 +13950,11 @@ pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                     .map_err(|e| GpgError::TempFileError(
                         format!("Failed to create secure temporary file '{}': {}", temp_filename, e)
                     ))?;
-                
+
                 // Mark that we've created a temp file that needs cleanup on error
                 temp_file_created = Some(temp_file_path.clone());
             }
-            
+
             #[cfg(not(unix))]
             {
                 // On non-Unix systems, just create the file
@@ -13911,15 +13962,15 @@ pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                     .map_err(|e| GpgError::TempFileError(
                         format!("Failed to create temporary file '{}': {}", temp_filename, e)
                     ))?;
-                
+
                 temp_file_created = Some(temp_file_path.clone());
             }
-            
+
             // Execute GPG to decrypt the .gpgtoml file into our temporary file
             // Note: GPG operations are not retried as they typically either work or fail definitively
-            debug_log!("gpBUFFttrofodg(): Executing GPG to decrypt {} to temporary file {}", 
+            debug_log!("gpBUFFttrofodg(): Executing GPG to decrypt {} to temporary file {}",
                        input_toml_absolute_path.display(), temp_file_path.display());
-            
+
             let gpg_output = std::process::Command::new("gpg")
                 .arg("--quiet")                          // Suppress informational messages
                 .arg("--batch")                          // Non-interactive mode
@@ -13933,7 +13984,7 @@ pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                 .output()
                 .map_err(|e| {
                     let error_msg = format!(
-                        "Failed to execute GPG decrypt command for file '{}': {}", 
+                        "Failed to execute GPG decrypt command for file '{}': {}",
                         input_toml_absolute_path.display(), e
                     );
                     eprintln!("\nERROR: {}", error_msg);
@@ -13941,12 +13992,12 @@ pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                     let _ = std::io::stdin().read_line(&mut String::new());
                     GpgError::GpgOperationError(error_msg)
                 })?;
-            
+
             // Check if GPG decryption was successful
             if !gpg_output.status.success() {
                 let stderr_text = String::from_utf8_lossy(&gpg_output.stderr);
                 let error_msg = format!(
-                    "GPG decryption failed for file '{}': {}", 
+                    "GPG decryption failed for file '{}': {}",
                     input_toml_absolute_path.display(), stderr_text
                 );
                 eprintln!("\nERROR: {}", error_msg);
@@ -13954,14 +14005,14 @@ pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                 let _ = std::io::stdin().read_line(&mut String::new());
                 return Err(GpgError::GpgOperationError(error_msg));
             }
-            
+
             debug_log!("gpBUFFttrofodg(): Successfully decrypted .gpgtoml file to temporary file");
         }
-        
+
         // Return the temporary file path
         Ok(temp_file_path)
     })();
-    
+
     // If any error occurred and we created a temp file, clean it up before propagating error
     match create_temp_result {
         Ok(result) => {
@@ -14097,43 +14148,43 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
     base_uma_temp_directory_path: &Path,
 ) -> Result<String, GpgError> {
     debug_log("starting gpttrofodg() -> get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml");
-    
+
     // Validate input parameters before proceeding
     if gpg_full_fingerprint_key_id_string.is_empty() {
         return Err(GpgError::ValidationError(
             "gpttrofodg() GPG fingerprint key ID cannot be empty".to_string()
         ));
     }
-    
+
     // Check if the input path exists
     if !input_toml_absolute_path.exists() {
         return Err(GpgError::ValidationError(
             format!("gpttrofodg() Input file does not exist: {:?}", input_toml_absolute_path)
         ));
     }
-    
+
     // Get the file extension to determine file type
     let extension = input_toml_absolute_path.extension()
         .and_then(|ext| ext.to_str())
         .ok_or_else(|| GpgError::ValidationError(
             format!("gpttrofodg() Input file has no extension or invalid extension: {:?}", input_toml_absolute_path)
         ))?;
-    
+
     // Validate that the extension is either .toml or .gpgtoml
     if extension != "toml" && extension != "gpgtoml" {
         return Err(GpgError::ValidationError(
             format!("gpttrofodg() Input file must have .toml or .gpgtoml extension, found: .{}", extension)
         ));
     }
-    
+
     // Get the filename stem for use in temporary filename
     let filename_stem = input_toml_absolute_path.file_stem()
         .and_then(|stem| stem.to_str())
         .unwrap_or("unknown");
-    
+
     // Variable to track temporary file for cleanup on error
     let mut temp_file_created: Option<PathBuf> = None;
-    
+
     // Use a closure to ensure cleanup on any error after temp file creation
     let create_temp_result = (|| -> Result<PathBuf, GpgError> {
         // Generate unique temporary filename using timestamp
@@ -14143,33 +14194,33 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                 format!("gpttrofodg() Failed to get system time for temp file creation: {}", e)
             ))?
             .as_nanos();
-        
+
         // Create temporary filename with source filename stem and timestamp for uniqueness
         // Always use .toml extension for temp file regardless of source type for consistency
         let temp_filename = format!("temp_toml_copy_{}_{}.toml", filename_stem, timestamp_nanos);
         // let temp_file_path = std::env::temp_dir().join(&temp_filename);
         // Use the provided UME temp directory path instead of system temp directory
         let temp_file_path = base_uma_temp_directory_path.join(&temp_filename);
-        
+
         debug_log!("gpttrofodg() : Creating temporary file for TOML content: {:?}", temp_file_path);
         debug_log!("gpttrofodg() : Source file: {:?} (type: .{})", input_toml_absolute_path, extension);
-        
+
         // Handle based on file extension
         if extension == "toml" {
             // Case 1: Plain .toml file - create a temporary copy
             debug_log!("gpttrofodg() : Processing plain .toml file: {:?}", input_toml_absolute_path);
             debug_log!("gpttrofodg() : Creating temporary copy to ensure original file safety");
-            
+
             // Read the original file content with retry mechanism
             // We'll try up to 2 times with a 300ms delay between attempts
             let mut original_content = Vec::new();
             let max_retry_attempts = 2;
             let retry_delay_millis = 300;
             let mut last_read_error = None;
-            
+
             for attempt in 1..=max_retry_attempts {
                 debug_log!("gpttrofodg() : Attempting to read original file (attempt {} of {})", attempt, max_retry_attempts);
-                
+
                 match std::fs::read(input_toml_absolute_path) {
                     Ok(content) => {
                         // Successfully read the file
@@ -14180,10 +14231,10 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                     Err(e) => {
                         // Failed to read file
                         last_read_error = Some(e);
-                        
+
                         if attempt < max_retry_attempts {
                             // Not the last attempt, wait and retry
-                            debug_log!("gpttrofodg() : Failed to read file on attempt {}: {}. Waiting {}ms before retry...", 
+                            debug_log!("gpttrofodg() : Failed to read file on attempt {}: {}. Waiting {}ms before retry...",
                                        attempt, last_read_error.as_ref().unwrap(), retry_delay_millis);
                             std::thread::sleep(std::time::Duration::from_millis(retry_delay_millis));
                         } else {
@@ -14193,32 +14244,32 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                     }
                 }
             }
-            
+
             // Check if we successfully read the file
             if original_content.is_empty() && last_read_error.is_some() {
                 // All attempts failed
                 return Err(GpgError::FileSystemError(
                     std::io::Error::new(
                         std::io::ErrorKind::Other,
-                        format!("gpttrofodg() Failed to read original .toml file '{}' after {} attempts: {}", 
+                        format!("gpttrofodg() Failed to read original .toml file '{}' after {} attempts: {}",
                                 input_toml_absolute_path.display(), max_retry_attempts, last_read_error.unwrap())
                     )
                 ));
             }
-            
+
             // Create the temporary file with restricted permissions
             #[cfg(unix)]
             {
                 use std::os::unix::fs::OpenOptionsExt;
                 use std::io::Write;
-                
+
                 // Write to temporary file with retry mechanism
                 let mut write_success = false;
                 let mut last_write_error = None;
-                
+
                 for attempt in 1..=max_retry_attempts {
                     debug_log!("gpttrofodg() : Attempting to write to temporary file (attempt {} of {})", attempt, max_retry_attempts);
-                    
+
                     // Try to create and write to the file
                     let write_result = (|| -> Result<(), std::io::Error> {
                         // Create file with restricted permissions atomically
@@ -14228,21 +14279,21 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                             .truncate(true)
                             .mode(0o600)  // Owner read/write only
                             .open(&temp_file_path)?;
-                        
+
                         // Mark that we've created a temp file that needs cleanup on error
                         if attempt == 1 {
                             temp_file_created = Some(temp_file_path.clone());
                         }
-                        
+
                         // Write the content to the temporary file
                         temp_file.write_all(&original_content)?;
-                        
+
                         // Ensure all data is written to disk
                         temp_file.flush()?;
-                        
+
                         Ok(())
                     })();
-                    
+
                     match write_result {
                         Ok(()) => {
                             // Successfully wrote the file
@@ -14253,13 +14304,13 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                         Err(e) => {
                             // Failed to write file
                             last_write_error = Some(e);
-                            
+
                             if attempt < max_retry_attempts {
                                 // Not the last attempt, wait and retry
-                                debug_log!("gpttrofodg() : Failed to write temporary file on attempt {}: {}. Waiting {}ms before retry...", 
+                                debug_log!("gpttrofodg() : Failed to write temporary file on attempt {}: {}. Waiting {}ms before retry...",
                                            attempt, last_write_error.as_ref().unwrap(), retry_delay_millis);
                                 std::thread::sleep(std::time::Duration::from_millis(retry_delay_millis));
-                                
+
                                 // Clean up the failed temp file before retry
                                 let _ = std::fs::remove_file(&temp_file_path);
                             } else {
@@ -14269,28 +14320,28 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                         }
                     }
                 }
-                
+
                 if !write_success && last_write_error.is_some() {
                     // All attempts failed
                     return Err(GpgError::TempFileError(
                         format!(
-                            "gpttrofodg() Failed to write content to temporary file after {} attempts: {}", 
-                            max_retry_attempts, 
+                            "gpttrofodg() Failed to write content to temporary file after {} attempts: {}",
+                            max_retry_attempts,
                             last_write_error.unwrap(),
                             )
                     ));
                 }
             }
-            
+
             #[cfg(not(unix))]
             {
                 // On non-Unix systems, create file normally then write content with retry
                 let mut write_success = false;
                 let mut last_write_error = None;
-                
+
                 for attempt in 1..=max_retry_attempts {
                     debug_log!("gpttrofodg() : Attempting to write to temporary file (attempt {} of {})", attempt, max_retry_attempts);
-                    
+
                     match std::fs::write(&temp_file_path, &original_content) {
                         Ok(()) => {
                             // Successfully wrote the file
@@ -14304,13 +14355,13 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                         Err(e) => {
                             // Failed to write file
                             last_write_error = Some(e);
-                            
+
                             if attempt < max_retry_attempts {
                                 // Not the last attempt, wait and retry
-                                debug_log!("gpttrofodg() : Failed to write temporary file on attempt {}: {}. Waiting {}ms before retry...", 
+                                debug_log!("gpttrofodg() : Failed to write temporary file on attempt {}: {}. Waiting {}ms before retry...",
                                            attempt, last_write_error.as_ref().unwrap(), retry_delay_millis);
                                 std::thread::sleep(std::time::Duration::from_millis(retry_delay_millis));
-                                
+
                                 // Clean up the failed temp file before retry
                                 let _ = std::fs::remove_file(&temp_file_path);
                             } else {
@@ -14320,27 +14371,27 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                         }
                     }
                 }
-                
+
                 if !write_success && last_write_error.is_some() {
                     // All attempts failed
                     return Err(GpgError::TempFileError(
-                        format!("gpttrofodg() Failed to create temporary file '{}' after {} attempts: {}", 
+                        format!("gpttrofodg() Failed to create temporary file '{}' after {} attempts: {}",
                                 temp_filename, max_retry_attempts, last_write_error.unwrap())
                     ));
                 }
             }
-            
+
             debug_log!("gpttrofodg() : Successfully created temporary copy of .toml file");
-            
+
         } else {
             // Case 2: Encrypted .gpgtoml file - decrypt to temporary file
             debug_log!("gpttrofodg() : Processing encrypted .gpgtoml file: {:?}", input_toml_absolute_path);
-            
+
             // Create empty temporary file with restricted permissions first
             #[cfg(unix)]
             {
                 use std::os::unix::fs::OpenOptionsExt;
-                
+
                 // Create file with restricted permissions atomically
                 std::fs::OpenOptions::new()
                     .create(true)
@@ -14351,11 +14402,11 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                     .map_err(|e| GpgError::TempFileError(
                         format!("gpttrofodg() failed to create secure temporary file '{}': {}", temp_filename, e)
                     ))?;
-                
+
                 // Mark that we've created a temp file that needs cleanup on error
                 temp_file_created = Some(temp_file_path.clone());
             }
-            
+
             #[cfg(not(unix))]
             {
                 // On non-Unix systems, just create the file
@@ -14363,15 +14414,15 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                     .map_err(|e| GpgError::TempFileError(
                         format!("gpttrofodg() Failed to create temporary file '{}': {}", temp_filename, e)
                     ))?;
-                
+
                 temp_file_created = Some(temp_file_path.clone());
             }
-            
+
             // Execute GPG to decrypt the .gpgtoml file into our temporary file
             // Note: GPG operations are not retried as they typically either work or fail definitively
-            debug_log!("gpttrofodg() : Executing GPG to decrypt {} to temporary file {}", 
+            debug_log!("gpttrofodg() : Executing GPG to decrypt {} to temporary file {}",
                        input_toml_absolute_path.display(), temp_file_path.display());
-            
+
             let gpg_output = std::process::Command::new("gpg")
                 .arg("--quiet")                          // Suppress informational messages
                 .arg("--batch")                          // Non-interactive mode
@@ -14385,7 +14436,7 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                 .output()
                 .map_err(|e| {
                     let error_msg = format!(
-                        "gpttrofodg() Failed to execute GPG decrypt command for file '{}': {}", 
+                        "gpttrofodg() Failed to execute GPG decrypt command for file '{}': {}",
                         input_toml_absolute_path.display(), e
                     );
                     eprintln!("\nERROR: {}", error_msg);
@@ -14393,12 +14444,12 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                     let _ = std::io::stdin().read_line(&mut String::new());
                     GpgError::GpgOperationError(error_msg)
                 })?;
-            
+
             // Check if GPG decryption was successful
             if !gpg_output.status.success() {
                 let stderr_text = String::from_utf8_lossy(&gpg_output.stderr);
                 let error_msg = format!(
-                    "gpttrofodg() GPG decryption failed for file '{}': {}", 
+                    "gpttrofodg() GPG decryption failed for file '{}': {}",
                     input_toml_absolute_path.display(), stderr_text
                 );
                 eprintln!("\nERROR: {}", error_msg);
@@ -14406,14 +14457,14 @@ pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
                 let _ = std::io::stdin().read_line(&mut String::new());
                 return Err(GpgError::GpgOperationError(error_msg));
             }
-            
+
             debug_log!("gpttrofodg() : Successfully decrypted .gpgtoml file to temporary file");
         }
-        
+
         // Return the temporary file path
         Ok(temp_file_path)
     })();
-    
+
     // If any error occurred and we created a temp file, clean it up before propagating error
     match create_temp_result {
         Ok(result) => {
@@ -14491,10 +14542,10 @@ You're not doing bulk deletions
 /// ```rust
 /// // Safe cleanup pattern - the file is always a temp file from our function
 /// let (temp_file_path, _) = get_path_to_validated_addressbook_toml_or_gpgtoml(...)?;
-/// 
+///
 /// // Use the file...
 /// let content = std::fs::read_to_string(&temp_file_path)?;
-/// 
+///
 /// // Always cleanup - this is always safe because our function only returns temp files
 /// if let Err(e) = cleanup_collaborator_temp_file(&temp_file_path) {
 ///     eprintln!("Warning: Failed to cleanup temporary file: {}", e);
@@ -14506,14 +14557,14 @@ pub fn cleanup_collaborator_temp_file(
     base_temp_directory_path: &Path,
 ) -> Result<(), GpgError> {
     debug_log!("CCTF(): Attempting to clean up temporary file: {:?}", temp_file_path_string);
-    
+
 	// convert string to path
     let temp_file_path: &std::path::Path = if temp_file_path_string.is_empty() {
         return Err(GpgError::TempFileError("CCTF():Input path string cannot be empty".to_string()));
     } else {
         std::path::Path::new(temp_file_path_string)
     };
-    
+
     // // TODO should be using this dir
     // // Get the UME temp directory path with explicit String conversion
     // let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
@@ -14524,7 +14575,7 @@ pub fn cleanup_collaborator_temp_file(
     //         // Convert GpgError to String for the function's return type
     //         format!("{:?}", gpg_error)
     //     })?;
-    
+
     // CRITICAL SAFETY CHECK: Verify this file is actually in the temp directory
     // This prevents accidental deletion of original addressbook files
     // let temp_dir = std::env::temp_dir();  // TODO -> not this dir
@@ -14533,7 +14584,7 @@ pub fn cleanup_collaborator_temp_file(
         .map_err(|e| GpgError::TempFileError(
             format!("CCTF():Failed to canonicalize temp file path '{}': {}", temp_file_path.display(), e)
         ))?;
-    
+
     // Check if the file path starts with the temp directory path
     if !canonical_temp_path.starts_with(&base_temp_directory_path) {
         let error_msg = format!(
@@ -14543,7 +14594,7 @@ pub fn cleanup_collaborator_temp_file(
         eprintln!("CCTF(): ERROR: {}", error_msg);
         return Err(GpgError::TempFileError(error_msg));
     }
-    
+
     // Check if the file exists before attempting removal
     if canonical_temp_path.exists() {
         // Attempt to remove the file
@@ -14556,7 +14607,7 @@ pub fn cleanup_collaborator_temp_file(
                 eprintln!("CCTFle(): WARNING: {}", error_msg);
                 GpgError::TempFileError(error_msg)
             })?;
-        
+
         debug_log!("CCTF(): Successfully removed temporary file");
         Ok(())
     } else {

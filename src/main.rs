@@ -404,23 +404,23 @@ use crate::clearsign_toml_module::{
     read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyid,
     read_teamchannel_collaborators_with_access_from_clearsigntoml,
     //
-    read_singleline_string_from_clearsigntoml_without_keyid,
-    read_u8_array_from_clearsigntoml_without_keyid,
-    read_pathbuf_from_clearsigntoml_without_keyid,
-    read_u64_from_clearsigntoml_without_keyid,
-    read_stringarray_from_clearsigntoml_without_keyid,
-    // read_hashmap_corenode_ports_from_clearsigntoml_without_keyid,
-    read_option_i32_tuple_array_from_clearsigntoml_without_keyid,
-    read_option_usize_from_clearsigntoml_without_keyid,
-    read_option_bool_from_clearsigntoml_without_keyid,
-    read_option_i64_from_clearsigntoml_without_keyid,
+    read_singleline_string_from_clearsigntoml_without_publicgpgkey,
+    read_u8_array_from_clearsigntoml_without_publicgpgkey,
+    read_pathbuf_from_clearsigntoml_without_publicgpgkey,
+    read_u64_from_clearsigntoml_without_publicgpgkey,
+    read_stringarray_from_clearsigntoml_without_publicgpgkey,
+    // read_hashmap_corenode_ports_from_clearsigntoml_without_publicgpgkey,
+    read_option_i32_tuple_array_from_clearsigntoml_without_publicgpgkey,
+    read_option_usize_from_clearsigntoml_without_publicgpgkey,
+    read_option_bool_from_clearsigntoml_without_publicgpgkey,
+    read_option_i64_from_clearsigntoml_without_publicgpgkey,
     read_teamchannel_collaborator_ports_clearsigntoml_without_keyid,
 
     read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml,
     get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml,
     get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml,
     cleanup_collaborator_temp_file,
-    read_u64_array_from_clearsigntoml_without_keyid,
+    read_u64_array_from_clearsigntoml_without_publicgpgkey,
 
     //
 
@@ -9010,19 +9010,19 @@ Data Types (including 'Option'):
     Option<i64>,
 
 Functions:
-    string -> read_singleline_string_from_clearsigntoml_without_keyid()
-    vec<u8> -> read_u8_array_from_clearsigntoml_without_keyid()
-    PathBuf -> read_pathbuf_from_clearsigntoml_without_keyid()
-    u64 -> read_u64_from_clearsigntoml_without_keyid()
-    vec<String> -> read_stringarray_from_clearsigntoml_without_keyid()
+    string -> read_singleline_string_from_clearsigntoml_without_publicgpgkey()
+    vec<u8> -> read_u8_array_from_clearsigntoml_without_publicgpgkey()
+    PathBuf -> read_pathbuf_from_clearsigntoml_without_publicgpgkey()
+    u64 -> read_u64_from_clearsigntoml_without_publicgpgkey()
+    vec<String> -> read_stringarray_from_clearsigntoml_without_publicgpgkey()
 
    HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
--> read_hashmap_corenode_ports_from_clearsigntoml_without_keyid()
+-> read_hashmap_corenode_ports_from_clearsigntoml_without_publicgpgkey()
 
-Option<Vec<(i32, i32)>> -> read_option_i32_tuple_array_from_clearsigntoml_without_keyid()
-    Option<usize> -> read_option_usize_from_clearsigntoml_without_keyid()
-    Option<bool> -> read_option_bool_from_clearsigntoml_without_keyid()
-    Option<i64> -> read_option_i64_from_clearsigntoml_without_keyid()
+Option<Vec<(i32, i32)>> -> read_option_i32_tuple_array_from_clearsigntoml_without_publicgpgkey()
+    Option<usize> -> read_option_usize_from_clearsigntoml_without_publicgpgkey()
+    Option<bool> -> read_option_bool_from_clearsigntoml_without_publicgpgkey()
+    Option<i64> -> read_option_i64_from_clearsigntoml_without_publicgpgkey()
 
 
 For reference, this is the CoreNode struct showing the struct fields that have said datatypes:
@@ -9399,19 +9399,19 @@ all use these parameters:
     name_of_toml_field_key_to_read: &str,
 
 
-    string -> read_singleline_string_from_clearsigntoml_without_keyid()
-    vec<u8> -> read_u8_array_from_clearsigntoml_without_keyid()
-    PathBuf -> read_pathbuf_from_clearsigntoml_without_keyid()
-    u64 -> read_u64_from_clearsigntoml_without_keyid()
-    vec<String> -> read_stringarray_from_clearsigntoml_without_keyid()
+    string -> read_singleline_string_from_clearsigntoml_without_publicgpgkey()
+    vec<u8> -> read_u8_array_from_clearsigntoml_without_publicgpgkey()
+    PathBuf -> read_pathbuf_from_clearsigntoml_without_publicgpgkey()
+    u64 -> read_u64_from_clearsigntoml_without_publicgpgkey()
+    vec<String> -> read_stringarray_from_clearsigntoml_without_publicgpgkey()
 
    HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
--> read_hashmap_corenode_ports_from_clearsigntoml_without_keyid()
+-> read_hashmap_corenode_ports_from_clearsigntoml_without_publicgpgkey()
 
-Option<Vec<(i32, i32)>> -> read_option_i32_tuple_array_from_clearsigntoml_without_keyid()
-    Option<usize> -> read_option_usize_from_clearsigntoml_without_keyid()
-    Option<bool> -> read_option_bool_from_clearsigntoml_without_keyid()
-    Option<i64> -> read_option_i64_from_clearsigntoml_without_keyid()
+Option<Vec<(i32, i32)>> -> read_option_i32_tuple_array_from_clearsigntoml_without_publicgpgkey()
+    Option<usize> -> read_option_usize_from_clearsigntoml_without_publicgpgkey()
+    Option<bool> -> read_option_bool_from_clearsigntoml_without_publicgpgkey()
+    Option<i64> -> read_option_i64_from_clearsigntoml_without_publicgpgkey()
 
 struct CoreNode {
     /// The name of the node. This is used for display and identification.
@@ -9482,7 +9482,7 @@ struct CoreNode {
 
     // 1. Read File Contents
     /*
-    /// match read_singleline_string_from_clearsigntoml_without_keyid(
+    /// match read_singleline_string_from_clearsigntoml_without_publicgpgkey(
     ///     config_path,
     ///     target_path,
     ///     "api_endpoint"
@@ -9492,7 +9492,7 @@ struct CoreNode {
     /// }
     /// ```
     ///
-    pub fn read_singleline_string_from_clearsigntoml_without_keyid(
+    pub fn read_singleline_string_from_clearsigntoml_without_publicgpgkey(
         pathstr_to_config_file_that_contains_gpg_key: &str,
         pathstr_to_target_clearsigned_file: &str,
         name_of_toml_field_key_to_read: &str,
@@ -9515,7 +9515,7 @@ struct CoreNode {
         })?;
 
     // Example: Read node_id from the clearsigned TOML file
-    let node_id = read_singleline_string_from_clearsigntoml_without_keyid(
+    let node_id = read_singleline_string_from_clearsigntoml_without_publicgpgkey(
         "config/security.toml",  // Config file containing GPG key
         file_path_str,           // Target clearsigned file
         "node_id"                // Field to read
@@ -9526,7 +9526,7 @@ struct CoreNode {
     */
 
     // Example: Read _ from the clearsigned TOML file
-    let node_name = read_singleline_string_from_clearsigntoml_without_keyid(
+    let node_name = read_singleline_string_from_clearsigntoml_without_publicgpgkey(
         &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "node_name"                // Field to read
@@ -9536,7 +9536,7 @@ struct CoreNode {
     })?;
 
     // Example: Read _ from the clearsigned TOML file
-    let description_for_tui = read_singleline_string_from_clearsigntoml_without_keyid(
+    let description_for_tui = read_singleline_string_from_clearsigntoml_without_publicgpgkey(
         &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "description_for_tui"                // Field to read
@@ -9546,7 +9546,7 @@ struct CoreNode {
     })?;
 
     // Example: Read _ from the clearsigned TOML file
-    let node_unique_id = read_u8_array_from_clearsigntoml_without_keyid(
+    let node_unique_id = read_u8_array_from_clearsigntoml_without_publicgpgkey(
         &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "node_unique_id"                // Field to read
@@ -9556,7 +9556,7 @@ struct CoreNode {
     })?;
 
     // Example: Read _ from the clearsigned TOML file
-    let directory_path = read_pathbuf_from_clearsigntoml_without_keyid(
+    let directory_path = read_pathbuf_from_clearsigntoml_without_publicgpgkey(
         &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "directory_path"                // Field to read
@@ -9568,7 +9568,7 @@ struct CoreNode {
 
 
     // Example: Read _ from the clearsigned TOML file
-    let owner = read_singleline_string_from_clearsigntoml_without_keyid(
+    let owner = read_singleline_string_from_clearsigntoml_without_publicgpgkey(
         &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "owner"                // Field to read
@@ -9579,7 +9579,7 @@ struct CoreNode {
 
 
     // Example: Read _ from the clearsigned TOML file
-    let updated_at_timestamp = read_u64_from_clearsigntoml_without_keyid(
+    let updated_at_timestamp = read_u64_from_clearsigntoml_without_publicgpgkey(
         &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "updated_at_timestamp"                // Field to read
@@ -9590,7 +9590,7 @@ struct CoreNode {
 
 
     // Example: Read _ from the clearsigned TOML file
-    let expires_at = read_u64_from_clearsigntoml_without_keyid(
+    let expires_at = read_u64_from_clearsigntoml_without_publicgpgkey(
         &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "expires_at"                // Field to read
@@ -9601,7 +9601,7 @@ struct CoreNode {
 
 
     // Example: Read _ from the clearsigned TOML file
-    let teamchannel_collaborators_with_access = read_stringarray_from_clearsigntoml_without_keyid(
+    let teamchannel_collaborators_with_access = read_stringarray_from_clearsigntoml_without_publicgpgkey(
         &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "teamchannel_collaborators_with_access"                // Field to read
@@ -9614,7 +9614,7 @@ struct CoreNode {
     debug_log("HERE HERE TestPoint");
 
     /*
-    pub fn read_hashmap_corenode_ports_from_clearsigntoml_without_keyid(
+    pub fn read_hashmap_corenode_ports_from_clearsigntoml_without_publicgpgkey(
         pathstr_to_config_file_that_contains_gpg_key: &str,
         pathstr_to_target_clearsigned_file: &str,
     ) -> Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, String> {
@@ -9636,7 +9636,7 @@ struct CoreNode {
 	///?/////////////
 
     // Example: Read _ from the clearsigned TOML file
-    let pa1_process = read_singleline_string_from_clearsigntoml_without_keyid(
+    let pa1_process = read_singleline_string_from_clearsigntoml_without_publicgpgkey(
         &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "pa1_process"                // Field to read
@@ -9648,7 +9648,7 @@ struct CoreNode {
 
 
     // Example: Read _ from the clearsigned TOML file
-    let pa2_schedule = read_u64_array_from_clearsigntoml_without_keyid(
+    let pa2_schedule = read_u64_array_from_clearsigntoml_without_publicgpgkey(
         &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "pa2_schedule"                // Field to read
@@ -9659,7 +9659,7 @@ struct CoreNode {
 
 
     // Example: Read _ from the clearsigned TOML file
-    let pa3_users = read_singleline_string_from_clearsigntoml_without_keyid(
+    let pa3_users = read_singleline_string_from_clearsigntoml_without_publicgpgkey(
         &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "pa3_users"                // Field to read
@@ -9670,7 +9670,7 @@ struct CoreNode {
 
 
     // Example: Read _ from the clearsigned TOML file
-    let pa4_features = read_singleline_string_from_clearsigntoml_without_keyid(
+    let pa4_features = read_singleline_string_from_clearsigntoml_without_publicgpgkey(
         &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "pa4_features"                // Field to read
@@ -9681,7 +9681,7 @@ struct CoreNode {
 
 
     // Example: Read _ from the clearsigned TOML file
-    let pa5_mvp = read_singleline_string_from_clearsigntoml_without_keyid(
+    let pa5_mvp = read_singleline_string_from_clearsigntoml_without_publicgpgkey(
         &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "pa5_mvp"                // Field to read
@@ -9692,7 +9692,7 @@ struct CoreNode {
 
 
     // Example: Read _ from the clearsigned TOML file
-    let pa6_feedback = read_singleline_string_from_clearsigntoml_without_keyid(
+    let pa6_feedback = read_singleline_string_from_clearsigntoml_without_publicgpgkey(
         &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "pa6_feedback"                // Field to read
@@ -9706,7 +9706,7 @@ struct CoreNode {
 	////////////////
 
     // Example: Read _ from the clearsigned TOML file
-    let message_post_data_format_specs_integer_ranges_from_to_tuple_array = read_option_i32_tuple_array_from_clearsigntoml_without_keyid(
+    let message_post_data_format_specs_integer_ranges_from_to_tuple_array = read_option_i32_tuple_array_from_clearsigntoml_without_publicgpgkey(
         &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "message_post_data_format_specs_integer_ranges_from_to_tuple_array"                // Field to read
@@ -9717,7 +9717,7 @@ struct CoreNode {
 
 
     // Example: Read _ from the clearsigned TOML file
-    let message_post_data_format_specs_int_string_ranges_from_to_tuple_array = read_option_i32_tuple_array_from_clearsigntoml_without_keyid(
+    let message_post_data_format_specs_int_string_ranges_from_to_tuple_array = read_option_i32_tuple_array_from_clearsigntoml_without_publicgpgkey(
         &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "message_post_data_format_specs_int_string_ranges_from_to_tuple_array"                // Field to read
@@ -9728,7 +9728,7 @@ struct CoreNode {
 
 
     // Example: Read _ from the clearsigned TOML file
-    let message_post_max_string_length_int = read_option_usize_from_clearsigntoml_without_keyid(
+    let message_post_max_string_length_int = read_option_usize_from_clearsigntoml_without_publicgpgkey(
         &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "message_post_max_string_length_int"                // Field to read
@@ -9739,7 +9739,7 @@ struct CoreNode {
 
 
     // Example: Read _ from the clearsigned TOML file
-    let message_post_is_public_bool = read_option_bool_from_clearsigntoml_without_keyid(
+    let message_post_is_public_bool = read_option_bool_from_clearsigntoml_without_publicgpgkey(
         &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "message_post_is_public_bool"                // Field to read
@@ -9750,7 +9750,7 @@ struct CoreNode {
 
 
     // Example: Read _ from the clearsigned TOML file
-    let message_post_user_confirms_bool = read_option_bool_from_clearsigntoml_without_keyid(
+    let message_post_user_confirms_bool = read_option_bool_from_clearsigntoml_without_publicgpgkey(
         &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "message_post_user_confirms_bool"                // Field to read
@@ -9761,7 +9761,7 @@ struct CoreNode {
 
 
     // Example: Read _ from the clearsigned TOML file
-    let message_post_start_date_utc_posix = read_option_i64_from_clearsigntoml_without_keyid(
+    let message_post_start_date_utc_posix = read_option_i64_from_clearsigntoml_without_publicgpgkey(
         &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "message_post_start_date_utc_posix"                // Field to read
@@ -9772,7 +9772,7 @@ struct CoreNode {
 
 
     // Example: Read _ from the clearsigned TOML file
-    let message_post_end_date_utc_posix = read_option_i64_from_clearsigntoml_without_keyid(
+    let message_post_end_date_utc_posix = read_option_i64_from_clearsigntoml_without_publicgpgkey(
         &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
         "message_post_end_date_utc_posix"                // Field to read
