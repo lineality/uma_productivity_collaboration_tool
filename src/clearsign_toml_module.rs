@@ -12360,7 +12360,7 @@ gotit_port = 50006
 // ///
 // /// ```rust
 // /// // Get a temporary copy of the addressbook file
-// /// let temp_file_path = get_temp_copy_of_addressbook_toml_or_decrypt_gpgtoml(
+// /// let temp_file_path = get_temp_copy_of_addressbook_toml_or_decrypted_gpgtoml(
 // ///     "alice",
 // ///     "config/addressbooks",
 // ///     "1234567890ABCDEF1234567890ABCDEF12345678"
@@ -12372,7 +12372,7 @@ gotit_port = 50006
 // /// // IMPORTANT: Clean up the temporary file
 // /// cleanup_temp_addressbook_file(&temp_file_path)?;
 // /// ```
-// pub fn get_addressbook_path_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
+// pub fn get_addressbook_path_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
 //     collaborator_name: &str,
 //     addressbook_files_directory_relative: &str,
 //     gpg_full_fingerprint_key_id_string: &str,
@@ -12382,7 +12382,7 @@ gotit_port = 50006
 //     //     to make read-copy of file
 //     // maybe use...standard temp dir to be deleted routinely?
 
-//     // new version get_path_to_temp_readcopy_of_toml_or_decrypt_gpgtoml
+//     // new version get_path_to_temp_readcopy_of_toml_or_decrypted_gpgtoml
 //     // not formatting for name-in-file-name{}
 
 //     // Validate input parameters before proceeding
@@ -12711,7 +12711,7 @@ gotit_port = 50006
 ///
 /// ```rust
 /// // Get a temporary copy of the addressbook file
-/// let temp_file_path = get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
+/// let temp_file_path = get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
 ///     "alice",
 ///     "config/addressbooks",
 ///     "1234567890ABCDEF1234567890ABCDEF12345678"
@@ -12723,7 +12723,7 @@ gotit_port = 50006
 /// // IMPORTANT: Clean up the temporary file
 /// cleanup_temp_addressbook_file(&temp_file_path)?;
 /// ```
-pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
+pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
     collaborator_name: &str,
     addressbook_files_directory_relative: &str,
     gpg_full_fingerprint_key_id_string: &str,
@@ -12734,7 +12734,7 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
     use get_base_uma_temp_directory_path()
     using TEMP_DIR_BASE_UMA_PATH_STR
     */
-    debug_log("gaPATHBUFFttrotodg: starting get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml ");
+    debug_log("gaPATHBUFFttrotodg: starting get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypted_gpgtoml ");
 
     // ensure temp dir exists
     // Ensure the base UME temp directory exists
@@ -13197,7 +13197,7 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
 ///
 /// ```rust
 /// // Get a temporary copy of the addressbook file
-/// let temp_file_path = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
+/// let temp_file_path = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
 ///     "alice",
 ///     "config/addressbooks",
 ///     "1234567890ABCDEF1234567890ABCDEF12345678"
@@ -13209,7 +13209,7 @@ pub fn get_addressbook_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
 /// // IMPORTANT: Clean up the temporary file
 /// cleanup_temp_addressbook_file(&temp_file_path)?;
 /// ```
-pub fn get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
+pub fn get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
     collaborator_name: &str,
     addressbook_files_directory_relative: &str,
     gpg_full_fingerprint_key_id_string: &str,
@@ -13676,7 +13676,7 @@ pub fn get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
 /// ```rust
 /// // Get a temporary copy of a TOML file
 /// let input_path = Path::new("/home/user/config/settings.toml");
-/// let temp_file_path = get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
+/// let temp_file_path = get_pathbuff_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
 ///     &input_path,
 ///     "1234567890ABCDEF1234567890ABCDEF12345678"
 /// )?;
@@ -13687,7 +13687,7 @@ pub fn get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
 /// // IMPORTANT: Clean up the temporary file
 /// std::fs::remove_file(&temp_file_path)?;
 /// ```
-pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
+pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
     input_toml_absolute_path: &Path,
     gpg_full_fingerprint_key_id_string: &str, // COLLABORATOR_ADDRESSBOOK_PATH_STR
     base_uma_temp_directory_path: &Path,
@@ -14131,7 +14131,7 @@ pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
 /// ```rust
 /// // Get a temporary copy of a TOML file
 /// let input_path = Path::new("/home/user/config/settings.toml");
-/// let temp_file_path = get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
+/// let temp_file_path = get_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
 ///     &input_path,
 ///     "1234567890ABCDEF1234567890ABCDEF12345678"
 /// )?;
@@ -14142,12 +14142,12 @@ pub fn get_pathbuff_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
 /// // IMPORTANT: Clean up the temporary file
 /// std::fs::remove_file(&temp_file_path)?;
 /// ```
-pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
+pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
     input_toml_absolute_path: &Path,
     gpg_full_fingerprint_key_id_string: &str, // COLLABORATOR_ADDRESSBOOK_PATH_STR
     base_uma_temp_directory_path: &Path,
 ) -> Result<String, GpgError> {
-    debug_log("starting gpttrofodg() -> get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml");
+    debug_log("starting gpttrofodg() -> get_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml");
 
     // Validate input parameters before proceeding
     if gpg_full_fingerprint_key_id_string.is_empty() {

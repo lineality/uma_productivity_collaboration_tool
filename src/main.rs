@@ -397,7 +397,7 @@ use crate::clearsign_toml_module::{
     extract_verify_store_gpg_encrypted_clearsign_toml,
     verify_clearsigned_file_and_extract_content_to_output,
     clearsign_and_encrypt_file_for_recipient,
-    decrypt_and_validate_file,
+    // decrypt_and_validate_file,
     gpg_make_input_path_name_abs_executabledirectoryrelative_nocheck,
     decrypt_gpgfile_to_output,
     read_all_collaborator_port_assignments_clearsigntoml_optimized,
@@ -417,8 +417,8 @@ use crate::clearsign_toml_module::{
     read_teamchannel_collaborator_ports_clearsigntoml_without_keyid,
 
     read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml,
-    get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml,
-    get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml,
+    get_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml,
+    get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml,
     cleanup_collaborator_temp_file,
     read_u64_array_from_clearsigntoml_without_publicgpgkey,
 
@@ -3722,7 +3722,7 @@ pub fn global_ports_exclusion_list_generator() -> Result<HashSet<u16>, ThisProje
             ))?;
 
         // Using Debug trait for more detailed error information
-        let node_readcopy_path = get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
+        let node_readcopy_path = get_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
             &node_toml_path,
             &gpg_full_fingerprint_key_id_string,
             &base_uma_temp_directory_path,
@@ -3769,7 +3769,7 @@ pub fn global_ports_exclusion_list_generator() -> Result<HashSet<u16>, ThisProje
             ))?;
 
         // Extract the addressbook path string with inline error conversion
-        let addressbook_readcopy_path_string = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
+        let addressbook_readcopy_path_string = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
             &file_owner_username,
             COLLABORATOR_ADDRESSBOOK_PATH_STR,
             &gpg_full_fingerprint_key_id_string,
@@ -8897,7 +8897,7 @@ load_core_node_from_toml_file(
         path,
     )
 
-get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
+get_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
         &file_path,
         &gpg_full_fingerprint_key_id_string,
     )
@@ -8940,7 +8940,7 @@ The owner of the addressbook file cannot be found until the node.toml file is re
 - use node.toml owner name
 - get Addressbook directory path simplified
 - get real path to read-copy with:
-pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
+pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
     collaborator_name: &str,
     addressbook_files_directory_relative: &str,
     gpg_full_fingerprint_key_id_string: &str,
@@ -9161,7 +9161,7 @@ fn load_core_node_from_toml_file(
            the uma.toml config file)
 
     1.1 get path to addressbook file
-    get_path_to_temp_copy_of_addressbook_toml_or_decrypt_gpgtoml(
+    get_path_to_temp_copy_of_addressbook_toml_or_decrypted_gpgtoml(
     collaborator_name: &str,
     addressbook_files_directory_relative: &str,
     gpg_full_fingerprint_key_id_string: &str,
@@ -9211,7 +9211,7 @@ fn load_core_node_from_toml_file(
         })?;
 
     // Using Debug trait for more detailed error information
-    let node_readcopy_path = get_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
+    let node_readcopy_path = get_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
         &file_path,
         &gpg_full_fingerprint_key_id_string,
         &base_uma_temp_directory_path,
@@ -9259,7 +9259,7 @@ fn load_core_node_from_toml_file(
     // TODO returns full response not just string
     // because the filepath needs to be constructed
     // this is a separate function
-	// let addressbook_readcopy_path_string = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
+	// let addressbook_readcopy_path_string = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
     //        &file_owner_username,
     //        COLLABORATOR_ADDRESSBOOK_PATH_STR,
     //        &gpg_full_fingerprint_key_id_string,
@@ -9273,7 +9273,7 @@ fn load_core_node_from_toml_file(
         ))?;
 
     // Extract the addressbook path string with inline error conversion
-    let addressbook_readcopy_path_string = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
+    let addressbook_readcopy_path_string = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
         &file_owner_username,
         COLLABORATOR_ADDRESSBOOK_PATH_STR,
         &gpg_full_fingerprint_key_id_string,
@@ -16033,7 +16033,7 @@ fn share_team_channel_with_existing_collaborator_converts_to_abs(
         ))?;
 
     // Extract the addressbook path string with proper error conversion to GpgError
-    let local_owner_addressbook_readcopy_path_string = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
+    let local_owner_addressbook_readcopy_path_string = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
         &local_owner_username,
         COLLABORATOR_ADDRESSBOOK_PATH_STR,
         &gpg_full_fingerprint_key_id_string,
@@ -16083,7 +16083,7 @@ fn share_team_channel_with_existing_collaborator_converts_to_abs(
 
     // // read cpoy of collaborator's address book file
     // Extract the addressbook path string with proper error conversion to GpgError
-    let remote_collaborator_addressbook_readcopy_path_string = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
+    let remote_collaborator_addressbook_readcopy_path_string = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
         &remote_collaborator_username,
         COLLABORATOR_ADDRESSBOOK_PATH_STR,
         &gpg_full_fingerprint_key_id_string,
@@ -16345,7 +16345,7 @@ fn share_lou_address_book_with_existingcollaborator(recipient_name: &str) -> Res
         ))?;
 
     // Extract the addressbook path string with proper error conversion to GpgError
-    let addressbook_readcopy_path_string = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypt_gpgtoml(
+    let addressbook_readcopy_path_string = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
         &local_owner_user_name,
         COLLABORATOR_ADDRESSBOOK_PATH_STR,
         &gpg_full_fingerprint_key_id_string,
