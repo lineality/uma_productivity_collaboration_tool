@@ -3782,11 +3782,11 @@ pub fn global_ports_exclusion_list_generator() -> Result<HashSet<u16>, ThisProje
 
         // Define cleanup closure
         let cleanup_closure = || {
-            cleanup_collaborator_temp_file(
+            let _ = cleanup_collaborator_temp_file(
                 &node_readcopy_path,
                 &base_uma_temp_directory_path,
                 );
-            cleanup_collaborator_temp_file(
+            let _ = cleanup_collaborator_temp_file(
                 &addressbook_readcopy_path_string,
                 &base_uma_temp_directory_path,
                 );
@@ -7817,7 +7817,7 @@ impl GraphNavigationInstanceState {
                 debug_log!("File metadata found: is_file={}, size={}", metadata.is_file(), metadata.len());
             },
             Err(e) => {
-                debug_log!("Error reading file metadata: {}", e);
+                debug_log!("\n\n nav_graph_look_read_node_toml() Error reading file metadata: {}", e);
             }
         }
 
@@ -7827,8 +7827,9 @@ impl GraphNavigationInstanceState {
             Ok(contents) => {
                 debug_log!("Successfully read file, content length: {}", contents.len());
 
-
                 // here here?
+                debug_log("\n\nHEREHERE TESTING, node load gnis\n\n");
+                println!("\n\nHEREHERE TESTING, node load gnis\n\n");
                 // Load and parse the node.toml file
                 let this_node = match load_core_node_from_toml_file(&node_toml_path) {
                     Ok(node) => node,
@@ -9181,8 +9182,9 @@ fn load_core_node_from_toml_file(
     fn cleanup_collaborator_temp_file(temp_file_path: &Path) -> Result<(), GpgError> {
     */
 
+
     debug_log!(
-        "Starting: load_core_node_from_toml_file(), file_path -> {:?}",
+        "LCNFTF: Starting: load_core_node_from_toml_file(), file_path -> {:?}",
         file_path,
     );
 
@@ -9192,7 +9194,7 @@ fn load_core_node_from_toml_file(
         Err(e) => {
             // Since the function returns Result<CoreNode, String>, we need to return a String error
             return Err(format!(
-                "implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}",
+                "LCNFTF: implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}",
                 e
             ));
         }
@@ -9204,10 +9206,10 @@ fn load_core_node_from_toml_file(
     let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
         .map_err(|io_err| {
             let gpg_error = GpgError::ValidationError(
-                format!("Failed to get UME temp directory path: {}", io_err)
+                format!("LCNFTF: Failed to get UME temp directory path: {}", io_err)
             );
             // Convert GpgError to String for the function's return type
-            format!("{:?}", gpg_error)
+            format!("LCNFTF: {:?}", gpg_error)
         })?;
 
     // Using Debug trait for more detailed error information
@@ -9215,7 +9217,7 @@ fn load_core_node_from_toml_file(
         &file_path,
         &gpg_full_fingerprint_key_id_string,
         &base_uma_temp_directory_path,
-    ).map_err(|e| format!("Failed to get temporary read copy of TOML file: {:?}", e))?;
+    ).map_err(|e| format!("LCNFTF: Failed to get temporary read copy of TOML file: {:?}", e))?;
 
     // //    // simple read string to get owner name
     // //    // not for extraction and return, just part of validation
@@ -9226,9 +9228,13 @@ fn load_core_node_from_toml_file(
     ////////////////////////////////
     let owner_name_of_toml_field_key_to_read = "owner";
     debug_log!(
-        "Reading file owner from field '{}' for security validation",
+        "LCNFTF: Reading file owner from field '{}' for security validation",
         owner_name_of_toml_field_key_to_read
     );
+
+    debug_log("\n\nHEREHERE TESTING, node load gnis\n\n");
+    println!("\n\nHEREHERE TESTING, node load gnis\n\n");
+
 
     // get node_owners_public_gpg_key
 
@@ -9240,7 +9246,7 @@ fn load_core_node_from_toml_file(
             if username.is_empty() {
                 // Convert to String error instead of GpgError
                 return Err(format!(
-                    "Field '{}' is empty in TOML file. File owner is required for security validation.",
+                    "LCNFTF: Field '{}' is empty in TOML file. File owner is required for security validation.",
                     owner_name_of_toml_field_key_to_read
                 ));
             }
@@ -9249,12 +9255,13 @@ fn load_core_node_from_toml_file(
         Err(e) => {
             // Convert to String error instead of GpgError
             return Err(format!(
-                "Failed to read file owner from field '{}': {}",
+                "LCNFTF: Failed to read file owner from field '{}': {}",
                 owner_name_of_toml_field_key_to_read, e
             ));
         }
     };
-    println!("File owner: '{}'", file_owner_username);
+    println!("LCNFTF: File owner: '{}'", file_owner_username);
+    debug_log!("LCNFTF: File owner: '{}'", file_owner_username);
 
     // TODO returns full response not just string
     // because the filepath needs to be constructed
@@ -9268,7 +9275,7 @@ fn load_core_node_from_toml_file(
     // Get the UME temp directory path with error handling
     let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
         .map_err(|io_err| format!(
-            "Failed to get UME temp directory path: {:?}",
+            "LCNFTF: Failed to get UME temp directory path: {:?}",
             io_err
         ))?;
 
@@ -9279,18 +9286,18 @@ fn load_core_node_from_toml_file(
         &gpg_full_fingerprint_key_id_string,
         &base_uma_temp_directory_path,
     ).map_err(|e| format!(
-        "Failed to get addressbook path for user '{}': {:?}",
+        "LCNFTF: Failed to get addressbook path for user '{}': {:?}",
         file_owner_username,
         e
     ))?;
 
     // Define cleanup closure
     let cleanup_closure = || {
-        cleanup_collaborator_temp_file(
+        let _ = cleanup_collaborator_temp_file(
             &node_readcopy_path,
             &base_uma_temp_directory_path,
             );
-        cleanup_collaborator_temp_file(
+        let _ = cleanup_collaborator_temp_file(
             &addressbook_readcopy_path_string,
             &base_uma_temp_directory_path,
             );
@@ -9304,7 +9311,7 @@ fn load_core_node_from_toml_file(
     let node_owners_public_gpg_key = read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml(
         &addressbook_readcopy_path_string,
     ).map_err(|e| format!(
-        "Failed to get addressbook path for user '{}': {:?}",
+        "LCNFTF: Failed to get addressbook path for user '{}': {:?}",
         file_owner_username,
         e
     ))?;
@@ -9320,7 +9327,7 @@ fn load_core_node_from_toml_file(
             // Clean up temporary files before returning error
             cleanup_closure();
             return Err(format!(
-                "Failed to verify addressbook clearsign signature for user '{}': {:?}",
+                "LCNFTF: Failed to verify addressbook clearsign signature for user '{}': {:?}",
                 file_owner_username,
                 e
             ));
@@ -9352,7 +9359,7 @@ fn load_core_node_from_toml_file(
     // If either verification failed, clean up and return error
     if !verify_addressbook_file_result || !verify_node_file_result {
 
-        debug_log("Whoops, something faileded...");
+        debug_log("LCNFTF: Whoops, something faileded...");
 
         // Clean up temporary files
         cleanup_closure();
@@ -9360,14 +9367,14 @@ fn load_core_node_from_toml_file(
         // Provide detailed error message about which verification failed
         let mut error_details = Vec::new();
         if !verify_addressbook_file_result {
-            error_details.push("addressbook file signature verification failed");
+            error_details.push("LCNFTF: addressbook file signature verification failed");
         }
         if !verify_node_file_result {
-            error_details.push("node file signature verification failed");
+            error_details.push("LCNFTF: node file signature verification failed");
         }
 
         return Err(format!(
-            "Clearsign validation failed for user '{}': {}",
+            "LCNFTF: Clearsign validation failed for user '{}': {}",
             file_owner_username,
             error_details.join(" and ")
         ));
@@ -9377,7 +9384,7 @@ fn load_core_node_from_toml_file(
     // // 5. Field Extraction
 
     /*
-This will probably evolve over time but to date the datatypes needed are:
+    This will probably evolve over time but to date the datatypes needed are:
     string
     vec<u8>
     PathBuf
@@ -9532,7 +9539,7 @@ struct CoreNode {
         "node_name"                // Field to read
     ).map_err(|e| {
         cleanup_closure(); // Run cleanup on error
-        format!("node_name Failed to read node_name: {}", e)
+        format!("LCNFTF: node_name Failed to read node_name: {}", e)
     })?;
 
     // Example: Read _ from the clearsigned TOML file
@@ -9542,7 +9549,7 @@ struct CoreNode {
         "description_for_tui"                // Field to read
     ).map_err(|e| {
         cleanup_closure(); // Run cleanup on error
-        format!("description_for_tui sFailed to read description_for_tui: {}", e)
+        format!("LCNFTF: description_for_tui sFailed to read description_for_tui: {}", e)
     })?;
 
     // Example: Read _ from the clearsigned TOML file
@@ -9552,7 +9559,7 @@ struct CoreNode {
         "node_unique_id"                // Field to read
     ).map_err(|e| {
         cleanup_closure(); // Run cleanup on error
-        format!("node_unique_id Failed to read node_unique_id: {}", e)
+        format!("LCNFTF: node_unique_id Failed to read node_unique_id: {}", e)
     })?;
 
     // Example: Read _ from the clearsigned TOML file
@@ -9562,7 +9569,7 @@ struct CoreNode {
         "directory_path"                // Field to read
     ).map_err(|e| {
         cleanup_closure(); // Run cleanup on error
-        format!("directory_path Failed to read directory_pathe_id: {}", e)
+        format!("LCNFTF: directory_path Failed to read directory_pathe_id: {}", e)
     })?;
 
 
@@ -9574,7 +9581,7 @@ struct CoreNode {
         "owner"                // Field to read
     ).map_err(|e| {
         cleanup_closure(); // Run cleanup on error
-        format!("owner Failed to read owner: {}", e)
+        format!("LCNFTF: owner Failed to read owner: {}", e)
     })?;
 
 
@@ -9585,7 +9592,7 @@ struct CoreNode {
         "updated_at_timestamp"                // Field to read
     ).map_err(|e| {
         cleanup_closure(); // Run cleanup on error
-        format!("updated_at_timestamp Failed to read updated_at_timestamp: {}", e)
+        format!("LCNFTF: updated_at_timestamp Failed to read updated_at_timestamp: {}", e)
     })?;
 
 
@@ -9596,7 +9603,7 @@ struct CoreNode {
         "expires_at"                // Field to read
     ).map_err(|e| {
         cleanup_closure(); // Run cleanup on error
-        format!("expires_at Failed to read expires_at: {}", e)
+        format!("LCNFTF: expires_at Failed to read expires_at: {}", e)
     })?;
 
 
@@ -9607,11 +9614,11 @@ struct CoreNode {
         "teamchannel_collaborators_with_access"                // Field to read
     ).map_err(|e| {
         cleanup_closure(); // Run cleanup on error
-        format!("teamchannel_collaborators_with_access Failed to read teamchannel_collaborators_with_access: {}", e)
+        format!("LCNFTF: teamchannel_collaborators_with_access Failed to read teamchannel_collaborators_with_access: {}", e)
     })?;
 
-    // println!("HERE HERE TestPoint");
-    debug_log("HERE HERE TestPoint");
+
+    debug_log("LCNFTF: starting read_teamchannel_collaborator_ports_clearsigntoml_without_keyid...");
 
     /*
     pub fn read_hashmap_corenode_ports_from_clearsigntoml_without_publicgpgkey(
@@ -9626,14 +9633,14 @@ struct CoreNode {
         &node_readcopy_path,                   // Target clearsigned file
     ).map_err(|e| {
         cleanup_closure(); // Run cleanup on error
-        format!("abstract_collaborator_port_assignments Failed to read abstract_collaborator_port_assignments: {}", e)
+        format!("LCNFTF: read_abstract_collaborator_port_assignments Failed to read abstract_collaborator_port_assignments: {}", e)
     })?;
 
 
 
 	////?////////////
 	// Project Areas
-	///?/////////////
+	/////////////////
 
     // Example: Read _ from the clearsigned TOML file
     let pa1_process = read_singleline_string_from_clearsigntoml_without_publicgpgkey(
@@ -9642,7 +9649,7 @@ struct CoreNode {
         "pa1_process"                // Field to read
     ).map_err(|e| {
         cleanup_closure(); // Run cleanup on error
-        format!("pa1_process Failed to read pa1_process: {}", e)
+        format!("LCNFTF: pa1_process Failed to read pa1_process: {}", e)
     })?;
 
 
@@ -9654,7 +9661,7 @@ struct CoreNode {
         "pa2_schedule"                // Field to read
     ).map_err(|e| {
         cleanup_closure(); // Run cleanup on error
-        format!("pa2_schedule Failed to read pa2_schedule: {}", e)
+        format!("LCNFTF error: pa2_schedule Failed to read pa2_schedule: {}", e)
     })?;
 
 
@@ -9665,7 +9672,7 @@ struct CoreNode {
         "pa3_users"                // Field to read
     ).map_err(|e| {
         cleanup_closure(); // Run cleanup on error
-        format!("pa3_users Failed to read pa3_users: {}", e)
+        format!("LCNFTF error:  pa3_users Failed to read pa3_users: {}", e)
     })?;
 
 
@@ -9676,7 +9683,7 @@ struct CoreNode {
         "pa4_features"                // Field to read
     ).map_err(|e| {
         cleanup_closure(); // Run cleanup on error
-        format!("pa4_features Failed to read pa4_features: {}", e)
+        format!("LCNFTF error: pa4_features Failed to read pa4_features: {}", e)
     })?;
 
 
@@ -9687,7 +9694,7 @@ struct CoreNode {
         "pa5_mvp"                // Field to read
     ).map_err(|e| {
         cleanup_closure(); // Run cleanup on error
-        format!("pa5_mvp Failed to read pa5_mvp: {}", e)
+        format!("LCNFTF error: pa5_mvp Failed to read pa5_mvp: {}", e)
     })?;
 
 
@@ -9698,7 +9705,7 @@ struct CoreNode {
         "pa6_feedback"                // Field to read
     ).map_err(|e| {
         cleanup_closure(); // Run cleanup on error
-        format!("pa6_feedback Failed to read pa6_feedback: {}", e)
+        format!("LCNFTF error: pa6_feedback Failed to read pa6_feedback: {}", e)
     })?;
 
 	////////////////
@@ -9712,7 +9719,7 @@ struct CoreNode {
         "message_post_data_format_specs_integer_ranges_from_to_tuple_array"                // Field to read
     ).map_err(|e| {
         cleanup_closure(); // Run cleanup on error
-        format!("message_post_data_format_specs_integer_ranges_from_to_tuple_array Failed to read message_post_data_format_specs_integer_ranges_from_to_tuple_array: {}", e)
+        format!("LCNFTF error: message_post_data_format_specs_integer_ranges_from_to_tuple_array Failed to read message_post_data_format_specs_integer_ranges_from_to_tuple_array: {}", e)
     })?;
 
 
@@ -9723,7 +9730,7 @@ struct CoreNode {
         "message_post_data_format_specs_int_string_ranges_from_to_tuple_array"                // Field to read
     ).map_err(|e| {
         cleanup_closure(); // Run cleanup on error
-        format!("message_post_data_format_specs_int_string_ranges_from_to_tuple_array Failed to read message_post_data_format_specs_int_string_ranges_from_to_tuple_array: {}", e)
+        format!("LCNFTF error: message_post_data_format_specs_int_string_ranges_from_to_tuple_array Failed to read message_post_data_format_specs_int_string_ranges_from_to_tuple_array: {}", e)
     })?;
 
 
@@ -9734,7 +9741,7 @@ struct CoreNode {
         "message_post_max_string_length_int"                // Field to read
     ).map_err(|e| {
         cleanup_closure(); // Run cleanup on error
-        format!("message_post_max_string_length_int Failed to read message_post_max_string_length_int: {}", e)
+        format!("LCNFTF error: message_post_max_string_length_int Failed to read message_post_max_string_length_int: {}", e)
     })?;
 
 
@@ -9745,7 +9752,7 @@ struct CoreNode {
         "message_post_is_public_bool"                // Field to read
     ).map_err(|e| {
         cleanup_closure(); // Run cleanup on error
-        format!("message_post_is_public_bool Failed to read node_imessage_post_is_public_boold: {}", e)
+        format!("LCNFTF error: message_post_is_public_bool Failed to read node_imessage_post_is_public_boold: {}", e)
     })?;
 
 
@@ -9756,7 +9763,7 @@ struct CoreNode {
         "message_post_user_confirms_bool"                // Field to read
     ).map_err(|e| {
         cleanup_closure(); // Run cleanup on error
-        format!("message_post_user_confirms_bool Failed to read message_post_user_confirms_bool: {}", e)
+        format!("LCNFTF error: message_post_user_confirms_bool Failed to read message_post_user_confirms_bool: {}", e)
     })?;
 
 
@@ -9767,7 +9774,7 @@ struct CoreNode {
         "message_post_start_date_utc_posix"                // Field to read
     ).map_err(|e| {
         cleanup_closure(); // Run cleanup on error
-        format!("message_post_start_date_utc_posix Failed to read message_post_start_date_utc_posix: {}", e)
+        format!("LCNFTF error: message_post_start_date_utc_posix Failed to read message_post_start_date_utc_posix: {}", e)
     })?;
 
 
@@ -9778,7 +9785,7 @@ struct CoreNode {
         "message_post_end_date_utc_posix"                // Field to read
     ).map_err(|e| {
         cleanup_closure(); // Run cleanup on error
-        format!("message_post_end_date_utc_posix Failed to read message_post_end_date_utc_posix: {}", e)
+        format!("LCNFTF error: message_post_end_date_utc_posix Failed to read message_post_end_date_utc_posix: {}", e)
     })?;
 
     /*
@@ -9791,11 +9798,8 @@ struct CoreNode {
 
     */
 
-
-
-
     // 6. Deserialize into CoreNode Struct (Manually)
-    let mut core_node = CoreNode {
+    let core_node = CoreNode {
         // node_name: toml_value.get("node_name").and_then(Value::as_str).unwrap_or("").to_string(),
         // description_for_tui: toml_value.get("description_for_tui").and_then(Value::as_str).unwrap_or("").to_string(),
         // node_unique_id: node_unique_id,
@@ -9862,22 +9866,20 @@ struct CoreNode {
     // }
 
 
-
     // // 6. Cleanup
     //
     debug_log("Proper cleansup");
-    cleanup_collaborator_temp_file(
+    let _ = cleanup_collaborator_temp_file(
         &node_readcopy_path,
         &base_uma_temp_directory_path,
         );
-    cleanup_collaborator_temp_file(
+    let _ = cleanup_collaborator_temp_file(
         &addressbook_readcopy_path_string,
         &base_uma_temp_directory_path,
         );
 
-
     // // 7. Return Node Struct (CoreNode)
-    debug_log("Ending load_core_node_from_toml_file");
+    debug_log("LCNFTF DONE: Ending load_core_node_from_toml_file");
     Ok(core_node)
 }
 
@@ -10965,7 +10967,7 @@ fn create_core_node(
 
 /// for passive view mode
 fn run_passive_task_mode(path: &Path) -> io::Result<()> {
-    debug_log("Starting passive message mode...");
+    debug_log("Starting passive task mode...");
 
     // 1. Read refresh rate from uma.toml (similar to log mode)
     // let refresh_rate = get_refresh_rate()?;
@@ -14788,7 +14790,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         debug_log!("Using salts: {:?}", new_usersalt_list);
 
         // // Add a new user to Uma file system
-        make_new_collaborator_addressbook_toml_file(
+        let _ = make_new_collaborator_addressbook_toml_file(
             username_for_function,
             new_usersalt_list,
             ipv4_addresses,
@@ -18640,11 +18642,12 @@ fn handle_command_main_mode(
                 */
                 debug_log("Home command received.");
 
-                quit_set_continue_uma_to_false();
+                let _ = quit_set_continue_uma_to_false();
 
                 // //////////////////////////
                 // // Enable sync flag here!
                 // //////////////////////////
+                // TODO: ? also set in initializae-uma?
                 // debug_log("About to set sync flag to true! (handle_command_main_mode(), home)");
                 // initialize_ok_to_start_sync_flag_to_false();  //TODO turn on to use sync !!! (off for testing)
 
@@ -26462,6 +26465,69 @@ pub fn no_restart_set_hard_reset_flag_to_false() -> Result<(), io::Error> {
     Ok(())
 }
 
+// // TODO spin these two off into a function optional_passive_mode();
+// // if return true, return?
+// // Get command line arguments
+// let args: Vec<String> = env::args().collect();
+// // Check for passive message mode
+// if args.len() >= 3 && args[1] == "--passive_message_mode" {
+//     let path = Path::new(&args[2]);
+//     if let Err(e) = run_passive_message_mode(path) {
+//         eprintln!("Error in passive message mode: {}", e);
+//         process::exit(1);
+//     }
+//     return;
+// }
+// // Check for passive message mode
+// if args.len() >= 3 && args[1] == "--passive_task_mode" {
+//     let path = Path::new(&args[2]);
+//     if let Err(e) = run_passive_task_mode(path) {
+//         eprintln!("Error in passive message mode: {}", e);
+//         process::exit(1);
+//     }
+//     return;
+// }
+/// Check for user input argument flag to launch int passive mode
+/// - message mode passsive
+/// or
+/// - task mode passive
+/// if so, return True (after running that mode)
+/// else: return false
+///
+/// use in main with:
+/// ```
+/// if optional_passive_mode() {
+///     return;
+/// };
+/// ```
+///
+fn optional_passive_mode() -> bool {
+    // TODO spin these two off into a function optional_passive_mode();
+    // if return true, return?
+    // Get command line arguments
+    let args: Vec<String> = env::args().collect();
+    // Check for passive message mode
+    if args.len() >= 3 && args[1] == "--passive_message_mode" {
+        let path = Path::new(&args[2]);
+        if let Err(e) = run_passive_message_mode(path) {
+            eprintln!("Error in passive message mode: {}", e);
+            process::exit(1);
+        }
+        return true;
+    }
+    // Check for passive message mode
+    if args.len() >= 3 && args[1] == "--passive_task_mode" {
+        let path = Path::new(&args[2]);
+        if let Err(e) = run_passive_task_mode(path) {
+            eprintln!("Error in passive message mode: {}", e);
+            process::exit(1);
+        }
+        return true;
+    }
+
+    return false;
+}
+
 /*
 An Appropriately Svelt Mainland:
 */
@@ -26476,34 +26542,15 @@ An Appropriately Svelt Mainland:
 ///
 /// This also allows the user to manually set the halt signal.
 fn main() {
-    // Get command line arguments
-    let args: Vec<String> = env::args().collect();
 
-    // Check for passive message mode
-    if args.len() >= 3 && args[1] == "--passive_message_mode" {
-        let path = Path::new(&args[2]);
-        if let Err(e) = run_passive_message_mode(path) {
-            eprintln!("Error in passive message mode: {}", e);
-            process::exit(1);
-        }
+    if optional_passive_mode() {
         return;
-    }
+    };
 
-    // Check for passive message mode
-    if args.len() >= 3 && args[1] == "--passive_task_mode" {
-        let path = Path::new(&args[2]);
-        if let Err(e) = run_passive_task_mode(path) {
-            eprintln!("Error in passive message mode: {}", e);
-            process::exit(1);
-        }
-        return;
-    }
+    let _ = initialize_continue_uma_signal(); // set boolean flag for loops to hault
+    let _ = initialize_hard_restart_signal(); // set boolean flag for uma restart
 
-
-    initialize_continue_uma_signal(); // set boolean flag for loops to hault
-    initialize_hard_restart_signal(); // set boolean flag for uma restart
-
-    let mut online_mode: bool = false;
+    let mut online_mode: bool;
 
     loop { // Main loop: let it fail, and try again
 
@@ -26534,13 +26581,13 @@ fn main() {
 
         // Thread 1: Executes the thread1_loop function
         let we_love_projects_loop = thread::spawn(move || {
-            we_love_projects_loop();
+            let _ = we_love_projects_loop();
         });
 
         // Thread 2: Executes the thread2_loop function
         if online_mode {
             let you_love_the_sync_team_office = thread::spawn(move || {
-                you_love_the_sync_team_office();
+                let _ = you_love_the_sync_team_office();
             });
             you_love_the_sync_team_office.join().unwrap(); // Wait for finish
         };
