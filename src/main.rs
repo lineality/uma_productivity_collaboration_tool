@@ -7620,6 +7620,9 @@ struct GraphNavigationInstanceState {
         pa6_feedback - Feedback: Tests, Ecological Effects, Communication, Documentation & Iteration (~agile)
     */
 
+    /// message_post_gpgtoml_required
+    message_post_gpgtoml_required:  Option<bool>,
+
     /// Integer validation ranges as tuples (min, max) - inclusive bounds
     message_post_data_format_specs_integer_ranges_from_to_tuple_array: Option<Vec<(i32, i32)>>,
 
@@ -7851,6 +7854,7 @@ impl GraphNavigationInstanceState {
                     self.pa6_feedback = this_node.pa6_feedback;
 
                     // Message posting configuration fields (if present in CoreNode)
+                    self.message_post_gpgtoml_required = this_node.message_post_gpgtoml_required;
                     self.message_post_data_format_specs_integer_ranges_from_to_tuple_array = this_node.message_post_data_format_specs_integer_ranges_from_to_tuple_array;
                     self.message_post_data_format_specs_int_string_ranges_from_to_tuple_array = this_node.message_post_data_format_specs_int_string_ranges_from_to_tuple_array;
                     self.message_post_max_string_length_int = this_node.message_post_max_string_length_int;
@@ -8007,7 +8011,7 @@ struct CoreNode {
     /////////////////
 
     // /// maybe: gpg encrypted messages? (new clearsign standard?)
-    // pub_message_post_gpgtoml_required: Option<bool>,
+    pub message_post_gpgtoml_required: Option<bool>,
 
     /// Integer validation ranges as tuples (min, max) - inclusive bounds
     pub message_post_data_format_specs_integer_ranges_from_to_tuple_array: Option<Vec<(i32, i32)>>,
@@ -8092,6 +8096,7 @@ struct CoreNode {
 /// * `pa4_features` - Project area 4: features description
 /// * `pa5_mvp` - Project area 5: MVP description
 /// * `pa6_feedback` - Project area 6: feedback description
+/// message_post_gpgtoml_required
 /// * `message_post_data_format_specs_integer_ranges_from_to_tuple_array` - Integer validation ranges
 /// * `message_post_data_format_specs_int_string_ranges_from_to_tuple_array` - Integer-string validation ranges
 /// * `message_post_max_string_length_int` - Max string length for int-string pairs
@@ -8115,6 +8120,7 @@ impl CoreNode {
         pa5_mvp: String,
         pa6_feedback: String,
         // Message Post Configuration
+        message_post_gpgtoml_required: Option<bool>,
         message_post_data_format_specs_integer_ranges_from_to_tuple_array: Option<Vec<(i32, i32)>>,
         message_post_data_format_specs_int_string_ranges_from_to_tuple_array: Option<Vec<(i32, i32)>>,
         message_post_max_string_length_int: Option<usize>,
@@ -8201,6 +8207,7 @@ impl CoreNode {
             pa5_mvp,
             pa6_feedback,
             // Message Post Configuration
+            message_post_gpgtoml_required,
             message_post_data_format_specs_integer_ranges_from_to_tuple_array,
             message_post_data_format_specs_int_string_ranges_from_to_tuple_array,
             message_post_max_string_length_int,
@@ -9676,6 +9683,16 @@ struct CoreNode {
 	// Message-Post
 	////////////////
 
+	// Example: Read _ from the clearsigned TOML file
+    let message_post_gpgtoml_required = read_option_bool_from_clearsigntoml_without_publicgpgkey(
+        &addressbook_readcopy_path_string,  // Config file containing GPG key
+        &node_readcopy_path,           // Target clearsigned file
+        "message_post_gpgtoml_required"                // Field to read
+    ).map_err(|e| {
+        cleanup_closure(); // Run cleanup on error
+        format!("LCNFTF error: message_post_gpgtoml_required Failed to read message_post_gpgtoml_required: {}", e)
+    })?;
+
     // Example: Read _ from the clearsigned TOML file
     let message_post_data_format_specs_integer_ranges_from_to_tuple_array = read_option_i32_tuple_array_from_clearsigntoml_without_publicgpgkey(
         &addressbook_readcopy_path_string,  // Config file containing GPG key
@@ -9793,6 +9810,7 @@ struct CoreNode {
         pa6_feedback: pa6_feedback,
 
         // Message Post Configuration
+        message_post_gpgtoml_required,
         message_post_data_format_specs_integer_ranges_from_to_tuple_array,
         message_post_data_format_specs_int_string_ranges_from_to_tuple_array,
         message_post_max_string_length_int,
@@ -9916,7 +9934,7 @@ struct MessagePostFile {
     signature: Option<String>,
 
     // /// Is MessagePostFile file gpg encrypted
-    // gpgtoml: Bool,
+    gpgtoml: bool,
 }
 
 impl MessagePostFile {
@@ -9944,7 +9962,8 @@ impl MessagePostFile {
             updated_at_timestamp: timestamp, // utc posix timestamp
             expires_at: expires_at, // utc posix timestamp // TODO!! update this
             links: Vec::new(),
-            signature,
+            signature: signature,
+            gpgtoml: false,
         }
     }
 }
@@ -10245,6 +10264,7 @@ fn create_new_team_channel(team_channel_name: String, owner: String) -> Result<(
         pa5_mvp,
         pa6_feedback,
         // Message Post Configuration - all None when no values
+        None,  // message_post_gpgtoml_required
         None,  // message_post_data_format_specs_integer_ranges_from_to_tuple_array
         None,  // message_post_data_format_specs_int_string_ranges_from_to_tuple_array
         None,  // message_post_max_string_length_int
@@ -10856,6 +10876,9 @@ fn create_core_node(
     let pa6_feedback = q_and_a_get_pa6_feedback()?;
 
     // Get user input for message post configuration fields
+
+    let message_post_gpgtoml_required = q_and_a_get_message_post_gpgtoml_required()?;
+    print!("\n");
     let message_post_integer_ranges = q_and_a_get_message_post_integer_ranges()?;
     print!("\n");
     let message_post_int_string_ranges = q_and_a_get_message_post_int_string_ranges()?;
@@ -10909,6 +10932,7 @@ fn create_core_node(
         pa6_feedback,
 
         // Message Post Configuration
+        message_post_gpgtoml_required,
         message_post_integer_ranges,
         message_post_int_string_ranges,
         message_post_max_string_length,
@@ -11777,6 +11801,31 @@ fn q_and_a_get_message_post_user_confirms() -> Result<Option<bool>, ThisProjectE
         _ => Err(ThisProjectError::InvalidInput(format!("Invalid boolean value: {}. Use yes/no", input)))
     }
 }
+
+
+/// Gets user input for whether user confirmation is required before posting
+///
+/// # Returns
+/// * `Result<Option<bool>, ThisProjectError>` - Whether user confirmation is required or None
+fn q_and_a_get_message_post_gpgtoml_required() -> Result<Option<bool>, ThisProjectError> {
+    println!("Require all message post are gpgtoml encrypted?  -> (y)es / (n)o / Press-Enter to skip):");
+
+    let mut input = String::new();
+    io::stdout().flush()?;
+    io::stdin().read_line(&mut input)?;
+
+    let input = input.trim().to_lowercase();
+    if input.is_empty() {
+        return Ok(None);
+    }
+
+    match input.as_str() {
+        "yes" | "y" | "true" | "1" => Ok(Some(true)),
+        "no" | "n" | "false" | "0" => Ok(Some(false)),
+        _ => Err(ThisProjectError::InvalidInput(format!("Invalid boolean value: {}. Use yes/no", input)))
+    }
+}
+
 
 /// Gets user input for message post start date with component-based input
 ///
@@ -13316,6 +13365,9 @@ fn extract_clearsign_data(clearsigned_data: &[u8]) -> Result<Vec<u8>, ThisProjec
     Ok(message_content.as_bytes().to_vec())
 }
 
+// TODO: this may be mostly right: directing to readcopy .toml?
+// or... readcopy clearsigned toml?
+// or... new struct serialized to .toml?
 /// Prepares file contents for secure sending by clearsigning and encrypting them.
 ///
 /// This function reads the contents of the file at the given `file_path`,
@@ -24441,7 +24493,8 @@ fn handle_remote_collaborator_meetingroom_desk(
         let remote_collaborator_name_clone = room_sync_input.remote_collaborator_name.clone();
 
         // --- HRCD 1.5 Spawn a thread to handle recieving GotItSignal(s) and SendFile prefail-flag removal ---
-        let gotit_thread = thread::spawn(move || {
+        // let gotit_thread
+        let _ = thread::spawn(move || {
             //////////////////////////////////////
             // Listen for 'I got it' GotItSignal
             ////////////////////////////////////
@@ -24518,7 +24571,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                         ```
                         */
 
-                        remove_one_prefail_flag__for_sendfile(
+                        let _ = remove_one_prefail_flag__for_sendfile(
                             document_id, // di_flag_id: String,
                             &remote_collaborator_name_clone, // remote_collaborator_name: String,
                             &team_channel_name, // team_channel_name: String,
@@ -24630,7 +24683,7 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                     // --- 2.3 Deserialize the ReadySignal ---
                     // TODO add size check to deserialize function
-                    let mut ready_signal: ReadySignal = match deserialize_ready_signal(&buf[..amt], &room_sync_input.remote_collaborator_salt_list) {
+                    let ready_signal: ReadySignal = match deserialize_ready_signal(&buf[..amt], &room_sync_input.remote_collaborator_salt_list) {
                         Ok(ready_signal) => {
                             // println!("HRCD 2.3 Deserialize Ok(ready_signal) {}: Received ReadySignal: {:?}",
                             //     room_sync_input.remote_collaborator_name, ready_signal
@@ -24837,6 +24890,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                     );
 
                     // 4. while: Send File: Send One File from Queue
+                    // if let ref mut queue = session_send_queue {
                     if let ref mut queue = session_send_queue {
 
                         debug_log!(
@@ -24856,6 +24910,59 @@ fn handle_remote_collaborator_meetingroom_desk(
                                 file_path
                             );
 
+                            /*
+                            Probably a few items from here:
+                            1. original file path (needed?)
+                            2. file suffix, or file 'type' (.gpgtoml or clerasigned .toml) enum?
+                            3. readcopy path to .toml file (to re processed)
+                            4. struct of file to re-serialize to a fresh file? (ideal)
+
+                            */
+                            // Using Debug trait for more detailed error information
+                            // this is in clearsigntoml module
+                            /*
+                            pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
+                                input_toml_absolute_path: &Path,
+                                gpg_full_fingerprint_key_id_string: &str, // COLLABORATOR_ADDRESSBOOK_PATH_STR
+                                base_uma_temp_directory_path: &Path,
+                            ) -> Result<String, GpgError> {
+                             */
+                             // Get armored public key, using key-id (full fingerprint in)
+                             let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+                                 Ok(fingerprint) => fingerprint,
+                                 // Err(e) => {
+                                 //     // Since the function returns Result<CoreNode, String>, we need to return a String error
+                                 //     return Err(format!(
+                                 //         "LCNFTF: implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}",
+                                 //         e
+                                 //     ));
+                                 // }
+                                 Err(e) => {
+                                     debug_log!( "LCNFTF: implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}", e);
+                                     continue; // Skip to the next file if hashing fails
+                                 }
+                             };
+
+                             // // 1. Paths & Reading-Copies Part 1: node.toml path and read-copy
+
+                             // Get the UME temp directory path with explicit String conversion
+                             let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
+                                 .map_err(|io_err| {
+                                     let gpg_error = GpgError::ValidationError(
+                                         format!("LCNFTF: Failed to get UME temp directory path: {}", io_err)
+                                     );
+                                     // Convert GpgError to String for the function's return type
+                                     format!("LCNFTF: {:?}", gpg_error)
+                                 })?;
+                            let sendfile_readcopy_pathstring = get_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
+                                &file_path,
+                                &gpg_full_fingerprint_key_id_string,
+                                &base_uma_temp_directory_path,
+                            ).map_err(|e| format!("LCNFTF: Failed to get temporary read copy of TOML file: {:?}", e))?;
+
+                            // converst from path-string to path-type path
+                            let path_sendfile_readcopy_path = Path::new(&sendfile_readcopy_pathstring);
+
                             // 4.2.1 Get File Send Time
                             let intray_send_time = get_current_unix_timestamp();
 
@@ -24865,7 +24972,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                             // 4.3.1 GPG Clearsign the File (with your private key)
                             // 4.3.2 GPG Encrypt File (with their public key)
                             let file_bytes2send = wrapper__path_to_clearsign_to_gpgencrypt_to_send_bytes(
-                                &file_path,
+                                &path_sendfile_readcopy_path,
                                 &room_sync_input.remote_collaborator_public_gpg,
                             )?;
 
@@ -24898,8 +25005,8 @@ fn handle_remote_collaborator_meetingroom_desk(
                             // 4.6. Create SendFile Struct
                             let sendfile_struct = SendFile {
                                 intray_send_time: Some(intray_send_time),
-                                gpg_encrypted_intray_file: Some(file_bytes2send.clone()), // Clone needed here if file_bytes2send is used later
-                                intray_hash_list: Some(calculated_hashes.clone()),  // Clone here as well
+                                gpg_encrypted_intray_file: Some(file_bytes2send), // Clone needed here if file_bytes2send is used later
+                                intray_hash_list: Some(calculated_hashes),  // Clone here as well
                             };
 
                             debug_log!(
@@ -24911,7 +25018,7 @@ fn handle_remote_collaborator_meetingroom_desk(
 
 
                             // get updatedat value of .toml
-                            let file_last_updatedat_time: u64 = get_updated_at_timestamp_from_toml_file(&file_path)?;
+                            let file_last_updatedat_time: u64 = get_updated_at_timestamp_from_toml_file(&path_sendfile_readcopy_path)?;
 
 
                             // 4.7.2 HRCD set_prefail_flag_rt_timestamp__for_sendfile
@@ -24949,14 +25056,14 @@ fn handle_remote_collaborator_meetingroom_desk(
                                             // --- 4.7.3 Get Timestamp ---
                                             //  Timestamp Log is depricated (most likely)
                                             debug_log("HRCD calling calling get_toml_file_updated_at_timestamp(), yes...");
-                                            if let Ok(timestamp) = get_toml_file_updated_at_timestamp(&file_path) {
-                                            //     update_collaborator_sendqueue_timestamp_log(
-                                            //         // TODO: Replace with the actual team channel name
-                                            //         &this_team_channelname,
-                                            //         &room_sync_input.remote_collaborator_name,
-                                            //     )?;
-                                                // debug_log!("HRCD 4.7.3  Updated timestamp log for {}", room_sync_input.remote_collaborator_name);
-                                            }
+                                            // if let Ok(timestamp) = get_toml_file_updated_at_timestamp(&file_path) {
+                                            // //     update_collaborator_sendqueue_timestamp_log(
+                                            // //         // TODO: Replace with the actual team channel name
+                                            // //         &this_team_channelname,
+                                            // //         &room_sync_input.remote_collaborator_name,
+                                            // //     )?;
+                                            //     // debug_log!("HRCD 4.7.3  Updated timestamp log for {}", room_sync_input.remote_collaborator_name);
+                                            // }
                                         }
                                         Err(e) => {
                                             debug_log!("Error sending data: {}", e);
@@ -25629,25 +25736,28 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         pa6_feedback: String::new(),
         // message-post
 
-        /// Integer validation ranges as tuples (min, max) - inclusive bounds
+        // message_post_gpgtoml_required bool option
+        message_post_gpgtoml_required: None,
+
+        // Integer validation ranges as tuples (min, max) - inclusive bounds
         message_post_data_format_specs_integer_ranges_from_to_tuple_array: None,
 
-        /// Integer-string validation ranges as tuples (min, max) for the integer part
+        // Integer-string validation ranges as tuples (min, max) for the integer part
         message_post_data_format_specs_int_string_ranges_from_to_tuple_array: None,
 
-        /// Maximum string length
+        // Maximum string length
         message_post_max_string_length_int: None,
 
-        /// Whether posts are public or private
+        // Whether posts are public or private
         message_post_is_public_bool: None,
 
-        /// Whether user confirmation is required before posting
+        // Whether user confirmation is required before posting
         message_post_user_confirms_bool: None,
 
-        /// Start time for accepting posts (UTC POSIX timestamp)
+        // Start time for accepting posts (UTC POSIX timestamp)
         message_post_start_date_utc_posix: None,
 
-        /// End time for accepting posts (UTC POSIX timestamp)
+        // End time for accepting posts (UTC POSIX timestamp)
         message_post_end_date_utc_posix: None,
     };
 
