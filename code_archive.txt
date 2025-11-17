@@ -165,8 +165,8 @@
             pa2_schedule,
         })
     }
-    
-    
+
+
     // /// Saves the `CoreNode` data to a `node.toml` file.
     // ///
     // /// This function serializes the `CoreNode` struct into TOML format and writes
@@ -339,8 +339,8 @@
     //     );
 
     // }
-    
-    
+
+
     // TODO: this will need to be replaced with a
     // clearsigntoml version
     fn load_node_from_file(path: &Path) -> Result<CoreNode, io::Error> {
@@ -350,9 +350,9 @@
         })?;
         Ok(node)
     }
-        
-        
-    
+
+
+
 // pseudocode draft
 // fn get_local_owner_username() -> String {  // Returns String directly
 //     debug_log!("___ Step 1: Reading LOCAL OWNER USER's name from uma.toml");
@@ -392,7 +392,7 @@
 
 
 
-        
+
     // /// saves the `CoreNode` data to a `node.gpgtoml` file.
     // ///
     // /// This function serializes the `CoreNode` struct into TOML format
@@ -1120,9 +1120,9 @@
             )
         })
     }
-    
-    
-    
+
+
+
 
 
 
@@ -5498,3 +5498,346 @@ fn debugpause(n: u64) {
         // }
 
 
+
+// /// Reads all collaborator pair port assignments from a clearsigned TOML file using owner-based GPG key lookup (optimized version).
+// ///
+// /// # Purpose
+// /// This function extracts network port assignments for ALL collaborator pairs from a
+// /// clearsigned team channel configuration file in a single pass. Unlike the previous version
+// /// that calls the specific function multiple times, this version validates the file once
+// /// and extracts all data efficiently.
+// ///
+// /// # Security Model
+// /// This function implements the same strict security-first approach:
+// /// 1. **Mandatory validation**: The clearsigned file MUST be validated before ANY data extraction
+// /// 2. **Owner-based key management**: Uses the file's owner field to look up the validation key
+// /// 3. **Chain of trust**: Validation uses keys from the collaborator addressbook system
+// /// 4. **Single validation pass**: Optimized to validate once and extract all data
+// ///
+// /// # Validation Process
+// /// 1. Reads the `owner` field from the target clearsigned TOML file
+// /// 2. Constructs the path to the owner's addressbook file: `{owner}__collaborator.toml`
+// /// 3. Extracts the GPG key ID from the addressbook (which is itself clearsigned and validated)
+// /// 4. Uses that key to verify the target file's signature ONCE
+// /// 5. Extracts all port assignments in a single pass through the validated content
+// ///
+// /// # Data Structure Expected
+// /// The function expects the TOML file to contain:
+// /// ```toml
+// /// [abstract_collaborator_port_assignments.alice_bob]
+// /// collaborator_ports = [
+// ///     { user_name = "alice", ready_port = 50001, intray_port = 50002, gotit_port = 50003 },
+// ///     { user_name = "bob", ready_port = 50004, intray_port = 50005, gotit_port = 50006 },
+// /// ]
+// ///
+// /// [abstract_collaborator_port_assignments.alice_charlotte]
+// /// collaborator_ports = [
+// ///     { user_name = "alice", ready_port = 50007, intray_port = 50008, gotit_port = 50009 },
+// ///     { user_name = "charlotte", ready_port = 50010, intray_port = 50011, gotit_port = 50012 },
+// /// ]
+// /// ```
+// ///
+// /// # Arguments
+// /// - `path_to_clearsigned_toml` - Path to the clearsigned TOML file containing port assignments
+// /// - `addressbook_files_directory_relative` - Relative path to the directory containing collaborator addressbook files
+// ///
+// /// # Returns
+// /// - `Ok(HashMap<String, Vec<AbstractTeamchannelNodeTomlPortsData>>)` - A map where:
+// ///   - Keys are collaborator pair names (e.g., "alice_bob")
+// ///   - Values are vectors of port assignments for that pair
+// /// - `Err(GpgError)` - If any step fails:
+// ///   - `PathError`: File not found, invalid path, or path encoding issues
+// ///   - `GpgOperationError`: GPG validation failure, missing required fields, or parsing errors
+// ///   - `FileSystemError`: I/O errors during file operations
+// ///
+// /// # Performance
+// /// This optimized version:
+// /// - Performs GPG validation only ONCE (vs. once per pair in the previous version)
+// /// - Reads the file content only ONCE
+// /// - Parses all assignments in a single pass
+// /// - Significantly faster for files with many collaborator pairs
+// ///
+// /// # Example
+// /// ```no_run
+// /// let all_assignments = read_all_collaborator_port_assignments_clearsigntoml_optimized(
+// ///     Path::new("team_channel_config.toml"),
+// ///     "collaborators"
+// /// )?;
+// ///
+// /// // Display all assignments
+// /// for (pair_name, assignments) in &all_assignments {
+// ///     debug_log!("Collaborator pair: {}", pair_name);
+// ///     for assignment in assignments {
+// ///         debug_log!("  {} -> ready: {}, intray: {}, gotit: {}",
+// ///                  assignment.user_name,
+// ///                  assignment.ready_port,
+// ///                  assignment.intray_port,
+// ///                  assignment.gotit_port);
+// ///     }
+// /// }
+// ///
+// /// // Access specific pair
+// /// if let Some(alice_bob_ports) = all_assignments.get("alice_bob") {
+// ///     debug_log!("Alice-Bob communication ports: {:?}", alice_bob_ports);
+// /// }
+// /// ```
+// pub fn read_teamchannel_collaborator_ports_clearsigntoml_without_keyid(
+//     addressbook_readcopy_path_string: &str,
+//     path_to_clearsigned_toml: &str,
+//     // addressbook_files_directory_relative: &str,  // pass in constant here
+// ) -> Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, GpgError> {
+//     debug_log("starting RATPFT read_all_collaborator_port_assignments_clearsigntoml_optimized() Starting optimized extraction of all collaborator port assignments");
+
+//     // --- Stage 1: Input Validation ---
+//     debug_log!(
+//         "RATPFT from path_to_clearsigned_toml: {}",
+//         path_to_clearsigned_toml,
+//     );
+
+//     println!("HERE HERE FLAG 01 TestPoint");
+//     debug_log("HERE HERE FLAG 01 TestPoint");
+
+//     // Extract GPG key ID from addressbook (which validates the addressbook's signature)
+//     let gpg_key_id_name_of_toml_field_key_to_read = "gpg_publickey_id";
+//     let signing_key_id = match read_singleline_string_from_clearsigntoml(
+//         addressbook_readcopy_path_string,
+//         gpg_key_id_name_of_toml_field_key_to_read,
+//     ) {
+//         Ok(key_id) => {
+//             if key_id.is_empty() {
+//                 return Err(GpgError::GpgOperationError(format!(
+//                     "RATPFT GPG key ID is empty in addressbook_readcopy_path_string '{}'",
+//                     addressbook_readcopy_path_string,
+//                 )));
+//             }
+//             key_id
+//         }
+//         Err(e) => {
+//             return Err(GpgError::GpgOperationError(format!(
+//                 "RATPFT Failed to read GPG key ID from addressbook: {}",
+//                 e
+//             )));
+//         }
+//     };
+//     debug_log!("RATPFT Found GPG key ID for validation: '{}'", signing_key_id);
+
+//     // --- Stage 4: Create Temporary File for Validation ---
+//     let temp_validation_path = create_temp_file_path("validate_all_ports_optimized")?;
+
+//     // --- Stage 5: Verify Signature and Extract Content (once) ---
+//     debug_log!("RATPFT Validating clearsigned file signature...");
+
+//     // Decrypt (which validates) the clearsigned file
+//     let validation_result = Command::new("gpg")
+//         .arg("--decrypt")
+//         .arg("--batch")
+//         .arg("--status-fd")
+//         .arg("2")
+//         .arg("--output")
+//         .arg(&temp_validation_path)
+//         .arg(path_to_clearsigned_toml)
+//         .output();
+
+//     match validation_result {
+//         Ok(output) => {
+//             if !output.status.success() {
+//                 // Cleanup temp file
+//                 let _ = fs::remove_file(&temp_validation_path);
+
+//                 let stderr_output = String::from_utf8_lossy(&output.stderr);
+//                 return Err(GpgError::GpgOperationError(format!(
+//                     "RATPFT GPG signature validation FAILED. File may be tampered. GPG output: {}",
+//                     stderr_output.trim()
+//                 )));
+//             }
+//             debug_log!("RATPFT ✓ Signature validation PASSED. File integrity confirmed.");
+//             debug_log!("RATPFT Now extracting all port assignments in a single pass...");
+//         }
+//         Err(e) => {
+//             // Cleanup temp file
+//             let _ = fs::remove_file(&temp_validation_path);
+
+//             return Err(GpgError::GpgOperationError(format!(
+//                 "RATPFT Failed to execute GPG validation: {}",
+//                 e
+//             )));
+//         }
+//     }
+
+//     // --- Stage 6: Parse ALL Port Assignments from Validated Content ---
+
+//     // Read the validated content once
+//     let validated_content = match fs::read_to_string(&temp_validation_path) {
+//         Ok(content) => content,
+//         Err(e) => {
+//             // Cleanup temp file
+//             let _ = fs::remove_file(&temp_validation_path);
+//             return Err(GpgError::FileSystemError(e));
+//         }
+//     };
+
+//     // Cleanup temp file immediately after reading
+//     let _ = fs::remove_file(&temp_validation_path);
+
+//     // Parse all collaborator pair sections in one pass
+//     let mut all_assignments: HashMap<String, Vec<AbstractTeamchannelNodeTomlPortsData>> = HashMap::new();
+//     let table_prefix = "[abstract_collaborator_port_assignments.";
+
+//     // State tracking for parsing
+//     let mut current_pair_name: Option<String> = None;
+//     let mut current_pair_assignments: Vec<AbstractTeamchannelNodeTomlPortsData> = Vec::new();
+//     let mut in_ports_array = false;
+//     let mut current_port_entry: Option<PartialPortEntry> = None;
+
+//     // Helper structure for parsing (reused from the specific function)
+//     #[derive(Default)]
+//     struct PartialPortEntry {
+//         user_name: Option<String>,
+//         ready_port: Option<u16>,
+//         intray_port: Option<u16>,
+//         gotit_port: Option<u16>,
+//     }
+
+//     // Process each line of the validated content
+//     for line in validated_content.lines() {
+//         let trimmed = line.trim();
+
+//         // Check if we're entering a new collaborator pair section
+//         if trimmed.starts_with(table_prefix) && trimmed.ends_with(']') {
+//             // Save previous pair's data if any
+//             if let Some(pair_name) = current_pair_name.take() {
+//                 if !current_pair_assignments.is_empty() {
+//                     all_assignments.insert(pair_name, current_pair_assignments.clone());
+//                     current_pair_assignments.clear();
+//                 }
+//             }
+
+//             // Extract new pair name
+//             let start = table_prefix.len();
+//             let end = trimmed.len() - 1;
+//             current_pair_name = Some(trimmed[start..end].to_string());
+//             in_ports_array = false;
+//             debug_log!("  Processing pair: {}", current_pair_name.as_ref().unwrap());
+//             continue;
+//         }
+
+//         // Skip lines if we're not in a pair section
+//         if current_pair_name.is_none() {
+//             continue;
+//         }
+
+//         // Check for collaborator_ports array start
+//         if trimmed.starts_with("collaborator_ports = [") {
+//             in_ports_array = true;
+
+//             // Check if it's a single-line array (for simple cases)
+//             if trimmed.contains(']') {
+//                 // TODO: Handle single-line array parsing if needed
+//                 in_ports_array = false;
+//             }
+//             continue;
+//         }
+
+//         // Check for array end
+//         if in_ports_array && trimmed == "]" {
+//             in_ports_array = false;
+//             continue;
+//         }
+
+//         // Parse array entries
+//         if in_ports_array {
+//             // Handle start of a new port entry
+//             if trimmed.starts_with('{') || trimmed.contains("{ user_name") {
+//                 // If we had a previous incomplete entry, it's an error
+//                 if current_port_entry.is_some() {
+//                     return Err(GpgError::GpgOperationError(format!(
+//                         "RATPFT Malformed port entry in pair '{}'",
+//                         current_pair_name.as_ref().unwrap()
+//                     )));
+//                 }
+//                 current_port_entry = Some(PartialPortEntry::default());
+//             }
+
+//             // Parse fields within the entry
+//             if let Some(ref mut entry) = current_port_entry {
+//                 // Parse all fields that might be on this line
+
+//                 // Parse user_name
+//                 if trimmed.contains("user_name = ") {
+//                     if let Some(value) = extract_quoted_value(trimmed, "user_name") {
+//                         entry.user_name = Some(value);
+//                     }
+//                 }
+
+//                 // Parse ready_port
+//                 if trimmed.contains("ready_port = ") {
+//                     if let Some(value) = extract_port_value(trimmed, "ready_port") {
+//                         entry.ready_port = Some(value);
+//                     }
+//                 }
+
+//                 // Parse intray_port
+//                 if trimmed.contains("intray_port = ") {
+//                     if let Some(value) = extract_port_value(trimmed, "intray_port") {
+//                         entry.intray_port = Some(value);
+//                     }
+//                 }
+
+//                 // Parse gotit_port
+//                 if trimmed.contains("gotit_port = ") {
+//                     if let Some(value) = extract_port_value(trimmed, "gotit_port") {
+//                         entry.gotit_port = Some(value);
+//                     }
+//                 }
+//             }
+
+//             // Check for end of entry
+//             if trimmed.ends_with("},") || trimmed.ends_with('}') {
+//                 if let Some(entry) = current_port_entry.take() {
+//                     // Validate we have all required fields
+//                     match (entry.user_name, entry.ready_port, entry.intray_port, entry.gotit_port) {
+//                         (Some(user), Some(ready), Some(intray), Some(gotit)) => {
+//                             current_pair_assignments.push(AbstractTeamchannelNodeTomlPortsData {
+//                                 user_name: user,
+//                                 ready_port: ready,
+//                                 intray_port: intray,
+//                                 gotit_port: gotit,
+//                             });
+//                         }
+//                         _ => {
+//                             return Err(GpgError::GpgOperationError(format!(
+//                                 "RATPFT Incomplete port assignment entry for pair '{}'. Missing required fields.",
+//                                 current_pair_name.as_ref().unwrap()
+//                             )));
+//                         }
+//                     }
+//                 }
+//             }
+//         }
+//     }
+
+//     // Don't forget the last pair if the file doesn't end with another section
+//     if let Some(pair_name) = current_pair_name.take() {
+//         if !current_pair_assignments.is_empty() {
+//             all_assignments.insert(pair_name, current_pair_assignments);
+//         }
+//     }
+
+//     // --- Stage 7: Validate Results ---
+//     if all_assignments.is_empty() {
+//         return Err(GpgError::GpgOperationError(
+//             "RATPFT No collaborator port assignments found in abstract_collaborator_port_assignments".to_string()
+//         ));
+//     }
+
+//     // Log summary
+//     debug_log!(
+//         "RATPFT ✓ Successfully extracted port assignments for {} collaborator pairs:",
+//         all_assignments.len()
+//     );
+//     for (pair_name, assignments) in &all_assignments {
+//         debug_log!("  - {}: {} port assignments", pair_name, assignments.len());
+//     }
+
+//     Ok(all_assignments)
+// }

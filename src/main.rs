@@ -1,6 +1,4 @@
 /*
-TODO add module reference code in text blurb
-
 Uma
 2024.09-11
 RUST_BACKTRACE=full cargo run
@@ -11,7 +9,6 @@ RUST_BACKTRACE=full cargo run
 / \
 ```
 A distributed project graph database MCU (Multipoint Conferencing Unit) with cli TUI, instant messenger, Kanban Task Manager, and other Agile Kahneman-Tversky project, productivity, coordination, collaboration features
-
 
 Uma Productivity Collaboration Tools for Project-Alignment
 ~ "Read the old books."
@@ -37,9 +34,6 @@ rand = "0.8.5"
 getifaddrs = "0.1.4"
 
 https://docs.rs/getifaddrs/latest/getifaddrs/
-
-
-// tiny_tui_module.rs
 
 // tiny_tui_module.rs
 
@@ -339,11 +333,6 @@ use serde::{
 use std::ffi::OsStr;
 use std::collections::HashMap;
 use std::collections::HashSet;
-// use std::sync::mpsc::channel;
-// use std::sync::mpsc::Sender;
-
-
-// use std::sync::mpsc;
 
 // For Sync
 use rand::prelude::{
@@ -378,9 +367,6 @@ toml crates
 mod clearsign_toml_module;
 use crate::clearsign_toml_module::{
     GpgError,
-    // read_field_from_toml,
-    // read_basename_fields_from_toml,
-    convert_tomlfile_without_keyid_into_clearsigntoml_inplace,
     convert_tomlfile_without_keyid_using_gpgtomlkeyid_into_clearsigntoml_inplace,
     verify_clearsign,
     convert_toml_filewithkeyid_into_clearsigntoml_inplace,
@@ -389,57 +375,36 @@ use crate::clearsign_toml_module::{
     read_u8_field_from_toml,
     read_u64_field_from_toml,
     read_float_f32_field_from_toml,
-    read_multi_line_toml_string,
-    read_integer_array,
     read_singleline_string_from_clearsigntoml,
     read_multiline_string_from_clearsigntoml,
     read_str_array_field_clearsigntoml,
     extract_verify_store_gpg_encrypted_clearsign_toml,
     verify_clearsigned_file_and_extract_content_to_output,
     clearsign_and_encrypt_file_for_recipient,
-    // decrypt_and_validate_file,
     gpg_make_input_path_name_abs_executabledirectoryrelative_nocheck,
     decrypt_gpgfile_to_output,
     read_all_collaborator_port_assignments_clearsigntoml_optimized,
     read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyid,
     read_teamchannel_collaborators_with_access_from_clearsigntoml,
-    //
     read_singleline_string_from_clearsigntoml_without_publicgpgkey,
     read_u8_array_from_clearsigntoml_without_publicgpgkey,
     read_pathbuf_from_clearsigntoml_without_publicgpgkey,
     read_u64_from_clearsigntoml_without_publicgpgkey,
     read_stringarray_from_clearsigntoml_without_publicgpgkey,
-    // read_hashmap_corenode_ports_from_clearsigntoml_without_publicgpgkey,
     read_option_i32_tuple_array_from_clearsigntoml_without_publicgpgkey,
     read_option_usize_from_clearsigntoml_without_publicgpgkey,
     read_option_bool_from_clearsigntoml_without_publicgpgkey,
     read_option_i64_from_clearsigntoml_without_publicgpgkey,
     read_teamchannel_collaborator_ports_clearsigntoml_without_keyid,
-
     read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml,
     get_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml,
     get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml,
     cleanup_collaborator_temp_file,
     read_u64_array_from_clearsigntoml_without_publicgpgkey,
-
-    //
-
-
-
 };
 
-// // deprecated, code moved to new clearsign_toml_module
-// mod handle_gpg;  // This declares the module and tells Rust to look for handle_gpg.rs
-// use crate::handle_gpg::{
-//     ,
-//     ,
-//     ,
-//     ,
-//     ,
-// };
 
-// for managing file paths
-
+/// for managing file paths
 mod manage_absolute_executable_directory_relative_paths;
 use manage_absolute_executable_directory_relative_paths::{
     make_input_path_name_abs_executabledirectoryrelative_nocheck,
@@ -449,7 +414,7 @@ use manage_absolute_executable_directory_relative_paths::{
     abs_executable_directory_relative_exists,
     prepare_file_parent_directories_abs_executabledirectoryrelative,
     make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path,
-    count_subdirectories_executabledirectoryrelative_default_zero,
+    // count_subdirectories_executabledirectoryrelative_default_zero,
 };
 
 
@@ -1042,7 +1007,7 @@ fn get_band__find_valid_network_index_and_type(
 
     // println!("ipv4_addresses: {:?}", ipv4_addresses);
     // println!("ipv6_addresses: {:?}", ipv6_addresses);
-    // println!("HERE HERE BREAKPOINT
+
 
     let (ipv4_addresses_string, ipv6_addresses_string) = match load_local_iplists_as_stringtype(
         uma_local_owner_user,
@@ -5671,8 +5636,6 @@ impl App {
         Ok(App {
             tui_focus: 0,
             current_path: current_exe_dir_relative_abs_path_canonicalized,
-            // HERE HERE
-
             input_mode: InputMode::MainCommand,
             tui_file_list: Vec::new(), // Initialize files
             tui_directory_list: Vec::new(), // Initialize files
@@ -6421,8 +6384,8 @@ impl App {
                         // Read the file contents
                         let file_contents = fs::read_to_string(entry.path()).expect("Failed to read message file");
 
-                        // Assuming you're parsing the TOML into a InstantMessageFile struct called 'message'
-                        let message: InstantMessageFile = toml::from_str(&file_contents).unwrap();
+                        // Assuming you're parsing the TOML into a MessagePostFile struct called 'message'
+                        let message: MessagePostFile = toml::from_str(&file_contents).unwrap();
 
                         debug_log(&format!("file_name from {}", file_name));
                         debug_log(&format!("Added message from {}", message.owner));
@@ -7827,9 +7790,7 @@ impl GraphNavigationInstanceState {
             Ok(contents) => {
                 debug_log!("Successfully read file, content length: {}", contents.len());
 
-                // here here?
-                debug_log("\n\nHEREHERE TESTING, node load gnis\n\n");
-                println!("\n\nHEREHERE TESTING, node load gnis\n\n");
+
                 // Load and parse the node.toml file
                 let this_node = match load_core_node_from_toml_file(&node_toml_path) {
                     Ok(node) => node,
@@ -8006,6 +7967,10 @@ graph-dungeon location.
 struct CoreNode {
     /// The name of the node. This is used for display and identification.
     node_name: String,
+
+    // /// Is node.toml file gpg encrypted
+    // gpgtoml: Bool,
+
     /// A description of the node, intended for display in the TUI.
     description_for_tui: String,
     /// A unique identifier for the node, generated using pearson hashes of the other fields
@@ -8040,6 +8005,9 @@ struct CoreNode {
     /////////////////
     // message_posts
     /////////////////
+
+    // /// maybe: gpg encrypted messages? (new clearsign standard?)
+    // pub_message_post_gpgtoml_required: Option<bool>,
 
     /// Integer validation ranges as tuples (min, max) - inclusive bounds
     pub message_post_data_format_specs_integer_ranges_from_to_tuple_array: Option<Vec<(i32, i32)>>,
@@ -9232,10 +9200,6 @@ fn load_core_node_from_toml_file(
         owner_name_of_toml_field_key_to_read
     );
 
-    debug_log("\n\nHEREHERE TESTING, node load gnis\n\n");
-    println!("\n\nHEREHERE TESTING, node load gnis\n\n");
-
-
     // get node_owners_public_gpg_key
 
     let file_owner_username = match read_single_line_string_field_from_toml(
@@ -9938,7 +9902,7 @@ unless there is a clear reason to included created_at, it should not be included
 nothing should be included with empirical data in support
 */
 #[derive(Debug, Deserialize, Serialize)]
-struct InstantMessageFile {
+struct MessagePostFile {
     // every .toml has these four
     owner: String, // owner of this item
     teamchannel_collaborators_with_access: Vec<String>,
@@ -9950,9 +9914,12 @@ struct InstantMessageFile {
     text_message: String,
     links: Vec<String>,
     signature: Option<String>,
+
+    // /// Is MessagePostFile file gpg encrypted
+    // gpgtoml: Bool,
 }
 
-impl InstantMessageFile {
+impl MessagePostFile {
     fn new(
         owner: &str,
         node_name: &str, // Add node name as a parameter
@@ -9961,14 +9928,14 @@ impl InstantMessageFile {
         signature: Option<String>,
         graph_navigation_instance_state: &GraphNavigationInstanceState,  // gets uma.toml data
         recipients_list: Vec<String>,
-    ) -> InstantMessageFile {
+    ) -> MessagePostFile {
         let timestamp = get_current_unix_timestamp();
         // Calculate expiration date using the value from local_user_metadata
         let expires_at = timestamp +
             (graph_navigation_instance_state.default_im_messages_expiration_days * 24 * 60 * 60);
         // let teamchannel_collaborators_with_access = graph_navigation_instance_state.current_node_teamchannel_collaborators_with_access.clone();
 
-        InstantMessageFile {
+        MessagePostFile {
             owner: owner.to_string(),
             teamchannel_collaborators_with_access: recipients_list,
             node_name: node_name.to_string(), // Store the node name
@@ -13610,7 +13577,7 @@ fn add_im_message(
     // Extract node name and file path
     let node_name = metadata.node_name;
     let filepath_in_node = metadata.path_in_node;
-    let message = InstantMessageFile::new(
+    let message = MessagePostFile::new(
         owner, // owner: &str,
         &node_name, // node_name: &str, , // Add node name as a parameter
         &filepath_in_node, // filepath_in_node: &str, , // Add filepath_in_node as a parameter
@@ -18142,11 +18109,11 @@ pub fn invite_wizard() -> Result<(), GpgError> {
 
                     // this does nothing, press enter to proceed.
                     let mut input = String::new();
-                    io::stdin()
+                    let _ = io::stdin()
                         .read_line(&mut input)
                         .map_err(|e| format!("Failed to read input: {:?}", e));
 
-                    process_incoming_encrypted_collaborator_addressbook();
+                    let _ = process_incoming_encrypted_collaborator_addressbook();
                     /*
                     logic to target that directory...
                     // 1. Scans the incoming directory for .asc files
