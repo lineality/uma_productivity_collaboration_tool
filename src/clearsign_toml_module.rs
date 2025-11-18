@@ -10399,6 +10399,148 @@ pub fn read_option_bool_field_from_toml(
     Ok(None)
 }
 
+/// Reads an optional boolean field from a TOML file into an Option<bool>.
+///
+/// # Purpose
+/// This function parses a TOML file to extract an optional boolean value defined by the
+/// specified field name. It handles cases where the field may or may not exist, returning
+/// None if the field is absent and Some(bool) if present with a valid boolean value.
+///
+/// # TOML Boolean Format
+/// Valid TOML boolean values are:
+/// - `true` (lowercase)
+/// - `false` (lowercase)
+///
+/// # Arguments
+/// - `path` - Path to the TOML file
+/// - `name_of_toml_field_key_to_read` - Name of the field to read (may or may not exist in the TOML file)
+///
+/// # Returns
+/// - `Ok(None)` - If the field does not exist in the file
+/// - `Ok(Some(true))` - If the field exists and has value `true`
+/// - `Ok(Some(false))` - If the field exists and has value `false`
+/// - `Err(String)` - If the file cannot be read or the field has an invalid value
+///
+/// # Error Handling
+/// This function returns errors when:
+/// - The file cannot be opened or read
+/// - The field exists but has a non-boolean value
+/// - The field exists but has an invalid format (including empty values)
+///
+/// Note: A missing field is NOT an error - it returns Ok(None)
+///
+/// # Example
+/// For a TOML file containing:
+/// ```toml
+/// message_post_is_public_bool = true
+/// message_post_user_confirms_bool = false
+/// # field_not_present is missing
+/// ```
+///
+/// Usage:
+/// ```
+/// let is_public = read_option_bool_field_from_toml("config.toml", "message_post_is_public_bool")?;
+/// // Returns: Some(true)
+///
+/// let confirms = read_option_bool_field_from_toml("config.toml", "message_post_user_confirms_bool")?;
+/// // Returns: Some(false)
+///
+/// let missing = read_option_bool_field_from_toml("config.toml", "field_not_present")?;
+/// // Returns: None
+/// ```
+///
+/// # Implementation Notes
+/// - Field absence returns None (not an error)
+/// - Boolean values must be lowercase `true` or `false`
+/// - Quoted booleans (e.g., "true") are treated as strings and will cause an error
+/// - Empty values after `=` cause an error
+pub fn read_bool_field_from_toml(
+    path: &str,
+    name_of_toml_field_key_to_read: &str,
+) -> Result<bool, String> {
+    // Open the file
+    let file = File::open(path).map_err(|e| {
+        format!(
+            "read_option_bool_field_from_toml Failed to open file '{}': {}",
+            path, e
+        )
+    })?;
+
+    let reader = io::BufReader::new(file);
+
+    // Process each line looking for our field
+    for (line_number, line_result) in reader.lines().enumerate() {
+        // Handle line reading errors
+        let line = line_result.map_err(|e| {
+            format!(
+                "Failed to read line {} from file '{}': {}",
+                line_number + 1,
+                path,
+                e
+            )
+        })?;
+
+        let trimmed = line.trim();
+
+        // Skip empty lines and comments
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+
+        // Check if this line contains our field (more flexible parsing)
+        // Split by = and check if the first part matches our field name
+        if let Some(equals_pos) = trimmed.find('=') {
+            let key_part = trimmed[..equals_pos].trim();
+
+            if key_part == name_of_toml_field_key_to_read {
+                // Found our field, now parse the value
+                let value_part = trimmed[equals_pos + 1..].trim();
+
+                // Check for empty value
+                if value_part.is_empty() {
+                    return Err(format!(
+                        "Field '{}' in file '{}' has empty value",
+                        name_of_toml_field_key_to_read, path
+                    ));
+                }
+
+                // Parse the boolean value
+                match value_part {
+                    "true" => {
+                        debug_log!(
+                            "Read optional boolean field '{}': Some(true)",
+                            name_of_toml_field_key_to_read
+                        );
+                        return Ok(true);
+                    }
+                    "false" => {
+                        debug_log!(
+                            "Read optional boolean field '{}': Some(false)",
+                            name_of_toml_field_key_to_read
+                        );
+                        return Ok(false);
+                    }
+                    _ => {
+                        // Invalid boolean value
+                        return Err(format!(
+                            "Field '{}' in file '{}' has invalid boolean value: '{}'. Expected 'true' or 'false'",
+                            name_of_toml_field_key_to_read, path, value_part
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    // Field not found - this is OK for optional fields
+    debug_log!(
+        "Optional boolean field '{}' not found in file '{}', returning None",
+        name_of_toml_field_key_to_read,
+        path
+    );
+    Ok(false)
+}
+
 /// Reads an optional boolean field from a clearsigned TOML file into an Option<bool>.
 ///
 /// # Purpose
@@ -10476,6 +10618,82 @@ pub fn read_option_bool_from_clearsigntoml(
         format!(
             "Failed to read optional boolean '{}' from verified file '{}': {}",
             name_of_toml_field_key_to_read, path, e
+        )
+    })
+}
+
+/// Reads an optional boolean field from a clearsigned TOML file using a GPG key from a separate config file.
+///
+/// # Purpose
+/// This function provides a way to verify and read optional boolean fields from clearsigned TOML files
+/// that don't contain their own GPG keys, instead using a key from a separate centralized config file.
+///
+/// # Process Flow
+/// 1. Extracts the GPG public key from the specified config file
+/// 2. Uses this key to verify the signature of the target clearsigned TOML file
+/// 3. If verification succeeds, reads the optional boolean field
+/// 4. Returns None if field doesn't exist, Some(bool) if it does, or an error
+///
+/// # Arguments
+/// - `pathstr_to_config_file_that_contains_gpg_key` - Path to a clearsigned TOML file containing the GPG public key
+/// - `pathstr_to_target_clearsigned_file` - Path to the clearsigned TOML file to read from (without its own GPG key)
+/// - `name_of_toml_field_key_to_read` - Name of the optional boolean field to read from the target file
+///
+/// # Returns
+/// - `Ok(None)` - If verification succeeds and the field does not exist
+/// - `Ok(Some(bool))` - If verification succeeds and the field has a valid boolean value
+/// - `Err(String)` - Detailed error message if any step fails
+///
+/// # Example
+/// ```
+/// let config_path = "security_config.toml";
+/// let settings_file = "message_settings.toml";
+///
+/// let is_public = read_option_bool_from_clearsigntoml_without_publicgpgkey(
+///     config_path,
+///     settings_file,
+///     "message_post_is_public_bool"
+/// )?;
+/// // Returns: Some(true), Some(false), or None depending on the field value
+/// ```
+pub fn read_bool_from_clearsigntoml_without_publicgpgkey(
+    pathstr_to_config_file_that_contains_gpg_key: &str,
+    pathstr_to_target_clearsigned_file: &str,
+    name_of_toml_field_key_to_read: &str,
+) -> Result<bool, String> {
+    // Step 1: Extract GPG key from the config file
+    let key = extract_gpg_key_from_clearsigntoml(
+        pathstr_to_config_file_that_contains_gpg_key,
+        "gpg_key_public",
+    )
+    .map_err(|e| {
+        format!(
+            "Failed to extract GPG key from config file '{}': {}",
+            pathstr_to_config_file_that_contains_gpg_key, e
+        )
+    })?;
+
+    // Step 2: Verify the target file using the extracted key
+    let verification_result = verify_clearsign(pathstr_to_target_clearsigned_file, &key)
+        .map_err(|e| format!("Failed during verification process: {}", e))?;
+
+    // Step 3: Check verification result
+    if !verification_result {
+        return Err(format!(
+            "GPG signature verification failed for file '{}' using key from '{}'",
+            pathstr_to_target_clearsigned_file, pathstr_to_config_file_that_contains_gpg_key
+        ));
+    }
+
+    // Step 4: Read the optional boolean field from the verified file
+    read_bool_field_from_toml(
+        pathstr_to_target_clearsigned_file,
+        name_of_toml_field_key_to_read,
+    )
+    .map_err(|e| {
+        format!(
+            "Failed to read optional boolean '{}' from verified file '{}': {}",
+            name_of_toml_field_key_to_read, pathstr_to_target_clearsigned_file, e
         )
     })
 }

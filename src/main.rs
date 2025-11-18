@@ -394,6 +394,7 @@ use crate::clearsign_toml_module::{
     read_option_i32_tuple_array_from_clearsigntoml_without_publicgpgkey,
     read_option_usize_from_clearsigntoml_without_publicgpgkey,
     read_option_bool_from_clearsigntoml_without_publicgpgkey,
+    read_bool_from_clearsigntoml_without_publicgpgkey,
     read_option_i64_from_clearsigntoml_without_publicgpgkey,
     read_teamchannel_collaborator_ports_clearsigntoml_without_keyid,
     read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml,
@@ -7973,7 +7974,7 @@ struct CoreNode {
     node_name: String,
 
     // /// Is node.toml file gpg encrypted
-    // gpgtoml: Bool,
+    corenode_gpgtoml: bool,
 
     /// A description of the node, intended for display in the TUI.
     description_for_tui: String,
@@ -8107,6 +8108,7 @@ struct CoreNode {
 impl CoreNode {
     fn new(
         node_name: String,
+        corenode_gpgtoml: bool,
         description_for_tui: String,
         directory_path: PathBuf,
         owner: String,
@@ -8191,6 +8193,7 @@ impl CoreNode {
         // 3. Create the CoreNode instance
         let node = CoreNode {
             node_name,
+            corenode_gpgtoml,
             description_for_tui,
             node_unique_id,
             directory_path,
@@ -9513,6 +9516,17 @@ struct CoreNode {
         format!("LCNFTF: node_name Failed to read node_name: {}", e)
     })?;
 
+    // TODO...should be bool not option bool
+    // Example: Read _ from the clearsigned TOML file
+    let corenode_gpgtoml = read_bool_from_clearsigntoml_without_publicgpgkey(
+        &addressbook_readcopy_path_string,  // Config file containing GPG key
+        &node_readcopy_path,                // Target clearsigned file
+        "corenode_gpgtoml"                  // Field to read
+    ).map_err(|e| {
+        cleanup_closure(); // Run cleanup on error
+        format!("LCNFTF: node_name Failed to read corenode_gpgtoml: {}", e)
+    })?;
+
     // Example: Read _ from the clearsigned TOML file
     let description_for_tui = read_singleline_string_from_clearsigntoml_without_publicgpgkey(
         &addressbook_readcopy_path_string,  // Config file containing GPG key
@@ -9791,6 +9805,7 @@ struct CoreNode {
         // teamchannel_collaborators_with_access: toml_value.get("teamchannel_collaborators_with_access").and_then(Value::as_array).map(|arr| arr.iter().filter_map(Value::as_str).map(String::from).collect()).unwrap_or_default(),
 
         node_name: node_name,
+        corenode_gpgtoml: corenode_gpgtoml,
         description_for_tui: description_for_tui,
         node_unique_id: node_unique_id,
         directory_path: directory_path,
@@ -9933,8 +9948,8 @@ struct MessagePostFile {
     links: Vec<String>,
     signature: Option<String>,
 
-    // /// Is MessagePostFile file gpg encrypted
-    gpgtoml: bool,
+    // Is MessagePostFile file gpg encrypted
+    messagepost_gpgtoml: bool,
 }
 
 impl MessagePostFile {
@@ -9946,6 +9961,7 @@ impl MessagePostFile {
         signature: Option<String>,
         graph_navigation_instance_state: &GraphNavigationInstanceState,  // gets uma.toml data
         recipients_list: Vec<String>,
+        messagepost_gpgtoml: bool,
     ) -> MessagePostFile {
         let timestamp = get_current_unix_timestamp();
         // Calculate expiration date using the value from local_user_metadata
@@ -9963,7 +9979,7 @@ impl MessagePostFile {
             expires_at: expires_at, // utc posix timestamp // TODO!! update this
             links: Vec::new(),
             signature: signature,
-            gpgtoml: false,
+            messagepost_gpgtoml: messagepost_gpgtoml,
         }
     }
 }
@@ -10075,6 +10091,15 @@ fn create_new_team_channel(team_channel_name: String, owner: String) -> Result<(
 
     */
     debug_log("Starting CTC create_new_team_channel()");
+
+
+    let corenode_gpgtoml = match q_and_a_get_corenode_gpgtoml() {
+        Ok(data) => data,
+        Err(e) => {
+            debug_log!("CTC: Error getting PA1 Process: {}", e);
+            return Err(e);
+        }
+    };
 
     // Get the base directory path relative to executable location
     let team_channels_dir_path = match make_input_path_name_abs_executabledirectoryrelative_nocheck(
@@ -10251,6 +10276,7 @@ fn create_new_team_channel(team_channel_name: String, owner: String) -> Result<(
     // option to save as .gpgtoml
     let new_node_result = CoreNode::new(
         team_channel_name.clone(),
+        corenode_gpgtoml,
         team_channel_name,
         new_channel_path,
         owner,
@@ -10850,6 +10876,14 @@ fn create_core_node(
     io::stdin().read_line(&mut node_name)?;
     let node_name = node_name.trim().to_string();
 
+    let corenode_gpgtoml = match q_and_a_get_corenode_gpgtoml() {
+        Ok(data) => data,
+        Err(e) => {
+            debug_log!("CTC: Error getting PA1 Process: {}", e);
+            return Err(e);
+        }
+    };
+
     // Get user input for description
     println!("Enter project description:");
     let mut description = String::new();
@@ -10917,6 +10951,7 @@ fn create_core_node(
     // Create CoreNode instance
     let new_node_result = CoreNode::new(
         node_name.clone(),                 // node_name
+        corenode_gpgtoml,
         description,                       // description_for_tui
         node_specific_path.clone(),        // directory_path
         owner,                             // owner
@@ -11825,6 +11860,31 @@ fn q_and_a_get_message_post_gpgtoml_required() -> Result<Option<bool>, ThisProje
         _ => Err(ThisProjectError::InvalidInput(format!("Invalid boolean value: {}. Use yes/no", input)))
     }
 }
+
+
+/// Gets user input for whether user confirmation is required before posting
+///
+/// # Returns
+/// * `Result<Option<bool>, ThisProjectError>` - Whether user confirmation is required or None
+fn q_and_a_get_corenode_gpgtoml() -> Result<bool, ThisProjectError> {
+    println!("This Node is gpgtoml encrypted?  -> (y)es / (n)o / Press-Enter to skip):");
+
+    let mut input = String::new();
+    io::stdout().flush()?;
+    io::stdin().read_line(&mut input)?;
+
+    let input = input.trim().to_lowercase();
+    if input.is_empty() {
+        return Ok(false);
+    }
+
+    match input.as_str() {
+        "yes" | "y" | "true" | "1" => Ok(true),
+        "no" | "n" | "false" | "0" => Ok(false),
+        _ => Err(ThisProjectError::InvalidInput(format!("Invalid boolean value: {}. Use yes/no", input)))
+    }
+}
+
 
 
 /// Gets user input for message post start date with component-based input
@@ -13637,6 +13697,7 @@ fn add_im_message(
         signature, // signature: Option<String>,
         graph_navigation_instance_state, // graph_navigation_instance_state: &GraphNavigationInstanceState,  // gets uma.toml data
         recipients_list.clone(),
+        false, // messagepost_gpgtoml
     );
     let toml_data = toml::to_string(&message).map_err(|e| {
         io::Error::new(io::ErrorKind::Other, format!("TOML serialization error: {}", e))
@@ -22969,6 +23030,24 @@ fn handle_local_owner_desk(
                     //     }
                     // }
 
+                    /*
+                    Maybe here:
+
+                    If message file:
+                    look in Navigation-State for Messages requires gpg-encrypted
+                    if not: look in file for flag
+
+                    if node-file
+                    look in file for flag
+
+                    add steps to
+
+                    (if not a message file or no mssage-file nav-state:  Messages requires gpg-encrypted)
+                    A. save as a temp file (no os-temp, uma-data temp)
+                    B. make read-copy
+                    C. look for flag
+
+                    */
 
                     // --- 6. HLOD decypt ---
                     // 6.1  Handle the Option<Vec<u8>> for gpg_encrypted_intray_file
@@ -23013,6 +23092,18 @@ fn handle_local_owner_desk(
                         extracted_clearsigned_file_data
                     );
 
+
+                    // Section 6.4 - Extract flag - for clearsigned .toml / .gpgtoml
+                    let file_str = std::str::from_utf8(&extracted_clearsigned_file_data)
+                        .map_err(|_| ThisProjectError::InvalidData("Invalid UTF-8 in file content".into()))?;
+
+                    let save_as_gpgtoml = file_str.contains("\nmessagepost_gpgtoml = true\n")
+                        || file_str.contains("\ncorenode_gpgtoml = true\n");
+
+                    debug_log!("HLOD 6.4: save_as_gpgtoml flag = {}", save_as_gpgtoml);
+
+
+
                     // 7 Save File into Uma Folder Structure
                     // let received_toml: Value = toml::from_slice(&extracted_clearsigned_file_data)?;
                     /*
@@ -23037,7 +23128,8 @@ fn handle_local_owner_desk(
                         file_str
                     );
 
-                    let mut incoming_file_path: PathBuf = PathBuf::from("project_graph_data/team_channels");
+                    // let mut incoming_file_path: PathBuf = PathBuf::from("project_graph_data/team_channels");
+                    let mut incoming_file_path: PathBuf; // = PathBuf::new();
 
                     let team_channel_name = get_current_team_channel_name_from_cwd()
                         .ok_or(ThisProjectError::InvalidData(
@@ -23059,6 +23151,11 @@ fn handle_local_owner_desk(
                             &current_path,
                             &local_owner_desk_setup_data.remote_collaborator_name // local user name
                         );
+
+                        // NEW: Adjust extension based on flag
+                        if save_as_gpgtoml {
+                            incoming_file_path.set_extension("gpgtoml");
+                        }
 
                         debug_log!(
                             "HLOD 7.2 got-made incoming_file_path -> {:?}",
@@ -23088,17 +23185,45 @@ fn handle_local_owner_desk(
                         file_hash_set_session_nonce.insert(received_file_hash); // Insert BEFORE saving
 
                         // 3. Saving the File
-                        if let Err(e) = fs::write(&incoming_file_path, &extracted_clearsigned_file_data) {
+                        // MODIFIED: Choose what to save
+                        let data_to_save = if save_as_gpgtoml {
+                            still_encrypted_file_blob  // Save encrypted version
+                        } else {
+                            &decrypted_clearsignfile_data  // Save clearsigned version
+                        };
+
+                        // 3. Saving the File
+                        if let Err(e) = fs::write(&incoming_file_path, data_to_save) {
                             debug_log!("HLOD-InTray: Failed to write message file: {:?}", e);
-                            // Consider returning an error here instead of continuing the loop
                             return Err(ThisProjectError::from(e));
                         }
 
                         debug_log!("7.3 HLOD-InTray: IM message file saved to: {:?}", incoming_file_path);
+                        // if let Err(e) = fs::write(&incoming_file_path, &extracted_clearsigned_file_data) {
+                        //     debug_log!("HLOD-InTray: Failed to write message file: {:?}", e);
+                        //     // Consider returning an error here instead of continuing the loop
+                        //     return Err(ThisProjectError::from(e));
+                        // }
+
+                        // debug_log!("7.3 HLOD-InTray: IM message file saved to: {:?}", incoming_file_path);
+
+
+                    }
+
+                    // HEREHERe
+                    // if message file
+                    // if nav-state fule
+                    // if contains gpg "\ngpgtoml = true\n"
+                    if file_str.contains("\nmessagepost_gpgtoml = true\n") || file_str.contains("\ncorenode_gpgtoml = true\n"){
+
+                        // save .gpg version as .gpgtoml
+                        // ...file name if message...
+
                     }
 
 
                     // TODO for now only handling IM and Node files
+                    // TODO, don't load whole file...
                     if file_str.contains("node_unique_id = \"") {
                         debug_log!("HLOD-InTray: an Ode file. (Grecian Urn...you know.)");
 
@@ -23226,19 +23351,43 @@ fn handle_local_owner_desk(
                                         &olddir_abs_node_directory_path
                                     );
 
-                                    let oldfile_node_toml_file_path = olddir_abs_node_directory_path.join("node.toml"); // Path to the new node.toml
+                                    // for clearsigned .toml and .gpgtoml
+                                    // Determine filename based on flag
+                                    let node_filename = if save_as_gpgtoml {
+                                        "node.gpgtoml"
+                                    } else {
+                                        "node.toml"
+                                    };
 
-                                    debug_log!(
-                                        "HLOD 7.2 got-made oldfile_node_toml_file_path -> {:?}",
-                                        &oldfile_node_toml_file_path
-                                    );
+                                    let oldfile_node_file_path = olddir_abs_node_directory_path.join(node_filename);
 
-                                    // 3.2 replace (delete the old) node.toml file (file, not directory)
-                                    // Write the received data to the OLD node.toml location, replacing it:
-                                    if let Err(e) = fs::write(&oldfile_node_toml_file_path, &extracted_clearsigned_file_data) {
-                                        debug_log!("Error writing node.toml: {:?} - {}", &oldfile_node_toml_file_path, e);
+                                    // Choose what to save
+                                    let data_to_save = if save_as_gpgtoml {
+                                        still_encrypted_file_blob  // Save encrypted version
+                                    } else {
+                                        &decrypted_clearsignfile_data  // Save clearsigned version
+                                    };
+
+                                    // 3.2 replace (delete the old) node file
+                                    if let Err(e) = fs::write(&oldfile_node_file_path, data_to_save) {
+                                        debug_log!("Error writing node file: {:?} - {}", &oldfile_node_file_path, e);
                                         return Err(ThisProjectError::from(e));
                                     }
+
+
+                                    // let oldfile_node_toml_file_path = olddir_abs_node_directory_path.join("node.toml"); // Path to the new node.toml
+
+                                    // debug_log!(
+                                    //     "HLOD 7.2 got-made oldfile_node_toml_file_path -> {:?}",
+                                    //     &oldfile_node_toml_file_path
+                                    // );
+
+                                    // // 3.2 replace (delete the old) node.toml file (file, not directory)
+                                    // // Write the received data to the OLD node.toml location, replacing it:
+                                    // if let Err(e) = fs::write(&oldfile_node_toml_file_path, &extracted_clearsigned_file_data) {
+                                    //     debug_log!("Error writing node.toml: {:?} - {}", &oldfile_node_toml_file_path, e);
+                                    //     return Err(ThisProjectError::from(e));
+                                    // }
 
                                     // 3.3 Move old node directory (not remove/delete) (directory, not file)
                                     // TODO HERE HERE
@@ -23251,18 +23400,49 @@ fn handle_local_owner_desk(
                                     debug_log!("7.3 HLOD-InTray: moved-new file saved to: {:?}", &new_full_abs_node_directory_path);
 
                                 } else {
+                                    // 3. saving node as clearsigned .toml or .gpgtoml
+
+                                    // Determine filename based on flag
+                                    let node_filename = if save_as_gpgtoml {
+                                        "node.gpgtoml"
+                                    } else {
+                                        "node.toml"
+                                    };
+
+                                    let new_node_file_path = new_full_abs_node_directory_path.join(node_filename);
+
+                                    // Choose what to save
+                                    let data_to_save = if save_as_gpgtoml {
+                                        still_encrypted_file_blob  // Save encrypted version
+                                    } else {
+                                        &decrypted_clearsignfile_data  // Save clearsigned version
+                                    };
+
+                                    // Create directory
+                                    fs::create_dir_all(&new_full_abs_node_directory_path)?;
+
+                                    // Save file
+                                    if let Err(e) = fs::write(&new_node_file_path, data_to_save) {
+                                        debug_log!("Error writing node file: {:?} - {}", &new_node_file_path, e);
+                                        return Err(ThisProjectError::from(e));
+                                    }
+
+                                    debug_log!("7.3 HLOD-InTray: new file saved to: {:?}", new_node_file_path);
+
+
+
                                     // Node is new, save it:
                                     // 3. Unpacking/Saving the File as node.toml file
 
-                                    match unpack_new_node_save_toml_and_create_dir(
-                                        &extracted_clearsigned_file_data,
-                                        &new_full_abs_node_directory_path
-                                    ) {
-                                        Ok(_) => debug_log("Node unpacked and saved successfully."),
-                                        Err(e) => debug_log!("Error unpacking node: {}", e),
-                                    }
+                                    // match unpack_new_node_save_toml_and_create_dir(
+                                    //     &extracted_clearsigned_file_data,
+                                    //     &new_full_abs_node_directory_path
+                                    // ) {
+                                    //     Ok(_) => debug_log("Node unpacked and saved successfully."),
+                                    //     Err(e) => debug_log!("Error unpacking node: {}", e),
+                                    // }
 
-                                    debug_log!("7.3 HLOD-InTray: new file saved to: {:?}", new_full_abs_node_directory_path);
+                                    // debug_log!("7.3 HLOD-InTray: new file saved to: {:?}", new_full_abs_node_directory_path);
 
                                     // unpack_new_node_save_toml_and_create_dir(
                                     //     &extracted_clearsigned_file_data,
@@ -24911,12 +25091,8 @@ fn handle_remote_collaborator_meetingroom_desk(
                             );
 
                             /*
-                            Probably a few items from here:
-                            1. original file path (needed?)
-                            2. file suffix, or file 'type' (.gpgtoml or clerasigned .toml) enum?
-                            3. readcopy path to .toml file (to re processed)
-                            4. struct of file to re-serialize to a fresh file? (ideal)
-
+                            Probably from raw path to file
+                            get path to readcopy of toml (checked and 'unpackaged' from clearsign and gpg encrypt)
                             */
                             // Using Debug trait for more detailed error information
                             // this is in clearsigntoml module
