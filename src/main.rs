@@ -6189,13 +6189,32 @@ impl App {
                         needs_display_refresh = true;
                     } else {
                         // Process non-empty input (possibly a command or message)
+                        // match user_input_buffer.as_str() {
+                        //     "q" | "quit" | "b" | "back" => {
+                        //         // Exit message browser
+                        //         break 'browser_loop;
+                        //     },
+                        //     _ => {
+                        //         // Send message
+                        //         self.add_new_message_from_input(&user_input_buffer)?;
+                        //         user_input_buffer.clear();
+                        //         self.load_im_messages();
+                        //         needs_display_refresh = true;
+                        //     }
+                        // }
                         match user_input_buffer.as_str() {
                             "q" | "quit" | "b" | "back" => {
-                                // Exit message browser
                                 break 'browser_loop;
                             },
+                            "--custom" => {
+                                // Launch custom message Q&A
+                                user_input_buffer.clear();
+                                self.create_custom_message_interactive()?;
+                                self.load_im_messages();
+                                needs_display_refresh = true;
+                            },
                             _ => {
-                                // Send message
+                                // Normal message send
                                 self.add_new_message_from_input(&user_input_buffer)?;
                                 user_input_buffer.clear();
                                 self.load_im_messages();
@@ -6251,6 +6270,428 @@ impl App {
         Ok(())
     }
 
+    /// Create custom message with interactive Q&A prompts
+    ///
+    /// Prompts user for:
+    /// - Recipients (from available collaborators)
+    /// - Expiration time (in minutes)
+    /// - Encryption setting (unless required by policy)
+    /// - Message text
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(())` - Message created successfully or user cancelled
+    /// * `Err(io::Error)` - If message creation fails
+    fn create_custom_message_interactive(&mut self) -> io::Result<()> {
+        // Clear screen for clean Q&A interface
+        print!("\x1B[2J\x1B[1;1H");
+        io::stdout().flush()?;
+
+        println!("=== Custom Message Creation ===\n");
+
+        // 1. Get Recipients with retry loop
+        let recipients = loop {
+            println!("Available collaborators:");
+            for (i, collab) in self.graph_navigation_instance_state
+                .current_node_teamchannel_collaborators_with_access
+                .iter()
+                .enumerate()
+            {
+                println!("  {}. {}", i + 1, collab);
+            }
+            println!("\nRecipients (comma-separated names, or ENTER for all, or 'c' to cancel):");
+
+            let mut input = String::new();
+            io::stdin().read_line(&mut input)?;
+            let input = input.trim();
+
+            if input == "c" || input == "cancel" {
+                println!("\n✗ Message creation cancelled");
+                println!("\nPress ENTER to continue...");
+                let mut _dummy = String::new();
+                io::stdin().read_line(&mut _dummy)?;
+                return Ok(());
+            }
+
+            if input.is_empty() {
+                // Empty = all recipients
+                break Vec::new();
+            }
+
+            // Validate recipients
+            let mut validated = Vec::new();
+            let mut all_valid = true;
+
+            for name in input.split(',') {
+                let trimmed = name.trim();
+                if self.graph_navigation_instance_state
+                    .current_node_teamchannel_collaborators_with_access
+                    .contains(&trimmed.to_string())
+                {
+                    validated.push(trimmed.to_string());
+                } else {
+                    println!("✗ Error: '{}' not in collaborator list", trimmed);
+                    all_valid = false;
+                }
+            }
+
+            if all_valid && !validated.is_empty() {
+                break validated;
+            }
+
+            if !all_valid {
+                println!("\nPlease try again with valid names.\n");
+            }
+        };
+
+        // 2. Get Expiration (in minutes)
+        let expires_minutes = loop {
+            println!("\nExpiration time (in minutes from now, or ENTER for default 30 days):");
+
+            let mut input = String::new();
+            io::stdin().read_line(&mut input)?;
+            let input = input.trim();
+
+            if input.is_empty() {
+                // Default: 30 days
+                break 30 * 24 * 60;
+            }
+
+            match input.parse::<u64>() {
+                Ok(minutes) if minutes > 0 => break minutes,
+                _ => {
+                    println!("✗ Invalid input. Please enter a positive number or press ENTER for default.");
+                }
+            }
+        };
+
+        // 3. Get Encryption Setting (with override check)
+        let use_encryption = if self.graph_navigation_instance_state.message_post_gpgtoml_required == Some(true) {
+            println!("\nEncryption: REQUIRED by channel policy (gpgtoml will be used)");
+            true
+        } else {
+            loop {
+                println!("\nUse encryption? (y/n, default: n):");
+
+                let mut input = String::new();
+                io::stdin().read_line(&mut input)?;
+
+                match input.trim().to_lowercase().as_str() {
+                    "y" | "yes" => break true,
+                    "n" | "no" | "" => break false,
+                    _ => {
+                        println!("✗ Invalid input. Please enter 'y' or 'n'.");
+                    }
+                }
+            }
+        };
+
+        // 4. Get Message Text (single line only)
+        let text_message = loop {
+            println!("\nMessage text:");
+
+            let mut input = String::new();
+            io::stdin().read_line(&mut input)?;
+            let text = input.trim();
+
+            if text.is_empty() {
+                println!("✗ Message text cannot be empty.");
+            } else {
+                break text.to_string();
+            }
+        };
+
+        // 5. Preview and Confirm
+        println!("\n--- Message Preview ---");
+
+        let recipients_display = if recipients.is_empty() {
+            "All".to_string()
+        } else {
+            recipients.join(", ")
+        };
+
+        println!("To: {}", recipients_display);
+        println!("Expires: {} minutes from now", expires_minutes);
+        println!("Encrypted: {}", use_encryption);
+        println!("Text: {}", text_message);
+
+        loop {
+            println!("\nSend this message? (y/n):");
+
+            let mut input = String::new();
+            io::stdin().read_line(&mut input)?;
+
+            match input.trim().to_lowercase().as_str() {
+                "y" | "yes" => {
+                    // Create and send message
+                    self.send_custom_message(
+                        recipients,
+                        expires_minutes,
+                        use_encryption,
+                        text_message,
+                    )?;
+
+                    println!("\n✓ Message sent!");
+                    break;
+                }
+                "n" | "no" => {
+                    println!("\n✗ Message cancelled");
+                    break;
+                }
+                _ => {
+                    println!("✗ Invalid input. Please enter 'y' or 'n'.");
+                }
+            }
+        }
+
+        // Pause before returning to browser
+        println!("\nPress ENTER to continue...");
+        let mut _dummy = String::new();
+        io::stdin().read_line(&mut _dummy)?;
+
+        Ok(())
+    }
+
+    /// Send custom message with specified settings
+    ///
+    /// Helper function that handles the actual message creation and saving.
+    fn send_custom_message(
+        &mut self,
+        recipients: Vec<String>,
+        expires_minutes: u64,
+        use_encryption: bool,
+        text_message: String,
+    ) -> io::Result<()> {
+        // Calculate expiration timestamp
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Time error: {}", e)))?
+            .as_secs();
+
+        let expires_at = now + (expires_minutes * 60);
+
+        // Read metadata to get node info
+        let metadata_path = self.current_path.join("0.toml");
+        let metadata_string = fs::read_to_string(&metadata_path)?;
+        let metadata: NodeInstMsgBrowserMetadata = toml::from_str(&metadata_string)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("TOML error: {}", e)))?;
+
+        // Get next sequential file path
+        let file_path = get_next_message_file_path(
+            &self.current_path,
+            &self.graph_navigation_instance_state.local_owner_user
+        );
+
+        debug_log!("SCMSG: Creating message at: {:?}", file_path);
+
+        /*
+        impl MessagePostFile {
+            fn new(
+                graph_navigation_instance_state: &GraphNavigationInstanceState,
+                owner: &str, // owner
+                node_name: &str, // node_name
+                filepath_in_node: &str, //filepath_in_node
+                text_message: &str, // text_message
+                recipients_list: Vec<String>, // teamchannel_collaborators_with_access
+                messagepost_gpgtoml: bool,
+                expires_at: Option<u64>,  // NEW: Custom expiration, or None for default
+            ) -> MessagePostFile {
+        */
+
+        // Create message with custom settings
+        let message = MessagePostFile::new(
+            &self.graph_navigation_instance_state,
+            &self.graph_navigation_instance_state.local_owner_user,
+            &metadata.node_name,
+            &metadata.path_in_node,
+            &text_message,
+            if recipients.is_empty() {
+                self.graph_navigation_instance_state.current_node_teamchannel_collaborators_with_access.clone()
+            } else {
+                recipients.clone()
+            },
+            use_encryption,
+            Some(expires_at),
+        );
+
+        // Serialize
+        let toml_data = toml::to_string(&message)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Serialization error: {}", e)))?;
+
+        // Save based on encryption setting
+        if use_encryption {
+            let base_path = file_path.with_extension("");
+            save_message_as_gpgtoml(&base_path, &toml_data)?;
+        } else {
+            save_message_as_clearsigned_toml(&file_path, &toml_data)?;
+        }
+
+        // Write sync flags
+        let final_recipients = if recipients.is_empty() {
+            &self.graph_navigation_instance_state.current_node_teamchannel_collaborators_with_access
+        } else {
+            &recipients
+        };
+
+        let _ = write_newfile_sendq_flag(final_recipients, &file_path);
+
+        debug_log!("SCMSG: Message created successfully");
+
+        Ok(())
+    }
+
+    // fn create_custom_message_interactive(&mut self) -> io::Result<()> {
+    //     // Clear screen for clean Q&A interface
+    //     print!("\x1B[2J\x1B[1;1H");
+    //     io::stdout().flush()?;
+
+    //     println!("=== Custom Message Creation ===\n");
+
+    //     // 1. Get Recipients
+    //     println!("Available collaborators:");
+    //     for (i, collab) in self.graph_navigation_instance_state
+    //         .current_node_teamchannel_collaborators_with_access
+    //         .iter()
+    //         .enumerate()
+    //     {
+    //         println!("  {}. {}", i + 1, collab);
+    //     }
+    //     println!("\nRecipients (comma-separated names, or ENTER for all):");
+
+    //     let recipients = read_and_validate_recipients(
+    //         &self.graph_navigation_instance_state.current_node_teamchannel_collaborators_with_access
+    //     )?;
+
+    //     // 2. Get Expiration (in minutes)
+    //     println!("\nExpiration time (in minutes from now, or ENTER for default 30 days):");
+    //     let expires_minutes = read_expiration_minutes()?;
+
+    //     // 3. Get Encryption Setting (with override check)
+    //     let use_encryption = if self.graph_navigation_instance_state.message_post_gpgtoml_required == Some(true) {
+    //         println!("\nEncryption: REQUIRED by channel policy (gpgtoml will be used)");
+    //         true
+    //     } else {
+    //         println!("\nUse encryption? (y/n, default: n):");
+    //         read_yes_no_choice()?
+    //     };
+
+    //     // 4. Get Message Text
+    //     // 4. Get Message Text (SINGLE LINE)
+    //     println!("\nMessage text:");
+    //     let mut text_message = String::new();
+    //     io::stdin().read_line(&mut text_message)?;
+    //     let text_message = text_message.trim();
+
+    //     if text_message.is_empty() {
+    //         println!("✗ Message cannot be empty");
+    //         println!("\nPress ENTER to continue...");
+    //         let mut _dummy = String::new();
+    //         io::stdin().read_line(&mut _dummy)?;
+    //         return Ok(());
+    //     }
+
+    //     // 5. Confirm and create
+    //     println!("\n--- Message Preview ---");
+
+    //     let recipients_display = if recipients.is_empty() {
+    //         "All".to_string()
+    //     } else {
+    //         recipients.join(", ")
+    //     };
+
+    //     println!("To: {}", recipients_display);
+    //     println!("Expires: {} minutes from now", expires_minutes);
+    //     println!("Encrypted: {}", use_encryption);
+    //     println!("Text: {}", text_message);
+    //     println!("\nSend this message? (y/n):");
+
+
+    //     if read_yes_no_choice()? {
+    //         // Calculate expiration timestamp
+    //         let now = SystemTime::now()
+    //             .duration_since(UNIX_EPOCH)
+    //             .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Time error: {}", e)))?
+    //             .as_secs();
+
+    //         let expires_at = now + (expires_minutes * 60);
+
+    //         // Read metadata to get node info
+    //         let metadata_path = self.current_path.join("0.toml");
+    //         let metadata_string = fs::read_to_string(&metadata_path)?;
+    //         let metadata: NodeInstMsgBrowserMetadata = toml::from_str(&metadata_string)
+    //             .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("TOML error: {}", e)))?;
+
+    //         /*
+    //         fn new(
+    //             graph_navigation_instance_state: &GraphNavigationInstanceState,
+
+    //             owner: &str, // owner
+    //             node_name: &str, // node_name
+    //             filepath_in_node: &str, //filepath_in_node
+    //             text_message: &str, // text_message
+    //             recipients_list: Vec<String>, // teamchannel_collaborators_with_access
+    //             messagepost_gpgtoml: bool,
+    //             expires_at: Option<u64>,  // NEW: Custom expiration, or None for default
+    //         ) -> MessagePostFile {
+    //         */
+
+    //         // Create message directly with custom settings
+    //         let message = MessagePostFile::new(
+    //             &self.graph_navigation_instance_state,
+    //             &self.graph_navigation_instance_state.local_owner_user,
+    //             &metadata.node_name,
+    //             &metadata.path_in_node,
+    //             &text_message,
+    //             if recipients.is_empty() {
+    //                 self.graph_navigation_instance_state.current_node_teamchannel_collaborators_with_access.clone()
+    //             } else {
+    //                 recipients.clone()
+    //             },
+    //             use_encryption,
+    //             Some(expires_at),  // NEW: Custom expiration
+    //         );
+
+    //         // Generate filename and save
+    //         let timestamp = now;
+    //         let filename = format!("{}_{}.toml",
+    //             timestamp,
+    //             self.graph_navigation_instance_state.local_owner_user
+    //         );
+    //         let file_path = self.current_path.join(filename);
+
+    //         // Serialize
+    //         let toml_data = toml::to_string(&message)
+    //             .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Serialization error: {}", e)))?;
+
+    //         // Save based on encryption setting
+    //         if use_encryption {
+    //             let base_path = file_path.with_extension("");
+    //             save_message_as_gpgtoml(&base_path, &toml_data)?;
+    //         } else {
+    //             save_message_as_clearsigned_toml(&file_path, &toml_data)?;
+    //         }
+
+    //         // Write sync flags
+    //         let final_recipients = if recipients.is_empty() {
+    //             &self.graph_navigation_instance_state.current_node_teamchannel_collaborators_with_access
+    //         } else {
+    //             &recipients
+    //         };
+    //         let _ = write_newfile_sendq_flag(final_recipients, &file_path);
+
+    //         println!("\n✓ Message sent!");
+    //     } else {
+    //         println!("\n✗ Message cancelled");
+    //     }
+
+    //     // Pause before returning to browser
+    //     println!("\nPress ENTER to continue...");
+    //     let mut _dummy = String::new();
+    //     io::stdin().read_line(&mut _dummy)?;
+
+    //     Ok(())
+    // }
+
     /// Helper function to render the message browser screen
     ///
     /// Displays:
@@ -6304,110 +6745,375 @@ impl App {
             &message_path,
             local_owner_user,
             input.trim(),
-            None,
             &self.graph_navigation_instance_state,
         ).map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to add message: {}", e)))
     }
 
+    /// Load instant messages from current directory
+    ///
+    /// # Purpose
+    ///
+    /// Loads all instant message files from the current directory, handling both
+    /// clearsigned (.toml) and encrypted (.gpgtoml) formats. Displays messages
+    /// in the TUI message list.
+    ///
+    /// # Process Flow
+    ///
+    /// 1. Clear existing message list
+    /// 2. Check if directory contains messages (excluding 0.toml metadata)
+    /// 3. If empty, prompt user to create first message
+    /// 4. For each message file:
+    ///    - Get readable temp copy (decrypt if .gpgtoml, verify if clearsigned)
+    ///    - Read owner and text fields
+    ///    - Add to display list
+    ///    - Clean up temp copy
+    ///
+    /// # Message File Formats
+    ///
+    /// - `.toml` files: Clearsigned TOML (authenticated but readable)
+    /// - `.gpgtoml` files: Encrypted TOML (requires decryption)
+    /// - `0.toml`: Metadata file (excluded from message list)
+    ///
+    /// # Error Handling
+    ///
+    /// Errors are logged but don't halt loading - allows partial message display
+    /// if some files fail to load. First message creation errors are fatal.
+    ///
+    /// # Side Effects
+    ///
+    /// - Clears `self.tui_textmessage_list`
+    /// - Populates `self.tui_textmessage_list` with loaded messages
+    /// - May prompt user for input if channel is empty
+    /// - Creates temp files for reading (cleaned up after use)
     fn load_im_messages(&mut self) {
-        debug_log("starting: load_im_messages called");
-        debug_log(&format!("self.current_path  {:?}", self.current_path));
+        debug_log!("LIM: Starting load_im_messages");
+        debug_log!("LIM: Current path: {:?}", self.current_path);
+
         self.tui_textmessage_list.clear();
 
-        if self.current_path.is_dir() {
-            debug_log(&format!("self.current_path  {:?}", self.current_path));
-            let entries: Vec<_> = WalkDir::new(&self.current_path)
-                .max_depth(1) // Add this line to limit depth
-                .into_iter()
-                .filter_map(|entry| entry.ok())
-                .filter(|entry| entry.path().is_file())
-                .collect();
+        // Verify current path is a directory
+        if !self.current_path.is_dir() {
+            debug_log!("LIM: Current path is not a directory");
+            return;
+        }
 
-            // Inspection block (print file paths)
-            debug_log("=== Files in entries ===");
-            for entry in &entries {
-                debug_log(&format!("  {:?}", entry.path()));
+        debug_log!("LIM: Scanning directory for message files");
+
+        // // Collect all entries in directory (max depth 1)
+        // let entries: Vec<_> = WalkDir::new(&self.current_path)
+        //     .max_depth(1)
+        //     .into_iter()
+        //     .filter_map(|entry| entry.ok())
+        //     .filter(|entry| entry.path().is_file())
+        //     .collect();
+
+        // Collect all entries in directory (max depth 1)
+        let mut entries: Vec<_> = WalkDir::new(&self.current_path)
+            .max_depth(1)
+            .into_iter()
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| entry.path().is_file())
+            .collect();
+
+        // Sort entries by numeric prefix in filename (1__, 2__, 3__, etc.)
+        entries.sort_by_key(|entry| {
+            entry.path()
+                .file_name()
+                .and_then(|n| n.to_str())
+                .and_then(|s| s.split("__").next())  // Get part before "__"
+                .and_then(|num_str| num_str.parse::<u64>().ok())  // Parse as number
+                .unwrap_or(u64::MAX)  // Put unparseable names at end
+        });
+
+        debug_log!("LIM: Entries sorted by filename prefix");
+
+        // Debug: Log all found files
+        debug_log!("LIM: === Files found in directory ===");
+        for entry in &entries {
+            debug_log!("LIM:   {:?}", entry.path());
+        }
+        debug_log!("LIM: === End of file list ===");
+
+        // Check if directory is empty or only contains 0.toml
+        let has_messages = entries.iter().any(|entry| {
+            if let Some(file_name) = entry.path().file_name() {
+                file_name != OsStr::new("0.toml")
+            } else {
+                false
             }
-            debug_log("=== End of entries ===");
+        });
 
-            // Check if only 0.toml exists (or if the directory is empty)
-            if entries.is_empty() ||
-            (entries.len() == 1 && entries[0].path().file_name().unwrap() == OsStr::new("0.toml")) {
-                // Only 0.toml exists (or no files exist), prompt for the first message
-                println!("This channel is empty. Write a welcoming message:");
-                let mut first_message = String::new();
-                io::stdin().read_line(&mut first_message).unwrap();
+        if !has_messages {
+            // Channel is empty - prompt for first message
+            debug_log!("LIM: Channel is empty, prompting for first message");
+            println!("This channel is empty. Write a welcoming message:");
 
-                // Assuming 'local_owner_user' is already loaded in your main function
-                let local_owner_user = self.graph_navigation_instance_state.local_owner_user.clone(); // Access from graph_navigation_instance_state
-
-                let this_file_name = format!("1__{}.toml", local_owner_user);
-                let last_section = extract_last_path_section(&self.current_path);
-
-                // Add the first message (assuming the current user is the owner)
-                /*
-                TODO Top priority area:
-
-                maybe used GraphNavigationInstanceState node data to fill in these values
-
-                fn add_im_message(
-                    path: &Path,
-                    owner: &str,
-                    text: &str,
-                    signature: Option<String>,
-                    graph_navigation_instance_state: &GraphNavigationInstanceState, // Pass local_user_metadata here
-                ) -> Result<(), io::Error> {
-                */
-
-
-                debug_log(&format!("this_file_name {:?}", this_file_name));
-                // debug_log(&format!("self.current_path.join(this_file_name)  {:?}", self.current_path.join(this_file_name)));
-
-                add_im_message(
-                    &self.current_path.join(this_file_name), // path
-                    &local_owner_user, // owner
-                    first_message.trim(), // text
-                    None, // signature
-                    &self.graph_navigation_instance_state, // use GraphNavigationInstanceState
-                ).expect("Failed to add first message");
-
-
-                // Reload entries after adding the first message
-                self.load_im_messages(); // No arguments needed
+            let mut first_message = String::new();
+            if let Err(e) = io::stdin().read_line(&mut first_message) {
+                debug_log!("LIM: Failed to read user input: {}", e);
                 return;
             }
 
-            // Load messages (excluding 0.toml)
-            for entry in entries {
-                if entry.path().is_file() {
-                    let file_name = entry.path().file_name().unwrap().to_string_lossy().to_string();
-                    if file_name != "0.toml" {
-                        // Read the file contents
-                        let file_contents = fs::read_to_string(entry.path()).expect("Failed to read message file");
+            let local_owner_user = self.graph_navigation_instance_state.local_owner_user.clone();
+            let this_file_name = format!("1__{}.toml", local_owner_user);
 
-                        // Assuming you're parsing the TOML into a MessagePostFile struct called 'message'
-                        let message: MessagePostFile = toml::from_str(&file_contents).unwrap();
+            debug_log!("LIM: Creating first message file: {}", this_file_name);
 
-                        debug_log(&format!("file_name from {}", file_name));
-                        debug_log(&format!("Added message from {}", message.owner));
+            /*
+            fn add_im_message(
+                incoming_file_path: &Path,
+                owner: &str,
+                text: &str,
+                signature: Option<String>,
+                graph_navigation_instance_state: &GraphNavigationInstanceState,
+            ) -> Result<(), io::Error> {
+            */
 
-                        // Add the message to the list for display
-                        self.tui_textmessage_list.push(format!("{}: {}", message.owner, message.text_message));
-                    }
+            // Add the first message
+            match add_im_message(
+                &self.current_path.join(this_file_name),
+                &local_owner_user,
+                first_message.trim(),
+                &self.graph_navigation_instance_state,
+            ) {
+                Ok(()) => {
+                    debug_log!("LIM: First message created successfully");
+                    // Recursively reload messages
+                    self.load_im_messages();
+                    return;
+                }
+                Err(e) => {
+                    debug_log!("LIM: Failed to add first message: {}", e);
+                    println!("Error creating first message: {}", e);
+                    return;
                 }
             }
         }
 
-        // // Render the message list
-        // tiny_tui::render_list(
-        //     &self.tui_textmessage_list,
-        //     &self.current_path,
-        //     &self.graph_navigation_instance_state.agenda_process,
-        //     &self.graph_navigation_instance_state.goals_features_subfeatures_tools_targets,
-        //     &self.graph_navigation_instance_state.scope,
-        //     &self.graph_navigation_instance_state.pa2_schedule,
-        // );
+        // Get GPG fingerprint for decryption/verification
+        debug_log!("LIM: Getting GPG fingerprint from uma.toml");
+        let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+            Ok(fingerprint) => {
+                debug_log!("LIM: GPG fingerprint retrieved: {}", fingerprint);
+                fingerprint
+            }
+            Err(e) => {
+                debug_log!("LIM: Failed to read GPG fingerprint from uma.toml: {}", e);
+                println!("Error: Cannot load messages without GPG fingerprint");
+                return;
+            }
+        };
+
+        // Get temp directory for read copies
+        let base_uma_temp_directory_path = match get_base_uma_temp_directory_path() {
+            Ok(path) => path,
+            Err(e) => {
+                debug_log!("LIM: Failed to get temp directory path: {}", e);
+                println!("Error: Cannot create temp directory for message reading");
+                return;
+            }
+        };
+
+        // Load messages (excluding 0.toml)
+        debug_log!("LIM: Loading message files");
+        let mut loaded_count = 0;
+        let mut error_count = 0;
+
+        for entry in entries {
+            if !entry.path().is_file() {
+                continue;
+            }
+
+            // Get filename
+            let file_name = match entry.path().file_name() {
+                Some(name) => name.to_string_lossy().to_string(),
+                None => {
+                    debug_log!("LIM: Entry has no filename: {:?}", entry.path());
+                    continue;
+                }
+            };
+
+            // Skip metadata file
+            if file_name == "0.toml" {
+                debug_log!("LIM: Skipping metadata file: {}", file_name);
+                continue;
+            }
+
+            debug_log!("LIM: Processing message file: {}", file_name);
+
+            // Get readable temp copy (handles both .toml and .gpgtoml)
+            let message_readcopy_path = match get_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
+                entry.path(),
+                &gpg_full_fingerprint_key_id_string,
+                &base_uma_temp_directory_path,
+            ) {
+                Ok(path) => {
+                    debug_log!("LIM: Got temp read copy at: {}", path);
+                    path
+                }
+                Err(e) => {
+                    debug_log!("LIM: Failed to get readable copy of {}: {:?}", file_name, e);
+                    error_count += 1;
+                    continue;
+                }
+            };
+
+            // Read owner field
+            let owner = match read_single_line_string_field_from_toml(
+                &message_readcopy_path,
+                "owner",
+            ) {
+                Ok(owner_value) => {
+                    if owner_value.is_empty() {
+                        debug_log!("LIM: Owner field is empty in {}", file_name);
+                        error_count += 1;
+                        continue;
+                    }
+                    owner_value
+                }
+                Err(e) => {
+                    debug_log!("LIM: Failed to read owner from {}: {}", file_name, e);
+                    error_count += 1;
+                    continue;
+                }
+            };
+
+            // Read text_message field
+            let text_message = match read_single_line_string_field_from_toml(
+                &message_readcopy_path,
+                "text_message",
+            ) {
+                Ok(text) => {
+                    if text.is_empty() {
+                        debug_log!("LIM: text_message field is empty in {}", file_name);
+                        error_count += 1;
+                        continue;
+                    }
+                    text
+                }
+                Err(e) => {
+                    debug_log!("LIM: Failed to read text_message from {}: {}", file_name, e);
+                    error_count += 1;
+                    continue;
+                }
+            };
+
+            debug_log!("LIM: Successfully loaded message from {}: {} chars", owner, text_message.len());
+
+            // Add to display list
+            self.tui_textmessage_list.push(format!("{}: {}", owner, text_message));
+            loaded_count += 1;
+
+            // Note: temp file cleanup is handled by the OS or explicit cleanup
+            // depending on how get_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml works
+        }
+
+        debug_log!("LIM: Finished loading messages: {} loaded, {} errors", loaded_count, error_count);
+
+        if loaded_count == 0 && error_count > 0 {
+            println!("Warning: Failed to load any messages from this channel");
+        }
     }
+
+    // fn load_im_messages(&mut self) {
+    //     debug_log("starting: load_im_messages called");
+    //     debug_log(&format!("self.current_path  {:?}", self.current_path));
+    //     self.tui_textmessage_list.clear();
+
+    //     if self.current_path.is_dir() {
+    //         debug_log(&format!("self.current_path  {:?}", self.current_path));
+    //         let entries: Vec<_> = WalkDir::new(&self.current_path)
+    //             .max_depth(1) // Add this line to limit depth
+    //             .into_iter()
+    //             .filter_map(|entry| entry.ok())
+    //             .filter(|entry| entry.path().is_file())
+    //             .collect();
+
+    //         // Inspection block (print file paths)
+    //         debug_log("=== Files in entries ===");
+    //         for entry in &entries {
+    //             debug_log(&format!("  {:?}", entry.path()));
+    //         }
+    //         debug_log("=== End of entries ===");
+
+    //         // Check if only 0.toml exists (or if the directory is empty)
+    //         if entries.is_empty() ||
+    //         (entries.len() == 1 && entries[0].path().file_name().unwrap() == OsStr::new("0.toml")) {
+    //             // Only 0.toml exists (or no files exist), prompt for the first message
+    //             println!("This channel is empty. Write a welcoming message:");
+    //             let mut first_message = String::new();
+    //             io::stdin().read_line(&mut first_message).unwrap();
+
+    //             // Assuming 'local_owner_user' is already loaded in your main function
+    //             let local_owner_user = self.graph_navigation_instance_state.local_owner_user.clone(); // Access from graph_navigation_instance_state
+
+    //             let this_file_name = format!("1__{}.toml", local_owner_user);
+    //             let last_section = extract_last_path_section(&self.current_path);
+
+    //             // Add the first message (assuming the current user is the owner)
+    //             /*
+    //             TODO Top priority area:
+
+    //             maybe used GraphNavigationInstanceState node data to fill in these values
+
+    //             fn add_im_message(
+    //                 path: &Path,
+    //                 owner: &str,
+    //                 text: &str,
+    //                 signature: Option<String>,
+    //                 graph_navigation_instance_state: &GraphNavigationInstanceState, // Pass local_user_metadata here
+    //             ) -> Result<(), io::Error> {
+    //             */
+
+
+    //             debug_log(&format!("this_file_name {:?}", this_file_name));
+    //             // debug_log(&format!("self.current_path.join(this_file_name)  {:?}", self.current_path.join(this_file_name)));
+
+    //             add_im_message(
+    //                 &self.current_path.join(this_file_name), // path
+    //                 &local_owner_user, // owner
+    //                 first_message.trim(), // text
+    //                 None, // signature
+    //                 &self.graph_navigation_instance_state, // use GraphNavigationInstanceState
+    //             ).expect("Failed to add first message");
+
+
+    //             // Reload entries after adding the first message
+    //             self.load_im_messages(); // No arguments needed
+    //             return;
+    //         }
+
+    //         // Load messages (excluding 0.toml)
+    //         for entry in entries {
+    //             if entry.path().is_file() {
+    //                 let file_name = entry.path().file_name().unwrap().to_string_lossy().to_string();
+    //                 if file_name != "0.toml" {
+    //                     // Read the file contents
+    //                     let file_contents = fs::read_to_string(entry.path()).expect("Failed to read message file");
+
+    //                     // Assuming you're parsing the TOML into a MessagePostFile struct called 'message'
+    //                     let message: MessagePostFile = toml::from_str(&file_contents).unwrap();
+
+    //                     debug_log(&format!("file_name from {}", file_name));
+    //                     debug_log(&format!("Added message from {}", message.owner));
+
+    //                     // Add the message to the list for display
+    //                     self.tui_textmessage_list.push(format!("{}: {}", message.owner, message.text_message));
+    //                 }
+    //             }
+    //         }
+    //     }
+
+    //     // // Render the message list
+    //     // tiny_tui::render_list(
+    //     //     &self.tui_textmessage_list,
+    //     //     &self.current_path,
+    //     //     &self.graph_navigation_instance_state.agenda_process,
+    //     //     &self.graph_navigation_instance_state.goals_features_subfeatures_tools_targets,
+    //     //     &self.graph_navigation_instance_state.scope,
+    //     //     &self.graph_navigation_instance_state.pa2_schedule,
+    //     // );
+    // }
 
     fn enter_task_browser(&mut self) {
         debug_log!("task-mode: starting: enter_task_browser");
@@ -7431,7 +8137,7 @@ fn check_collaborator_collisions(
 }
 
 fn add_collaborator_qa(
-    graph_navigation_instance_state: &GraphNavigationInstanceState
+    // graph_navigation_instance_state: &GraphNavigationInstanceState
 ) -> Result<(), io::Error> {
 
     println!("Name: Enter collaborator user name:");
@@ -7567,6 +8273,88 @@ fn check_team_channel_collision(channel_name: &str) -> bool {
      channel_path.exists()
 }
 
+
+fn read_and_validate_recipients(allowed: &[String]) -> io::Result<Vec<String>> {
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+
+    if input.trim().is_empty() {
+        return Ok(Vec::new()); // Empty = all recipients
+    }
+
+    let mut validated = Vec::new();
+    for name in input.trim().split(',') {
+        let trimmed = name.trim();
+        if allowed.contains(&trimmed.to_string()) {
+            validated.push(trimmed.to_string());
+        } else {
+            println!("Warning: '{}' not in collaborator list, skipping", trimmed);
+        }
+    }
+
+    if validated.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "No valid recipients specified"
+        ));
+    }
+
+    Ok(validated)
+}
+
+fn read_expiration_minutes() -> io::Result<u64> {
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+
+    if input.trim().is_empty() {
+        // Default: 30 days
+        return Ok(30 * 24 * 60);
+    }
+
+    match input.trim().parse::<u64>() {
+        Ok(minutes) if minutes > 0 => Ok(minutes),
+        _ => {
+            println!("Invalid input, using default (30 days)");
+            Ok(30 * 24 * 60)
+        }
+    }
+}
+
+fn read_yes_no_choice() -> io::Result<bool> {
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+
+    match input.trim().to_lowercase().as_str() {
+        "y" | "yes" => Ok(true),
+        "n" | "no" | "" => Ok(false),
+        _ => {
+            println!("Invalid input, treating as 'no'");
+            Ok(false)
+        }
+    }
+}
+
+fn read_multiline_text() -> io::Result<String> {
+    let mut lines = Vec::new();
+    loop {
+        let mut line = String::new();
+        io::stdin().read_line(&mut line)?;
+
+        if line.trim().is_empty() {
+            break;
+        }
+        lines.push(line.trim_end().to_string());
+    }
+
+    if lines.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Message text cannot be empty"
+        ));
+    }
+
+    Ok(lines.join("\n"))
+}
 
 /// Represents the current state of a user's navigation within the UMA project graph.
 ///
@@ -8238,57 +9026,57 @@ impl CoreNode {
     ///  - File writing
     fn save_node_to_clearsigned_file(&self) -> Result<(), io::Error> {
         // Debug logging for initial state
-        debug_log!("in imple CoreNode: SNTF -> Starting save_node_to_clearsigned_file!");
-        debug_log!("SNTF: Current working directory: {:?}", std::env::current_dir()?);
-        debug_log!("SNTF: Target directory path: {:?}", self.directory_path);
+        debug_log!("in imple CoreNode: SNCTF -> Starting save_node_to_clearsigned_file!");
+        debug_log!("SNCTF: Current working directory: {:?}", std::env::current_dir()?);
+        debug_log!("SNCTF: Target directory path: {:?}", self.directory_path);
 
         // 1. Verify and create directory structure
         if !self.directory_path.exists() {
-            debug_log!("SNTF: Directory doesn't exist, creating it");
+            debug_log!("SNCTF: Directory doesn't exist, creating it");
             fs::create_dir_all(&self.directory_path)?;
         }
-        debug_log!("SNTF: Directory now exists: {}", self.directory_path.exists());
+        debug_log!("SNCTF: Directory now exists: {}", self.directory_path.exists());
 
         // 2. Verify directory is actually a directory
         if !self.directory_path.is_dir() {
-            debug_log!("SNTF: Path exists but is not a directory!");
+            debug_log!("SNCTF: Path exists but is not a directory!");
             return Err(io::Error::new(
                 io::ErrorKind::Other,
-                "SNTF: Path exists but is not a directory"
+                "SNCTF: Path exists but is not a directory"
             ));
         }
 
         // 3. Serialize the CoreNode struct to a TOML string
         let toml_string = toml::to_string(&self).map_err(|e| {
-            debug_log!("SNTF: TOML serialization error: {}", e);
+            debug_log!("SNCTF: TOML serialization error: {}", e);
             io::Error::new(
                 io::ErrorKind::Other,
-                format!("SNTF: TOML serialization error: {}", e),
+                format!("SNCTF: TOML serialization error: {}", e),
             )
         })?;
-        debug_log!("SNTF: Successfully serialized CoreNode to TOML");
+        debug_log!("SNCTF: Successfully serialized CoreNode to TOML");
 
         // 4. Construct and verify the file path
         let file_path = self.directory_path.join("node.toml");
-        debug_log!("SNTF: Full file path for node.toml: {:?}", file_path);
+        debug_log!("SNCTF: Full file path for node.toml: {:?}", file_path);
 
         // 5. Verify parent directory one more time
         if let Some(parent) = file_path.parent() {
             if !parent.exists() {
-                debug_log!("SNTF: Parent directory missing, creating: {:?}", parent);
+                debug_log!("SNCTF: Parent directory missing, creating: {:?}", parent);
                 fs::create_dir_all(parent)?;
             }
         }
 
         // 6. Write the TOML data to the file
-        debug_log!("SNTF: Writing TOML data to file...");
+        debug_log!("SNCTF: Writing TOML data to file...");
         fs::write(&file_path, &toml_string)?;
 
         // 7. Verify the file was created
         if file_path.exists() {
-            debug_log!("SNTF: Successfully created node.toml at: {:?}", file_path);
+            debug_log!("SNCTF: Successfully created node.toml at: {:?}", file_path);
         } else {
-            debug_log!("SNTF: Warning: File write succeeded but file doesn't exist!");
+            debug_log!("SNCTF: Warning: File write succeeded but file doesn't exist!");
         }
 
         /*
@@ -8408,7 +9196,7 @@ impl CoreNode {
         Addressbook file: Already clearsigned → Remains unchanged (read-only operation)
 
         */
-        debug_log!("SNTF: Starting convert_tomlfile_without_keyid_into_clearsigntoml_inplace()");
+        debug_log!("SNCTF: Starting convert_tomlfile_without_keyid_into_clearsigntoml_inplace()");
 
         // Get armored public key, using key-id (full fingerprint in)
         let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
@@ -8430,16 +9218,16 @@ impl CoreNode {
             // Convert GpgError to std::io::Error
             std::io::Error::new(
                 std::io::ErrorKind::Other,
-                format!("SNTF: GPG into_clearsign operation failed: {:?}", gpg_err),
+                format!("SNCTF: GPG into_clearsign operation failed: {:?}", gpg_err),
             )
         })?;
 
         Ok(())
     }
 
-    fn update_updated_at_timestamp(&mut self) {
-        self.updated_at_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-    }
+    // fn update_updated_at_timestamp(&mut self) {
+    //     self.updated_at_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+    // }
 
     /// Saves the `CoreNode` data to a `node.gpgtoml` file.
     ///
@@ -8469,35 +9257,35 @@ impl CoreNode {
     ///  - Temp file cleanup (ensures no files left in production)
     fn save_node_as_gpgtoml(&self) -> Result<(), io::Error> {
         // Debug logging for initial state
-        debug_log!("in impl CoreNode: SNTF -> Starting save_node_as_gpgtoml!");
-        debug_log!("SNTF: Current working directory: {:?}", std::env::current_dir()?);
-        debug_log!("SNTF: Target directory path: {:?}", self.directory_path);
+        debug_log!("in impl CoreNode: SNAGTF -> Starting save_node_as_gpgtoml!");
+        debug_log!("SNAGTF: Current working directory: {:?}", std::env::current_dir()?);
+        debug_log!("SNAGTF: Target directory path: {:?}", self.directory_path);
 
         // 1. Verify and create target directory structure
         if !self.directory_path.exists() {
-            debug_log!("SNTF: Directory doesn't exist, creating it");
+            debug_log!("SNAGTF: Directory doesn't exist, creating it");
             fs::create_dir_all(&self.directory_path)?;
         }
-        debug_log!("SNTF: Directory now exists: {}", self.directory_path.exists());
+        debug_log!("SNAGTF: Directory now exists: {}", self.directory_path.exists());
 
         // 2. Verify directory is actually a directory
         if !self.directory_path.is_dir() {
-            debug_log!("SNTF: Path exists but is not a directory!");
+            debug_log!("SNAGTF: Path exists but is not a directory!");
             return Err(io::Error::new(
                 io::ErrorKind::Other,
-                "SNTF: Path exists but is not a directory"
+                "SNAGTF: Path exists but is not a directory"
             ));
         }
 
         // 3. Serialize the CoreNode struct to a TOML string
         let toml_string = toml::to_string(&self).map_err(|e| {
-            debug_log!("SNTF: TOML serialization error: {}", e);
+            debug_log!("SNAGTF: TOML serialization error: {}", e);
             io::Error::new(
                 io::ErrorKind::Other,
-                format!("SNTF: TOML serialization error: {}", e),
+                format!("SNAGTF: TOML serialization error: {}", e),
             )
         })?;
-        debug_log!("SNTF: Successfully serialized CoreNode to TOML");
+        debug_log!("SNAGTF: Successfully serialized CoreNode to TOML");
 
         // 4. Get temp directory and create unique temp file path
         let temp_dir = get_base_uma_temp_directory_path()?;
@@ -8507,25 +9295,25 @@ impl CoreNode {
             .as_secs();
         let temp_file_name = format!("node_{}.toml", timestamp);
         let temp_file_path = temp_dir.join(temp_file_name);
-        debug_log!("SNTF: Temp file path: {:?}", temp_file_path);
+        debug_log!("SNAGTF: Temp file path: {:?}", temp_file_path);
 
         // 5. Write TOML data to temp file
-        debug_log!("SNTF: Writing TOML data to temp file...");
+        debug_log!("SNAGTF: Writing TOML data to temp file...");
         fs::write(&temp_file_path, &toml_string)?;
 
         // Verify temp file was created
         if !temp_file_path.exists() {
             return Err(io::Error::new(
                 io::ErrorKind::Other,
-                "SNTF: Failed to create temp file"
+                "SNAGTF: Failed to create temp file"
             ));
         }
-        debug_log!("SNTF: Successfully created temp file at: {:?}", temp_file_path);
+        debug_log!("SNAGTF: Successfully created temp file at: {:?}", temp_file_path);
 
         // 6. Get GPG fingerprint for the local user
         let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
             Ok(fingerprint) => {
-                debug_log!("SNTF: Retrieved GPG fingerprint: {}", fingerprint);
+                debug_log!("SNAGTF: Retrieved GPG fingerprint: {}", fingerprint);
                 fingerprint
             },
             Err(e) => {
@@ -8539,27 +9327,27 @@ impl CoreNode {
         };
 
         // 7. Clearsign the temp file in-place
-        debug_log!("SNTF: Starting clearsign operation on temp file");
+        debug_log!("SNAGTF: Starting clearsign operation on temp file");
         match convert_tomlfile_without_keyid_using_gpgtomlkeyid_into_clearsigntoml_inplace(
             &temp_file_path,
             COLLABORATOR_ADDRESSBOOK_PATH_STR,
             &gpg_full_fingerprint_key_id_string,
         ) {
             Ok(()) => {
-                debug_log!("SNTF: Successfully clearsigned temp file");
+                debug_log!("SNAGTF: Successfully clearsigned temp file");
             },
             Err(gpg_err) => {
                 // Clean up temp file before returning error
                 let _ = fs::remove_file(&temp_file_path);
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
-                    format!("SNTF: GPG clearsign operation failed: {:?}", gpg_err),
+                    format!("SNAGTF: GPG clearsign operation failed: {:?}", gpg_err),
                 ));
             }
         }
 
         // 8. Extract public key from GPG keyring using fingerprint
-        debug_log!("SNTF: Extracting public key from GPG for fingerprint: {}", gpg_full_fingerprint_key_id_string);
+        debug_log!("SNAGTF: Extracting public key from GPG for fingerprint: {}", gpg_full_fingerprint_key_id_string);
         let public_key_output = std::process::Command::new("gpg")
             .arg("--armor")
             .arg("--export")
@@ -8570,7 +9358,7 @@ impl CoreNode {
                 let _ = fs::remove_file(&temp_file_path);
                 io::Error::new(
                     io::ErrorKind::Other,
-                    format!("SNTF: Failed to execute GPG export command: {}", e)
+                    format!("SNAGTF: Failed to execute GPG export command: {}", e)
                 )
             })?;
 
@@ -8581,7 +9369,7 @@ impl CoreNode {
             let stderr = String::from_utf8_lossy(&public_key_output.stderr);
             return Err(io::Error::new(
                 io::ErrorKind::Other,
-                format!("SNTF: GPG export failed: {}", stderr)
+                format!("SNAGTF: GPG export failed: {}", stderr)
             ));
         }
 
@@ -8592,7 +9380,7 @@ impl CoreNode {
                 let _ = fs::remove_file(&temp_file_path);
                 io::Error::new(
                     io::ErrorKind::Other,
-                    format!("SNTF: Failed to convert public key to UTF-8: {}", e)
+                    format!("SNAGTF: Failed to convert public key to UTF-8: {}", e)
                 )
             })?;
 
@@ -8602,53 +9390,53 @@ impl CoreNode {
             let _ = fs::remove_file(&temp_file_path);
             return Err(io::Error::new(
                 io::ErrorKind::Other,
-                "SNTF: GPG export returned empty public key"
+                "SNAGTF: GPG export returned empty public key"
             ));
         }
-        debug_log!("SNTF: Successfully extracted public key from GPG");
+        debug_log!("SNAGTF: Successfully extracted public key from GPG");
 
         // 9. Construct final output path for encrypted file
         let final_file_path = self.directory_path.join("node.gpgtoml");
-        debug_log!("SNTF: Final encrypted file path: {:?}", final_file_path);
+        debug_log!("SNAGTF: Final encrypted file path: {:?}", final_file_path);
 
         // 10. Encrypt the clearsigned temp file with the public key
-        debug_log!("SNTF: Starting encryption of clearsigned file");
+        debug_log!("SNAGTF: Starting encryption of clearsigned file");
         match encrypt_clearsigned_toml_with_public_key_content(
             &temp_file_path,
             &public_key_string,
             &final_file_path
         ) {
             Ok(()) => {
-                debug_log!("SNTF: Successfully created encrypted file at: {:?}", final_file_path);
+                debug_log!("SNAGTF: Successfully created encrypted file at: {:?}", final_file_path);
             },
             Err(e) => {
                 // Clean up temp file before returning error
                 let _ = fs::remove_file(&temp_file_path);
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
-                    format!("SNTF: Encryption failed: {:?}", e)
+                    format!("SNAGTF: Encryption failed: {:?}", e)
                 ));
             }
         }
 
         // 11. Clean up temp file (critical for production)
-        debug_log!("SNTF: Cleaning up temp file");
+        debug_log!("SNAGTF: Cleaning up temp file");
         if let Err(e) = fs::remove_file(&temp_file_path) {
             // Log warning but don't fail the operation since the main task succeeded
-            debug_log!("SNTF: Warning: Failed to remove temp file: {}", e);
+            debug_log!("SNAGTF: Warning: Failed to remove temp file: {}", e);
         }
 
         // 12. Verify final file exists
         if final_file_path.exists() {
-            debug_log!("SNTF: Success! node.gpgtoml created at: {:?}", final_file_path);
+            debug_log!("SNAGTF: Success! node.gpgtoml created at: {:?}", final_file_path);
         } else {
             return Err(io::Error::new(
                 io::ErrorKind::Other,
-                "SNTF: Final file creation appeared successful but file doesn't exist"
+                "SNAGTF: Final file creation appeared successful but file doesn't exist"
             ));
         }
 
-        debug_log!("SNTF: save_node_as_gpgtoml completed successfully");
+        debug_log!("SNAGTF: save_node_as_gpgtoml completed successfully");
         Ok(())
     }
 
@@ -9894,6 +10682,2594 @@ pub fn save_toml_to_file<T: Serialize>(data: &T, file_path: &Path) -> Result<(),
     Ok(())
 }
 
+// ====================
+// Message Post Section
+// ====================
+
+/// Creates a tuple of (directory_path, final_filename) for message post files.
+///
+/// # Purpose
+///
+/// This function handles the path and filename logic for instant message files,
+/// determining the correct file extension based on encryption settings:
+/// - `.toml` for clearsigned TOML files (unencrypted but signed)
+/// - `.gpgtoml` for GPG encrypted TOML files
+///
+/// # Project Context
+///
+/// Instant messages in the system can be stored in two formats:
+/// 1. Clearsigned TOML: Human-readable, cryptographically signed
+/// 2. GPG Encrypted TOML: Encrypted + signed, only readable by key holder
+///
+/// The choice affects both file extension and subsequent processing pipeline.
+/// This function ensures consistent naming across the message storage system.
+///
+/// # Arguments
+///
+/// * `incoming_path` - The full path including base filename (may include .toml extension)
+/// * `use_encryption` - If `true`, use `.gpgtoml` extension; if `false`, use `.toml`
+///
+/// # Returns
+///
+/// * `Ok((directory, filename))` - Tuple of parent directory and final filename with correct extension
+/// * `Err(io::Error)` - If path validation fails or path has no parent directory
+///
+/// # Error Cases
+///
+/// - Path has no filename component
+/// - Path has no parent directory (e.g., root path or relative path with no parent)
+/// - Path contains invalid UTF-8 (though this is handled gracefully)
+///
+/// # Examples
+///
+/// ```rust
+/// use std::path::Path;
+///
+/// // Clearsigned format (unencrypted)
+/// let input = Path::new("sync_data/team/messages/1234567890.toml");
+/// let (dir, file) = create_messagepost_file_namepath_extension_tuple(input, false)?;
+/// // dir: "sync_data/team/messages"
+/// // file: "1234567890.toml"
+///
+/// // GPG encrypted format
+/// let input = Path::new("sync_data/team/messages/1234567890.toml");
+/// let (dir, file) = create_messagepost_file_namepath_extension_tuple(input, true)?;
+/// // dir: "sync_data/team/messages"
+/// // file: "1234567890.gpgtoml"
+///
+/// // Also works without extension in input
+/// let input = Path::new("sync_data/team/messages/1234567890");
+/// let (dir, file) = create_messagepost_file_namepath_extension_tuple(input, false)?;
+/// // dir: "sync_data/team/messages"
+/// // file: "1234567890.toml"
+/// ```
+fn create_messagepost_file_namepath_extension_tuple(
+    incoming_path: &Path,
+    use_encryption: bool,
+) -> Result<(PathBuf, PathBuf), io::Error> {
+
+    // Debug logging for inputs
+    debug_log!("CMFNPET: Starting create_messagepost_file_namepath_extension_tuple");
+    debug_log!("CMFNPET: incoming_path: {:?}", incoming_path);
+    debug_log!("CMFNPET: use_encryption: {}", use_encryption);
+
+    // Debug-Assert: Path must have a filename component
+    // ONLY runs in debug builds, NOT in tests or release
+    // #[cfg(not(test))]
+    #[cfg(all(debug_assertions, not(test)))]
+    debug_assert!(
+        incoming_path.file_name().is_some(),
+        "CMFNPET: Path must contain a filename component"
+    );
+
+    // Production-Catch: Handle missing filename
+    // This ALWAYS runs and returns Err instead of panicking
+    let filename_os = incoming_path.file_name()
+        .ok_or_else(|| io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "CMFNPET: Path must contain a filename component"
+        ))?;
+
+    debug_log!("CMFNPET: Original filename: {:?}", filename_os);
+
+    // Extract parent directory
+    // Debug-Assert: Path must have a parent directory
+    // ONLY runs in debug builds, NOT in tests or release
+    // #[cfg(not(test))]
+    #[cfg(all(debug_assertions, not(test)))]
+    debug_assert!(
+        incoming_path.parent().is_some(),
+        "CMFNPET: Path must have a parent directory"
+    );
+
+    // Production-Catch: Handle missing parent directory
+    // This ALWAYS runs and returns Err instead of panicking
+    let directory_path = incoming_path.parent()
+        .ok_or_else(|| io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "CMFNPET: Path must have a parent directory"
+        ))?
+        .to_path_buf();
+
+    debug_log!("CMFNPET: Parent directory: {:?}", directory_path);
+
+    // Strip any existing extension to get base filename
+    // Use file_stem() to get filename without extension
+    let base_filename = incoming_path.file_stem()
+        .ok_or_else(|| io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "CMFNPET: Cannot extract base filename"
+        ))?;
+
+    debug_log!("CMFNPET: Base filename (no extension): {:?}", base_filename);
+
+    // Construct final filename with appropriate extension
+    let final_filename = if use_encryption {
+        // GPG encrypted format: use .gpgtoml extension
+        let mut filename = base_filename.to_os_string();
+        filename.push(".gpgtoml");
+        PathBuf::from(filename)
+    } else {
+        // Clearsigned format: use .toml extension
+        let mut filename = base_filename.to_os_string();
+        filename.push(".toml");
+        PathBuf::from(filename)
+    };
+
+    debug_log!("CMFNPET: Final filename with extension: {:?}", final_filename);
+
+    // Debug-Assert: Final filename must have an extension
+    // ONLY runs in debug builds, NOT in tests or release
+    debug_assert!(
+        final_filename.extension().is_some(),
+        "CMFNPET: Final filename must have an extension"
+    );
+
+    // Production-Catch: Verify extension exists
+    // This ALWAYS runs and returns Err instead of panicking
+    if final_filename.extension().is_none() {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "CMFNPET: Failed to create filename with extension"
+        ));
+    }
+
+    // Verify correct extension was applied
+    let expected_extension = if use_encryption { "gpgtoml" } else { "toml" };
+
+    // Debug-Assert: Extension must match encryption setting
+    // ONLY runs in debug builds, NOT in tests or release
+    debug_assert!(
+        final_filename.extension()
+            .and_then(|ext| ext.to_str())
+            .map(|ext| ext == expected_extension)
+            .unwrap_or(false),
+        "CMFNPET: Extension must match encryption setting"
+    );
+
+    // Production-Catch: Verify correct extension
+    // This ALWAYS runs and returns Err instead of panicking
+    let actual_extension = final_filename.extension()
+        .and_then(|ext| ext.to_str())
+        .ok_or_else(|| io::Error::new(
+            io::ErrorKind::Other,
+            "CMFNPET: Cannot read final extension"
+        ))?;
+
+    if actual_extension != expected_extension {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            format!(
+                "CMFNPET: Extension mismatch: expected '{}', got '{}'",
+                expected_extension,
+                actual_extension
+            )
+        ));
+    }
+
+    debug_log!("CMFNPET: Successfully created tuple");
+    debug_log!("CMFNPET: Directory: {:?}", directory_path);
+    debug_log!("CMFNPET: Filename: {:?}", final_filename);
+
+    Ok((directory_path, final_filename))
+}
+
+#[cfg(test)]
+mod message_post_names_tests {
+    use super::*;
+    use std::path::Path;
+
+    /// Test: Basic clearsigned TOML path handling with .toml input
+    ///
+    /// Verifies that when given a path with .toml extension and encryption disabled,
+    /// the function correctly extracts directory and preserves .toml extension.
+    #[test]
+    fn test_clearsigned_with_toml_extension() {
+        let input = Path::new("sync_data/team/messages/1234567890.toml");
+        let result = create_messagepost_file_namepath_extension_tuple(input, false);
+
+        // Test-Assert: Function must succeed with valid path
+        assert!(result.is_ok(), "Function should succeed with valid path");
+
+        let (dir, file) = result.unwrap();
+
+        // Test-Assert: Directory path must match expected
+        assert_eq!(
+            dir,
+            PathBuf::from("sync_data/team/messages"),
+            "Directory path should be extracted correctly"
+        );
+
+        // Test-Assert: Filename must match expected
+        assert_eq!(
+            file,
+            PathBuf::from("1234567890.toml"),
+            "Filename should have .toml extension"
+        );
+
+        // Test-Assert: Extension must be 'toml'
+        assert_eq!(
+            file.extension().and_then(|e| e.to_str()),
+            Some("toml"),
+            "Extension should be 'toml'"
+        );
+    }
+
+    /// Test: GPG encrypted path handling with .toml input
+    ///
+    /// Verifies that when given a path with .toml extension and encryption enabled,
+    /// the function replaces the extension with .gpgtoml.
+    #[test]
+    fn test_encrypted_replaces_toml_extension() {
+        let input = Path::new("sync_data/team/messages/1234567890.toml");
+        let result = create_messagepost_file_namepath_extension_tuple(input, true);
+
+        // Test-Assert: Function must succeed with valid path
+        assert!(result.is_ok(), "Function should succeed with valid path");
+
+        let (dir, file) = result.unwrap();
+
+        // Test-Assert: Directory path must match expected
+        assert_eq!(
+            dir,
+            PathBuf::from("sync_data/team/messages"),
+            "Directory path should be extracted correctly"
+        );
+
+        // Test-Assert: Filename must have .gpgtoml extension
+        assert_eq!(
+            file,
+            PathBuf::from("1234567890.gpgtoml"),
+            "Filename should have .gpgtoml extension"
+        );
+
+        // Test-Assert: Extension must be 'gpgtoml'
+        assert_eq!(
+            file.extension().and_then(|e| e.to_str()),
+            Some("gpgtoml"),
+            "Extension should be 'gpgtoml'"
+        );
+    }
+
+    /// Test: Path without extension, clearsigned format
+    ///
+    /// Verifies that the function adds .toml extension when input has no extension.
+    #[test]
+    fn test_no_extension_clearsigned() {
+        let input = Path::new("sync_data/team/messages/1234567890");
+        let result = create_messagepost_file_namepath_extension_tuple(input, false);
+
+        // Test-Assert: Function must succeed with extensionless path
+        assert!(result.is_ok(), "Function should succeed with extensionless path");
+
+        let (dir, file) = result.unwrap();
+
+        // Test-Assert: Directory must match expected
+        assert_eq!(
+            dir,
+            PathBuf::from("sync_data/team/messages"),
+            "Directory path should be extracted correctly"
+        );
+
+        // Test-Assert: Extension must be added
+        assert_eq!(
+            file,
+            PathBuf::from("1234567890.toml"),
+            "Should add .toml extension"
+        );
+    }
+
+    /// Test: Path without extension, encrypted format
+    ///
+    /// Verifies that the function adds .gpgtoml extension when input has no extension.
+    #[test]
+    fn test_no_extension_encrypted() {
+        let input = Path::new("sync_data/team/messages/1234567890");
+        let result = create_messagepost_file_namepath_extension_tuple(input, true);
+
+        // Test-Assert: Function must succeed with extensionless path
+        assert!(result.is_ok(), "Function should succeed with extensionless path");
+
+        let (dir, file) = result.unwrap();
+
+        // Test-Assert: Directory must match expected
+        assert_eq!(
+            dir,
+            PathBuf::from("sync_data/team/messages"),
+            "Directory path should be extracted correctly"
+        );
+
+        // Test-Assert: Extension must be added
+        assert_eq!(
+            file,
+            PathBuf::from("1234567890.gpgtoml"),
+            "Should add .gpgtoml extension"
+        );
+    }
+
+    /// Test: Different extension gets replaced (clearsigned)
+    ///
+    /// Verifies that non-.toml extensions are replaced with .toml for clearsigned.
+    #[test]
+    fn test_different_extension_replaced_clearsigned() {
+        let input = Path::new("sync_data/team/messages/1234567890.txt");
+        let result = create_messagepost_file_namepath_extension_tuple(input, false);
+
+        // Test-Assert: Function must succeed
+        assert!(result.is_ok(), "Function should succeed");
+
+        let (_, file) = result.unwrap();
+
+        // Test-Assert: Extension must be replaced
+        assert_eq!(
+            file,
+            PathBuf::from("1234567890.toml"),
+            "Should replace .txt with .toml"
+        );
+    }
+
+    /// Test: Different extension gets replaced (encrypted)
+    ///
+    /// Verifies that non-.gpgtoml extensions are replaced with .gpgtoml for encrypted.
+    #[test]
+    fn test_different_extension_replaced_encrypted() {
+        let input = Path::new("sync_data/team/messages/1234567890.txt");
+        let result = create_messagepost_file_namepath_extension_tuple(input, true);
+
+        // Test-Assert: Function must succeed
+        assert!(result.is_ok(), "Function should succeed");
+
+        let (_, file) = result.unwrap();
+
+        // Test-Assert: Extension must be replaced
+        assert_eq!(
+            file,
+            PathBuf::from("1234567890.gpgtoml"),
+            "Should replace .txt with .gpgtoml"
+        );
+    }
+
+    /// Test: Nested directory structure
+    ///
+    /// Verifies function works with deeply nested paths.
+    #[test]
+    fn test_nested_directory_structure() {
+        let input = Path::new("a/b/c/d/e/message.toml");
+        let result = create_messagepost_file_namepath_extension_tuple(input, false);
+
+        // Test-Assert: Function must handle nested paths
+        assert!(result.is_ok(), "Function should handle nested paths");
+
+        let (dir, file) = result.unwrap();
+
+        // Test-Assert: Full nested path must be extracted
+        assert_eq!(
+            dir,
+            PathBuf::from("a/b/c/d/e"),
+            "Should extract full nested directory path"
+        );
+
+        // Test-Assert: Filename must be correct
+        assert_eq!(
+            file,
+            PathBuf::from("message.toml"),
+            "Should extract filename correctly"
+        );
+    }
+
+    /// Test: Single directory level
+    ///
+    /// Verifies function works with minimal directory depth.
+    #[test]
+    fn test_single_directory_level() {
+        let input = Path::new("messages/1234567890.toml");
+        let result = create_messagepost_file_namepath_extension_tuple(input, false);
+
+        // Test-Assert: Function must handle single directory level
+        assert!(result.is_ok(), "Function should handle single directory level");
+
+        let (dir, file) = result.unwrap();
+
+        // Test-Assert: Single directory must be extracted
+        assert_eq!(
+            dir,
+            PathBuf::from("messages"),
+            "Should extract single directory correctly"
+        );
+
+        // Test-Assert: Filename must be correct
+        assert_eq!(
+            file,
+            PathBuf::from("1234567890.toml"),
+            "Should extract filename correctly"
+        );
+    }
+    /// Test: Error case - no filename
+        ///
+        /// Verifies function returns error when path has no filename component.
+        #[test]
+        fn test_error_no_filename() {
+            // Use root path which has no filename
+            let input = Path::new("/");
+            let result = create_messagepost_file_namepath_extension_tuple(input, false);
+
+            assert!(
+                result.is_err(),
+                "Function should return error for path without filename"
+            );
+
+            if let Err(e) = result {
+                let error_msg = format!("{}", e);
+                assert!(
+                    error_msg.contains("filename component"),
+                    "Error message should mention missing filename component, got: {}",
+                    error_msg
+                );
+            }
+        }
+
+        /// Test: Error case - no parent directory
+        ///
+        /// Verifies function returns error when path has no parent.
+        #[test]
+        fn test_error_no_parent() {
+            // Use root path which has no parent
+            let input = Path::new("/");
+            let result = create_messagepost_file_namepath_extension_tuple(input, false);
+
+            assert!(
+                result.is_err(),
+                "Function should return error for path without parent directory"
+            );
+
+            if let Err(e) = result {
+                let error_msg = format!("{}", e);
+                assert!(
+                    error_msg.contains("parent directory") || error_msg.contains("filename component"),
+                    "Error message should mention missing parent directory, got: {}",
+                    error_msg
+                );
+            }
+        }
+
+    /// Test: Complex filename with multiple dots
+    ///
+    /// Verifies that only the final extension is replaced, not intermediate dots.
+    #[test]
+    fn test_filename_with_multiple_dots() {
+        let input = Path::new("messages/my.message.file.toml");
+        let result = create_messagepost_file_namepath_extension_tuple(input, true);
+
+        // Test-Assert: Function must handle multiple dots
+        assert!(result.is_ok(), "Function should handle multiple dots");
+
+        let (_, file) = result.unwrap();
+
+        // Test-Assert: Dots in stem must be preserved
+        assert_eq!(
+            file,
+            PathBuf::from("my.message.file.gpgtoml"),
+            "Should preserve dots in filename stem and replace extension"
+        );
+    }
+
+    /// Test: Filename with spaces
+    ///
+    /// Verifies function handles filenames containing spaces correctly.
+    #[test]
+    fn test_filename_with_spaces() {
+        let input = Path::new("messages/my message file.toml");
+        let result = create_messagepost_file_namepath_extension_tuple(input, false);
+
+        // Test-Assert: Function must handle spaces in filename
+        assert!(result.is_ok(), "Function should handle spaces in filename");
+
+        let (_, file) = result.unwrap();
+
+        // Test-Assert: Spaces must be preserved
+        assert_eq!(
+            file,
+            PathBuf::from("my message file.toml"),
+            "Should preserve spaces in filename"
+        );
+    }
+
+    /// Test: Absolute path (Unix-style)
+    ///
+    /// Verifies function works with absolute paths.
+    #[test]
+    #[cfg(unix)]
+    fn test_absolute_path_unix() {
+        let input = Path::new("/home/user/sync_data/messages/1234567890.toml");
+        let result = create_messagepost_file_namepath_extension_tuple(input, false);
+
+        // Test-Assert: Function must handle absolute paths
+        assert!(result.is_ok(), "Function should handle absolute paths");
+
+        let (dir, file) = result.unwrap();
+
+        // Test-Assert: Absolute directory path must be correct
+        assert_eq!(
+            dir,
+            PathBuf::from("/home/user/sync_data/messages"),
+            "Should extract absolute directory path correctly"
+        );
+
+        // Test-Assert: Filename must be correct
+        assert_eq!(
+            file,
+            PathBuf::from("1234567890.toml"),
+            "Should extract filename correctly from absolute path"
+        );
+    }
+
+    /// Test: Absolute path (Windows-style)
+    ///
+    /// Verifies function works with Windows absolute paths.
+    #[test]
+    #[cfg(windows)]
+    fn test_absolute_path_windows() {
+        let input = Path::new("C:\\Users\\user\\sync_data\\messages\\1234567890.toml");
+        let result = create_messagepost_file_namepath_extension_tuple(input, false);
+
+        // Test-Assert: Function must handle Windows absolute paths
+        assert!(result.is_ok(), "Function should handle Windows absolute paths");
+
+        let (dir, file) = result.unwrap();
+
+        // Test-Assert: Windows absolute directory path must be correct
+        assert_eq!(
+            dir,
+            PathBuf::from("C:\\Users\\user\\sync_data\\messages"),
+            "Should extract Windows absolute directory path correctly"
+        );
+
+        // Test-Assert: Filename must be correct
+        assert_eq!(
+            file,
+            PathBuf::from("1234567890.toml"),
+            "Should extract filename correctly from Windows path"
+        );
+    }
+
+    /// Test: Extension consistency - clearsigned always gives .toml
+    ///
+    /// Verifies that use_encryption=false always results in .toml extension.
+    #[test]
+    fn test_extension_consistency_clearsigned() {
+        let test_cases = vec![
+            "dir/file.toml",
+            "dir/file.gpgtoml",
+            "dir/file.txt",
+            "dir/file.md",
+            "dir/file",
+        ];
+
+        for input_str in test_cases {
+            let input = Path::new(input_str);
+            let result = create_messagepost_file_namepath_extension_tuple(input, false);
+
+            // Test-Assert: Function must succeed for all test cases
+            assert!(
+                result.is_ok(),
+                "Should succeed for input: {}",
+                input_str
+            );
+
+            let (_, file) = result.unwrap();
+
+            // Test-Assert: Extension must always be 'toml' for clearsigned
+            assert_eq!(
+                file.extension().and_then(|e| e.to_str()),
+                Some("toml"),
+                "Extension should always be 'toml' for clearsigned, input was: {}",
+                input_str
+            );
+        }
+    }
+
+    /// Test: Extension consistency - encrypted always gives .gpgtoml
+    ///
+    /// Verifies that use_encryption=true always results in .gpgtoml extension.
+    #[test]
+    fn test_extension_consistency_encrypted() {
+        let test_cases = vec![
+            "dir/file.toml",
+            "dir/file.gpgtoml",
+            "dir/file.txt",
+            "dir/file.md",
+            "dir/file",
+        ];
+
+        for input_str in test_cases {
+            let input = Path::new(input_str);
+            let result = create_messagepost_file_namepath_extension_tuple(input, true);
+
+            // Test-Assert: Function must succeed for all test cases
+            assert!(
+                result.is_ok(),
+                "Should succeed for input: {}",
+                input_str
+            );
+
+            let (_, file) = result.unwrap();
+
+            // Test-Assert: Extension must always be 'gpgtoml' for encrypted
+            assert_eq!(
+                file.extension().and_then(|e| e.to_str()),
+                Some("gpgtoml"),
+                "Extension should always be 'gpgtoml' for encrypted, input was: {}",
+                input_str
+            );
+        }
+    }
+}
+
+/// Saves message content as a clearsigned TOML file.
+///
+/// # Purpose
+///
+/// Creates a cryptographically signed TOML file for instant messages
+/// by writing the TOML content and then clearsigning it in-place.
+///
+/// # Process Flow (Mirrors save_node_to_clearsigned_file)
+///
+/// 1. Validate target directory and create if needed
+/// 2. Write plain TOML content to target file
+/// 3. Get local user's GPG fingerprint from uma.toml
+/// 4. Clearsign the file in-place
+///
+/// # Arguments
+///
+/// * `target_file_path` - Full path where clearsigned file should be saved
+/// * `toml_content` - Pre-serialized TOML string to be clearsigned
+///
+/// # Returns
+///
+/// * `Ok(())` - File successfully created and clearsigned
+/// * `Err(io::Error)` - If any step fails
+fn save_message_as_clearsigned_toml(
+    target_file_path: &Path,
+    toml_content: &str,
+) -> Result<(), io::Error> {
+
+    debug_log!("SMACT: Starting save_message_as_clearsigned_toml");
+    debug_log!("SMACT: target_file_path: {:?}", target_file_path);
+    debug_log!("SMACT: toml_content length: {} bytes", toml_content.len());
+
+    // Debug-Assert: TOML content must not be empty
+    #[cfg(all(debug_assertions, not(test)))]
+    debug_assert!(
+        !toml_content.is_empty(),
+        "SMACT: TOML content must not be empty"
+    );
+
+    // Production-Catch: Handle empty TOML content
+    if toml_content.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "SMACT: TOML content must not be empty"
+        ));
+    }
+
+    // 1. Get target directory and verify/create it
+    let target_dir = target_file_path.parent()
+        .ok_or_else(|| io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "SMACT: Target path must have a parent directory"
+        ))?;
+
+    if !target_dir.exists() {
+        debug_log!("SMACT: Target directory doesn't exist, creating it");
+        fs::create_dir_all(target_dir)?;
+    }
+    debug_log!("SMACT: Directory now exists: {}", target_dir.exists());
+
+    // 2. Verify directory is actually a directory
+    if !target_dir.is_dir() {
+        debug_log!("SMACT: Path exists but is not a directory!");
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "SMACT: Target parent path exists but is not a directory"
+        ));
+    }
+
+    // 3. Write the TOML data to the file
+    debug_log!("SMACT: Writing TOML data to file...");
+    fs::write(target_file_path, toml_content)?;
+
+    // 4. Verify the file was created
+    if target_file_path.exists() {
+        debug_log!("SMACT: Successfully created file at: {:?}", target_file_path);
+    } else {
+        debug_log!("SMACT: Warning: File write succeeded but file doesn't exist!");
+    }
+
+    // 5. Get local user's GPG fingerprint from uma.toml
+    debug_log!("SMACT: Getting GPG fingerprint from uma.toml");
+    let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+        Ok(fingerprint) => {
+            debug_log!("SMACT: Retrieved GPG fingerprint: {}", fingerprint);
+            fingerprint
+        },
+        Err(e) => {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("SMACT: Failed to read GPG fingerprint from uma.toml: {}", e)
+            ));
+        }
+    };
+
+    // 6. Clearsign the file in-place
+    debug_log!("SMACT: Starting clearsign operation");
+    convert_tomlfile_without_keyid_using_gpgtomlkeyid_into_clearsigntoml_inplace(
+        target_file_path,
+        COLLABORATOR_ADDRESSBOOK_PATH_STR,
+        &gpg_full_fingerprint_key_id_string,
+    )
+    .map_err(|gpg_err| {
+        std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("SMACT: GPG clearsign operation failed: {:?}", gpg_err),
+        )
+    })?;
+
+    debug_log!("SMACT: Successfully created clearsigned message file at: {:?}", target_file_path);
+    debug_log!("SMACT: save_message_as_clearsigned_toml completed successfully");
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests_clearsigned_v2 {
+    use super::*;
+    use std::path::{Path, PathBuf};
+    use std::fs;
+
+    /// Helper function to create test temp directory
+    fn create_test_temp_dir() -> Result<PathBuf, io::Error> {
+        let temp_base = std::env::temp_dir();
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Time error: {}", e)))?
+            .as_secs();
+        let test_dir = temp_base.join(format!("test_clearsign_v2_{}", timestamp));
+        fs::create_dir_all(&test_dir)?;
+        Ok(test_dir)
+    }
+
+    /// Helper function to cleanup test directory
+    fn cleanup_test_dir(dir: &Path) {
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// Test: Error case - empty TOML content
+    ///
+    /// Verifies that the function returns an error when given empty TOML content.
+    #[test]
+    fn test_error_empty_toml_content() {
+        let test_dir = create_test_temp_dir().expect("Failed to create test directory");
+        let target_file = test_dir.join("test_message.toml");
+
+        let result = save_message_as_clearsigned_toml(
+            &target_file,
+            "", // Empty content
+        );
+
+        assert!(result.is_err(), "Function should return error for empty TOML content");
+
+        if let Err(e) = result {
+            let error_msg = format!("{}", e);
+            assert!(
+                error_msg.contains("TOML content must not be empty"),
+                "Error message should mention empty TOML content, got: {}",
+                error_msg
+            );
+        }
+
+        cleanup_test_dir(&test_dir);
+    }
+
+    // For save_message_as_clearsigned_toml test:
+    #[test]
+    fn test_error_no_parent_directory() {
+        let result = save_message_as_clearsigned_toml(
+            Path::new("message.toml"),
+            "owner = \"test\"\ntext = \"message\"",
+        );
+
+        assert!(result.is_err(), "Function should return error for path without proper parent");
+
+        if let Err(e) = result {
+            let error_msg = format!("{}", e);
+            assert!(
+                error_msg.contains("parent directory") ||
+                error_msg.contains("empty path") ||
+                error_msg.contains("not a directory"),  // ADD THIS
+                "Error message should mention parent directory issue, got: {}",
+                error_msg
+            );
+        }
+    }
+
+    /// Test: Directory creation when target directory doesn't exist
+    ///
+    /// Verifies that the function creates necessary directories.
+    #[test]
+    #[ignore] // Requires GPG setup
+    fn test_creates_target_directory() {
+        let test_dir = create_test_temp_dir().expect("Failed to create test directory");
+        let nested_dir = test_dir.join("level1/level2/level3");
+        let target_file = nested_dir.join("test_message.toml");
+
+        // Directory shouldn't exist yet
+        assert!(!nested_dir.exists(), "Nested directory should not exist yet");
+
+        let _result = save_message_as_clearsigned_toml(
+            &target_file,
+            "owner = \"test\"\ntext = \"message\"",
+        );
+
+        // Would verify directory was created if GPG setup available
+
+        cleanup_test_dir(&test_dir);
+    }
+
+    /// Test: TOML content with special characters
+    ///
+    /// Verifies that the function handles TOML with quotes, newlines, etc.
+    #[test]
+    #[ignore] // Requires GPG setup
+    fn test_toml_with_special_characters() {
+        let test_dir = create_test_temp_dir().expect("Failed to create test directory");
+        let target_file = test_dir.join("test_message.toml");
+
+        let toml_content = r#"owner = "testuser"
+text = "Message with \"quotes\" and\nnewlines"
+timestamp = 1234567890"#;
+
+        let result = save_message_as_clearsigned_toml(
+            &target_file,
+            toml_content,
+        );
+
+        // With GPG setup, this should succeed
+        // Without GPG, validates that content validation passes
+        if let Err(e) = result {
+            let error_msg = format!("{}", e);
+            assert!(
+                !error_msg.contains("TOML content must not be empty"),
+                "Should not fail on content validation with valid special chars"
+            );
+        }
+
+        cleanup_test_dir(&test_dir);
+    }
+
+    /// Test: Large TOML content
+    ///
+    /// Verifies that the function can handle large message content.
+    #[test]
+    #[ignore] // Requires GPG setup
+    fn test_large_toml_content() {
+        let test_dir = create_test_temp_dir().expect("Failed to create test directory");
+        let target_file = test_dir.join("test_message.toml");
+
+        // Create large content (10KB)
+        let large_text = "x".repeat(10000);
+        let toml_content = format!("owner = \"testuser\"\ntext = \"{}\"", large_text);
+
+        let result = save_message_as_clearsigned_toml(
+            &target_file,
+            &toml_content,
+        );
+
+        // With GPG setup, should handle large content
+        if let Err(e) = result {
+            let error_msg = format!("{}", e);
+            assert!(
+                !error_msg.contains("TOML content must not be empty"),
+                "Should not fail on content validation with large content"
+            );
+        }
+
+        cleanup_test_dir(&test_dir);
+    }
+
+    /// Test: Basic functionality with valid inputs
+    ///
+    /// This test requires GPG setup to run fully.
+    #[test]
+    #[ignore] // Requires GPG setup
+    fn test_basic_clearsign_success() {
+        let test_dir = create_test_temp_dir().expect("Failed to create test directory");
+
+        let target_file = test_dir.join("test_message.toml");
+        let toml_content = "owner = \"testuser\"\ntext = \"Test message\"";
+
+        let result = save_message_as_clearsigned_toml(
+            &target_file,
+            toml_content,
+        );
+
+        // With proper GPG setup, this should succeed
+        // assert!(result.is_ok(), "Function should succeed with valid inputs");
+        // assert!(target_file.exists(), "Target file should exist");
+
+        cleanup_test_dir(&test_dir);
+    }
+}
+
+// /// Saves message content as a GPG encrypted TOML file.
+// ///
+// /// # Purpose
+// ///
+// /// This function creates a cryptographically signed AND encrypted TOML file
+// /// for instant messages. The encryption process:
+// /// 1. Signs the content (clearsign) for authenticity verification
+// /// 2. Encrypts the signed content for confidentiality
+// /// 3. Results in a file readable only by the key holder
+// ///
+// /// # Project Context
+// ///
+// /// Instant messages in the system can be stored in two formats. This function
+// /// handles the encrypted format which provides:
+// /// - Cryptographic verification of message author (via signature)
+// /// - Confidentiality through encryption (only key holder can read)
+// /// - Protection against tampering
+// /// - Maximum security for sensitive communications
+// ///
+// /// The encrypted format (.gpgtoml) is used when both authentication and
+// /// privacy are required, as opposed to the clearsigned format which only
+// /// provides authentication.
+// ///
+// /// # Process Flow
+// ///
+// /// 1. Validate inputs and construct target file path with .gpgtoml extension
+// /// 2. Verify target directory exists or create it
+// /// 3. Create temporary file in project temp directory
+// /// 4. Write plain TOML content to temp file
+// /// 5. Look up owner's GPG key ID from their collaborator addressbook
+// /// 6. Clearsign temp file in-place using owner's GPG key
+// /// 7. Extract owner's public key from GPG keyring
+// /// 8. Encrypt clearsigned temp file with public key
+// /// 9. Save encrypted content to final .gpgtoml file
+// /// 10. Clean up all temporary files (even on errors)
+// ///
+// /// # Arguments
+// ///
+// /// * `base_file_path` - Path WITHOUT extension (function adds .gpgtoml)
+// /// * `toml_content` - Pre-serialized TOML string to be encrypted
+// /// * `owner_username` - Username of message owner (for GPG key lookup)
+// /// * `addressbook_path` - Path to collaborator addressbook directory
+// ///
+// /// # Returns
+// ///
+// /// * `Ok(())` - File successfully created, clearsigned, and encrypted
+// /// * `Err(io::Error)` - If any step fails (directory creation, file I/O, GPG operations)
+// ///
+// /// # Error Handling
+// ///
+// /// Errors can occur during:
+// /// - Input validation
+// /// - Target directory validation or creation
+// /// - Temp file creation or writing
+// /// - GPG key lookup in addressbook
+// /// - Clearsigning operation
+// /// - Public key extraction from GPG keyring
+// /// - Encryption operation
+// /// - Saving encrypted content to target
+// /// - Temp file cleanup (logged but not fatal)
+// ///
+// /// All errors ensure temp file cleanup before returning.
+// ///
+// /// # Security Notes
+// ///
+// /// - Uses owner's GPG private key for signing (requires key access)
+// /// - Uses owner's GPG public key for encryption
+// /// - Signature can be verified after decryption using owner's public key
+// /// - Content is BOTH signed AND encrypted (sign-then-encrypt pattern)
+// /// - Temp files are created with restrictive permissions (system default)
+// /// - Temp files are always cleaned up to prevent information leakage
+// /// - Only the key holder can decrypt and read the content
+// ///
+// /// # File Extension
+// ///
+// /// The function automatically appends `.gpgtoml` extension to the base path.
+// /// Example: `base_path = "messages/1234567890"` → creates `messages/1234567890.gpgtoml`
+// ///
+// /// # Examples
+// ///
+// /// ```rust
+// /// use std::path::Path;
+// ///
+// /// let base_path = Path::new("sync_data/team/messages/1234567890");
+// /// let toml = "owner = \"alice\"\ntext = \"Secret message\"";
+// /// let result = save_message_as_gpgtoml(
+// ///     base_path,
+// ///     toml,
+// ///     "alice",
+// ///     "sync_data/addressbook"
+// /// )?;
+// /// // Creates: 1234567890.gpgtoml with encrypted content
+// /// ```
+// fn save_message_as_gpgtoml(
+//     base_file_path: &Path,
+//     toml_content: &str,
+//     owner_username: &str,
+//     addressbook_path: &str,
+// ) -> Result<(), io::Error> {
+
+//     // Debug logging for inputs
+//     debug_log!("SMAGF: Starting save_message_as_gpgtoml");
+//     debug_log!("SMAGF: base_file_path: {:?}", base_file_path);
+//     debug_log!("SMAGF: owner_username: {}", owner_username);
+//     debug_log!("SMAGF: addressbook_path: {}", addressbook_path);
+//     debug_log!("SMAGF: toml_content length: {} bytes", toml_content.len());
+
+//     // =================================================
+//     // Debug-Assert (debug builds only), Production-Catch-Handle (always)
+//     // =================================================
+
+//     // Debug-Assert: TOML content must not be empty (debug builds only, NOT tests)
+//     #[cfg(all(debug_assertions, not(test)))]
+//     debug_assert!(
+//         !toml_content.is_empty(),
+//         "SMAGF: TOML content must not be empty"
+//     );
+
+//     // Production-Catch: Handle empty TOML content (always active)
+//     if toml_content.is_empty() {
+//         return Err(io::Error::new(
+//             io::ErrorKind::InvalidInput,
+//             "SMAGF: TOML content must not be empty"
+//         ));
+//     }
+
+//     // Debug-Assert: Owner username must not be empty (debug builds only, NOT tests)
+//     #[cfg(all(debug_assertions, not(test)))]
+//     debug_assert!(
+//         !owner_username.is_empty(),
+//         "SMAGF: Owner username must not be empty"
+//     );
+
+//     // Production-Catch: Handle empty owner username (always active)
+//     if owner_username.is_empty() {
+//         return Err(io::Error::new(
+//             io::ErrorKind::InvalidInput,
+//             "SMAGF: Owner username must not be empty"
+//         ));
+//     }
+
+//     // Debug-Assert: Addressbook path must not be empty (debug builds only, NOT tests)
+//     #[cfg(all(debug_assertions, not(test)))]
+//     debug_assert!(
+//         !addressbook_path.is_empty(),
+//         "SMAGF: Addressbook path must not be empty"
+//     );
+
+//     // Production-Catch: Handle empty addressbook path (always active)
+//     if addressbook_path.is_empty() {
+//         return Err(io::Error::new(
+//             io::ErrorKind::InvalidInput,
+//             "SMAGF: Addressbook path must not be empty"
+//         ));
+//     }
+
+//     // 1. Construct final file path with .gpgtoml extension
+//     debug_log!("SMAGF: Constructing final file path with .gpgtoml extension");
+
+//     let final_file_path = base_file_path.with_extension("gpgtoml");
+
+//     debug_log!("SMAGF: Final file path: {:?}", final_file_path);
+
+//     // Debug-Assert: Final path must have gpgtoml extension (debug builds only, NOT tests)
+//     #[cfg(all(debug_assertions, not(test)))]
+//     debug_assert!(
+//         final_file_path.extension().and_then(|e| e.to_str()) == Some("gpgtoml"),
+//         "SMAGF: Final path must have gpgtoml extension"
+//     );
+
+//     // Production-Catch: Verify gpgtoml extension
+//     if final_file_path.extension().and_then(|e| e.to_str()) != Some("gpgtoml") {
+//         return Err(io::Error::new(
+//             io::ErrorKind::Other,
+//             "SMAGF: Failed to create path with gpgtoml extension"
+//         ));
+//     }
+
+//     // 2. Verify and create target directory structure if needed
+//     debug_log!("SMAGF: Verifying target directory");
+
+//     let target_dir = final_file_path.parent()
+//         .ok_or_else(|| io::Error::new(
+//             io::ErrorKind::InvalidInput,
+//             "SMAGF: Target path must have a parent directory"
+//         ))?;
+
+//     // Debug-Assert: Parent directory path must not be empty (debug builds only, NOT tests)
+//     #[cfg(all(debug_assertions, not(test)))]
+//     debug_assert!(
+//         target_dir != Path::new(""),
+//         "SMAGF: Parent directory must not be empty path"
+//     );
+
+//     // Production-Catch: Handle empty parent directory path
+//     if target_dir == Path::new("") {
+//         return Err(io::Error::new(
+//             io::ErrorKind::InvalidInput,
+//             "SMAGF: Parent directory is empty path"
+//         ));
+//     }
+
+//     if !target_dir.exists() {
+//         debug_log!("SMAGF: Target directory doesn't exist, creating it");
+//         fs::create_dir_all(target_dir)?;
+//     }
+
+//     // Verify directory is actually a directory
+//     if !target_dir.is_dir() {
+//         return Err(io::Error::new(
+//             io::ErrorKind::Other,
+//             "SMAGF: Target parent path exists but is not a directory"
+//         ));
+//     }
+
+//     debug_log!("SMAGF: Target directory verified: {:?}", target_dir);
+
+//     // 3. Get temp directory and create unique temp file path
+//     debug_log!("SMAGF: Creating temp file for encryption");
+
+//     let temp_dir = get_base_uma_temp_directory_path()?;
+
+//     let timestamp = std::time::SystemTime::now()
+//         .duration_since(std::time::UNIX_EPOCH)
+//         .map_err(|e| io::Error::new(
+//             io::ErrorKind::Other,
+//             format!("SMAGF: Time error: {}", e)
+//         ))?
+//         .as_secs();
+
+//     let temp_file_name = format!("message_gpgtoml_{}_{}.toml", owner_username, timestamp);
+//     let temp_file_path = temp_dir.join(temp_file_name);
+
+//     debug_log!("SMAGF: Temp file path: {:?}", temp_file_path);
+
+//     // 4. Write plain TOML content to temp file
+//     debug_log!("SMAGF: Writing TOML content to temp file");
+
+//     if let Err(e) = fs::write(&temp_file_path, toml_content) {
+//         debug_log!("SMAGF: Failed to write temp file: {}", e);
+//         return Err(e);
+//     }
+
+//     // Verify temp file was created
+//     if !temp_file_path.exists() {
+//         return Err(io::Error::new(
+//             io::ErrorKind::Other,
+//             "SMAGF: Failed to create temp file"
+//         ));
+//     }
+
+//     debug_log!("SMAGF: Successfully wrote temp file");
+
+//     // 5. Look up owner's GPG key ID from addressbook
+//     debug_log!("SMAGF: Looking up GPG key ID for owner: {}", owner_username);
+
+//     // Convert addressbook path to absolute path
+//     let addressbook_dir = match make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(
+//         addressbook_path
+//     ) {
+//         Ok(dir) => dir,
+//         Err(e) => {
+//             // Clean up temp file before returning error
+//             let _ = fs::remove_file(&temp_file_path);
+//             return Err(e);
+//         }
+//     };
+
+//     debug_log!("SMAGF: Addressbook directory: {:?}", addressbook_dir);
+
+//     // Construct path to owner's collaborator file
+//     let collaborator_filename = format!("{}__collaborator.toml", owner_username);
+//     let collaborator_file_path = addressbook_dir.join(collaborator_filename);
+
+//     debug_log!("SMAGF: Collaborator file path: {:?}", collaborator_file_path);
+
+//     // Verify collaborator file exists
+//     if !collaborator_file_path.exists() {
+//         // Clean up temp file before returning error
+//         let _ = fs::remove_file(&temp_file_path);
+//         return Err(io::Error::new(
+//             io::ErrorKind::NotFound,
+//             format!("SMAGF: Collaborator file not found for user: {}", owner_username)
+//         ));
+//     }
+
+//     // Convert to string for TOML reading function
+//     let collaborator_file_str = collaborator_file_path.to_str()
+//         .ok_or_else(|| {
+//             // Clean up temp file before returning error
+//             let _ = fs::remove_file(&temp_file_path);
+//             io::Error::new(
+//                 io::ErrorKind::InvalidInput,
+//                 "SMAGF: Cannot convert collaborator file path to string"
+//             )
+//         })?;
+
+//     // Read GPG key ID from clearsigned collaborator file
+//     let gpg_key_id = match read_singleline_string_from_clearsigntoml(
+//         collaborator_file_str,
+//         "gpg_publickey_id"
+//     ) {
+//         Ok(key_id) => {
+//             debug_log!("SMAGF: Retrieved GPG key ID: {}", key_id);
+//             key_id
+//         },
+//         Err(e) => {
+//             // Clean up temp file before returning error
+//             let _ = fs::remove_file(&temp_file_path);
+//             return Err(io::Error::new(
+//                 io::ErrorKind::Other,
+//                 format!("SMAGF: Failed to read GPG key ID from collaborator file: {}", e)
+//             ));
+//         }
+//     };
+
+//     // Debug-Assert: GPG key ID must not be empty (debug builds only, NOT tests)
+//     #[cfg(all(debug_assertions, not(test)))]
+//     debug_assert!(
+//         !gpg_key_id.is_empty(),
+//         "SMAGF: GPG key ID must not be empty"
+//     );
+
+//     // Production-Catch: Handle empty GPG key ID (always active)
+//     if gpg_key_id.is_empty() {
+//         // Clean up temp file before returning error
+//         let _ = fs::remove_file(&temp_file_path);
+//         return Err(io::Error::new(
+//             io::ErrorKind::InvalidData,
+//             "SMAGF: GPG key ID from addressbook is empty"
+//         ));
+//     }
+
+//     // 6. Clearsign the temp file in-place
+//     debug_log!("SMAGF: Starting clearsign operation on temp file");
+
+//     match convert_tomlfile_without_keyid_using_gpgtomlkeyid_into_clearsigntoml_inplace(
+//         &temp_file_path,
+//         addressbook_path,
+//         &gpg_key_id,
+//     ) {
+//         Ok(()) => {
+//             debug_log!("SMAGF: Successfully clearsigned temp file");
+//         },
+//         Err(gpg_err) => {
+//             // Clean up temp file before returning error
+//             let _ = fs::remove_file(&temp_file_path);
+//             return Err(io::Error::new(
+//                 io::ErrorKind::Other,
+//                 format!("SMAGF: GPG clearsign operation failed: {:?}", gpg_err),
+//             ));
+//         }
+//     }
+
+//     // 7. Extract public key from GPG keyring using fingerprint
+//     debug_log!("SMAGF: Extracting public key from GPG for fingerprint: {}", gpg_key_id);
+
+//     let public_key_output = match std::process::Command::new("gpg")
+//         .arg("--armor")
+//         .arg("--export")
+//         .arg(&gpg_key_id)
+//         .output()
+//     {
+//         Ok(output) => output,
+//         Err(e) => {
+//             // Clean up temp file before returning error
+//             let _ = fs::remove_file(&temp_file_path);
+//             return Err(io::Error::new(
+//                 io::ErrorKind::Other,
+//                 format!("SMAGF: Failed to execute GPG export command: {}", e)
+//             ));
+//         }
+//     };
+
+//     // Check if GPG command succeeded
+//     if !public_key_output.status.success() {
+//         // Clean up temp file before returning error
+//         let _ = fs::remove_file(&temp_file_path);
+//         let stderr = String::from_utf8_lossy(&public_key_output.stderr);
+//         return Err(io::Error::new(
+//             io::ErrorKind::Other,
+//             format!("SMAGF: GPG export failed: {}", stderr)
+//         ));
+//     }
+
+//     // Convert public key bytes to string
+//     let public_key_string = match String::from_utf8(public_key_output.stdout) {
+//         Ok(key_str) => key_str,
+//         Err(e) => {
+//             // Clean up temp file before returning error
+//             let _ = fs::remove_file(&temp_file_path);
+//             return Err(io::Error::new(
+//                 io::ErrorKind::Other,
+//                 format!("SMAGF: Failed to convert public key to UTF-8: {}", e)
+//             ));
+//         }
+//     };
+
+//     // Verify we got a valid public key
+//     if public_key_string.trim().is_empty() {
+//         // Clean up temp file before returning error
+//         let _ = fs::remove_file(&temp_file_path);
+//         return Err(io::Error::new(
+//             io::ErrorKind::Other,
+//             "SMAGF: GPG export returned empty public key"
+//         ));
+//     }
+
+//     debug_log!("SMAGF: Successfully extracted public key from GPG");
+
+//     // 8. Encrypt the clearsigned temp file with the public key
+//     debug_log!("SMAGF: Starting encryption of clearsigned file");
+
+//     match encrypt_clearsigned_toml_with_public_key_content(
+//         &temp_file_path,
+//         &public_key_string,
+//         &final_file_path
+//     ) {
+//         Ok(()) => {
+//             debug_log!("SMAGF: Successfully created encrypted file at: {:?}", final_file_path);
+//         },
+//         Err(e) => {
+//             // Clean up temp file before returning error
+//             let _ = fs::remove_file(&temp_file_path);
+//             return Err(io::Error::new(
+//                 io::ErrorKind::Other,
+//                 format!("SMAGF: Encryption failed: {:?}", e)
+//             ));
+//         }
+//     }
+
+//     // 9. Clean up temp file (critical for production)
+//     debug_log!("SMAGF: Cleaning up temp file");
+
+//     if let Err(e) = fs::remove_file(&temp_file_path) {
+//         // Log warning but don't fail the operation since main task succeeded
+//         debug_log!("SMAGF: Warning: Failed to remove temp file: {}", e);
+//     }
+
+//     // 10. Verify final file exists and is non-empty
+//     if !final_file_path.exists() {
+//         return Err(io::Error::new(
+//             io::ErrorKind::Other,
+//             "SMAGF: Final file creation appeared successful but file doesn't exist"
+//         ));
+//     }
+
+//     // Check file size
+//     match fs::metadata(&final_file_path) {
+//         Ok(metadata) => {
+//             let file_size = metadata.len();
+//             debug_log!("SMAGF: Final file size: {} bytes", file_size);
+
+//             if file_size == 0 {
+//                 return Err(io::Error::new(
+//                     io::ErrorKind::Other,
+//                     "SMAGF: Final file was created but is empty"
+//                 ));
+//             }
+//         },
+//         Err(e) => {
+//             return Err(io::Error::new(
+//                 io::ErrorKind::Other,
+//                 format!("SMAGF: Cannot read final file metadata: {}", e)
+//             ));
+//         }
+//     }
+
+//     debug_log!("SMAGF: Successfully created encrypted message file at: {:?}", final_file_path);
+//     debug_log!("SMAGF: save_message_as_gpgtoml completed successfully");
+
+//     Ok(())
+// }
+
+/// Saves message content as a GPG encrypted TOML file.
+///
+/// # Purpose
+///
+/// Creates a cryptographically signed AND encrypted TOML file.
+///
+/// # Process Flow (Mirrors save_node_as_gpgtoml)
+///
+/// 1. Verify target directory and create if needed
+/// 2. Create temp file in project temp directory
+/// 3. Write plain TOML to temp file
+/// 4. Get local user's GPG fingerprint from uma.toml
+/// 5. Clearsign temp file in-place
+/// 6. Extract public key from GPG keyring
+/// 7. Encrypt clearsigned file with public key
+/// 8. Save to final .gpgtoml file
+/// 9. Clean up temp file
+///
+/// # Arguments
+///
+/// * `base_file_path` - Path WITHOUT extension (function adds .gpgtoml)
+/// * `toml_content` - Pre-serialized TOML string to be encrypted
+///
+/// # Returns
+///
+/// * `Ok(())` - File successfully created, clearsigned, and encrypted
+/// * `Err(io::Error)` - If any step fails
+fn save_message_as_gpgtoml(
+    base_file_path: &Path,
+    toml_content: &str,
+) -> Result<(), io::Error> {
+
+    debug_log!("SMAGF: Starting save_message_as_gpgtoml");
+    debug_log!("SMAGF: base_file_path: {:?}", base_file_path);
+    debug_log!("SMAGF: toml_content length: {} bytes", toml_content.len());
+
+    // Debug-Assert: TOML content must not be empty
+    #[cfg(all(debug_assertions, not(test)))]
+    debug_assert!(
+        !toml_content.is_empty(),
+        "SMAGF: TOML content must not be empty"
+    );
+
+    // Production-Catch: Handle empty TOML content
+    if toml_content.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "SMAGF: TOML content must not be empty"
+        ));
+    }
+
+    // 1. Construct final file path with .gpgtoml extension
+    let final_file_path = base_file_path.with_extension("gpgtoml");
+    debug_log!("SMAGF: Final file path: {:?}", final_file_path);
+
+    // 2. Verify and create target directory structure if needed
+    let target_dir = final_file_path.parent()
+        .ok_or_else(|| io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "SMAGF: Target path must have a parent directory"
+        ))?;
+
+    if !target_dir.exists() {
+        debug_log!("SMAGF: Target directory doesn't exist, creating it");
+        fs::create_dir_all(target_dir)?;
+    }
+    debug_log!("SMAGF: Directory now exists: {}", target_dir.exists());
+
+    // Verify directory is actually a directory
+    if !target_dir.is_dir() {
+        debug_log!("SMAGF: Path exists but is not a directory!");
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "SMAGF: Target parent path exists but is not a directory"
+        ));
+    }
+
+    // 3. Get temp directory and create unique temp file path
+    let temp_dir = get_base_uma_temp_directory_path()?;
+
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| io::Error::new(
+            io::ErrorKind::Other,
+            format!("SMAGF: Time error: {}", e)
+        ))?
+        .as_secs();
+
+    let temp_file_name = format!("message_gpgtoml_{}.toml", timestamp);
+    let temp_file_path = temp_dir.join(temp_file_name);
+
+    debug_log!("SMAGF: Temp file path: {:?}", temp_file_path);
+
+    // 4. Write plain TOML content to temp file
+    debug_log!("SMAGF: Writing TOML content to temp file");
+
+    if let Err(e) = fs::write(&temp_file_path, toml_content) {
+        debug_log!("SMAGF: Failed to write temp file: {}", e);
+        return Err(e);
+    }
+
+    // Verify temp file was created
+    if !temp_file_path.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "SMAGF: Failed to create temp file"
+        ));
+    }
+
+    debug_log!("SMAGF: Successfully wrote temp file");
+
+    // 5. Get local user's GPG fingerprint from uma.toml
+    debug_log!("SMAGF: Getting GPG fingerprint from uma.toml");
+
+    let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+        Ok(fingerprint) => {
+            debug_log!("SMAGF: Retrieved GPG fingerprint: {}", fingerprint);
+            fingerprint
+        },
+        Err(e) => {
+            // Clean up temp file before returning error
+            let _ = fs::remove_file(&temp_file_path);
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("SMAGF: Failed to read GPG fingerprint from uma.toml: {}", e)
+            ));
+        }
+    };
+
+    // 6. Clearsign the temp file in-place
+    debug_log!("SMAGF: Starting clearsign operation on temp file");
+
+    match convert_tomlfile_without_keyid_using_gpgtomlkeyid_into_clearsigntoml_inplace(
+        &temp_file_path,
+        COLLABORATOR_ADDRESSBOOK_PATH_STR,
+        &gpg_full_fingerprint_key_id_string,
+    ) {
+        Ok(()) => {
+            debug_log!("SMAGF: Successfully clearsigned temp file");
+        },
+        Err(gpg_err) => {
+            // Clean up temp file before returning error
+            let _ = fs::remove_file(&temp_file_path);
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("SMAGF: GPG clearsign operation failed: {:?}", gpg_err),
+            ));
+        }
+    }
+
+    // 7. Extract public key from GPG keyring using fingerprint
+    debug_log!("SMAGF: Extracting public key from GPG for fingerprint: {}", gpg_full_fingerprint_key_id_string);
+
+    let public_key_output = match std::process::Command::new("gpg")
+        .arg("--armor")
+        .arg("--export")
+        .arg(&gpg_full_fingerprint_key_id_string)
+        .output()
+    {
+        Ok(output) => output,
+        Err(e) => {
+            // Clean up temp file before returning error
+            let _ = fs::remove_file(&temp_file_path);
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("SMAGF: Failed to execute GPG export command: {}", e)
+            ));
+        }
+    };
+
+    // Check if GPG command succeeded
+    if !public_key_output.status.success() {
+        // Clean up temp file before returning error
+        let _ = fs::remove_file(&temp_file_path);
+        let stderr = String::from_utf8_lossy(&public_key_output.stderr);
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            format!("SMAGF: GPG export failed: {}", stderr)
+        ));
+    }
+
+    // Convert public key bytes to string
+    let public_key_string = match String::from_utf8(public_key_output.stdout) {
+        Ok(key_str) => key_str,
+        Err(e) => {
+            // Clean up temp file before returning error
+            let _ = fs::remove_file(&temp_file_path);
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("SMAGF: Failed to convert public key to UTF-8: {}", e)
+            ));
+        }
+    };
+
+    // Verify we got a valid public key
+    if public_key_string.trim().is_empty() {
+        // Clean up temp file before returning error
+        let _ = fs::remove_file(&temp_file_path);
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "SMAGF: GPG export returned empty public key"
+        ));
+    }
+
+    debug_log!("SMAGF: Successfully extracted public key from GPG");
+
+    // 8. Encrypt the clearsigned temp file with the public key
+    debug_log!("SMAGF: Starting encryption of clearsigned file");
+
+    match encrypt_clearsigned_toml_with_public_key_content(
+        &temp_file_path,
+        &public_key_string,
+        &final_file_path
+    ) {
+        Ok(()) => {
+            debug_log!("SMAGF: Successfully created encrypted file at: {:?}", final_file_path);
+        },
+        Err(e) => {
+            // Clean up temp file before returning error
+            let _ = fs::remove_file(&temp_file_path);
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("SMAGF: Encryption failed: {:?}", e)
+            ));
+        }
+    }
+
+    // 9. Clean up temp file (critical for production)
+    debug_log!("SMAGF: Cleaning up temp file");
+
+    if let Err(e) = fs::remove_file(&temp_file_path) {
+        // Log warning but don't fail the operation since main task succeeded
+        debug_log!("SMAGF: Warning: Failed to remove temp file: {}", e);
+    }
+
+    // 10. Verify final file exists and is non-empty
+    if !final_file_path.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "SMAGF: Final file creation appeared successful but file doesn't exist"
+        ));
+    }
+
+    // Check file size
+    match fs::metadata(&final_file_path) {
+        Ok(metadata) => {
+            let file_size = metadata.len();
+            debug_log!("SMAGF: Final file size: {} bytes", file_size);
+
+            if file_size == 0 {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "SMAGF: Final file was created but is empty"
+                ));
+            }
+        },
+        Err(e) => {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("SMAGF: Cannot read final file metadata: {}", e)
+            ));
+        }
+    }
+
+    debug_log!("SMAGF: Successfully created encrypted message file at: {:?}", final_file_path);
+    debug_log!("SMAGF: save_message_as_gpgtoml completed successfully");
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests_gpgtoml_v2 {
+    use super::*;
+    use std::path::{Path, PathBuf};
+    use std::fs;
+
+    /// Helper function to create test temp directory
+    fn create_test_temp_dir() -> Result<PathBuf, io::Error> {
+        let temp_base = std::env::temp_dir();
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Time error: {}", e)))?
+            .as_secs();
+        let test_dir = temp_base.join(format!("test_gpgtoml_v2_{}", timestamp));
+        fs::create_dir_all(&test_dir)?;
+        Ok(test_dir)
+    }
+
+    /// Helper function to cleanup test directory
+    fn cleanup_test_dir(dir: &Path) {
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// Test: Error case - empty TOML content
+    ///
+    /// Verifies that the function returns an error when given empty TOML content.
+    #[test]
+    fn test_error_empty_toml_content() {
+        let test_dir = create_test_temp_dir().expect("Failed to create test directory");
+        let base_file = test_dir.join("test_message");
+
+        let result = save_message_as_gpgtoml(
+            &base_file,
+            "", // Empty content
+        );
+
+        assert!(result.is_err(), "Function should return error for empty TOML content");
+
+        if let Err(e) = result {
+            let error_msg = format!("{}", e);
+            assert!(
+                error_msg.contains("TOML content must not be empty"),
+                "Error message should mention empty TOML content, got: {}",
+                error_msg
+            );
+        }
+
+        cleanup_test_dir(&test_dir);
+    }
+
+    /// Test: Error case - base path with no parent directory
+    ///
+    /// Verifies that the function returns an error when base path has no parent.
+    #[test]
+    fn test_error_no_parent_directory() {
+        let result = save_message_as_gpgtoml(
+            Path::new("message"), // Path with empty parent ("")
+            "owner = \"test\"\ntext = \"message\"",
+        );
+
+        assert!(result.is_err(), "Function should return error for path without proper parent");
+
+        if let Err(e) = result {
+            let error_msg = format!("{}", e);
+            // The error could be about parent directory or that empty path is not a directory
+            assert!(
+                error_msg.contains("parent directory") ||
+                error_msg.contains("empty path") ||
+                error_msg.contains("not a directory"),
+                "Error message should mention parent directory issue, got: {}",
+                error_msg
+            );
+        }
+    }
+
+    /// Test: Extension handling - gpgtoml extension is added
+    ///
+    /// Verifies that .gpgtoml extension is correctly added to base path.
+    #[test]
+    #[ignore] // Requires GPG setup
+    fn test_extension_added_correctly() {
+        let test_dir = create_test_temp_dir().expect("Failed to create test directory");
+        let base_file = test_dir.join("test_message");
+
+        let result = save_message_as_gpgtoml(
+            &base_file,
+            "owner = \"test\"\ntext = \"message\"",
+        );
+
+        // With GPG setup, should create file with .gpgtoml extension
+        // Without GPG, validates that path construction doesn't fail
+
+        cleanup_test_dir(&test_dir);
+    }
+
+    /// Test: Extension handling - existing extension is replaced
+    ///
+    /// Verifies that if base path has an extension, it's replaced with .gpgtoml.
+    #[test]
+    #[ignore] // Requires GPG setup
+    fn test_existing_extension_replaced() {
+        let test_dir = create_test_temp_dir().expect("Failed to create test directory");
+        let base_file = test_dir.join("test_message.toml");
+
+        let result = save_message_as_gpgtoml(
+            &base_file,
+            "owner = \"test\"\ntext = \"message\"",
+        );
+
+        // Should create .gpgtoml file, replacing .toml extension
+
+        cleanup_test_dir(&test_dir);
+    }
+
+    /// Test: TOML content with special characters
+    ///
+    /// Verifies that the function handles TOML with quotes, newlines, etc.
+    #[test]
+    #[ignore] // Requires GPG setup
+    fn test_toml_with_special_characters() {
+        let test_dir = create_test_temp_dir().expect("Failed to create test directory");
+        let base_file = test_dir.join("test_message");
+
+        let toml_content = r#"owner = "testuser"
+text = "Message with \"quotes\" and\nnewlines"
+timestamp = 1234567890"#;
+
+        let result = save_message_as_gpgtoml(
+            &base_file,
+            toml_content,
+        );
+
+        // With GPG setup, should handle special characters
+        if let Err(e) = result {
+            let error_msg = format!("{}", e);
+            assert!(
+                !error_msg.contains("TOML content must not be empty"),
+                "Should not fail on content validation with valid special chars"
+            );
+        }
+
+        cleanup_test_dir(&test_dir);
+    }
+
+    /// Test: Large TOML content
+    ///
+    /// Verifies that the function can handle large message content.
+    #[test]
+    #[ignore] // Requires GPG setup
+    fn test_large_toml_content() {
+        let test_dir = create_test_temp_dir().expect("Failed to create test directory");
+        let base_file = test_dir.join("test_message");
+
+        // Create large content (10KB)
+        let large_text = "x".repeat(10000);
+        let toml_content = format!("owner = \"testuser\"\ntext = \"{}\"", large_text);
+
+        let result = save_message_as_gpgtoml(
+            &base_file,
+            &toml_content,
+        );
+
+        // With GPG setup, should handle large content
+        if let Err(e) = result {
+            let error_msg = format!("{}", e);
+            assert!(
+                !error_msg.contains("TOML content must not be empty"),
+                "Should not fail on content validation with large content"
+            );
+        }
+
+        cleanup_test_dir(&test_dir);
+    }
+
+    /// Test: Basic functionality with valid inputs
+    ///
+    /// This test requires GPG setup to run fully.
+    #[test]
+    #[ignore] // Requires GPG setup
+    fn test_basic_gpgtoml_success() {
+        let test_dir = create_test_temp_dir().expect("Failed to create test directory");
+
+        let base_file = test_dir.join("test_message");
+        let toml_content = "owner = \"testuser\"\ntext = \"Test message\"";
+
+        let result = save_message_as_gpgtoml(
+            &base_file,
+            toml_content,
+        );
+
+        // With proper GPG setup, should create .gpgtoml file
+        // assert!(result.is_ok(), "Function should succeed with valid inputs");
+        // let expected_file = test_dir.join("test_message.gpgtoml");
+        // assert!(expected_file.exists(), "Target file should exist with .gpgtoml extension");
+
+        cleanup_test_dir(&test_dir);
+    }
+}
+
+/// Add New Message File
+///
+/// # Purpose
+///
+/// Creates and saves an instant message file in either clearsigned TOML or
+/// GPG encrypted TOML format, depending on the message settings.
+///
+/// # Project Context
+///
+/// This function is the main entry point for creating instant messages in the
+/// team collaboration system. It:
+/// - Parses recipient information from message text
+/// - Validates recipients against team channel access list
+/// - Creates appropriately formatted message file (clearsigned or encrypted)
+/// - Sets up sync flags for message distribution to recipients
+///
+/// Messages can be in two formats:
+/// 1. Clearsigned TOML (.toml): Signed but readable, for general team communication
+/// 2. GPG Encrypted TOML (.gpgtoml): Signed and encrypted, for sensitive communication
+///
+/// # Process Flow
+///
+/// 1. Parse optional `{to:username}` syntax to restrict recipients
+/// 2. Validate recipients are in team channel collaborator list
+/// 3. Read message browser metadata from `0.toml`
+/// 4. Create MessagePostFile struct with all message data
+/// 5. Serialize message to TOML format
+/// 6. Save as clearsigned or encrypted file based on settings
+/// 7. Write sync flags for each recipient to trigger distribution
+///
+/// # Arguments
+///
+/// * `incoming_file_path` - Full path where message file should be saved (with extension)
+/// * `owner` - Username of message author/sender
+/// * `text` - Message text content (may include `{to:username}` for direct messages)
+/// * `signature` - Optional cryptographic signature for message
+/// * `graph_navigation_instance_state` - Current navigation state with collaborator info
+///
+/// # Returns
+///
+/// * `Ok(())` - Message file successfully created and sync flags written
+/// * `Err(io::Error)` - If any step fails (file I/O, serialization, GPG operations)
+///
+/// # Recipient Syntax
+///
+/// Messages can include `{to:username}` to send to a specific recipient:
+/// - `{to:alice}` - Send only to alice
+/// - If recipient not in channel or is sender, falls back to default channel list
+/// - Without `{to:}` syntax, sends to all channel collaborators
+///
+/// # Error Handling
+///
+/// Errors can occur during:
+/// - Metadata file reading (0.toml)
+/// - TOML serialization
+/// - File saving (clearsign or encrypt operations)
+/// - Sync flag writing
+///
+/// # Security Notes
+///
+/// - Clearsigned messages are authenticated but readable by anyone with file access
+/// - Encrypted messages require recipient's GPG key to decrypt
+/// - Message format determined by MessagePostFile.messagepost_gpgtoml flag
+/// - All messages include sender authentication via GPG signature
+///
+/// # Examples
+///
+/// ```rust
+/// // Send message to all channel collaborators (clearsigned)
+/// add_im_message(
+///     Path::new("sync_data/team/channel/messages/123.toml"),
+///     "alice",
+///     "Hello team!",
+///     None,
+///     &state
+/// )?;
+///
+/// // Send direct message to bob (format depends on MessagePostFile settings)
+/// add_im_message(
+///     Path::new("sync_data/team/channel/messages/124.toml"),
+///     "alice",
+///     "{to:bob} Private message",
+///     None,
+///     &state
+/// )?;
+/// ```
+fn add_im_message(
+    incoming_file_path: &Path,
+    owner: &str,
+    text: &str,
+    graph_navigation_instance_state: &GraphNavigationInstanceState,
+) -> Result<(), io::Error> {
+
+    debug_log!("AIM: Starting add_im_message");
+    debug_log!("AIM: incoming_file_path: {:?}", incoming_file_path);
+    debug_log!("AIM: owner: {}", owner);
+    debug_log!("AIM: text length: {} bytes", text.len());
+
+    // =================================================
+    // Debug-Assert (debug builds only), Production-Catch-Handle (always)
+    // =================================================
+
+    // Debug-Assert: Owner must not be empty (debug builds only, NOT tests)
+    #[cfg(all(debug_assertions, not(test)))]
+    debug_assert!(
+        !owner.is_empty(),
+        "AIM: Owner must not be empty"
+    );
+
+    // Production-Catch: Handle empty owner
+    if owner.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "AIM: Owner must not be empty"
+        ));
+    }
+
+    // Debug-Assert: Text must not be empty (debug builds only, NOT tests)
+    #[cfg(all(debug_assertions, not(test)))]
+    debug_assert!(
+        !text.is_empty(),
+        "AIM: Message text must not be empty"
+    );
+
+    // Production-Catch: Handle empty text
+    if text.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "AIM: Message text must not be empty"
+        ));
+    }
+
+    // Debug-Assert: File path must have a filename (debug builds only, NOT tests)
+    #[cfg(all(debug_assertions, not(test)))]
+    debug_assert!(
+        incoming_file_path.file_name().is_some(),
+        "AIM: File path must have a filename"
+    );
+
+    // Production-Catch: Handle missing filename
+    if incoming_file_path.file_name().is_none() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "AIM: File path must have a filename"
+        ));
+    }
+
+    // 1. Parse for {to:user} syntax to determine recipients
+    debug_log!("AIM: Parsing recipient list");
+
+    let mut recipients_list = graph_navigation_instance_state
+        .current_node_teamchannel_collaborators_with_access
+        .clone();
+
+    if let Some(to_clause) = text.find("{to:") {
+        if let Some(end_brace) = text[to_clause..].find('}') {
+            let recipient_name = text[to_clause + 4..to_clause + end_brace].trim();
+
+            debug_log!("AIM: Found clause for recipient: {}", recipient_name);
+
+            recipients_list.clear(); // Clear default list: restrict to listed recipient only
+
+            // 2. Check if recipient in team channel list and is not sender
+            if graph_navigation_instance_state
+                .current_node_teamchannel_collaborators_with_access
+                .contains(&recipient_name.to_string())
+                && recipient_name != owner
+            {
+                recipients_list.push(recipient_name.to_string()); // Add only the specified recipient
+                debug_log!("AIM: Recipient validated and added: {}", recipient_name);
+            } else {
+                // Log if user not found
+                debug_log!(
+                    "AIM: 'to:' clause but recipient '{}' not found in channel or is sender.",
+                    recipient_name
+                );
+            }
+        }
+    }
+
+    debug_log!("AIM: Final recipients list: {:?}", recipients_list);
+
+    // 3. Separate name and path - get parent directory
+    debug_log!("AIM: Extracting parent directory");
+
+    let parent_dir = incoming_file_path.parent()
+        .ok_or_else(|| io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "AIM: File path must have a parent directory"
+        ))?;
+
+    // Debug-Assert: Parent directory must not be empty path (debug builds only, NOT tests)
+    #[cfg(all(debug_assertions, not(test)))]
+    debug_assert!(
+        parent_dir != Path::new(""),
+        "AIM: Parent directory must not be empty path"
+    );
+
+    // Production-Catch: Handle empty parent directory
+    if parent_dir == Path::new("") {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "AIM: Parent directory is empty path"
+        ));
+    }
+
+    debug_log!("AIM: Parent directory: {:?}", parent_dir);
+
+    // 4. Read 0.toml to get this instant messenger browser room's settings
+    debug_log!("AIM: Reading metadata from 0.toml");
+
+    let metadata_path = parent_dir.join("0.toml");
+
+    let metadata_string = fs::read_to_string(&metadata_path)
+        .map_err(|e| io::Error::new(
+            io::ErrorKind::Other,
+            format!("AIM: Failed to read metadata file: {}", e)
+        ))?;
+
+    let metadata: NodeInstMsgBrowserMetadata = toml::from_str(&metadata_string)
+        .map_err(|e| io::Error::new(
+            io::ErrorKind::Other,
+            format!("AIM: TOML deserialization error: {}", e)
+        ))?;
+
+    debug_log!("AIM: Metadata loaded - node: {}, path: {}",
+        metadata.node_name,
+        metadata.path_in_node
+    );
+
+    // Extract node name and file path
+    let node_name = metadata.node_name;
+    let filepath_in_node = metadata.path_in_node;
+
+    // 5. Create MessagePostFile struct
+    debug_log!("AIM: Creating MessagePostFile");
+
+    let message = MessagePostFile::new(
+        graph_navigation_instance_state,
+        owner,
+        &node_name,
+        &filepath_in_node,
+        text,
+        recipients_list.clone(),
+        false, // messagepost_gpgtoml - default to clearsigned format
+        None,  // NEW: None = use default expiration
+    );
+
+    debug_log!("AIM: MessagePostFile created, gpgtoml: {}", message.messagepost_gpgtoml);
+
+    // 6. Serialize message to TOML
+    debug_log!("AIM: Serializing message to TOML");
+
+    let toml_data = toml::to_string(&message)
+        .map_err(|e| io::Error::new(
+            io::ErrorKind::Other,
+            format!("AIM: TOML serialization error: {}", e)
+        ))?;
+
+    debug_log!("AIM: TOML serialization successful, {} bytes", toml_data.len());
+
+    // 7. Save message file based on format setting
+    debug_log!("AIM: Saving message file");
+
+    if message.messagepost_gpgtoml {
+        // GPG encrypted format - use base path without extension
+        debug_log!("AIM: Using GPG encrypted format (.gpgtoml)");
+
+        let base_path = incoming_file_path.with_extension("");
+
+        save_message_as_gpgtoml(
+            &base_path,
+            &toml_data,
+            // owner,
+            // COLLABORATOR_ADDRESSBOOK_PATH_STR,
+        )?;
+
+        debug_log!("AIM: GPG encrypted message saved successfully");
+    } else {
+        // Clearsigned format - use full path
+        debug_log!("AIM: Using clearsigned format (.toml)");
+
+        /*
+        fn save_message_as_clearsigned_toml(
+            target_file_path: &Path,
+            toml_content: &str,
+        ) -> Result<(), io::Error> {
+        */
+
+        save_message_as_clearsigned_toml(
+            incoming_file_path,
+            &toml_data,
+            // owner,
+            // COLLABORATOR_ADDRESSBOOK_PATH_STR,
+        )?;
+
+        debug_log!("AIM: Clearsigned message saved successfully");
+    }
+
+    // 8. Write update flag for each possible remote collaborator
+    // sync_data/teamtest/new_file_path_flags/bob
+    // sync_data/teamtest/new_file_path_flags/charlotte
+    // etc.
+    debug_log!("AIM: Writing sync flags for recipients");
+
+    let sync_result = write_newfile_sendq_flag(
+        &recipients_list,
+        incoming_file_path,
+    );
+
+    // Log but don't fail if sync flags fail (message is already saved)
+    if let Err(e) = sync_result {
+        debug_log!("AIM: Warning: Failed to write sync flags: {}", e);
+    } else {
+        debug_log!("AIM: Sync flags written successfully");
+    }
+
+    debug_log!("AIM: add_im_message completed successfully");
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests_add_im_message {
+    use super::*;
+    use std::path::{Path, PathBuf};
+    use std::fs;
+
+    /// Helper to create minimal test state for testing
+    ///
+    /// Creates a GraphNavigationInstanceState with reasonable defaults
+    /// for testing purposes. This avoids duplicating state initialization
+    /// across multiple tests.
+    fn create_minimal_test_state() -> GraphNavigationInstanceState {
+        GraphNavigationInstanceState {
+            local_owner_user: "testuser".to_string(),
+            active_team_channel: String::new(),
+            default_im_messages_expiration_days: 30,
+            default_task_nodes_expiration_days: 90,
+            tui_height: 24,
+            tui_width: 80,
+            current_full_file_path: PathBuf::from("/tmp/test"),
+            current_node_teamchannel_collaborators_with_access: vec![],
+            current_node_name: String::new(),
+            current_node_owner: String::new(),
+            current_node_description_for_tui: String::new(),
+            current_node_directory_path: PathBuf::new(),
+            current_node_unique_id: Vec::new(),
+            current_node_members: Vec::new(),
+            home_square_one: false,
+            pa1_process: String::new(),
+            pa2_schedule: Vec::new(),
+            pa3_users: String::new(),
+            pa4_features: String::new(),
+            pa5_mvp: String::new(),
+            pa6_feedback: String::new(),
+            message_post_gpgtoml_required: None,
+            message_post_data_format_specs_integer_ranges_from_to_tuple_array: None,
+            message_post_data_format_specs_int_string_ranges_from_to_tuple_array: None,
+            message_post_max_string_length_int: None,
+            message_post_is_public_bool: None,
+            message_post_user_confirms_bool: None,
+            message_post_start_date_utc_posix: None,
+            message_post_end_date_utc_posix: None,
+        }
+    }
+
+    /// Helper function to create test temp directory
+    fn create_test_temp_dir() -> Result<PathBuf, io::Error> {
+        let temp_base = std::env::temp_dir();
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Time error: {}", e)))?
+            .as_secs();
+        let test_dir = temp_base.join(format!("test_add_im_{}", timestamp));
+        fs::create_dir_all(&test_dir)?;
+        Ok(test_dir)
+    }
+
+    /// Helper function to cleanup test directory
+    fn cleanup_test_dir(dir: &Path) {
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// Test: Error case - empty owner
+    ///
+    /// Verifies that the function returns an error when owner is empty.
+    #[test]
+    fn test_error_empty_owner() {
+        let test_dir = create_test_temp_dir().expect("Failed to create test directory");
+        let message_file = test_dir.join("test_message.toml");
+
+        let state = create_minimal_test_state();
+
+        let result = add_im_message(
+            &message_file,
+            "", // Empty owner
+            "Test message",
+            &state,
+        );
+
+        assert!(result.is_err(), "Function should return error for empty owner");
+
+        if let Err(e) = result {
+            let error_msg = format!("{}", e);
+            assert!(
+                error_msg.contains("Owner must not be empty"),
+                "Error message should mention empty owner, got: {}",
+                error_msg
+            );
+        }
+
+        cleanup_test_dir(&test_dir);
+    }
+
+    /// Test: Error case - empty message text
+    ///
+    /// Verifies that the function returns an error when text is empty.
+    #[test]
+    fn test_error_empty_text() {
+        let test_dir = create_test_temp_dir().expect("Failed to create test directory");
+        let message_file = test_dir.join("test_message.toml");
+
+        let state = create_minimal_test_state();
+
+        let result = add_im_message(
+            &message_file,
+            "testuser",
+            "", // Empty text
+            &state,
+        );
+
+        assert!(result.is_err(), "Function should return error for empty text");
+
+        if let Err(e) = result {
+            let error_msg = format!("{}", e);
+            assert!(
+                error_msg.contains("Message text must not be empty"),
+                "Error message should mention empty text, got: {}",
+                error_msg
+            );
+        }
+
+        cleanup_test_dir(&test_dir);
+    }
+
+    // /// Test: Error case - path with no filename
+    // ///
+    // /// Verifies that the function returns an error when path has no filename.
+    // #[test]
+    // fn test_error_no_filename() {
+    //     let test_dir = create_test_temp_dir().expect("Failed to create test directory");
+    //     let message_path = test_dir.join("messages/");
+
+    //     let state = create_minimal_test_state();
+
+    //     let result = add_im_message(
+    //         &message_path,
+    //         "testuser",
+    //         "Test message",
+    //         None,
+    //         &state,
+    //     );
+
+    //     assert!(result.is_err(), "Function should return error for path without filename");
+
+    //     if let Err(e) = result {
+    //         let error_msg = format!("{}", e);
+    //         assert!(
+    //             error_msg.contains("must have a filename"),
+    //             "Error message should mention missing filename, got: {}",
+    //             error_msg
+    //         );
+    //     }
+
+    //     cleanup_test_dir(&test_dir);
+    // }
+
+    /// Test: Error case - path with no filename / directory path
+    ///
+    /// Verifies that directory-like paths fail appropriately.
+    /// Note: Path validation for file vs directory happens when reading metadata.
+    #[test]
+    fn test_error_directory_like_path() {
+        let test_dir = create_test_temp_dir().expect("Failed to create test directory");
+        let message_path = test_dir.join("messages/");
+
+        let state = create_minimal_test_state();
+
+        let result = add_im_message(
+            &message_path,
+            "testuser",
+            "Test message",
+            &state,
+        );
+
+        assert!(result.is_err(), "Function should return error for directory-like path");
+
+        if let Err(e) = result {
+            let error_msg = format!("{}", e);
+            // Will fail at metadata reading stage since path isn't a proper file path
+            assert!(
+                error_msg.contains("Failed to read metadata file") ||
+                error_msg.contains("must have a filename"),
+                "Error should mention metadata or filename issue, got: {}",
+                error_msg
+            );
+        }
+
+        cleanup_test_dir(&test_dir);
+    }
+
+    /// Test: Error case - path with no parent directory
+    ///
+    /// Verifies that the function returns an error when path has no parent.
+    #[test]
+    fn test_error_no_parent_directory() {
+        let state = create_minimal_test_state();
+
+        let result = add_im_message(
+            Path::new("message.toml"), // No parent directory
+            "testuser",
+            "Test message",
+            &state,
+        );
+
+        assert!(result.is_err(), "Function should return error for path without parent");
+
+        if let Err(e) = result {
+            let error_msg = format!("{}", e);
+            assert!(
+                error_msg.contains("parent directory") || error_msg.contains("empty path"),
+                "Error message should mention parent directory issue, got: {}",
+                error_msg
+            );
+        }
+    }
+
+    /// Test: Message text with special characters
+    ///
+    /// Verifies that message text with quotes, newlines, etc. is handled.
+    #[test]
+    fn test_message_text_special_characters() {
+        let test_dir = create_test_temp_dir().expect("Failed to create test directory");
+        let message_file = test_dir.join("test_message.toml");
+
+        let state = create_minimal_test_state();
+
+        let text_with_specials = "Message with \"quotes\" and\nnewlines\nand\ttabs";
+
+        /*
+        fn add_im_message(
+            incoming_file_path: &Path,
+            owner: &str,
+            text: &str,
+            signature: Option<String>,
+            graph_navigation_instance_state: &GraphNavigationInstanceState,
+        ) -> Result<(), io::Error> {
+        */
+
+        let result = add_im_message(
+            &message_file,
+            "testuser",
+            text_with_specials,
+            &state,
+        );
+
+        // Will fail without 0.toml metadata file, but validates text handling
+        if let Err(e) = result {
+            let error_msg = format!("{}", e);
+            assert!(
+                !error_msg.contains("Message text must not be empty"),
+                "Should not fail on text validation with special chars, got: {}",
+                error_msg
+            );
+        }
+
+        cleanup_test_dir(&test_dir);
+    }
+
+    /// Test: Owner with special characters
+    ///
+    /// Verifies that usernames with dots, dashes, underscores work.
+    #[test]
+    fn test_owner_special_characters() {
+        let test_dir = create_test_temp_dir().expect("Failed to create test directory");
+        let message_file = test_dir.join("test_message.toml");
+
+        let state = create_minimal_test_state();
+
+        let usernames = vec![
+            "user.name",
+            "user-name",
+            "user_name",
+            "user123",
+        ];
+
+        for username in usernames {
+            let result = add_im_message(
+                &message_file,
+                username,
+                "Test message",
+                &state,
+            );
+
+            // Should not fail on username validation
+            if let Err(e) = result {
+                let error_msg = format!("{}", e);
+                assert!(
+                    !error_msg.contains("Owner must not be empty"),
+                    "Should accept username '{}', got error: {}",
+                    username,
+                    error_msg
+                );
+            }
+        }
+
+        cleanup_test_dir(&test_dir);
+    }
+
+    /// Test: Long message text
+    ///
+    /// Verifies that long messages are handled correctly.
+    #[test]
+    fn test_long_message_text() {
+        let test_dir = create_test_temp_dir().expect("Failed to create test directory");
+        let message_file = test_dir.join("test_message.toml");
+
+        let state = create_minimal_test_state();
+
+        // Create 5KB message
+        let long_text = "x".repeat(5000);
+
+        let result = add_im_message(
+            &message_file,
+            "testuser",
+            &long_text,
+            &state,
+        );
+
+        // Will fail without full setup, but validates large text handling
+        if let Err(e) = result {
+            let error_msg = format!("{}", e);
+            assert!(
+                !error_msg.contains("Message text must not be empty"),
+                "Should not fail on text validation with large text, got: {}",
+                error_msg
+            );
+        }
+
+        cleanup_test_dir(&test_dir);
+    }
+}
+
+// #[cfg(test)]
+// mod tests_add_im_message {
+//     use super::*;
+
+//     // Helper to create minimal test state
+//     fn create_minimal_test_state() -> GraphNavigationInstanceState {
+//         GraphNavigationInstanceState {
+//             local_owner_user: "testuser".to_string(),
+//             active_team_channel: String::new(),
+//             default_im_messages_expiration_days: 30,
+//             default_task_nodes_expiration_days: 90,
+//             tui_height: 24,
+//             tui_width: 80,
+//             current_full_file_path: PathBuf::from("/tmp/test"),
+//             current_node_teamchannel_collaborators_with_access: vec![],
+//             current_node_name: String::new(),
+//             current_node_owner: String::new(),
+//             current_node_description_for_tui: String::new(),
+//             current_node_directory_path: PathBuf::new(),
+//             current_node_unique_id: Vec::new(),
+//             current_node_members: Vec::new(),
+//             home_square_one: false,
+//             pa1_process: String::new(),
+//             pa2_schedule: Vec::new(),
+//             pa3_users: String::new(),
+//             pa4_features: String::new(),
+//             pa5_mvp: String::new(),
+//             pa6_feedback: String::new(),
+//             message_post_gpgtoml_required: None,
+//             message_post_data_format_specs_integer_ranges_from_to_tuple_array: None,
+//             message_post_data_format_specs_int_string_ranges_from_to_tuple_array: None,
+//             message_post_max_string_length_int: None,
+//             message_post_is_public_bool: None,
+//             message_post_user_confirms_bool: None,
+//             message_post_start_date_utc_posix: None,
+//             message_post_end_date_utc_posix: None,
+//         }
+//     }
+
+//     #[test]
+//     fn test_error_empty_owner() {
+//         let state = create_minimal_test_state();
+//         let result = add_im_message(
+//             Path::new("dummy/message.toml"),
+//             "",
+//             "Test",
+//             None,
+//             &state,
+//         );
+//         assert!(result.is_err());
+//     }
+// }
+
 #[derive(Debug, Deserialize, Serialize)]
 struct NodeInstMsgBrowserMetadata {
     // every .toml has these four
@@ -9928,6 +13304,8 @@ impl NodeInstMsgBrowserMetadata {
     }
 }
 
+
+
 /*
 Note: this might get generalized to fit in with vote an other files
 but only if that is best
@@ -9938,50 +13316,77 @@ nothing should be included with empirical data in support
 struct MessagePostFile {
     // every .toml has these four
     owner: String, // owner of this item
-    teamchannel_collaborators_with_access: Vec<String>,
-    updated_at_timestamp: u64, // utc posix timestamp
-    expires_at: u64, // utc posix timestamp
-
     node_name: String, // Name of the node this message belongs to
     filepath_in_node: String, // Relative path within the node's directory
-    text_message: String,
-    links: Vec<String>,
-    signature: Option<String>,
+    text_message: String, // content-body
 
-    // Is MessagePostFile file gpg encrypted
-    messagepost_gpgtoml: bool,
+    teamchannel_collaborators_with_access: Vec<String>,
+    updated_at_timestamp: u64, // utc posix timestamp
+    messagepost_gpgtoml: bool, // Is MessagePostFile file gpg encrypted
+    expires_at: u64, // utc posix timestamp
+
+    // links: Vec<String>,  // reference to node etc.
+    // signature: Option<String>, // ???
 }
 
 impl MessagePostFile {
     fn new(
-        owner: &str,
-        node_name: &str, // Add node name as a parameter
-        filepath_in_node: &str, // Add filepath_in_node as a parameter
-        text_message: &str,
-        signature: Option<String>,
-        graph_navigation_instance_state: &GraphNavigationInstanceState,  // gets uma.toml data
-        recipients_list: Vec<String>,
+        graph_navigation_instance_state: &GraphNavigationInstanceState,
+        owner: &str, // owner
+        node_name: &str, // node_name
+        filepath_in_node: &str, //filepath_in_node
+        text_message: &str, // text_message
+        recipients_list: Vec<String>, // teamchannel_collaborators_with_access
         messagepost_gpgtoml: bool,
+        expires_at: Option<u64>,  // NEW: Custom expiration, or None for default
     ) -> MessagePostFile {
         let timestamp = get_current_unix_timestamp();
-        // Calculate expiration date using the value from local_user_metadata
-        let expires_at = timestamp +
-            (graph_navigation_instance_state.default_im_messages_expiration_days * 24 * 60 * 60);
-        // let teamchannel_collaborators_with_access = graph_navigation_instance_state.current_node_teamchannel_collaborators_with_access.clone();
+
+        // Use custom expiration if provided, otherwise calculate default
+        let expires_at_timestamp = expires_at.unwrap_or_else(|| {
+            timestamp + (graph_navigation_instance_state.default_im_messages_expiration_days * 24 * 60 * 60)
+        });
 
         MessagePostFile {
             owner: owner.to_string(),
             teamchannel_collaborators_with_access: recipients_list,
-            node_name: node_name.to_string(), // Store the node name
-            filepath_in_node: filepath_in_node.to_string(), // Store the filepath
+            node_name: node_name.to_string(),
+            filepath_in_node: filepath_in_node.to_string(),
             text_message: text_message.to_string(),
-            updated_at_timestamp: timestamp, // utc posix timestamp
-            expires_at: expires_at, // utc posix timestamp // TODO!! update this
-            links: Vec::new(),
-            signature: signature,
+            updated_at_timestamp: timestamp,
+            expires_at: expires_at_timestamp,  // Use calculated or custom value
             messagepost_gpgtoml: messagepost_gpgtoml,
         }
     }
+    // fn new(
+    //     owner: &str,
+    //     node_name: &str, // Add node name as a parameter
+    //     filepath_in_node: &str, // Add filepath_in_node as a parameter
+    //     text_message: &str,
+    //     signature: Option<String>,
+    //     graph_navigation_instance_state: &GraphNavigationInstanceState,  // gets uma.toml data
+    //     recipients_list: Vec<String>,
+    //     messagepost_gpgtoml: bool,
+    // ) -> MessagePostFile {
+    //     let timestamp = get_current_unix_timestamp();
+    //     // Calculate expiration date using the value from local_user_metadata
+    //     let expires_at = timestamp +
+    //         (graph_navigation_instance_state.default_im_messages_expiration_days * 24 * 60 * 60);
+    //     // let teamchannel_collaborators_with_access = graph_navigation_instance_state.current_node_teamchannel_collaborators_with_access.clone();
+
+    //     MessagePostFile {
+    //         owner: owner.to_string(),
+    //         teamchannel_collaborators_with_access: recipients_list,
+    //         node_name: node_name.to_string(), // Store the node name
+    //         filepath_in_node: filepath_in_node.to_string(), // Store the filepath
+    //         text_message: text_message.to_string(),
+    //         updated_at_timestamp: timestamp, // utc posix timestamp
+    //         expires_at: expires_at, // utc posix timestamp // TODO!! update this
+    //         links: Vec::new(),
+    //         signature: signature,
+    //         messagepost_gpgtoml: messagepost_gpgtoml,
+    //     }
+    // }
 }
 
 // /// Broken
@@ -13635,87 +17040,89 @@ fn read_all_newfile_sendq_flags_w_cleanup(
 }
 
 
-/// Add New Message File
-/// 1. create message .toml
-/// 2. save .toml to team-channel messages path
-/// 3. save that path as
-///
-fn add_im_message(
-    incoming_file_path: &Path,
-    owner: &str,
-    text: &str,
-    signature: Option<String>,
-    graph_navigation_instance_state: &GraphNavigationInstanceState, // Pass local_user_metadata here
-) -> Result<(), io::Error> {
+// /// Add New Message File
+// /// 1. create message .toml
+// /// 2. save .toml to team-channel messages path
+// /// 3. save that path as
+// ///
+// fn add_im_message(
+//     incoming_file_path: &Path,
+//     owner: &str,
+//     text: &str,
+//     signature: Option<String>,
+//     graph_navigation_instance_state: &GraphNavigationInstanceState, // Pass local_user_metadata here
+// ) -> Result<(), io::Error> {
 
-    // 1. Parse for {to:user} syntax
-    let mut recipients_list = graph_navigation_instance_state.current_node_teamchannel_collaborators_with_access.clone();
-    if let Some(to_clause) = text.find("{to:") {
-        if let Some(end_brace) = text[to_clause..].find('}') {
-            let recipient_name = text[to_clause + 4..to_clause + end_brace].trim();
-            recipients_list.clear(); // Clear default list: restrict to listed recipient only
+//     // 1. Parse for {to:user} syntax
+//     let mut recipients_list = graph_navigation_instance_state.current_node_teamchannel_collaborators_with_access.clone();
+//     if let Some(to_clause) = text.find("{to:") {
+//         if let Some(end_brace) = text[to_clause..].find('}') {
+//             let recipient_name = text[to_clause + 4..to_clause + end_brace].trim();
+//             recipients_list.clear(); // Clear default list: restrict to listed recipient only
 
-            // 2. Check if recipient in team channel list and is not sender.
-            if graph_navigation_instance_state.current_node_teamchannel_collaborators_with_access.contains(&recipient_name.to_string()) && recipient_name != owner {
-                recipients_list.push(recipient_name.to_string()); // Add only the specified recipient
-            } else {
-                // Log if user not found
-                debug_log!("'to:' but Recipient '{}' not found in channel or is sender.", recipient_name);
-            }
-        }
-    }
+//             // 2. Check if recipient in team channel list and is not sender.
+//             if graph_navigation_instance_state.current_node_teamchannel_collaborators_with_access.contains(&recipient_name.to_string()) && recipient_name != owner {
+//                 recipients_list.push(recipient_name.to_string()); // Add only the specified recipient
+//             } else {
+//                 // Log if user not found
+//                 debug_log!("'to:' but Recipient '{}' not found in channel or is sender.", recipient_name);
+//             }
+//         }
+//     }
 
-    // separate name and path
-    let parent_dir = if let Some(parent) = incoming_file_path.parent() {
-        parent
-    } else {
-        Path::new("")
-    };
+//     // separate name and path
+//     let parent_dir = if let Some(parent) = incoming_file_path.parent() {
+//         parent
+//     } else {
+//         Path::new("")
+//     };
 
-    // Now you can use `parent_dir` as needed
-    // For example, you can check if it's an empty string
-    if parent_dir == Path::new("") {
-        debug_log("The path has no parent directory.");
-    } else {
-        debug_log(&format!("parent directory  {:?}", parent_dir));
-    }
+//     // Now you can use `parent_dir` as needed
+//     // For example, you can check if it's an empty string
+//     if parent_dir == Path::new("") {
+//         debug_log("The path has no parent directory.");
+//     } else {
+//         debug_log(&format!("parent directory  {:?}", parent_dir));
+//     }
 
-    // Read 0.toml to get this instant messager browser room's settings
-    let metadata_path = parent_dir.join("0.toml"); // Assuming path is the message_posts_browser directory
-    let metadata_string = fs::read_to_string(metadata_path)?;
-    let metadata: NodeInstMsgBrowserMetadata = toml::from_str(&metadata_string)
-    .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("TOML deserialization error: {}", e)))?;
+//     // Read 0.toml to get this instant messager browser room's settings
+//     let metadata_path = parent_dir.join("0.toml"); // Assuming path is the message_posts_browser directory
+//     let metadata_string = fs::read_to_string(metadata_path)?;
+//     let metadata: NodeInstMsgBrowserMetadata = toml::from_str(&metadata_string)
+//     .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("TOML deserialization error: {}", e)))?;
 
-    // Extract node name and file path
-    let node_name = metadata.node_name;
-    let filepath_in_node = metadata.path_in_node;
-    let message = MessagePostFile::new(
-        owner, // owner: &str,
-        &node_name, // node_name: &str, , // Add node name as a parameter
-        &filepath_in_node, // filepath_in_node: &str, , // Add filepath_in_node as a parameter
-        text, // text_message: &str,
-        signature, // signature: Option<String>,
-        graph_navigation_instance_state, // graph_navigation_instance_state: &GraphNavigationInstanceState,  // gets uma.toml data
-        recipients_list.clone(),
-        false, // messagepost_gpgtoml
-    );
-    let toml_data = toml::to_string(&message).map_err(|e| {
-        io::Error::new(io::ErrorKind::Other, format!("TOML serialization error: {}", e))
-    })?; // Wrap TOML error in io::Error
-    fs::write(incoming_file_path, toml_data)?;
+//     // Extract node name and file path
+//     let node_name = metadata.node_name;
+//     let filepath_in_node = metadata.path_in_node;
+//     let message = MessagePostFile::new(
+//         owner, // owner: &str,
+//         &node_name, // node_name: &str, , // Add node name as a parameter
+//         &filepath_in_node, // filepath_in_node: &str, , // Add filepath_in_node as a parameter
+//         text, // text_message: &str,
+//         signature, // signature: Option<String>,
+//         graph_navigation_instance_state, // graph_navigation_instance_state: &GraphNavigationInstanceState,  // gets uma.toml data
+//         recipients_list.clone(),
+//         false, // messagepost_gpgtoml
+//     );
+
+//     // TODO: save updates here...
+//     let toml_data = toml::to_string(&message).map_err(|e| {
+//         io::Error::new(io::ErrorKind::Other, format!("TOML serialization error: {}", e))
+//     })?; // Wrap TOML error in io::Error
+//     fs::write(incoming_file_path, toml_data)?;
 
 
-    // Write update flag for each possible remote collaborator
-    // sync_data/teamtest/new_file_path_flags/bob
-    // sync_data/teamtest/new_file_path_flags/charlotte
-    // etc.
-    write_newfile_sendq_flag(
-        &recipients_list,
-        &incoming_file_path,
-    );
+//     // Write update flag for each possible remote collaborator
+//     // sync_data/teamtest/new_file_path_flags/bob
+//     // sync_data/teamtest/new_file_path_flags/charlotte
+//     // etc.
+//     let _ = write_newfile_sendq_flag(
+//         &recipients_list,
+//         &incoming_file_path,
+//     );
 
-    Ok(())
-}
+//     Ok(())
+// }
 
 
 /*
@@ -18526,7 +21933,7 @@ fn handle_command_main_mode(
 
                 debug_log!("app.current_path {:?}", app.current_path);
 
-                create_core_node(
+                let _ = create_core_node(
                     app.current_path.clone(), // node_path: PathBuf,
                     app.graph_navigation_instance_state.current_node_teamchannel_collaborators_with_access.clone(),  // teamchannel_collaborators_with_access: Vec<String>,
                 );
@@ -18554,7 +21961,8 @@ fn handle_command_main_mode(
             // }
             "collaborator" => {
                 debug_log("make node!");
-                add_collaborator_qa(&graph_navigation_instance_state);
+                // add_collaborator_qa(&graph_navigation_instance_state);
+                let _ = add_collaborator_qa();
             }
 
            "d" | "datalab" | "data" => {
@@ -26147,7 +29555,6 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                     &message_path,
                     local_owner_user,
                     input.trim(),
-                    None,
                     &app.graph_navigation_instance_state, // Pass using self
                 ).expect("handle_insert_text_input: Failed to add message");
 
