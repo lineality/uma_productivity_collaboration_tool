@@ -19444,19 +19444,75 @@ fn share_team_channel_with_existing_collaborator_converts_to_abs(
     // Create path to the specific team channel directory
     let absolute_specific_team_channel_directory_path = absolute_team_channels_directory_path.join(team_channel_name);
 
-    // Create path to the team channel's node.toml file
-    let absolute_team_channel_node_toml_path = absolute_specific_team_channel_directory_path.join("node.toml");
+    // // Create path to the team channel's node.toml file
+    // let absolute_team_channel_node_toml_path = absolute_specific_team_channel_directory_path.join("node.toml");
 
-    debug_log!("TCS: Team channel node.toml path: {}",
-               absolute_team_channel_node_toml_path.display());
+    // // let absolute_team_channel_node_toml_path = absolute_specific_team_channel_directory_path.join("node.toml");
 
-    // Verify the team channel node.toml file exists
-    if !absolute_team_channel_node_toml_path.exists() {
-        return Err(GpgError::PathError(format!(
-            "TCS: Team channel node.toml file not found at: {}",
-            absolute_team_channel_node_toml_path.display()
-        )));
-    }
+
+
+    // debug_log!("TCS: Team channel node.toml path: {}",
+    //            absolute_team_channel_node_toml_path.display());
+
+    // // todo node.toml or node.gpgtoml
+    // //
+    // // Verify the team channel node.toml file exists
+    // if !absolute_team_channel_node_toml_path.exists() {
+
+    //     debug_log!("TCS: Team channel node.toml file not found at: {}",
+    //     absolute_team_channel_node_toml_path.display());
+
+    //     return Err(GpgError::PathError(format!(
+    //         "TCS: Team channel node.toml file not found at: {}",
+    //         absolute_team_channel_node_toml_path.display()
+    //     )));
+    // }
+
+    // A. Check for either node.toml or node.gpgtoml
+    let node_toml_path = absolute_specific_team_channel_directory_path.join("node.toml");
+    let node_gpgtoml_path = absolute_specific_team_channel_directory_path.join("node.gpgtoml");
+
+    let node_file_path = if node_toml_path.exists() {
+        debug_log!("TCS: Found node.toml");
+        node_toml_path
+    } else if node_gpgtoml_path.exists() {
+        debug_log!("TCS: Found node.gpgtoml");
+        node_gpgtoml_path
+    } else {
+        return Err(GpgError::PathError(
+            "TCS: Neither node.toml nor node.gpgtoml found in team channel directory".to_string()
+        ));
+    };
+
+    // B. Get readable temp copy (handles decryption if .gpgtoml)
+    debug_log!("TCS: Getting readable copy of node file");
+
+    // Get GPG fingerprint
+    let gpg_fingerprint = LocalUserUma::read_gpg_fingerprint_from_file()
+        .map_err(|e| GpgError::PathError(
+            format!("TCS: Failed to read GPG fingerprint from uma.toml: {}", e)
+        ))?;
+
+    // Get temp directory
+    let temp_dir = get_base_uma_temp_directory_path()
+        .map_err(|e| GpgError::PathError(
+            format!("TCS: Failed to get temp directory path: {}", e)
+        ))?;
+
+    // Get readable copy
+    let absolute_team_channel_node_toml_path = get_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
+        &node_file_path,
+        &gpg_fingerprint,
+        &temp_dir,
+    ).map_err(|e| GpgError::PathError(
+        format!("TCS: Failed to get readable copy of node file: {:?}", e)
+    ))?;
+
+    debug_log!("TCS: Node readcopy path: {}", absolute_team_channel_node_toml_path);
+
+    // Now use node_readcopy_path to read fields...
+
+    // ///////////////////
 
     debug_log!("TCS: Successfully verified team channel node.toml file exists");
 
@@ -19650,14 +19706,16 @@ fn share_team_channel_with_existing_collaborator_converts_to_abs(
 
     // Display information about the process
     println!("\nProcessing with the following parameters:");
-    println!("Team channel file: {}", absolute_team_channel_node_toml_path.display());
+    println!("Team channel file: {}", absolute_team_channel_node_toml_path);
     println!("Local owner's GPG key ID (for signing): {}", local_owner_gpg_key_id);
     println!("Remote collaborator's public key file: {}", temporary_remote_collaborator_public_key_file_path.display());
     println!("Encrypting team channel '{}' for user '{}'", team_channel_name, remote_collaborator_username);
 
+    let path_absoluteteam_channel_node_toml_path = Path::new(&absolute_team_channel_node_toml_path);
+
     // Clearsign and encrypt the team channel node.toml file
     clearsign_and_encrypt_file_for_recipient(
-        &absolute_team_channel_node_toml_path,
+        &path_absoluteteam_channel_node_toml_path,
         &local_owner_gpg_key_id,
         &temporary_remote_collaborator_public_key_file_path
     )?;
@@ -21106,52 +21164,105 @@ pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
         })?;
 
     debug_log!("PIET Extracted team channel owner: {}", team_channel_owner);
-    println!("Team channel owned by: {}", team_channel_owner);
+    println!("PIET Team channel owned by: {}", team_channel_owner);
 
     // STEP 8: Get team channel owner's public key for verification
     debug_log!("PIET Step 8: Getting team channel owner's public key for verification");
 
-    // TODO maybe needs to be updated for readcopy and .gpg-option
-    // Path to the team channel owner's addressbook file
-    let team_channel_owner_address_book_filename = format!("{}__collaborator.toml", team_channel_owner);
-    let absolute_team_channel_owner_address_book_path = absolute_collab_dir.join(&team_channel_owner_address_book_filename);
+    // // TODO maybe needs to be updated for readcopy and .gpg-option
+    // // Path to the team channel owner's addressbook file
+    // let team_channel_owner_address_book_filename = format!("{}__collaborator.toml", team_channel_owner);
+    // let absolute_team_channel_owner_address_book_path = absolute_collab_dir.join(&team_channel_owner_address_book_filename);
 
-    debug_log!("PIET Team channel owner's addressbook path: {}", absolute_team_channel_owner_address_book_path.display());
+    // debug_log!("PIET Team channel owner's addressbook path: {}", absolute_team_channel_owner_address_book_path.display());
 
-    // Verify the team channel owner's addressbook file exists
-    if !absolute_team_channel_owner_address_book_path.exists() {
-        let error_msg = format!(
-            "PIET Team channel owner's addressbook file not found at: {}",
-            absolute_team_channel_owner_address_book_path.display()
-        );
-        println!("Error: {}", error_msg);
-        println!("You need to import the team channel owner's addressbook first.");
+    // // Verify the team channel owner's addressbook file exists
+    // if !absolute_team_channel_owner_address_book_path.exists() {
+    //     let error_msg = format!(
+    //         "PIET Team channel owner's addressbook file not found at: {}",
+    //         absolute_team_channel_owner_address_book_path.display()
+    //     );
+    //     println!("Error: {}", error_msg);
+    //     println!("You need to import the team channel owner's addressbook first.");
 
-        // Clean up temp directory before returning
-        let _ = fs::remove_dir_all(&temp_dir);
+    //     // Clean up temp directory before returning
+    //     let _ = fs::remove_dir_all(&temp_dir);
 
-        return Err(GpgError::PathError(error_msg));
-    }
+    //     return Err(GpgError::PathError(error_msg));
+    // }
 
-    // Convert the team channel owner's addressbook path to string for TOML reading
-    let absolute_team_channel_owner_address_book_path_str = absolute_team_channel_owner_address_book_path
-        .to_str()
-        .ok_or_else(|| {
-            let error_msg = format!(
-                "PIET Unable to convert team channel owner's addressbook path to string: {}",
-                absolute_team_channel_owner_address_book_path.display()
-            );
-            println!("Error: {}", error_msg);
+    // A. Check for either node.toml or node.gpgtoml
+    // let node_toml_path = absolute_specific_team_channel_directory_path.join("node.toml");
+    let cl_team_channel_owner_address_book_filename = format!("{}__collaborator.toml", team_channel_owner);
+    let cl_absolute_team_channel_owner_address_book_path = absolute_collab_dir.join(&cl_team_channel_owner_address_book_filename);
 
-            // Clean up temp directory before returning
-            let _ = fs::remove_dir_all(&temp_dir);
+    // let node_gpgtoml_path = absolute_specific_team_channel_directory_path.join("node.gpgtoml");
+    let gpg_team_channel_owner_address_book_filename = format!("{}__collaborator.gpgtoml", team_channel_owner);
+    let gpg_absolute_team_channel_owner_address_book_path = absolute_collab_dir.join(&gpg_team_channel_owner_address_book_filename);
 
-            GpgError::PathError(error_msg)
-        })?;
+
+    let absolute_team_channel_owner_address_book_path = if cl_absolute_team_channel_owner_address_book_path.exists() {
+        debug_log!("PIET: Found .toml");
+        cl_absolute_team_channel_owner_address_book_path
+    } else if gpg_absolute_team_channel_owner_address_book_path.exists() {
+        debug_log!("PIET: Found .gpgtoml");
+        gpg_absolute_team_channel_owner_address_book_path
+    } else {
+        debug_log("PIET: Neither .toml nor .gpgtoml found in  directory");
+        return Err(GpgError::PathError(
+            "PIET: Neither .toml nor .gpgtoml found in  directory".to_string()
+        ));
+    };
+
+    // B. Get readable temp copy (handles decryption if .gpgtoml)
+    debug_log!("PIET: Getting readable copy of file");
+
+    // Get GPG fingerprint
+    let gpg_fingerprint = LocalUserUma::read_gpg_fingerprint_from_file()
+        .map_err(|e| GpgError::PathError(
+            format!("PIET: Failed to read GPG fingerprint from uma.toml: {}", e)
+        ))?;
+
+    // Get temp directory
+    let temp_dir = get_base_uma_temp_directory_path()
+        .map_err(|e| GpgError::PathError(
+            format!("PIET: Failed to get temp directory path: {}", e)
+        ))?;
+
+    // Get readable copy
+    let absolute_team_channel_owner_address_book_path_str = get_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
+        &absolute_team_channel_owner_address_book_path,
+        &gpg_fingerprint,
+        &temp_dir,
+    ).map_err(|e| GpgError::PathError(
+        format!("PIET: Failed to get readable copy of node file: {:?}", e)
+    ))?;
+
+    debug_log!("PIET: Node readcopy path: {}", absolute_team_channel_owner_address_book_path_str);
+
+    // Now use node_readcopy_path to read fields...
+
+    // ////////////////////////
+
+    // // Convert the team channel owner's addressbook path to string for TOML reading
+    // let absolute_team_channel_owner_address_book_path_str = absolute_team_channel_owner_address_book_path
+    //     .to_str()
+    //     .ok_or_else(|| {
+    //         let error_msg = format!(
+    //             "PIET Unable to convert team channel owner's addressbook path to string: {}",
+    //             absolute_team_channel_owner_address_book_path.display()
+    //         );
+    //         println!("Error: {}", error_msg);
+
+    //         // Clean up temp directory before returning
+    //         let _ = fs::remove_dir_all(&temp_dir);
+
+    //         GpgError::PathError(error_msg)
+    //     })?;
 
     // Read the team channel owner's public GPG key from their addressbook
     let team_channel_owner_public_key = read_multiline_string_from_clearsigntoml(
-        absolute_team_channel_owner_address_book_path_str,
+        &absolute_team_channel_owner_address_book_path_str,
         "gpg_key_public"
     ).map_err(|e| {
         let error_msg = format!("PIET Failed to read team channel owner's public GPG key: {}", e);
@@ -21782,7 +21893,7 @@ pub fn invite_wizard() -> Result<(), GpgError> {
                     exe-parent/invites_updates/incoming/
                     ```
                     */
-                    share_team_channel_with_existing_collaborator_converts_to_abs(
+                    let _ = share_team_channel_with_existing_collaborator_converts_to_abs(
                         &remote_collaborator_username,
                         &team_channel_name,
                     );
@@ -21793,14 +21904,14 @@ pub fn invite_wizard() -> Result<(), GpgError> {
                     println!(" --- FROM a remote-collaborator & team-channel-owner, TO you --- ");
                     println!("Please put their FILENAME.SUFFIX file, as the only file, in the");
                     println!("```path");
-                    println!("invites_updates/incoming/teamchannels ");
+                    println!("invites_updates/incoming/ ");
                     println!("```");
                     println!("directory (folder)");
                     println!("Press enter when this is done.");
 
                     // this does nothing, press enter to proceed.
                     let mut input = String::new();
-                    io::stdin()
+                    let _  = io::stdin()
                         .read_line(&mut input)
                         .map_err(|e| format!("Failed to read input: {:?}", e));
 
@@ -21831,7 +21942,7 @@ pub fn invite_wizard() -> Result<(), GpgError> {
                     */
 
                     //
-                    process_incoming_encrypted_teamchannel();
+                    let _ = process_incoming_encrypted_teamchannel();
 
                     }
 
