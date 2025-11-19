@@ -5841,3 +5841,91 @@ fn debugpause(n: u64) {
 
 //     Ok(all_assignments)
 // }
+
+// /// Extracts the abstract port assignments from a team channel's `node.toml` file.
+// ///
+// /// This function reads the `node.toml` file, parses the TOML data, and extracts the
+// /// `collaborator_port_assignments` table, returning it as a HashMap.
+// ///
+// /// # Arguments
+// ///
+// /// * `node_toml_path` - The path to the team channel's `node.toml` file.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, String>` - A `Result` containing a HashMap of
+// ///   collaborator pair names to their port assignments on success, or a `String` describing the error on failure.
+// fn get_abstract_port_assignments_from_node_toml(
+//     node_toml_path: &Path
+// ) -> Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, String> {
+//     debug_log!("GAPAFNT 5. starting get_abstract_port_assignments_from_node_toml(): 1. Entering function with path: {:?}", node_toml_path);
+
+//     // 1. Read the node.toml file
+//     let toml_string = match std::fs::read_to_string(node_toml_path) {
+//         Ok(content) => {
+//             debug_log!("GAPAFNT: 2. Successfully read node.toml file.");
+//             content
+//         },
+//         Err(e) => {
+//             let error_message = format!("GAPAFNT: Error reading node.toml file: {}", e);
+//             debug_log!("{}", error_message);
+//             return Err(error_message);
+//         }
+//     };
+
+//     // 2. Parse the TOML data
+//     // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+//     let toml_value: Value = match toml::from_str(&toml_string) {
+//         Ok(value) => {
+//             debug_log!("GAPAFNT: 3. Successfully parsed TOML data.");
+//             value
+//         },
+//         Err(e) => {
+//             let error_message = format!("GAPAFNT: Error parsing node.toml data: {}", e);
+//             debug_log!("{}", error_message);
+//             return Err(error_message);
+//         }
+//     };
+
+//     // 3. Extract the abstract_collaborator_port_assignments table
+//     let mut abstract_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>> = HashMap::new();
+//     debug_log!("GAPAFNT: 4. Looking for 'abstract_collaborator_port_assignments' table.");
+//     if let Some(collaborator_assignments_table) = toml_value.get("abstract_collaborator_port_assignments").and_then(Value::as_table) {
+//         debug_log!("GAPAFNT: 5. Found 'abstract_collaborator_port_assignments' table.");
+//         for (pair_name, pair_data) in collaborator_assignments_table {
+//             debug_log!("GAPAFNT: 6. Processing pair: {}", pair_name);
+//             if let Some(ports_array) = pair_data.get("collaborator_ports").and_then(Value::as_array) {
+//                 debug_log!("GAPAFNT: 7. Found 'collaborator_ports' array for pair: {}", pair_name);
+//                 let mut ports_for_pair = Vec::new();
+//                 for port_data in ports_array {
+//                     debug_log!("GAPAFNT: 8. Processing port data: {:?}", port_data);
+//                     let port_data_str = toml::to_string(&port_data).unwrap();
+
+//                     // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+//                     // // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+//                     // // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+//                     // // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+//                     // // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+//                     // // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+//                     // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+//                     let collaborator_port: AbstractTeamchannelNodeTomlPortsData = toml::from_str(&port_data_str)
+//                         .map_err(|e| format!("GAPAFNT: Error deserializing collaborator port: {}", e))?;
+//                     debug_log!("GAPAFNT: 9. Deserialized port data: {:?}", collaborator_port);
+//                     ports_for_pair.push(ReadTeamchannelCollaboratorPortsToml {
+//                         collaborator_ports: vec![collaborator_port],
+//                     });
+//                 }
+//                 debug_log!("GAPAFNT: 10. Inserting ports for pair: {} into HashMap.", pair_name);
+//                 abstract_port_assignments.insert(pair_name.to_string(), ports_for_pair);
+//             } else {
+//                 debug_log!("GAPAFNT: 11. 'collaborator_ports' array not found for pair: {}", pair_name);
+//             }
+//         }
+//     } else {
+//         debug_log!("GAPAFNT: 12. 'abstract_collaborator_port_assignments' table not found.");
+//     }
+
+//     debug_log!("GAPAFNT: 13. Exiting function with port assignments: {:?}", abstract_port_assignments);
+//     // 4. Return the abstract_port_assignments HashMap
+//     Ok(abstract_port_assignments)
+// }

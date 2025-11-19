@@ -449,6 +449,8 @@ const CONTINUE_UMA_PATH_STR: &str = "project_graph_data/session_state_items/cont
 const HARD_RESTART_FLAG_PATH_STR: &str = "project_graph_data/session_state_items/yes_hard_restart_flag.txt";
 const SYNC_START_OK_FLAG_PATH_STR: &str = "project_graph_data/session_state_items/ok_to_start_sync_flag.txt";
 const INCOMING_PUBLICGPG_KEYASC_FILEPATH_STR: &str = "invites_updates/incoming/key.asc";
+const UMA_SESSION_STATE_ITEMS_DIR_PATH_STR: &str = "project_graph_data/session_state_items";
+
 
 /// Gets the absolute path to temp directory
 /// executible-parent-relative-aboslute path
@@ -488,6 +490,11 @@ pub fn get_continue_uma_path() -> io::Result<PathBuf> {
     )
 }
 
+pub fn get_sessionstateitems_path() -> io::Result<PathBuf> {
+    make_input_path_name_abs_executabledirectoryrelative_nocheck(
+        UMA_SESSION_STATE_ITEMS_DIR_PATH_STR
+    )
+}
 
 /// Determines if UMA should halt based on the continue_uma.txt file.
 ///
@@ -4601,6 +4608,7 @@ pub fn should_not_hard_restart() -> bool {
     }
 }
 
+// TODO not used? use with dubug_assert flag?
 /// Prints the status of all control flags for debugging purposes.
 ///
 /// This function reads and displays the values and locations of all flag files
@@ -4889,6 +4897,8 @@ fn get_toml_file_updated_at_timestamp(file_path: &Path) -> Result<u64, ThisProje
     );
 
     let toml_string = std::fs::read_to_string(file_path)?;
+
+    // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
     let toml_value: Value = toml::from_str(&toml_string)?;
 
     let timestamp = toml_value
@@ -5278,44 +5288,150 @@ fn extract_ports_from_table(port_set: &toml::map::Map<String, Value>) -> Result<
 /// * `Result<Vec<String>, String>` - A `Result` containing a vector of collaborator names
 ///   on success, or a `String` describing the error on failure.
 fn get_collaborator_names_from_node_toml(node_toml_path: &Path) -> Result<Vec<String>, String> {
-    debug_log!("4. Entering get_collaborator_names_from_node_toml() with path: {:?}", node_toml_path);
+    debug_log!("GCNRNT 4. Entering get_collaborator_names_from_node_toml() with path: {:?}", node_toml_path);
 
-    // 1. Read the node.toml file
-    let toml_string = match std::fs::read_to_string(node_toml_path) {
-        Ok(content) => {
-            debug_log!("Successfully read node.toml file. Contents:\n{}", content);
-            content
-        },
-        Err(e) => return Err(format!("Error reading node.toml file: {}", e)),
-    };
+    // // 1. Read the node.toml file
+    // let toml_string = match std::fs::read_to_string(node_toml_path) {
+    //     Ok(content) => {
+    //         debug_log!("GCNRNT Successfully read node.toml file. Contents:\n{}", content);
+    //         content
+    //     },
+    //     Err(e) => return Err(format!("GCNRNT Error reading node.toml file: {}", e)),
+    // };
 
-    // 2. Parse the TOML data
-    let toml_value: Value = match toml::from_str(&toml_string) {
-        Ok(value) => {
-            debug_log!("Successfully parsed TOML data. Value: {:?}", value);
-            value
-        },
-        Err(e) => return Err(format!("Error parsing node.toml data: {}", e)),
-    };
+    // // 2. Parse the TOML data
+    // // // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+    // let toml_value: Value = match toml::from_str(&toml_string) {
+    //     Ok(value) => {
+    //         debug_log!("GCNRNT Successfully parsed TOML data. Value: {:?}", value);
+    //         value
+    //     },
+    //     Err(e) => return Err(format!("GCNRNT Error parsing node.toml data: {}", e)),
+    // };
 
-    // 3. Extract collaborator names from abstract_collaborator_port_assignments
-    let mut collaborator_names = Vec::new();
-    debug_log!("Looking for table 'abstract_collaborator_port_assignments'");
-    if let Some(collaborator_assignments_table) = toml_value.get("abstract_collaborator_port_assignments").and_then(Value::as_table) {
-        debug_log!("Found table 'abstract_collaborator_port_assignments'. Entries: {:?}", collaborator_assignments_table);
-        for (pair_name, _) in collaborator_assignments_table {
-            debug_log!("Processing pair: {}", pair_name);
-            // Split the pair name (e.g., "alice_bob") into individual names
-            let names: Vec<&str> = pair_name.split('_').collect();
-            collaborator_names.extend(names.iter().map(|&s| s.to_string()));
+
+    let target_path_string = node_toml_path.to_string_lossy();
+
+
+    ////////////////////////////////
+    // Extract Owner for Key Lookup
+    ////////////////////////////////
+    let owner_name_of_toml_field_key_to_read = "owner";
+    debug_log!(
+        "LCNFTF: Reading file owner from field '{}' for security validation",
+        owner_name_of_toml_field_key_to_read
+    );
+
+    // get node_owners_public_gpg_key
+
+    let file_owner_username = match read_single_line_string_field_from_toml(
+        &node_toml_path.to_string_lossy(),  // TODO convert to string?
+        owner_name_of_toml_field_key_to_read,
+    ) {
+        Ok(username) => {
+            if username.is_empty() {
+                // Convert to String error instead of GpgError
+                return Err(format!(
+                    "LCNFTF: Field '{}' is empty in TOML file. File owner is required for security validation.",
+                    owner_name_of_toml_field_key_to_read
+                ));
+            }
+            username
         }
-    } else {
-        debug_log!("Table 'abstract_collaborator_port_assignments' not found.");
-    }
+        Err(e) => {
+            // Convert to String error instead of GpgError
+            return Err(format!(
+                "LCNFTF: Failed to read file owner from field '{}': {}",
+                owner_name_of_toml_field_key_to_read, e
+            ));
+        }
+    };
+    println!("LCNFTF: File owner: '{}'", file_owner_username);
+    debug_log!("LCNFTF: File owner: '{}'", file_owner_username);
 
-    debug_log!("Exiting get_collaborator_names_from_node_toml() with names: {:?}", collaborator_names);
+    // Get armored public key, using key-id (full fingerprint in)
+    let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+        Ok(fingerprint) => fingerprint,
+        Err(e) => {
+            // Since the function returns Result<CoreNode, String>, we need to return a String error
+            return Err(format!(
+                "LCNFTF: implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}",
+                e
+            ));
+        }
+    };
+
+    // Get the UME temp directory path with explicit String conversion
+    let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
+        .map_err(|io_err| {
+            let gpg_error = GpgError::ValidationError(
+                format!("LCNFTF: Failed to get UME temp directory path: {}", io_err)
+            );
+            // Convert GpgError to String for the function's return type
+            format!("LCNFTF: {:?}", gpg_error)
+        })?;
+
+    // Extract the addressbook path string with inline error conversion
+    let addressbook_readcopy_path_string = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
+        &file_owner_username,
+        COLLABORATOR_ADDRESSBOOK_PATH_STR,
+        &gpg_full_fingerprint_key_id_string,
+        &base_uma_temp_directory_path,
+    ).map_err(|e| format!(
+        "LCNFTF: Failed to get addressbook path for user '{}': {:?}",
+        file_owner_username,
+        e
+    ))?;
+
+    // // Define cleanup closure
+    // let cleanup_closure = || {
+    //     let _ = cleanup_collaborator_temp_file(
+    //         &node_toml_path,
+    //         &base_uma_temp_directory_path,
+    //         );
+    //     let _ = cleanup_collaborator_temp_file(
+    //         &addressbook_readcopy_path_string,
+    //         &base_uma_temp_directory_path,
+    //         );
+    // };
+
+    /*
+    pub fn read_stringarray_from_clearsigntoml_without_publicgpgkey(
+        pathstr_to_config_file_that_contains_gpg_key: &str,
+        pathstr_to_target_clearsigned_file: &str,
+        name_of_toml_field_key_to_read: &str,
+    ) -> Result<Vec<String>, String> {
+    */
+
+    // Example: Read _ from the clearsigned TOML file
+    let collaborator_names_array = read_stringarray_from_clearsigntoml_without_publicgpgkey(
+        &addressbook_readcopy_path_string,  // Config file containing GPG key
+        &target_path_string,           // Target clearsigned filepath string
+        "teamchannel_collaborators_with_access"                // Field to read
+    ).map_err(|e| {
+        // cleanup_closure(); // Run cleanup on error
+        format!("LCNFTF: description_for_tui sFailed to read description_for_tui: {}", e)
+    })?;
+
+
+    // // 3. Extract collaborator names from abstract_collaborator_port_assignments
+    // let mut collaborator_names = Vec::new();
+    // debug_log!("GCNRNT Looking for table 'abstract_collaborator_port_assignments'");
+    // if let Some(collaborator_assignments_table) = toml_value.get("abstract_collaborator_port_assignments").and_then(Value::as_table) {
+    //     debug_log!("GCNRNT Found table 'abstract_collaborator_port_assignments'. Entries: {:?}", collaborator_assignments_table);
+    //     for (pair_name, _) in collaborator_assignments_table {
+    //         debug_log!("GCNRNT Processing pair: {}", pair_name);
+    //         // Split the pair name (e.g., "alice_bob") into individual names
+    //         let names: Vec<&str> = pair_name.split('_').collect();
+    //         collaborator_names.extend(names.iter().map(|&s| s.to_string()));
+    //     }
+    // } else {
+    //     debug_log!("GCNRNT Table 'abstract_collaborator_port_assignments' not found.");
+    // }
+
+    debug_log!("GCNRNT Exiting get_collaborator_names_from_node_toml() with names: {:?}", collaborator_names_array);
     // 4. Return the list of collaborator names
-    Ok(collaborator_names)
+    Ok(collaborator_names_array)
 }
 
 /// Extracts the abstract port assignments from a team channel's `node.toml` file.
@@ -5334,29 +5450,30 @@ fn get_collaborator_names_from_node_toml(node_toml_path: &Path) -> Result<Vec<St
 fn get_abstract_port_assignments_from_node_toml(
     node_toml_path: &Path
 ) -> Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, String> {
-    debug_log!("5. starting get_abstract_port_assignments_from_node_toml(): 1. Entering function with path: {:?}", node_toml_path);
+    debug_log!("GAPAFNT 5. starting get_abstract_port_assignments_from_node_toml(): 1. Entering function with path: {:?}", node_toml_path);
 
     // 1. Read the node.toml file
     let toml_string = match std::fs::read_to_string(node_toml_path) {
         Ok(content) => {
-            debug_log!("get_abstract_port_assignments_from_node_toml: 2. Successfully read node.toml file.");
+            debug_log!("GAPAFNT: 2. Successfully read node.toml file.");
             content
         },
         Err(e) => {
-            let error_message = format!("get_abstract_port_assignments_from_node_toml: Error reading node.toml file: {}", e);
+            let error_message = format!("GAPAFNT: Error reading node.toml file: {}", e);
             debug_log!("{}", error_message);
             return Err(error_message);
         }
     };
 
     // 2. Parse the TOML data
+    // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
     let toml_value: Value = match toml::from_str(&toml_string) {
         Ok(value) => {
-            debug_log!("get_abstract_port_assignments_from_node_toml: 3. Successfully parsed TOML data.");
+            debug_log!("GAPAFNT: 3. Successfully parsed TOML data.");
             value
         },
         Err(e) => {
-            let error_message = format!("get_abstract_port_assignments_from_node_toml: Error parsing node.toml data: {}", e);
+            let error_message = format!("GAPAFNT: Error parsing node.toml data: {}", e);
             debug_log!("{}", error_message);
             return Err(error_message);
         }
@@ -5364,35 +5481,43 @@ fn get_abstract_port_assignments_from_node_toml(
 
     // 3. Extract the abstract_collaborator_port_assignments table
     let mut abstract_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>> = HashMap::new();
-    debug_log!("get_abstract_port_assignments_from_node_toml: 4. Looking for 'abstract_collaborator_port_assignments' table.");
+    debug_log!("GAPAFNT: 4. Looking for 'abstract_collaborator_port_assignments' table.");
     if let Some(collaborator_assignments_table) = toml_value.get("abstract_collaborator_port_assignments").and_then(Value::as_table) {
-        debug_log!("get_abstract_port_assignments_from_node_toml: 5. Found 'abstract_collaborator_port_assignments' table.");
+        debug_log!("GAPAFNT: 5. Found 'abstract_collaborator_port_assignments' table.");
         for (pair_name, pair_data) in collaborator_assignments_table {
-            debug_log!("get_abstract_port_assignments_from_node_toml: 6. Processing pair: {}", pair_name);
+            debug_log!("GAPAFNT: 6. Processing pair: {}", pair_name);
             if let Some(ports_array) = pair_data.get("collaborator_ports").and_then(Value::as_array) {
-                debug_log!("get_abstract_port_assignments_from_node_toml: 7. Found 'collaborator_ports' array for pair: {}", pair_name);
+                debug_log!("GAPAFNT: 7. Found 'collaborator_ports' array for pair: {}", pair_name);
                 let mut ports_for_pair = Vec::new();
                 for port_data in ports_array {
-                    debug_log!("get_abstract_port_assignments_from_node_toml: 8. Processing port data: {:?}", port_data);
+                    debug_log!("GAPAFNT: 8. Processing port data: {:?}", port_data);
                     let port_data_str = toml::to_string(&port_data).unwrap();
+
+                    // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+                    // // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+                    // // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+                    // // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+                    // // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+                    // // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+                    // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
                     let collaborator_port: AbstractTeamchannelNodeTomlPortsData = toml::from_str(&port_data_str)
-                        .map_err(|e| format!("get_abstract_port_assignments_from_node_toml: Error deserializing collaborator port: {}", e))?;
-                    debug_log!("get_abstract_port_assignments_from_node_toml: 9. Deserialized port data: {:?}", collaborator_port);
+                        .map_err(|e| format!("GAPAFNT: Error deserializing collaborator port: {}", e))?;
+                    debug_log!("GAPAFNT: 9. Deserialized port data: {:?}", collaborator_port);
                     ports_for_pair.push(ReadTeamchannelCollaboratorPortsToml {
                         collaborator_ports: vec![collaborator_port],
                     });
                 }
-                debug_log!("get_abstract_port_assignments_from_node_toml: 10. Inserting ports for pair: {} into HashMap.", pair_name);
+                debug_log!("GAPAFNT: 10. Inserting ports for pair: {} into HashMap.", pair_name);
                 abstract_port_assignments.insert(pair_name.to_string(), ports_for_pair);
             } else {
-                debug_log!("get_abstract_port_assignments_from_node_toml: 11. 'collaborator_ports' array not found for pair: {}", pair_name);
+                debug_log!("GAPAFNT: 11. 'collaborator_ports' array not found for pair: {}", pair_name);
             }
         }
     } else {
-        debug_log!("get_abstract_port_assignments_from_node_toml: 12. 'abstract_collaborator_port_assignments' table not found.");
+        debug_log!("GAPAFNT: 12. 'abstract_collaborator_port_assignments' table not found.");
     }
 
-    debug_log!("get_abstract_port_assignments_from_node_toml: 13. Exiting function with port assignments: {:?}", abstract_port_assignments);
+    debug_log!("GAPAFNT: 13. Exiting function with port assignments: {:?}", abstract_port_assignments);
     // 4. Return the abstract_port_assignments HashMap
     Ok(abstract_port_assignments)
 }
@@ -5400,7 +5525,13 @@ fn get_abstract_port_assignments_from_node_toml(
 // ALPHA VERSION
 // Function to read a simple string from a file
 pub fn read_state_string(file_name: &str) -> Result<String, std::io::Error> {
-    let file_path = Path::new("project_graph_data/session_state_items").join(file_name);
+    // TODO needs to be exe-relative etc...
+    debug_log!("read_state_string (file_name)->{}", file_name);
+
+    let file_path = get_sessionstateitems_path()?.join(file_name);
+
+    debug_log!("read_state_string 1. Channel directory path (file_path)->{:?}", file_path);
+
     fs::read_to_string(file_path)
 }
 
@@ -6474,6 +6605,8 @@ impl App {
         // Read metadata to get node info
         let metadata_path = self.current_path.join("0.toml");
         let metadata_string = fs::read_to_string(&metadata_path)?;
+
+        // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
         let metadata: NodeInstMsgBrowserMetadata = toml::from_str(&metadata_string)
             .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("TOML error: {}", e)))?;
 
@@ -8663,13 +8796,35 @@ impl GraphNavigationInstanceState {
                 // the error would be an error in reading node.toml
                 // it is not an error to not need to try to read
                 // a file that is not there.
-                debug_log!("Error reading file: {}", e);
-                debug_log!("This directory is not a node. nav_graph_look_read_node_toml() node.toml not found at {:?}. ", node_toml_path);
+                debug_log!("NGLRNT Error reading file: {}", e);
+                debug_log!("NGLRNTThis directory is not a node. nav_graph_look_read_node_toml() node.toml not found at {:?}. ", node_toml_path);
                 return;
             }
         }
 
-        debug_log!("ending: nav_graph_look_read_node_toml()");
+        // // create team channel...path state
+        // // set file-state team-channel's current_node_directory_path
+        // let file_path = get_sessionstateitems_path()?.join("current_node_directory_path.txt");
+        // if let Some(path_str) = self.current_node_directory_path.to_str() {
+        //     fs::write(file_path, path_str)?;
+        // }
+
+        // create team channel...path state
+        // set file-state team-channel's current_node_directory_path
+        if let Ok(session_path) = get_sessionstateitems_path() {
+            let file_path = session_path.join("current_node_directory_path.txt");
+            if let Some(path_str) = self.current_node_directory_path.to_str() {
+                if let Err(e) = fs::write(file_path, path_str) {
+                    debug_log!("NGLRNT Failed to write file: {}", e);
+                    // Optionally log the error or handle it in another way
+                }
+            }
+        } else {
+            debug_log!("NGLRNT Failed to get session state items path");
+            // Optionally log the error or handle it in another way
+        }
+
+        debug_log!("NGLRNT Done: ending: nav_graph_look_read_node_toml()");
     }
 }  // end of impl GraphNav...
 
@@ -9566,6 +9721,8 @@ fn update_collaborator_sendqueue_timestamp_log(
         if entry.file_type().is_file() && entry.path().extension() == Some(OsStr::new("toml")) {
             // 4. If a .toml file
             let toml_string = fs::read_to_string(entry.path())?;
+
+            // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
             let toml_value: Value = toml::from_str(&toml_string)?;
 
             // 5. If owner = target collaborator
@@ -12783,6 +12940,7 @@ fn add_im_message(
             format!("AIM: Failed to read metadata file: {}", e)
         ))?;
 
+    // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
     let metadata: NodeInstMsgBrowserMetadata = toml::from_str(&metadata_string)
         .map_err(|e| io::Error::new(
             io::ErrorKind::Other,
@@ -17177,6 +17335,8 @@ fn create_node_id_to_path_lookup(
             if node_toml_path.exists() {
                 // Found a node directory
                 let toml_string = std::fs::read_to_string(&node_toml_path)?;
+
+                // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
                 let toml_value: Value = toml::from_str(&toml_string)?;
 
                 // B. Extract node unique ID
@@ -19486,7 +19646,7 @@ fn share_team_channel_with_existing_collaborator_converts_to_abs(
     };
 
     // B. Get readable temp copy (handles decryption if .gpgtoml)
-    debug_log!("TCS: Getting readable copy of node file");
+    debug_log!("TCS: Getting readable copy of node file, node_file_path {:?}", node_file_path);
 
     // Get GPG fingerprint
     let gpg_fingerprint = LocalUserUma::read_gpg_fingerprint_from_file()
@@ -21403,9 +21563,9 @@ pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
 
     debug_log!("PIET Created team channel directory: {}", absolute_specific_team_channel_dir.display());
 
-    // Create paths for node.toml and node.gpg in the team channel directory
-    let node_toml_path = absolute_specific_team_channel_dir.join("node.toml");
-    let node_gpg_path = absolute_specific_team_channel_dir.join("node.gpgtoml");
+    // // Create paths for node.toml and node.gpg in the team channel directory
+    // let node_toml_path = absolute_specific_team_channel_dir.join("node.toml");
+    // let node_gpg_path = absolute_specific_team_channel_dir.join("node.gpgtoml");
 
     // // STEP 13: Save verified content as node.toml
     // debug_log!("PIET Step 13: Saving verified content as node.toml");
@@ -21439,7 +21599,7 @@ pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
 
     // debug_log!("PIET Saved node.gpg to: {}", node_gpg_path.display());
 
-// STEP 12.5: Ask user for preferred save format
+    // STEP 12.5: Ask user for preferred save format
     debug_log!("PIET Step 12.5: Prompting user for save format preference");
 
     let save_encrypted_format = prompt_user_for_save_format_choice()
@@ -21988,28 +22148,91 @@ fn handle_command_main_mode(
     command-list/legend
     */
 
-    debug_log(&format!("handle_command_main_mode(), input->{:?}", input));
+    debug_log(&format!("HCMM handle_command_main_mode(), input->{:?}", input));
     // First, try to handle numeric input
     if let Ok(index) = input.trim().parse::<usize>() {
         let item_index = index - 1; // Adjust for 0-based indexing
         if item_index < app.tui_directory_list.len() {
             // Special handling for team channels directory
-            if app.current_path.display().to_string() == "project_graph_data/team_channels".to_string() {
-                let selected_channel = app.tui_directory_list[item_index].clone();
-                debug_log(&format!("Selected channel: {}", selected_channel));
 
-                set_sync_start_ok_flag_to_true();
+            debug_log!("HCMM app.current_path.display().to_string()->{:?}", app.current_path.display().to_string());
+
+
+            // =====
+            // The setting options and factors here are:
+            // there are (may be) some bootstrapping steps
+            // for the first time you enter a team-channel
+            // and are not on home-base
+            //
+            // is_in_teamchannels_homebase (bool) is whether you are in home-base:
+            // "project_graph_data/team_channels"
+            //
+            // reserved strings: (cannot be name of node)
+            // uma
+            // project_graph_data
+            // team_channels
+            // ======
+            /*
+             * HCMM app.current_path.display().to_string()->"/home/oops/code/uma_productivity_collaboration_tool/target/debug/project_graph_data/team_channels"
+             */
+
+            let starting_in_teamchannels_homebase: bool;
+
+            // Get the last two components as an iterator
+            let last_two: Vec<_> = app.current_path.iter().rev().take(2).collect();
+            let last_two: Vec<_> = last_two.into_iter().rev().collect();
+
+            // Convert to strings for comparison
+            let last_two_strs: Vec<String> = last_two
+                .into_iter()
+                .filter_map(|c| c.to_str())
+                .map(|s| s.to_string())
+                .collect();
+
+            // Join with "/" for comparison
+            let last_two_joined = last_two_strs.join("/");
+
+            if last_two_joined == "project_graph_data/team_channels" {
+                println!("Path matches the last two components!");
+                starting_in_teamchannels_homebase = true;
+            } else {
+                println!("HCMM Path does not match.");
+                starting_in_teamchannels_homebase = false;
+            }
+
+            // if app.current_path.display().to_string() == "project_graph_data/team_channels".to_string() {
+            if starting_in_teamchannels_homebase {
+
+                let selected_channel = app.tui_directory_list[item_index].clone();
+                debug_log(&format!("HCMM Selected channel: {}", selected_channel));
+
 
                 app.current_path = app.current_path.join(&selected_channel);
                 app.graph_navigation_instance_state.current_full_file_path = app.current_path.clone();
 
+
                 // Simply call the method without trying to handle its result
                 app.graph_navigation_instance_state.nav_graph_look_read_node_toml();
+
+                // // current_node_directory_path
+                // debug_log(&format!("HCMM current_node_directory_path: {:?}", app.graph_navigation_instance_state.current_node_directory_path));
+
+
+                // bootstrap: now you are in a channel, start sync
+                let set_sync_result = set_sync_start_ok_flag_to_true();
+
+                #[cfg(debug_assertions)]
+                debug_log!("HCMM set_sync_result->{:?}", set_sync_result);
+
             } else {
+
                 // Regular directory navigation
                 app.current_path = app.current_path.join(&app.tui_directory_list[item_index]);
                 app.graph_navigation_instance_state.current_full_file_path = app.current_path.clone();
+
+                // try?
                 app.graph_navigation_instance_state.nav_graph_look_read_node_toml(); // ???
+
             }
             return Ok(false);  // Continue main loop
         }
@@ -22043,7 +22266,7 @@ fn handle_command_main_mode(
                 debug_log("invite / update wizard");
                 /*
                 */
-                invite_wizard();
+                let _ = invite_wizard();
             }
 
             "addnode" | "add_node" | "newnode" | "new" | "node" | "task" | "addtask" | "add_task" | "add" => {
@@ -23422,7 +23645,7 @@ fn move_directory_contents(
 /// excluding those who collide with senior members
 /// or returning an error if found.
 fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<HashSet<MeetingRoomSyncDataset>, MyCustomError> {
-    debug_log!("Entering the make_sync_meetingroomconfig_datasets() function...");
+    debug_log!("MSMD Entering the make_sync_meetingroomconfig_datasets() function...");
 
     // --- 1. find node.toml ---
     /*
@@ -23433,26 +23656,107 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
     though perhaps not shared yet with you)
     */
     // get path, derive name from path
-    let channel_dir_path_str = read_state_string("current_node_directory_path.txt")?; // read as string first
-    debug_log!("1. Channel directory path (from session state): {}", channel_dir_path_str);
+    // let channel_dir_path_str = read_state_string("current_node_directory_path.txt")?; // read as string first
+
+    // get path, derive name from path
+    let channel_dir_path_str = match read_state_string("current_node_directory_path.txt") {
+        Ok(path) => {
+            debug_log!("MSMD 1. Channel directory path (from session state): {:?}", path);
+            path
+        }
+        Err(e) => {
+            debug_log!(
+                "MSMD ERROR: Failed to read 'current_node_directory_path.txt': {}. \
+                 This may be due to missing file, permission issues, or malformed content.",
+                e
+            );
+            return Err(MyCustomError::from(format!(
+                "MSMD ERROR: Failed to read channel directory path: {}. \
+                 Ensure the file exists and is accessible.",
+                e
+            )));
+        }
+    };
+
+
+    debug_log!("MSMD 1. Channel directory path (from session state): {:?}", channel_dir_path_str);
 
     // use absolute file path
     let channel_dir_path = PathBuf::from(channel_dir_path_str);
 
     // A. Print the absolute path of the channel directory
     match channel_dir_path.canonicalize() {
-        Ok(abs_path) => debug_log!("1. Absolute channel directory path: {:?}", abs_path),
-        Err(e) => debug_log!("Error 1. getting absolute path of channel directory: {}", e),
+        Ok(abs_path) => debug_log!("MSMD 1. Absolute channel directory path: {:?}", abs_path),
+        Err(e) => debug_log!("MSMD Error 1. getting absolute path of channel directory: {}", e),
     }
 
+    // todo: add either-or .toml .gpgtoml
+    // A. Check for either node.toml or node.gpgtoml
+    let node_toml_path = channel_dir_path.join("node.toml");
+    let node_gpgtoml_path = channel_dir_path.join("node.gpgtoml");
+
+    let raw_channelnodetoml_path = if node_toml_path.exists() {
+        debug_log!("TCS: Found node.toml");
+        node_toml_path
+    } else if node_gpgtoml_path.exists() {
+        debug_log!("TCS: Found node.gpgtoml");
+        node_gpgtoml_path
+    } else {
+        return Err(MyCustomError::from(
+            "TCS: Neither node.toml nor node.gpgtoml found in team channel directory".to_string()
+        ));
+    };
+
+    // Get GPG fingerprint
+    let gpg_fingerprint = LocalUserUma::read_gpg_fingerprint_from_file()
+        .map_err(|e| MyCustomError::from(
+            format!("TCS: Failed to read GPG fingerprint from uma.toml: {}", e)
+        ))?;
+        // .map_err(|e| Err(MyCustomError::from(
+        //     format!("TCS: Failed to read GPG fingerprint from uma.toml: {}", e)
+        // ))?;
+
+    // Get temp directory
+    let temp_dir = get_base_uma_temp_directory_path()
+        .map_err(|e| MyCustomError::from(
+            format!("TCS: Failed to get temp directory path: {}", e)
+        ))?;
+        // .map_err(|e| Err(MyCustomError::from(
+        //     format!("TCS: Failed to get temp directory path: {}", e)
+        // )))?;
+
+    // Get readable copy
+    let channel_node_tomlpath_string
+        = get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
+        &raw_channelnodetoml_path,
+        &gpg_fingerprint,
+        &temp_dir,
+    ).map_err(|e| MyCustomError::from(
+        format!("TCS: Failed to get readable copy of node file: {:?}", e)
+    ))?;
+    // ).map_err(|e| GpgError::PathError(
+    //     format!("TCS: Failed to get readable copy of node file: {:?}", e)
+    // ))?;
+
+    debug_log!("TCS: channel_node_tomlpath_string
+        : {}", channel_node_tomlpath_string
+    );
+
     // Construct the path to node.toml
-    let channel_node_toml_path = channel_dir_path.join("node.toml");
-    debug_log!("1. Channel node.toml path: {:?}", channel_node_toml_path);
+    // let channel_node_tomlpath_string
+    //  = channel_dir_path.join("node.toml");
+
+    debug_log!("MSMD 1. Channel node.toml path: {:?}", channel_node_tomlpath_string
+    );
+
+    let channel_node_toml_path
+        = Path::new(&channel_node_tomlpath_string
+        );
 
     // B. Print the absolute path of the node.toml file
     match channel_node_toml_path.canonicalize() {
-        Ok(abs_path) => debug_log!("1. Absolute channel_dir_path node.toml path: {:?}", abs_path),
-        Err(e) => debug_log!("Error 1. getting absolute path of channel_dir_path node.toml: {}", e),
+        Ok(abs_path) => debug_log!("MSMD 1. Absolute channel_dir_path node.toml path: {:?}", abs_path),
+        Err(e) => debug_log!("MSMD Error 1. getting absolute path of channel_dir_path node.toml: {}", e),
     }
 
     // --- 2. Load/Read node.toml ---
@@ -23461,22 +23765,22 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
     // loading the fields into an organized struct with datatypes
     let teamchannel_nodetoml_data: CoreNode = match load_core_node_from_toml_file(&channel_node_toml_path) {
         Ok(node) => {
-            debug_log!("2. Successfully read channel node.toml");
+            debug_log!("MSMD 2. Successfully read channel node.toml");
             node // ???
         },
         Err(e) => {
-            debug_log!("Error 2. reading channel node.toml: {:?}", channel_node_toml_path);
-            debug_log!("Error 2. details: {}", e);
+            debug_log!("MSMD Error 2. reading channel node.toml: {:?}", channel_node_toml_path);
+            debug_log!("MSMD Error 2. details: {}", e);
             return Err(MyCustomError::from(io::Error::new(io::ErrorKind::Other, e))); // Convert the error
         }
     };
-    debug_log!("2. teamchannel_nodetoml_data->{:?}", teamchannel_nodetoml_data);
+    debug_log!("MSMD 2. teamchannel_nodetoml_data->{:?}", teamchannel_nodetoml_data);
 
     // --- 3. Empty Table for Later ---
     // Create an (empty) lookup-table (hash-set) to put all the meeting-room-data-sets in.
     // This will contain the local-port-assignments for each desk.
     let mut sync_config_data_set: HashSet<MeetingRoomSyncDataset> = HashSet::new();
-    debug_log!("3. sync_config_data_set->{:?} <should be empty, ok>", &sync_config_data_set);
+    debug_log!("MSMD 3. sync_config_data_set->{:?} <should be empty, ok>", &sync_config_data_set);
 
     // --- 4. Team-Channel Memebers ---
     // Get team member names from team_channel node
@@ -23488,11 +23792,11 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
     let collaborators_names_array = match get_collaborator_names_from_node_toml(&channel_node_toml_path) {
         Ok(names) => names,
         Err(e) => {
-            debug_log!("Error 4. getting collaborator names: {}", e);
+            debug_log!("MSMD Error 4. getting collaborator names: {}", e);
             return Err(MyCustomError::from(io::Error::new(io::ErrorKind::Other, e)));
         }
     };
-    debug_log!("4. collaborators_names_array->{:?}", collaborators_names_array);
+    debug_log!("MSMD 4. collaborators_names_array->{:?}", collaborators_names_array);
 
     // --- 5. raw-abstract port-assignments ---
     // Get the raw-abstract port-assignments
@@ -23505,12 +23809,12 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
     let abstract_collaborator_port_assignments = match get_abstract_port_assignments_from_node_toml(&channel_node_toml_path) {
         Ok(names) => names,
         Err(e) => {
-            debug_log!("Error 5. getting abstract_collaborator_port_assignments: {}", e);
+            debug_log!("MSMD Error 5. getting abstract_collaborator_port_assignments: {}", e);
             return Err(MyCustomError::from(io::Error::new(io::ErrorKind::Other, e)));
         }
     };
     debug_log!(
-        "5. abstract_collaborator_port_assignments->{:?}",
+        "MSMD 5. abstract_collaborator_port_assignments->{:?}",
         &abstract_collaborator_port_assignments
     );
 
@@ -23538,7 +23842,7 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
         toml_file_path.exists()
     });
     debug_log!(
-        "6. filtered_collaboratorsarray->{:?}",
+        "MSMD 6. filtered_collaboratorsarray->{:?}",
         &filtered_collaboratorsarray
     );
 
@@ -23569,9 +23873,10 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
     let full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
         Ok(fingerprint) => fingerprint,
         Err(e) => {
-            eprintln!("Failed to read GPG fingerprint from uma.toml: {}", e);
+            eprintln!("MSMD Failed to read GPG fingerprint from uma.toml: {}", e);
+            debug_log!("MSMD Failed to read GPG fingerprint from uma.toml: {}", e);
             return Err(MyCustomError::from(format!(
-                "Failed to read GPG fingerprint from uma.toml: {}", e
+                "MSMD Failed to read GPG fingerprint from uma.toml: {}", e
             )));
         }
     };
@@ -23583,7 +23888,7 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
         ) {
         Ok(data) => data.user_salt_list,
         Err(e) => {
-            debug_log!("Error loading local user's salt list: {}", e);
+            debug_log!("MSMD Error loading local user's salt list: {}", e);
             // return Err(e);
             return Err(e.into()); // Convert ThisProjectError to MyCustomError
         }
@@ -23593,7 +23898,7 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
     // Go through the list make a set of meeting room information for each team-member,
     // so that you (e.g. Alice) can sync with other team members.
     for collaborator_name in filtered_collaboratorsarray { // collaborator_data is now a String
-        debug_log!("7. Processing collaborator: {}", collaborator_name);
+        debug_log!("MSMD 7. Processing collaborator: {}", collaborator_name);
 
         // --- 8. get (that team member's) addressbook file by (their) username ---
         // using get_addressbook_file_by_username()
@@ -23606,12 +23911,12 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
             Ok(these_collaboratorfiles_toml_data) => these_collaboratorfiles_toml_data,
             Err(e) => {
                 // This is where you'll most likely get the "No such file or directory" error
-                debug_log!("Error 8. loading collaborator {}. File might be missing. Error: {}", collaborator_name, e);
+                debug_log!("MSMD Error 8. loading collaborator {}. File might be missing. Error: {}", collaborator_name, e);
                 return Err(e.into()); // Convert ThisProjectError to MyCustomError
             }
         };
         debug_log!(
-            "8. Collaborator data these_collaboratorfiles_toml_data: {:?}",
+            "MSMD 8. Collaborator data these_collaboratorfiles_toml_data: {:?}",
             &these_collaboratorfiles_toml_data
         );
 
@@ -23633,18 +23938,18 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
         {
             Some(addr) => {
                 debug_log!(
-                    "9. IPv6 address for {}: {}",
+                    "MSMD 9. IPv6 address for {}: {}",
                     collaborator_name, addr
                 );
                 addr // ?
             },
             None => {
-                debug_log!("WARNING: 9. No IPv6 address found for {}. Skipping this collaborator.", collaborator_name);
+                debug_log!("MSMD WARNING: 9. No IPv6 address found for {}. Skipping this collaborator.", collaborator_name);
                 continue; // Skip to the next collaborator in the loop
             }
         };
         debug_log!(
-            "9. ipv6_address {:?}->",
+            "MSMD 9. ipv6_address {:?}->",
             &ipv6_address
         );
 
@@ -23665,14 +23970,14 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
         instance roles set of port assignments, namely,
         local_user_role, remote_collaborator_role
         */
-        debug_log("10. Starting translate_port_assignments()");
+        debug_log("MSMD 10. Starting translate_port_assignments()");
         let role_based_ports = translate_port_assignments(
             uma_local_owner_user,
             &collaborator_name,
             abstract_collaborator_port_assignments.clone(), // Clone to avoid ownership issues
         )?;
         debug_log!(
-            "10. role_based_ports {:?}->",
+            "MSMD 10. role_based_ports {:?}->",
             &role_based_ports
         );
         /*
@@ -23693,7 +23998,7 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
             ) {
             Ok(data) => data.user_salt_list,
             Err(e) => {
-                debug_log!("Error loading remote_collaborator_salt_list user's salt list: {}", e);
+                debug_log!("MSMD Error loading remote_collaborator_salt_list user's salt list: {}", e);
                 // return Err(e);
                 return Err(e.into()); // Convert ThisProjectError to MyCustomError
             }
@@ -23738,13 +24043,13 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
         // add this one meeting room data-bundle to the larger set
         sync_config_data_set.insert(meeting_room_sync_data.clone());
         debug_log!(
-            "12. Created MeetingRoomSyncDataset: {:?}",
+            "MSMD 12. Created MeetingRoomSyncDataset: {:?}",
             meeting_room_sync_data
         );
 
     } // End of collaborator loop
 
-    debug_log!("12,13: sync_config_data_set created: {:?}", sync_config_data_set);
+    debug_log!("MSMD Done: 12,13: sync_config_data_set created: {:?}", sync_config_data_set);
 
     // 13. after iterating, return full set of meeting-rooms
     Ok(sync_config_data_set)
@@ -23894,6 +24199,7 @@ fn get_saltlist_for_collaborator(collaborator_name: &str) -> Result<Vec<u128>, T
     let toml_string = std::fs::read_to_string(&file_path)?;
 
     // 3. Parse TOML
+    // // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
     let toml_value: Value = toml::from_str(&toml_string)?;
 
     // 4. Extract Salt List (handling missing/invalid data)
@@ -24026,6 +24332,7 @@ fn verify_readysignal_hashes(
     true
 }
 
+// TODO maybe replace with simpler file-flag system: ~no stub-file no flag
 /// Waits until either UMA should halt or synchronization is enabled.
 ///
 /// This function implements a loop that checks two conditions:
@@ -24080,17 +24387,17 @@ fn sync_flag_ok_or_wait(wait_this_many_seconds: u64) {
         let sync_flag_path = match get_sync_start_ok_flag_path() {
             Ok(path) => path,
             Err(e) => {
-                debug_log!("Error resolving path to sync flag: {}", e);
+                debug_log!("Error resolving path to sync flag from get_sync_start_ok_flag_path(): {}", e);
                 // Continue with the default value of "0" (assume syncing is disabled)
                 thread::sleep(Duration::from_secs(wait_this_many_seconds));
                 continue;
             }
         };
 
-        debug_log!(
-            "sync_flag_ok_or_wait(), sync_flag_path -> {:?}",
-            sync_flag_path,
-            );
+        // debug_log!(
+        //     "sync_flag_ok_or_wait(), sync_flag_path -> {:?}",
+        //     sync_flag_path,
+        //     );
 
         // Read the sync flag file
         let is_sync_enabled = match fs::read_to_string(&sync_flag_path) {
@@ -24106,7 +24413,7 @@ fn sync_flag_ok_or_wait(wait_this_many_seconds: u64) {
             debug_log("Synchronization flag is '1'. Proceeding...");
             break; // Exit the loop
         } else {
-            // debug_log("Synchronization flag is '0'. Waiting...");
+            debug_log("Synchronization flag is '0'. Waiting...");
             thread::sleep(Duration::from_secs(wait_this_many_seconds)); // Wait for specified seconds
         }
     }
@@ -25050,6 +25357,7 @@ fn get_updated_at_timestamp_from_toml_file(file_path: &Path) -> Result<u64, This
 
 
     // 2. Parse the TOML string: Handle TOML parsing errors
+    // // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
     let toml_value: Value = match toml::from_str(&toml_string) {
         Ok(value) => value,
         Err(e) => {
@@ -25533,7 +25841,7 @@ fn read_rc_latest_received_from_rc_filetimestamp_plaintextstatefile(
 /// # Returns
 ///
 /// * `Result<u64, ThisProjectError>`: The latest `updated_at_timestamp` or an error.
-fn actual_latest_received_from_rc_file_timestamp(
+fn get_latest_received_from_rc_file_timestamp(
     team_channel_name: &str,
     collaborator_name: &str,
 ) -> Result<u64, ThisProjectError> {
@@ -25555,6 +25863,7 @@ fn actual_latest_received_from_rc_file_timestamp(
             debug_log!("GLRFRCFT(): Found TOML file: {:?}", path);
 
             // 3. Read and parse the TOML file:
+            // // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
             match fs::read_to_string(path).and_then(|content| Ok(toml::from_str::<Value>(&content))) {
                 Ok(toml_data) => {
                     debug_log!("GLRFRCFT(): Successfully parsed TOML file.");
@@ -26166,7 +26475,7 @@ fn handle_local_owner_desk(
 
         // 1. Create lookup table:
         let channel_dir_path_str = read_state_string("current_node_directory_path.txt")?; // read as string first
-        debug_log!("1. Channel directory path (from session state): {}", channel_dir_path_str);
+        debug_log!("HLOD 1. Channel directory path (from session state): {}", channel_dir_path_str);
 
         // use absolute file path
         let team_channel_path = PathBuf::from(channel_dir_path_str);
@@ -26221,13 +26530,13 @@ fn handle_local_owner_desk(
         */
 
         // initialization
-        let mut latest_received_from_rc_file_timestamp = match actual_latest_received_from_rc_file_timestamp(
+        let mut latest_received_from_rc_file_timestamp = match get_latest_received_from_rc_file_timestamp(
             &team_channel_name, // Correct argument order.
             &remote_collaborator_name_for_thread_1,
         ) {
             Ok(temp_extractor) => temp_extractor,
             Err(e) => {
-                debug_log!("HLOD Error getting timestamp via actual_latest_received_from_rc_file_timestamp: e'{}'e. Using 0.", e);
+                debug_log!("HLOD Error getting timestamp via get_latest_received_from_rc_file_timestamp: e'{}'e. Using 0.", e);
                 0 // Use a default timestamp (0) if an error occurs.
             }
         };
@@ -26238,7 +26547,7 @@ fn handle_local_owner_desk(
 
         // initialization
         // update state: latest received timestamp
-        write_save_latest_received_from_rc_file_timestamp_plaintext(
+        let _ = write_save_latest_received_from_rc_file_timestamp_plaintext(
             &team_channel_name, // for team_channel_name
             &remote_collaborator_name.clone(), // for collaborator_name
             latest_received_from_rc_file_timestamp, // for timestamp
@@ -27376,6 +27685,7 @@ fn receive_toml_file(socket: &UdpSocket) -> Result<(Value, SocketAddr), ThisProj
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.utf8_error()))?;
 
     // 3. Parse TOML (handling toml::de::Error)
+    // // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
     let toml_value: Value = toml::from_str(&toml_string)?;
 
     // 4. Save to file (you'll need to determine the file path)
@@ -27605,6 +27915,8 @@ fn get_or_create_send_queue(
                 debug_log!("inHRCD->get_or_create_send_queue 6: file is toml, entry -> {:?}", entry);
                 // If a .toml file
                 let toml_string = fs::read_to_string(entry.path())?;
+
+                // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
                 let toml_value: Value = toml::from_str(&toml_string)?;
 
                 // If owner = target collaborator
@@ -27736,6 +28048,8 @@ fn get_or_create_send_queue(
     Ok(session_send_queue)
 }
 
+
+
 /// get latest Remote Collaborator file timestamp
 /// for use by handl local owner desk
 ///
@@ -27763,6 +28077,8 @@ fn get_latest_received_from_rc_in_teamchannel_file_timestamp_filecrawl(
 
         if path.is_file() && path.extension() == Some(OsStr::new("toml")) {
             let toml_string = fs::read_to_string(path)?;
+
+            // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
             let toml_value: Value = toml::from_str(&toml_string)?;
 
             // Check if the file is owned by the collaborator
@@ -28982,7 +29298,7 @@ fn get_current_team_channel_name_from_cwd() -> Option<String> {
 ///
 ///  Note current node members are not the same as channel members
 ///  a node may have narrower scope, but not broader.
-///  this may especially apply to tasks only shared to relevant members
+///  this may especially apply to tasks only shared with relevant members
 fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
     /*
     "It's all fun and games until someone syncs a file."
@@ -28992,7 +29308,7 @@ fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
     the home_square_one flag may work
     */
     // --- WAIT FOR CHANNEL SELECTION ---
-    sync_flag_ok_or_wait(3); // Wait for the sync flag to become "1"
+    sync_flag_ok_or_wait(5); // Wait for the sync flag to become "1"
 
     // 1.5.1 Check for halt-uma signal
     if should_halt_uma() {
@@ -29000,7 +29316,7 @@ fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(()); // Exit the function
     }
 
-    debug_log("starting UMA Sync Team Office...you_love_the_sync_team_office()");
+    debug_log("starting YLTSTO! UMA Sync Team Office...you_love_the_sync_team_office()");
 
     // // Read uma_local_owner_user from uma.toml
     // // maybe add gpg and make this a separate function TODO
@@ -29063,7 +29379,7 @@ fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
             room_config_datasets
         },
         Err(e) => {
-            debug_log!("Error creating room_config_datasets: {}", e);
+            debug_log!("YLTSTO Error creating room_config_datasets: {}", e);
             return Err(Box::new(e)); // Return the error early
         }
     };
@@ -29856,10 +30172,32 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
 ///
 /// * `Result<(), io::Error>` - Success or failure with detailed error information
 fn set_sync_flag(value: &[u8], operation_name: &str) -> Result<(), io::Error> {
+
+    debug_log!("starting: set_sync_flag(), operation_name->{}", operation_name);
+
     // Get the absolute path to the flag file relative to the executable
-    let flag_path = make_input_path_name_abs_executabledirectoryrelative_nocheck(
-        "data/flags/ok_to_start_sync_flag.txt"
-    )?;
+    // let flag_path = make_input_path_name_abs_executabledirectoryrelative_nocheck(
+    //     "data/flags/ok_to_start_sync_flag.txt"
+    // )?;
+
+    // // Get the absolute path to the sync flag file
+    // let flag_path = match get_sync_start_ok_flag_path() {
+    //     Ok(path) => path,
+    //     Err(e) => {
+    //         debug_log!("Error resolving path to sync flag from get_sync_start_ok_flag_path(): {}", e);
+    //         PathBuf::new()
+    //     }
+    // };
+
+    let mut flag_path = PathBuf::new(); // Default value if the function errors
+
+    // TODO How to handle error in get_sync_start_ok_flag_path?
+    if let Ok(path) = get_sync_start_ok_flag_path() {
+        flag_path = path; // Only set if the function returns Ok
+    } else {
+        debug_log!("Error resolving path to sync flag from get_sync_start_ok_flag_path()");
+    }
+
 
     // Ensure parent directories exist
     if let Some(parent_dir) = flag_path.parent() {
