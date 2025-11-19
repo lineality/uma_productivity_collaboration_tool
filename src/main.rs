@@ -7009,7 +7009,7 @@ impl App {
             // depending on how get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml works
         }
 
-        debug_log!("LIM: Finished loading messages: {} loaded, {} errors", loaded_count, error_count);
+        debug_log!("LIM: Finished loading messages: {} messages loaded, {} problems", loaded_count, error_count);
 
         if loaded_count == 0 && error_count > 0 {
             println!("Warning: Failed to load any messages from this channel");
@@ -19811,7 +19811,7 @@ fn share_team_channel_with_existing_collaborator_converts_to_abs(
 /// read_multiline_string_from_clearsigntoml();
 fn share_lou_address_book_with_existingcollaborator(recipient_name: &str) -> Result<(), GpgError> {
     // 'SLABE' is an achronym for this function to idenitfy this function in logs
-    debug_log("\nstarting -> SLABE fn share_lou_address_book_with_existingcollaborator()");
+    debug_log("\nstarting -> SLABE share_lou_address_book_with_existingcollaborator()");
     debug_log!("SLABE Sharing LOCAL OWNER USER'S address book with existing collaborator: {}", recipient_name);
 
     // Create output directory using absolute path relative to executable
@@ -20012,7 +20012,7 @@ fn share_lou_address_book_with_existingcollaborator(recipient_name: &str) -> Res
     )?;
 
     // remove temp file
-    cleanup_collaborator_temp_file(
+    let _ = cleanup_collaborator_temp_file(
         &addressbook_readcopy_path_string,
         &base_uma_temp_directory_path,
         );
@@ -20412,6 +20412,8 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
         &temp_clearsigned_path
     );
 
+    // maybe step here to gpg if flag?
+
     if let Err(e) = &decrypt_result {
         let error_msg = format!("PIECA Failed to decrypt or verify file: {:?}", e);
         println!("Error: {}", error_msg);
@@ -20477,7 +20479,7 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
 
     // println!("Successfully saved collaborator addressbook to: {}", output_file_path.display());
 
-// STEP 7: Extract collaborator username from the verified content
+    // STEP 7: Extract collaborator username from the verified content
     debug_log!("PIECA Step 7: Extracting collaborator username from verified content");
 
     // Convert temporary file path to string for TOML reading
@@ -20585,7 +20587,7 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
 
     // this does nothing, press enter to proceed.
     let mut input = String::new();
-    io::stdin()
+    let _ = io::stdin()
         .read_line(&mut input)
         .map_err(|e| format!("Failed to read input: {:?}", e));
 
@@ -21552,6 +21554,10 @@ pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
 
 /// TODO needs extensive doc string
 /// TODO needs absolute file paths, see:  src/manage_absolute_executable_directory_relative_paths.rs
+///
+/// Invite Wizard
+///
+/// to inspect files use ```gpg --decrypt FILENAME.THINGY```
 ///
 pub fn invite_wizard() -> Result<(), GpgError> {
     /*

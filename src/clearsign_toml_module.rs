@@ -317,7 +317,7 @@ use std::collections::HashMap;
 use std::error::Error as StdError;
 use std::fmt;
 use std::fs::{self, File};
-use std::io::{self, BufRead, Read, Write};
+use std::io::{self, BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -2550,6 +2550,63 @@ fn encrypt_file_with_public_key(
     Ok(())
 }
 
+/// Checks if the first line of a file is a PGP clearsigned message header.
+///
+/// # Project Context
+/// This function is used to verify if a file is a PGP clearsigned message,
+/// which is a common requirement for secure communication and file validation.
+/// It is designed to be used in environments where file integrity and security are critical.
+///
+/// # Arguments
+/// * `file_path` - Absolute path to the file to check.
+///
+/// # Returns
+/// * `Ok(true)` if the first line matches the PGP clearsigned header.
+/// * `Ok(false)` if the first line does not match.
+/// * `Err(io::Error)` if the file cannot be opened or read.
+///
+/// # Errors
+/// This function will return an error if:
+/// - The file does not exist.
+/// - The file cannot be opened.
+/// - The file cannot be read.
+///
+/// # Safety
+/// This function is safe and does not use any unsafe code.
+/// It handles all errors gracefully and does not panic.
+///
+/// # Examples
+/// ```
+/// let result = is_file_clearsigned("/absolute/path/to/file");
+/// match result {
+///     Ok(true) => println!("File is clearsigned."),
+///     Ok(false) => println!("File is not clearsigned."),
+///     Err(e) => eprintln!("Error checking file: {}", e),
+/// }
+/// ```
+pub fn is_file_clearsigned<P: AsRef<Path>>(file_path: P) -> io::Result<bool> {
+    // Debug assertion: only active in debug builds, not in tests
+    #[cfg(all(debug_assertions, not(test)))]
+    debug_assert!(
+        !file_path.as_ref().as_os_str().is_empty(),
+        "File path must not be empty"
+    );
+
+    // Open the file
+    let file = File::open(file_path)?;
+    let reader = BufReader::new(file);
+
+    // Read the first line
+    let mut lines = reader.lines();
+    if let Some(Ok(first_line)) = lines.next() {
+        // Check if the first line matches the PGP clearsigned header
+        Ok(first_line == "-----BEGIN PGP SIGNED MESSAGE-----")
+    } else {
+        // File is empty or could not be read
+        Ok(false)
+    }
+}
+
 /// Main function to process a file: clearsign with your key and encrypt with recipient's public key
 /// Clearsigns a file with your GPG key and encrypts it with a recipient's public key.
 ///
@@ -2670,18 +2727,58 @@ pub fn clearsign_and_encrypt_file_for_recipient(
     // Clearsign with your private key
     clearsign_file_with_private_key(input_file_path, &clearsigned_temp_path, your_signing_key_id)?;
 
-    // Encrypt with recipient's public key
-    encrypt_file_with_public_key(
-        &clearsigned_temp_path,
-        &final_output_path,
-        recipient_public_key_path,
-    )?;
+    // clearsign file ONLY if not already clearsigned:
+    let result = is_file_clearsigned(input_file_path);
+    match result {
+        Ok(true) => {
+            debug_log!("File is clearsigned.");
 
-    // Cleanup temporary file
-    if clearsigned_temp_path.exists() {
-        fs::remove_file(&clearsigned_temp_path)
-            .map_err(|e| GpgError::TempFileError(e.to_string()))?;
+            // Encrypt with recipient's public key
+            // original file, not new clearsigned copy
+            encrypt_file_with_public_key(
+                &input_file_path,
+                &final_output_path,
+                recipient_public_key_path,
+            )?;
+        }
+
+        Ok(false) => {
+            debug_log!("File is not clearsigned.");
+            // Clearsign with your private key
+            clearsign_file_with_private_key(
+                input_file_path,
+                &clearsigned_temp_path,
+                your_signing_key_id,
+            )?;
+
+            // Encrypt with recipient's public key
+            encrypt_file_with_public_key(
+                &clearsigned_temp_path,
+                &final_output_path,
+                recipient_public_key_path,
+            )?;
+
+            // Cleanup temporary file
+            if clearsigned_temp_path.exists() {
+                fs::remove_file(&clearsigned_temp_path)
+                    .map_err(|e| GpgError::TempFileError(e.to_string()))?;
+            }
+        }
+        Err(e) => eprintln!("Error checking file: {}", e),
     }
+
+    // // Encrypt with recipient's public key
+    // encrypt_file_with_public_key(
+    //     &clearsigned_temp_path,
+    //     &final_output_path,
+    //     recipient_public_key_path,
+    // )?;
+
+    // // Cleanup temporary file
+    // if clearsigned_temp_path.exists() {
+    //     fs::remove_file(&clearsigned_temp_path)
+    //         .map_err(|e| GpgError::TempFileError(e.to_string()))?;
+    // }
 
     // Log completion
     println!("\nSuccessfully completed clearsigning and encryption");
