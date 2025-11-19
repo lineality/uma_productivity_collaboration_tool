@@ -398,7 +398,8 @@ use crate::clearsign_toml_module::{
     read_option_i64_from_clearsigntoml_without_publicgpgkey,
     read_teamchannel_collaborator_ports_clearsigntoml_without_keyid,
     read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml,
-    get_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml,
+    get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml,
+    get_pathstring_to_temp_plaintoml_verified_extracted,
     get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml,
     cleanup_collaborator_temp_file,
     read_u64_array_from_clearsigntoml_without_publicgpgkey,
@@ -3688,7 +3689,7 @@ pub fn global_ports_exclusion_list_generator() -> Result<HashSet<u16>, ThisProje
             ))?;
 
         // Using Debug trait for more detailed error information
-        let node_readcopy_path = get_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
+        let node_readcopy_path = get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
             &node_toml_path,
             &gpg_full_fingerprint_key_id_string,
             &base_uma_temp_directory_path,
@@ -6942,7 +6943,7 @@ impl App {
             debug_log!("LIM: Processing message file: {}", file_name);
 
             // Get readable temp copy (handles both .toml and .gpgtoml)
-            let message_readcopy_path = match get_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
+            let message_readcopy_path = match get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
                 entry.path(),
                 &gpg_full_fingerprint_key_id_string,
                 &base_uma_temp_directory_path,
@@ -7005,7 +7006,7 @@ impl App {
             loaded_count += 1;
 
             // Note: temp file cleanup is handled by the OS or explicit cleanup
-            // depending on how get_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml works
+            // depending on how get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml works
         }
 
         debug_log!("LIM: Finished loading messages: {} loaded, {} errors", loaded_count, error_count);
@@ -9664,7 +9665,7 @@ load_core_node_from_toml_file(
         path,
     )
 
-get_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
+get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
         &file_path,
         &gpg_full_fingerprint_key_id_string,
     )
@@ -9707,7 +9708,7 @@ The owner of the addressbook file cannot be found until the node.toml file is re
 - use node.toml owner name
 - get Addressbook directory path simplified
 - get real path to read-copy with:
-pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
+pub fn get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
     collaborator_name: &str,
     addressbook_files_directory_relative: &str,
     gpg_full_fingerprint_key_id_string: &str,
@@ -9979,7 +9980,7 @@ fn load_core_node_from_toml_file(
         })?;
 
     // Using Debug trait for more detailed error information
-    let node_readcopy_path = get_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
+    let node_readcopy_path = get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
         &file_path,
         &gpg_full_fingerprint_key_id_string,
         &base_uma_temp_directory_path,
@@ -19500,7 +19501,7 @@ fn share_team_channel_with_existing_collaborator_converts_to_abs(
         ))?;
 
     // Get readable copy
-    let absolute_team_channel_node_toml_path = get_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
+    let absolute_team_channel_node_toml_path = get_pathstring_to_temp_plaintoml_verified_extracted(
         &node_file_path,
         &gpg_fingerprint,
         &temp_dir,
@@ -19641,6 +19642,7 @@ fn share_team_channel_with_existing_collaborator_converts_to_abs(
             e
         ))
     })?;
+
     /*
     // remove temp file
     cleanup_collaborator_temp_file(&remote_collaborator_addressbook_readcopy_path_string);
@@ -20776,7 +20778,7 @@ fn share_lou_addressbook_with_incomingkey() -> Result<(), GpgError> {
     println!("Press Enter to continue...");
     // this does nothing, press enter to proceed.
     let mut input = String::new();
-    io::stdin()
+    let _ = io::stdin()
         .read_line(&mut input)
         .map_err(|e| format!("Failed to read input: {:?}", e));
 
@@ -21230,7 +21232,7 @@ pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
         ))?;
 
     // Get readable copy
-    let absolute_team_channel_owner_address_book_path_str = get_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
+    let absolute_team_channel_owner_address_book_path_str = get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
         &absolute_team_channel_owner_address_book_path,
         &gpg_fingerprint,
         &temp_dir,
@@ -28616,7 +28618,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                             // Using Debug trait for more detailed error information
                             // this is in clearsigntoml module
                             /*
-                            pub fn get_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
+                            pub fn get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
                                 input_toml_absolute_path: &Path,
                                 gpg_full_fingerprint_key_id_string: &str, // COLLABORATOR_ADDRESSBOOK_PATH_STR
                                 base_uma_temp_directory_path: &Path,
@@ -28649,7 +28651,9 @@ fn handle_remote_collaborator_meetingroom_desk(
                                      // Convert GpgError to String for the function's return type
                                      format!("LCNFTF: {:?}", gpg_error)
                                  })?;
-                            let sendfile_readcopy_pathstring = get_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
+
+                            // base file to send is clearsigned
+                            let sendfile_readcopy_pathstring = get_pathstring_to_temp_plaintoml_verified_extracted(
                                 &file_path,
                                 &gpg_full_fingerprint_key_id_string,
                                 &base_uma_temp_directory_path,
