@@ -395,6 +395,7 @@ use crate::clearsign_toml_module::{
     read_option_usize_from_clearsigntoml_without_publicgpgkey,
     read_option_bool_from_clearsigntoml_without_publicgpgkey,
     read_bool_from_clearsigntoml_without_publicgpgkey,
+    read_abstract_ports_from_clearsigntoml_without_publicgpgkey,
     read_option_i64_from_clearsigntoml_without_publicgpgkey,
     read_teamchannel_collaborator_ports_clearsigntoml_without_keyid,
     read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml,
@@ -5002,8 +5003,6 @@ pub struct ReadTeamchannelCollaboratorPortsToml {
     /// The port used by the REMOTE collaborator to signal readiness to receive data.
     collaborator_ports: Vec<AbstractTeamchannelNodeTomlPortsData>,
 }
-
-
 
 
 /// Instance-Role-Specific Local-Meeting-Room-Struct
@@ -23749,9 +23748,9 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
     debug_log!("MSMD 1. Channel node.toml path: {:?}", channel_node_tomlpath_string
     );
 
-    let channel_node_toml_path
-        = Path::new(&channel_node_tomlpath_string
-        );
+    let channel_node_toml_path = Path::new(
+        &channel_node_tomlpath_string
+    );
 
     // B. Print the absolute path of the node.toml file
     match channel_node_toml_path.canonicalize() {
@@ -23806,13 +23805,111 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
     //     "5. abstract_collaborator_port_assignments->{:?}",
     //     &abstract_collaborator_port_assignments
     // );
-    let abstract_collaborator_port_assignments = match get_abstract_port_assignments_from_node_toml(&channel_node_toml_path) {
+
+
+    ////////////////////////////////
+    // Extract Owner for Key Lookup
+    ////////////////////////////////
+    let owner_name_of_toml_field_key_to_read = "owner";
+    debug_log!(
+        "LCNFTF: Reading file owner from field '{}' for security validation",
+        owner_name_of_toml_field_key_to_read
+    );
+
+    // get node_owners_public_gpg_key
+
+    let file_owner_username = match read_single_line_string_field_from_toml(
+        &channel_node_tomlpath_string,  // TODO convert to string?
+        owner_name_of_toml_field_key_to_read,
+    ) {
+        Ok(username) => {
+            if username.is_empty() {
+                // Convert to String error instead of GpgError
+                return Err(MyCustomError::from(format!(
+                    "MSMD: Field '{}' is empty in TOML file. File owner is required for security validation.",
+                    owner_name_of_toml_field_key_to_read
+                )));
+            }
+            username
+        }
+        Err(e) => {
+            // Convert to String error instead of GpgError
+            return Err(MyCustomError::from(format!(
+                "MSMD: Failed to read file owner from field '{}': {}",
+                owner_name_of_toml_field_key_to_read, e
+            )));
+        }
+    };
+    println!("MSMD: File owner: '{}'", file_owner_username);
+    debug_log!("MSMD: File owner: '{}'", file_owner_username);
+
+    // Get armored public key, using key-id (full fingerprint in)
+    let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+        Ok(fingerprint) => fingerprint,
+        Err(e) => {
+            debug_log!("MSMD Error 5. getting abstract_collaborator_port_assignments: {}", e);
+            return Err(MyCustomError::from(io::Error::new(io::ErrorKind::Other, e)));
+        }
+    };
+
+
+    // Get the UME temp directory path with error handling
+    let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
+        .map_err(|io_err| format!(
+            "MSMD: Failed to get UME temp directory path: {:?}",
+            io_err
+        ))?;
+
+    // Extract the addressbook path string with inline error conversion
+    let addressbook_readcopy_path_string = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
+        &file_owner_username,
+        COLLABORATOR_ADDRESSBOOK_PATH_STR,
+        &gpg_full_fingerprint_key_id_string,
+        &base_uma_temp_directory_path,
+    ).map_err(|e| format!(
+        "MSMD: Failed to get addressbook path for user '{}': {:?}",
+        file_owner_username,
+        e
+    ))?;
+
+    // Define cleanup closure
+    let cleanup_closure = || {
+        let _ = cleanup_collaborator_temp_file(
+            &channel_node_tomlpath_string,
+            &base_uma_temp_directory_path,
+            );
+        let _ = cleanup_collaborator_temp_file(
+            &addressbook_readcopy_path_string,
+            &base_uma_temp_directory_path,
+            );
+    };
+
+    /*
+    pub fn read_abstract_ports_from_clearsigntoml_without_publicgpgkey(
+        pathstr_to_config_file_that_contains_gpg_key: &str,
+        pathstr_to_target_clearsigned_file: &str,
+    ) -> Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, String> {
+    */
+
+    // let abstract_collaborator_port_assignments = match get_abstract_port_assignments_from_node_toml(&channel_node_toml_path) {
+    //     Ok(names) => names,
+    //     Err(e) => {
+    //         debug_log!("MSMD Error 5. getting abstract_collaborator_port_assignments: {}", e);
+    //         return Err(MyCustomError::from(io::Error::new(io::ErrorKind::Other, e)));
+    //     }
+    // };
+
+    let abstract_collaborator_port_assignments = match read_abstract_ports_from_clearsigntoml_without_publicgpgkey(
+        &addressbook_readcopy_path_string,
+        &channel_node_tomlpath_string
+    ) {
         Ok(names) => names,
         Err(e) => {
             debug_log!("MSMD Error 5. getting abstract_collaborator_port_assignments: {}", e);
             return Err(MyCustomError::from(io::Error::new(io::ErrorKind::Other, e)));
         }
     };
+
     debug_log!(
         "MSMD 5. abstract_collaborator_port_assignments->{:?}",
         &abstract_collaborator_port_assignments

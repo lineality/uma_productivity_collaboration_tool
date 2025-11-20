@@ -1390,6 +1390,653 @@ fn extract_gpg_key_from_clearsigntoml(path: &str, key_field: &str) -> Result<Str
     read_multi_line_toml_string(path, key_field)
 }
 
+/// Reads abstract port assignments from a GPG clearsigned TOML file without embedded public key.
+///
+/// # Purpose
+/// Extracts collaborator port assignments from a team channel's clearsigned node.toml file.
+/// This function verifies the GPG signature using a key from a separate config file, then
+/// manually parses the abstract_collaborator_port_assignments section without using the toml crate.
+///
+/// # Process Flow
+/// 1. Extracts the GPG public key from the specified config file
+/// 2. Verifies the signature of the target clearsigned TOML file
+/// 3. If verification succeeds, manually parses the abstract port assignments
+/// 4. Returns the structured port data or an appropriate error
+///
+/// # Arguments
+/// * `pathstr_to_config_file_that_contains_gpg_key` - Path to a clearsigned TOML file containing the GPG public key
+/// * `pathstr_to_target_clearsigned_file` - Path to the clearsigned TOML file to read from (without its own GPG key)
+///
+/// # Returns
+/// * `Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, String>` - A `Result` containing a HashMap of
+///   collaborator pair names to their port assignments on success, or a `String` describing the error on failure.
+///
+/// # TOML Structure Expected
+/// ```toml
+/// [[abstract_collaborator_port_assignments.alice_bob]]
+///
+/// [[abstract_collaborator_port_assignments.alice_bob.collaborator_ports]]
+/// user_name = "alice"
+/// ready_port = 64024
+/// intray_port = 58940
+/// gotit_port = 49549
+///
+/// [[abstract_collaborator_port_assignments.alice_bob.collaborator_ports]]
+/// user_name = "bob"
+/// ready_port = 58375
+/// intray_port = 62062
+/// gotit_port = 58812
+/// ```
+///
+/// # Example
+/// ```
+/// let config_path = "security_config.toml";
+/// let node_file = "team_channels/alicetown/node.toml";
+///
+/// let port_assignments = read_abstract_ports_from_clearsigntoml_without_publicgpgkey(
+///     config_path,
+///     node_file
+/// )?;
+/// // Returns: HashMap with "alice_bob" -> Vec of port assignments
+/// ```
+pub fn read_abstract_ports_from_clearsigntoml_without_publicgpgkey(
+    pathstr_to_config_file_that_contains_gpg_key: &str,
+    pathstr_to_target_clearsigned_file: &str,
+) -> Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, String> {
+    // Step 1: Extract GPG key from the config file
+    let key = extract_gpg_key_from_clearsigntoml(
+        pathstr_to_config_file_that_contains_gpg_key,
+        "gpg_key_public",
+    )
+    .map_err(|e| {
+        format!(
+            "RAPFCT: Failed to extract GPG key from config file '{}': {}",
+            pathstr_to_config_file_that_contains_gpg_key, e
+        )
+    })?;
+
+    // Step 2: Verify the target file using the extracted key
+    let verification_result = verify_clearsign(pathstr_to_target_clearsigned_file, &key)
+        .map_err(|e| format!("RAPFCT: Failed during verification process: {}", e))?;
+
+    // Step 3: Check verification result
+    if !verification_result {
+        return Err(format!(
+            "RAPFCT: GPG signature verification failed for file '{}' using key from '{}'",
+            pathstr_to_target_clearsigned_file, pathstr_to_config_file_that_contains_gpg_key
+        ));
+    }
+
+    // Step 4: Parse the abstract port assignments from the verified file
+    parse_abstract_port_assignments(pathstr_to_target_clearsigned_file).map_err(|e| {
+        format!(
+            "RAPFCT: Failed to parse abstract port assignments from verified file '{}': {}",
+            pathstr_to_target_clearsigned_file, e
+        )
+    })
+}
+
+/// Manually parses abstract collaborator port assignments from a clearsigned TOML file.
+///
+/// # Purpose
+/// Incrementally reads and parses only the abstract_collaborator_port_assignments section
+/// from a TOML file, skipping all other content. Does not use the toml crate.
+///
+/// # Process
+/// 1. Opens file for line-by-line reading
+/// 2. Skips content until finding abstract_collaborator_port_assignments headers
+/// 3. Extracts pair names (e.g., "alice_bob") from section headers
+/// 4. Parses individual collaborator port data (4 required fields)
+/// 5. Builds nested data structure matching expected return type
+/// 6. Handles multiple pair names in a single file
+///
+/// # Arguments
+/// * `path` - Path to the TOML file to parse
+///
+/// # Returns
+/// * `Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, String>` -
+///   HashMap mapping pair names to vectors of port assignments, or error message
+///
+/// # Error Conditions
+/// - File cannot be opened/read
+/// - Required fields missing (user_name, ready_port, intray_port, gotit_port)
+/// - Port values not valid u16
+/// - Malformed TOML structure
+///
+/// # Data Structure Built
+/// ```
+/// HashMap {
+///     "alice_bob" => vec![
+///         ReadTeamchannelCollaboratorPortsToml {
+///             collaborator_ports: vec![
+///                 AbstractTeamchannelNodeTomlPortsData { user_name: "alice", ... }
+///             ]
+///         },
+///         ReadTeamchannelCollaboratorPortsToml {
+///             collaborator_ports: vec![
+///                 AbstractTeamchannelNodeTomlPortsData { user_name: "bob", ... }
+///             ]
+///         }
+///     ]
+/// }
+/// ```
+fn parse_abstract_port_assignments(
+    path: &str,
+) -> Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, String> {
+    #[cfg(all(debug_assertions, not(test)))]
+    debug_log!(
+        "PAPA: Starting parse_abstract_port_assignments for file: {}",
+        path
+    );
+
+    // Open the file for line-by-line reading
+    let file = File::open(path).map_err(|e| format!("PAPA: err open file"))?;
+
+    let reader = io::BufReader::new(file);
+
+    // Result HashMap to store all pair assignments
+    let mut result: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>> = HashMap::new();
+
+    // State tracking for parsing
+    let mut current_pair_name: Option<String> = None;
+    let mut in_collaborator_ports_section = false;
+
+    // Temporary storage for current collaborator being parsed
+    let mut current_user_name: Option<String> = None;
+    let mut current_ready_port: Option<u16> = None;
+    let mut current_intray_port: Option<u16> = None;
+    let mut current_gotit_port: Option<u16> = None;
+
+    // Process each line
+    for line_result in reader.lines() {
+        let line = line_result.map_err(|e| format!("PAPA: err read line"))?;
+
+        let trimmed = line.trim();
+
+        // Skip empty lines and comments
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+
+        // Skip GPG signature blocks
+        if trimmed.starts_with("-----BEGIN PGP")
+            || trimmed.starts_with("-----END PGP")
+            || trimmed.starts_with("Hash:")
+        {
+            continue;
+        }
+
+        // FIRST: Check for collaborator_ports section header (MUST BE FIRST!)
+        // Format: [[abstract_collaborator_port_assignments.PAIRNAME.collaborator_ports]]
+        if trimmed.starts_with("[[abstract_collaborator_port_assignments.")
+            && trimmed.ends_with(".collaborator_ports]]")
+        {
+            #[cfg(all(debug_assertions, not(test)))]
+            debug_log!("PAPA: Found collaborator_ports header: {}", trimmed);
+
+            // Save any previously parsed collaborator data
+            if let (Some(pair), Some(user), Some(ready), Some(intray), Some(gotit)) = (
+                &current_pair_name,
+                current_user_name.take(),
+                current_ready_port.take(),
+                current_intray_port.take(),
+                current_gotit_port.take(),
+            ) {
+                let port_data = AbstractTeamchannelNodeTomlPortsData {
+                    user_name: user,
+                    ready_port: ready,
+                    intray_port: intray,
+                    gotit_port: gotit,
+                };
+
+                let wrapped_data = ReadTeamchannelCollaboratorPortsToml {
+                    collaborator_ports: vec![port_data],
+                };
+
+                result
+                    .entry(pair.clone())
+                    .or_insert_with(Vec::new)
+                    .push(wrapped_data);
+            }
+
+            // Extract pair name from header
+            // Remove "[[abstract_collaborator_port_assignments." prefix
+            let prefix = "[[abstract_collaborator_port_assignments.";
+            let after_prefix = &trimmed[prefix.len()..];
+
+            // Find the next dot to get pair name
+            if let Some(dot_pos) = after_prefix.find('.') {
+                let pair_name = &after_prefix[..dot_pos];
+                current_pair_name = Some(pair_name.to_string());
+                in_collaborator_ports_section = true;
+
+                #[cfg(all(debug_assertions, not(test)))]
+                debug_log!("PAPA: Extracted pair name: {}", pair_name);
+            } else {
+                return Err(format!("PAPA: err malformed header"));
+            }
+
+            continue;
+        }
+
+        // SECOND: Check for outer section headers (we skip these)
+        // Format: [[abstract_collaborator_port_assignments.PAIRNAME]]
+        if trimmed.starts_with("[[abstract_collaborator_port_assignments.")
+            && trimmed.ends_with("]]")
+            && !trimmed.contains(".collaborator_ports]]")
+        {
+            #[cfg(all(debug_assertions, not(test)))]
+            debug_log!("PAPA: Skipping outer header: {}", trimmed);
+
+            continue;
+        }
+
+        // THIRD: If we encounter ANY other [[ header, we're done with current section
+        if trimmed.starts_with("[[") && in_collaborator_ports_section {
+            // Save any pending collaborator data before leaving section
+            if let (Some(pair), Some(user), Some(ready), Some(intray), Some(gotit)) = (
+                &current_pair_name,
+                current_user_name.take(),
+                current_ready_port.take(),
+                current_intray_port.take(),
+                current_gotit_port.take(),
+            ) {
+                let port_data = AbstractTeamchannelNodeTomlPortsData {
+                    user_name: user,
+                    ready_port: ready,
+                    intray_port: intray,
+                    gotit_port: gotit,
+                };
+
+                let wrapped_data = ReadTeamchannelCollaboratorPortsToml {
+                    collaborator_ports: vec![port_data],
+                };
+
+                result
+                    .entry(pair.clone())
+                    .or_insert_with(Vec::new)
+                    .push(wrapped_data);
+            }
+
+            // We've left the abstract_collaborator_port_assignments section
+            in_collaborator_ports_section = false;
+            continue;
+        }
+
+        // Parse field assignments if we're in a collaborator_ports section
+        if in_collaborator_ports_section && current_pair_name.is_some() {
+            // Parse user_name field
+            if trimmed.starts_with("user_name = ") {
+                let value_part = &trimmed[12..].trim(); // Skip "user_name = "
+                let cleaned = value_part.trim_matches('"');
+                current_user_name = Some(cleaned.to_string());
+
+                #[cfg(all(debug_assertions, not(test)))]
+                debug_log!("PAPA: Parsed user_name: {}", cleaned);
+
+                continue;
+            }
+
+            // Parse ready_port field
+            if trimmed.starts_with("ready_port = ") {
+                let value_part = &trimmed[13..].trim(); // Skip "ready_port = "
+                let port = value_part
+                    .parse::<u16>()
+                    .map_err(|_| format!("PAPA: err invalid ready_port"))?;
+                current_ready_port = Some(port);
+
+                #[cfg(all(debug_assertions, not(test)))]
+                debug_log!("PAPA: Parsed ready_port: {}", port);
+
+                continue;
+            }
+
+            // Parse intray_port field
+            if trimmed.starts_with("intray_port = ") {
+                let value_part = &trimmed[14..].trim(); // Skip "intray_port = "
+                let port = value_part
+                    .parse::<u16>()
+                    .map_err(|_| format!("PAPA: err invalid intray_port"))?;
+                current_intray_port = Some(port);
+
+                #[cfg(all(debug_assertions, not(test)))]
+                debug_log!("PAPA: Parsed intray_port: {}", port);
+
+                continue;
+            }
+
+            // Parse gotit_port field
+            if trimmed.starts_with("gotit_port = ") {
+                let value_part = &trimmed[13..].trim(); // Skip "gotit_port = "
+                let port = value_part
+                    .parse::<u16>()
+                    .map_err(|_| format!("PAPA: err invalid gotit_port"))?;
+                current_gotit_port = Some(port);
+
+                #[cfg(all(debug_assertions, not(test)))]
+                debug_log!("PAPA: Parsed gotit_port: {}", port);
+
+                // When we have all 4 fields, save the collaborator data
+                if let (Some(pair), Some(user), Some(ready), Some(intray), Some(gotit)) = (
+                    &current_pair_name,
+                    current_user_name.take(),
+                    current_ready_port.take(),
+                    current_intray_port.take(),
+                    current_gotit_port.take(),
+                ) {
+                    let port_data = AbstractTeamchannelNodeTomlPortsData {
+                        user_name: user,
+                        ready_port: ready,
+                        intray_port: intray,
+                        gotit_port: gotit,
+                    };
+
+                    let wrapped_data = ReadTeamchannelCollaboratorPortsToml {
+                        collaborator_ports: vec![port_data],
+                    };
+
+                    result
+                        .entry(pair.clone())
+                        .or_insert_with(Vec::new)
+                        .push(wrapped_data);
+
+                    #[cfg(all(debug_assertions, not(test)))]
+                    debug_log!("PAPA: Saved collaborator data for pair: {}", pair);
+                }
+
+                continue;
+            }
+        }
+    }
+
+    // Handle any remaining data after file ends
+    if let (Some(pair), Some(user), Some(ready), Some(intray), Some(gotit)) = (
+        current_pair_name,
+        current_user_name,
+        current_ready_port,
+        current_intray_port,
+        current_gotit_port,
+    ) {
+        let port_data = AbstractTeamchannelNodeTomlPortsData {
+            user_name: user,
+            ready_port: ready,
+            intray_port: intray,
+            gotit_port: gotit,
+        };
+
+        let wrapped_data = ReadTeamchannelCollaboratorPortsToml {
+            collaborator_ports: vec![port_data],
+        };
+
+        result
+            .entry(pair.clone())
+            .or_insert_with(Vec::new)
+            .push(wrapped_data);
+    }
+
+    #[cfg(all(debug_assertions, not(test)))]
+    debug_log!("PAPA: Completed parsing. Found {} pairs", result.len());
+
+    Ok(result)
+}
+
+// fn parse_abstract_port_assignments(
+//     path: &str,
+// ) -> Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, String> {
+//     #[cfg(all(debug_assertions, not(test)))]
+//     debug_log!(
+//         "PAPA: Starting parse_abstract_port_assignments for file: {}",
+//         path
+//     );
+
+//     // Open the file for line-by-line reading
+//     let file = File::open(path).map_err(|e| format!("PAPA: err open file"))?;
+
+//     let reader = io::BufReader::new(file);
+
+//     // Result HashMap to store all pair assignments
+//     let mut result: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>> = HashMap::new();
+
+//     // State tracking for parsing
+//     let mut current_pair_name: Option<String> = None;
+//     let mut in_collaborator_ports_section = false;
+
+//     // Temporary storage for current collaborator being parsed
+//     let mut current_user_name: Option<String> = None;
+//     let mut current_ready_port: Option<u16> = None;
+//     let mut current_intray_port: Option<u16> = None;
+//     let mut current_gotit_port: Option<u16> = None;
+
+//     // Process each line
+//     for line_result in reader.lines() {
+//         let line = line_result.map_err(|e| format!("PAPA: err read line"))?;
+
+//         let trimmed = line.trim();
+
+//         // Skip empty lines and comments
+//         if trimmed.is_empty() || trimmed.starts_with('#') {
+//             continue;
+//         }
+
+//         // Skip GPG signature blocks
+//         if trimmed.starts_with("-----BEGIN PGP")
+//             || trimmed.starts_with("-----END PGP")
+//             || trimmed.starts_with("Hash:")
+//         {
+//             continue;
+//         }
+
+//         // Check for collaborator_ports section header
+//         // Format: [[abstract_collaborator_port_assignments.PAIRNAME.collaborator_ports]]
+//         // If we encounter a different [[ header, we're done with current section
+//         if trimmed.starts_with("[[") && in_collaborator_ports_section {
+//             // Save any pending collaborator data before leaving section
+//             if let (Some(pair), Some(user), Some(ready), Some(intray), Some(gotit)) = (
+//                 &current_pair_name,
+//                 current_user_name.take(),
+//                 current_ready_port.take(),
+//                 current_intray_port.take(),
+//                 current_gotit_port.take(),
+//             ) {
+//                 let port_data = AbstractTeamchannelNodeTomlPortsData {
+//                     user_name: user,
+//                     ready_port: ready,
+//                     intray_port: intray,
+//                     gotit_port: gotit,
+//                 };
+
+//                 let wrapped_data = ReadTeamchannelCollaboratorPortsToml {
+//                     collaborator_ports: vec![port_data],
+//                 };
+
+//                 result
+//                     .entry(pair.clone())
+//                     .or_insert_with(Vec::new)
+//                     .push(wrapped_data);
+//             }
+
+//             // Extract pair name from header
+//             // Remove "[[abstract_collaborator_port_assignments." prefix
+//             let prefix = "[[abstract_collaborator_port_assignments.";
+//             let after_prefix = &trimmed[prefix.len()..]; // Use actual length instead of hardcoded 41
+
+//             // Find the next dot to get pair name
+//             if let Some(dot_pos) = after_prefix.find('.') {
+//                 let pair_name = &after_prefix[..dot_pos];
+//                 current_pair_name = Some(pair_name.to_string());
+//                 in_collaborator_ports_section = true;
+
+//                 #[cfg(all(debug_assertions, not(test)))]
+//                 debug_log!("PAPA: Extracted pair name: {}", pair_name);
+//             } else {
+//                 return Err(format!("PAPA: err malformed header"));
+//             }
+
+//             continue;
+//         }
+
+//         // Check for outer section headers (we skip these)
+//         // Format: [[abstract_collaborator_port_assignments.PAIRNAME]]
+//         if trimmed.starts_with("[[abstract_collaborator_port_assignments.")
+//             && trimmed.ends_with("]]")
+//             && !trimmed.contains(".collaborator_ports]]")
+//         {
+//             #[cfg(all(debug_assertions, not(test)))]
+//             debug_log!("PAPA: Skipping outer header: {}", trimmed);
+
+//             continue;
+//         }
+
+//         // If we encounter a different [[ header, we're done with current section
+//         if trimmed.starts_with("[[") && in_collaborator_ports_section {
+//             // Save any pending collaborator data before leaving section
+//             if let (Some(pair), Some(user), Some(ready), Some(intray), Some(gotit)) = (
+//                 &current_pair_name,
+//                 current_user_name.take(),
+//                 current_ready_port.take(),
+//                 current_intray_port.take(),
+//                 current_gotit_port.take(),
+//             ) {
+//                 let port_data = AbstractTeamchannelNodeTomlPortsData {
+//                     user_name: user,
+//                     ready_port: ready,
+//                     intray_port: intray,
+//                     gotit_port: gotit,
+//                 };
+
+//                 let wrapped_data = ReadTeamchannelCollaboratorPortsToml {
+//                     collaborator_ports: vec![port_data],
+//                 };
+
+//                 result
+//                     .entry(pair.clone())
+//                     .or_insert_with(Vec::new)
+//                     .push(wrapped_data);
+//             }
+
+//             // Check if this is another collaborator_ports section
+//             if !trimmed.contains("abstract_collaborator_port_assignments") {
+//                 in_collaborator_ports_section = false;
+//             }
+//         }
+
+//         // Parse field assignments if we're in a collaborator_ports section
+//         if in_collaborator_ports_section && current_pair_name.is_some() {
+//             // Parse user_name field
+//             if trimmed.starts_with("user_name = ") {
+//                 let value_part = &trimmed[12..].trim(); // Skip "user_name = "
+//                 let cleaned = value_part.trim_matches('"');
+//                 current_user_name = Some(cleaned.to_string());
+
+//                 #[cfg(all(debug_assertions, not(test)))]
+//                 debug_log!("PAPA: Parsed user_name: {}", cleaned);
+
+//                 continue;
+//             }
+
+//             // Parse ready_port field
+//             if trimmed.starts_with("ready_port = ") {
+//                 let value_part = &trimmed[13..].trim(); // Skip "ready_port = "
+//                 let port = value_part
+//                     .parse::<u16>()
+//                     .map_err(|_| format!("PAPA: err invalid ready_port"))?;
+//                 current_ready_port = Some(port);
+
+//                 #[cfg(all(debug_assertions, not(test)))]
+//                 debug_log!("PAPA: Parsed ready_port: {}", port);
+
+//                 continue;
+//             }
+
+//             // Parse intray_port field
+//             if trimmed.starts_with("intray_port = ") {
+//                 let value_part = &trimmed[14..].trim(); // Skip "intray_port = "
+//                 let port = value_part
+//                     .parse::<u16>()
+//                     .map_err(|_| format!("PAPA: err invalid intray_port"))?;
+//                 current_intray_port = Some(port);
+
+//                 #[cfg(all(debug_assertions, not(test)))]
+//                 debug_log!("PAPA: Parsed intray_port: {}", port);
+
+//                 continue;
+//             }
+
+//             // Parse gotit_port field
+//             if trimmed.starts_with("gotit_port = ") {
+//                 let value_part = &trimmed[13..].trim(); // Skip "gotit_port = "
+//                 let port = value_part
+//                     .parse::<u16>()
+//                     .map_err(|_| format!("PAPA: err invalid gotit_port"))?;
+//                 current_gotit_port = Some(port);
+
+//                 #[cfg(all(debug_assertions, not(test)))]
+//                 debug_log!("PAPA: Parsed gotit_port: {}", port);
+
+//                 // When we have all 4 fields, save the collaborator data
+//                 if let (Some(pair), Some(user), Some(ready), Some(intray), Some(gotit)) = (
+//                     &current_pair_name,
+//                     current_user_name.take(),
+//                     current_ready_port.take(),
+//                     current_intray_port.take(),
+//                     current_gotit_port.take(),
+//                 ) {
+//                     let port_data = AbstractTeamchannelNodeTomlPortsData {
+//                         user_name: user,
+//                         ready_port: ready,
+//                         intray_port: intray,
+//                         gotit_port: gotit,
+//                     };
+
+//                     let wrapped_data = ReadTeamchannelCollaboratorPortsToml {
+//                         collaborator_ports: vec![port_data],
+//                     };
+
+//                     result
+//                         .entry(pair.clone())
+//                         .or_insert_with(Vec::new)
+//                         .push(wrapped_data);
+
+//                     #[cfg(all(debug_assertions, not(test)))]
+//                     debug_log!("PAPA: Saved collaborator data for pair: {}", pair);
+//                 }
+
+//                 continue;
+//             }
+//         }
+//     }
+
+//     // Handle any remaining data after file ends
+//     if let (Some(pair), Some(user), Some(ready), Some(intray), Some(gotit)) = (
+//         current_pair_name,
+//         current_user_name,
+//         current_ready_port,
+//         current_intray_port,
+//         current_gotit_port,
+//     ) {
+//         let port_data = AbstractTeamchannelNodeTomlPortsData {
+//             user_name: user,
+//             ready_port: ready,
+//             intray_port: intray,
+//             gotit_port: gotit,
+//         };
+
+//         let wrapped_data = ReadTeamchannelCollaboratorPortsToml {
+//             collaborator_ports: vec![port_data],
+//         };
+
+//         result
+//             .entry(pair.clone())
+//             .or_insert_with(Vec::new)
+//             .push(wrapped_data);
+//     }
+
+//     #[cfg(all(debug_assertions, not(test)))]
+//     debug_log!("PAPA: Completed parsing. Found {} pairs", result.len());
+
+//     Ok(result)
+// }
+
 // /// Verifies a clearsigned TOML file using GPG.
 // ///
 // /// # Arguments
