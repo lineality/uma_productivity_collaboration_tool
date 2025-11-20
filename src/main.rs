@@ -443,6 +443,9 @@ const UMA_TOML_CONFIGFILE_PATH_STR: &str = "uma.toml";
 /// "project_graph_data/collaborator_files_address_book/{}__collaborator.gpgtoml";
 const COLLABORATOR_ADDRESSBOOK_PATH_STR: &str = "project_graph_data/collaborator_files_address_book";
 
+const TEAM_CHANNELS_HOMEBASE_PATH_STR: &str = "project_graph_data/team_channels/";
+
+
 /// temp file to clean regularly
 const TEMP_DIR_BASE_UMA_PATH_STR: &str = "uma_temp_dir";
 
@@ -452,6 +455,22 @@ const SYNC_START_OK_FLAG_PATH_STR: &str = "project_graph_data/session_state_item
 const INCOMING_PUBLICGPG_KEYASC_FILEPATH_STR: &str = "invites_updates/incoming/key.asc";
 const UMA_SESSION_STATE_ITEMS_DIR_PATH_STR: &str = "project_graph_data/session_state_items";
 
+const UMA_CURRENT_NODE_PATH_STR: &str = "project_graph_data/session_state_items/current_node_directory_path.txt";
+
+
+
+/*
+# Use Example:
+```
+let absolute_path = match get_team_channels_homebase_directory_path() {
+    Ok(path) => path,
+    Err(e) => {
+        debug_log!("Failed to get absolute path: {}", e);
+        return None;
+    }
+};
+```
+*/
 
 /// Gets the absolute path to temp directory
 /// executible-parent-relative-aboslute path
@@ -461,7 +480,13 @@ pub fn get_addressbook_directory_path() -> io::Result<PathBuf> {
     )
 }
 
-
+/// Gets the absolute path to temp directory
+/// executible-parent-relative-aboslute path
+pub fn get_team_channels_homebase_directory_path() -> io::Result<PathBuf> {
+    make_input_path_name_abs_executabledirectoryrelative_nocheck(
+        TEAM_CHANNELS_HOMEBASE_PATH_STR
+    )
+}
 
 /// Gets the absolute path to temp directory
 /// executible-parent-relative-aboslute path
@@ -506,6 +531,13 @@ pub fn get_sessionstateitems_path() -> io::Result<PathBuf> {
         UMA_SESSION_STATE_ITEMS_DIR_PATH_STR
     )
 }
+
+pub fn get_current_node_path() -> io::Result<PathBuf> {
+    make_input_path_name_abs_executabledirectoryrelative_nocheck(
+        UMA_CURRENT_NODE_PATH_STR
+    )
+}
+
 
 /// Determines if UMA should halt based on the continue_uma.txt file.
 ///
@@ -1721,7 +1753,7 @@ fn hlod_udp_handshake__rc_network_type_rc_ip_addr(
 
 
     // setup: Get Team Channel Name
-    let team_channel_name = get_current_team_channel_name_from_cwd()
+    let team_channel_name = get_current_team_channel_name_from_nav_path()
         .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
 
     // setup: Construct Path to check for a ready signal received from the rc (remote collaborator)
@@ -17050,7 +17082,7 @@ fn remove_non_alphanumeric(s: &str) -> String {
 //     recipients_list: Vec<String>,
 //     file_path: Path,
 // ) {
-//     team_channel_name = get_current_team_channel_name_from_cwd();
+//     team_channel_name = get_current_team_channel_name_from_nav_path();
 //     // e.g. sync_data/teamtest/new_file_path_flags/bob}
 
 //     // // maybe iterate through recipients_list
@@ -17082,7 +17114,7 @@ fn write_newfile_sendq_flag(
     recipients_list: &[String], // Use a slice for efficiency
     file_path: &Path, // Use a reference to avoid unnecessary cloning
 ) -> Result<(), ThisProjectError> {
-    let team_channel_name = get_current_team_channel_name_from_cwd()
+    let team_channel_name = get_current_team_channel_name_from_nav_path()
         .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
 
     let timestamp_flagfile_name = get_current_unix_timestamp();
@@ -25214,7 +25246,7 @@ fn hex_string_to_bytes(hex_string: &str) -> Result<Vec<u8>, ThisProjectError> {
 ///   or a `ThisProjectError` if an error occurs (e.g., during directory reading).
 fn get_active_collaborator_names() -> Result<Vec<String>, ThisProjectError> {
     // 1. Get the team channel name
-    let team_channel_name = match get_current_team_channel_name_from_cwd() {
+    let team_channel_name = match get_current_team_channel_name_from_nav_path() {
         Some(name) => name,
         None => {
             debug_log!("Error: Could not get current channel name in get_active_collaborator_names. Skipping.");
@@ -25436,7 +25468,7 @@ fn hash_checker_for_sendfile_struct(
 // ) -> Result<(), ThisProjectError> {
 //     // let doc_id = docid__hash_array_to_hex_string(hash_array);
 
-//     let team_channel_name = get_current_team_channel_name_from_cwd()
+//     let team_channel_name = get_current_team_channel_name_from_nav_path()
 //         .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
 
 //     let mut file_path = PathBuf::from("sync_data"); // Use PathBuf not format!()
@@ -25542,7 +25574,7 @@ fn set_prefail_flag_rt_timestamp__for_sendfile(
         rt_timestamp = 1;
     }
 
-    let team_channel_name = get_current_team_channel_name_from_cwd()
+    let team_channel_name = get_current_team_channel_name_from_nav_path()
         .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
 
     let mut flag_file_path = PathBuf::from("sync_data")
@@ -25589,7 +25621,7 @@ fn get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(
     let mut oldest_timestamp = 0u64;
     let mut oldest_file_path: Option<PathBuf> = None; // Store path to the oldest file
 
-    let team_channel_name = get_current_team_channel_name_from_cwd()
+    let team_channel_name = get_current_team_channel_name_from_nav_path()
         .ok_or(ThisProjectError::InvalidData("get_oldest prefail... Unable to get team channel name".into()))?;
 
     let prefail_directory = PathBuf::from("sync_data")
@@ -25749,7 +25781,7 @@ fn remove_one_prefail_flag__for_sendfile(
 fn remove_prefail_flags__for_sendfile(
     remote_collaborator_name: &str,
 ) -> Result<(), ThisProjectError> {
-    let team_channel_name = get_current_team_channel_name_from_cwd()
+    let team_channel_name = get_current_team_channel_name_from_nav_path()
         .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
 
     let directory = PathBuf::from("sync_data")
@@ -26617,8 +26649,9 @@ fn handle_local_owner_desk(
 
         }
 
+        debug_log("HLOD calling get_current_team_channel_name_from_nav_path");
         // --- Get team channel name ---
-        let team_channel_name = match get_current_team_channel_name_from_cwd() {
+        let team_channel_name = match get_current_team_channel_name_from_nav_path() {
             Some(name) => name,
             None => {
                 debug_log!("Error: Could not get current channel name. Skipping.");
@@ -27092,7 +27125,7 @@ fn handle_local_owner_desk(
                     // let mut incoming_file_path: PathBuf = PathBuf::from("project_graph_data/team_channels");
                     let mut incoming_file_path: PathBuf; // = PathBuf::new();
 
-                    let team_channel_name = get_current_team_channel_name_from_cwd()
+                    let team_channel_name = get_current_team_channel_name_from_nav_path()
                         .ok_or(ThisProjectError::InvalidData(
                             "Unable to get team channel name".into())
                         )?;
@@ -28233,7 +28266,7 @@ fn get_latest_received_from_rc_in_teamchannel_file_timestamp_filecrawl(
         last_timestamp
     );
 
-    let team_channel_name = get_current_team_channel_name_from_cwd()
+    let team_channel_name = get_current_team_channel_name_from_nav_path()
         .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
 
     // update state: latest received timestamp
@@ -28367,7 +28400,7 @@ fn get_rc_band_ready_gotit_socketaddrses_hrcd(
                 let gotit_socket_addr = SocketAddr::new(rc_ip, room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip);  // Correct port from room_sync_input
 
                 // --- Write/Save Received Band Data ---
-                let team_channel_name = match get_current_team_channel_name_from_cwd() {
+                let team_channel_name = match get_current_team_channel_name_from_nav_path() {
                     Some(name) => name,
                     None => {
                         debug_log!("Error: get_rc_band_ Could not get current channel name. Skipping set_as_active.");
@@ -28585,9 +28618,11 @@ fn handle_remote_collaborator_meetingroom_desk(
         // Bootstrap
         /////////////
 
+        debug_log("HRCD calling get_current_team_channel_name_from_nav_path");
+
         // TODO
         // setup: Get Team Channel Name
-        let team_channel_name = get_current_team_channel_name_from_cwd()
+        let team_channel_name = get_current_team_channel_name_from_nav_path()
             .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
 
         // 1.2 Get Remote Collaborator's IP and Network Type
@@ -28945,7 +28980,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                     //////////////////////////////
 
                     // --- 3.3 Get / Make Send-Queue ---
-                    let this_team_channelname = match get_current_team_channel_name_from_cwd() {
+                    let this_team_channelname = match get_current_team_channel_name_from_nav_path() {
                         Some(name) => name,
                         None => {
                             debug_log("HRCD 3.3: Error: Could not get current channel name. Skipping send queue creation.");
@@ -29316,6 +29351,7 @@ enum SyncResult {
     Failure(ThisProjectError), // Contains an error if sync failed
 }
 
+// TODO likely need to be updated to abs-exe-parent-relative paths
 /// Extracts the team channel name from the current working directory path.
 ///
 /// Looks for the pattern "project_graph_data/team_channels/[CHANNEL_NAME]" in the absolute path
@@ -29327,51 +29363,59 @@ enum SyncResult {
 ///
 /// # Example
 /// ```
-/// match get_current_team_channel_name_from_cwd() {
+/// match get_current_team_channel_name_from_nav_path() {
 ///     Some(channel) => println!("Found channel: {}", channel),
 ///     None => println!("No channel found"),
 /// }
 /// ```
 /// or:
-/// let team_channel_name = match get_current_team_channel_name_from_cwd() {
+/// let team_channel_name = match get_current_team_channel_name_from_nav_path() {
 ///     Some(name) => name,
 ///     None => {
 ///         debug_log!("Error: Could not get current channel name. Skipping set_as_active.");
 ///         return Err(ThisProjectError::InvalidData("Could not get team channel name".into()));
 ///     },
 /// };
-fn get_current_team_channel_name_from_cwd() -> Option<String> {
-    debug_log!("Starting: get_current_team_channel_name_from_cwd()");
+fn get_current_team_channel_name_from_nav_path() -> Option<String> {
+    debug_log!("\nGCTCNFNP Starting: get_current_team_channel_name_from_nav_path()");
 
-    // Get absolute path from current directory
-    let absolute_path = match PathBuf::from(".").canonicalize() {
+    // // Get absolute path from current directory
+    // let absolute_path = match PathBuf::from(".").canonicalize() {
+    //     Ok(path) => path,
+    //     Err(e) => {
+    //         debug_log!("Failed to get absolute path: {}", e);
+    //         return None;
+    //     }
+    // };
+
+    let absolute_path_string = match read_state_string("current_node_directory_path.txt") {
         Ok(path) => path,
         Err(e) => {
-            debug_log!("Failed to get absolute path: {}", e);
+            debug_log!("GCTCNFNP Failed to get absolute path: {}", e);
             return None;
         }
     };
 
-    debug_log!("Absolute path: {:?}", absolute_path);
+    debug_log!("GCTCNFNP Absolute path: {}", absolute_path_string);
 
     // Convert path to string
-    let path_str = absolute_path.to_string_lossy();
+    // let path_str = absolute_path.to_string_lossy();
 
     // Define the marker we're looking for
     let marker = "project_graph_data/team_channels/";
 
     // Find marker position
-    let position = match path_str.find(marker) {
+    let position = match absolute_path_string.find(marker) {
         Some(pos) => pos,
         None => {
-            debug_log!("Marker '{}' not found in path", marker);
+            debug_log!("GCTCNFNP Marker '{}' not found in path", marker);
             return None;
         }
     };
 
     // Extract everything after the marker
-    let after_marker = &path_str[position + marker.len()..];
-    debug_log!("Path after marker: {:?}", after_marker);
+    let after_marker = &absolute_path_string[position + marker.len()..];
+    debug_log!("GCTCNFNP Path after marker: {:?}", after_marker);
 
     // Get the first component after the marker
     let team_channel = after_marker
@@ -29382,11 +29426,11 @@ fn get_current_team_channel_name_from_cwd() -> Option<String> {
     // Validate and return
     match team_channel {
         Some(channel) if !channel.is_empty() => {
-            debug_log!("Found team channel: {}", channel);
+            debug_log!("GCTCNFNP Found team channel: {}", channel);
             Some(channel)
         }
         _ => {
-            debug_log!("No valid team channel found");
+            debug_log!("GCTCNFNP No valid team channel found");
             None
         }
     }
@@ -30415,7 +30459,7 @@ pub fn initialize_ok_to_start_sync_flag_to_false() -> Result<(), io::Error> {
 /// use std::path::PathBuf;
 fn set_as_active(collaborator_name: &str) -> Result<(), ThisProjectError> {
     // 1. Get team channel name (replace with your actual implementation)
-    let team_channel_name = match get_current_team_channel_name_from_cwd() {
+    let team_channel_name = match get_current_team_channel_name_from_nav_path() {
         Some(name) => name,
         None => {
             debug_log!("Error: Could not get current channel name. Skipping set_as_active.");
