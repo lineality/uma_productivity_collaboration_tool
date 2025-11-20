@@ -455,6 +455,16 @@ const UMA_SESSION_STATE_ITEMS_DIR_PATH_STR: &str = "project_graph_data/session_s
 
 /// Gets the absolute path to temp directory
 /// executible-parent-relative-aboslute path
+pub fn get_addressbook_directory_path() -> io::Result<PathBuf> {
+    make_input_path_name_abs_executabledirectoryrelative_nocheck(
+        COLLABORATOR_ADDRESSBOOK_PATH_STR
+    )
+}
+
+
+
+/// Gets the absolute path to temp directory
+/// executible-parent-relative-aboslute path
 pub fn get_base_uma_temp_directory_path() -> io::Result<PathBuf> {
     make_input_path_name_abs_executabledirectoryrelative_nocheck(
         TEMP_DIR_BASE_UMA_PATH_STR
@@ -23933,11 +23943,29 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
     // Remove Names Not in your Address Book
     // the team-owner invites people to the team
     // each collaborator invites you to connect with them
+    // filtered_collaboratorsarray.retain(|name| {
+    //     let addressbook_toml_file_path = Path::new(COLLABORATOR_ADDRESSBOOK_PATH_STR)
+    //         .join(format!("{}__collaborator.toml", name));
+    //     addressbook_toml_file_path.exists()
+    // });
+
+
     filtered_collaboratorsarray.retain(|name| {
-        let toml_file_path = Path::new(COLLABORATOR_ADDRESSBOOK_PATH_STR)
-            .join(format!("{}__collaborator.toml", name));
-        toml_file_path.exists()
+        let addressbook_dir = get_addressbook_directory_path().unwrap_or_else(|_| {
+            // Handle error if needed, e.g., return an empty PathBuf or panic
+            debug_log(
+                "MSMD addressbook_dir not found..."
+            );
+
+            PathBuf::new()
+        });
+        let addressbook_toml_file_path = addressbook_dir.join(format!("{}__collaborator.toml", name));
+        let addressbook_gpgtoml_file_path = addressbook_dir.join(format!("{}__collaborator.gpgtoml", name));
+        addressbook_toml_file_path.exists() || addressbook_gpgtoml_file_path.exists()
     });
+
+
+
     debug_log!(
         "MSMD 6. filtered_collaboratorsarray->{:?}",
         &filtered_collaboratorsarray
