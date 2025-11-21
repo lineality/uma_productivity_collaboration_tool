@@ -5929,3 +5929,215 @@ fn debugpause(n: u64) {
 //     // 4. Return the abstract_port_assignments HashMap
 //     Ok(abstract_port_assignments)
 // }
+
+
+/// depricated...this saves a name...
+/// Adds a file path to the send queue for all active collaborators in a team channel.
+///
+/// This function creates a new file containing the file path to be sent. The file is placed in a directory structure under `sync_data`,
+/// specifically `sync_data/{team_channel_name}/sendqueue_updates/FILENAME.txt
+/// The timestamp is used to ensure unique filenames and can be used for ordering or managing updates.
+///
+/// # Arguments
+///
+/// * `team_channel_name`: The name of the team channel.
+/// * `collaborator_name`: The name of the collaborator.
+/// * `file_path`: The path to the file to be added to the queue.
+///
+/// # Returns
+///
+/// * `Result<(), ThisProjectError>`: `Ok(())` on success, or a `ThisProjectError` if an error occurs.
+fn save_updateflag_path_for_sendqueue(
+    team_channel_name: &str,
+    file_path: &PathBuf, // Take PathBuf directly
+) -> Result<(), ThisProjectError> {
+
+    debug_log!(
+        "save_updateflag_path_for_sendqueue: team: {:?}, path: {:?}",
+        team_channel_name,
+        file_path,
+    );
+
+    // Get active collaborator names
+    let active_collaborators = match get_active_collaborator_names() {
+        Ok(names) => names,
+        Err(e) => {
+            debug_log!("Error getting active collaborators: {}", e);
+            return Err(e); // Or handle error differently
+        }
+    };
+
+    // 1. Convert hashes to hex string
+    // remove_non_alphanumeric
+    let filename_for_updateflag = remove_non_alphanumeric(&file_path.to_string_lossy().to_string());
+
+    // Use the active_collaborators list to determine which queue updates to save
+    for this_iter_collaborator_name in active_collaborators {
+        // Construct the update flag path for this specific collaborator
+        // and save the update flag
+
+        // 2. Construct Directory Path (using PathBuf)
+        let mut queue_dir = PathBuf::from("sync_data");
+        queue_dir.push(team_channel_name);
+        queue_dir.push("sendqueue_updates");
+        queue_dir.push(this_iter_collaborator_name);
+
+        // 3. Create Directory (if needed)
+        create_dir_all(&queue_dir)?;
+
+        // 4. Construct File Path (within directory, with filename_for_updateflag)
+        let queue_file = queue_dir.join(format!("{}.txt", filename_for_updateflag));
+
+        // 5. Write Filepath to Queue File (convert PathBuf to String, handle potential errors)
+        let file_path_string = file_path.to_string_lossy().to_string();
+        write(queue_file, file_path_string)?;
+    }
+
+    debug_log!("File path added to send queue: {:?}", file_path);
+    Ok(())
+}
+
+
+// /// Saves a "pre-fail" flag file (an empty file used as a marker).
+// ///
+// /// This function creates an empty file within the `sync_data` directory to serve as a "pre-fail"
+// /// flag.  The file's name is derived from the provided `hash_array`, and its presence indicates
+// /// that a file send attempt is in progress (and assumed to have failed unless explicitly cleared).
+// /// The directory structure is as follows:  `sync_data/{team_channel_name}/fail_retry_flags/{remote_collaborator_name}/{doc_id}`
+// ///
+// /// # Arguments
+// ///
+// /// * `hash_array`: A slice of `u8` values used to generate the filename (doc_id).
+// /// * `remote_collaborator_name`: The name of the remote collaborator associated with the flag.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<(), ThisProjectError>`:  `Ok(())` if the flag file is successfully created, or a `ThisProjectError`
+// ///   if an error occurs (e.g., during file creation or directory creation).
+// ///
+// fn set_prefail_flag_rt_timestamp__for_sendfile(
+//     rt_timestamp: u64,
+//     remote_collaborator_name: &str,
+// ) -> Result<(), ThisProjectError> {
+//     // let doc_id = docid__hash_array_to_hex_string(hash_array);
+
+//     let team_channel_name = get_current_team_channel_name_from_nav_path()
+//         .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
+
+//     let mut file_path = PathBuf::from("sync_data"); // Use PathBuf not format!()
+//     file_path.push(&team_channel_name);
+//     file_path.push("fail_retry_flags");
+//     file_path.push(remote_collaborator_name);
+//     create_dir_all(&file_path)?; // Create the directory structure if it doesn't exist
+
+//     // TODO string of u64
+//     let string_of_rt = rt_timestamp.to_string();
+
+//     file_path.push(string_of_rt);
+//     File::create(file_path)?; // Create the empty file as a flag
+//     Ok(())
+// }
+
+
+fn extract_ipv4_addresses(table: &toml::map::Map<String, Value>, key: &str) -> Result<Option<Vec<Ipv4Addr>>, ThisProjectError> {
+    if let Some(Value::Array(arr)) = table.get(key) {
+        let mut addresses = Vec::new();
+        for val in arr {
+            if let Value::String(s) = val {
+                match s.parse::<Ipv4Addr>() {
+                    Ok(ip) => addresses.push(ip),
+                    Err(e) => return Err(ThisProjectError::TomlVanillaDeserialStrError(format!("Invalid {} format: {}. Skipping this address.", key, e))),
+                }
+            } else {
+                return Err(ThisProjectError::TomlVanillaDeserialStrError(format!("Invalid {} format: Expected string. Skipping this address.", key)));
+            }
+        }
+
+        if addresses.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(addresses))
+        }
+    } else {
+        Ok(None)
+    }
+}
+
+fn extract_ipv6_addresses(table: &toml::map::Map<String, Value>, key: &str) -> Result<Option<Vec<Ipv6Addr>>, ThisProjectError> {
+    if let Some(Value::Array(arr)) = table.get(key) {
+        let mut addresses = Vec::new();
+        for val in arr {
+            if let Value::String(s) = val {
+                match s.parse::<Ipv6Addr>() {
+                    Ok(ip) => addresses.push(ip),
+                    Err(e) => return Err(ThisProjectError::TomlVanillaDeserialStrError(format!("Invalid {} format: {}. Skipping this address.", key, e))),
+                }
+            } else {
+                return Err(ThisProjectError::TomlVanillaDeserialStrError(format!("Invalid {} format: Expected string. Skipping this address.", key)));
+            }
+        }
+
+        if addresses.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(addresses))
+        }
+    } else {
+        Ok(None)
+    }
+}
+
+
+
+// Helper function to extract a u64 from a toml::Value::Table
+/// Extracts a `u64` value from a `toml::Value::Table` for a given key.
+///
+/// This helper function attempts to extract a `u64` value associated with the
+/// specified `key` from a `toml::map::Map` (representing a TOML table). It
+/// handles cases where the key is missing, the value is not an integer, or
+/// the integer value is outside the valid range for a `u64`.
+///
+/// # Parameters
+///
+/// - `table`: A reference to the `toml::map::Map` (TOML table) from which to extract the value.
+/// - `key`: The key (as a string slice) associated with the value to extract.
+/// - `errors`: A mutable reference to a vector of `ThisProjectError` to collect any errors encountered during extraction.
+///
+/// # Error Handling
+///
+/// The function uses a `Result` type to handle potential errors. It returns:
+///
+/// - `Ok(u64)`: If the key is found and the value can be successfully parsed as a `u64`.
+/// - `Err(ThisProjectError)`: If:
+///     - The key is missing from the table.
+///     - The value associated with the key is not a `toml::Value::Integer`.
+///     - The integer value is negative or exceeds the maximum value of a `u64`.
+///
+/// In case of errors, a descriptive error message is added to the `errors` vector.
+///
+/// # Example
+///
+/// ```rust
+/// use toml::Value;
+///
+/// let mut errors = Vec::new();
+/// let mut table = toml::map::Map::new();
+/// table.insert("my_key".to_string(), Value::Integer(12345));
+///
+/// let my_value = extract_u64(&table, "my_key", &mut errors);
+///
+/// assert_eq!(my_value.unwrap(), 12345);
+/// assert!(errors.is_empty()); // No errors
+/// ```
+// Helper function to extract a u64 from a toml::Value::Table
+fn extract_u64(table: &toml::map::Map<String, Value>, key: &str) -> Result<u64, ThisProjectError> {
+    if let Some(Value::Integer(i)) = table.get(key) {
+        if *i >= 0 && *i <= i64::MAX {
+            Ok(*i as u64)
+        } else {
+            Err(ThisProjectError::TomlVanillaDeserialStrError(format!("Invalid {}: Out of range for u64", key)))
+        }
+    } else {
+        Err(ThisProjectError::TomlVanillaDeserialStrError(format!("Missing or invalid {}", key)))
+    }
+}

@@ -269,6 +269,45 @@ src/read_toml_field.rs
 
 */
 
+/*
+
+// Get armored public key, using key-id (full fingerprint in)
+let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+    Ok(fingerprint) => fingerprint,
+    Err(e) => {
+        // Since the function returns Result<CoreNode, String>, we need to return a String error
+        return Err(format!(
+            "implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}",
+            e
+        ).into());
+    }
+};
+
+// code from load_core_node...()
+// Get the UME temp directory path with proper GpgError conversion
+let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
+    .map_err(|io_err| GpgError::ValidationError(
+        format!("Failed to get UME temp directory path: {}", io_err)
+    ))?;
+
+// Using Debug trait for more detailed error information
+let node_readcopy_path = get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
+    &node_toml_path,
+    &gpg_full_fingerprint_key_id_string,
+    &base_uma_temp_directory_path,
+).map_err(|e| format!("Failed to get temporary read copy of TOML file: {:?}", e))?;
+
+or
+
+// Using Debug trait for more detailed error information
+let node_readcopy_path = get_pathstring_to_temp_plaintoml_verified_extracted(
+    &node_toml_path,
+    &gpg_full_fingerprint_key_id_string,
+    &base_uma_temp_directory_path,
+).map_err(|e| format!("Failed to get temporary read copy of TOML file: {:?}", e))?;
+
+*/
+
 // Set debug flag (future: add time stamp with 24 check)
 const DEBUG_FLAG: bool = true;
 const MAX_NETWORK_TYPE_LENGTH: usize = 1024; // Example: 1KB limit
@@ -367,6 +406,7 @@ toml crates
 mod clearsign_toml_module;
 use crate::clearsign_toml_module::{
     GpgError,
+    read_string_array_field_from_toml,
     convert_tomlfile_without_keyid_using_gpgtomlkeyid_into_clearsigntoml_inplace,
     verify_clearsign,
     convert_toml_filewithkeyid_into_clearsigntoml_inplace,
@@ -2509,107 +2549,6 @@ fn read_one_collaborator_addressbook_toml(
     })
 }
 
-fn extract_ipv4_addresses(table: &toml::map::Map<String, Value>, key: &str) -> Result<Option<Vec<Ipv4Addr>>, ThisProjectError> {
-    if let Some(Value::Array(arr)) = table.get(key) {
-        let mut addresses = Vec::new();
-        for val in arr {
-            if let Value::String(s) = val {
-                match s.parse::<Ipv4Addr>() {
-                    Ok(ip) => addresses.push(ip),
-                    Err(e) => return Err(ThisProjectError::TomlVanillaDeserialStrError(format!("Invalid {} format: {}. Skipping this address.", key, e))),
-                }
-            } else {
-                return Err(ThisProjectError::TomlVanillaDeserialStrError(format!("Invalid {} format: Expected string. Skipping this address.", key)));
-            }
-        }
-
-        if addresses.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(addresses))
-        }
-    } else {
-        Ok(None)
-    }
-}
-
-fn extract_ipv6_addresses(table: &toml::map::Map<String, Value>, key: &str) -> Result<Option<Vec<Ipv6Addr>>, ThisProjectError> {
-    if let Some(Value::Array(arr)) = table.get(key) {
-        let mut addresses = Vec::new();
-        for val in arr {
-            if let Value::String(s) = val {
-                match s.parse::<Ipv6Addr>() {
-                    Ok(ip) => addresses.push(ip),
-                    Err(e) => return Err(ThisProjectError::TomlVanillaDeserialStrError(format!("Invalid {} format: {}. Skipping this address.", key, e))),
-                }
-            } else {
-                return Err(ThisProjectError::TomlVanillaDeserialStrError(format!("Invalid {} format: Expected string. Skipping this address.", key)));
-            }
-        }
-
-        if addresses.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(addresses))
-        }
-    } else {
-        Ok(None)
-    }
-}
-
-// Helper function to extract a u64 from a toml::Value::Table
-/// Extracts a `u64` value from a `toml::Value::Table` for a given key.
-///
-/// This helper function attempts to extract a `u64` value associated with the
-/// specified `key` from a `toml::map::Map` (representing a TOML table). It
-/// handles cases where the key is missing, the value is not an integer, or
-/// the integer value is outside the valid range for a `u64`.
-///
-/// # Parameters
-///
-/// - `table`: A reference to the `toml::map::Map` (TOML table) from which to extract the value.
-/// - `key`: The key (as a string slice) associated with the value to extract.
-/// - `errors`: A mutable reference to a vector of `ThisProjectError` to collect any errors encountered during extraction.
-///
-/// # Error Handling
-///
-/// The function uses a `Result` type to handle potential errors. It returns:
-///
-/// - `Ok(u64)`: If the key is found and the value can be successfully parsed as a `u64`.
-/// - `Err(ThisProjectError)`: If:
-///     - The key is missing from the table.
-///     - The value associated with the key is not a `toml::Value::Integer`.
-///     - The integer value is negative or exceeds the maximum value of a `u64`.
-///
-/// In case of errors, a descriptive error message is added to the `errors` vector.
-///
-/// # Example
-///
-/// ```rust
-/// use toml::Value;
-///
-/// let mut errors = Vec::new();
-/// let mut table = toml::map::Map::new();
-/// table.insert("my_key".to_string(), Value::Integer(12345));
-///
-/// let my_value = extract_u64(&table, "my_key", &mut errors);
-///
-/// assert_eq!(my_value.unwrap(), 12345);
-/// assert!(errors.is_empty()); // No errors
-/// ```
-// Helper function to extract a u64 from a toml::Value::Table
-fn extract_u64(table: &toml::map::Map<String, Value>, key: &str) -> Result<u64, ThisProjectError> {
-    if let Some(Value::Integer(i)) = table.get(key) {
-        if *i >= 0 && *i <= i64::MAX {
-            Ok(*i as u64)
-        } else {
-            Err(ThisProjectError::TomlVanillaDeserialStrError(format!("Invalid {}: Out of range for u64", key)))
-        }
-    } else {
-        Err(ThisProjectError::TomlVanillaDeserialStrError(format!("Missing or invalid {}", key)))
-    }
-}
-
 /// Extracts the `updated_at_timestamp` from TOML data.
 ///
 /// This function takes a byte slice containing TOML data and attempts to extract
@@ -4346,6 +4285,9 @@ pub fn generate_pairwise_port_assignments(
     collaborators: &[String],
     exclusion_list: &HashSet<u16>,
 ) -> Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, ThisProjectError> {
+
+    debug_log("GPPA Staring generate_pairwise_port_assignments");
+
     println!("\n=== Generating Pairwise Port Assignments ===");
 
     let mut port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>> = HashMap::new();
@@ -4455,7 +4397,7 @@ pub fn generate_pairwise_port_assignments(
                 collaborator2, ready_port2, intray_port2, gotit_port2);
 
             debug_log!(
-                "generate_pairwise_port_assignments: Pair '{}' assigned 6 ports",
+                "GPPA: Pair '{}' assigned 6 ports",
                 pair_name
             );
         }
@@ -4464,7 +4406,7 @@ pub fn generate_pairwise_port_assignments(
     // Final verification - ensure no local collisions
     if local_used_ports.len() != (total_pairs * 6) as usize {
         let error_msg = format!(
-            "CRITICAL: Local port collision detected! Expected {} unique ports but got {}",
+            "GPPA error CRITICAL: Local port collision detected! Expected {} unique ports but got {}",
             total_pairs * 6,
             local_used_ports.len()
         );
@@ -15334,26 +15276,26 @@ fn q_and_a_get_message_post_int_string_ranges() -> Result<Option<Vec<(i32, i32)>
             // Validate that we have exactly 2 parts
             if parts.len() != 2 {
                 return Err(ThisProjectError::InvalidInput(
-                    format!("Invalid range format: '{}'. Expected format: 'min-max'", trimmed)
+                    format!("q_and_a_get_message_post_int_string_ranges error Invalid range format: '{}'. Expected format: 'min-max'", trimmed)
                 ));
             }
 
             // Parse minimum value
             let min = parts[0].parse::<i32>()
                 .map_err(|_| ThisProjectError::InvalidInput(
-                    format!("Invalid minimum value: '{}'", parts[0])
+                    format!("q_and_a_get_message_post_int_string_ranges error Invalid minimum value: '{}'", parts[0])
                 ))?;
 
             // Parse maximum value
             let max = parts[1].parse::<i32>()
                 .map_err(|_| ThisProjectError::InvalidInput(
-                    format!("Invalid maximum value: '{}'", parts[1])
+                    format!("q_and_a_get_message_post_int_string_ranges error Invalid maximum value: '{}'", parts[1])
                 ))?;
 
             // Validate that min <= max
             if min > max {
                 return Err(ThisProjectError::InvalidInput(
-                    format!("Minimum {} is greater than maximum {}", min, max)
+                    format!("q_and_a_get_message_post_int_string_ranges error Minimum {} is greater than maximum {}", min, max)
                 ));
             }
 
@@ -15362,7 +15304,7 @@ fn q_and_a_get_message_post_int_string_ranges() -> Result<Option<Vec<(i32, i32)>
             // Handle single integer (e.g., "5" becomes "5-5")
             let single_value = trimmed.parse::<i32>()
                 .map_err(|_| ThisProjectError::InvalidInput(
-                    format!("Invalid integer value: '{}'", trimmed)
+                    format!("q_and_a_get_message_post_int_string_ranges error Invalid integer value: '{}'", trimmed)
                 ))?;
 
             // Add as a range where min equals max
@@ -25292,72 +25234,6 @@ fn get_active_collaborator_names() -> Result<Vec<String>, ThisProjectError> {
     }
 }
 
-/// depricated...this saves a name...
-/// Adds a file path to the send queue for all active collaborators in a team channel.
-///
-/// This function creates a new file containing the file path to be sent. The file is placed in a directory structure under `sync_data`,
-/// specifically `sync_data/{team_channel_name}/sendqueue_updates/FILENAME.txt
-/// The timestamp is used to ensure unique filenames and can be used for ordering or managing updates.
-///
-/// # Arguments
-///
-/// * `team_channel_name`: The name of the team channel.
-/// * `collaborator_name`: The name of the collaborator.
-/// * `file_path`: The path to the file to be added to the queue.
-///
-/// # Returns
-///
-/// * `Result<(), ThisProjectError>`: `Ok(())` on success, or a `ThisProjectError` if an error occurs.
-fn save_updateflag_path_for_sendqueue(
-    team_channel_name: &str,
-    file_path: &PathBuf, // Take PathBuf directly
-) -> Result<(), ThisProjectError> {
-
-    debug_log!(
-        "save_updateflag_path_for_sendqueue: team: {:?}, path: {:?}",
-        team_channel_name,
-        file_path,
-    );
-
-    // Get active collaborator names
-    let active_collaborators = match get_active_collaborator_names() {
-        Ok(names) => names,
-        Err(e) => {
-            debug_log!("Error getting active collaborators: {}", e);
-            return Err(e); // Or handle error differently
-        }
-    };
-
-    // 1. Convert hashes to hex string
-    // remove_non_alphanumeric
-    let filename_for_updateflag = remove_non_alphanumeric(&file_path.to_string_lossy().to_string());
-
-    // Use the active_collaborators list to determine which queue updates to save
-    for this_iter_collaborator_name in active_collaborators {
-        // Construct the update flag path for this specific collaborator
-        // and save the update flag
-
-        // 2. Construct Directory Path (using PathBuf)
-        let mut queue_dir = PathBuf::from("sync_data");
-        queue_dir.push(team_channel_name);
-        queue_dir.push("sendqueue_updates");
-        queue_dir.push(this_iter_collaborator_name);
-
-        // 3. Create Directory (if needed)
-        create_dir_all(&queue_dir)?;
-
-        // 4. Construct File Path (within directory, with filename_for_updateflag)
-        let queue_file = queue_dir.join(format!("{}.txt", filename_for_updateflag));
-
-        // 5. Write Filepath to Queue File (convert PathBuf to String, handle potential errors)
-        let file_path_string = file_path.to_string_lossy().to_string();
-        write(queue_file, file_path_string)?;
-    }
-
-    debug_log!("File path added to send queue: {:?}", file_path);
-    Ok(())
-}
-
 // /// Saves data to a file with a filename derived from a hash array.
 // ///
 // /// This function saves a stub file (named file with no contents) within the specified `directory`.  The filename
@@ -25410,7 +25286,7 @@ fn hash_checker_for_sendfile_struct(
     // 1. Fail by default
     let mut all_hashes_match = false; // Initialize to false (Fail by default)
 
-    debug_log!("hash_checker_for_sendfile_struct(): Starting verification...");
+    debug_log!("HCFSS hash_checker_for_sendfile_struct(): Starting verification...");
 
     // 2. Calculate expected hashes
     let calculated_hashes_result = hash_sendfile_struct_fields(salt_list, intray_send_time, gpg_encrypted_intray_file);
@@ -25419,73 +25295,30 @@ fn hash_checker_for_sendfile_struct(
         Ok(calculated_hashes) => {
             // 3. Length Check
             if calculated_hashes.len() != compare_to_this_hashvec.len() {
-                debug_log!("hash_checker_for_sendfile_struct(): Hash list length mismatch. Expected: {}, Received: {}", calculated_hashes.len(), compare_to_this_hashvec.len());
+                debug_log!("HCFSS hash_checker_for_sendfile_struct(): Hash list length mismatch. Expected: {}, Received: {}", calculated_hashes.len(), compare_to_this_hashvec.len());
             } else {
                 // 4. Compare hashes one by one
                 all_hashes_match = true; // Assume they match initially
                 for (i, &calculated_hash) in calculated_hashes.iter().enumerate() {
                     if calculated_hash != compare_to_this_hashvec[i] {
-                        debug_log!("hash_checker_for_sendfile_struct(): Hash mismatch at index {}. Expected: {:02x}, Received: {:02x}", i, calculated_hash, compare_to_this_hashvec[i]);
+                        debug_log!("HCFSS hash_checker_for_sendfile_struct(): Hash mismatch at index {}. Expected: {:02x}, Received: {:02x}", i, calculated_hash, compare_to_this_hashvec[i]);
                         all_hashes_match = false;
                         break;
                     }
                 }
                 if all_hashes_match {
-                    debug_log!("hash_checker_for_sendfile_struct(): All hashes match.");
+                    debug_log!("HCFSS hash_checker_for_sendfile_struct(): All hashes match.");
                 }
             }
         },
         Err(e) => {
-             debug_log!("hash_checker_for_sendfile_struct():  Error calculating hashes: {:?}. Returning false.", e);
+             debug_log!("HCFSS error hash_checker_for_sendfile_struct():  Error calculating hashes: {:?}. Returning false.", e);
         },
     }
-    debug_log!("hash_checker_for_sendfile_struct(): Verification completed. Result: {}", all_hashes_match);
+    debug_log!("HCFSS hash_checker_for_sendfile_struct(): Verification completed. Result: {}", all_hashes_match);
 
     all_hashes_match
 }
-
-
-// /// Saves a "pre-fail" flag file (an empty file used as a marker).
-// ///
-// /// This function creates an empty file within the `sync_data` directory to serve as a "pre-fail"
-// /// flag.  The file's name is derived from the provided `hash_array`, and its presence indicates
-// /// that a file send attempt is in progress (and assumed to have failed unless explicitly cleared).
-// /// The directory structure is as follows:  `sync_data/{team_channel_name}/fail_retry_flags/{remote_collaborator_name}/{doc_id}`
-// ///
-// /// # Arguments
-// ///
-// /// * `hash_array`: A slice of `u8` values used to generate the filename (doc_id).
-// /// * `remote_collaborator_name`: The name of the remote collaborator associated with the flag.
-// ///
-// /// # Returns
-// ///
-// /// * `Result<(), ThisProjectError>`:  `Ok(())` if the flag file is successfully created, or a `ThisProjectError`
-// ///   if an error occurs (e.g., during file creation or directory creation).
-// ///
-// fn set_prefail_flag_rt_timestamp__for_sendfile(
-//     rt_timestamp: u64,
-//     remote_collaborator_name: &str,
-// ) -> Result<(), ThisProjectError> {
-//     // let doc_id = docid__hash_array_to_hex_string(hash_array);
-
-//     let team_channel_name = get_current_team_channel_name_from_nav_path()
-//         .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
-
-//     let mut file_path = PathBuf::from("sync_data"); // Use PathBuf not format!()
-//     file_path.push(&team_channel_name);
-//     file_path.push("fail_retry_flags");
-//     file_path.push(remote_collaborator_name);
-//     create_dir_all(&file_path)?; // Create the directory structure if it doesn't exist
-
-//     // TODO string of u64
-//     let string_of_rt = rt_timestamp.to_string();
-
-//     file_path.push(string_of_rt);
-//     File::create(file_path)?; // Create the empty file as a flag
-//     Ok(())
-// }
-
-
 
 /// Extracts the `updated_at_timestamp` field from a TOML file.
 ///
@@ -25545,6 +25378,125 @@ fn get_updated_at_timestamp_from_toml_file(file_path: &Path) -> Result<u64, This
     Ok(updated_at_timestamp) // Return the timestamp if successful
 }
 
+/// Retrieves the .rt timestamp from the oldest pre-fail flag file.
+///
+/// Iterates through the `fail_retry_flags` directory, finds the oldest file (based on filename, which is the `updated_at` timestamp),
+/// reads the `.rt` timestamp (the file content) from that oldest file, and returns it.
+/// Deletes all flag files after reading the oldest timestamp, ensuring flags are processed only once.
+/// Returns 0 if no flags are found or if an error occurs during file operations.
+///
+/// Directory structure: `sync_data/{team_channel_name}/fail_retry_flags/{remote_collaborator_name}/{file_updated_at_timestamp}`
+///
+/// # Arguments
+///
+/// * `remote_collaborator_name`: The name of the remote collaborator.
+///
+/// # Returns
+///
+/// * `Result<u64, ThisProjectError>`: The `.rt` timestamp from the oldest flag file (or 0) on success, or a `ThisProjectError`.
+fn get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(
+    remote_collaborator_name: &str,
+) -> Result<u64, ThisProjectError> {
+    // #[cfg(debug_assertions)]
+    debug_log("GOSPrtT: get_oldest prefail: starting get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup()");
+
+    let mut oldest_timestamp = 0u64;
+    let mut oldest_file_path: Option<PathBuf> = None; // Store path to the oldest file
+
+    // #[cfg(debug_assertions)]
+    debug_log("GOSPrtT: calling get_current_team_channel_name_from_nav_path...");
+
+    let team_channel_name = get_current_team_channel_name_from_nav_path()
+        .ok_or(ThisProjectError::InvalidData("get_oldest prefail... Unable to get team channel name".into()))?;
+
+    let prefail_directory = PathBuf::from("sync_data")
+        .join(&team_channel_name)
+        .join("fail_retry_flags")
+        .join(remote_collaborator_name);
+
+    if !prefail_directory.exists() {
+
+        // #[cfg(debug_assertions)]
+        debug_log!(
+            "GOSPrtT: get_oldest...: Directory {:?} not found. Returning 0.",
+            prefail_directory
+        );
+        return Ok(0);
+    }
+
+    // 1. Find the oldest file:
+    for entry in fs::read_dir(&prefail_directory)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        // #[cfg(debug_assertions)]
+        debug_log!(
+            "GOSPrtT: get_oldest prefail... path -> {:?}",
+            path
+        );
+
+        if path.is_file() {
+            let file_name = path.file_name().and_then(|n| n.to_str()).ok_or(ThisProjectError::InvalidData("GOSPrtT error: Invalid flag file name".into()))?;
+            let file_updated_at: u64 = file_name.parse().map_err(|_| ThisProjectError::InvalidData("GOSPrtT error: Invalid timestamp in flag file name".into()))?;
+
+            if oldest_file_path.is_none() || file_updated_at < oldest_timestamp {
+                oldest_timestamp = file_updated_at;
+                oldest_file_path = Some(path.clone()); //Store the path
+            }
+        }
+    }
+
+    // 2. Read .rt timestamp from the oldest file (if found):
+    if let Some(path) = oldest_file_path {
+        match fs::read_to_string(&path) { // Read content (rt timestamp)
+            Ok(content) => {
+                oldest_timestamp = content.trim().parse().map_err(|_| ThisProjectError::InvalidData("Invalid .rt timestamp in flag file".into()))?;
+
+                // #[cfg(debug_assertions)]
+                debug_log!("GOSPrtT: get_oldest prefail: Oldest .rt timestamp found: {}", oldest_timestamp);
+            },
+            Err(e) => {
+                // #[cfg(debug_assertions)]
+                debug_log!("GOSPrtT error: get_oldest prefail: Error reading .rt timestamp from file {:?}: {}", path, e);
+                return Err(ThisProjectError::from(e));
+            }
+        }
+        // 3. Delete oldest flag
+        // TODO alpha version: remove only oldest flag
+        match fs::read_to_string(&path) { // Read content (rt timestamp)
+            Ok(pathtemp) => {
+                if let Err(e) = fs::remove_file(pathtemp) { // Use &path
+                    // #[cfg(debug_assertions)]
+                    debug_log!(
+                        "GOSPrtT error: get_oldest prefail: Error removing oldest_file_path flag file {:?}: {}",
+                        path,
+                        e);
+                    return Err(ThisProjectError::from(e)); // Or handle error as needed
+                }
+            },
+            Err(e) => {
+                // #[cfg(debug_assertions)]
+                debug_log!("GOSPrtT error: get_oldest prefail: Error in remove_file {:?}: {}", path, e);
+                return Err(ThisProjectError::from(e));
+            }
+        }
+
+        // for entry in fs::read_dir(&prefail_directory)? {
+        //     let entry = entry?;
+        //     let path = entry.path();
+        //     if path.is_file() {
+        //         if let Err(e) = fs::remove_file(&path) { // Use &path
+        //             debug_log!("get_oldest prefail: Error removing flag file {:?}: {}", path, e);
+        //             return Err(ThisProjectError::from(e)); // Or handle error as needed
+        //         }
+        //     }
+
+    }
+
+    Ok(oldest_timestamp)
+}
+
+
 /// Sets a "pre-fail" flag file.  The filename is the file's `updated_at` timestamp.
 /// The file content is the ReadySignal's `.rt` timestamp.
 ///
@@ -25598,170 +25550,6 @@ fn set_prefail_flag_rt_timestamp__for_sendfile(
     Ok(())
 }
 
-/// Retrieves the .rt timestamp from the oldest pre-fail flag file.
-///
-/// Iterates through the `fail_retry_flags` directory, finds the oldest file (based on filename, which is the `updated_at` timestamp),
-/// reads the `.rt` timestamp (the file content) from that oldest file, and returns it.
-/// Deletes all flag files after reading the oldest timestamp, ensuring flags are processed only once.
-/// Returns 0 if no flags are found or if an error occurs during file operations.
-///
-/// Directory structure: `sync_data/{team_channel_name}/fail_retry_flags/{remote_collaborator_name}/{file_updated_at_timestamp}`
-///
-/// # Arguments
-///
-/// * `remote_collaborator_name`: The name of the remote collaborator.
-///
-/// # Returns
-///
-/// * `Result<u64, ThisProjectError>`: The `.rt` timestamp from the oldest flag file (or 0) on success, or a `ThisProjectError`.
-fn get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(
-    remote_collaborator_name: &str,
-) -> Result<u64, ThisProjectError> {
-    debug_log("get_oldest prefail: starting get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup()");
-    let mut oldest_timestamp = 0u64;
-    let mut oldest_file_path: Option<PathBuf> = None; // Store path to the oldest file
-
-    let team_channel_name = get_current_team_channel_name_from_nav_path()
-        .ok_or(ThisProjectError::InvalidData("get_oldest prefail... Unable to get team channel name".into()))?;
-
-    let prefail_directory = PathBuf::from("sync_data")
-        .join(&team_channel_name)
-        .join("fail_retry_flags")
-        .join(remote_collaborator_name);
-
-    if !prefail_directory.exists() {
-        debug_log!(
-            "get_oldest...: Directory {:?} not found. Returning 0.",
-            prefail_directory
-        );
-        return Ok(0);
-    }
-
-    // 1. Find the oldest file:
-    for entry in fs::read_dir(&prefail_directory)? {
-        let entry = entry?;
-        let path = entry.path();
-
-        debug_log!(
-            "get_oldest prefail... path -> {:?}",
-            path
-        );
-
-        if path.is_file() {
-            let file_name = path.file_name().and_then(|n| n.to_str()).ok_or(ThisProjectError::InvalidData("Invalid flag file name".into()))?;
-            let file_updated_at: u64 = file_name.parse().map_err(|_| ThisProjectError::InvalidData("Invalid timestamp in flag file name".into()))?;
-
-            if oldest_file_path.is_none() || file_updated_at < oldest_timestamp {
-                oldest_timestamp = file_updated_at;
-                oldest_file_path = Some(path.clone()); //Store the path
-            }
-        }
-    }
-
-    // 2. Read .rt timestamp from the oldest file (if found):
-    if let Some(path) = oldest_file_path {
-        match fs::read_to_string(&path) { // Read content (rt timestamp)
-            Ok(content) => {
-                oldest_timestamp = content.trim().parse().map_err(|_| ThisProjectError::InvalidData("Invalid .rt timestamp in flag file".into()))?;
-                debug_log!("get_oldest prefail: Oldest .rt timestamp found: {}", oldest_timestamp);
-            },
-            Err(e) => {
-                debug_log!("get_oldest prefail: Error reading .rt timestamp from file {:?}: {}", path, e);
-                return Err(ThisProjectError::from(e));
-            }
-        }
-        // 3. Delete oldest flag
-        // TODO alpha version: remove only oldest flag
-        match fs::read_to_string(&path) { // Read content (rt timestamp)
-            Ok(pathtemp) => {
-                if let Err(e) = fs::remove_file(pathtemp) { // Use &path
-                    debug_log!(
-                        "get_oldest prefail: Error removing oldest_file_path flag file {:?}: {}",
-                        path,
-                        e);
-                    return Err(ThisProjectError::from(e)); // Or handle error as needed
-                }
-            },
-            Err(e) => {
-                debug_log!("get_oldest prefail: Error in remove_file {:?}: {}", path, e);
-                return Err(ThisProjectError::from(e));
-            }
-        }
-
-        // for entry in fs::read_dir(&prefail_directory)? {
-        //     let entry = entry?;
-        //     let path = entry.path();
-        //     if path.is_file() {
-        //         if let Err(e) = fs::remove_file(&path) { // Use &path
-        //             debug_log!("get_oldest prefail: Error removing flag file {:?}: {}", path, e);
-        //             return Err(ThisProjectError::from(e)); // Or handle error as needed
-        //         }
-        //     }
-
-    }
-
-    Ok(oldest_timestamp)
-}
-
-/// Removes a specific pre-fail flag file based on its ID (timestamp).
-/// currently gotit sign di (doc id) is the updated-at time of the file
-///
-/// This function attempts to remove the flag file located at:
-/// `sync_data/{team_channel_name}/fail_retry_flags/{remote_collaborator_name}/{di_flag_id}`.
-/// It returns an `Ok(())` if the file is successfully removed or if the file
-/// doesn't exist (which isn't considered an error in this context, as the goal is
-/// simply to ensure the flag is *not* present). It returns an error only if a file
-/// operation other than `NotFound` occurs.
-///
-/// # Arguments
-///
-/// * `di_flag_id`: The document ID (timestamp) used as the flag file name.
-/// * `remote_collaborator_name`: The remote collaborator's name.
-/// * `team_channel_name`: The team channel name.
-///
-/// # Returns
-///
-/// * `Result<(), ThisProjectError>`: `Ok(())` on successful removal or if the
-/// file doesn't exist, or a `ThisProjectError` on other file operation errors.
-fn remove_one_prefail_flag__for_sendfile(
-    di_flag_id: u64,         // Use u64 directly, as the flag ID comes from a u64 timestamp.
-    remote_collaborator_name: &str, // Use &str for efficiency
-    team_channel_name: &str,   // Use &str for efficiency
-) -> Result<(), ThisProjectError> {
-
-    let mut flag_file_path = PathBuf::from("sync_data")
-        .join(team_channel_name)
-        .join("fail_retry_flags")
-        .join(remote_collaborator_name);
-
-    if !flag_file_path.exists() { // Check for existance
-        return Ok(()); //
-    }
-
-    flag_file_path.push(di_flag_id.to_string());  // Use di_flag_id directly
-
-    match remove_file(flag_file_path) {
-        Ok(_) => {
-            debug_log!(
-                "remove_one_prefail_flag__for_sendfile(): Successfully removed flag with id: {}",
-                di_flag_id
-            );
-            Ok(())
-        }
-        Err(e) if e.kind() == ErrorKind::NotFound => {
-            debug_log!("remove_one_prefail_flag__for_sendfile(): Flag file not found: {}", di_flag_id);
-            Ok(()) // Not an error if the file isn't found.
-        }
-        Err(e) => {
-            debug_log!("remove_one_prefail_flag__for_sendfile(): Error removing flag file: {}", e);
-            Err(ThisProjectError::IoError(e))  // Return other errors
-        }
-    }
-}
-
-
-
-
 /// Removes all pre-fail flag files for a remote collaborator.
 ///
 /// This function removes all files within the fail_retry_flags directory for the
@@ -25810,14 +25598,6 @@ fn remove_prefail_flags__for_sendfile(
     Ok(())
 }
 
-// let timestamp_request_port = // ... port for sending "ready to receive" to collaborator
-// let file_receive_port = // ...  port for receiving files from collaborator
-// let receipt_confirmation_port = // ... port for sending confirmations to collaborator
-fn send_data(data: &[u8], target_addr: SocketAddr) -> Result<(), io::Error> {
-    let socket = UdpSocket::bind(":::0")?;
-    socket.send_to(data, target_addr)?;
-    Ok(())
-}
 
 /// Gets the latest received file timestamp for a collaborator in a team channel, using a plain text file.
 ///
@@ -25892,6 +25672,71 @@ fn read_latestreceivedfromme_file_timestamp_plaintextstatefile(
         }
         Err(e) => Err(ThisProjectError::IoError(e)), // Other IO errors
     }
+}
+
+/// Removes a specific pre-fail flag file based on its ID (timestamp).
+/// currently gotit sign di (doc id) is the updated-at time of the file
+///
+/// This function attempts to remove the flag file located at:
+/// `sync_data/{team_channel_name}/fail_retry_flags/{remote_collaborator_name}/{di_flag_id}`.
+/// It returns an `Ok(())` if the file is successfully removed or if the file
+/// doesn't exist (which isn't considered an error in this context, as the goal is
+/// simply to ensure the flag is *not* present). It returns an error only if a file
+/// operation other than `NotFound` occurs.
+///
+/// # Arguments
+///
+/// * `di_flag_id`: The document ID (timestamp) used as the flag file name.
+/// * `remote_collaborator_name`: The remote collaborator's name.
+/// * `team_channel_name`: The team channel name.
+///
+/// # Returns
+///
+/// * `Result<(), ThisProjectError>`: `Ok(())` on successful removal or if the
+/// file doesn't exist, or a `ThisProjectError` on other file operation errors.
+fn remove_one_prefail_flag__for_sendfile(
+    di_flag_id: u64,         // Use u64 directly, as the flag ID comes from a u64 timestamp.
+    remote_collaborator_name: &str, // Use &str for efficiency
+    team_channel_name: &str,   // Use &str for efficiency
+) -> Result<(), ThisProjectError> {
+
+    let mut flag_file_path = PathBuf::from("sync_data")
+        .join(team_channel_name)
+        .join("fail_retry_flags")
+        .join(remote_collaborator_name);
+
+    if !flag_file_path.exists() { // Check for existance
+        return Ok(()); //
+    }
+
+    flag_file_path.push(di_flag_id.to_string());  // Use di_flag_id directly
+
+    match remove_file(flag_file_path) {
+        Ok(_) => {
+            debug_log!(
+                "remove_one_prefail_flag__for_sendfile(): Successfully removed flag with id: {}",
+                di_flag_id
+            );
+            Ok(())
+        }
+        Err(e) if e.kind() == ErrorKind::NotFound => {
+            debug_log!("remove_one_prefail_flag__for_sendfile(): Flag file not found: {}", di_flag_id);
+            Ok(()) // Not an error if the file isn't found.
+        }
+        Err(e) => {
+            debug_log!("remove_one_prefail_flag__for_sendfile(): Error removing flag file: {}", e);
+            Err(ThisProjectError::IoError(e))  // Return other errors
+        }
+    }
+}
+
+// let timestamp_request_port = // ... port for sending "ready to receive" to collaborator
+// let file_receive_port = // ...  port for receiving files from collaborator
+// let receipt_confirmation_port = // ... port for sending confirmations to collaborator
+fn send_data(data: &[u8], target_addr: SocketAddr) -> Result<(), io::Error> {
+    let socket = UdpSocket::bind(":::0")?;
+    socket.send_to(data, target_addr)?;
+    Ok(())
 }
 
 /// Gets the latest received file timestamp for a collaborator in a team channel, using a plain text file.
@@ -26467,10 +26312,10 @@ fn handle_local_owner_desk(
 
     // Clone the values
     let salt_list_1 = local_owner_desk_setup_data.local_user_salt_list.clone();
-    let salt_list_2 = local_owner_desk_setup_data.local_user_salt_list.clone();
+    // let salt_list_2 = local_owner_desk_setup_data.local_user_salt_list.clone();
 
-    let readyport_1 = local_owner_desk_setup_data.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip.clone();
-    let readyport_2 = local_owner_desk_setup_data.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip.clone();
+    // let readyport_1 = local_owner_desk_setup_data.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip.clone();
+    // let readyport_2 = local_owner_desk_setup_data.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip.clone();
     let localowner_gotit_port = local_owner_desk_setup_data.local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip.clone();
 
     let remote_collaborator_name = local_owner_desk_setup_data.remote_collaborator_name.clone();
@@ -26640,7 +26485,7 @@ fn handle_local_owner_desk(
 
         let remote_collaborator_name_for_thread_1 = remote_collaborator_name.clone();
         let remote_collaborator_name_for_thread_2 = remote_collaborator_name.clone();
-        let salt_list_1_drone_clone = salt_list_1.clone();
+        // let salt_list_1_drone_clone = salt_list_1.clone();
 
         // 1.1 check for halt/quit uma signal
         if should_halt_uma() {
@@ -26719,14 +26564,14 @@ fn handle_local_owner_desk(
         let rc_network_type_string_1 = rc_network_type_string.clone();
 
         // --- 1.5 Drone Loop to Send ReadySignals ---
-        let ready_thread = thread::spawn(move || {
+        let _ = thread::spawn(move || {
             ////////////////////////////////////
             // Drone Loop to Send ReadySignals  (hlod)
             //////////////////////////////////
             loop {
 
                 // 1.1 Wait (and check for exit Uma)  this waits and checks N times: for i in 0..N {
-                for i in 0..10 {
+                for _ in 0..10 {
                     // break for loop ?
                     if should_halt_uma() {
                         debug_log!("should_halt_uma(), exiting Uma in handle_local_owner_desk()");
@@ -26766,7 +26611,7 @@ fn handle_local_owner_desk(
                 );
 
                 // 1.3 Send Ready Signal (using a function)
-                send_ready_signal(
+                let _ = send_ready_signal(
                     &salty_the_clone_list, // local_user_salt_list: &[u128],
                     rc_network_type_string_1.clone(), // local_user_ipv4_address: &Ipv4Addr,
                     rc_ip_addr_string_1.clone(), // local_user_ipv6_address: &Ipv6Addr,
@@ -26891,7 +26736,7 @@ fn handle_local_owner_desk(
                     // --- 3.5.3 Deserialize the SendFile signal ---
                     // let incoming_intray_file_struct: SendFile = deserialize_intray_send_file_struct(&clearsigned_data)?;  // Deserialize from clearsigned data
 
-                    let mut incoming_intray_file_struct: SendFile = match deserialize_intray_send_file_struct(&buf[..amt]) {
+                    let incoming_intray_file_struct: SendFile = match deserialize_intray_send_file_struct(&buf[..amt]) {
                         Ok(incoming_intray_file_struct) => {
                             debug_log("HLOD-InTray 2.3 SendFile listener: Receive File Data...do you copy, gold leader... >*<");
 
@@ -27486,7 +27331,7 @@ fn handle_local_owner_desk(
                     };
 
                     // update state: latest received timestamp
-                    write_save_latest_received_from_rc_file_timestamp_plaintext(
+                    let _ = write_save_latest_received_from_rc_file_timestamp_plaintext(
                         &team_channel_name, // for team_channel_name
                         &local_owner_desk_setup_data.remote_collaborator_name, // for collaborator_name
                         received_file_updatedat_timestamp, // for timestamp
@@ -27507,7 +27352,7 @@ fn handle_local_owner_desk(
                     */
 
                     debug_log("7.3 HLOD-InTray: send_gotit_signal ");
-                    send_gotit_signal(
+                    let _ = send_gotit_signal(
                         &local_owner_desk_setup_data.local_user_salt_list,
                         &band_local_user_ipv4_address, // local_user_ipv4_address: &Ipv4Addr,
                         &band_local_user_ipv6_address, // local_user_ipv6_address: &Ipv6Addr,
@@ -27576,15 +27421,15 @@ fn handle_local_owner_desk(
         ////////////////////////
 
 
-    // TESTING ONLY wait, if only for testing, so thread debug prints do not ~overlap
-    thread::sleep(Duration::from_millis(100)); // Avoid busy-waiting
+        // TESTING ONLY wait, if only for testing, so thread debug prints do not ~overlap
+        thread::sleep(Duration::from_millis(100)); // Avoid busy-waiting
 
-    debug_log!(
-        "HLOD Exiting handle_local_owner_desk() for {}",
-        local_owner_desk_setup_data.local_user_name
-    ); // Add collaborator name
-    debug_log(">*< Halt signal received. Exiting The Uma. Closing... handle_local_owner_desk() |o|");
-}
+        debug_log!(
+            "HLOD Exiting handle_local_owner_desk() for {}",
+            local_owner_desk_setup_data.local_user_name
+        ); // Add collaborator name
+        debug_log(">*< Halt signal received. Exiting The Uma. Closing... handle_local_owner_desk() |o|");
+    }
 }
 
 
@@ -27685,6 +27530,8 @@ fn deserialize_ready_signal(bytes: &[u8], salt_list: &[u128]) -> Result<ReadySig
     b: u8, // Network Index (e.g. which ipv6 in the list)
     rh: Vec<u8>, // N hashes of rt + re
     */
+    // debug_log("DRS Starting deserialize_ready_signal");
+
     let timestamp_len = std::mem::size_of::<u64>();         // Length of a u64 (8 bytes)
     let band_index_len = std::mem::size_of::<u8>();           // Length of the band index (1 byte)
     let hash_list_len = salt_list.len() * std::mem::size_of::<u8>(); // Length of the hash list (4 bytes in current design: 4 salts * 1 byte/hash)
@@ -27692,7 +27539,7 @@ fn deserialize_ready_signal(bytes: &[u8], salt_list: &[u128]) -> Result<ReadySig
 
     // 2. Full Length Check
     if bytes.len() != expected_len {  // Note: Now a strict equality check
-        return Err(ThisProjectError::InvalidData(format!("Invalid byte array length for ReadySignal. Expected: {}, Received: {}", expected_len, bytes.len())));
+        return Err(ThisProjectError::InvalidData(format!("DRS error: Invalid byte array length for ReadySignal. Expected: {}, Received: {}", expected_len, bytes.len())));
     }
 
     // 3. Extract rt (receive timestamp)
@@ -27703,7 +27550,7 @@ fn deserialize_ready_signal(bytes: &[u8], salt_list: &[u128]) -> Result<ReadySig
     let rst_start = timestamp_len;
     let rst_end = rst_start + timestamp_len;
     if bytes.len() < rst_end {
-        return Err(ThisProjectError::InvalidData("Data too short for rst".into()));
+        return Err(ThisProjectError::InvalidData("DRS error: Data too short for rst".into()));
     }
     let rst_bytes = &bytes[rst_start..rst_end];
     let rst = u64::from_be_bytes(rst_bytes.try_into().map_err(|_| ThisProjectError::InvalidData("Failed to convert rst bytes to u64".into()))?);
@@ -27712,7 +27559,7 @@ fn deserialize_ready_signal(bytes: &[u8], salt_list: &[u128]) -> Result<ReadySig
     // 6. Extract b (network index) -- u8
     let b_start = rst_start + timestamp_len;
     if bytes.len() <= b_start {  // Check length *before* access
-        return Err(ThisProjectError::InvalidData("Data too short for b".into()));
+        return Err(ThisProjectError::InvalidData("DRS error: Data too short for b".into()));
     }
     let b = bytes[b_start];  // Directly access as u8
 
@@ -27720,7 +27567,7 @@ fn deserialize_ready_signal(bytes: &[u8], salt_list: &[u128]) -> Result<ReadySig
     let rh_start = b_start + 1;  // one byte for b
     let rh_end = rh_start + hash_list_len;
     if bytes.len() < rh_end {
-        return Err(ThisProjectError::InvalidData("Data too short for rh".into()));
+        return Err(ThisProjectError::InvalidData("DRS error: Data too short for rh".into()));
     }
     let rh = bytes[rh_start..rh_end].to_vec();
 
@@ -27906,11 +27753,243 @@ fn create_retry_flag(
 }
 
 fn get_absolute_team_channel_path(team_channel_name: &str) -> io::Result<PathBuf> {
-    let team_channels_dir = Path::new("project_graph_data/team_channels");
+
+    // let team_channels_dir = Path::new("project_graph_data/team_channels");
+
+    let team_channels_dir = match get_team_channels_homebase_directory_path() {
+        Ok(path) => path,
+        Err(e) => {
+            debug_log!("in get_team_channels_homebase_directory_path()-> Failed to get absolute path: {}", e);
+            return Err(e);
+        }
+    };
+
     let channel_path = team_channels_dir.join(team_channel_name);
 
     channel_path.canonicalize() // Get the absolute path
 }
+
+
+/// Safely extracts file extension as a string slice.
+///
+/// # Project Context
+/// In the UMA system, we need to distinguish between .toml and .gpgtoml files
+/// to determine if decryption is needed. This helper provides safe extension
+/// extraction without unwrap or panic.
+///
+/// # Arguments
+/// - `path` - File path to extract extension from
+///
+/// # Returns
+/// - `Some(&str)` - Extension as string slice (e.g., "toml", "gpgtoml")
+/// - `None` - No extension or invalid UTF-8
+///
+/// # Safety
+/// Returns None instead of panicking on invalid paths or non-UTF-8 extensions.
+fn get_file_extension_safe(path: &Path) -> Option<&str> {
+    path.extension()
+        .and_then(OsStr::to_str)
+}
+
+/// Prepares a readable TOML path from either .toml or .gpgtoml file.
+///
+/// # Project Context
+/// In the UMA secure collaboration system, files may be stored as:
+/// - Plain .toml files (readable directly)
+/// - Encrypted .gpgtoml files (must be decrypted to temp directory first)
+///
+/// This function abstracts that difference, always returning a path to a
+/// readable .toml file (either the original or a temporary decrypted copy).
+/// The caller can then use standard TOML reading functions on the result.
+///
+/// # Arguments
+/// - `file_path` - Original file path (may be .toml or .gpgtoml)
+/// - `extension` - File extension ("toml" or "gpgtoml")
+/// - `gpg_fingerprint` - GPG key fingerprint for decryption
+/// - `temp_dir` - Base temp directory for decrypted files
+///
+/// # Returns
+/// - `Ok(PathBuf)` - Path to readable .toml file
+/// - `Err(String)` - Decryption failed or invalid extension
+///
+/// # Error Handling
+/// Caller should skip the file and continue processing if Err is returned.
+/// This is not a fatal error - just means this particular file cannot be
+/// processed in this queue-building pass.
+///
+/// # Security Notes
+/// - Temporary decrypted files are managed by the GPG infrastructure
+/// - Cleanup of temp files is handled by that infrastructure
+/// - This function does not validate cleanup
+fn prepare_readable_toml_path(
+    file_path: &Path,
+    extension: &str,
+    gpg_fingerprint: &str,
+    temp_dir: &PathBuf,
+) -> Result<PathBuf, String> {
+    match extension {
+        "toml" => {
+            // Plain TOML file - use directly
+            Ok(file_path.to_path_buf())
+        }
+        "gpgtoml" => {
+            // Encrypted file - decrypt to temp directory
+            // Returns Result<String, _>, we need Result<PathBuf, _>
+            let temp_path_string = get_pathstring_to_temp_plaintoml_verified_extracted(
+                file_path,
+                gpg_fingerprint,
+                temp_dir,
+            )
+            .map_err(|e| format!("PRTEP: GPG decryption failed: {:?}", e))?;
+
+            // Convert String to PathBuf
+            Ok(PathBuf::from(temp_path_string))
+        }
+        _ => {
+            // Invalid extension (should not reach here due to earlier filtering)
+            Err(format!("PRTEP: Invalid extension: {}", extension))
+        }
+    }
+}
+
+
+#[cfg(test)]
+mod get_sendq_tests {
+    use super::*;
+
+    #[test]
+    fn test_get_file_extension_safe_with_toml() {
+        let path = Path::new("/path/to/file.toml");
+        let ext = get_file_extension_safe(path);
+        assert_eq!(ext, Some("toml"));
+    }
+
+    #[test]
+    fn test_get_file_extension_safe_with_gpgtoml() {
+        let path = Path::new("/path/to/file.gpgtoml");
+        let ext = get_file_extension_safe(path);
+        assert_eq!(ext, Some("gpgtoml"));
+    }
+
+    #[test]
+    fn test_get_file_extension_safe_no_extension() {
+        let path = Path::new("/path/to/file");
+        let ext = get_file_extension_safe(path);
+        assert_eq!(ext, None);
+    }
+
+    #[test]
+    fn test_get_file_extension_safe_empty_extension() {
+        let path = Path::new("/path/to/file.");
+        let ext = get_file_extension_safe(path);
+        assert_eq!(ext, Some(""));
+    }
+
+    // Note: Additional integration tests would require:
+    // - Mock TOML files
+    // - Mock GPG decryption infrastructure
+    // - Mock directory structure
+    // These should be added based on your testing infrastructure
+}
+
+/// Checks if a file qualifies for the send queue using incremental field reads.
+///
+/// # Project Context
+/// In the UMA send-queue system, files are sent to collaborators based on
+/// a three-tier qualification system:
+///
+/// 1. **Ownership**: File must be owned by the local user (security boundary)
+/// 2. **Access Control**: Remote collaborator must be in the access list (permissions)
+/// 3. **Freshness**: File must be newer than last successful send (efficiency)
+///
+/// This function implements these checks in order, stopping as soon as any
+/// check fails (defensive programming + efficiency). We never read more data
+/// from a file than necessary to make the qualification decision.
+///
+/// # Read Order (stops on first failure)
+/// 1. Read "owner" field only → if no match, stop (don't read more)
+/// 2. Read "teamchannel_collaborators_with_access" → if not in list, stop
+/// 3. Read "updated_at_timestamp" → if too old, stop
+/// 4. If all pass → return Ok(true)
+///
+/// # Arguments
+/// - `readable_toml_path` - Path to readable .toml file (plain or decrypted)
+/// - `localowneruser_name` - Expected owner name
+/// - `remote_collaborator_name` - Collaborator to check access for
+/// - `timestamp_threshold` - Minimum timestamp for inclusion
+///
+/// # Returns
+/// - `Ok(true)` - File qualifies, should be added to queue
+/// - `Ok(false)` - File doesn't qualify (not an error, just doesn't match criteria)
+/// - `Err(String)` - File is malformed/unreadable (caller should skip file)
+///
+/// # Error Handling
+/// A return of `Ok(false)` is not an error - it simply means the file doesn't
+/// meet the criteria (e.g., owned by different user, collaborator not on list).
+/// Only `Err` indicates the file itself has a problem (missing fields, parse errors).
+///
+/// # Performance
+/// Incremental reading means:
+/// - If owner doesn't match, we never read the collaborators array
+/// - If collaborator not in list, we never read the timestamp
+/// - Minimum I/O for disqualified files
+fn check_file_qualifications(
+    readable_toml_path: &PathBuf,
+    localowneruser_name: &str,
+    remote_collaborator_name: &str,
+    timestamp_threshold: u64,
+) -> Result<bool, String> {
+    // Convert PathBuf to &str for TOML reading functions
+    let toml_path_str = readable_toml_path
+        .to_str()
+        .ok_or_else(|| "CFQUAL: Path conversion to string failed".to_string())?;
+
+    // =================================================
+    // Check 1: Owner must match local user
+    // =================================================
+
+    let owner = read_single_line_string_field_from_toml(toml_path_str, "owner")
+        .map_err(|e| format!("CFQUAL: Failed to read owner field: {}", e))?;
+
+    if owner != localowneruser_name {
+        // Not owned by local user - doesn't qualify (not an error)
+        return Ok(false);
+    }
+
+    // =================================================
+    // Check 2: Remote collaborator must have access
+    // =================================================
+
+    let collaborators = read_string_array_field_from_toml(
+        toml_path_str,
+        "teamchannel_collaborators_with_access",
+    )
+    .map_err(|e| format!("CFQUAL: Failed to read collaborators field: {}", e))?;
+
+    if !collaborators.contains(&remote_collaborator_name.to_string()) {
+        // Collaborator not in access list - doesn't qualify (not an error)
+        return Ok(false);
+    }
+
+    // =================================================
+    // Check 3: File must be newer than threshold
+    // =================================================
+
+    let timestamp = read_u64_field_from_toml(toml_path_str, "updated_at_timestamp")
+        .map_err(|e| format!("CFQUAL: Failed to read timestamp field: {}", e))?;
+
+    if timestamp <= timestamp_threshold {
+        // File is not newer than threshold - doesn't qualify (not an error)
+        return Ok(false);
+    }
+
+    // =================================================
+    // All checks passed - file qualifies
+    // =================================================
+
+    Ok(true)
+}
+
 
 /// Gets existing send-Queue or makes a new one: to send out locally owned files: a queue of paths to those files
 /// if back_of_queue_timestamp != 0 and
@@ -28050,85 +28129,238 @@ fn get_or_create_send_queue(
         }
     };
 
+
+    // Get armored public key, using key-id (full fingerprint in)
+    let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+        Ok(fingerprint) => fingerprint,
+        Err(e) => {
+            // Since the function returns Result<CoreNode, String>, we need to return a String error
+            return Err(format!(
+                "implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}",
+                e
+            ).into());
+        }
+    };
+
+    // code from load_core_node...()
+    // Get the UME temp directory path with proper GpgError conversion
+    let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
+        .map_err(|io_err| GpgError::ValidationError(
+            format!("Failed to get UME temp directory path: {}", io_err)
+        ))?;
+
+
+
     // --- 3. Make a new Queue ---
     debug_log!("inHRCD->get_or_create_send_queue 5: no crawl if false, make_a_new_queue_flag -> {:?}", make_a_new_queue_flag);
 
     if make_a_new_queue_flag {
         debug_log!("inHRCD->get_or_create_send_queue 5: Starting crawl of directory: {:?}", team_channel_path);
-        /*
-        Only when a new send-queue is needed,
-        get the paths of files
-        for only files that are owned by you
-        for only files in the current team_channel
-        for only files where current remote collaborator is on the list of teamchannel_collaborators_with_access
-        for only files dated after (younger than) the .rt ready_signal_rt_timestamp
-        which is not the time the ready-signal was sent, but is
-        the updated_at timestamp
-        of the last received-by-them sent-by-you file.
-        */
-        // ...Use the unwrapped PathBuf with WalkDir
-        for entry in WalkDir::new(&team_channel_path) { // Note the & for borrowing
-            let entry = entry?;
-            if entry.file_type().is_file() && entry.path().extension() == Some(OsStr::new("toml")) {
-                debug_log!("inHRCD->get_or_create_send_queue 6: file is toml, entry -> {:?}", entry);
-                // If a .toml file
-                let toml_string = fs::read_to_string(entry.path())?;
 
-                // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
-                let toml_value: Value = toml::from_str(&toml_string)?;
+        // Operational metrics
+        let mut files_encountered: usize = 0;
+        let mut files_skipped: usize = 0;
+        let mut files_added_to_queue: usize = 0;
 
-                // If owner = target collaborator
-                if toml_value.get("owner").and_then(Value::as_str) == Some(localowneruser_name) {
-                    debug_log!("inHRCD->get_or_create_send_queue 7: file owner == colaborator name {:?}", toml_value);
+        // Walk directory and process each file
+        for entry in WalkDir::new(&team_channel_path) {
+            files_encountered += 1;
 
-                    // if current remote collaborator is on the list of teamchannel_collaborators_with_access
+            // Get directory entry, skip on any error
+            let entry = match entry {
+                Ok(e) => e,
+                Err(e) => {
+                    #[cfg(debug_assertions)]
+                    debug_log!(
+                        "inHRCD->get_or_create_send_queue: WalkDir entry error (skipping): {}",
+                        e
+                    );
+                    files_skipped += 1;
+                    continue;
+                }
+            };
 
-                    // 1. Get collaborators for this file (if available):
-                    let file_collaborators: Vec<String> = toml_value
-                        .get("teamchannel_collaborators_with_access") // Must match the key in your TOML files
-                        .and_then(Value::as_array)
-                        .map(|arr| arr.iter().filter_map(Value::as_str).map(String::from).collect())
-                        .unwrap_or_default();  // Handle case where the field is missing
+            // Only process regular files
+            if !entry.file_type().is_file() {
+                continue;
+            }
 
+            // Get file extension safely
+            let extension = match get_file_extension_safe(entry.path()) {
+                Some(ext) if ext == "toml" || ext == "gpgtoml" => ext,
+                _ => {
+                    // Not a TOML file, skip silently
+                    continue;
+                }
+            };
 
-                    // 2. Check if remote collaborator is in the access list:
-                    if file_collaborators.contains(&remote_collaborator_name.to_string()) {  // Accessing remote_collaborator_name correctly here
-                        debug_log!(
-                            "inHRCD->get_or_create_send_queue 8, access: file_collaborators=>{:?} vs. remote_collaborator_name=>{:?}",
-                            file_collaborators,
-                            remote_collaborator_name,
-                        );
+            #[cfg(debug_assertions)]
+            debug_log!(
+                "inHRCD->get_or_create_send_queue 6: Processing file: {:?}, extension: {}",
+                entry.path(),
+                extension
+            );
 
-                        // If updated_at_timestamp exists
-                        if let Some(toml_updatedat_timestamp) = toml_value.get("updated_at_timestamp").and_then(Value::as_integer) {
-                            debug_log!(
-                                "inHRCD->get_or_create_send_queue 9: updated_at_timestamp=>{:?} vs. rt=>{:?}",
-                                toml_updatedat_timestamp,
-                                ready_signal_rt_timestamp,
-                            );
-                            let toml_updatedat_timestamp = toml_updatedat_timestamp as u64;
+            // Prepare readable TOML path (decrypt .gpgtoml if needed)
+            let readable_path = match prepare_readable_toml_path(
+                entry.path(),
+                extension,
+                &gpg_full_fingerprint_key_id_string,
+                &base_uma_temp_directory_path,
+            ) {
+                Ok(p) => p,
+                Err(e) => {
+                    #[cfg(debug_assertions)]
+                    debug_log!(
+                        "inHRCD->get_or_create_send_queue: Failed to prepare readable path for {:?}: {} (skipping)",
+                        entry.path(),
+                        e
+                    );
+                    files_skipped += 1;
+                    continue;
+                }
+            };
 
-                            // If updated_at_timestamp > back_of_queue_timestamp (or back_of_queue_timestamp is 0)
-                            // if timestamp > back_of_queue_timestamp || back_of_queue_timestamp == 0 {
-                            if toml_updatedat_timestamp > session_send_queue.back_of_queue_timestamp {
-                                debug_log("inHRCD->get_or_create_send_queue 10: timestamp > back_of_queue_timestamp");
-                                // Add filepath to send_queue
-                                session_send_queue.items.push(entry.path().to_path_buf());
-                            }
-                        }
-                    } else {
-                        debug_log!(
-                            "get_or_create_send_queue, Collaborator '{}' does not have access to file: {:?}",
-                            remote_collaborator_name,
-                            entry.path()
-                        );
-                    }
+            // Check if file qualifies for send queue (incremental checks)
+            match check_file_qualifications(
+                &readable_path,
+                localowneruser_name,
+                remote_collaborator_name,
+                session_send_queue.back_of_queue_timestamp,
+            ) {
+                Ok(true) => {
+                    // File qualifies - add ORIGINAL path to queue
+                    session_send_queue.items.push(entry.path().to_path_buf());
+                    files_added_to_queue += 1;
+
+                    #[cfg(debug_assertions)]
+                    debug_log!(
+                        "inHRCD->get_or_create_send_queue 10: Added to queue: {:?}",
+                        entry.path()
+                    );
+                }
+                Ok(false) => {
+                    // File doesn't qualify (not an error)
+                    #[cfg(debug_assertions)]
+                    debug_log!(
+                        "inHRCD->get_or_create_send_queue: File doesn't qualify: {:?}",
+                        entry.path()
+                    );
+                }
+                Err(e) => {
+                    // File is malformed or unreadable
+                    #[cfg(debug_assertions)]
+                    debug_log!(
+                        "inHRCD->get_or_create_send_queue: File read/parse error for {:?}: {} (skipping)",
+                        entry.path(),
+                        e
+                    );
+                    files_skipped += 1;
                 }
             }
         }
+
+        // Log metrics
+        #[cfg(debug_assertions)]
+        debug_log!(
+            "inHRCD->get_or_create_send_queue: Crawl complete - encountered: {}, skipped: {}, added: {}",
+            files_encountered,
+            files_skipped,
+            files_added_to_queue
+        );
     }
 
     debug_log("inHRCD-> get_or_create_send_queue 11: calling, get_toml_file_updated_at_timestamp(), Hello?");
+
+    // if make_a_new_queue_flag {
+    //     debug_log!("inHRCD->get_or_create_send_queue 5: Starting crawl of directory: {:?}", team_channel_path);
+    //     /*
+    //     Make a full-new send-queue:
+
+    //     This is a big heavy-lifting task, but it usually
+    //     only needs to be done once.
+
+    //     Only when a new send-queue is needed,
+    //     get the paths of files
+    //     for only files that are owned by you
+    //     for only files in the current team_channel
+    //     for only files where current remote collaborator is on the list of teamchannel_collaborators_with_access
+    //     for only files dated after (younger than) the .rt ready_signal_rt_timestamp
+    //     which is not the time the ready-signal was sent, but is
+    //     the updated_at timestamp
+    //     of the last received-by-them sent-by-you file.
+
+    //     This is made less-simple by clearsigned-toml and .gpgtoml
+
+    //     */
+
+
+
+
+
+    //     // // ...Use the unwrapped PathBuf with WalkDir
+    //     // for entry in WalkDir::new(&team_channel_path) { // Note the & for borrowing
+    //     //     let entry = entry?;
+    //     //     if entry.file_type().is_file() && entry.path().extension() == Some(OsStr::new("toml")) {
+    //     //         debug_log!("inHRCD->get_or_create_send_queue 6: file is toml, entry -> {:?}", entry);
+    //     //         // If a .toml file
+    //     //         let toml_string = fs::read_to_string(entry.path())?;
+
+    //     //         // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+    //     //         let toml_value: Value = toml::from_str(&toml_string)?;
+
+    //     //         // If owner = target collaborator
+    //     //         if toml_value.get("owner").and_then(Value::as_str) == Some(localowneruser_name) {
+    //     //             debug_log!("inHRCD->get_or_create_send_queue 7: file owner == colaborator name {:?}", toml_value);
+
+    //     //             // if current remote collaborator is on the list of teamchannel_collaborators_with_access
+
+    //     //             // 1. Get collaborators for this file (if available):
+    //     //             let file_collaborators: Vec<String> = toml_value
+    //     //                 .get("teamchannel_collaborators_with_access") // Must match the key in your TOML files
+    //     //                 .and_then(Value::as_array)
+    //     //                 .map(|arr| arr.iter().filter_map(Value::as_str).map(String::from).collect())
+    //     //                 .unwrap_or_default();  // Handle case where the field is missing
+
+
+    //     //             // 2. Check if remote collaborator is in the access list:
+    //     //             if file_collaborators.contains(&remote_collaborator_name.to_string()) {  // Accessing remote_collaborator_name correctly here
+    //     //                 debug_log!(
+    //     //                     "inHRCD->get_or_create_send_queue 8, access: file_collaborators=>{:?} vs. remote_collaborator_name=>{:?}",
+    //     //                     file_collaborators,
+    //     //                     remote_collaborator_name,
+    //     //                 );
+
+    //     //                 // If updated_at_timestamp exists
+    //     //                 if let Some(toml_updatedat_timestamp) = toml_value.get("updated_at_timestamp").and_then(Value::as_integer) {
+    //     //                     debug_log!(
+    //     //                         "inHRCD->get_or_create_send_queue 9: updated_at_timestamp=>{:?} vs. rt=>{:?}",
+    //     //                         toml_updatedat_timestamp,
+    //     //                         ready_signal_rt_timestamp,
+    //     //                     );
+    //     //                     let toml_updatedat_timestamp = toml_updatedat_timestamp as u64;
+
+    //     //                     // If updated_at_timestamp > back_of_queue_timestamp (or back_of_queue_timestamp is 0)
+    //     //                     // if timestamp > back_of_queue_timestamp || back_of_queue_timestamp == 0 {
+    //     //                     if toml_updatedat_timestamp > session_send_queue.back_of_queue_timestamp {
+    //     //                         debug_log("inHRCD->get_or_create_send_queue 10: timestamp > back_of_queue_timestamp");
+    //     //                         // Add filepath to send_queue
+    //     //                         session_send_queue.items.push(entry.path().to_path_buf());
+    //     //                     }
+    //     //                 }
+    //     //             } else {
+    //     //                 debug_log!(
+    //     //                     "get_or_create_send_queue, Collaborator '{}' does not have access to file: {:?}",
+    //     //                     remote_collaborator_name,
+    //     //                     entry.path()
+    //     //                 );
+    //     //             }
+    //     //         }
+    //     //     }
+    //     // }
+    // }
+
+    // debug_log("inHRCD-> get_or_create_send_queue 11: calling, get_toml_file_updated_at_timestamp(), Hello?");
 
 
     // Get update flag paths
@@ -30213,7 +30445,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                 // pass (no additional action if task mode entered)
 
             } else if input == "move" {
-                move_task(
+                let _ = move_task(
                     &app.next_path_lookup_table,
                 );
 

@@ -12065,7 +12065,7 @@ max_value = 18446744073709551615
         assert!(
             result
                 .unwrap_err()
-                .contains("test_read_option_usize_edge_cases ailed to open file")
+                .contains("read_option_usize_field_from_toml Failed to open file")
         );
     }
 }
@@ -12747,11 +12747,9 @@ far_past = -62135596800
     fn test_read_option_i64_file_not_found() {
         let result = read_option_i64_field_from_toml("nonexistent.toml", "some_field");
         assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .contains("test_read_option_i64_invalid_values Failed to open file")
-        );
+        let err = result.unwrap_err();
+        assert!(err.contains("Failed to open file"));
+        assert!(err.contains("nonexistent.toml"));
     }
 }
 
