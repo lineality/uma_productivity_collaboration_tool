@@ -6141,3 +6141,986 @@ fn extract_u64(table: &toml::map::Map<String, Value>, key: &str) -> Result<u64, 
         Err(ThisProjectError::TomlVanillaDeserialStrError(format!("Missing or invalid {}", key)))
     }
 }
+
+old, relative path
+/// Gets the latest received file's `updated_at_timestamp` for a collaborator.
+///
+/// Crawls the team channel directory, finds TOML files owned by the collaborator,
+/// extracts their `updated_at_timestamp`, and returns the latest one.  Returns 0 if no such files are found.
+///
+/// # Arguments
+///
+/// * `team_channel_name`: The team channel name.
+/// * `collaborator_name`: The collaborator's name.
+///
+/// # Returns
+///
+/// * `Result<u64, ThisProjectError>`: The latest `updated_at_timestamp` or an error.
+fn get_latest_received_from_rc_file_timestamp(
+    team_channel_name: &str,
+    collaborator_name: &str,
+) -> Result<u64, ThisProjectError> {
+    let mut latest_timestamp = 0;
+    let team_channel_path = PathBuf::from("project_graph_data/team_channels").join(team_channel_name);
+
+    debug_log!(
+        "read_latestreceivedfromme_file_timestamp_plaintextstatefile(): Starting GLRFRCFT team_channel_path: {:?}, collaborator_name: {}",
+        team_channel_path, collaborator_name
+    );
+
+    // 1. Crawl the team channel directory:
+    for entry in walkdir::WalkDir::new(team_channel_path) { // Use walkdir to traverse subdirectories
+        let entry = entry?;
+        let path = entry.path();
+
+        // 2. Check for TOML files:
+        if path.is_file() && path.extension().map_or(false, |ext| ext == "toml") {
+            debug_log!("GLRFRCFT(): Found TOML file: {:?}", path);
+
+            // 3. Read and parse the TOML file:
+            // // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+            match fs::read_to_string(path).and_then(|content| Ok(toml::from_str::<Value>(&content))) {
+                Ok(toml_data) => {
+                    debug_log!("GLRFRCFT(): Successfully parsed TOML file.");
+
+                    // 4. Check file ownership:
+                    if toml_data.clone()?.get("owner").and_then(Value::as_str) == Some(collaborator_name) {
+                        debug_log!("GLRFRCFT(): File owned by collaborator.");
+
+                        // 5. Extract and update latest_timestamp:
+                        if let Some(timestamp) = toml_data?
+                            .get("updated_at_timestamp")
+                            .and_then(Value::as_integer)
+                            .map(|ts| ts as u64)
+                        {
+                            debug_log!("GLRFRCFT(): Found updated_at_timestamp: {}", timestamp);
+
+                            latest_timestamp = latest_timestamp.max(timestamp); // Keep the latest
+                        } else {
+                            debug_log!("GLRFRCFT(): 'updated_at_timestamp' field not found or invalid in TOML file: {:?}", path);
+                        }
+                    }
+                }
+                Err(e) => {
+                    debug_log!("GLRFRCFT(): Error reading or parsing TOML file: {:?} - {}", path, e);
+                    // Handle error as needed (e.g., log and continue, or return an error)
+                    // return Err(ThisProjectError::from(e)); //Example: Return the error.
+                    continue; // Or continue to the next file.
+                }
+            }
+        }
+    }
+
+    debug_log!("GLRFRCFT(): End Returning latest timestamp: {}", latest_timestamp);
+
+    Ok(latest_timestamp)
+}
+
+
+// Updated helper function:
+fn update_current_path_and_state(app: &mut App, selected_item: String, input_mode: InputMode) {
+    // if input_mode == InputMode::TaskCommand && app.is_at_task_browser_root() {
+    //     app.current_path.push(selected_item);  // Only push if in TaskCommand mode and at root (for column selection).
+    // } else if input_mode == InputMode::MainCommand {
+    //     app.current_path.push(selected_item);  // Only push when not in task mode (directory or IM message selection).
+    // }
+
+    // Populate next_path_lookup_table:
+    app.next_path_lookup_table.clear(); // Clear previous entries.
+
+    if input_mode == InputMode::MainCommand  {
+        for (i, item) in app.tui_directory_list.iter().enumerate() {
+            let next_path = app.current_path.join(item);
+            app.next_path_lookup_table.insert(i + 1, next_path);
+        }
+    }
+
+    app.graph_navigation_instance_state.current_full_file_path = app.current_path.clone();
+    app.graph_navigation_instance_state.nav_graph_look_read_node_toml(); // Always call to update state.
+    debug_log!("Updated path and state. New path: {:?}", app.current_path);
+}
+
+// In handle_task_selection:
+fn handle_task_selection(app: &mut App, selection: usize) -> Result<bool, io::Error> { // Now returns a bool
+    if app.is_at_task_browser_root() {
+        // ... Column selection:
+        // todo this may be wrong
+        // Update current_path using handle_selection:
+        if let Some(selected_column) = app.tui_directory_list.get(selection - 1) {
+            update_current_path_and_state(app, selected_column.clone(), app.input_mode.clone());  //FIX 1
+            app.load_tasks(); // Refresh task browser to show tasks within the column
+        } else { // Invalid selection
+            app.display_error("hts Invalid column selection.");
+            app.load_tasks(); //Refresh view
+            return Ok(false); //Stay in task mode
+        }
+
+    } else { //Task selection
+        if let Some(full_task_path) = app.get_full_task_path(selection - 1) {
+            // No need to push here (current_path is already inside a column directory):
+            debug_log!(
+                "hts app.current_path: {:?}", app.current_path
+            );
+            debug_log!(
+                "hts full_task_path: {:?}", full_task_path
+            );
+            app.current_path = full_task_path.clone(); // Update current_path directly
+            app.graph_navigation_instance_state.current_full_file_path = full_task_path;
+
+            debug_log!(
+                "hts  app.graph_navigation_instance_state.current_full_file_path: {:?}",
+                app.graph_navigation_instance_state.current_full_file_path
+            );
+
+            app.graph_navigation_instance_state.nav_graph_look_read_node_toml();
+            return Ok(true); // Return true to signal exiting task mode
+
+        } else {
+            app.display_error("hts Invalid task number");
+            app.load_tasks();
+            return Ok(false); //Stay in task mode
+        }
+    }
+    Ok(false)  // Stay in task mode by default (if no task is selected).
+}
+
+
+fn extract_last_path_section(current_path: &PathBuf) -> Option<String> {
+    current_path.file_name().and_then(|os_str| os_str.to_str().map(|s| s.to_string()))
+}
+
+/// Gets a list of active collaborators by reading stub file names in the sync_data directory.
+///
+/// This function reads the names of files (which are the collaborator names)
+/// within the directory:  `sync_data/{team_channel_name}/is_active/`. Each file represents an active collaborator.
+/// The function handles directory reading errors and filters out entries that are not files.
+///
+/// # Arguments
+///
+/// * None
+///
+/// # Returns
+///
+/// * `Result<Vec<String>, ThisProjectError>`:  A `Result` containing a vector of active collaborator names (`Vec<String>`) on success,
+///   or a `ThisProjectError` if an error occurs (e.g., during directory reading).
+fn get_active_collaborator_names() -> Result<Vec<String>, ThisProjectError> {
+    // 1. Get the team channel name
+    let team_channel_name = match get_current_team_channel_name_from_nav_path() {
+        Some(name) => name,
+        None => {
+            debug_log!("Error: Could not get current channel name in get_active_collaborator_names. Skipping.");
+            return Err(ThisProjectError::InvalidData("Could not get team channel name".into()));
+        },
+    };
+
+    // 2. Construct Path to "is_active" directory
+    let is_active_dir = Path::new("sync_data")
+        .join(&team_channel_name)
+        .join("is_active");
+
+    // 3. Create Vector to Hold Names
+    let mut active_collaborators: Vec<String> = Vec::new(); // Initialize an empty vector
+
+    // 4. Read Directory and Collect Names
+    match read_dir(&is_active_dir) { // returns Result<ReadDir> so we match on it
+        Ok(entries) => {
+            // Handle potential errors inside the loop, so not all are lost in case of one error.
+            for entry in entries {
+                // Handle DirEntry Result
+                match entry {
+                    Ok(entry) => {
+                        // Is it a file?
+                        if entry.path().is_file() {
+                            // Extract file_name as String
+                            let file_name = entry.file_name(); // returns OsString which cannot be string-matched
+                            let collaborator_name = file_name.to_string_lossy().into_owned();  // so convert to owned String
+                            active_collaborators.push(collaborator_name);
+                        }
+                    },
+                    Err(err) => {
+                        debug_log!("Error reading entry: {}", err);
+                        // Handle error appropriately.
+                        // You might choose to skip the bad entry, log and return an error, or continue
+                        // return Err(...); // Example, if you want to stop on first error
+                    },
+                }
+            }
+            Ok(active_collaborators) // Return vector of names on success
+        }
+        Err(err) => Err(ThisProjectError::IoError(err)), // Return error if directory read fails
+    }
+}
+
+// /// Saves data to a file with a filename derived from a hash array.
+// ///
+// /// This function saves a stub file (named file with no contents) within the specified `directory`.  The filename
+// /// is generated by converting the `hash_array` into a hexadecimal string using `hash_array_to_hex_string()`.
+// /// if content data are needed that can be added later, but perahps nothing is needed
+// ///
+// /// # Arguments
+// ///
+// /// * `hash_array`: A slice of `u8` values used to generate the filename.
+// /// * `remote_collarator_name`
+// ///
+// /// # Returns
+// ///
+// /// * `Result<(), ThisProjectError>`: `Ok(())` if the file is successfully saved,
+// ///   or a `ThisProjectError` if an error occurs (e.g., during file creation or writing).
+// ///
+// /// # Example
+// ///
+
+/// Gets the latest received file timestamp for a collaborator in a team channel, using a plain text file.
+///
+/// This function reads the timestamp from a plain text file at:
+/// `sync_data/{team_channel_name}/latest_receivedfile_timestamps/{collaborator_name}/latest_receivedfromme_file_timestamp.txt`
+/// If the file or directory structure doesn't exist, it creates them and initializes the timestamp to 0.
+///
+/// # Arguments
+///
+/// * `team_channel_name`: The name of the team channel.
+/// * `collaborator_name`: The name of the collaborator.
+///
+/// # Returns
+///
+/// * `Result<u64, ThisProjectError>`:  The latest received timestamp on success, or a `ThisProjectError` if an error occurs.
+///
+/// This is one of those values and functions that can be confusing
+/// because both you and your remote collaborator have quasi-mirror-image sync systems
+/// with reversed roles. Both of you are making 'latest_received' timestamps
+/// and both of you are using your and their 'latest_received' timestamps,
+/// which are simultanously 'the same' abstract value but very different local-context-role-specific values
+///
+/// the complimentary function is: get_latest_received_from_rc_in_teamchannel_file_timestamp_filecrawl()
+///
+/// example location of use:
+/// Drone Loop to Send ReadySignals  (hlod)
+/// 1.2 Refresh Timestamp
+fn read_latestreceivedfromme_file_timestamp_plaintextstatefile(
+    collaborator_name: &str,
+    team_channel_name: &str,
+) -> Result<u64, ThisProjectError> {
+    /*
+    Wait random time in A to B range, N times
+    FILE_READWRITE_N_RETRIES
+    FILE_READWRITE_RETRY_SEC_PAUSE_MIN
+    FILE_READWRITE_RETRY_SEC_PAUSE_max
+    */
+
+    let mut file_path = PathBuf::from("sync_data");
+    file_path.push(team_channel_name);
+    file_path.push("latest_receivedfile_timestamps");
+    file_path.push(collaborator_name);
+    file_path.push("latest_receivedfromme_file_timestamp.txt");
+
+    // Create directory structure if it doesn't exist
+    if let Some(parent) = file_path.parent() {
+        create_dir_all(parent)?;
+    }
+
+    // Read or initialize the timestamp
+    match read_to_string(&file_path) {
+        Ok(timestamp_str) => {
+            // if let Ok(timestamp) = timestamp_str.trim().parse() {
+            // Parse with error handling
+            match timestamp_str.trim().parse::<u64>() {
+                Ok(timestamp) => Ok(timestamp),
+                Err(e) => {
+                    debug_log!("Error parsing timestamp from file: {}", e);
+                    Err(ThisProjectError::from(e))
+                }
+            }
+        },
+        Err(e) if e.kind() == ErrorKind::NotFound => {
+            debug_log!(
+                "Error: glrfftptsf() getting timestamp: e'{}'e. Using0 inside read_latestreceivedfromme_file_timestamp_plaintextstatefile()",
+                e,
+            );
+            // File not found, initialize to 0
+            let mut file = File::create(&file_path)?;
+            file.write_all(b"0")?; // Write zero timestamp
+            Ok(0)
+        }
+        Err(e) => Err(ThisProjectError::IoError(e)), // Other IO errors
+    }
+}
+
+/// Saves the combined network option index to a file.
+/// @ /sync_data/network_option_index.txt
+/// This function saves the given `combined_index` to "sync_data/{team_channel_name}/network_option_index.txt".
+/// It creates the necessary directories if they don't exist and handles file I/O errors.
+///
+/// # Arguments
+///
+/// * `combined_index`: The combined network option index.
+/// * `team_channel_name`: The name of the team channel.
+///
+/// # Returns
+///
+/// * `Result<(), ThisProjectError>`:  `Ok(())` on success, or an error if an I/O operation fails.
+fn save_network_option_index_statefile(
+    combined_index: u8,
+) -> Result<(), ThisProjectError> {
+    let mut file_path = PathBuf::from("sync_data");
+    file_path.push("network_option_index.txt");
+
+    if let Some(parent_dir) = file_path.parent() {
+        create_dir_all(parent_dir)?;
+    }
+
+    let mut file = File::create(&file_path)?;
+    write!(file, "{}", combined_index)?;
+    Ok(())
+}
+
+/// update_collaborator_sendqueue_timestamp_log
+/// ### making a new timestamp (maybe good to do each session)
+/// 1. pick a target collaborator
+/// 2. make sure path exists:
+/// ```path
+/// sync_data/team_channel/collaborator_name/
+/// ```
+/// 2. make a mut u64 variable called back_of_queue_timestamp = 0
+/// 3. crawl through the files and subdirectories (recursively) in the teamchannel (only the team_channel directory tree, not all of uma) looking at files:
+/// 4. if a .toml file,
+/// 5. if owner=target_collaborator,
+/// 6. if updated_at_timestamp exists
+/// 7. write/rewrite a stub-file of that timestamp to:
+/// ```path
+/// sync_data/team_channel/collaborator_name/372385339229
+/// ```
+/// 8. if timestamp is higher than back_of_queue_timestamp, then
+/// back_of_queue_timestamp = new value
+/// 9. write/rewrite:
+/// ```path
+/// sync_data/team_channel/collaborator_name/back_of_queue_timestamp
+/// ```
+/// - Note: the paper trail of timestamps allows backtracking easily for error correction. quick sort to e.g. go-back-five
+fn update_collaborator_sendqueue_timestamp_log(
+    team_channel_name: &str,
+    collaborator_name: &str,
+) -> Result<u64, ThisProjectError> {
+    let sync_data_dir = PathBuf::from("sync_data")
+        .join(team_channel_name)
+        .join(collaborator_name);
+    fs::create_dir_all(&sync_data_dir)?;
+
+    let mut back_of_queue_timestamp = 0;
+    let team_channel_path = PathBuf::from("project_graph_data").join(team_channel_name);  // Use the read name
+
+    // 3. Crawl through the team channel directory tree
+    for entry in WalkDir::new(team_channel_path) {
+        let entry = entry?;
+        if entry.file_type().is_file() && entry.path().extension() == Some(OsStr::new("toml")) {
+            // 4. If a .toml file
+            let toml_string = fs::read_to_string(entry.path())?;
+
+            // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+            let toml_value: Value = toml::from_str(&toml_string)?;
+
+            // 5. If owner = target collaborator
+            if toml_value.get("owner").and_then(Value::as_str) == Some(collaborator_name) {
+                // 6. If updated_at_timestamp exists
+                if let Some(timestamp) = toml_value.get("updated_at_timestamp").and_then(Value::as_integer) {
+                    let timestamp = timestamp as u64;
+
+                    // // 7. Write stub file
+                    // let stub_file_path = sync_data_dir.join(timestamp.to_string());
+                    // fs::File::create(stub_file_path)?;
+
+                    // 8. Update back_of_queue_timestamp
+                    if timestamp > back_of_queue_timestamp {
+                        back_of_queue_timestamp = timestamp;
+                    }
+                }
+            }
+        }
+    }
+
+    // 9. Write back_of_queue_timestamp
+    let timestamp_file_path = sync_data_dir.join("back_of_queue_timestamp");
+    fs::write(timestamp_file_path, back_of_queue_timestamp.to_string())?;
+
+    debug_log!(
+        "End of update_collaborator_sendqueue_timestamp_log, back_of_queue_timestamp -> {:?}",
+        back_of_queue_timestamp
+    );
+
+    Ok(back_of_queue_timestamp)
+}
+
+fn display_simple_tui_table(headers: &[&str], data: &[Vec<&str>]) {
+    // Print headers
+    for header in headers {
+        print!("{:<15} ", header); // Left-align with padding
+    }
+    println!();
+
+    // Print separator
+    println!("{}", "-".repeat(headers.len() * 15));
+
+    // Print data rows
+    for row in data {
+        for item in row {
+            print!("{:<15} ", item);
+        }
+        println!();
+    }
+}
+// fn main() {
+//     let headers = vec!["Column 1", "Column 2", "Column 3"];
+//     let data = vec![
+//         vec!["Data A", "Data B", "Data C"],
+//         vec!["Data D", "Data E", "Data F"],
+//     ];
+//     display_table(&headers, &data);
+// }
+
+// TODO
+/// Reads all new file send queue flags and cleans up the flag files.
+///
+/// This function reads all flag files in the directory
+/// `sync_data/{team_channel_name}/sendqueue_updates/{remote_collaborator_name}/`
+/// and returns the file paths contained within those flags as a vector.
+/// After reading, it deletes all flag files to ensure they are processed only once.
+///
+/// # Arguments
+///
+/// * `remote_collaborator_name`: The name of the remote collaborator.
+/// * `team_channel_name`: The name of the team channel.
+///
+/// # Returns
+///
+/// * `Result<Vec<PathBuf>, ThisProjectError>`: A vector of file paths on success, or a `ThisProjectError` if an error occurs during directory access or file operations.
+fn read_all_newfile_sendq_flags_w_cleanup(
+    remote_collaborator_name: &str,
+    team_channel_name: &str,
+) -> Result<Vec<PathBuf>, ThisProjectError> {
+
+    let mut flag_dir = make_input_path_name_abs_executabledirectoryrelative_nocheck(
+        "sync_data"
+    )?;
+    flag_dir.push(team_channel_name);
+    flag_dir.push("sendqueue_updates");
+    flag_dir.push(remote_collaborator_name);
+
+    let mut file_paths = Vec::new();
+
+    // 1. Read all flag files and collect paths: Check if directory exists
+    if flag_dir.exists() { // Only proceed if the directory exists
+        match fs::read_dir(&flag_dir) {
+            Ok(entries) => {
+                for entry in entries.flatten() {  // Flatten to handle potential errors directly
+                    let flag_file_path = entry.path();
+                    if flag_file_path.is_file() {
+                        match fs::read_to_string(&flag_file_path) {
+                            Ok(file_path_str) => {
+                                let file_path = PathBuf::from(file_path_str.trim()); //Important: trim whitespace!
+                                file_paths.push(file_path);
+                            }
+                            Err(e) => {
+                                debug_log!("Error reading flag file: {} - {}", flag_file_path.display(), e);
+                                // Choose whether to continue or return an error:
+                                return Err(e.into()); // Or continue;
+                            }
+                        }
+
+                        // 2. Delete the flag file immediately after reading (cleanup): Handle errors
+                        if let Err(e) = fs::remove_file(&flag_file_path) {
+                            debug_log!("Error removing flag file: {} - {}", flag_file_path.display(), e);
+                            // Handle the remove error if needed
+                            // return Err(e.into()); // Or continue;
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                debug_log!(
+                    "read_all_newfile_sendq_flags_w_cleanup: Error reading directory: {}",
+                    e
+                );
+                return Err(e.into());
+            }
+        }
+
+
+        // // 3. Remove directory if empty:  Handle errors
+        // if fs::read_dir(&flag_dir)?.next().is_none() { // Directory is now empty
+        //     if let Err(e) = fs::remove_dir(&flag_dir) { // Just remove the directory, not recursively
+        //         debug_log!(
+        //             "read_all_newfile_sendq_flags_w_cleanup: Error removing empty directory: {}",
+        //             e
+        //         );
+        //         // Handle error, e.g., continue or return
+        //         return Err(e.into());  // Or continue;
+        //     }
+        // }
+    }
+
+
+    Ok(file_paths)  // Return Ok with file paths or handle not existing as needed
+}
+
+
+// /// Add New Message File
+// /// 1. create message .toml
+// /// 2. save .toml to team-channel messages path
+// /// 3. save that path as
+// ///
+// fn add_im_message(
+//     incoming_file_path: &Path,
+//     owner: &str,
+//     text: &str,
+//     signature: Option<String>,
+//     graph_navigation_instance_state: &GraphNavigationInstanceState, // Pass local_user_metadata here
+// ) -> Result<(), io::Error> {
+
+//     // 1. Parse for {to:user} syntax
+//     let mut recipients_list = graph_navigation_instance_state.current_node_teamchannel_collaborators_with_access.clone();
+//     if let Some(to_clause) = text.find("{to:") {
+//         if let Some(end_brace) = text[to_clause..].find('}') {
+//             let recipient_name = text[to_clause + 4..to_clause + end_brace].trim();
+//             recipients_list.clear(); // Clear default list: restrict to listed recipient only
+
+//             // 2. Check if recipient in team channel list and is not sender.
+//             if graph_navigation_instance_state.current_node_teamchannel_collaborators_with_access.contains(&recipient_name.to_string()) && recipient_name != owner {
+//                 recipients_list.push(recipient_name.to_string()); // Add only the specified recipient
+//             } else {
+//                 // Log if user not found
+//                 debug_log!("'to:' but Recipient '{}' not found in channel or is sender.", recipient_name);
+//             }
+//         }
+//     }
+
+//     // separate name and path
+//     let parent_dir = if let Some(parent) = incoming_file_path.parent() {
+//         parent
+//     } else {
+//         Path::new("")
+//     };
+
+//     // Now you can use `parent_dir` as needed
+//     // For example, you can check if it's an empty string
+//     if parent_dir == Path::new("") {
+//         debug_log("The path has no parent directory.");
+//     } else {
+//         debug_log(&format!("parent directory  {:?}", parent_dir));
+//     }
+
+//     // Read 0.toml to get this instant messager browser room's settings
+//     let metadata_path = parent_dir.join("0.toml"); // Assuming path is the message_posts_browser directory
+//     let metadata_string = fs::read_to_string(metadata_path)?;
+//     let metadata: NodeInstMsgBrowserMetadata = toml::from_str(&metadata_string)
+//     .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("TOML deserialization error: {}", e)))?;
+
+//     // Extract node name and file path
+//     let node_name = metadata.node_name;
+//     let filepath_in_node = metadata.path_in_node;
+//     let message = MessagePostFile::new(
+//         owner, // owner: &str,
+//         &node_name, // node_name: &str, , // Add node name as a parameter
+//         &filepath_in_node, // filepath_in_node: &str, , // Add filepath_in_node as a parameter
+//         text, // text_message: &str,
+//         signature, // signature: Option<String>,
+//         graph_navigation_instance_state, // graph_navigation_instance_state: &GraphNavigationInstanceState,  // gets uma.toml data
+//         recipients_list.clone(),
+//         false, // messagepost_gpgtoml
+//     );
+
+//     // TODO: save updates here...
+//     let toml_data = toml::to_string(&message).map_err(|e| {
+//         io::Error::new(io::ErrorKind::Other, format!("TOML serialization error: {}", e))
+//     })?; // Wrap TOML error in io::Error
+//     fs::write(incoming_file_path, toml_data)?;
+
+
+//     // Write update flag for each possible remote collaborator
+//     // sync_data/teamtest/new_file_path_flags/bob
+//     // sync_data/teamtest/new_file_path_flags/charlotte
+//     // etc.
+//     let _ = write_newfile_sendq_flag(
+//         &recipients_list,
+//         &incoming_file_path,
+//     );
+
+//     Ok(())
+// }
+
+    // // Check if the data directory exists
+    // let invite_parent_folder = Path::new("import_export_invites");
+    // if !invite_parent_folder.exists() {
+    //     // If the directory does not exist, create it
+    //     fs::create_dir_all(invite_parent_folder).expect("Failed to create import_export_invites directory");
+    // }
+
+
+    // // Check if the data directory exists
+    // let library_clearsign = Path::new("library_clearsign");
+    // if !library_clearsign.exists() {
+    //     // If the directory does not exist, create it
+    //     fs::create_dir_all(library_clearsign).expect("Failed to create library_clearsign directory");
+    // }
+
+    // // Check if the data directory exists
+    // let library_clearsignteam_channels = Path::new("library_clearsign/team_channels");
+    // if !library_clearsignteam_channels.exists() {
+    //     // If the directory does not exist, create it
+    //     fs::create_dir_all(library_clearsignteam_channels).expect("Failed to create library_clearsignteam_channels directory");
+    // }
+
+    // // Check if the data directory exists
+    // let library_clearsignaddressbook = Path::new("library_clearsign/addressbook");
+    // if !library_clearsignaddressbook.exists() {
+    //     // If the directory does not exist, create it
+    //     fs::create_dir_all(library_clearsignaddressbook).expect("Failed to create library_clearsignaddressbook directory");
+    // }
+
+    // // Check if the data directory exists
+    // let library_clearsign = Path::new("library_clearsign");
+    // if !library_clearsign.exists() {
+    //     // If the directory does not exist, create it
+    //     fs::create_dir_all(library_clearsign).expect("Failed to create library_clearsign directory");
+    // }
+
+
+    // // Check if the data directory exists
+    // let addressbook_invite = Path::new("invites_updates/incoming");
+    // if !addressbook_invite.exists() {
+    //     // If the directory does not exist, create it
+    //     fs::create_dir_all(addressbook_invite).expect("Failed to create addressbook_invite directory");
+    // }
+
+    // // Check if the data directory exists
+    let invites_incoming_pathbuf =  make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path(
+        "invites_updates/incoming"
+    );
+
+    // // Check if the data directory exists
+    // let invites_outgoing_pathbuf = Path::new("invites_updates/outgoing");
+    // if !invites_outgoing_pathbuf.exists() {
+    //     // If the directory does not exist, create it
+    //     fs::create_dir_all(invites_outgoing_pathbuf).expect("Failed to create invites_outgoing_pathbuf directory");
+    // }
+
+    // // Check if the data directory exists
+    let invites_outgoing_pathbuf =  make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path(
+        "invites_updates/outgoing"
+    );
+    // // ... 2. Load user metadata from the now-existing uma.toml
+    // let user_metadata = match toml::from_str::<LocalUserUma>(&fs::read_to_string(uma_toml_path)?) {
+    //     Ok(metadata) => {
+    //         debug_log!("uma.toml loaded successfully!");
+    //         metadata
+    //     },
+    //     Err(e) => {
+    //         eprintln!("Failed to load or parse uma.toml: {}", e);
+    //         return Ok(false);
+    //     }
+    // };
+
+
+    // TODO
+    // // --- 3. CHECK FOR PORT COLLISIONS ---
+    // // You can now safely access user_metadata.uma_local_owner_user if needed
+    // if let Err(e) = check_all_ports_in_team_channels() {
+    //     eprintln!("Error: {}", e);
+    //     debug_log!("Error: {}", e);
+    //     return;
+    // }
+
+    // // ... 4. CREATE DIRECTORIES ---
+
+
+    // old relative path version, depricated
+    // // Check if the data directory exists
+    // let project_graph_directory = Path::new("project_graph_data");
+    // if !project_graph_directory.exists() {
+    //     // If the directory does not exist, create it
+    //     fs::create_dir_all(project_graph_directory).expect("Failed to create project_graph_data directory");
+    // }
+
+/// Encrypts data using GPG with the specified recipient's public key.
+///
+/// This function uses the `gpg` command-line tool to encrypt the data. It assumes that `gpg`
+/// is installed and accessible in the system's PATH.
+///
+/// # Arguments
+///
+/// * `data`: The data to encrypt as a byte slice.
+/// * `recipient_public_key`: The recipient's public GPG key.
+///
+/// # Returns
+///
+/// * `Result<Vec<u8>, ThisProjectError>`:  A `Result` containing the encrypted data as a `Vec<u8>` on success,
+///   or a `ThisProjectError` on failure.
+fn encrypt_with_gpg(data: &[u8], recipient_public_key: &str) -> Result<Vec<u8>, ThisProjectError> {
+    /*
+    // // Example Use:
+
+    // 5. Encrypt clearsigned data
+    let encrypted_data = encrypt_with_gpg(&clearsigned_data, &public_key_string)?;
+
+    // 6. Create export directory if it doesn't exist
+    let export_dir = PathBuf::from("invites_updates/addressbook_invite/export");
+    create_dir_all(&export_dir)?;
+
+    // 7. Write encrypted data to file. Use a timestamp to avoid overwriting.
+    let export_file_path = export_dir.join(format!(
+        "{}_addressbook_{}.gpgtoml",
+        local_owner_username,
+        get_current_unix_timestamp() // Or use a UUID
+    ));
+    let mut file = File::create(&export_file_path)?;
+    file.write_all(&encrypted_data)?;
+    */
+
+    let mut child = StdCommand::new("gpg")
+        .arg("--encrypt")
+        .arg("--recipient")
+        .arg(recipient_public_key)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()?;
+
+    // Write the data to encrypt to the GPG process's standard input
+    {
+        let stdin = child.stdin.as_mut().ok_or_else(|| ThisProjectError::NetworkError("Failed to open stdin for GPG process".to_string()))?;
+        stdin.write_all(data)?;
+    }
+
+    let output = child.wait_with_output()?;
+
+    if output.status.success() {
+        Ok(output.stdout) // Return the encrypted data
+    } else {
+        // Log the GPG error
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        debug_log!("GPG encryption error: {}", stderr);
+        Err(ThisProjectError::NetworkError(format!("GPG encryption failed: {}", stderr)))
+    }
+}
+
+// TODO maybe various updatesand fixes, how files read, paths
+// TODO doc string needed here...
+fn export_addressbook() -> Result<(), ThisProjectError> {
+    debug_log("start export_addressbook()");
+
+    // 1. Get local owner's username
+    // 1. Get local owner's username
+    // Read uma_local_owner_user from uma.toml
+    // maybe add gpg and make this a separate function TODO
+    // Load UMA configuration from uma.toml
+    // let uma_toml_path = Path::new("uma.toml");
+
+    // // For exe-parent-relative Absolute paths:
+    // 1. Get local owner's username (from exe-parent absolute path file)
+    // Get absolute path to uma.toml configuration file
+    let relative_uma_toml_path = UMA_TOML_CONFIGFILE_PATH_STR;
+    let absolute_uma_toml_path = make_file_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_uma_toml_path)
+        .map_err(|e| {
+            let error_msg = format!("___ Failed to locate uma.toml configuration file: {}", e);
+            println!("Error: {}", error_msg);
+            io::Error::new(io::ErrorKind::InvalidData, error_msg)
+        })?;
+
+    // Convert PathBuf to string for TOML reading
+    let absolute_uma_toml_path_str = absolute_uma_toml_path
+        .to_str()
+        .ok_or_else(|| {
+            let error_msg = "__ Unable to convert UMA TOML path to string".to_string();
+            println!("Error: {}", error_msg);
+            io::Error::new(io::ErrorKind::InvalidData, error_msg)
+        })?;
+
+
+    // // let user_metadata = toml::from_str::<toml::Value>(&std::fs::read_to_string(uma_toml_path)?)?;
+    // // let user_metadata = toml::from_str::<toml::Value>(&std::fs::read_to_string(uma_toml_path)?)
+    // let user_metadata = toml::from_str::<toml::Value>(&std::fs::read_to_string(absolute_uma_toml_path_str)?)
+    // .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("TOML deserialization error: {}", e)))?;
+    // let local_owner_username = user_metadata["uma_local_owner_user"].as_str().unwrap().to_string();
+
+
+    // Read LOCAL OWNER USER's name from uma.toml
+    let local_owner_username = read_single_line_string_field_from_toml(
+        absolute_uma_toml_path_str,
+        "uma_local_owner_user"
+    ).map_err(|e| {
+        let error_msg = format!("___ Failed to read LOCAL OWNER USER's name: {}", e);
+        println!("Error: {}", error_msg);
+        io::Error::new(io::ErrorKind::InvalidData, error_msg)
+    })?;
+
+    debug_log!("export_addressbook() local_owner_username is: {}", local_owner_username);
+
+    // 2. Construct paths
+    // let address_book_export_dir = PathBuf::from("invites_updates/addressbook_invite/export");
+    let address_book_export_dir = make_input_path_name_abs_executabledirectoryrelative_nocheck(
+        "invites_updates/addressbook_invite/export"
+    )?;
+
+    let key_file_path = address_book_export_dir.join("key.asc");
+    let collaborator_file_path = PathBuf::from(COLLABORATOR_ADDRESSBOOK_PATH_STR)
+        .join(format!("{}__collaborator.toml", local_owner_username));
+
+    // 3. Read public key (early return on error).  Handles NotFound.
+    let public_key_string = match read_to_string(&key_file_path) {
+        Ok(key) => key,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            debug_log!("Public key file ('key.asc') not found. Skipping address book export.");
+            return Ok(()); // Return Ok if the file isn't found, not continuing.
+        },
+        Err(e) => return Err(ThisProjectError::IoError(e)),
+    };
+
+    // 4. Clearsign collaborator file
+    let clearsign_output = StdCommand::new("gpg")
+        .arg("--sign")
+        .arg(&collaborator_file_path)
+        .output()?;
+
+
+    // Error handling: (exit early on error)
+    if !clearsign_output.status.success() {
+        let stderr = String::from_utf8_lossy(&clearsign_output.stderr);
+        return Err(ThisProjectError::GpgError(format!("GPG clearsign failed: {}", stderr)));
+    }
+    let clearsigned_data = clearsign_output.stdout;
+
+    // 5. Encrypt clearsigned data
+    let encrypted_data = encrypt_with_gpg(&clearsigned_data, &public_key_string)?;
+
+    // 6. Create export directory if it doesn't exist
+    // let export_dir = PathBuf::from("invites_updates/addressbook_invite/export");
+    let export_dir = make_input_path_name_abs_executabledirectoryrelative_nocheck(
+        "invites_updates/addressbook_invite/export"
+    )?;
+
+    create_dir_all(&export_dir)?;
+
+    // 7. Write encrypted data to file. Use a timestamp to avoid overwriting.
+    let export_file_path = export_dir.join(format!(
+        "{}_addressbook_{}.gpgtoml",
+        local_owner_username,
+        get_current_unix_timestamp() // Or use a UUID
+    ));
+    let mut file = File::create(&export_file_path)?;
+    file.write_all(&encrypted_data)?;
+
+    debug_log("export complete");
+
+    Ok(())
+}
+
+// Helper function to extract ports from a TOML table
+fn extract_ports_from_table(port_set: &toml::map::Map<String, Value>) -> Result<AbstractTeamchannelNodeTomlPortsData, MyCustomError> {
+    Ok(AbstractTeamchannelNodeTomlPortsData {
+        user_name: port_set
+            .get("user_name")
+            .ok_or_else(|| MyCustomError::from(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Missing 'user_name' in port set",
+            )))?
+            .as_str()
+            .ok_or_else(|| MyCustomError::from(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "'user_name' is not a string",
+            )))?
+            .to_string(),
+        ready_port: port_set
+            .get("ready_port")
+            .ok_or_else(|| MyCustomError::from(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Missing 'ready_port' in port set",
+            )))?
+            .as_integer()
+            .ok_or_else(|| MyCustomError::from(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "'ready_port' is not an integer",
+            )))? as u16,
+        intray_port: port_set
+            .get("intray_port")
+            .ok_or_else(|| MyCustomError::from(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Missing 'intray_port' in port set",
+            )))?
+            .as_integer()
+            .ok_or_else(|| MyCustomError::from(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "'intray_port' is not an integer",
+            )))? as u16,
+        gotit_port: port_set
+            .get("gotit_port")
+            .ok_or_else(|| MyCustomError::from(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Missing 'gotit_port' in port set",
+            )))?
+            .as_integer()
+            .ok_or_else(|| MyCustomError::from(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "'gotit_port' is not an integer",
+            )))? as u16,
+    })
+}
+
+/// Encrypts data using GPG with the specified recipient's public key.
+///
+/// This function uses the `gpg` command-line tool to encrypt the data. It assumes that `gpg`
+/// is installed and accessible in the system's PATH.
+///
+/// # Arguments
+///
+/// * `data`: The data to encrypt as a byte slice.
+/// * `recipient_public_key`: The recipient's public GPG key.
+///
+/// # Returns
+///
+/// * `Result<Vec<u8>, ThisProjectError>`:  A `Result` containing the encrypted data as a `Vec<u8>` on success,
+///   or a `ThisProjectError` on failure.
+fn encrypt_with_gpg(data: &[u8], recipient_public_key: &str) -> Result<Vec<u8>, ThisProjectError> {
+    /*
+    // // Example Use:
+
+    // 5. Encrypt clearsigned data
+    let encrypted_data = encrypt_with_gpg(&clearsigned_data, &public_key_string)?;
+
+    // 6. Create export directory if it doesn't exist
+    let export_dir = PathBuf::from("invites_updates/addressbook_invite/export");
+    create_dir_all(&export_dir)?;
+
+    // 7. Write encrypted data to file. Use a timestamp to avoid overwriting.
+    let export_file_path = export_dir.join(format!(
+        "{}_addressbook_{}.gpgtoml",
+        local_owner_username,
+        get_current_unix_timestamp() // Or use a UUID
+    ));
+    let mut file = File::create(&export_file_path)?;
+    file.write_all(&encrypted_data)?;
+    */
+
+    let mut child = StdCommand::new("gpg")
+        .arg("--encrypt")
+        .arg("--recipient")
+        .arg(recipient_public_key)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()?;
+
+    // Write the data to encrypt to the GPG process's standard input
+    {
+        let stdin = child.stdin.as_mut().ok_or_else(|| ThisProjectError::NetworkError("Failed to open stdin for GPG process".to_string()))?;
+        stdin.write_all(data)?;
+    }
+
+    let output = child.wait_with_output()?;
+
+    if output.status.success() {
+        Ok(output.stdout) // Return the encrypted data
+    } else {
+        // Log the GPG error
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        debug_log!("GPG encryption error: {}", stderr);
+        Err(ThisProjectError::NetworkError(format!("GPG encryption failed: {}", stderr)))
+    }
+}
