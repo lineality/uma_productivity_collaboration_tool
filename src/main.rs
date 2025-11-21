@@ -17533,7 +17533,6 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         Err(io_error) => {
             eprintln!("Warning: Failed to create uma_archive/logs directory: {}", io_error);
             // Create a fallback directory in case the executable-relative path fails
-            // let mut fallback_dir = PathBuf::new();
             let mut fallback_dir = make_input_path_name_abs_executabledirectoryrelative_nocheck(
                 "uma_archive"
             )?;
@@ -17547,7 +17546,6 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
                 if let Err(e) = fs::create_dir_all(&fallback_dir) {
                     eprintln!("Critical: Failed to create fallback archive directory: {}", e);
                     // Return a sensible default to allow the program to continue
-                    // PathBuf::from("uma_archive/logs")
                     make_input_path_name_abs_executabledirectoryrelative_nocheck(
                         "uma_archive/logs"
                     )?
@@ -22169,8 +22167,8 @@ fn handle_command_main_mode(
             }
             "q" | "quit" | "exit" => {
                 debug_log("quit");
-                no_restart_set_hard_reset_flag_to_false();
-                quit_set_continue_uma_to_false();
+                let _ = no_restart_set_hard_reset_flag_to_false();
+                let _ = quit_set_continue_uma_to_false();
 
                 return Ok(true); // Signal to exit the loop
             }
@@ -26863,8 +26861,6 @@ fn handle_local_owner_desk(
                         || file_str.contains("\ncorenode_gpgtoml = true\n");
 
                     debug_log!("HLOD 6.4: save_as_gpgtoml flag = {}", save_as_gpgtoml);
-
-
 
                     // 7 Save File into Uma Folder Structure
                     // let received_toml: Value = toml::from_slice(&extracted_clearsigned_file_data)?;
