@@ -1293,18 +1293,22 @@ pub fn read_multi_line_toml_string(
     path: &str,
     name_of_toml_field_key_to_read: &str,
 ) -> Result<String, String> {
-    let mut file = File::open(path)
-        .map_err(|e| format!("read_multi_line_toml_string Failed to open file: {}", e))?;
+    let mut file = File::open(path).map_err(|e| {
+        format!(
+            "read_multi_line_toml_string Failed to open filepath->{:?}: e->{}",
+            path, e
+        )
+    })?;
 
     let mut content = String::new();
     file.read_to_string(&mut content)
-        .map_err(|e| format!("Failed to read file: {}", e))?;
+        .map_err(|e| format!("read_multi_line_toml_string Failed to read file: {}", e))?;
 
     // Find the start of the field
     let field_start = format!("{} = \"\"\"", name_of_toml_field_key_to_read);
     let start_pos = content.find(&field_start).ok_or_else(|| {
         format!(
-            "Multi-line field '{}' not found",
+            "read_multi_line_toml_string(): Multi-line field '{}' not found",
             name_of_toml_field_key_to_read
         )
     })?;
@@ -2210,6 +2214,11 @@ pub fn read_singleline_string_from_clearsigntoml(
     path_to_clearsigntoml_with_gpgkey: &str,
     name_of_toml_field_key_to_read: &str,
 ) -> Result<String, String> {
+    debug_log!(
+        "read_singleline_string_from_clearsigntoml: path_to_clearsigntoml_with_gpgkey->{:?},name_of_toml_field_key_to_read->{:?}",
+        path_to_clearsigntoml_with_gpgkey,
+        name_of_toml_field_key_to_read,
+    );
     // Extract GPG key from the file
     let key =
         extract_gpg_key_from_clearsigntoml(path_to_clearsigntoml_with_gpgkey, "gpg_key_public")?;
@@ -2781,12 +2790,12 @@ impl GpgError {
     /// Returns a user-friendly error message
     pub fn to_string(&self) -> String {
         match self {
-            GpgError::FileSystemError(e) => format!("File system error: {}", e),
-            GpgError::GpgOperationError(s) => format!("GPG operation error: {}", s),
-            GpgError::TempFileError(s) => format!("Temporary file error: {}", s),
-            GpgError::PathError(s) => format!("Path error: {}", s),
-            GpgError::ValidationError(s) => format!("Validation error: {}", s),
-            GpgError::DecryptionError(s) => format!("Decryption error: {}", s),
+            GpgError::FileSystemError(e) => format!("impl GpgError File system error: {}", e),
+            GpgError::GpgOperationError(s) => format!("impl GpgError GPG operation error: {}", s),
+            GpgError::TempFileError(s) => format!("impl GpgError Temporary file error: {}", s),
+            GpgError::PathError(s) => format!("impl GpgError Path error: {}", s),
+            GpgError::ValidationError(s) => format!("impl GpgError Validation error: {}", s),
+            GpgError::DecryptionError(s) => format!("impl GpgError Decryption error: {}", s),
         }
     }
 }
@@ -7922,8 +7931,8 @@ pub fn read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyi
         }
         Err(e) => {
             return Err(GpgError::GpgOperationError(format!(
-                "RACPFTW Failed to read GPG key ID from addressbook at '{}': {}",
-                addressbook_readcopy_path_string, e
+                "RACPFTW read_singleline_string_from_clearsigntoml Failed to read '{}' key ID from addressbook->{}':e->{}",
+                gpg_key_id_field_name, addressbook_readcopy_path_string, e
             )));
         }
     };
@@ -8688,7 +8697,9 @@ pub fn read_abstract_collaborator_port_assignments_from_clearsigntoml(
 /// ```
 pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
     path_to_clearsigned_toml: &Path,
-    addressbook_files_directory_relative: &str, // pass in constant here
+    absolute_addressbook_directory_path: &Path,
+    gpg_full_fingerprint_key_id_string: &String,
+    base_uma_temp_directory_path: &PathBuf,
 ) -> Result<HashMap<String, Vec<AbstractTeamchannelNodeTomlPortsData>>, GpgError> {
     debug_log(
         "starting RACPACO read_all_collaborator_port_assignments_clearsigntoml_optimized() Starting optimized extraction of all collaborator port assignments",
@@ -8700,8 +8711,8 @@ pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
         path_to_clearsigned_toml.display(),
     );
     debug_log!(
-        "RACPACO addressbook_files_directory_relative: {}",
-        addressbook_files_directory_relative,
+        "RACPACO absolute_addressbook_directory_path -> {:?}",
+        absolute_addressbook_directory_path.display()
     );
     debug_log!("RACPACO This version validates once and extracts all data in a single pass.");
 
@@ -8766,55 +8777,98 @@ pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
         file_owner_username
     );
 
-    // Convert collaborator directory to absolute path
-    let collaborator_files_directory_absolute =
-        match make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(
-            addressbook_files_directory_relative,
+    // Check for both file types
+    let toml_path = absolute_addressbook_directory_path
+        .join(format!("{}__collaborator.toml", file_owner_username));
+    let gpgtoml_path = absolute_addressbook_directory_path
+        .join(format!("{}__collaborator.gpgtoml", file_owner_username));
+
+    // Determine which file exists and use that path
+    let user_addressbook_path = if toml_path.exists() {
+        // Prefer plain .toml if both exist
+        toml_path
+    } else if gpgtoml_path.exists() {
+        gpgtoml_path
+    } else {
+        // Neither exists, skip this directory
+        #[cfg(debug_assertions)]
+        debug_log!(
+            "Skipping directory (no node.toml or node.gpgtoml): {:?}",
+            &absolute_addressbook_directory_path
+        );
+        return Err(GpgError::PathError(format!(
+            "RACPACO Err Invalid path encoding for addressbook file: {}",
+            absolute_addressbook_directory_path.display()
+        )));
+    };
+
+    #[cfg(debug_assertions)]
+    debug_log!(
+        "Found user_addressbook_path file: {:?}",
+        user_addressbook_path
+    );
+
+    // // Verify addressbook exists
+    // if !user_addressbook_path.exists() {
+    //     return Err(GpgError::PathError(format!(
+    //         "RACPACO Err Addressbook file not found for user_addressbook_path {}",
+    //         user_addressbook_path.display()
+    //     )));
+    // }
+
+    // // Get readable copy (pass the specific file path, not the directory entry)
+    // let addressbook_readcopy_path_string =
+    //     get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
+    //         &user_addressbook_path, // <-- Use the determined file path here
+    //         &gpg_full_fingerprint_key_id_string,
+    //         &base_uma_temp_directory_path,
+    //     )
+    //     .map_err(|e| format!("Failed to get temporary read copy of TOML file: {:?}", e))?;
+
+    // Get readable temp copy (handles both .toml and .gpgtoml)
+    let user_addressbook_path_str =
+        match get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
+            &user_addressbook_path, // <-- Use the determined file path here
+            &gpg_full_fingerprint_key_id_string,
+            &base_uma_temp_directory_path,
         ) {
-            Ok(path) => path,
-            Err(io_error) => {
-                return Err(GpgError::FileSystemError(io_error));
+            Ok(path) => {
+                debug_log!("LIM: Got temp read copy at: {}", path);
+                path
+            }
+            Err(e) => {
+                return Err(GpgError::PathError(format!(
+                    "RACPACO Err Invalid path encoding for addressbook file: {} {}",
+                    user_addressbook_path.display(),
+                    e
+                )));
             }
         };
 
-    debug_log!(
-        "RACPACO collaborator_files_directory_absolute -> {:?}",
-        collaborator_files_directory_absolute.display()
-    );
+    // // Construct addressbook filename
+    // let collaborator_filename = format!("{}__collaborator.toml", file_owner_username);
 
-    // Construct addressbook filename
-    let collaborator_filename = format!("{}__collaborator.toml", file_owner_username);
-
-    /*
-    maybe skip to this part where adddressbook
-    readcopy is passed in
-    */
-
-    let user_addressbook_path = collaborator_files_directory_absolute.join(&collaborator_filename);
+    // /*
+    // maybe skip to this part where adddressbook
+    // readcopy is passed in
+    // */
+    // let user_addressbook_path = collaborator_files_directory_absolute.join(&collaborator_filename);
 
     // debug_log!(
     //     "RACPACO Owner's addressbook path: {}",
     //     user_addressbook_path.display()
     // );
 
-    // Verify addressbook exists
-    if !user_addressbook_path.exists() {
-        return Err(GpgError::PathError(format!(
-            "RACPACO Err Addressbook file not found for user_addressbook_path {}",
-            user_addressbook_path.display()
-        )));
-    }
-
-    // Convert addressbook path to string
-    let user_addressbook_path_str = match user_addressbook_path.to_str() {
-        Some(s) => s,
-        None => {
-            return Err(GpgError::PathError(format!(
-                "RACPACO Err Invalid path encoding for addressbook file: {}",
-                user_addressbook_path.display()
-            )));
-        }
-    };
+    // // Convert addressbook path to string
+    // let user_addressbook_path_str = match user_addressbook_path.to_str() {
+    //     Some(s) => s,
+    //     None => {
+    //         return Err(GpgError::PathError(format!(
+    //             "RACPACO Err Invalid path encoding for addressbook file: {}",
+    //             user_addressbook_path.display()
+    //         )));
+    //     }
+    // };
 
     debug_log!(
         "RACPACO user_addressbook_path_str -> {}",
@@ -8824,7 +8878,7 @@ pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
     // Extract GPG key ID from addressbook (which validates the addressbook's signature)
     let gpg_key_id_name_of_toml_field_key_to_read = "gpg_publickey_id";
     let signing_key_id = match read_singleline_string_from_clearsigntoml(
-        user_addressbook_path_str,
+        &user_addressbook_path_str,
         gpg_key_id_name_of_toml_field_key_to_read,
     ) {
         Ok(key_id) => {
@@ -9503,7 +9557,7 @@ fn extract_port_value(line: &str, key: &str) -> Option<u16> {
 /// ```
 pub fn read_teamchannel_collaborators_with_access_from_clearsigntoml(
     path_to_clearsigned_toml: &Path,
-    addressbook_files_directory_relative: &str, // pass in constant here
+    addressbook_files_directory_relative: &str,
 ) -> Result<Vec<String>, GpgError> {
     debug_log!(
         "Reading team channel collaborators with access from: {}",
@@ -9520,6 +9574,14 @@ pub fn read_teamchannel_collaborators_with_access_from_clearsigntoml(
             )));
         }
     };
+
+    /*
+    pub fn read_stringarray_from_clearsigntoml_without_publicgpgkey(
+        pathstr_to_config_file_that_contains_gpg_key: &str,
+        pathstr_to_target_clearsigned_file: &str,
+        name_of_toml_field_key_to_read: &str,
+    ) -> Result<Vec<String>, String> {
+    */
 
     // Use the existing string array reading function with owner-based validation
     match read_stringarray_from_clearsigntoml_without_publicgpgkey(
@@ -13421,116 +13483,118 @@ zero_width = [[42, 42], [0, 0]]
 //     pub collaborator_ports: Vec<AbstractTeamchannelNodeTomlPortsData>,
 // }
 
-/// Reads all collaborator port assignments into the format expected by CoreNode.
-///
-/// # Purpose
-/// This function reads the port assignments from a clearsigned TOML file and returns
-/// them in the exact format needed by CoreNode's `abstract_collaborator_port_assignments`
-/// field, which is `HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>`.
-///
-/// # Security Model
-/// This function enforces the same strict security requirements:
-/// 1. Validates the clearsigned file using owner-based key lookup
-/// 2. No data is returned if signature validation fails
-/// 3. Maintains complete chain of trust
-///
-/// # TOML Structure Expected
-/// The function expects the TOML file to contain sections like:
-/// ```toml
-/// [[abstract_collaborator_port_assignments.alice_bob]]
-///
-/// [[abstract_collaborator_port_assignments.alice_bob.collaborator_ports]]
-/// user_name = "alice"
-/// ready_port = 62002
-/// intray_port = 49595
-/// gotit_port = 49879
-///
-/// [[abstract_collaborator_port_assignments.alice_bob.collaborator_ports]]
-/// user_name = "bob"
-/// ready_port = 59980
-/// intray_port = 52755
-/// gotit_port = 60575
-/// ```
-///
-/// # Arguments
-/// - `path_to_clearsigned_toml` - Path to the clearsigned TOML file containing port assignments
-/// - `addressbook_files_directory_relative` - Relative path to the directory containing collaborator addressbook files
-///
-/// # Returns
-/// - `Ok(HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>)` - Port assignments in CoreNode format
-/// - `Err(GpgError)` - If validation fails or parsing errors occur
-///
-/// # Example
-/// ```no_run
-/// let port_assignments = read_hashmap_corenode_ports_struct_from_clearsigntoml(
-///     Path::new("team_channel_config.toml"),
-///     "collaborators"
-/// )?;
-///
-/// // Use with translate_port_assignments
-/// let role_based_ports = translate_port_assignments(
-///     "alice",
-///     "bob",
-///     port_assignments
-/// )?;
-/// ```
-pub fn read_hashmap_corenode_ports_struct_from_clearsigntoml(
-    path_to_clearsigned_toml: &Path,
-    addressbook_files_directory_relative: &str, // pass in constant here
-                                                // addressbook_readcopy_path_string: &Path,
-) -> Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, GpgError> {
-    debug_log("RHCPSFC starting read_hashmap_corenode_ports_struct_from_clearsigntoml()");
+// /// Reads all collaborator port assignments into the format expected by CoreNode.
+// ///
+// /// # Purpose
+// /// This function reads the port assignments from a clearsigned TOML file and returns
+// /// them in the exact format needed by CoreNode's `abstract_collaborator_port_assignments`
+// /// field, which is `HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>`.
+// ///
+// /// # Security Model
+// /// This function enforces the same strict security requirements:
+// /// 1. Validates the clearsigned file using owner-based key lookup
+// /// 2. No data is returned if signature validation fails
+// /// 3. Maintains complete chain of trust
+// ///
+// /// # TOML Structure Expected
+// /// The function expects the TOML file to contain sections like:
+// /// ```toml
+// /// [[abstract_collaborator_port_assignments.alice_bob]]
+// ///
+// /// [[abstract_collaborator_port_assignments.alice_bob.collaborator_ports]]
+// /// user_name = "alice"
+// /// ready_port = 62002
+// /// intray_port = 49595
+// /// gotit_port = 49879
+// ///
+// /// [[abstract_collaborator_port_assignments.alice_bob.collaborator_ports]]
+// /// user_name = "bob"
+// /// ready_port = 59980
+// /// intray_port = 52755
+// /// gotit_port = 60575
+// /// ```
+// ///
+// /// # Arguments
+// /// - `path_to_clearsigned_toml` - Path to the clearsigned TOML file containing port assignments
+// /// - `addressbook_files_directory_relative` - Relative path to the directory containing collaborator addressbook files
+// ///
+// /// # Returns
+// /// - `Ok(HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>)` - Port assignments in CoreNode format
+// /// - `Err(GpgError)` - If validation fails or parsing errors occur
+// ///
+// /// # Example
+// /// ```no_run
+// /// let port_assignments = read_hashmap_corenode_ports_struct_from_clearsigntoml(
+// ///     Path::new("team_channel_config.toml"),
+// ///     "collaborators"
+// /// )?;
+// ///
+// /// // Use with translate_port_assignments
+// /// let role_based_ports = translate_port_assignments(
+// ///     "alice",
+// ///     "bob",
+// ///     port_assignments
+// /// )?;
+// /// ```
+// pub fn read_hashmap_corenode_ports_struct_from_clearsigntoml(
+//     path_to_clearsigned_toml: &Path,
+//     addressbook_files_directory_relative: &str, // pass in constant here
+//                                                 // addressbook_readcopy_path_string: &Path,
+// ) -> Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, GpgError> {
+//     debug_log("RHCPSFC starting read_hashmap_corenode_ports_struct_from_clearsigntoml()");
 
-    debug_log!(
-        "RHCPSFC path_to_clearsigned_toml -> {:?}",
-        path_to_clearsigned_toml.display(),
-    );
+//     debug_log!(
+//         "RHCPSFC path_to_clearsigned_toml -> {:?}",
+//         path_to_clearsigned_toml.display(),
+//     );
 
-    // debug_log!(
-    //     "RHCPSFC addressbook_readcopy_path_string -> {:?}",
-    //     addressbook_readcopy_path_string.display(),
-    // );
+//     // debug_log!(
+//     //     "RHCPSFC addressbook_readcopy_path_string -> {:?}",
+//     //     addressbook_readcopy_path_string.display(),
+//     // );
 
-    // // First, use our existing optimized reader to get the data
-    // let raw_assignments = read_all_collaborator_port_assignments_clearsigntoml_optimized(
-    //     path_to_clearsigned_toml,
-    //     // addressbook_files_directory_relative,
-    //     addressbook_readcopy_path_string, //addressbook_readcopy_path_string
-    // )?;
+//     // // First, use our existing optimized reader to get the data
+//     // let raw_assignments = read_all_collaborator_port_assignments_clearsigntoml_optimized(
+//     //     path_to_clearsigned_toml,
+//     //     // addressbook_files_directory_relative,
+//     //     addressbook_readcopy_path_string, //addressbook_readcopy_path_string
+//     // )?;
 
-    debug_log!(
-        "RHCPSFC addressbook_files_directory_relative -> {:?}",
-        addressbook_files_directory_relative,
-    );
+//     debug_log!(
+//         "RHCPSFC addressbook_files_directory_relative -> {:?}",
+//         addressbook_files_directory_relative,
+//     );
 
-    // First, use our existing optimized reader to get the data
-    let raw_assignments = read_all_collaborator_port_assignments_clearsigntoml_optimized(
-        path_to_clearsigned_toml,
-        // addressbook_files_directory_relative,
-        addressbook_files_directory_relative, //addressbook_files_directory_relative
-    )?;
+//     // First, use our existing optimized reader to get the data
+//     let raw_assignments = read_all_collaborator_port_assignments_clearsigntoml_optimized(
+//         path_to_clearsigned_toml,
+//         // addressbook_files_directory_relative,
+//         addressbook_files_directory_relative, //addressbook_files_directory_relative
+//         &gpg_full_fingerprint_key_id_string,
+//         &base_uma_temp_directory_path,
+//     )?;
 
-    // Now transform the data into the format CoreNode expects
-    let mut corenode_format: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>> =
-        HashMap::new();
+//     // Now transform the data into the format CoreNode expects
+//     let mut corenode_format: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>> =
+//         HashMap::new();
 
-    for (pair_name, collaborator_assignments) in raw_assignments {
-        // Create a single ReadTeamchannelCollaboratorPortsToml that contains all collaborators for this pair
-        let wrapper = ReadTeamchannelCollaboratorPortsToml {
-            collaborator_ports: collaborator_assignments,
-        };
+//     for (pair_name, collaborator_assignments) in raw_assignments {
+//         // Create a single ReadTeamchannelCollaboratorPortsToml that contains all collaborators for this pair
+//         let wrapper = ReadTeamchannelCollaboratorPortsToml {
+//             collaborator_ports: collaborator_assignments,
+//         };
 
-        // Store it in a Vec (even though there's only one element, to match the expected type)
-        corenode_format.insert(pair_name, vec![wrapper]);
-    }
+//         // Store it in a Vec (even though there's only one element, to match the expected type)
+//         corenode_format.insert(pair_name, vec![wrapper]);
+//     }
 
-    debug_log!(
-        "Transformed {} collaborator pairs into CoreNode format",
-        corenode_format.len()
-    );
+//     debug_log!(
+//         "Transformed {} collaborator pairs into CoreNode format",
+//         corenode_format.len()
+//     );
 
-    Ok(corenode_format)
-}
+//     Ok(corenode_format)
+// }
 
 // // TODO there may be something wrong with this function
 // // the calling of read_hashmap_corenode_ports_struct_from_clearsigntoml

@@ -356,7 +356,7 @@ use std::fs::{
     create_dir_all,
     OpenOptions,
     read_to_string,
-    write,
+    // write,
     remove_dir_all,
     read_dir,
     // DirEntry,
@@ -386,7 +386,7 @@ use std::net::{
     IpAddr,
     Ipv4Addr,
     Ipv6Addr,
-    TcpListener,
+    // TcpListener,
     // TcpStream,
     SocketAddr,
     UdpSocket,
@@ -423,7 +423,7 @@ use crate::clearsign_toml_module::{
     clearsign_and_encrypt_file_for_recipient,
     gpg_make_input_path_name_abs_executabledirectoryrelative_nocheck,
     decrypt_gpgfile_to_output,
-    read_all_collaborator_port_assignments_clearsigntoml_optimized,
+    // read_all_collaborator_port_assignments_clearsigntoml_optimized,
     read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyid,
     read_teamchannel_collaborators_with_access_from_clearsigntoml,
     read_singleline_string_from_clearsigntoml_without_publicgpgkey,
@@ -2440,6 +2440,12 @@ fn read_one_collaborator_addressbook_toml(
 
     // 2. Read and verify all fields from the clearsigned TOML file
     // Each read operation includes signature verification
+    /*
+    pub fn read_singleline_string_from_clearsigntoml(
+        path_to_clearsigntoml_with_gpgkey: &str,
+        name_of_toml_field_key_to_read: &str,
+    ) -> Result<String, String> {
+    */
 
     // Extract user_name
     let user_name = read_singleline_string_from_clearsigntoml(file_path_str, "user_name")
@@ -2947,9 +2953,10 @@ The global function would internally call the single-channel function for each `
 /// ```
 pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), ThisProjectError> {
     println!("=== Team Channel Port Audit ===");
-
+    debug_log("CAPITCCV starto check_all_ports_in_team_channels_clearsign_validated === Team Channel Port Audit ===");
     // --- Stage 1: Directory Setup ---
     println!("Setting up team channels directory...");
+    debug_log!("CAPITCCV Setting up team channels directory...");
 
     // Ensure the project graph data directory exists relative to the executable
     let team_channels_dir = match make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path(
@@ -2957,14 +2964,17 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
     ) {
         Ok(directory_path) => {
             println!("Team channels directory: {}", directory_path.display());
+            debug_log!("CAPITCCV Team channels directory: {}", directory_path.display());
+
             directory_path
         }
         Err(io_error) => {
             let error_msg = format!(
-                "Failed to ensure team_channels_dir exists: {}",
+                "CAPITCCV Failed to ensure team_channels_dir exists: {}",
                 io_error
             );
-            eprintln!("ERROR: {}", error_msg);
+            debug_log!("CAPITCCV ERROR: {}", error_msg);
+            eprintln!("CAPITCCV ERROR: {}", error_msg);
             return Err(ThisProjectError::from(error_msg));
         }
     };
@@ -2994,6 +3004,8 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
     let mut collision_count = 0;
 
     println!("\nScanning for team channel configurations...\n");
+    debug_log!("\n CAPITCCV Scanning for team channel configurations...for entry in WalkDir::new(&team_channels_dir)\n");
+
 
     // --- Stage 3: Walk Through Team Channels ---
     for entry in WalkDir::new(&team_channels_dir)
@@ -3004,14 +3016,112 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
         /*
         workflow:
 
+        maybe a few small changes just here
+        to
+        A. use helper functions to use clearsigned or .gpgtoml
+        B. make a read-copy and use that path
+
+
+
         */
 
-        let node_toml_path = entry.path().join("node.toml");
+        // // Check the both!
+        // let node_toml_path_a = entry.path().join("node.toml");
+        // let node_toml_path_b = entry.path().join("node.gpgtoml");
 
-        // Skip directories without node.toml
-        if !node_toml_path.exists() {
+
+        // // Skip directories without node.toml
+        // if !node_toml_path_a.exists() & !node_toml_path_b.exists(){
+        //     continue;
+        // }
+
+        // // new code here for gpgtoml
+
+        // // Get armored public key, using key-id (full fingerprint in)
+        // let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+        //     Ok(fingerprint) => fingerprint,
+        //     Err(e) => {
+        //         // Since the function returns Result<CoreNode, String>, we need to return a String error
+        //         return Err(format!(
+        //             "implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}",
+        //             e
+        //         ).into());
+        //     }
+        // };
+
+        // // code from load_core_node...()
+        // // Get the UME temp directory path with proper GpgError conversion
+        // let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
+        //     .map_err(|io_err| GpgError::ValidationError(
+        //         format!("Failed to get UME temp directory path: {}", io_err)
+        //     ))?;
+
+        // // Using Debug trait for more detailed error information
+        // let node_readcopy_path_string = get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
+        //     &entry.clone().into_path(),
+        //     &gpg_full_fingerprint_key_id_string,
+        //     &base_uma_temp_directory_path,
+        // ).map_err(|e| format!("Failed to get temporary read copy of TOML file: {:?}", e))?;
+
+        // Check for both file types
+        let node_toml_path = entry.path().join("node.toml");
+        let node_gpgtoml_path = entry.path().join("node.gpgtoml");
+
+        // Determine which file exists and use that path
+        let node_file_path = if node_toml_path.exists() {
+            node_toml_path
+        } else if node_gpgtoml_path.exists() {
+            node_gpgtoml_path
+        } else {
+            // Neither exists, skip this directory
             continue;
-        }
+        };
+
+        // Get GPG fingerprint (could move this outside the loop if same for all)
+        let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+            Ok(fingerprint) => fingerprint,
+            Err(e) => {
+                #[cfg(debug_assertions)]
+                debug_log!(
+                    "CAPITCCV error Failed to read GPG fingerprint for {:?}: {} (skipping)",
+                    entry.path(),
+                    e
+                );
+                continue; // Skip this directory, continue with next
+            }
+        };
+
+        // Get temp directory path (could move this outside the loop if same for all)
+        let base_uma_temp_directory_path = match get_base_uma_temp_directory_path() {
+            Ok(path) => path,
+            Err(e) => {
+                #[cfg(debug_assertions)]
+                debug_log!(
+                    "CAPITCCV error Failed to get temp directory path for {:?}: {} (skipping)",
+                    entry.path(),
+                    e
+                );
+                continue; // Skip this directory, continue with next
+            }
+        };
+
+        // Get readable copy
+        let node_readcopy_path_string = match get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
+            &node_file_path,
+            &gpg_full_fingerprint_key_id_string,
+            &base_uma_temp_directory_path,
+        ) {
+            Ok(path) => path,
+            Err(e) => {
+                #[cfg(debug_assertions)]
+                debug_log!(
+                    "CAPITCCV error Failed to get read copy for {:?}: {:?} (skipping)",
+                    node_file_path,
+                    e
+                );
+                continue; // Skip this directory, continue with next
+            }
+        };
 
         // Extract channel name from directory path
         let channel_name = entry.path()
@@ -3025,7 +3135,7 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
             continue;
         }
 
-        println!("Processing channel: {}", channel_name);
+        debug_log!("CAPITCCV Processing channel: {}", channel_name);
         channels_processed += 1;
 
         /*
@@ -3037,14 +3147,185 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
 
         */
 
+        let node_readcopy_path_path = Path::new(&node_readcopy_path_string);
+
+        let absolute_addressbook_directory_pathbuf = match get_addressbook_directory_path() {
+            Ok(path) => path,
+            Err(e) => {
+                debug_log!("CAPITCCV Failed to get absolute path: {}", e);
+                return Err(ThisProjectError::from(format!(
+                    "CAPITCCV error Failed absolute_addressbook_directory_pathbuf: {}",
+                    e
+                )));
+            }
+        };
+
+        // let absolute_addressbook_directory_path = Path::new(&absolute_addressbook_directory_pathbuf);
+
+        // // Get GPG fingerprint
+        // let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+        //     Ok(fingerprint) => fingerprint,
+        //     Err(e) => {
+        //         return Err(format!("Failed to read GPG fingerprint from uma.toml: {}", e).into());
+        //     }
+        // };
+
+        // // Get temp directory path
+        // let base_uma_temp_directory_path = get_base_uma_temp_directory_path().map_err(|io_err| {
+        //     GpgError::ValidationError(format!("Failed to get UME temp directory path: {}", io_err))
+        // })?;
+
         // --- Stage 4: Read and Validate Clearsigned Configuration ---
-        match read_all_collaborator_port_assignments_clearsigntoml_optimized(
-            &node_toml_path,
-            collaborator_files_dir_relative,
+        //
+        // match read_all_collaborator_port_assignments_clearsigntoml_optimized(
+        //     &node_readcopy_path_path,
+        //     &absolute_addressbook_directory_path,
+        //     &gpg_full_fingerprint_key_id_string,
+        //     &base_uma_temp_directory_path,
+        // ) {
+
+        // Check for both file types
+        let node_toml_path = entry.path().join("node.toml");
+        let node_gpgtoml_path = entry.path().join("node.gpgtoml");
+
+        // Determine which file exists and use that path
+        let node_file_path = if node_toml_path.exists() {
+            node_toml_path
+        } else if node_gpgtoml_path.exists() {
+            node_gpgtoml_path
+        } else {
+            // Neither exists, skip this directory
+            continue;
+        };
+
+        // Get GPG fingerprint (could move this outside the loop if same for all)
+        let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+            Ok(fingerprint) => fingerprint,
+            Err(e) => {
+                #[cfg(debug_assertions)]
+                debug_log!(
+                    "CAPITCCV Failed to read GPG fingerprint for {:?}: {} (skipping)",
+                    entry.path(),
+                    e
+                );
+                continue; // Skip this directory, continue with next
+            }
+        };
+
+        // Get temp directory path (could move this outside the loop if same for all)
+        let base_uma_temp_directory_path = match get_base_uma_temp_directory_path() {
+            Ok(path) => path,
+            Err(e) => {
+                #[cfg(debug_assertions)]
+                debug_log!(
+                    "CAPITCCV Failed to get temp directory path for {:?}: {} (skipping)",
+                    entry.path(),
+                    e
+                );
+                continue; // Skip this directory, continue with next
+            }
+        };
+
+        // Get readable copy
+        let node_readcopy_path_string = match get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
+            &node_file_path,
+            &gpg_full_fingerprint_key_id_string,
+            &base_uma_temp_directory_path,
+        ) {
+            Ok(path) => path,
+            Err(e) => {
+                #[cfg(debug_assertions)]
+                debug_log!(
+                    "CAPITCCV Failed to get read copy for {:?}: {:?} (skipping)",
+                    node_file_path,
+                    e
+                );
+                continue; // Skip this directory, continue with next
+            }
+        };
+
+        debug_log!("CAPITCCV node_readcopy_path_string->{}", node_readcopy_path_string);
+
+        // addressbook:
+        //
+        /*
+        pub fn read_singleline_string_from_clearsigntoml(
+            path_to_clearsigntoml_with_gpgkey: &str,
+            name_of_toml_field_key_to_read: &str,
+        ) -> Result<String, String> {
+        */
+
+        // Read the username from the clearsigned TOML
+        // This is the remote collaborator whose addressbook we just received
+        let remote_collaborator_username = read_single_line_string_field_from_toml(
+            &node_readcopy_path_string,
+            "owner"
+        ).map_err(|rssfc_e| {
+            let error_msg = format!(
+                "CAPITCCV Failed read_single_line_string_field_from_toml 'owner' node_readcopy_path_string->{}; rssfc_e->{}; ",
+                node_readcopy_path_string,
+                rssfc_e,
+            );
+            debug_log!("CAPITCCV Error: {}", error_msg);
+            // debug_log!("CAPITCCV The decrypted file doesn't contain a valid owner field.");
+            GpgError::ValidationError(error_msg)
+        })?;
+
+        debug_log!("CAPITCCV Extracted remote collaborator's username: {}", remote_collaborator_username);
+
+        // STEP 7.5: Ask user for preferred save format
+        debug_log!("CAPITCCV Step 7.5: Prompting user for save format preference");
+
+        // Check for both file types
+        let toml_path = absolute_addressbook_directory_pathbuf
+            .join(format!("{}__collaborator.toml", remote_collaborator_username));
+        let gpgtoml_path = absolute_addressbook_directory_pathbuf
+            .join(format!("{}__collaborator.gpgtoml", remote_collaborator_username));
+
+        // Determine which file exists and use that path
+        let raw_addressbook_path = if toml_path.exists() {
+            // Prefer plain .toml if both exist
+            toml_path
+        } else if gpgtoml_path.exists() {
+            gpgtoml_path
+        } else {
+            // Neither exists, skip this directory
+            #[cfg(debug_assertions)]
+            debug_log!(
+                "Skipping directory (no node.toml or node.gpgtoml): {:?}",
+                &absolute_addressbook_directory_pathbuf
+            );
+            return Err(ThisProjectError::from(format!(
+                "CAPITCCV Err Invalid path encoding for addressbook file: {}",
+                absolute_addressbook_directory_pathbuf.display()
+            )));
+        };
+
+        // Get readable copy
+        let specific_readcopy_addressbook_path = match get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
+            &raw_addressbook_path,
+            &gpg_full_fingerprint_key_id_string,
+            &base_uma_temp_directory_path,
+        ) {
+            Ok(path) => path,
+            Err(e) => {
+                #[cfg(debug_assertions)]
+                debug_log!(
+                    "CAPITCCV Failed to get read copy for {:?}: {:?} (skipping)",
+                    node_file_path,
+                    e
+                );
+                continue; // Skip this directory, continue with next
+            }
+        };
+
+        match read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyid(
+            &specific_readcopy_addressbook_path, // addressbook_readcopy_path_string
+            &node_readcopy_path_string // path_to_clearsigned_toml
         ) {
             Ok(port_assignments) => {
-                println!("  ✓ Signature validated successfully");
-                println!("  Found {} collaborator pairs", port_assignments.len());
+                println!("CAPITCCV  ✓ Signature validated successfully");
+                println!("CAPITCCV  Found {} collaborator pairs", port_assignments.len());
 
                 // --- Stage 5: Process Port Assignments ---
                 for (pair_name, assignments) in port_assignments {
@@ -3074,23 +3355,11 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
                         }
                     }
                 }
-
-                // Also check if authorized collaborators can be read (optional)
-                match read_teamchannel_collaborators_with_access_from_clearsigntoml(
-                    &node_toml_path,
-                    collaborator_files_dir_relative,
-                ) {
-                    Ok(collaborators) => {
-                        println!("  Authorized collaborators: {:?}", collaborators);
-                    }
-                    Err(e) => {
-                        println!("  ⚠️  Could not read authorized collaborators: {}", e.to_string());
-                    }
-                }
             }
             Err(e) => {
                 validation_failures += 1;
-                eprintln!("  ✗ Validation FAILED: {}", e.to_string());
+                eprintln!("  ✗ Validation FAILED cuz: {}", e.to_string());
+                debug_log!("Validation FAILED cuz: {}", e.to_string());
                 eprintln!("  Skipping this channel due to security validation failure");
                 continue;
             }
@@ -3112,7 +3381,8 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
             // Print collision warning
             println!("⚠️  PORT COLLISION DETECTED!");
             println!("Port {} is assigned multiple times:", port);
-
+            debug_log!("⚠️  PORT COLLISION DETECTED!");
+            debug_log!("Port {} is assigned multiple times:", port);
             for context in contexts {
                 println!(
                     "  - Channel '{}': {} ({}_port) in pair {}",
@@ -3128,8 +3398,11 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
             // Check if the port is actually in use on the system
             if is_port_in_use(*port) {
                 println!("  🔴 CRITICAL: Port {} is currently IN USE on the system!", port);
+                debug_log!("  🔴 CRITICAL: Port {} is currently IN USE on the system!", port);
+
             } else {
                 println!("  🟡 Port {} is not currently in use on the system", port);
+                debug_log!("  🔴 CRITICAL: Port {} is currently IN USE on the system!", port);
             }
 
             // Interactive warning - ask user to continue
@@ -3151,6 +3424,8 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
 
     if !collision_found {
         println!("✓ No port collisions detected!");
+        debug_log!("No port collisions detected!");
+
     }
 
     // --- Stage 7: Summary Report ---
@@ -3161,11 +3436,19 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
     println!("Validation failures: {}", validation_failures);
     println!("Port collisions found: {}", collision_count);
 
+    debug_log!("Total channels scanned: {}", channels_processed);
+    debug_log!("Total port assignments: {}", total_port_assignments);
+    debug_log!("Unique ports used: {}", port_registry.len());
+    debug_log!("Validation failures: {}", validation_failures);
+    debug_log!("Port collisions found: {}", collision_count);
+
     // --- Stage 8: Final Status ---
     if collision_found {
         eprintln!("\n❌ Port audit FAILED: {} collision(s) detected", collision_count);
         eprintln!("Please resolve port conflicts before proceeding.");
 
+        debug_log!("\n❌ Port audit FAILED: {} collision(s) detected", collision_count);
+        debug_log!("Please resolve port conflicts before proceeding.");
         // Create detailed error message
         let mut collision_details = String::from("Port collisions detected:\n");
         for (port, contexts) in &port_registry {
@@ -3178,10 +3461,12 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
     } else if validation_failures > 0 {
         eprintln!("\n⚠️  Port audit completed with {} validation failures", validation_failures);
         eprintln!("Some channels could not be verified due to signature issues.");
+        debug_log!("\n⚠️  Port audit completed with {} validation failures", validation_failures);
+        debug_log!("Some channels could not be verified due to signature issues.");
         Ok(())
     } else {
         println!("\n✅ Port audit PASSED: All ports properly configured!");
-        debug_log("Done check_all_ports_in_team_channels_clearsign_validated()");
+        debug_log("Done check_all_ports_in_team_channels_clearsign_validated() Port audit PASSED: All ports properly configured!");
         Ok(())
     }
 }
@@ -5215,7 +5500,7 @@ fn get_collaborator_names_from_node_toml(node_toml_path: &Path) -> Result<Vec<St
             ));
         }
     };
-    println!("LCNFTF: File owner: '{}'", file_owner_username);
+    // println!("LCNFTF: File owner: '{}'", file_owner_username);
     debug_log!("LCNFTF: File owner: '{}'", file_owner_username);
 
     // Get armored public key, using key-id (full fingerprint in)
@@ -9965,7 +10250,7 @@ fn load_core_node_from_toml_file(
             ));
         }
     };
-    println!("LCNFTF: File owner: '{}'", file_owner_username);
+    // println!("LCNFTF: File owner: '{}'", file_owner_username);
     debug_log!("LCNFTF: File owner: '{}'", file_owner_username);
 
     // TODO returns full response not just string
@@ -17638,7 +17923,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
     }
 
     debug_log("next IUA get_local_ip_addresses");
-    get_local_ip_addresses();
+    let _ = get_local_ip_addresses();
 
 
 
@@ -21623,10 +21908,11 @@ fn handle_command_main_mode(
             let last_two_joined = last_two_strs.join("/");
 
             if last_two_joined == "project_graph_data/team_channels" {
-                println!("Path matches the last two components!");
+                // println!("Path matches the last two components!");
                 starting_in_teamchannels_homebase = true;
             } else {
                 println!("HCMM Path does not match.");
+                debug_log!("HCMM Path does not match.");
                 starting_in_teamchannels_homebase = false;
             }
 
@@ -23722,8 +24008,6 @@ fn hex_string_to_pearson_hash(hex_string: &str) -> Result<Vec<u8>, String> {
     Ok(hash)
 }
 
-
-// TODO not used?
 /// Retrieves the salt list for a collaborator from their TOML configuration file.
 ///
 /// This function reads the collaborator's TOML file located at
@@ -24823,11 +25107,59 @@ fn get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(
         }
     }
 
+    // // 2. Read .rt timestamp from the oldest file (if found):
+    // if let Some(path) = oldest_file_path {
+    //     match fs::read_to_string(&path) { // Read content (rt timestamp)
+    //         Ok(content) => {
+    //             oldest_timestamp = content.trim().parse().map_err(|_| ThisProjectError::InvalidData("Invalid .rt timestamp in flag file".into()))?;
+
+    //             // #[cfg(debug_assertions)]
+    //             debug_log!("GOSPrtT: get_oldest prefail: Oldest .rt timestamp found: {}", oldest_timestamp);
+    //         },
+    //         Err(e) => {
+    //             // #[cfg(debug_assertions)]
+    //             debug_log!("GOSPrtT error: get_oldest prefail: Error reading .rt timestamp from file {:?}: {}", path, e);
+    //             return Err(ThisProjectError::from(e));
+    //         }
+    //     }
+    //     // 3. Delete oldest flag
+    //     // TODO alpha version: remove only oldest flag
+    //     match fs::read_to_string(&path) { // Read content (rt timestamp)
+    //         Ok(pathtemp) => {
+    //             if let Err(e) = fs::remove_file(pathtemp) { // Use &path
+    //                 // #[cfg(debug_assertions)]
+    //                 debug_log!(
+    //                     "GOSPrtT error: get_oldest prefail: Error removing oldest_file_path flag file {:?}: {}",
+    //                     path,
+    //                     e);
+    //                 return Err(ThisProjectError::from(e)); // Or handle error as needed
+    //             }
+    //         },
+    //         Err(e) => {
+    //             // #[cfg(debug_assertions)]
+    //             debug_log!("GOSPrtT error: get_oldest prefail: Error in remove_file {:?}: {}", path, e);
+    //             return Err(ThisProjectError::from(e));
+    //         }
+    //     }
+
+    //     // for entry in fs::read_dir(&prefail_directory)? {
+    //     //     let entry = entry?;
+    //     //     let path = entry.path();
+    //     //     if path.is_file() {
+    //     //         if let Err(e) = fs::remove_file(&path) { // Use &path
+    //     //             debug_log!("get_oldest prefail: Error removing flag file {:?}: {}", path, e);
+    //     //             return Err(ThisProjectError::from(e)); // Or handle error as needed
+    //     //         }
+    //     //     }
+
+    // }
+
     // 2. Read .rt timestamp from the oldest file (if found):
     if let Some(path) = oldest_file_path {
-        match fs::read_to_string(&path) { // Read content (rt timestamp)
+        match fs::read_to_string(&path) {
             Ok(content) => {
-                oldest_timestamp = content.trim().parse().map_err(|_| ThisProjectError::InvalidData("Invalid .rt timestamp in flag file".into()))?;
+                oldest_timestamp = content.trim().parse()
+                    .map_err(|_| ThisProjectError::InvalidData("Invalid .rt timestamp in flag file".into()))?;
 
                 // #[cfg(debug_assertions)]
                 debug_log!("GOSPrtT: get_oldest prefail: Oldest .rt timestamp found: {}", oldest_timestamp);
@@ -24838,36 +25170,16 @@ fn get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(
                 return Err(ThisProjectError::from(e));
             }
         }
-        // 3. Delete oldest flag
-        // TODO alpha version: remove only oldest flag
-        match fs::read_to_string(&path) { // Read content (rt timestamp)
-            Ok(pathtemp) => {
-                if let Err(e) = fs::remove_file(pathtemp) { // Use &path
-                    // #[cfg(debug_assertions)]
-                    debug_log!(
-                        "GOSPrtT error: get_oldest prefail: Error removing oldest_file_path flag file {:?}: {}",
-                        path,
-                        e);
-                    return Err(ThisProjectError::from(e)); // Or handle error as needed
-                }
-            },
-            Err(e) => {
-                // #[cfg(debug_assertions)]
-                debug_log!("GOSPrtT error: get_oldest prefail: Error in remove_file {:?}: {}", path, e);
-                return Err(ThisProjectError::from(e));
-            }
+
+        // 3. Delete oldest flag - CORRECTED
+        if let Err(e) = fs::remove_file(&path) {
+            // #[cfg(debug_assertions)]
+            debug_log!(
+                "GOSPrtT error: get_oldest prefail: Error removing oldest_file_path flag file {:?}: {}",
+                path,
+                e);
+            return Err(ThisProjectError::from(e));
         }
-
-        // for entry in fs::read_dir(&prefail_directory)? {
-        //     let entry = entry?;
-        //     let path = entry.path();
-        //     if path.is_file() {
-        //         if let Err(e) = fs::remove_file(&path) { // Use &path
-        //             debug_log!("get_oldest prefail: Error removing flag file {:?}: {}", path, e);
-        //             return Err(ThisProjectError::from(e)); // Or handle error as needed
-        //         }
-        //     }
-
     }
 
     Ok(oldest_timestamp)
@@ -26955,6 +27267,20 @@ fn handle_local_owner_desk(
                         };
 
                         // 3. Saving the File
+                        // if let Err(e) = fs::write(&incoming_file_path, data_to_save) {
+                        //     debug_log!("HLOD-InTray: Failed to write message file: {:?}", e);
+                        //     return Err(ThisProjectError::from(e));
+                        // }
+
+                        // Create parent directories if they don't exist
+                        if let Some(parent) = Path::new(&incoming_file_path).parent() {
+                            if let Err(e) = fs::create_dir_all(parent) {
+                                debug_log!("HLOD-InTray: Failed to create directories: {:?}", e);
+                                return Err(ThisProjectError::from(e));
+                            }
+                        }
+
+                        // 3. Saving the File
                         if let Err(e) = fs::write(&incoming_file_path, data_to_save) {
                             debug_log!("HLOD-InTray: Failed to write message file: {:?}", e);
                             return Err(ThisProjectError::from(e));
@@ -27597,82 +27923,6 @@ fn serialize_gotit_signal(signal: &GotItSignal) -> std::io::Result<Vec<u8>> {
     bytes.extend_from_slice(&signal.gh);             // gh is now Vec<u8>, no Option
 
     Ok(bytes)
-}
-
-/// File Deserialization (Receiving):
-/// Receive Bytes: Receive the byte array from the network using socket.recv_from().
-/// Convert to String: Convert the byte array back to a string using String::from_utf8(). This assumes the received bytes are in ASCII encoding.
-/// Parse TOML: Parse the TOML string using the toml::from_str() function to create a TOML Value or a custom struct representing the data.
-/// Save to File: Write the parsed TOML data to a file using fs::write().
-fn receive_toml_file(socket: &UdpSocket) -> Result<(Value, SocketAddr), ThisProjectError> {
-    let mut buf = [0; 65536]; // Maximum UDP datagram size
-    let (amt, src) = socket.recv_from(&mut buf)?;
-
-    // 2. Convert to string (handling FromUtf8Error)
-    let toml_string = String::from_utf8(buf[..amt].to_vec())
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.utf8_error()))?;
-
-    // 3. Parse TOML (handling toml::de::Error)
-    // // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
-    let toml_value: Value = toml::from_str(&toml_string)?;
-
-    // 4. Save to file (you'll need to determine the file path)
-    // ...
-
-    Ok((toml_value, src))
-}
-
-fn get_oldest_retry_timestamp(collaborator_username: &str) -> Result<Option<u64>, io::Error> {
-    let retry_flags_dir = Path::new("project_graph_data/sync_state_items")
-        .join(&collaborator_username)
-        .join("fail_retry_flags");
-
-    if !retry_flags_dir.exists() {
-        return Ok(None); // No retry flags exist
-    }
-
-    let mut oldest_timestamp: Option<u64> = None;
-
-    for entry in fs::read_dir(retry_flags_dir)? {
-        let entry = entry?;
-        let path = entry.path();
-
-        if path.is_file() {
-            let file_name = path.file_name().unwrap().to_str().unwrap();
-            if let Some((_, timestamp_str)) = file_name.split_once("__") {
-                if let Ok(timestamp) = timestamp_str.parse::<u64>() {
-                    if oldest_timestamp.is_none() || timestamp < oldest_timestamp.unwrap() {
-                        oldest_timestamp = Some(timestamp);
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(oldest_timestamp)
-}
-
-fn create_retry_flag(
-    collaborator: &RemoteCollaboratorPortsData,
-    file_path: &PathBuf,
-    timestamp: u64,
-) -> Result<PathBuf, io::Error> {
-    let retry_flags_dir = Path::new("project_graph_data/sync_state_items")
-        .join(&collaborator.remote_collaborator_name)
-        .join("fail_retry_flags");
-
-    fs::create_dir_all(&retry_flags_dir)?;
-
-    // Generate a unique ID (you might use a UUID library for better uniqueness)
-    let unique_id: u64 = rand::random();
-
-    let retry_flag_file_name = format!("{}__{}.txt", unique_id, timestamp);
-    let retry_flag_path = retry_flags_dir.join(retry_flag_file_name);
-
-    // Create an empty file (the presence of the file acts as the flag)
-    File::create(&retry_flag_path)?;
-
-    Ok(retry_flag_path)
 }
 
 fn get_absolute_team_channel_path(team_channel_name: &str) -> io::Result<PathBuf> {
