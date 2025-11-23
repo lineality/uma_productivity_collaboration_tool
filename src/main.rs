@@ -18636,50 +18636,125 @@ pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
     // STEP 2: Locate the LOCAL OWNER USER's addressbook file and extract their GPG key ID
     debug_log!("PIET Step 2: Locating LOCAL OWNER USER's addressbook file to get GPG key ID");
 
-    // Get absolute path to the collaborator files directory
-    let relative_collab_dir = COLLABORATOR_ADDRESSBOOK_PATH_STR;
-    let absolute_collab_dir = make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_collab_dir)
-        .map_err(|e| {
-            let error_msg = format!("PIET Failed to locate collaborator files directory: {}", e);
-            println!("Error: {}", error_msg);
-            GpgError::PathError(error_msg)
-        })?;
+    // // Get absolute path to the collaborator files directory
+    // let relative_collab_dir = COLLABORATOR_ADDRESSBOOK_PATH_STR;
+    // let absolute_collab_dir = make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_collab_dir)
+    //     .map_err(|e| {
+    //         let error_msg = format!("PIET Failed to locate collaborator files directory: {}", e);
+    //         println!("Error: {}", error_msg);
+    //         GpgError::PathError(error_msg)
+    //     })?;
 
-    // Path to the LOCAL OWNER USER's addressbook file (absolute path)
-    let local_owner_address_book_filename = format!("{}__collaborator.toml", local_owner_user_name);
-    let absolute_local_owner_address_book_path = absolute_collab_dir.join(&local_owner_address_book_filename);
+    // // Path to the LOCAL OWNER USER's addressbook file (absolute path)
+    // let local_owner_address_book_filename = format!("{}__collaborator.toml", local_owner_user_name);
+    // let absolute_local_owner_address_book_path = absolute_collab_dir.join(&local_owner_address_book_filename);
 
-    debug_log!("PIET LOCAL OWNER USER's addressbook path: {}", absolute_local_owner_address_book_path.display());
+    // debug_log!("PIET LOCAL OWNER USER's addressbook path: {}", absolute_local_owner_address_book_path.display());
 
-    // Verify the LOCAL OWNER USER's addressbook file exists
-    if !absolute_local_owner_address_book_path.exists() {
-        let error_msg = format!(
-            "PIET LOCAL OWNER USER's addressbook file not found at: {}",
-            absolute_local_owner_address_book_path.display()
+    // // Verify the LOCAL OWNER USER's addressbook file exists
+    // if !absolute_local_owner_address_book_path.exists() {
+    //     let error_msg = format!(
+    //         "PIET LOCAL OWNER USER's addressbook file not found at: {}",
+    //         absolute_local_owner_address_book_path.display()
+    //     );
+    //     println!("Error: {}", error_msg);
+    //     return Err(GpgError::PathError(error_msg));
+    // }
+
+    // debug_log!("PIET LOCAL OWNER USER's addressbook file exists");
+
+    // // Convert the LOCAL OWNER USER's addressbook path to string for TOML reading
+    // let absolute_local_owner_address_book_path_str = absolute_local_owner_address_book_path
+    //     .to_str()
+    //     .ok_or_else(|| {
+    //         let error_msg = format!(
+    //             "PIET Unable to convert LOCAL OWNER USER's addressbook path to string: {}",
+    //             absolute_local_owner_address_book_path.display()
+    //         );
+    //         println!("Error: {}", error_msg);
+    //         GpgError::PathError(error_msg)
+    //     })?;
+
+    let absolute_addressbook_directory_pathbuf = match get_addressbook_directory_path() {
+        Ok(path) => path,
+        Err(e) => {
+            debug_log!("PIET Failed to get absolute path: {}", e);
+            return Err(GpgError::GpgOperationError(format!(
+                "PIET error Failed absolute_addressbook_directory_pathbuf: {}",
+                e
+            )));
+        }
+    };
+
+    // Check for both file types
+    let toml_path = absolute_addressbook_directory_pathbuf
+        .join(format!("{}__collaborator.toml", local_owner_user_name));
+    let gpgtoml_path = absolute_addressbook_directory_pathbuf
+        .join(format!("{}__collaborator.gpgtoml", local_owner_user_name));
+
+    // Determine which file exists and use that path
+    let raw_addressbook_path = if toml_path.exists() {
+        // Prefer plain .toml if both exist
+        toml_path
+    } else if gpgtoml_path.exists() {
+        gpgtoml_path
+    } else {
+        // Neither exists, skip this directory
+        #[cfg(debug_assertions)]
+        debug_log!(
+            "PIET Skipping directory (no node.toml or node.gpgtoml): {:?}",
+            &absolute_addressbook_directory_pathbuf
         );
-        println!("Error: {}", error_msg);
-        return Err(GpgError::PathError(error_msg));
-    }
+        return Err(GpgError::GpgOperationError(format!(
+            "PIET Err Invalid path encoding for addressbook file: {}",
+            absolute_addressbook_directory_pathbuf.display()
+        )));
+    };
 
-    debug_log!("PIET LOCAL OWNER USER's addressbook file exists");
 
-    // Convert the LOCAL OWNER USER's addressbook path to string for TOML reading
-    let absolute_local_owner_address_book_path_str = absolute_local_owner_address_book_path
-        .to_str()
-        .ok_or_else(|| {
-            let error_msg = format!(
-                "PIET Unable to convert LOCAL OWNER USER's addressbook path to string: {}",
-                absolute_local_owner_address_book_path.display()
-            );
-            println!("Error: {}", error_msg);
+    // Get armored public key, using key-id (full fingerprint in)
+    let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+        Ok(fingerprint) => fingerprint,
+        Err(e) => {
+            // Since the function returns Result<CoreNode, String>, we need to return a String error
+            return Err(GpgError::GpgOperationError(format!(
+                "PIET: implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}",
+                e
+            )));
+        }
+    };
+
+    // Get the UME temp directory path with explicit String conversion
+    let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
+        .map_err(|e| {
+            let error_msg = format!("PIET Failed to resolve incoming teamchannels directory path: {}", e);
+            println!("PIET Error: {}", error_msg);
             GpgError::PathError(error_msg)
         })?;
+
+
+    // Get readable copy
+    let specific_readcopy_addressbook_path = match get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
+        &raw_addressbook_path,
+        &gpg_full_fingerprint_key_id_string,
+        &base_uma_temp_directory_path,
+    ) {
+        Ok(path) => path,
+        Err(e) => {
+            // Since the function returns Result<CoreNode, String>, we need to return a String error
+            return Err(GpgError::GpgOperationError(format!(
+                "PIET: specific_readcopy_addressbook_path: {}",
+                e
+            )));
+        }
+    };
+
 
     // Read the LOCAL OWNER USER's GPG key ID from their addressbook file
     debug_log!("PIET Attempting to read GPG key ID from LOCAL OWNER USER's addressbook file");
 
     let local_owner_gpg_key_id = read_singleline_string_from_clearsigntoml(
-        absolute_local_owner_address_book_path_str,
+        &specific_readcopy_addressbook_path,
         "gpg_publickey_id"
     ).map_err(|e| {
         let error_msg = format!("PIET Failed to read LOCAL OWNER USER's GPG key ID: {}", e);
@@ -18952,11 +19027,11 @@ pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
     // A. Check for either node.toml or node.gpgtoml
     // let node_toml_path = absolute_specific_team_channel_directory_path.join("node.toml");
     let cl_team_channel_owner_address_book_filename = format!("{}__collaborator.toml", team_channel_owner);
-    let cl_absolute_team_channel_owner_address_book_path = absolute_collab_dir.join(&cl_team_channel_owner_address_book_filename);
+    let cl_absolute_team_channel_owner_address_book_path = absolute_addressbook_directory_pathbuf.join(&cl_team_channel_owner_address_book_filename);
 
     // let node_gpgtoml_path = absolute_specific_team_channel_directory_path.join("node.gpgtoml");
     let gpg_team_channel_owner_address_book_filename = format!("{}__collaborator.gpgtoml", team_channel_owner);
-    let gpg_absolute_team_channel_owner_address_book_path = absolute_collab_dir.join(&gpg_team_channel_owner_address_book_filename);
+    let gpg_absolute_team_channel_owner_address_book_path = absolute_addressbook_directory_pathbuf.join(&gpg_team_channel_owner_address_book_filename);
 
 
     let absolute_team_channel_owner_address_book_path = if cl_absolute_team_channel_owner_address_book_path.exists() {
