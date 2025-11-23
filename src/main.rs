@@ -6250,72 +6250,6 @@ impl App {
         Ok(max_count)
     }
 
-    /// Prints the current task display (for debugging)
-    pub fn print_task_display(&self) {
-        for row in &self.task_display_table {
-            println!("{}", row);
-        }
-    }
-
-
-    fn handle_tui_action(&mut self) -> Result<(), io::Error> { // Now returns Result
-        debug_log("app fn handle_tui_action() started");
-
-        // self.update_next_path_lookup_table();
-
-        if self.is_in_team_channel_list() {
-            debug_log("is_in_team_channel_list");
-            debug_log(&format!("handle_tui_action() current_path: {:?}", self.current_path));
-
-            let input = tiny_tui::get_input()?; // Get input here
-            if let Ok(index) = input.parse::<usize>() {
-                let item_index = index - 1; // Adjust for 0-based indexing
-                if item_index < self.tui_directory_list.len() {
-                    let selected_channel = &self.tui_directory_list[item_index];
-                    debug_log(&format!("Selected channel: {}", selected_channel)); // Log the selected channel name
-
-                    self.current_path = self.current_path.join(selected_channel);
-
-                    debug_log(&format!("handle_tui_action() New current_path: {:?}", self.current_path)); // Log the updated current path
-
-                    self.graph_navigation_instance_state.current_full_file_path = self.current_path.clone();
-                    self.graph_navigation_instance_state.nav_graph_look_read_node_toml();
-
-                    // Log the state after loading node.toml
-                    debug_log(&format!("handle_tui_action() State after nav_graph_look_read_node_toml: {:?}", self.graph_navigation_instance_state));
-
-                    // ... enter IM browser or other features ...
-                } else {
-                    debug_log("Invalid index.");
-                }
-            }
-        } else if self.is_in_message_posts_browser_directory() {
-            // ... handle other TUI actions ...
-            debug_log("else if self.is_in_message_posts_browser_directory()");
-
-
-        }
-        debug_log("end app fn handle_tui_action()");
-        Ok(()) // Return Ok if no errors
-    }
-
-    fn get_focused_channel_path(&self) -> Option<PathBuf> {
-        let channel_name = self.tui_file_list.get(self.tui_focus)?;
-        Some(self.current_path.join(channel_name))
-    }
-
-    // // TODO not being used
-    // fn enter_message_posts_browser(&mut self, channel_path: PathBuf) {
-    //     // Update the current path to the instant message browser directory within the selected channel
-    //     self.current_path = channel_path.join("message_posts_browser");
-    //     // Load the instant messages for this channel
-    //     self.load_im_messages(); // No need to pass any arguments
-    //     // Reset the TUI focus to the beginning of the message list
-    //     self.tui_focus = 0;
-    // }
-
-
-
     /// Modal Interactive Message Browser with Dual Refresh/Insert Modes
     ///
     /// # Purpose
@@ -6721,7 +6655,7 @@ impl App {
             .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Time error: {}", e)))?
             .as_secs();
 
-        let expires_at = now + (expires_minutes * 60);
+
 
         // Read metadata to get node info
         let metadata_path = self.current_path.join("0.toml");
@@ -6736,6 +6670,11 @@ impl App {
             &self.current_path,
             &self.graph_navigation_instance_state.local_owner_user
         );
+
+        let expires_after_min = metadata.expires_after_min;
+
+
+        let expires_at = now + (expires_after_min * 60);
 
         debug_log!("SCMSG: Creating message at: {:?}", file_path);
 
@@ -6755,7 +6694,7 @@ impl App {
 
         // Create message with custom settings
         let message = MessagePostFile::new(
-            &self.graph_navigation_instance_state,
+            // &self.graph_navigation_instance_state,
             &self.graph_navigation_instance_state.local_owner_user,
             &metadata.node_name,
             &metadata.path_in_node,
@@ -11858,6 +11797,7 @@ fn add_im_message(
     // 1. Parse for {to:user} syntax to determine recipients
     debug_log!("AIM: Parsing recipient list");
 
+    // note: this should come from 0.toml, not nav-state
     let mut recipients_list = graph_navigation_instance_state
         .current_node_teamchannel_collaborators_with_access
         .clone();
@@ -11946,15 +11886,30 @@ fn add_im_message(
     // 5. Create MessagePostFile struct
     debug_log!("AIM: Creating MessagePostFile");
 
+    /*
+    struct MessagePostFile {
+        // every .toml has these four
+        owner: String, // owner of this item
+        node_name: String, // Name of the node this message belongs to
+        filepath_in_node: String, // Relative path within the node's directory
+        text_message: String, // content-body
+
+        teamchannel_collaborators_with_access: Vec<String>,
+        updated_at_timestamp: u64, // utc posix timestamp
+        messagepost_gpgtoml: bool, // Is MessagePostFile file gpg encrypted
+        expires_at: u64, // utc posix timestamp
+    }
+    */
+
+    // should not require nav-state
     let message = MessagePostFile::new(
-        graph_navigation_instance_state,
         owner,
         &node_name,
         &filepath_in_node,
         text,
         recipients_list.clone(),
         false, // messagepost_gpgtoml - default to clearsigned format
-        None,  // NEW: None = use default expiration
+        None,
     );
 
     debug_log!("AIM: MessagePostFile created, gpgtoml: {}", message.messagepost_gpgtoml);
@@ -12369,34 +12324,98 @@ struct NodeInstMsgBrowserMetadata {
     owner: String, // owner of this item
     teamchannel_collaborators_with_access: Vec<String>,
     updated_at_timestamp: u64, // utc posix timestamp
-    expires_at: u64, // utc posix timestamp
+    expires_after_min: u64, // utc posix timestamp
 
     node_name: String,
     path_in_node: String,
-    expiration_period_days: u64,
     max_message_size_char: u64,
     total_max_size_mb: u64,
+
+
+    // Special configurations
+
+    /// message_post_gpgtoml_required
+    message_post_gpgtoml_required:  Option<bool>,
+
+    /// Integer validation ranges as tuples (min, max) - inclusive bounds
+    message_post_data_format_specs_integer_ranges_from_to_tuple_array: Option<Vec<(i32, i32)>>,
+
+    /// Integer-string validation ranges as tuples (min, max) for the integer part
+    message_post_data_format_specs_int_string_ranges_from_to_tuple_array: Option<Vec<(i32, i32)>>,
+
+    /// Maximum string length
+    message_post_max_string_length_int: Option<usize>,
+
+    /// Whether posts are public or private
+    message_post_is_public_bool: Option<bool>,
+
+    /// Whether user confirmation is required before posting
+    message_post_user_confirms_bool: Option<bool>,
+
+    /// Start time for accepting posts (UTC POSIX timestamp)
+    message_post_start_date_utc_posix: Option<i64>,
+
+    /// End time for accepting posts (UTC POSIX timestamp)
+    message_post_end_date_utc_posix: Option<i64>,
 }
 
 impl NodeInstMsgBrowserMetadata {
     fn new(
         node_name: &str,
-        owner: String
+        owner: String,
+        teamchannel_collaborators_with_access: Vec<String>,
+        expires_after_min: u64,
+        // Special configurations
+        message_post_gpgtoml_required: Option<bool>,
+        message_post_data_format_specs_integer_ranges_from_to_tuple_array: Option<Vec<(i32, i32)>>,
+        message_post_data_format_specs_int_string_ranges_from_to_tuple_array: Option<Vec<(i32, i32)>>,
+        message_post_max_string_length_int: Option<usize>,
+        message_post_is_public_bool: Option<bool>,
+        message_post_user_confirms_bool: Option<bool>,
+        message_post_start_date_utc_posix: Option<i64>,
+        message_post_end_date_utc_posix: Option<i64>,
+
     ) -> NodeInstMsgBrowserMetadata {
         NodeInstMsgBrowserMetadata {
             node_name: node_name.to_string(),
             path_in_node: "/message_posts_browser".to_string(), // TODO
-            expiration_period_days: 30, // Default: 7 days
-            max_message_size_char: 4096, // Default: 4096 characters
+            max_message_size_char: 4096, // Default: 4096 characters...too big?
             total_max_size_mb: 512, // Default: 1024 MB
             updated_at_timestamp: get_current_unix_timestamp(),
-            expires_at: get_current_unix_timestamp(),  // TODO update this with real something
-            teamchannel_collaborators_with_access: Vec::new(), // by default use state-struct node members
+            expires_after_min: expires_after_min,  // TODO update this with real something
+            teamchannel_collaborators_with_access: teamchannel_collaborators_with_access, // by default use state-struct node members
             owner: owner,
+
+
+            // Special configurations (only for config 0toml file)
+
+            // message_post_gpgtoml_required
+            message_post_gpgtoml_required:  message_post_gpgtoml_required,
+
+            // Integer validation ranges as tuples (min, max) - inclusive bounds
+            message_post_data_format_specs_integer_ranges_from_to_tuple_array: message_post_data_format_specs_integer_ranges_from_to_tuple_array,
+
+            // Integer-string validation ranges as tuples (min, max) for the integer part
+            message_post_data_format_specs_int_string_ranges_from_to_tuple_array: message_post_data_format_specs_int_string_ranges_from_to_tuple_array,
+
+            // Maximum string length
+            message_post_max_string_length_int: message_post_max_string_length_int,
+
+            // Whether posts are public or private
+            message_post_is_public_bool: message_post_is_public_bool,
+
+            // Whether user confirmation is required before posting
+            message_post_user_confirms_bool: message_post_user_confirms_bool,
+
+            // Start time for accepting posts (UTC POSIX timestamp)
+            message_post_start_date_utc_posix:message_post_start_date_utc_posix,
+
+            // End time for accepting posts (UTC POSIX timestamp)
+            message_post_end_date_utc_posix: message_post_end_date_utc_posix,
+
         }
     }
 }
-
 
 
 /*
@@ -12417,14 +12436,11 @@ struct MessagePostFile {
     updated_at_timestamp: u64, // utc posix timestamp
     messagepost_gpgtoml: bool, // Is MessagePostFile file gpg encrypted
     expires_at: u64, // utc posix timestamp
-
-    // links: Vec<String>,  // reference to node etc.
-    // signature: Option<String>, // ???
 }
 
 impl MessagePostFile {
     fn new(
-        graph_navigation_instance_state: &GraphNavigationInstanceState,
+        // graph_navigation_instance_state: &GraphNavigationInstanceState,
         owner: &str, // owner
         node_name: &str, // node_name
         filepath_in_node: &str, //filepath_in_node
@@ -12435,10 +12451,13 @@ impl MessagePostFile {
     ) -> MessagePostFile {
         let timestamp = get_current_unix_timestamp();
 
+        // // Use custom expiration if provided, otherwise calculate default
+        // let expires_at_timestamp = expires_at.unwrap_or_else(|| {
+        //     timestamp + (graph_navigation_instance_state.default_im_messages_expiration_days * 24 * 60 * 60)
+        // });
+
         // Use custom expiration if provided, otherwise calculate default
-        let expires_at_timestamp = expires_at.unwrap_or_else(|| {
-            timestamp + (graph_navigation_instance_state.default_im_messages_expiration_days * 24 * 60 * 60)
-        });
+        let expires_at_timestamp = expires_at.unwrap_or_else(|| u64::MAX);
 
         MessagePostFile {
             owner: owner.to_string(),
@@ -12491,7 +12510,11 @@ impl MessagePostFile {
 /// * If saving TOML files fails
 /// * If retrieving project area data fails
 /// * If creating or saving the CoreNode fails
-fn create_new_team_channel(team_channel_name: String, owner: String) -> Result<(), ThisProjectError> {
+fn create_new_team_channel(
+    team_channel_name: String,
+    owner: String,
+    // teamchannel_collaborators_with_access: Vec<String>,
+) -> Result<(), ThisProjectError> {
     /*
     // uses
     use std::collections::HashMap;
@@ -12563,17 +12586,7 @@ fn create_new_team_channel(team_channel_name: String, owner: String) -> Result<(
         }
     }
 
-    // 2. Create and Save 0.toml Metadata (with error handling)
-    let metadata_path = instant_msg_path.join("0.toml");
-    let metadata = NodeInstMsgBrowserMetadata::new(&team_channel_name, owner.clone());
 
-    match save_toml_to_file(&metadata, &metadata_path) {
-        Ok(_) => debug_log!("CTC: Saved metadata to 0.toml"),
-        Err(e) => {
-            debug_log!("CTC: Error saving metadata: {}", e);
-            return Err(ThisProjectError::IoError(e));
-        }
-    }
 
     // Generate collaborator port assignments
 
@@ -12586,7 +12599,7 @@ fn create_new_team_channel(team_channel_name: String, owner: String) -> Result<(
     // Generate collaborator port assignments with global collision prevention
     debug_log!("CTC: create_new_team_channel(): Starting port assignment generation for owner '{}'", owner);
 
-    let (collaborators, abstract_collaborator_port_assignments) = match create_teamchannel_port_assignments(&owner) {
+    let (teamchannel_collaborators_with_access, abstract_collaborator_port_assignments) = match create_teamchannel_port_assignments(&owner) {
         Ok((collab_list, port_assigns)) => {
             debug_log!(
                 "CTC: create_new_team_channel(): Successfully generated port assignments for {} collaborators with {} pairs",
@@ -12620,10 +12633,37 @@ fn create_new_team_channel(team_channel_name: String, owner: String) -> Result<(
         }
     };
 
-    debug_log!("CTC: create_new_team_channel(): Port assignments complete. Collaborators: {:?}", collaborators);
+    debug_log!("CTC: create_new_team_channel(): Port assignments complete. Collaborators: {:?}", teamchannel_collaborators_with_access);
+
+    // 2. Create and Save 0.toml Metadata (with error handling)
+    let metadata_path = instant_msg_path.join("0.toml");
+    let metadata = NodeInstMsgBrowserMetadata::new(
+        &team_channel_name,
+        owner.clone(),
+        teamchannel_collaborators_with_access.clone(),
+        9999999, // default expiry in minutes
+
+        // Special configurations (not for team channel)
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+
+    match save_toml_to_file(&metadata, &metadata_path) {
+        Ok(_) => debug_log!("CTC: Saved metadata to 0.toml"),
+        Err(e) => {
+            debug_log!("CTC: Error saving metadata: {}", e);
+            return Err(ThisProjectError::IoError(e));
+        }
+    }
 
     // Log the results
-    debug_log!("CTC: create_new_team_channel(): Collaborators with access: {:?}", collaborators);
+    debug_log!("CTC: create_new_team_channel(): Collaborators with access: {:?}", teamchannel_collaborators_with_access);
     for (pair_name, assignments) in &abstract_collaborator_port_assignments {
         debug_log!("CTC: create_new_team_channel(): Pair '{}' has {} port assignments",
             pair_name,
@@ -12694,7 +12734,7 @@ fn create_new_team_channel(team_channel_name: String, owner: String) -> Result<(
         team_channel_name,
         new_channel_path,
         owner,
-        collaborators,
+        teamchannel_collaborators_with_access,
         abstract_collaborator_port_assignments,
         // Project Areas
         pa1_process,
@@ -13325,7 +13365,8 @@ fn create_core_node(
     let pa6_feedback = q_and_a_get_pa6_feedback()?;
 
     // Get user input for message post configuration fields
-
+    let expires_after_min = q_and_a_get_message_expires_after_min()?;
+    print!("\n");
     let message_post_gpgtoml_required = q_and_a_get_message_post_gpgtoml_required()?;
     print!("\n");
     let message_post_integer_ranges = q_and_a_get_message_post_integer_ranges()?;
@@ -13360,7 +13401,21 @@ fn create_core_node(
 
     // Create and Save metadata
     let metadata_path = message_dir.join("0.toml");
-    let metadata = NodeInstMsgBrowserMetadata::new(&node_name, owner.clone());
+    let metadata = NodeInstMsgBrowserMetadata::new(
+        &node_name,
+        owner.clone(),
+        teamchannel_collaborators_with_access.clone(),
+        expires_after_min,
+        // Special configurations
+        message_post_gpgtoml_required,
+        message_post_integer_ranges.clone(),
+        message_post_int_string_ranges.clone(),
+        message_post_max_string_length,
+        message_post_is_public,
+        message_post_user_confirms,
+        message_post_start_date,
+        message_post_end_date,
+    );
     save_toml_to_file(&metadata, &metadata_path)?;
 
     // Create CoreNode instance
@@ -14187,6 +14242,30 @@ fn q_and_a_get_message_post_int_string_ranges() -> Result<Option<Vec<(i32, i32)>
 ///
 /// # Returns
 /// * `Result<Option<usize>, ThisProjectError>` - Maximum string length or None
+fn q_and_a_get_message_expires_after_min() -> Result<u64, ThisProjectError> {
+    println!("Enter default-lifetime of post in minutes (or press Enter for 9999999):");
+    println!("Example: 42 (Massages respire after 42 minutes.");
+
+    let mut input = String::new();
+    io::stdout().flush()?;
+    io::stdin().read_line(&mut input)?;
+
+    let input = input.trim();
+    if input.is_empty() {
+        return Ok(9999999);
+    }
+
+    let max_length = input.parse::<u64>()
+        .map_err(|_| ThisProjectError::InvalidInput(format!("Invalid maximum string length: {}", input)))?;
+
+    Ok(max_length)
+}
+
+
+/// Gets user input for maximum string length in integer-string pairs
+///
+/// # Returns
+/// * `Result<Option<usize>, ThisProjectError>` - Maximum string length or None
 fn q_and_a_get_message_post_max_string_length() -> Result<Option<usize>, ThisProjectError> {
     println!("Enter maximum string length (max number of write-in characters) for integer-string pairs (or press Enter to skip):");
     println!("Example: 42");
@@ -14205,6 +14284,7 @@ fn q_and_a_get_message_post_max_string_length() -> Result<Option<usize>, ThisPro
 
     Ok(Some(max_length))
 }
+
 
 /// Gets user input for whether message posts should be public
 ///
@@ -15144,10 +15224,10 @@ fn handle_custom_end_date_input(start_date_timestamp: Option<i64>) -> Result<Opt
 ///
 /// e.g.
 /// // Call the function to move the directory
-/// if let Err(error) = move_directory__from_path_to_path("path/to/old/directory", "path/to/new/directory") {
+/// if let Err(error) = move_directory_from_path_to_path("path/to/old/directory", "path/to/new/directory") {
 ///     eprintln!("An error occurred: {}", error);
 /// }
-fn move_directory__from_path_to_path<SourceDirectory: AsRef<Path>, DestinationDirectory: AsRef<Path>>(
+fn move_directory_from_path_to_path<SourceDirectory: AsRef<Path>, DestinationDirectory: AsRef<Path>>(
     source_directory: SourceDirectory,
     destination_directory: DestinationDirectory,
 ) -> std::io::Result<()> {
@@ -15162,7 +15242,7 @@ fn move_directory__from_path_to_path<SourceDirectory: AsRef<Path>, DestinationDi
         // If the entry is a directory, create it in the destination directory and move its contents
         if file_type.is_dir() {
             fs::create_dir_all(destination_path.join(entry.file_name()))?;
-            move_directory__from_path_to_path(entry.path(), destination_path.join(entry.file_name()))?;
+            move_directory_from_path_to_path(entry.path(), destination_path.join(entry.file_name()))?;
         }
         // If the entry is a file, move it to the destination directory
         else {
@@ -16469,7 +16549,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
     if number_of_team_channels == 0 {
         // If no team channels exist, create the first one
         println!("There are no existing team channels. Let's create one.");
-        println!("Enter a name for the team channel:");
+        println!("Enter a name for a new Team-Channel:");
 
         let mut team_channel_name = String::new();
         io::stdin().read_line(&mut team_channel_name).unwrap();
@@ -16490,7 +16570,10 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         // // Get the owner from somewhere (e.g., user input or instance metadata)
         // let owner = "initial_owner".to_string(); // Replace with actual owner
 
-        create_new_team_channel(team_channel_name, uma_local_owner_user.clone());
+        let _ = create_new_team_channel(
+            team_channel_name,
+            uma_local_owner_user.clone(),
+        );
         }
 
         // TODO
@@ -19809,7 +19892,7 @@ pub fn invite_wizard() -> Result<(), GpgError> {
 fn handle_command_main_mode(
     input: &str,
     app: &mut App,
-    graph_navigation_instance_state: &GraphNavigationInstanceState
+    // graph_navigation_instance_state: &GraphNavigationInstanceState
 ) -> Result<bool, io::Error> {
     /*
     For input command mode
@@ -25282,7 +25365,7 @@ fn handle_local_owner_desk(
                                     // 3.3 Move old node directory (not remove/delete) (directory, not file)
                                     // TODO HERE HERE
                                     // from olddir_abs_node_directory_path to new_full_abs_node_directory_path
-                                    if let Err(error) = move_directory__from_path_to_path(&olddir_abs_node_directory_path, &new_full_abs_node_directory_path) {
+                                    if let Err(error) = move_directory_from_path_to_path(&olddir_abs_node_directory_path, &new_full_abs_node_directory_path) {
                                         debug_log!("An error occurred: {}", error);
                                     }
 
@@ -28179,7 +28262,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         // If in main command mode, handle main commands:
         // ?. Update directory list (only in MainCommand mode) - MOVE THIS
         if app.input_mode == InputMode::MainCommand {
-            if handle_command_main_mode(&input, &mut app, &graph_navigation_instance_state)? {
+            if handle_command_main_mode(&input, &mut app)? {
                 return Ok(());
             }
             app.update_directory_list()?;

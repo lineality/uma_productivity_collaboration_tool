@@ -9711,3 +9711,67 @@ fn get_latest_received_from_rc_in_teamchannel_file_timestamp_filecrawl(
 //     }
 //     None // No collisions
 // }
+
+    // /// Prints the current task display (for debugging)
+    // pub fn print_task_display(&self) {
+    //     for row in &self.task_display_table {
+    //         println!("{}", row);
+    //     }
+    // }
+
+
+    // fn handle_tui_action(&mut self) -> Result<(), io::Error> { // Now returns Result
+    //     debug_log("app fn handle_tui_action() started");
+
+    //     // self.update_next_path_lookup_table();
+
+    //     if self.is_in_team_channel_list() {
+    //         debug_log("is_in_team_channel_list");
+    //         debug_log(&format!("handle_tui_action() current_path: {:?}", self.current_path));
+
+    //         let input = tiny_tui::get_input()?; // Get input here
+    //         if let Ok(index) = input.parse::<usize>() {
+    //             let item_index = index - 1; // Adjust for 0-based indexing
+    //             if item_index < self.tui_directory_list.len() {
+    //                 let selected_channel = &self.tui_directory_list[item_index];
+    //                 debug_log(&format!("Selected channel: {}", selected_channel)); // Log the selected channel name
+
+    //                 self.current_path = self.current_path.join(selected_channel);
+
+    //                 debug_log(&format!("handle_tui_action() New current_path: {:?}", self.current_path)); // Log the updated current path
+
+    //                 self.graph_navigation_instance_state.current_full_file_path = self.current_path.clone();
+    //                 self.graph_navigation_instance_state.nav_graph_look_read_node_toml();
+
+    //                 // Log the state after loading node.toml
+    //                 debug_log(&format!("handle_tui_action() State after nav_graph_look_read_node_toml: {:?}", self.graph_navigation_instance_state));
+
+    //                 // ... enter IM browser or other features ...
+    //             } else {
+    //                 debug_log("Invalid index.");
+    //             }
+    //         }
+    //     } else if self.is_in_message_posts_browser_directory() {
+    //         // ... handle other TUI actions ...
+    //         debug_log("else if self.is_in_message_posts_browser_directory()");
+
+
+    //     }
+    //     debug_log("end app fn handle_tui_action()");
+    //     Ok(()) // Return Ok if no errors
+    // }
+
+    // fn get_focused_channel_path(&self) -> Option<PathBuf> {
+    //     let channel_name = self.tui_file_list.get(self.tui_focus)?;
+    //     Some(self.current_path.join(channel_name))
+    // }
+
+    // // TODO not being used
+    // fn enter_message_posts_browser(&mut self, channel_path: PathBuf) {
+    //     // Update the current path to the instant message browser directory within the selected channel
+    //     self.current_path = channel_path.join("message_posts_browser");
+    //     // Load the instant messages for this channel
+    //     self.load_im_messages(); // No need to pass any arguments
+    //     // Reset the TUI focus to the beginning of the message list
+    //     self.tui_focus = 0;
+    // }
