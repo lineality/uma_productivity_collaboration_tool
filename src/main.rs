@@ -5710,7 +5710,7 @@ use std::sync::mpsc::{self, Sender, Receiver, TryRecvError};
 /// and main thread to coordinate actions in the message browser.
 enum BrowserThreadMessage {
     KeyInput(char),     // A character was typed
-    Backspace,          // Backspace key pressed
+    // Backspace,          // Backspace key pressed
     Enter,              // Enter key pressed
     DirectoryChanged,   // Directory contents changed (new messages)
     Exit,               // Request to exit browser
@@ -5738,9 +5738,15 @@ fn run_message_browser_input_thread(sender: Sender<BrowserThreadMessage>) {
         if stdin.read_exact(&mut buffer).is_ok() {
             let message = match buffer[0] {
                 b'\n' | b'\r' => BrowserThreadMessage::Enter,
-                8 | 127 => BrowserThreadMessage::Backspace,
-                b'q' => BrowserThreadMessage::Exit,
+                // 8 | 127 => BrowserThreadMessage::Backspace,
+                b'q' => {
+                    debug_log("run_message_browser_input_thread -> q");
+
+                    BrowserThreadMessage::Exit
+                },
                 c => BrowserThreadMessage::KeyInput(c as char),
+                // _ => continue, // or BrowserThreadMessage::Unknown, or log a warning, etc.
+
             };
 
             // If send fails, the receiver has been dropped, so exit thread
@@ -6329,14 +6335,14 @@ impl App {
 
         // ----- SETUP INPUT THREAD -----
         let input_thread_sender = message_tx.clone();
-        let input_thread = thread::spawn(move || {
+        let _ = thread::spawn(move || {
             run_message_browser_input_thread(input_thread_sender);
         });
 
         // ----- SETUP DIRECTORY WATCH THREAD -----
         let watch_thread_sender = message_tx.clone();
         let watch_directory_path = self.current_path.clone();
-        let watch_thread = thread::spawn(move || {
+        let _ = thread::spawn(move || {
             run_message_browser_watch_thread(watch_thread_sender, watch_directory_path);
         });
 
@@ -6350,15 +6356,16 @@ impl App {
         'browser_loop: loop {
             match message_rx.try_recv() {
                 Ok(BrowserThreadMessage::KeyInput(c)) => {
+                    debug_log("EMMPB KeyInput(c)");
                     if current_message_view_mode == MessageViewMode::Insert || !needs_display_refresh {
                         user_input_buffer.push(c);
                         needs_display_refresh = true;
                     }
                 },
-                Ok(BrowserThreadMessage::Backspace) => {
-                    user_input_buffer.pop();
-                    needs_display_refresh = true;
-                },
+                // Ok(BrowserThreadMessage::Backspace) => {
+                //     user_input_buffer.pop();
+                //     needs_display_refresh = true;
+                // },
                 Ok(BrowserThreadMessage::Enter) => {
                     if user_input_buffer.is_empty() {
                         // Toggle between Refresh and Insert modes
@@ -6391,6 +6398,7 @@ impl App {
                         // }
                         match user_input_buffer.as_str() {
                             "q" | "quit" | "b" | "back" => {
+                            debug_log("EMMPB exit");
                                 break 'browser_loop;
                             },
                             "--custom" => {
@@ -6401,6 +6409,8 @@ impl App {
                                 needs_display_refresh = true;
                             },
                             _ => {
+                                // println!("EMMPB calling ANMFI");
+                                debug_log("EMMPB calling ANMFI");
                                 // Normal message send
                                 self.add_new_message_from_input(&user_input_buffer)?;
                                 user_input_buffer.clear();
@@ -6613,7 +6623,6 @@ impl App {
                     // Create and send message
                     self.send_custom_message(
                         recipients,
-                        expires_minutes,
                         use_encryption,
                         text_message,
                     )?;
@@ -6645,7 +6654,6 @@ impl App {
     fn send_custom_message(
         &mut self,
         recipients: Vec<String>,
-        expires_minutes: u64,
         use_encryption: bool,
         text_message: String,
     ) -> io::Result<()> {
@@ -6655,15 +6663,35 @@ impl App {
             .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Time error: {}", e)))?
             .as_secs();
 
-
-
         // Read metadata to get node info
         let metadata_path = self.current_path.join("0.toml");
-        let metadata_string = fs::read_to_string(&metadata_path)?;
+        let metadata_path_string = fs::read_to_string(&metadata_path)?;
 
         // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
-        let metadata: NodeInstMsgBrowserMetadata = toml::from_str(&metadata_string)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("TOML error: {}", e)))?;
+        // - metadata.expires_after_min u64
+        let expires_after_min = read_u64_field_from_toml(
+            &metadata_path_string,
+            "expires_after_min",
+        )
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("SCM: expires_after_min read_u64_field_from_toml error: {}", e)))?;
+
+        // Step 4: Read the requested field from the verified file
+        let node_name = read_single_line_string_field_from_toml(
+            &metadata_path_string,
+            "node_name",
+        )
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("SCM: node_name read_single_line_string_field_from_toml error: {}", e)))?;
+
+        // Step 4: Read the requested field from the verified file
+        let path_in_node = read_single_line_string_field_from_toml(
+            &metadata_path_string,
+            "path_in_node",
+        )
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("SCM: path_in_node read_single_line_string_field_from_toml error: {}", e)))?;
+
+
+        // let metadata: NodeInstMsgBrowserMetadata = toml::from_str(&metadata_path_string)
+        //     .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("TOML error: {}", e)))?;
 
         // Get next sequential file path
         let file_path = get_next_message_file_path(
@@ -6671,7 +6699,7 @@ impl App {
             &self.graph_navigation_instance_state.local_owner_user
         );
 
-        let expires_after_min = metadata.expires_after_min;
+        // let expires_after_min = metadata.expires_after_min;
 
 
         let expires_at = now + (expires_after_min * 60);
@@ -6696,8 +6724,8 @@ impl App {
         let message = MessagePostFile::new(
             // &self.graph_navigation_instance_state,
             &self.graph_navigation_instance_state.local_owner_user,
-            &metadata.node_name,
-            &metadata.path_in_node,
+            &node_name,
+            &path_in_node,
             &text_message,
             if recipients.is_empty() {
                 self.graph_navigation_instance_state.current_node_teamchannel_collaborators_with_access.clone()
@@ -6708,6 +6736,7 @@ impl App {
             Some(expires_at),
         );
 
+        // NO!!!!!!!!!!!!!!!!!!!!!
         // Serialize
         let toml_data = toml::to_string(&message)
             .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Serialization error: {}", e)))?;
@@ -6777,10 +6806,14 @@ impl App {
     ///
     /// Creates a new message file with the user's input as content
     fn add_new_message_from_input(&mut self, input: &str) -> io::Result<()> {
-        let local_owner_user = &self.graph_navigation_instance_state.local_owner_user;
 
+        debug_log("ANMFI: starting add_new_message_from_input in ANMFI");
+
+        let local_owner_user = &self.graph_navigation_instance_state.local_owner_user;
+        debug_log!("ANMFI: local_owner_user->{:?}", local_owner_user);
         // Generate the next available message filename
         let message_path = get_next_message_file_path(&self.current_path, local_owner_user);
+        debug_log!("ANMFI: message_path->{:?}", message_path);
 
         // Add the message using existing function
         add_im_message(
@@ -11850,7 +11883,7 @@ fn add_im_message(
     if parent_dir == Path::new("") {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            "AIM: Parent directory is empty path"
+            "AIM: error Parent directory is empty path"
         ));
     }
 
@@ -11860,28 +11893,35 @@ fn add_im_message(
     debug_log!("AIM: Reading metadata from 0.toml");
 
     let metadata_path = parent_dir.join("0.toml");
+    debug_log!("AIM: let metadata_path -> {:?}", metadata_path);
 
-    let metadata_string = fs::read_to_string(&metadata_path)
-        .map_err(|e| io::Error::new(
-            io::ErrorKind::Other,
-            format!("AIM: Failed to read metadata file: {}", e)
-        ))?;
+    let metadata_path_string = metadata_path.to_string_lossy();
 
     // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
-    let metadata: NodeInstMsgBrowserMetadata = toml::from_str(&metadata_string)
-        .map_err(|e| io::Error::new(
-            io::ErrorKind::Other,
-            format!("AIM: TOML deserialization error: {}", e)
-        ))?;
+    // let metadata: NodeInstMsgBrowserMetadata = toml::from_str(&metadata_string)
+    //     .map_err(|e| io::Error::new(
+    //         io::ErrorKind::Other,
+    //         format!("AIM: TOML deserialization error: {}", e)
+    //     ))?;
+
+    // Step 4: Read the requested field from the verified file
+    let node_name = read_single_line_string_field_from_toml(
+        &metadata_path_string,
+        "node_name",
+    )
+    .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("SCM: node_name read_single_line_string_field_from_toml error: {}", e)))?;
+
+    // Step 4: Read the requested field from the verified file
+    let filepath_in_node = read_single_line_string_field_from_toml(
+        &metadata_path_string,
+        "path_in_node",
+    )
+    .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("SCM: path_in_node read_single_line_string_field_from_toml error: {}", e)))?;
 
     debug_log!("AIM: Metadata loaded - node: {}, path: {}",
-        metadata.node_name,
-        metadata.path_in_node
+        node_name,
+        filepath_in_node
     );
-
-    // Extract node name and file path
-    let node_name = metadata.node_name;
-    let filepath_in_node = metadata.path_in_node;
 
     // 5. Create MessagePostFile struct
     debug_log!("AIM: Creating MessagePostFile");
@@ -11915,13 +11955,30 @@ fn add_im_message(
     debug_log!("AIM: MessagePostFile created, gpgtoml: {}", message.messagepost_gpgtoml);
 
     // 6. Serialize message to TOML
-    debug_log!("AIM: Serializing message to TOML");
+    debug_log!("AIM: Serializing message to TOML: message {:?}", message);
 
-    let toml_data = toml::to_string(&message)
-        .map_err(|e| io::Error::new(
-            io::ErrorKind::Other,
-            format!("AIM: TOML serialization error: {}", e)
-        ))?;
+    // let toml_data = toml::to_string(&message)
+    //     .map_err(|e| io::Error::new(
+    //         io::ErrorKind::Other,
+    //         format!("AIM: TOML serialization error: {}", e)
+    //     ))?;
+
+    let toml_data:String;
+    // let toml_data = serialize_messagepost_toml(&message)?;
+    match serialize_messagepost_toml(&message) {
+        Ok(toml_string) => {
+            // Write to file or transmit
+            toml_data = toml_string;
+        }
+        Err(e) => {
+            // Handle serialization error with project-appropriate recovery
+            debug_log("SMPC0T: serialization failed");
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("AIM: error serialize_messagepost_toml {}",e)
+            ));
+        }
+    }
 
     debug_log!("AIM: TOML serialization successful, {} bytes", toml_data.len());
 
@@ -12449,6 +12506,8 @@ impl MessagePostFile {
         messagepost_gpgtoml: bool,
         expires_at: Option<u64>,  // NEW: Custom expiration, or None for default
     ) -> MessagePostFile {
+        debug_log!("impl MessagePostFile: staring 'fn new'");
+
         let timestamp = get_current_unix_timestamp();
 
         // // Use custom expiration if provided, otherwise calculate default
@@ -12461,16 +12520,242 @@ impl MessagePostFile {
 
         MessagePostFile {
             owner: owner.to_string(),
-            teamchannel_collaborators_with_access: recipients_list,
             node_name: node_name.to_string(),
             filepath_in_node: filepath_in_node.to_string(),
             text_message: text_message.to_string(),
+
+            teamchannel_collaborators_with_access: recipients_list,
             updated_at_timestamp: timestamp,
             expires_at: expires_at_timestamp,  // Use calculated or custom value
             messagepost_gpgtoml: messagepost_gpgtoml,
         }
     }
 
+}
+
+/// Serialize MessagePostFile struct to TOML format string
+///
+/// This function manually constructs a TOML-formatted string from a `MessagePostFile`
+/// struct without using the `serde` or `toml` crates. This approach provides direct
+/// control over the serialization process and avoids third-party dependencies.
+///
+/// # Project Context
+///
+/// This function is part of the instant messaging file persistence system. It converts
+/// a message post data structure into TOML format for storage in the node's file system.
+/// The TOML file represents a single message post with metadata including ownership,
+/// recipients, timestamps, and encryption settings.
+///
+/// The function is used when writing message posts to disk, replacing the deprecated
+/// `toml::to_string()` approach with a manual serialization that gives full control
+/// over the output format and error handling.
+///
+/// # TOML Format
+///
+/// The generated TOML has the following structure:
+///
+/// ```toml
+/// owner = "username"
+/// node_name = "nodename"
+/// filepath_in_node = "/path/to/file"
+/// text_message = """message content"""
+/// teamchannel_collaborators_with_access = [
+///     "user1",
+///     "user2",
+/// ]
+/// updated_at_timestamp = 1234567890
+/// messagepost_gpgtoml = false
+/// expires_at = 18446744073709551615
+/// ```
+///
+/// # String Handling
+///
+/// - Simple string fields (owner, node_name, filepath_in_node) use basic TOML strings with escaping
+/// - The text_message field uses multi-line string format (triple quotes) to safely handle
+///   message content that may contain newlines, quotes, and other special characters
+/// - Array elements are individually escaped and formatted
+///
+/// # Parameters
+///
+/// - `message`: Reference to the `MessagePostFile` struct to serialize
+///
+/// # Returns
+///
+/// - `Ok(String)`: TOML-formatted string representation of the message post
+/// - `Err(ThisProjectError)`: If serialization encounters an error
+///
+/// # Error Handling
+///
+/// Returns errors via Result type for consistency and future extensibility.
+/// The function is designed to handle all valid `MessagePostFile` instances without
+/// panicking.
+///
+/// # Usage Example
+///
+/// ```rust
+/// let message = MessagePostFile::new(/*...*/);
+/// match serialize_messagepost_config_0toml(&message) {
+///     Ok(toml_string) => {
+///         // Write to file or transmit
+///         write_to_file(&toml_string)?;
+///     }
+///     Err(e) => {
+///         // Handle serialization error with project-appropriate recovery
+///         log_error("SMPC0T: serialization failed");
+///         return Err(e);
+///     }
+/// }
+/// ```
+fn serialize_messagepost_toml(message: &MessagePostFile) -> Result<String, ThisProjectError> {
+    let mut toml_string = String::new();
+
+    // Serialize owner field - identifies who created this message post
+    toml_string.push_str(&format!("owner = \"{}\"\n", escape_toml_basic_string(&message.owner)));
+
+    // Serialize node_name field - identifies which node this message belongs to
+    toml_string.push_str(&format!("node_name = \"{}\"\n", escape_toml_basic_string(&message.node_name)));
+
+    // Serialize filepath_in_node field - relative path within node directory structure
+    toml_string.push_str(&format!("filepath_in_node = \"{}\"\n", escape_toml_basic_string(&message.filepath_in_node)));
+
+    // Serialize text_message using multi-line string format
+    // Multi-line strings (triple quotes) preserve newlines and handle special characters
+    // This is appropriate for message content which may be multi-line
+    toml_string.push_str(&format!("text_message = \"\"\"{}\"\"\"\n", message.text_message));
+
+    // Serialize the recipients list as a TOML array
+    // This contains all users who have access to view this message post
+    serialize_string_array_to_toml(&mut toml_string, "teamchannel_collaborators_with_access", &message.teamchannel_collaborators_with_access)?;
+
+    // Serialize updated_at_timestamp - POSIX UTC timestamp of last update
+    toml_string.push_str(&format!("updated_at_timestamp = {}\n", message.updated_at_timestamp));
+
+    // Serialize messagepost_gpgtoml - boolean indicating if file is GPG encrypted
+    // TOML booleans are lowercase: true or false
+    toml_string.push_str(&format!("messagepost_gpgtoml = {}\n", message.messagepost_gpgtoml));
+
+    // Serialize expires_at - POSIX UTC timestamp when message expires (u64::MAX means no expiration)
+    toml_string.push_str(&format!("expires_at = {}\n", message.expires_at));
+
+    Ok(toml_string)
+}
+
+/// Escape string for TOML basic string format (double-quoted strings)
+///
+/// Escapes special characters in strings to ensure TOML compliance per the TOML specification.
+/// This prevents parsing errors when special characters appear in string values.
+///
+/// # Project Context
+///
+/// Used by manual TOML serialization to ensure string values in configuration files
+/// are properly formatted. This is critical for metadata fields like owner names,
+/// node names, and file paths that may contain characters with special meaning in TOML.
+///
+/// # TOML Basic String Requirements
+///
+/// According to TOML spec, basic strings (double-quoted) must escape:
+/// - Backslash (\) -> \\\\
+/// - Double quote (") -> \\\"
+/// - Backspace (\b) -> \\b
+/// - Tab (\t) -> \\t
+/// - Newline (\n) -> \\n
+/// - Form feed (\f) -> \\f
+/// - Carriage return (\r) -> \\r
+///
+/// # Parameters
+///
+/// - `s`: The string slice to escape
+///
+/// # Returns
+///
+/// A new `String` with all special characters properly escaped for TOML basic string format
+///
+/// # Memory Considerations
+///
+/// Pre-allocates string capacity based on input length. This is a reasonable estimate
+/// that avoids most reallocations while not over-allocating for strings with few
+/// escape sequences.
+fn escape_toml_basic_string(s: &str) -> String {
+    // Pre-allocate with source length as baseline (most strings won't need much escaping)
+    let mut escaped = String::with_capacity(s.len());
+
+    for ch in s.chars() {
+        match ch {
+            '\\' => escaped.push_str("\\\\"),
+            '"' => escaped.push_str("\\\""),
+            '\x08' => escaped.push_str("\\b"),  // backspace
+            '\t' => escaped.push_str("\\t"),
+            '\n' => escaped.push_str("\\n"),
+            '\x0C' => escaped.push_str("\\f"),  // form feed
+            '\r' => escaped.push_str("\\r"),
+            _ => escaped.push(ch),
+        }
+    }
+
+    escaped
+}
+
+/// Serialize a vector of strings to TOML array format
+///
+/// Converts a vector of strings into TOML array syntax with proper formatting,
+/// indentation, and escaping. Each array element is placed on its own line for
+/// readability and easier diff tracking in version control.
+///
+/// # Project Context
+///
+/// Used for serializing the `teamchannel_collaborators_with_access` field in message
+/// post TOML files. This field lists all users who have permission to view the message.
+/// Each username is individually escaped and formatted as a TOML string array element.
+///
+/// The array format follows the pattern used elsewhere in the project for IP address
+/// lists and other string arrays, maintaining consistency across TOML files.
+///
+/// # TOML Array Format
+///
+/// Generates arrays with this structure:
+/// ```toml
+/// key_name = [
+///     "element1",
+///     "element2",
+/// ]
+/// ```
+///
+/// Trailing commas are included (valid in TOML) for easier maintenance and cleaner diffs.
+///
+/// # Parameters
+///
+/// - `toml_string`: Mutable reference to the string being constructed
+/// - `key`: The TOML key name for this array field
+/// - `values`: Reference to the vector of strings to serialize
+///
+/// # Returns
+///
+/// - `Ok(())`: Successfully appended array to toml_string
+/// - `Err(ThisProjectError)`: If serialization encounters an error
+///
+/// # Error Handling
+///
+/// Returns Result for API consistency and future extensibility. Current implementation
+/// succeeds for all valid inputs but the Result return type allows for future error
+/// conditions (e.g., maximum array size limits) without breaking the interface.
+fn serialize_string_array_to_toml(
+    toml_string: &mut String,
+    key: &str,
+    values: &Vec<String>
+) -> Result<(), ThisProjectError> {
+    // Open array with key
+    toml_string.push_str(&format!("{} = [\n", key));
+
+    // Add each element on its own line with indentation
+    // Each element is escaped to handle special characters in usernames
+    for value in values {
+        toml_string.push_str(&format!("    \"{}\",\n", escape_toml_basic_string(value)));
+    }
+
+    // Close array
+    toml_string.push_str("]\n");
+
+    Ok(())
 }
 
 /// Creates a new team-channel directory, subdirectories, and metadata files.
@@ -20022,7 +20307,7 @@ fn handle_command_main_mode(
                 let _ = invite_wizard();
             }
 
-            "addnode" | "add_node" | "newnode" | "new" | "node" | "task" | "addtask" | "add_task" | "add" => {
+            "addnode" | "add_node" | "newnode" | "new" | "addtask" | "add_task" | "add" => {
                 debug_log("Command: Add Node");
                 // TODO trim down excess terms above
 
@@ -20391,6 +20676,55 @@ fn handle_command_main_mode(
             "m" | "message" => {
                 debug_log("m selected");
 
+                // /////////////////
+                // // Passive View
+                // /////////////////
+                // let mut this_team_message_path = app.current_path.clone();
+                // this_team_message_path.push("message_posts_browser");
+
+                // debug_log!("message_path {:?}", this_team_message_path);
+
+                // // Check if directory exists
+                // if !this_team_message_path.exists() {
+                //     println!("handle comand 'm', Message directory not found!");
+                //     return Ok(false);  // Changed to match expected return type
+                // }
+
+                // let message_path_str = this_team_message_path.to_string_lossy().into_owned();
+
+                // #[cfg(target_os = "linux")]
+                // {
+                //     if let Ok(uma_path) = env::current_exe() {
+                //         if let Some(uma_path_str) = uma_path.to_str() {
+                //             StdCommand::new("gnome-terminal")
+                //                 .arg("--")
+                //                 .arg(uma_path_str)
+                //                 .arg("--passive_message_mode")
+                //                 .arg(&message_path_str)
+                //                 .spawn()?;
+                //         }
+                //     }
+                // }
+
+                debug_log(&format!("handle command 'm' app.current_path {:?}", app.current_path));
+                // app.input_mode = InputMode::InsertText;
+                // app.current_path = app.current_path.join("message_posts_browser");
+
+                // debug_log!(
+                //     "app.current_path after joining 'message_posts_browser': {:?}",
+                //     app.current_path
+                // );
+
+                // // Enter Browser of Messages
+                // app.load_im_messages();
+
+                // TODO experimental state refresh
+                app.enter_modal_message_posts_browser(app.current_path.clone())?;
+            }
+
+            "mp" | "message-passive" => {
+                debug_log("m selected");
+
                 /////////////////
                 // Passive View
                 /////////////////
@@ -20421,23 +20755,63 @@ fn handle_command_main_mode(
                     }
                 }
 
-                debug_log(&format!("handle command 'm' app.current_path {:?}", app.current_path));
-                // app.input_mode = InputMode::InsertText;
-                // app.current_path = app.current_path.join("message_posts_browser");
-
-                // debug_log!(
-                //     "app.current_path after joining 'message_posts_browser': {:?}",
-                //     app.current_path
-                // );
-
-                // // Enter Browser of Messages
-                // app.load_im_messages();
-
-                // TODO experimental state refresh
-                app.enter_modal_message_posts_browser(app.current_path.clone())?;
+                debug_log(&format!("handle command 'mp'/'message-passive' app.current_path {:?}", app.current_path));
             }
 
             "t" | "task" | "tasks" => {
+                debug_log("t selected: task browser launching");
+
+                // /////////////////
+                // // Passive View
+                // /////////////////
+                // let mut task_path = app.current_path.clone();
+                // task_path.push("task_browser");
+
+                // // Check if directory exists
+                // if !task_path.exists() {
+                //     println!("Task directory not found!");
+                //     return Ok(false);
+                // }
+
+                // let task_path_str = task_path.to_string_lossy().into_owned();
+
+                // #[cfg(target_os = "linux")]
+                // {
+                //     if let Ok(uma_path) = env::current_exe() {
+                //         if let Some(uma_path_str) = uma_path.to_str() {
+                //             StdCommand::new("gnome-terminal")
+                //                 .arg("--")
+                //                 .arg(uma_path_str)
+                //                 .arg("--passive_task_mode")
+                //                 .arg(&task_path_str)
+                //                 .spawn()?;
+                //         }
+                //     }
+                // }
+
+
+                debug_log(&format!("app.current_path {:?}", app.current_path));
+                app.input_mode = InputMode::InsertText;
+
+                // // TODO Assuming you have a way to get the current node's name:
+                // let current_node_name = app.current_path.file_name().unwrap().to_string_lossy().to_string();
+
+                app.current_path = app.current_path.join("task_browser");
+                app.graph_navigation_instance_state.current_full_file_path = app.current_path.clone();
+                app.graph_navigation_instance_state.nav_graph_look_read_node_toml(); // ???
+
+                debug_log!(
+                    "app.current_path after joining 'task_browser': {:?}",
+                    app.current_path
+                );
+
+                // Enter Browser of Tasks
+                app.enter_task_browser();
+
+            }
+
+
+            "tp" | "task-passive" | "tasks-passive" => {
                 debug_log("t selected: task browser launching");
 
                 /////////////////
@@ -20469,25 +20843,10 @@ fn handle_command_main_mode(
                 }
 
 
-                debug_log(&format!("app.current_path {:?}", app.current_path));
-                app.input_mode = InputMode::InsertText;
-
-                // TODO Assuming you have a way to get the current node's name:
-                let current_node_name = app.current_path.file_name().unwrap().to_string_lossy().to_string();
-
-                app.current_path = app.current_path.join("task_browser");
-                app.graph_navigation_instance_state.current_full_file_path = app.current_path.clone();
-                app.graph_navigation_instance_state.nav_graph_look_read_node_toml(); // ???
-
-                debug_log!(
-                    "app.current_path after joining 'task_browser': {:?}",
-                    app.current_path
-                );
-
-                // Enter Browser of Tasks
-                app.enter_task_browser();
+                debug_log(&format!("'tp' 'task-passive' app.current_path {:?}", app.current_path));
 
             }
+
             "q" | "quit" | "exit" => {
                 debug_log("quit");
                 let _ = no_restart_set_hard_reset_flag_to_false();

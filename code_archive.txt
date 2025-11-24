@@ -9775,3 +9775,212 @@ fn get_latest_received_from_rc_in_teamchannel_file_timestamp_filecrawl(
     //     // Reset the TUI focus to the beginning of the message list
     //     self.tui_focus = 0;
     // }
+
+
+
+    /// Modal Interactive Message Browser with Dual Refresh/Insert Modes
+    ///
+    /// # Purpose
+    /// Provides a message viewing and composing interface that balances:
+    /// - Real-time message updates (in Refresh mode)
+    /// - Uninterrupted text input (in Insert mode)
+    ///
+    /// # Mode System
+    /// The function implements a modal interface with two states:
+    /// 1. REFRESH MODE: Terminal updates automatically when new messages arrive
+    ///    - Pros: Always shows latest messages
+    ///    - Cons: May interrupt typing
+    ///
+    /// 2. INSERT MODE: Terminal freezes updates to allow uninterrupted typing
+    ///    - Pros: User can type without interruption
+    ///    - Cons: May miss new messages until mode is toggled
+    ///
+    /// # User Experience
+    /// - Toggle between modes: Press ENTER with empty input
+    /// - Exit browser: Type 'q', 'quit', 'b', or 'back'
+    /// - Send message: Type message and press ENTER in either mode
+    ///
+    /// # Implementation Details
+    /// - Uses three concurrent threads:
+    ///   1. Main thread: Manages state and rendering
+    ///   2. Input thread: Captures user keystrokes
+    ///   3. Watch thread: Monitors directory for changes
+    ///
+    /// # Parameters
+    /// * `channel_path` - Path to the channel containing the message_posts_browser directory
+    ///
+    /// # Returns
+    /// * `io::Result<()>` - Success or IO error
+    ///
+    /// # Thread Safety
+    /// - Uses message passing (mpsc channels) between threads
+    /// - No shared mutable state between threads
+    /// - Safe shutdown of all threads on exit
+    ///
+    /// # State Management
+    /// - Updates App.current_path to message directory
+    /// - Sets App.input_mode appropriately
+    /// - Loads messages via App.load_im_messages()
+    /// - Restores previous path on exit
+    pub fn enter_modal_message_posts_browser(&mut self, channel_path: PathBuf) -> io::Result<()> {
+        debug_log("starting enter_modal_message_posts_browser()");
+
+        // Store the original path for restoration on exit
+        let original_path = self.current_path.clone();
+
+        // Update the current path to the instant message browser directory
+        self.current_path = channel_path.join("message_posts_browser");
+
+        debug_log!(
+            "enter_modal_message_posts_browser() app.current_path after joining 'message_posts_browser': {:?}",
+            self.current_path
+        );
+
+        // Verify directory exists
+        if !self.current_path.exists() {
+            println!("enter_modal_message_posts_browser Message directory not found!");
+            self.current_path = original_path; // Restore original path
+            return Ok(());
+        }
+
+        // Load initial messages
+        self.load_im_messages();
+
+        // Initialize the modal message browser state
+        let mut current_message_view_mode = MessageViewMode::Refresh;
+        let mut user_input_buffer = String::new();
+        let terminal_width = self.graph_navigation_instance_state.tui_width as u16;
+        let terminal_height = self.graph_navigation_instance_state.tui_height as u16;
+
+        // Set up channel for thread communication
+        let (message_tx, message_rx): (Sender<BrowserThreadMessage>, Receiver<BrowserThreadMessage>) = mpsc::channel();
+
+        // ----- SETUP INPUT THREAD -----
+        let input_thread_sender = message_tx.clone();
+        let _ = thread::spawn(move || {
+            run_message_browser_input_thread(input_thread_sender);
+        });
+
+        // ----- SETUP DIRECTORY WATCH THREAD -----
+        let watch_thread_sender = message_tx.clone();
+        let watch_directory_path = self.current_path.clone();
+        let _ = thread::spawn(move || {
+            run_message_browser_watch_thread(watch_thread_sender, watch_directory_path);
+        });
+
+        // ----- MAIN BROWSER LOOP -----
+        let mut needs_display_refresh = true;
+
+        // Initial render
+        self.render_message_browser_screen(&current_message_view_mode, &user_input_buffer, terminal_width, terminal_height)?;
+
+        // Process events until exit
+        'browser_loop: loop {
+            match message_rx.try_recv() {
+                Ok(BrowserThreadMessage::KeyInput(c)) => {
+                    if current_message_view_mode == MessageViewMode::Insert || !needs_display_refresh {
+                        user_input_buffer.push(c);
+                        needs_display_refresh = true;
+                    }
+                },
+                Ok(BrowserThreadMessage::Backspace) => {
+                    user_input_buffer.pop();
+                    needs_display_refresh = true;
+                },
+                Ok(BrowserThreadMessage::Enter) => {
+                    if user_input_buffer.is_empty() {
+                        // Toggle between Refresh and Insert modes
+                        let previous_mode = current_message_view_mode;
+                        current_message_view_mode = match current_message_view_mode {
+                            MessageViewMode::Refresh => MessageViewMode::Insert,
+                            MessageViewMode::Insert => MessageViewMode::Refresh,
+                        };
+
+                        // If switching from Insert to Refresh, immediately refresh
+                        if previous_mode == MessageViewMode::Insert && current_message_view_mode == MessageViewMode::Refresh {
+                            self.load_im_messages();
+                        }
+
+                        needs_display_refresh = true;
+                    } else {
+                        // Process non-empty input (possibly a command or message)
+                        // match user_input_buffer.as_str() {
+                        //     "q" | "quit" | "b" | "back" => {
+                        //         // Exit message browser
+                        //         break 'browser_loop;
+                        //     },
+                        //     _ => {
+                        //         // Send message
+                        //         self.add_new_message_from_input(&user_input_buffer)?;
+                        //         user_input_buffer.clear();
+                        //         self.load_im_messages();
+                        //         needs_display_refresh = true;
+                        //     }
+                        // }
+                        match user_input_buffer.as_str() {
+                            "q" | "quit" | "b" | "back" => {
+                                break 'browser_loop;
+                            },
+                            "--custom" => {
+                                // Launch custom message Q&A
+                                user_input_buffer.clear();
+                                self.create_custom_message_interactive()?;
+                                self.load_im_messages();
+                                needs_display_refresh = true;
+                            },
+                            _ => {
+                                // Normal message send
+                                self.add_new_message_from_input(&user_input_buffer)?;
+                                user_input_buffer.clear();
+                                self.load_im_messages();
+                                needs_display_refresh = true;
+                            }
+                        }
+                    }
+                },
+                Ok(BrowserThreadMessage::DirectoryChanged) => {
+                    if current_message_view_mode == MessageViewMode::Refresh {
+                        self.load_im_messages();
+                        needs_display_refresh = true;
+                    }
+                },
+                Ok(BrowserThreadMessage::Exit) => {
+                    // Exit due to quit command
+                    break 'browser_loop;
+                },
+                Err(TryRecvError::Empty) => {
+                    // No messages, continue
+                },
+                Err(TryRecvError::Disconnected) => {
+                    // Channel closed, exit
+                    break 'browser_loop;
+                }
+            }
+
+            // Refresh display if needed
+            if needs_display_refresh {
+                self.render_message_browser_screen(&current_message_view_mode, &user_input_buffer, terminal_width, terminal_height)?;
+                needs_display_refresh = false;
+            }
+
+            // Small sleep to prevent tight loop
+            thread::sleep(Duration::from_millis(10));
+        }
+
+        // Clean up and exit
+        // No need to join threads as they'll be cleaned up when program exits
+
+        // Restore original path and mode
+        self.current_path = original_path;
+        self.input_mode = InputMode::MainCommand;
+
+        // Final update before returning to main app
+        self.update_directory_list()?;
+
+        // Clear screen for clean transition
+        print!("\x1B[2J\x1B[1;1H");
+        io::stdout().flush()?;
+
+        debug_log("ending: ender_modal...");
+        Ok(())
+    }
