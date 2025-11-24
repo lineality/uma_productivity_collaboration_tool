@@ -20722,7 +20722,7 @@ fn handle_command_main_mode(
                 app.enter_modal_message_posts_browser(app.current_path.clone())?;
             }
 
-            "mp" | "message-passive" => {
+            "mp" | "pm" | "message-passive" => {
                 debug_log("m selected");
 
                 /////////////////
@@ -23068,6 +23068,7 @@ impl SendQueue {
     }
 }
 
+// TODO
 /// unpack new node
 /// saves new node.toml file, ensuring path and feature directories
 /// Unpacks and saves a new node from received data.
@@ -23267,7 +23268,7 @@ fn get_sendq_update_flag_paths(
 /// assert_eq!(hex_string, "123456789abcdef0");
 /// ```
 /// TODO Does this need error handling?
-fn docid__hash_array_to_hex_string(hash_array: &[u8]) -> String {
+fn docid_hash_array_to_hex_string(hash_array: &[u8]) -> String {
     hash_array
         .iter()
         .map(|&h| format!("{:02x}", h))

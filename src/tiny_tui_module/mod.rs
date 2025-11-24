@@ -157,23 +157,126 @@ pub mod tiny_tui {
             .unwrap_or_else(|| "Invalid Date".to_string())
     }
 
+    use crate::clearsign_toml_module::read_single_line_string_field_from_toml;
+
     /// for passive view mode
+    /// Display instant messages in passive (read-only) view mode
+    ///
+    /// # Purpose
+    ///
+    /// Loads and displays all instant message files from a specified directory
+    /// in read-only mode. Unlike `load_im_messages()`, this function reads plain
+    /// TOML files directly without GPG encryption/signature handling and renders
+    /// them without interactive TUI state.
+    ///
+    /// # Process Flow
+    ///
+    /// 1. Collect all file entries from target directory (max depth 1)
+    /// 2. Sort entries by numeric prefix in filename (1__, 2__, 3__, etc.)
+    /// 3. For each file (excluding 0.toml metadata):
+    ///    - Read owner field from TOML
+    ///    - Read text_message field from TOML
+    ///    - Add formatted message to display list
+    ///    - Skip files with read errors (logged in debug builds)
+    /// 4. Render complete message list in passive view
+    ///
+    /// # Message File Formats
+    ///
+    /// - `.toml` files: Plain TOML format with `owner` and `text_message` fields
+    /// - `0.toml`: Metadata file (excluded from message list)
+    /// - Expected filename format: `<number>__<identifier>.toml` (e.g., `1__alice.toml`)
+    ///
+    /// # Sorting Behavior
+    ///
+    /// Messages are sorted by extracting the numeric prefix before the first `__`
+    /// in the filename:
+    /// - `1__alice.toml` → 1
+    /// - `2__bob.toml` → 2
+    /// - `15__charlie.toml` → 15
+    /// - Files without numeric prefix are placed at the end (sorted as u64::MAX)
+    ///
+    /// # Error Handling
+    ///
+    /// - Individual file read errors are logged (debug builds) and skipped
+    /// - Allows partial message display if some files are malformed
+    /// - Directory traversal errors propagate as `io::Result::Err`
+    ///
+    /// # Parameters
+    ///
+    /// * `path` - Directory path containing message TOML files
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(())` - Messages successfully loaded and displayed
+    /// * `Err(io::Error)` - Directory traversal or access error
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use std::path::Path;
+    ///
+    /// let channel_path = Path::new("/path/to/channel");
+    /// passive_display_messages(channel_path)?;
+    /// ```
     pub fn passive_display_messages(path: &Path) -> io::Result<()> {
         let mut message_list = Vec::new();
 
-        // Walk directory and collect messages
-        for entry in WalkDir::new(path).max_depth(1) {
-            let entry = entry?;
-            if entry.path().is_file() {
-                let file_name = entry.file_name().to_string_lossy();
-                if file_name != "0.toml" {
-                    if let Ok(contents) = fs::read_to_string(entry.path()) {
-                        if let Ok(message) = toml::from_str::<MessagePostFile>(&contents) {
-                            message_list
-                                .push(format!("{}: {}", message.owner, message.text_message));
-                        }
+        // Collect all entries first
+        let mut entries: Vec<_> = WalkDir::new(path)
+            .max_depth(1)
+            .into_iter()
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| entry.path().is_file())
+            .collect();
+
+        // Sort entries by numeric prefix in filename (1__, 2__, 3__, etc.)
+        entries.sort_by_key(|entry| {
+            entry
+                .path()
+                .file_name()
+                .and_then(|n| n.to_str())
+                .and_then(|s| s.split("__").next()) // Get part before "__"
+                .and_then(|num_str| num_str.parse::<u64>().ok()) // Parse as number
+                .unwrap_or(u64::MAX) // Put unparseable names at end
+        });
+
+        // Process sorted entries
+        for entry in entries {
+            let file_name = entry.file_name().to_string_lossy();
+            if file_name != "0.toml" {
+                let owner = match read_single_line_string_field_from_toml(
+                    &entry.path().to_string_lossy(),
+                    "owner",
+                ) {
+                    Ok(o) => o,
+                    Err(e) => {
+                        #[cfg(debug_assertions)]
+                        debug_log!(
+                            "PDM: Failed to read owner field from {:?}: {} (skipping)",
+                            entry.path(),
+                            e
+                        );
+                        continue;
                     }
-                }
+                };
+
+                let text_message = match read_single_line_string_field_from_toml(
+                    &entry.path().to_string_lossy(),
+                    "text_message",
+                ) {
+                    Ok(o) => o,
+                    Err(e) => {
+                        #[cfg(debug_assertions)]
+                        debug_log!(
+                            "PDM: Failed to read text_message field from {:?}: {} (skipping)",
+                            entry.path(),
+                            e
+                        );
+                        continue;
+                    }
+                };
+
+                message_list.push(format!("{}: {}", owner, text_message));
             }
         }
 

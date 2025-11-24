@@ -9984,3 +9984,62 @@ fn get_latest_received_from_rc_in_teamchannel_file_timestamp_filecrawl(
         debug_log("ending: ender_modal...");
         Ok(())
     }
+
+    // /// for passive view mode
+    // pub fn passive_display_messages(path: &Path) -> io::Result<()> {
+    //     let mut message_list = Vec::new();
+
+    //     // Walk directory and collect messages
+    //     for entry in WalkDir::new(path).max_depth(1) {
+    //         let entry = entry?;
+    //         if entry.path().is_file() {
+    //             let file_name = entry.file_name().to_string_lossy();
+    //             if file_name != "0.toml" {
+    //                 let owner = match read_single_line_string_field_from_toml(
+    //                     &entry.path().to_string_lossy(),
+    //                     "owner",
+    //                 ) {
+    //                     Ok(o) => o,
+    //                     Err(e) => {
+    //                         #[cfg(debug_assertions)]
+    //                         debug_log!(
+    //                             "PDM: Failed to read owner field from {:?}: {} (skipping)",
+    //                             entry.path(),
+    //                             e
+    //                         );
+    //                         continue;
+    //                     }
+    //                 };
+
+    //                 let text_message = match read_single_line_string_field_from_toml(
+    //                     &entry.path().to_string_lossy(),
+    //                     "text_message",
+    //                 ) {
+    //                     Ok(o) => o,
+    //                     Err(e) => {
+    //                         #[cfg(debug_assertions)]
+    //                         debug_log!(
+    //                             "PDM: Failed to read text_message field from {:?}: {} (skipping)",
+    //                             entry.path(),
+    //                             e
+    //                         );
+    //                         continue;
+    //                     }
+    //                 };
+
+    //                 message_list.push(format!("{}: {}", owner, text_message));
+
+    //                 // if let Ok(contents) = fs::read_to_string(entry.path()) {
+    //                 //     if let Ok(message) = toml::from_str::<MessagePostFile>(&contents) {
+    //                 //         message_list
+    //                 //             .push(format!("{}: {}", message.owner, message.text_message));
+    //                 //     }
+    //                 // }
+    //             }
+    //         }
+    //     }
+
+    //     // Display using modified version of simple_render_list
+    //     simple_render_list_passive(&message_list, path);
+    //     Ok(())
+    // }
