@@ -10281,3 +10281,8 @@ fn remove_non_alphanumeric(s: &str) -> String {
 
     //         Ok(())
     //     }
+        // NO!!!!!!!!!!!!!!!!!!!!!
+        // Serialize
+        // let toml_data = toml::to_string(&message)
+        //     .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Serialization error: {}", e)))?;
+        // debug_log!("SCM toml_data {}", toml_data);

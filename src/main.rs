@@ -6698,11 +6698,19 @@ impl App {
         );
         debug_log("SCM Starting BAD!!!!!!! toml::to_string");
 
-        // NO!!!!!!!!!!!!!!!!!!!!!
-        // Serialize
-        let toml_data = toml::to_string(&message)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Serialization error: {}", e)))?;
-        debug_log!("SCM toml_data {}", toml_data);
+        let toml_data = match serialize_messagepost_toml(&message) {
+            Ok(toml_string) => {
+                debug_log!("SCM: TOML serialization successful, {} bytes", toml_string.len());
+                toml_string
+            }
+            Err(e) => {
+                debug_log!("SCM: serialization failed");
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("SCM: error serialize_messagepost_toml {}", e)
+                ));
+            }
+        };
 
         // Save based on encryption setting
         if use_encryption {
@@ -15284,13 +15292,13 @@ fn serialize_messagepost_toml(message: &MessagePostFile) -> Result<String, ThisP
     toml_string.push_str(&format!("filepath_in_node = \"{}\"\n", escape_toml_basic_string(&message.filepath_in_node)));
 
     // Serialize text_message using multi-line string format
-    // Multi-line strings (triple quotes) preserve newlines and handle special characters
     // This is appropriate for message content which may be multi-line
-    toml_string.push_str(&format!("text_message = \"\"\"{}\"\"\"\n", message.text_message));
+    toml_string.push_str(&format!("text_message = \"{}\"\n", message.text_message));
 
     // Serialize the recipients list as a TOML array
     // This contains all users who have access to view this message post
     serialize_string_array_to_toml(&mut toml_string, "teamchannel_collaborators_with_access", &message.teamchannel_collaborators_with_access)?;
+    serialize_string_array_to_toml(&mut toml_string, "ping", &message.teamchannel_collaborators_with_access)?;
 
     // Serialize updated_at_timestamp - POSIX UTC timestamp of last update
     toml_string.push_str(&format!("updated_at_timestamp = {}\n", message.updated_at_timestamp));
@@ -24623,7 +24631,7 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
             )));
         }
     };
-    println!("MSMD: File owner: '{}'", file_owner_username);
+    // println!("MSMD: File owner: '{}'", file_owner_username);
     debug_log!("MSMD: File owner: '{}'", file_owner_username);
 
     // Get armored public key, using key-id (full fingerprint in)
