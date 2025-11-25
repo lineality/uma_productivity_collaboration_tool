@@ -776,6 +776,13 @@ pub fn read_u64_field_from_toml(
     path: &str,
     name_of_toml_field_key_to_read: &str,
 ) -> Result<u64, String> {
+    debug_log!("read_u64_field_from_toml path {}", path);
+    debug_log!(
+        "read_u64_field_from_toml name_of_toml_field_key_to_read {}",
+        name_of_toml_field_key_to_read
+    );
+    // debug_log!("SCM metadata_path_string {}", metadata_path_string);
+
     let file = File::open(path)
         .map_err(|e| format!("read_u64_field_from_toml Failed to open file: {}", e))?;
 

@@ -5987,144 +5987,6 @@ impl App {
 
     */
 
-    // /// Updates the task display components based on the current directory
-    // pub fn update_task_display(&mut self) -> std::io::Result<()> {
-    //     // Reset display components
-    //     self.next_path_lookup_table.clear();
-    //     self.ordered_task_column_list.clear();
-    //     self.task_display_table.clear();
-
-    //     let mut sequence_counter: usize = 1;
-
-    //     // Clone the PathBuf to avoid borrowing issues
-    //     // Get absolute path from current directory
-    //     let channel_dir_path = self.current_path.clone();
-    //     debug_log!(
-    //         "update_task_display, channel_dir_path -> {:?}",
-    //         channel_dir_path
-    //     );
-
-
-    //     // // A. Print the absolute path of the channel directory
-    //     // match channel_dir_path.canonicalize() {
-    //     //     Ok(abs_path) => debug_log!("update_task_display. Absolute channel directory path: {:?}", abs_path),
-    //     //     Err(e) => debug_log!("Error update_task_display. getting absolute path of channel directory: {}", e),
-    //     // }
-
-    //     // Process columns
-    //     self.process_columns(&channel_dir_path, &mut sequence_counter)?;
-
-    //     // Process tasks in each column
-    //     self.process_tasks(&mut sequence_counter)?;
-
-    //     Ok(())
-    // }
-
-    //     /// Process column directories and create headers
-    //     fn process_columns(&mut self, channel_dir_path: &Path, sequence_counter: &mut usize) -> std::io::Result<()> {
-    //         let mut columns: Vec<(usize, String, PathBuf)> = Vec::new();
-
-    //         // Collect and parse column directories
-    //         for entry in fs::read_dir(channel_dir_path)? {
-    //             let entry = entry?;
-    //             let path = entry.path();
-    //             if path.is_dir() {
-    //                 if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-    //                     if let Some((seq, display_name)) = parse_directory_name(name) {
-    //                         columns.push((seq, display_name.to_string(), path));
-    //                         *sequence_counter = (*sequence_counter).max(seq + 1);
-    //                     }
-    //                 }
-    //             }
-    //         }
-
-    //         // Sort columns by sequence number
-    //         columns.sort_by_key(|(seq, _, _)| *seq);
-
-    //         // Create header row
-    //         let mut header_row = String::new();
-    //         for (seq, display_name, path) in &columns {
-    //             // Add to path lookup
-    //         self.next_path_lookup_table.insert(*seq, path.clone());
-
-
-    //             // Add to ordered column list
-    //             self.ordered_task_column_list.push(path.to_string_lossy().to_string());
-
-    //             // Add to display table header
-    //             let truncated_name = truncate_string(&display_name,
-    //                 (self.tui_width as usize / columns.len()).saturating_sub(5));
-    //             header_row.push_str(&format!("{:3} {:<20} ", seq, truncated_name));
-    //         }
-
-    //         self.task_display_table.push(header_row);
-    //         Ok(())
-    //     }
-
-    //     /// Process tasks within each column
-    //     fn process_tasks(&mut self, sequence_counter: &mut usize) -> std::io::Result<()> {
-    //         let max_rows = self.get_max_tasks_count()?;
-    //         let column_count = self.ordered_task_column_list.len();
-
-    //         // Initialize rows
-    //         for _ in 0..max_rows {
-    //             let mut row = String::new();
-    //             for _ in 0..column_count {
-    //                 row.push_str(&" ".repeat(25)); // Adjust spacing based on your needs
-    //             }
-    //             self.task_display_table.push(row);
-    //         }
-
-    //         // Process each column
-    //         for (col_idx, column_path_str) in self.ordered_task_column_list.iter().enumerate() {
-    //             let column_path = Path::new(column_path_str);
-    //             let mut tasks: Vec<(String, PathBuf)> = Vec::new();
-
-    //             // Collect tasks in current column
-    //             for entry in fs::read_dir(column_path)? {
-    //                 let entry = entry?;
-    //                 let path = entry.path();
-    //                 if path.is_dir() {
-    //                     if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-    //                         tasks.push((name.to_string(), path));
-    //                     }
-    //                 }
-    //             }
-
-    //             // Sort tasks
-    //             tasks.sort_by(|(a, _), (b, _)| a.cmp(b));
-
-    //             // Process each task
-    //             for (row_idx, (task_name, task_path)) in tasks.iter().enumerate() {
-    //                 if row_idx + 1 >= self.task_display_table.len() {
-    //                     break;
-    //                 }
-
-    //                 // Add to path lookup
-    //                 self.next_path_lookup_table.insert(*sequence_counter, task_path.clone());
-
-    //                 // Update display table
-    //                 let display_text = format!("{:3} {}", sequence_counter,
-    //                     truncate_string(task_name, 20));
-
-    //                 // Update the specific position in the row
-    //                 let row = &mut self.task_display_table[row_idx + 1];
-    //                 let start_pos = col_idx * 25;
-    //                 let end_pos = start_pos + display_text.len().min(25);
-    //                 if start_pos < row.len() {
-    //                     let mut new_row = row[..start_pos].to_string();
-    //                     new_row.push_str(&display_text);
-    //                     new_row.push_str(&row[end_pos..]);
-    //                     self.task_display_table[row_idx + 1] = new_row;
-    //                 }
-
-    //                 *sequence_counter += 1;
-    //             }
-    //         }
-
-    //         Ok(())
-    //     }
-
     /// Updates the task display components and returns formatted headers and data
     pub fn update_task_display(&mut self) -> std::io::Result<(Vec<String>, Vec<Vec<String>>)> {
         // Reset display components
@@ -6492,6 +6354,14 @@ impl App {
     fn create_custom_message_interactive(&mut self) -> io::Result<()> {
         // Clear screen for clean Q&A interface
         print!("\x1B[2J\x1B[1;1H");
+
+        // // 5. Preview and Confirm
+        // Clear stdin buffer by prompting for explicit Enter
+        // This consumes any leftover input from previous operations
+        println!("\nPress ENTER (maybe twice) to continue...");
+        let mut _buffer_clear = String::new();
+        io::stdin().read_line(&mut _buffer_clear)?;
+
         io::stdout().flush()?;
 
         println!("=== Custom Message Creation ===\n");
@@ -6506,19 +6376,20 @@ impl App {
             {
                 println!("  {}. {}", i + 1, collab);
             }
-            println!("\nRecipients (comma-separated names, or ENTER for all, or 'c' to cancel):");
+            // println!("\nRecipients (comma-separated names, or ENTER for all, or 'c' to cancel):");
+            println!("\nRecipients (enter comma-separated names, or ENTER for all):");
 
             let mut input = String::new();
             io::stdin().read_line(&mut input)?;
             let input = input.trim();
 
-            if input == "c" || input == "cancel" {
-                println!("\n✗ Message creation cancelled");
-                println!("\nPress ENTER to continue...");
-                let mut _dummy = String::new();
-                io::stdin().read_line(&mut _dummy)?;
-                return Ok(());
-            }
+            // if input == "c" || input == "cancel" {
+            //     println!("\n✗ Message creation cancelled");
+            //     println!("\nPress ENTER to continue...");
+            //     let mut _dummy = String::new();
+            //     io::stdin().read_line(&mut _dummy)?;
+            //     return Ok(());
+            // }
 
             if input.is_empty() {
                 // Empty = all recipients
@@ -6550,6 +6421,66 @@ impl App {
                 println!("\nPlease try again with valid names.\n");
             }
         };
+
+        // ping - send to the attention of (voluntary look for ping by them)
+
+        // 1. Get Recipients with retry loop
+        let ping_list = loop {
+            println!("Available collaborators:");
+            for (i, collab) in self.graph_navigation_instance_state
+                .current_node_teamchannel_collaborators_with_access
+                .iter()
+                .enumerate()
+            {
+                println!("  {}. {}", i + 1, collab);
+            }
+            // println!("\nPing (send to the attention of), list comma-separated names, or ENTER for all, or 'c' to cancel):");
+            println!("\nPing (send to the attention of), list comma-separated names, or ENTER for all:");
+
+
+            let mut input = String::new();
+            io::stdin().read_line(&mut input)?;
+            let input = input.trim();
+
+            // if input == "c" || input == "cancel" {
+            //     println!("\n✗ Message creation cancelled");
+            //     println!("\nPress ENTER to continue...");
+            //     let mut _dummy = String::new();
+            //     io::stdin().read_line(&mut _dummy)?;
+            //     return Ok(());
+            // }
+
+            if input.is_empty() {
+                // Empty = all recipients
+                break Vec::new();
+            }
+
+            // Validate recipients
+            let mut validated = Vec::new();
+            let mut all_valid = true;
+
+            for name in input.split(',') {
+                let trimmed = name.trim();
+                if self.graph_navigation_instance_state
+                    .current_node_teamchannel_collaborators_with_access
+                    .contains(&trimmed.to_string())
+                {
+                    validated.push(trimmed.to_string());
+                } else {
+                    println!("✗ Error: '{}' not in collaborator list", trimmed);
+                    all_valid = false;
+                }
+            }
+
+            if all_valid && !validated.is_empty() {
+                break validated;
+            }
+
+            if !all_valid {
+                println!("\nPlease try again with valid names.\n");
+            }
+        };
+
 
         // 2. Get Expiration (in minutes)
         let expires_minutes = loop {
@@ -6595,20 +6526,25 @@ impl App {
 
         // 4. Get Message Text (single line only)
         let text_message = loop {
+            println!("\nPress ENTER (maybe twice) to continue...");
+            let mut _buffer_clear = String::new();
+            io::stdin().read_line(&mut _buffer_clear)?;
+            // io::stdout().flush()?;
+
             println!("\nMessage text:");
 
             let mut input = String::new();
             io::stdin().read_line(&mut input)?;
             let text = input.trim();
 
+            // ToDo remove these loops!!
             if text.is_empty() {
-                println!("✗ Message text cannot be empty.");
+                println!("Try again:");
             } else {
                 break text.to_string();
             }
         };
 
-        // 5. Preview and Confirm
         println!("\n--- Message Preview ---");
 
         let recipients_display = if recipients.is_empty() {
@@ -6628,11 +6564,15 @@ impl App {
             let mut input = String::new();
             io::stdin().read_line(&mut input)?;
 
+            // testing
+            println!("input: {}", input);
+
             match input.trim().to_lowercase().as_str() {
                 "y" | "yes" => {
                     // Create and send message
                     self.send_custom_message(
                         recipients,
+                        ping_list,
                         use_encryption,
                         text_message,
                     )?;
@@ -6664,9 +6604,11 @@ impl App {
     fn send_custom_message(
         &mut self,
         recipients: Vec<String>,
+        ping_list: Vec<String>,
         use_encryption: bool,
         text_message: String,
     ) -> io::Result<()> {
+        debug_log("SCM Starting send_custom_message");
         // Calculate expiration timestamp
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -6675,15 +6617,22 @@ impl App {
 
         // Read metadata to get node info
         let metadata_path = self.current_path.join("0.toml");
-        let metadata_path_string = fs::read_to_string(&metadata_path)?;
+        // let metadata_path_string = fs::read_to_string(&metadata_path)?;
+
+        let metadata_path_string = metadata_path.to_string_lossy();
+
+        debug_log!("SCM metadata_path_string {}", metadata_path_string);
 
         // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
         // - metadata.expires_after_min u64
         let expires_after_min = read_u64_field_from_toml(
             &metadata_path_string,
-            "expires_after_min",
+            "expires_at",
         )
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("SCM: expires_after_min read_u64_field_from_toml error: {}", e)))?;
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("SCM: expires_at read_u64_field_from_toml error: {}", e)))?;
+
+        debug_log!("SCM expires_at {}", expires_after_min);
+
 
         // Step 4: Read the requested field from the verified file
         let node_name = read_single_line_string_field_from_toml(
@@ -6714,7 +6663,7 @@ impl App {
 
         let expires_at = now + (expires_after_min * 60);
 
-        debug_log!("SCMSG: Creating message at: {:?}", file_path);
+        debug_log!("SCM: Creating message at: {:?}", file_path);
 
         /*
         impl MessagePostFile {
@@ -6725,6 +6674,7 @@ impl App {
                 filepath_in_node: &str, //filepath_in_node
                 text_message: &str, // text_message
                 recipients_list: Vec<String>, // teamchannel_collaborators_with_access
+                ping: //
                 messagepost_gpgtoml: bool,
                 expires_at: Option<u64>,  // NEW: Custom expiration, or None for default
             ) -> MessagePostFile {
@@ -6742,14 +6692,17 @@ impl App {
             } else {
                 recipients.clone()
             },
+            ping_list,
             use_encryption,
             Some(expires_at),
         );
+        debug_log("SCM Starting BAD!!!!!!! toml::to_string");
 
         // NO!!!!!!!!!!!!!!!!!!!!!
         // Serialize
         let toml_data = toml::to_string(&message)
             .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Serialization error: {}", e)))?;
+        debug_log!("SCM toml_data {}", toml_data);
 
         // Save based on encryption setting
         if use_encryption {
@@ -6768,7 +6721,7 @@ impl App {
 
         let _ = write_newfile_sendq_flag(final_recipients, &file_path);
 
-        debug_log!("SCMSG: Message created successfully");
+        debug_log!("SCM: Message created successfully");
 
         Ok(())
     }
@@ -6803,106 +6756,14 @@ impl App {
 
         // 3. Display mode info bar with clear instructions
         match message_view_mode {
-            MessageViewMode::Refresh => println!("\\|/  Refresh Mode - - empty 'enter' to  insert mode"),
-            MessageViewMode::Insert => println!(">_  Insert Mode - empty 'enter' to toggle refresh-mode"),
+            MessageViewMode::Refresh => println!("\\|/  Refresh Mode - (empty-Enter -> insert mode)"),
+            MessageViewMode::Insert => println!(">_  Insert Mode - (empty-Enter -> refresh mode) try --custom"),
         }
 
         // 4. Display input prompt with current buffer
         print!("> {}", input_buffer);
         io::stdout().flush()
     }
-
-    // // TODO add to doc string
-    // // TODO add to function
-    // // TODO add to helper-function
-    // /// Add a new message from user input
-    // ///
-    // /// Creates a new message file with the user's input as content
-    // fn add_new_message_from_input(&mut self, input: &str) -> io::Result<()> {
-
-
-    //     // TODO
-    //     // add fork: look at these in nav-state
-    //     /*
-
-    //     these indicate if a 'this is not the set window UTC:{}' message
-
-    //     /// Start time for accepting posts (UTC POSIX timestamp)
-    //     message_post_start_date_utc_posix: Option<i64>,
-
-    //     /// End time for accepting posts (UTC POSIX timestamp)
-    //     message_post_end_date_utc_posix: Option<i64>,
-
-
-    //     these likely need to get passed along to
-    //     add_new_messagepost_message()
-
-
-    //     /// message_post_gpgtoml_required
-    //     message_post_gpgtoml_required:  Option<bool>,
-
-    //     /// Maximum string length
-    //     message_post_max_string_length_int: Option<usize>,
-
-    //     /// Whether posts are public or private
-    //     message_post_is_public_bool: Option<bool>,
-
-    //     /// Whether user confirmation is required before posting
-    //     message_post_user_confirms_bool: Option<bool>,
-
-
-
-    //     And THESE (structured message-post) "data format specs"
-    //     indicate a Q&A form! so neat.
-
-    //     /// Integer validation ranges as tuples (min, max) - inclusive bounds
-    //     /// e.g. option 1-3 (inclusive) are integers
-    //     message_post_data_format_specs_integer_ranges_from_to_tuple_array: Option<Vec<(i32, i32)>>,
-
-    //     /// Integer-string validation ranges as tuples (min, max) for the integer part
-    //     /// e.g. options 3-5 (inclusive) are write-in options
-    //     message_post_data_format_specs_int_string_ranges_from_to_tuple_array: Option<Vec<(i32, i32)>>,
-
-    //     e.g.
-
-    //     - Q&A tool for structured message-posts
-    //     For readability: '. ' delimited int, string
-    //     ```
-    //        let parts: Vec<&str> = s.split(". ").collect();
-    //         for part in parts {
-    //             println!("{}", part);
-    //         }
-    //     ```
-    //     -- three steps (plan A)
-    //     read from (v1 nav-state, alt: 0toml)
-    //     1. comment or answer-response (if comment: "#comment:  ..."
-    //     2. select an option
-    //     3. 	A. done
-    //     B. write-in:
-
-    //     result:
-    //     A. int, e.g. "1"
-    //     B. int, string e.g. "3. Cookie"
-
-
-    //      */
-
-    //     debug_log("ANMFI: starting add_new_message_from_input in ANMFI");
-
-    //     let local_owner_user = &self.graph_navigation_instance_state.local_owner_user;
-    //     debug_log!("ANMFI: local_owner_user->{:?}", local_owner_user);
-    //     // Generate the next available message filename
-    //     let message_path = get_next_message_file_path(&self.current_path, local_owner_user);
-    //     debug_log!("ANMFI: message_path->{:?}", message_path);
-
-    //     // Add the message using existing function
-    //     add_new_messagepost_message(
-    //         &message_path,
-    //         local_owner_user,
-    //         input.trim(),
-    //         &self.graph_navigation_instance_state,
-    //     ).map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to add message: {}", e)))
-    // }
 
     /// Add a new message from user input
     ///
@@ -6984,7 +6845,6 @@ impl App {
 
        let input_string = input.to_string();
        // input.clear();
-
 
         add_new_messagepost_message(
             &message_path,
@@ -8568,6 +8428,17 @@ impl GraphNavigationInstanceState {
             self.pa4_features = this_node.pa4_features;
             self.pa5_mvp = this_node.pa5_mvp;
             self.pa6_feedback = this_node.pa6_feedback;
+
+            // Message posting configuration fields (if present in CoreNode)
+            self.message_post_gpgtoml_required = None;
+            self.message_post_data_format_specs_integer_ranges_from_to_tuple_array = None;
+            self.message_post_data_format_specs_int_string_ranges_from_to_tuple_array = None;
+            self.message_post_max_string_length_int = None;
+            self.message_post_is_public_bool = None;
+            self.message_post_user_confirms_bool = None;
+            self.message_post_start_date_utc_posix = None;
+            self.message_post_end_date_utc_posix = None;
+
         } else {
             debug_log!("nav_graph_look_read_node_toml(), not a team channel node");
             /*
@@ -14904,6 +14775,13 @@ fn add_new_messagepost_message(
     if user_confirms == Some(true) {
         debug_log!("ANMPM: User confirmation required - showing preview");
 
+        // Clear stdin buffer by prompting for explicit Enter
+        // This consumes any leftover input from previous operations
+        println!("\nPress ENTER (maybe twice) to continue to preview and confirmation...");
+        let mut _buffer_clear = String::new();
+        io::stdin().read_line(&mut _buffer_clear)?;
+
+
         println!("\n=== Message Preview ===");
         println!("From: {}", owner);
         println!("To: {}", if recipients_list.is_empty() {
@@ -14926,11 +14804,6 @@ fn add_new_messagepost_message(
         // }
 
 
-        // Clear stdin buffer by prompting for explicit Enter
-        // This consumes any leftover input from previous operations
-        println!("\nPress ENTER (maybe twice) to continue to...Final prompt.");
-        let mut _buffer_clear = String::new();
-        io::stdin().read_line(&mut _buffer_clear)?;
 
         print!("Final Check: Do you confirm and post this message? (y)es / no: ");
 
@@ -15014,12 +14887,15 @@ fn add_new_messagepost_message(
 
     debug_log!("ANMPM: Creating MessagePostFile");
 
+    let ping: Vec<String> = Vec::new();
+
     let mut message = MessagePostFile::new(
         owner,
         &node_name,
         &filepath_in_node,
         &final_text_truncated,
         recipients_list.clone(),
+        ping,
         false, // default to clearsigned
         None,
     );
@@ -15274,6 +15150,10 @@ struct MessagePostFile {
     text_message: String, // content-body
 
     teamchannel_collaborators_with_access: Vec<String>,
+
+    /// sent "to the attention of" list => "ping"
+    ping: Vec<String>,
+
     updated_at_timestamp: u64, // utc posix timestamp
     messagepost_gpgtoml: bool, // Is MessagePostFile file gpg encrypted
     expires_at: u64, // utc posix timestamp
@@ -15287,6 +15167,7 @@ impl MessagePostFile {
         filepath_in_node: &str, //filepath_in_node
         text_message: &str, // text_message
         recipients_list: Vec<String>, // teamchannel_collaborators_with_access
+        ping: Vec<String>, // sent "to the attention of" list => "ping"
         messagepost_gpgtoml: bool,
         expires_at: Option<u64>,  // NEW: Custom expiration, or None for default
     ) -> MessagePostFile {
@@ -15307,8 +15188,8 @@ impl MessagePostFile {
             node_name: node_name.to_string(),
             filepath_in_node: filepath_in_node.to_string(),
             text_message: text_message.to_string(),
-
             teamchannel_collaborators_with_access: recipients_list,
+            ping: ping,
             updated_at_timestamp: timestamp,
             expires_at: expires_at_timestamp,  // Use calculated or custom value
             messagepost_gpgtoml: messagepost_gpgtoml,
