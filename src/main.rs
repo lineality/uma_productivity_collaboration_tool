@@ -6376,31 +6376,24 @@ impl App {
             {
                 println!("  {}. {}", i + 1, collab);
             }
-            // println!("\nRecipients (comma-separated names, or ENTER for all, or 'c' to cancel):");
-            println!("\nRecipients (enter comma-separated names, or ENTER for all):");
+            println!("\nRecipients (enter comma-separated names, or Enter for ALL):");
 
-            let mut input = String::new();
-            io::stdin().read_line(&mut input)?;
-            let input = input.trim();
+            let mut recipients_input = String::new();
+            io::stdin().read_line(&mut recipients_input)?;
+            let recipients_input = recipients_input.trim();
 
-            // if input == "c" || input == "cancel" {
-            //     println!("\n✗ Message creation cancelled");
-            //     println!("\nPress ENTER to continue...");
-            //     let mut _dummy = String::new();
-            //     io::stdin().read_line(&mut _dummy)?;
-            //     return Ok(());
-            // }
-
-            if input.is_empty() {
-                // Empty = all recipients
-                break Vec::new();
+            // if empty (empty enter) use all collaborators
+            if recipients_input.is_empty() {
+                break self.graph_navigation_instance_state
+                    .current_node_teamchannel_collaborators_with_access
+                    .clone();  // Return the full list
             }
 
             // Validate recipients
             let mut validated = Vec::new();
             let mut all_valid = true;
 
-            for name in input.split(',') {
+            for name in recipients_input.split(',') {
                 let trimmed = name.trim();
                 if self.graph_navigation_instance_state
                     .current_node_teamchannel_collaborators_with_access
@@ -6434,23 +6427,13 @@ impl App {
             {
                 println!("  {}. {}", i + 1, collab);
             }
-            // println!("\nPing (send to the attention of), list comma-separated names, or ENTER for all, or 'c' to cancel):");
-            println!("\nPing (send to the attention of), list comma-separated names, or ENTER for all:");
+            println!("\nPing (send to the attention of), list comma-separated names, or Enter for NONE:");
 
+            let mut ping_input = String::new();
+            io::stdin().read_line(&mut ping_input)?;
+            let ping_input = ping_input.trim();
 
-            let mut input = String::new();
-            io::stdin().read_line(&mut input)?;
-            let input = input.trim();
-
-            // if input == "c" || input == "cancel" {
-            //     println!("\n✗ Message creation cancelled");
-            //     println!("\nPress ENTER to continue...");
-            //     let mut _dummy = String::new();
-            //     io::stdin().read_line(&mut _dummy)?;
-            //     return Ok(());
-            // }
-
-            if input.is_empty() {
+            if ping_input.is_empty() {
                 // Empty = all recipients
                 break Vec::new();
             }
@@ -6459,7 +6442,7 @@ impl App {
             let mut validated = Vec::new();
             let mut all_valid = true;
 
-            for name in input.split(',') {
+            for name in ping_input.split(',') {
                 let trimmed = name.trim();
                 if self.graph_navigation_instance_state
                     .current_node_teamchannel_collaborators_with_access
@@ -6554,6 +6537,7 @@ impl App {
         };
 
         println!("To: {}", recipients_display);
+        println!("Ping: {:?}", ping_list);
         println!("Expires: {} minutes from now", expires_minutes);
         println!("Encrypted: {}", use_encryption);
         println!("Text: {}", text_message);
@@ -6577,7 +6561,7 @@ impl App {
                         text_message,
                     )?;
 
-                    println!("\n✓ Message sent!");
+                    println!("\n✓ Message was created.");
                     break;
                 }
                 "n" | "no" => {
@@ -7685,6 +7669,172 @@ fn encrypt_clearsigned_toml_with_public_key_content(
 
     cleanup_result
 }
+
+
+// TODO, maybe add to buffy
+/// Writes a single hotkey command with color highlighting directly to terminal
+///
+/// ## Memory: ZERO HEAP
+/// Writes hotkey (RED) + description (YELLOW) using buffy_print
+///
+/// ## Parameters
+/// - hotkey: The command character(s) to highlight in RED
+/// - description: The rest of the text in YELLOW
+///
+/// ## Example
+/// ```rust
+/// write_red_hotkey("q", "uit ")?;  // Outputs: RED"q" + YELLOW"uit "
+/// ```
+fn write_red_hotkey(hotkey: &str, description: &str) -> io::Result<()> {
+    buffy_print(
+        "{}{}{}{}",
+        &[
+            BuffyFormatArg::Str(RED),
+            BuffyFormatArg::Str(hotkey),
+            BuffyFormatArg::Str(YELLOW),
+            BuffyFormatArg::Str(description),
+        ],
+    )
+}
+
+const BOLD: &str = "\x1b[1m";
+const GREEN: &str = "\x1b[32m";
+// const BLUE: &str = "\x1b[34m";
+// const BOLD: &str = "\x1b[1m";
+// const ITALIC: &str = "\x1b[3m";
+// const UNDERLINE: &str = "\x1b[4m";
+const RED: &str = "\x1b[31m";
+const YELLOW: &str = "\x1b[33m";
+const BG_WHITE: &str = "\x1b[47m";
+const BG_CYAN: &str = "\x1b[46m";
+const RESET: &str = "\x1b[0m";
+mod buffy_format_write_module;
+use buffy_format_write_module::{BuffyFormatArg, buffy_print, buffy_println};
+
+// TODO, maybe add to buffy
+/// Writes a two-part hotkey command with color highlighting directly to terminal
+///
+/// ## Memory: ZERO HEAP
+/// Writes hotkey_1 (RED) + hotkey_2 (GREEN) + description (YELLOW) using buffy_print
+///
+/// ## Parameters
+/// - hotkey_1: First part of command to highlight in RED
+/// - hotkey_2: Second part of command to highlight in GREEN
+/// - description: The rest of the text in YELLOW
+///
+/// ## Example
+/// ```rust
+/// write_red_green_hotkey("s", "a", "v ")?;  // Outputs: RED"s" + GREEN"a" + YELLOW"v "
+/// write_red_green_hotkey("/", "/", "/cmnt ")?;  // Outputs: RED"/" + GREEN"/" + YELLOW"/cmnt "
+/// ```
+fn write_red_green_hotkey(hotkey_1: &str, hotkey_2: &str, description: &str) -> io::Result<()> {
+    buffy_print(
+        "{}{}{}{}{}{}",
+        &[
+            BuffyFormatArg::Str(RED),
+            BuffyFormatArg::Str(hotkey_1),
+            BuffyFormatArg::Str(GREEN),
+            BuffyFormatArg::Str(hotkey_2),
+            BuffyFormatArg::Str(YELLOW),
+            BuffyFormatArg::Str(description),
+        ],
+    )
+}
+
+/// Writes the complete navigation legend directly to terminal
+///
+/// ## Project Context
+/// Displays all available keyboard commands for file navigation with
+/// color-coded hotkeys. Each command section written independently for
+/// maintainability - adding/removing commands requires no argument counting.
+///
+/// ## Memory: ZERO HEAP
+/// All output written directly to terminal using buffy functions.
+/// No intermediate String building, no heap allocation.
+///
+/// ## Operation
+/// Writes legend in modular sections:
+/// - Each command written separately via write_red_hotkey()
+/// - Colors applied per-command (RED hotkey, YELLOW description)
+/// - RESET applied at end
+/// - Modular: Add/remove commands without affecting others
+///
+/// ## Safety & Error Handling
+/// - Returns io::Result for write failures
+/// - Each command write is independent
+/// - Failure in one command doesn't affect others structurally
+///
+/// ## Legend Commands
+/// - q: quit application
+/// - sav: save current state (red and green and yellow)
+/// - re: reload/refresh
+/// - undo: undo last operation
+/// - del: delete item
+/// - nrm: normal mode
+/// - ins: insert mode
+/// - vis: visual mode
+/// - hex: hex editor mode
+/// - raw: raw view
+/// - pasty: paste operation
+/// - cvy: copy operation
+/// - wrd,b,end: word navigation
+/// - ///cmnt: comment operations (red and green and yellow)
+/// - []idnt: indent operations
+/// - hjkl: vim-style navigation
+///
+/// ## Example
+/// ```rust
+/// // In main display loop:
+/// write_formatted_navigation_legend_to_tui()?;
+/// ```
+fn write_formatted_navigation_legend_to_tui() -> Result<(),Error> {
+    // File operations group
+        write_red_hotkey("Q", "uit ")?;
+
+    // // Mode operations group
+    write_red_hotkey("B", "ack|" )?;
+    write_red_hotkey("T", "ask ")?;
+    // // Three Colour
+    // write_red_green_hotkey("s", "a", "v ")?;
+    // // Red only
+    write_red_hotkey("M", "essage |")?;
+
+    write_red_hotkey("A", "dd Node")?;
+    // write_red_hotkey("i", "ns ")?;
+    // write_red_hotkey("v", "is ")?;
+    // write_red_hotkey("hex", " ")?;
+
+    // // View operations group
+    // write_red_hotkey("r", "aw|")?;
+    // write_red_hotkey("p", "asty ")?;
+    // write_red_hotkey("cvy", "|")?;
+
+    // // Navigation group
+    // write_red_hotkey("w", "rd,")?;
+    // write_red_hotkey("b", ",")?;
+    // write_red_hotkey("e", "nd ")?;
+
+    // // Comment/indent group
+    // // Three Colour
+    // write_red_green_hotkey("/", "/", "/cmnt ")?;
+    // // Red only
+    // write_red_hotkey("[]", "idnt ")?;
+
+    // // Movement group
+    // write_red_hotkey("hjkl", "")?;
+
+    // Clear formatting: ANSI color codes are stateful
+    // Make sure NEXT prints
+    // are not also formatted.
+    buffy_print("{}", &[BuffyFormatArg::Str(RESET)])?;
+
+    // Complete the line with newline \n
+    buffy_println("", &[])?;
+
+    // Done
+    Ok(())
+}
+
 
 /// Adds a new collaborator by creating a TOML configuration file in the executable-relative
 /// collaborator directory.
@@ -15298,7 +15448,7 @@ fn serialize_messagepost_toml(message: &MessagePostFile) -> Result<String, ThisP
     // Serialize the recipients list as a TOML array
     // This contains all users who have access to view this message post
     serialize_string_array_to_toml(&mut toml_string, "teamchannel_collaborators_with_access", &message.teamchannel_collaborators_with_access)?;
-    serialize_string_array_to_toml(&mut toml_string, "ping", &message.teamchannel_collaborators_with_access)?;
+    serialize_string_array_to_toml(&mut toml_string, "ping", &message.ping)?;
 
     // Serialize updated_at_timestamp - POSIX UTC timestamp of last update
     toml_string.push_str(&format!("updated_at_timestamp = {}\n", message.updated_at_timestamp));
