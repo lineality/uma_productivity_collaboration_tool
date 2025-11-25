@@ -3008,10 +3008,16 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
 
 
     // --- Stage 3: Walk Through Team Channels ---
-    for entry in WalkDir::new(&team_channels_dir)
-        .into_iter()
+    // for entry in WalkDir::new(&team_channels_dir) // ⚠️ This recursively walks ALL subdirectories!
+    //     .into_iter()
+    //     .filter_map(|e| e.ok())
+    //     .filter(|e| e.file_type().is_dir())
+    // {
+    // --- Stage 3: Walk Through Team Channels (ONE LEVEL ONLY) ---
+    for entry in std::fs::read_dir(&team_channels_dir)
+        .map_err(|e| ThisProjectError::from(format!("Failed to read team_channels directory: {}", e)))?
         .filter_map(|e| e.ok())
-        .filter(|e| e.file_type().is_dir())
+        .filter(|e| e.file_type().map(|ft| ft.is_dir()).unwrap_or(false))
     {
         /*
         workflow:
@@ -3358,6 +3364,9 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
             }
             Err(e) => {
                 validation_failures += 1;
+                println!("Validation node_readcopy_path_string: {}", node_readcopy_path_string);
+                debug_log!("Validation node_readcopy_path_string: {}", node_readcopy_path_string);
+
                 eprintln!("  ✗ Validation FAILED cuz: {}", e.to_string());
                 debug_log!("Validation FAILED cuz: {}", e.to_string());
                 eprintln!("  Skipping this channel due to security validation failure");
