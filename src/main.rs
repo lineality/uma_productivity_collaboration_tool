@@ -6412,8 +6412,9 @@ impl App {
                                 // println!("EMMPB calling ANMFI");
                                 debug_log("EMMPB calling ANMFI");
                                 // Normal message send
-                                self.add_new_message_from_input(&user_input_buffer)?;
+                                let input_string = user_input_buffer.to_string();
                                 user_input_buffer.clear();
+                                self.add_new_message_from_input(&input_string)?;
                                 self.load_im_messages();
                                 needs_display_refresh = true;
                             }
@@ -6972,10 +6973,14 @@ impl App {
         // Call Helper Function with All Configuration
         // =================================================
 
+       let input_string = input.to_string();
+       // input.clear();
+
+
         add_new_messagepost_message(
             &message_path,
             local_owner_user,
-            input.trim(),
+            input_string.trim(),
             &self.graph_navigation_instance_state,
         ).map_err(|e| io::Error::new(
             io::ErrorKind::Other,
@@ -8502,12 +8507,41 @@ impl GraphNavigationInstanceState {
 
         debug_log!("NGLRNT nav_graph_look_read_node_toml(), this_node -> {:?}", this_node);
 
-        // Check if this is a Team Channel Node using path components
-        let is_team_channel = self.current_full_file_path
-            .components()
-            .any(|component| component.as_os_str() == "team_channels");
+        // // Check if this is a Team Channel Node using path components
+        // let is_team_channel = self.current_full_file_path
+        //     .components()
+        //     .any(|component| component.as_os_str() == "team_channels");
+        debug_log(&format!("NGLRNT self.current_full_file_path {:?}", self.current_full_file_path));
+
+
+        let is_team_channel: bool;
+        // Get the last three components as an iterator
+        let last_three: Vec<_> = self.current_full_file_path.iter().rev().take(3).collect();
+        // Reverse back to original order
+        let last_three: Vec<_> = last_three.into_iter().rev().collect();
+        // Take the first two of these three
+        let first_two_of_last_three = &last_three[..2];
+        // Convert to strings for comparison
+        let first_two_strs: Vec<String> = first_two_of_last_three
+            .into_iter()
+            .filter_map(|c| c.to_str())
+            .map(|s| s.to_string())
+            .collect();
+        // Join with "/" for comparison
+        let first_two_joined = first_two_strs.join("/");
+        if first_two_joined == "project_graph_data/team_channels" {
+            debug_log!("NGLRNT in: project_graph_data/team_channels");
+            is_team_channel = true;
+        } else {
+            // println!("HCMM Path does not match.");
+            debug_log!("NGLRNT not in: project_graph_data/team_channels");
+            is_team_channel = false;
+        }
+
+
 
         if is_team_channel {
+            debug_log!("nav_graph_look_read_node_toml(), IS team channel node");
             // Update state for team channel node
             self.active_team_channel = this_node.node_name.clone();
             self.current_node_teamchannel_collaborators_with_access = this_node.teamchannel_collaborators_with_access.clone();
@@ -10244,7 +10278,8 @@ struct CoreNode {
             &node_readcopy_path,
         )
         .unwrap_or_else(|e| {
-            debug_log!("LCNFTF: No existing abstract_collaborator_port_assignments found (this is normal for new nodes): {}", e);
+            debug_log!("LCNFTF read_teamchannel_collaborator_ports_clearsigntoml_without_keyid file_path {:?}", file_path);
+            debug_log!("LCNFTF: No existing abstract_collaborator_port_assignments found (this should happen for non-team-channels): {}", e);
             HashMap::new()
         });
 
@@ -10501,6 +10536,8 @@ struct CoreNode {
         );
 
     // // 7. Return Node Struct (CoreNode)
+    debug_log!("LCNFTF: core_node {:?}", core_node);
+
     debug_log("LCNFTF DONE: Ending load_core_node_from_toml_file");
     Ok(core_node)
 }
@@ -14645,11 +14682,14 @@ fn add_new_messagepost_message(
     graph_navigation_instance_state: &GraphNavigationInstanceState,
 ) -> Result<(), io::Error> {
 
-    debug_log!("ANMPM: Starting add_new_messagepost_message");
-    debug_log!("ANMPM: incoming_file_path: {:?}", incoming_file_path);
-    debug_log!("ANMPM: owner: {}", owner);
-    debug_log!("ANMPM: text length: {} bytes", text.len());
-
+    #[cfg(all(debug_assertions, not(test)))]
+    {
+        debug_log!("ANMPM graph_navigation_instance_state->{:?}", graph_navigation_instance_state);
+        debug_log!("ANMPM: Starting add_new_messagepost_message");
+        debug_log!("ANMPM: incoming_file_path: {:?}", incoming_file_path);
+        debug_log!("ANMPM: owner: {}", owner);
+        debug_log!("ANMPM: text length: {} bytes", text.len());
+    }
     let start_date_utc_posix = graph_navigation_instance_state.message_post_start_date_utc_posix; //;: Option<i64>,
     let end_date_utc_posix = graph_navigation_instance_state.message_post_end_date_utc_posix; //;: Option<i64>,
 
@@ -14664,7 +14704,11 @@ fn add_new_messagepost_message(
 
     let current_node_owner = graph_navigation_instance_state.current_node_owner.clone(); //;: String
 
-
+    #[cfg(all(debug_assertions, not(test)))]
+    {
+    debug_log!("ANMPM: integer_ranges: {:?}", integer_ranges);
+    debug_log!("ANMPM: integer_string_ranges: {:?}", integer_string_ranges);
+    }
     // gpgtoml_required: Option<bool>,
     // max_string_length: Option<usize>,
     // is_public: Option<bool>,
@@ -14743,6 +14787,7 @@ fn add_new_messagepost_message(
     // =================================================
 
     debug_log!("ANMPM: Checking for structured format configuration");
+
 
     // Check if structured format is active
     let structured_format_active = match (&integer_ranges, &integer_string_ranges) {
@@ -14865,12 +14910,31 @@ fn add_new_messagepost_message(
         });
         println!("======================\n");
 
-        print!("Confirm and post this message? (y/n): ");
+        // if !read_user_confirmation("Confirm and post this message?")? {
+        //     println!("\n✗ Message creation cancelled by user.\n");
+        //     debug_log!("ANMPM: User did not confirm - skipping message creation");
+        //     return Ok(());
+        // }
+
+
+        // Clear stdin buffer by prompting for explicit Enter
+        // This consumes any leftover input from previous operations
+        println!("\nPress ENTER (maybe twice) to continue to...Final prompt.");
+        let mut _buffer_clear = String::new();
+        io::stdin().read_line(&mut _buffer_clear)?;
+
+        print!("Final Check: Do you confirm and post this message? (y)es / no: ");
+
+        // std out??
         io::stdout().flush()?;
 
         let mut confirmation = String::new();
         io::stdin().read_line(&mut confirmation)?;
         let confirmation = confirmation.trim().to_lowercase();
+
+        debug_log!("ANMPM: confirmation {}", confirmation);
+        println!("ANMPM: confirmation {}", confirmation);
+
 
         if confirmation != "y" && confirmation != "yes" {
             println!("\n✗ Message creation cancelled by user.\n");
@@ -15028,6 +15092,62 @@ fn add_new_messagepost_message(
     debug_log!("ANMPM: add_new_messagepost_message completed successfully");
 
     Ok(())
+}
+
+/// Read user confirmation with clean stdin buffer
+///
+/// # Purpose
+///
+/// Safely reads a yes/no confirmation from user by first clearing
+/// any leftover input in the stdin buffer. This prevents the common
+/// issue where previous operations leave characters in the buffer
+/// that interfere with fresh prompts.
+///
+/// # Project Context
+///
+/// Interactive CLI applications often have stdin buffer pollution when
+/// multiple input operations occur in sequence. This helper ensures
+/// each confirmation prompt starts with a clean slate.
+///
+/// # Arguments
+///
+/// * `prompt` - The question/prompt to display to user
+///
+/// # Returns
+///
+/// * `Ok(true)` - User confirmed (answered 'y' or 'yes')
+/// * `Ok(false)` - User declined (answered 'n' or 'no' or anything else)
+/// * `Err(io::Error)` - I/O error reading from stdin
+///
+/// # Examples
+///
+/// ```rust
+/// if read_user_confirmation("Proceed with deletion?")? {
+///     delete_file()?;
+/// } else {
+///     println!("Cancelled");
+/// }
+/// ```
+fn read_user_confirmation(prompt: &str) -> io::Result<bool> {
+    // Clear stdin buffer first
+    println!("\nPress ENTER to continue...");
+    let mut _buffer_clear = String::new();
+    io::stdin().read_line(&mut _buffer_clear)?;
+
+    // Show prompt
+    print!("{} (y/n): ", prompt);
+    io::stdout().flush()?;
+
+    // Read response
+    let mut response = String::new();
+    io::stdin().read_line(&mut response)?;    // Clear stdin buffer first
+    println!("\nPress ENTER to continue...");
+    let mut _buffer_clear = String::new();
+    io::stdin().read_line(&mut _buffer_clear)?;
+    let response = response.trim().to_lowercase();
+
+    // Return true only for explicit yes
+    Ok(response == "y" || response == "yes")
 }
 
 #[derive(Debug, Deserialize, Serialize)]
