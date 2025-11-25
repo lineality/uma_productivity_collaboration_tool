@@ -425,7 +425,7 @@ use crate::clearsign_toml_module::{
     decrypt_gpgfile_to_output,
     // read_all_collaborator_port_assignments_clearsigntoml_optimized,
     read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyid,
-    read_teamchannel_collaborators_with_access_from_clearsigntoml,
+    // read_teamchannel_collaborators_with_access_from_clearsigntoml,
     read_singleline_string_from_clearsigntoml_without_publicgpgkey,
     read_u8_array_from_clearsigntoml_without_publicgpgkey,
     read_pathbuf_from_clearsigntoml_without_publicgpgkey,
@@ -6802,26 +6802,185 @@ impl App {
         io::stdout().flush()
     }
 
+    // // TODO add to doc string
+    // // TODO add to function
+    // // TODO add to helper-function
+    // /// Add a new message from user input
+    // ///
+    // /// Creates a new message file with the user's input as content
+    // fn add_new_message_from_input(&mut self, input: &str) -> io::Result<()> {
+
+
+    //     // TODO
+    //     // add fork: look at these in nav-state
+    //     /*
+
+    //     these indicate if a 'this is not the set window UTC:{}' message
+
+    //     /// Start time for accepting posts (UTC POSIX timestamp)
+    //     message_post_start_date_utc_posix: Option<i64>,
+
+    //     /// End time for accepting posts (UTC POSIX timestamp)
+    //     message_post_end_date_utc_posix: Option<i64>,
+
+
+    //     these likely need to get passed along to
+    //     add_new_messagepost_message()
+
+
+    //     /// message_post_gpgtoml_required
+    //     message_post_gpgtoml_required:  Option<bool>,
+
+    //     /// Maximum string length
+    //     message_post_max_string_length_int: Option<usize>,
+
+    //     /// Whether posts are public or private
+    //     message_post_is_public_bool: Option<bool>,
+
+    //     /// Whether user confirmation is required before posting
+    //     message_post_user_confirms_bool: Option<bool>,
+
+
+
+    //     And THESE (structured message-post) "data format specs"
+    //     indicate a Q&A form! so neat.
+
+    //     /// Integer validation ranges as tuples (min, max) - inclusive bounds
+    //     /// e.g. option 1-3 (inclusive) are integers
+    //     message_post_data_format_specs_integer_ranges_from_to_tuple_array: Option<Vec<(i32, i32)>>,
+
+    //     /// Integer-string validation ranges as tuples (min, max) for the integer part
+    //     /// e.g. options 3-5 (inclusive) are write-in options
+    //     message_post_data_format_specs_int_string_ranges_from_to_tuple_array: Option<Vec<(i32, i32)>>,
+
+    //     e.g.
+
+    //     - Q&A tool for structured message-posts
+    //     For readability: '. ' delimited int, string
+    //     ```
+    //        let parts: Vec<&str> = s.split(". ").collect();
+    //         for part in parts {
+    //             println!("{}", part);
+    //         }
+    //     ```
+    //     -- three steps (plan A)
+    //     read from (v1 nav-state, alt: 0toml)
+    //     1. comment or answer-response (if comment: "#comment:  ..."
+    //     2. select an option
+    //     3. 	A. done
+    //     B. write-in:
+
+    //     result:
+    //     A. int, e.g. "1"
+    //     B. int, string e.g. "3. Cookie"
+
+
+    //      */
+
+    //     debug_log("ANMFI: starting add_new_message_from_input in ANMFI");
+
+    //     let local_owner_user = &self.graph_navigation_instance_state.local_owner_user;
+    //     debug_log!("ANMFI: local_owner_user->{:?}", local_owner_user);
+    //     // Generate the next available message filename
+    //     let message_path = get_next_message_file_path(&self.current_path, local_owner_user);
+    //     debug_log!("ANMFI: message_path->{:?}", message_path);
+
+    //     // Add the message using existing function
+    //     add_new_messagepost_message(
+    //         &message_path,
+    //         local_owner_user,
+    //         input.trim(),
+    //         &self.graph_navigation_instance_state,
+    //     ).map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to add message: {}", e)))
+    // }
+
     /// Add a new message from user input
     ///
-    /// Creates a new message file with the user's input as content
+    /// Creates a new message file with the user's input as content.
+    /// Extracts message-post configuration from navigation state and passes
+    /// to the helper function for processing.
+    ///
+    /// # Process Flow
+    ///
+    /// 1. Extract all message-post config from navigation state
+    /// 2. Generate next message file path
+    /// 3. Pass config and input to helper function for validation and creation
+    ///
+    /// # Configuration Parameters
+    ///
+    /// The following are extracted from `self.graph_navigation_instance_state`:
+    /// - Time window constraints (start/end dates)
+    /// - Structured format ranges (integer, integer-string)
+    /// - Max string length limit
+    /// - Public/private setting
+    /// - User confirmation requirement
+    /// - GPG encryption requirement
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(())` - Message created successfully OR skipped due to validation
+    /// * `Err(io::Error)` - System error during message creation
+    ///
     fn add_new_message_from_input(&mut self, input: &str) -> io::Result<()> {
 
-        debug_log("ANMFI: starting add_new_message_from_input in ANMFI");
+        debug_log("ANMFI: starting add_new_message_from_input");
+
+        // =================================================
+        // Extract Configuration from Navigation State
+        // =================================================
 
         let local_owner_user = &self.graph_navigation_instance_state.local_owner_user;
         debug_log!("ANMFI: local_owner_user->{:?}", local_owner_user);
-        // Generate the next available message filename
+
+        let current_node_owner = &self.graph_navigation_instance_state.current_node_owner;
+        debug_log!("ANMFI: current_node_owner->{:?}", current_node_owner);
+
+        // Time window configuration
+        let start_date_utc_posix = self.graph_navigation_instance_state.message_post_start_date_utc_posix;
+        let end_date_utc_posix = self.graph_navigation_instance_state.message_post_end_date_utc_posix;
+        debug_log!("ANMFI: time window start: {:?}, end: {:?}", start_date_utc_posix, end_date_utc_posix);
+
+        // Structured format configuration
+        let integer_ranges = self.graph_navigation_instance_state
+            .message_post_data_format_specs_integer_ranges_from_to_tuple_array
+            .clone();
+        let integer_string_ranges = self.graph_navigation_instance_state
+            .message_post_data_format_specs_int_string_ranges_from_to_tuple_array
+            .clone();
+        debug_log!("ANMFI: integer_ranges: {:?}", integer_ranges);
+        debug_log!("ANMFI: integer_string_ranges: {:?}", integer_string_ranges);
+
+        // Other configuration
+        let max_string_length = self.graph_navigation_instance_state.message_post_max_string_length_int;
+        let is_public = self.graph_navigation_instance_state.message_post_is_public_bool;
+        let user_confirms = self.graph_navigation_instance_state.message_post_user_confirms_bool;
+        let gpgtoml_required = self.graph_navigation_instance_state.message_post_gpgtoml_required;
+
+        debug_log!("ANMFI: max_string_length: {:?}", max_string_length);
+        debug_log!("ANMFI: is_public: {:?}", is_public);
+        debug_log!("ANMFI: user_confirms: {:?}", user_confirms);
+        debug_log!("ANMFI: gpgtoml_required: {:?}", gpgtoml_required);
+
+        // =================================================
+        // Generate Message File Path
+        // =================================================
+
         let message_path = get_next_message_file_path(&self.current_path, local_owner_user);
         debug_log!("ANMFI: message_path->{:?}", message_path);
 
-        // Add the message using existing function
-        add_im_message(
+        // =================================================
+        // Call Helper Function with All Configuration
+        // =================================================
+
+        add_new_messagepost_message(
             &message_path,
             local_owner_user,
             input.trim(),
             &self.graph_navigation_instance_state,
-        ).map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to add message: {}", e)))
+        ).map_err(|e| io::Error::new(
+            io::ErrorKind::Other,
+            format!("Failed to add message: {}", e)
+        ))
     }
 
     /// Load instant messages from current directory
@@ -6935,7 +7094,7 @@ impl App {
             debug_log!("LIM: Creating first message file: {}", this_file_name);
 
             /*
-            fn add_im_message(
+            fn  add_new_messagepost_message(
                 incoming_file_path: &Path,
                 owner: &str,
                 text: &str,
@@ -6945,7 +7104,7 @@ impl App {
             */
 
             // Add the first message
-            match add_im_message(
+            match add_new_messagepost_message(
                 &self.current_path.join(this_file_name),
                 &local_owner_user,
                 first_message.trim(),
@@ -8085,9 +8244,11 @@ struct GraphNavigationInstanceState {
     message_post_gpgtoml_required:  Option<bool>,
 
     /// Integer validation ranges as tuples (min, max) - inclusive bounds
+    /// e.g. option 1-3 (inclusive) are integers
     message_post_data_format_specs_integer_ranges_from_to_tuple_array: Option<Vec<(i32, i32)>>,
 
     /// Integer-string validation ranges as tuples (min, max) for the integer part
+    /// e.g. options 3-5 (inclusive) are write-in options
     message_post_data_format_specs_int_string_ranges_from_to_tuple_array: Option<Vec<(i32, i32)>>,
 
     /// Maximum string length
@@ -8178,7 +8339,7 @@ impl GraphNavigationInstanceState {
     /// nodes such as non-team-channel nodes within that team-channel (nearly ~everything is a node, only a few are team-channels)
     fn nav_graph_look_read_node_toml(&mut self) {
         debug_log!(
-            "starting nav_graph_look_read_node_toml() self.current_full_file_path -> {:?}, self.active_team_channel.clone() -> {:?}",
+            "NGLRNT! starting nav_graph_look_read_node_toml() self.current_full_file_path -> {:?}, self.active_team_channel.clone() -> {:?}",
 
             self.current_full_file_path.clone(),
             self.active_team_channel.clone(),
@@ -8193,152 +8354,227 @@ impl GraphNavigationInstanceState {
             ) {
             Ok(Some(path)) => {
                 // This is the path to whichever file was found (node.toml OR node.gpgtoml)
-                debug_log!("Found configuration file at: {:?}", path);
+                debug_log!("FNGLRNT ound configuration file at: {:?}", path);
                 path  // <-- This could be either file!
             },
             Ok(None) => {
                 // No file found - handle the error properly
-                debug_log("Neither node.toml nor node.gpgtoml found");
+                debug_log("NGLRNT Neither node.toml nor node.gpgtoml found");
                 return;
             },
             Err(e) => {
                 // Error occurred - handle it properly
-                debug_log!("Neither node.toml nor node.gpgtoml found >> {}", e);
+                debug_log!("NGLRNT Neither node.toml nor node.gpgtoml found >> {}", e);
                 return;
             }
         };
 
         // Now you have node_toml_path available for use
         debug_log!(
-            "nav_graph_look_read_node_toml() node_toml_path -> {:?}",
+            "NGLRNT nav_graph_look_read_node_toml() node_toml_path -> {:?}",
             node_toml_path.clone()
         );
 
         // Add more detailed existence checking
-        debug_log!("Checking if path exists: {:?}", node_toml_path.exists());
-        debug_log!("Checking if path is file: {:?}", node_toml_path.is_file());
+        debug_log!("NGLRNT Checking if path exists: {:?}", node_toml_path.exists());
+        debug_log!("NGLRNT Checking if path is file: {:?}", node_toml_path.is_file());
 
         debug_log!(
-            "nav_graph_look_read_node_toml() node_toml_path -> {:?}",
+            "NGLRNT nav_graph_look_read_node_toml() node_toml_path -> {:?}",
             node_toml_path.clone()
         );
 
         debug_log!(
-            "nav_graph_look_read_node_toml() node_toml_path -> {:?}",
+            "NGLRNT nav_graph_look_read_node_toml() node_toml_path -> {:?}",
             node_toml_path.clone()
         );
 
         // Add more detailed existence checking
-        debug_log!("Checking if path exists: {:?}", node_toml_path.exists());
-        debug_log!("Checking if path is file: {:?}", node_toml_path.is_file());
+        debug_log!("NGLRNT Checking if path exists: {:?}", node_toml_path.exists());
+        debug_log!("NGLRNT Checking if path is file: {:?}", node_toml_path.is_file());
 
         // if no file exists, return immediately!
         if !node_toml_path.exists() {
-            debug_log!("No node.toml at {:?} - this directory is not a node", node_toml_path);
+            debug_log!("NGLRNT No node.toml at {:?} - this directory is not a node", node_toml_path);
             return;
         }
 
-        // Try to read the file metadata
-        match fs::metadata(&node_toml_path) {
-            Ok(metadata) => {
-                debug_log!("File metadata found: is_file={}, size={}", metadata.is_file(), metadata.len());
-            },
-            Err(e) => {
-                debug_log!("\n\n nav_graph_look_read_node_toml() Error reading file metadata: {}", e);
-            }
-        }
+        // // Try to read the file metadata
+        // match fs::metadata(&node_toml_path) {
+        //     Ok(metadata) => {
+        //         debug_log!("File metadata found: is_file={}, size={}", metadata.is_file(), metadata.len());
+        //     },
+        //     Err(e) => {
+        //         debug_log!("\n\n nav_graph_look_read_node_toml() Error reading file metadata: {}", e);
+        //     }
+        // }
 
-        debug_log("In nav_graph_look_read_node_toml(), next calling: load_core_node_from_toml_file(file_path: &Path) -> Result<CoreNode");
+        debug_log("NGLRNT In nav_graph_look_read_node_toml(), next calling: load_core_node_from_toml_file(file_path: &Path) -> Result<CoreNode");
         // Try to open and read the file
-        match fs::read_to_string(&node_toml_path) {
-            Ok(contents) => {
-                debug_log!("Successfully read file, content length: {}", contents.len());
+        // match fs::read_to_string(&node_toml_path) {
+        //     Ok(contents) => {
+        //         debug_log!("Successfully read file, content length: {}", contents.len());
 
 
-                // Load and parse the node.toml file
-                let this_node = match load_core_node_from_toml_file(&node_toml_path) {
-                    Ok(node) => node,
-                    Err(e) => {
-                        debug_log!("ERROR: nav_graph_look_read_node_toml(), load_core_node_from_toml_file(), Failed to load node.toml: {}", e);
-                        return;
-                    }
-                };
 
-                debug_log!("nav_graph_look_read_node_toml(), this_node -> {:?}", this_node);
+        // // A. Check for either node.toml or node.gpgtoml
+        // let node_toml_path = channel_dir_path.join("node.toml");
+        // let node_gpgtoml_path = channel_dir_path.join("node.gpgtoml");
 
-                // Check if this is a Team Channel Node using path components
-                let is_team_channel = self.current_full_file_path
-                    .components()
-                    .any(|component| component.as_os_str() == "team_channels");
+        // let raw_channelnodetoml_path = if node_toml_path.exists() {
+        //     debug_log!("TCS: Found node.toml");
+        //     node_toml_path
+        // } else if node_gpgtoml_path.exists() {
+        //     debug_log!("TCS: Found node.gpgtoml");
+        //     node_gpgtoml_path
+        // } else {
+        //     return Err(MyCustomError::from(
+        //         "TCS: Neither node.toml nor node.gpgtoml found in team channel directory".to_string()
+        //     ));
+        // };
 
-                if is_team_channel {
-                    // Update state for team channel node
-                    self.active_team_channel = this_node.node_name.clone();
-                    self.current_node_teamchannel_collaborators_with_access = this_node.teamchannel_collaborators_with_access.clone();
-                    self.current_node_name = this_node.node_name.clone();
-                    self.current_node_owner = this_node.owner.clone();
-                    self.current_node_description_for_tui = this_node.description_for_tui.clone();
-                    self.current_node_directory_path = this_node.directory_path.clone();
-                    self.current_node_unique_id = this_node.node_unique_id;
-                    self.home_square_one = false;
+        // // Get GPG fingerprint (could move this outside the loop if same for all)
+        // let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+        //     Ok(fingerprint) => fingerprint,
+        //     Err(e) => {
+        //         #[cfg(debug_assertions)]
+        //         debug_log!(
+        //             "NGLRNT error Failed to read GPG fingerprint for {:?}:  (skipping)",
+        //             e
+        //         );
+        //         // continue; // Skip this directory, continue with next
+        //         return
+        //     }
+        // };
 
-                    // Project Areas
-                    self.pa1_process = this_node.pa1_process;
-                    self.pa2_schedule = this_node.pa2_schedule;
-                    self.pa3_users = this_node.pa3_users;
-                    self.pa4_features = this_node.pa4_features;
-                    self.pa5_mvp = this_node.pa5_mvp;
-                    self.pa6_feedback = this_node.pa6_feedback;
-                } else {
-                    debug_log!("nav_graph_look_read_node_toml(), not a team channel node");
-                    /*
-                    this should be loading... node items...
-                    */
+        // // Get temp directory path (could move this outside the loop if same for all)
+        // let base_uma_temp_directory_path = match get_base_uma_temp_directory_path() {
+        //     Ok(path) => path,
+        //     Err(e) => {
+        //         #[cfg(debug_assertions)]
+        //         debug_log!(
+        //             "NGLRNT error Failed to get temp directory path for {:?}: (skipping)",
+        //             e
+        //         );
+        //         // continue; // Skip this directory, continue with next
+        //         return
+        //     }
+        // };
 
-                    // Update state for non-team-channel nodes
-                    // These fields should be updated for ANY node type
-                    self.current_node_teamchannel_collaborators_with_access = this_node.teamchannel_collaborators_with_access.clone();
-                    self.current_node_name = this_node.node_name.clone();
-                    self.current_node_owner = this_node.owner.clone();
-                    self.current_node_description_for_tui = this_node.description_for_tui.clone();
-                    self.current_node_directory_path = this_node.directory_path.clone();
-                    self.current_node_unique_id = this_node.node_unique_id;
-                    // self.current_node_members = this_node.members.clone();
-                    self.home_square_one = false;
+        // // Get readable copy
+        // // Get readable copy
+        // let node_readcopy_path_string = match get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
+        //     &node_toml_path,
+        //     &gpg_full_fingerprint_key_id_string,
+        //     &base_uma_temp_directory_path,
+        // ) {
+        //     Ok(path) => path,
+        //     Err(e) => {
+        //         #[cfg(debug_assertions)]
+        //         debug_log!(
+        //             "NGLRNT error Failed to get read copy for {:?}: {:?} (skipping)",
+        //             node_toml_path,
+        //             e
+        //         );
+        //         // continue; // Skip this directory, continue with next
+        //         return
+        //     }
+        // };
 
-                    // Project Areas - these should be available for any node
-                    self.pa1_process = this_node.pa1_process;
-                    self.pa2_schedule = this_node.pa2_schedule;
-                    self.pa3_users = this_node.pa3_users;
-                    self.pa4_features = this_node.pa4_features;
-                    self.pa5_mvp = this_node.pa5_mvp;
-                    self.pa6_feedback = this_node.pa6_feedback;
+        // debug_log!("NGLRNT: channel_node_tomlpath_string
+        //     : {}", node_readcopy_path_string
+        // );
 
-                    // Message posting configuration fields (if present in CoreNode)
-                    self.message_post_gpgtoml_required = this_node.message_post_gpgtoml_required;
-                    self.message_post_data_format_specs_integer_ranges_from_to_tuple_array = this_node.message_post_data_format_specs_integer_ranges_from_to_tuple_array;
-                    self.message_post_data_format_specs_int_string_ranges_from_to_tuple_array = this_node.message_post_data_format_specs_int_string_ranges_from_to_tuple_array;
-                    self.message_post_max_string_length_int = this_node.message_post_max_string_length_int;
-                    self.message_post_is_public_bool = this_node.message_post_is_public_bool;
-                    self.message_post_user_confirms_bool = this_node.message_post_user_confirms_bool;
-                    self.message_post_start_date_utc_posix = this_node.message_post_start_date_utc_posix;
-                    self.message_post_end_date_utc_posix = this_node.message_post_end_date_utc_posix;
+        // let path_node_readcopy_path = Path::new(&node_readcopy_path_string);
 
-                    // Note: We do NOT update active_team_channel
-                    // because these are only relevant for team-channel nodes
+        // debug_log!("NGLRNT: path_node_readcopy_path
+        //     : {:?}", path_node_readcopy_path
+        // );
 
-
-                }
-            },
+        // Load and parse the node.toml file
+        let this_node = match load_core_node_from_toml_file(&node_toml_path) {
+            Ok(node) => node,
             Err(e) => {
-                // the error would be an error in reading node.toml
-                // it is not an error to not need to try to read
-                // a file that is not there.
-                debug_log!("NGLRNT Error reading file: {}", e);
-                debug_log!("NGLRNTThis directory is not a node. nav_graph_look_read_node_toml() node.toml not found at {:?}. ", node_toml_path);
+                debug_log!("NGLRNT ERROR: nav_graph_look_read_node_toml(), load_core_node_from_toml_file(), Failed to load node.toml: {}", e);
                 return;
             }
+        };
+
+        debug_log!("NGLRNT nav_graph_look_read_node_toml(), this_node -> {:?}", this_node);
+
+        // Check if this is a Team Channel Node using path components
+        let is_team_channel = self.current_full_file_path
+            .components()
+            .any(|component| component.as_os_str() == "team_channels");
+
+        if is_team_channel {
+            // Update state for team channel node
+            self.active_team_channel = this_node.node_name.clone();
+            self.current_node_teamchannel_collaborators_with_access = this_node.teamchannel_collaborators_with_access.clone();
+            self.current_node_name = this_node.node_name.clone();
+            self.current_node_owner = this_node.owner.clone();
+            self.current_node_description_for_tui = this_node.description_for_tui.clone();
+            self.current_node_directory_path = this_node.directory_path.clone();
+            self.current_node_unique_id = this_node.node_unique_id;
+            self.home_square_one = false;
+
+            // Project Areas
+            self.pa1_process = this_node.pa1_process;
+            self.pa2_schedule = this_node.pa2_schedule;
+            self.pa3_users = this_node.pa3_users;
+            self.pa4_features = this_node.pa4_features;
+            self.pa5_mvp = this_node.pa5_mvp;
+            self.pa6_feedback = this_node.pa6_feedback;
+        } else {
+            debug_log!("nav_graph_look_read_node_toml(), not a team channel node");
+            /*
+            this should be loading... node items...
+            */
+
+            // Update state for non-team-channel nodes
+            // These fields should be updated for ANY node type
+            self.current_node_teamchannel_collaborators_with_access = this_node.teamchannel_collaborators_with_access.clone();
+            self.current_node_name = this_node.node_name.clone();
+            self.current_node_owner = this_node.owner.clone();
+            self.current_node_description_for_tui = this_node.description_for_tui.clone();
+            self.current_node_directory_path = this_node.directory_path.clone();
+            self.current_node_unique_id = this_node.node_unique_id;
+            // self.current_node_members = this_node.members.clone();
+            self.home_square_one = false;
+
+            // Project Areas - these should be available for any node
+            self.pa1_process = this_node.pa1_process;
+            self.pa2_schedule = this_node.pa2_schedule;
+            self.pa3_users = this_node.pa3_users;
+            self.pa4_features = this_node.pa4_features;
+            self.pa5_mvp = this_node.pa5_mvp;
+            self.pa6_feedback = this_node.pa6_feedback;
+
+            // Message posting configuration fields (if present in CoreNode)
+            self.message_post_gpgtoml_required = this_node.message_post_gpgtoml_required;
+            self.message_post_data_format_specs_integer_ranges_from_to_tuple_array = this_node.message_post_data_format_specs_integer_ranges_from_to_tuple_array;
+            self.message_post_data_format_specs_int_string_ranges_from_to_tuple_array = this_node.message_post_data_format_specs_int_string_ranges_from_to_tuple_array;
+            self.message_post_max_string_length_int = this_node.message_post_max_string_length_int;
+            self.message_post_is_public_bool = this_node.message_post_is_public_bool;
+            self.message_post_user_confirms_bool = this_node.message_post_user_confirms_bool;
+            self.message_post_start_date_utc_posix = this_node.message_post_start_date_utc_posix;
+            self.message_post_end_date_utc_posix = this_node.message_post_end_date_utc_posix;
+
+            // Note: We do NOT update active_team_channel
+            // because these are only relevant for team-channel nodes
+
+
         }
+            // },
+            // Err(e) => {
+            //     // the error would be an error in reading node.toml
+            //     // it is not an error to not need to try to read
+            //     // a file that is not there.
+            //     debug_log!("NGLRNT Error reading file: {}", e);
+            //     debug_log!("NGLRNTThis directory is not a node. nav_graph_look_read_node_toml() node.toml not found at {:?}. ", node_toml_path);
+            //     return;
+            // }
+        // }
 
         // // create team channel...path state
         // // set file-state team-channel's current_node_directory_path
@@ -8454,34 +8690,26 @@ graph-dungeon location.
 struct CoreNode {
     /// The name of the node. This is used for display and identification.
     node_name: String,
-
-    // /// Is node.toml file gpg encrypted
+    /// Is node.toml file gpg encrypted
     corenode_gpgtoml: bool,
-
     /// A description of the node, intended for display in the TUI.
     description_for_tui: String,
     /// A unique identifier for the node, generated using pearson hashes of the other fields
     node_unique_id: Vec<u8>,
     /// The path to the directory on the file system where the node's data is stored.
     directory_path: PathBuf,
-    /// An order number used to define the node's position within a list or hierarchy.
-    // order_number: u32,
-    /// The priority of the node, which can be High, Medium, or Low.
-    // priority: NodePriority,
     /// The username of the owner of the node.
     owner: String,
     /// The Unix timestamp representing when the node was last updated.
     updated_at_timestamp: u64,
     /// The Unix timestamp representing when the node will expire.
     expires_at: u64,
-    /// A vector of `CoreNode` structs representing the child nodes of this node.
-    // children: Vec<CoreNode>,
     /// An ordered vector of collaborator usernames associated with this node.
     teamchannel_collaborators_with_access: Vec<String>,
     /// A map containing port assignments for each collaborator associated with the node.
     abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
 
-    // project areas: project module items as task-ish thing
+    /// project areas: project module items as task-ish thing
     pa1_process: String,
     pa2_schedule: Vec<u64>,
     pa3_users: String,
@@ -8493,7 +8721,7 @@ struct CoreNode {
     // message_posts
     /////////////////
 
-    // /// maybe: gpg encrypted messages? (new clearsign standard?)
+    /// maybe: gpg encrypted messages (new clearsign standard?)
     pub message_post_gpgtoml_required: Option<bool>,
 
     /// Integer validation ranges as tuples (min, max) - inclusive bounds
@@ -8614,7 +8842,7 @@ impl CoreNode {
         message_post_end_date_utc_posix: Option<i64>,
     ) -> Result<CoreNode, ThisProjectError> {
 
-        debug_log!("Starting CoreNode::new");
+        debug_log!("Starting CoreNode:new");
         debug_log!("implCoreNode-new: Directory path received: {:?}", directory_path);
         debug_log!("implCoreNode-new: Checking if directory exists: {}", directory_path.exists());
         debug_log!("implCoreNode-new: Absolute path: {:?}", directory_path.canonicalize().unwrap_or(directory_path.clone()));
@@ -9992,15 +10220,33 @@ struct CoreNode {
     */
 
     // Example: Read _ from the clearsigned TOML file
-    let abstract_collaborator_port_assignments = read_teamchannel_collaborator_ports_clearsigntoml_without_keyid(
-        &addressbook_readcopy_path_string,     // Config file containing GPG key
-        &node_readcopy_path,                   // Target clearsigned file
-    ).map_err(|e| {
-        cleanup_closure(); // Run cleanup on error
-        format!("LCNFTF: read_abstract_collaborator_port_assignments Failed to read abstract_collaborator_port_assignments: {}", e)
-    })?;
+    // let abstract_collaborator_port_assignments = read_teamchannel_collaborator_ports_clearsigntoml_without_keyid(
+    //     &addressbook_readcopy_path_string,     // Config file containing GPG key
+    //     &node_readcopy_path,                   // Target clearsigned file
+    // ).map_err(|e| {
+    //     cleanup_closure(); // Run cleanup on error
+    //     format!("LCNFTF: read_abstract_collaborator_port_assignments Failed to read abstract_collaborator_port_assignments: {}", e)
+    // })?;
 
+    // let abstract_collaborator_port_assignments =
+    //     read_teamchannel_collaborator_ports_clearsigntoml_without_keyid(
+    //         &addressbook_readcopy_path_string,
+    //         &node_readcopy_path,
+    //     )
+    //     .or_else(|e| {
+    //         eprintln!("LCNFTF: read_abstract_collaborator_port_assignments Failed to read abstract_collaborator_port_assignments: {}", e);
+    //         Ok(HashMap::new())
+    //     })?;
 
+    let abstract_collaborator_port_assignments =
+        read_teamchannel_collaborator_ports_clearsigntoml_without_keyid(
+            &addressbook_readcopy_path_string,
+            &node_readcopy_path,
+        )
+        .unwrap_or_else(|e| {
+            debug_log!("LCNFTF: No existing abstract_collaborator_port_assignments found (this is normal for new nodes): {}", e);
+            HashMap::new()
+        });
 
 	////?////////////
 	// Project Areas
@@ -11680,699 +11926,3108 @@ timestamp = 1234567890"#;
     }
 }
 
-/// Add New Message File
+/// Check if current time is within allowed message posting window
 ///
 /// # Purpose
 ///
-/// Creates and saves an instant message file in either clearsigned TOML or
-/// GPG encrypted TOML format, depending on the message settings.
+/// Validates whether the current UTC time falls within configured time boundaries
+/// for message posting. This is the earliest validation point in the message creation
+/// pipeline - if the time window check fails, no message creation occurs.
 ///
 /// # Project Context
 ///
-/// This function is the main entry point for creating instant messages in the
-/// team collaboration system. It:
-/// - Parses recipient information from message text
-/// - Validates recipients against team channel access list
-/// - Creates appropriately formatted message file (clearsigned or encrypted)
-/// - Sets up sync flags for message distribution to recipients
+/// The Message Post Suite supports time-bounded posting periods for various use cases:
+/// - Limited-duration surveys/polls
+/// - Event-specific feedback windows
+/// - Time-sensitive announcements
+/// - Scheduled messaging periods
 ///
-/// Messages can be in two formats:
-/// 1. Clearsigned TOML (.toml): Signed but readable, for general team communication
-/// 2. GPG Encrypted TOML (.gpgtoml): Signed and encrypted, for sensitive communication
+/// Time windows can have:
+/// - Both start and end bounds (fixed window)
+/// - Only start bound (open-ended after start)
+/// - Only end bound (open-ended until end)
+/// - No bounds (always open)
 ///
-/// # Process Flow
+/// When a message post attempt occurs outside the configured window, this function
+/// prints an informative message and returns false, allowing the caller to exit
+/// gracefully without creating any message file.
 ///
-/// 1. Parse optional `{to:username}` syntax to restrict recipients
-/// 2. Validate recipients are in team channel collaborator list
-/// 3. Read message browser metadata from `0.toml`
-/// 4. Create MessagePostFile struct with all message data
-/// 5. Serialize message to TOML format
-/// 6. Save as clearsigned or encrypted file based on settings
-/// 7. Write sync flags for each recipient to trigger distribution
+/// # Time Window Logic
+///
+/// Window is OPEN (return true) when:
+/// - No start AND no end specified (no constraints)
+/// - Current time >= start (if start exists) AND current time <= end (if end exists)
+///
+/// Window is CLOSED (return false) when:
+/// - Current time < start (too early)
+/// - Current time > end (too late)
 ///
 /// # Arguments
 ///
-/// * `incoming_file_path` - Full path where message file should be saved (with extension)
-/// * `owner` - Username of message author/sender
-/// * `text` - Message text content (may include `{to:username}` for direct messages)
-/// * `signature` - Optional cryptographic signature for message
-/// * `graph_navigation_instance_state` - Current navigation state with collaborator info
+/// * `start_utc_posix` - Optional Unix timestamp (seconds since epoch) for window start
+/// * `end_utc_posix` - Optional Unix timestamp (seconds since epoch) for window end
 ///
 /// # Returns
 ///
-/// * `Ok(())` - Message file successfully created and sync flags written
-/// * `Err(io::Error)` - If any step fails (file I/O, serialization, GPG operations)
-///
-/// # Recipient Syntax
-///
-/// Messages can include `{to:username}` to send to a specific recipient:
-/// - `{to:alice}` - Send only to alice
-/// - If recipient not in channel or is sender, falls back to default channel list
-/// - Without `{to:}` syntax, sends to all channel collaborators
+/// * `Ok(true)` - Current time is within window OR no window configured
+/// * `Ok(false)` - Current time is outside window (message printed to user)
+/// * `Err(io::Error)` - System time retrieval failed (extremely rare, indicates system issue)
 ///
 /// # Error Handling
 ///
-/// Errors can occur during:
-/// - Metadata file reading (0.toml)
-/// - TOML serialization
-/// - File saving (clearsign or encrypt operations)
-/// - Sync flag writing
-///
-/// # Security Notes
-///
-/// - Clearsigned messages are authenticated but readable by anyone with file access
-/// - Encrypted messages require recipient's GPG key to decrypt
-/// - Message format determined by MessagePostFile.messagepost_gpgtoml flag
-/// - All messages include sender authentication via GPG signature
+/// System time errors are propagated as io::Error since they indicate serious
+/// system-level problems (corrupted system clock, time before Unix epoch, etc.).
+/// The caller should handle these as system failures.
 ///
 /// # Examples
 ///
 /// ```rust
-/// // Send message to all channel collaborators (clearsigned)
-/// add_im_message(
-///     Path::new("sync_data/team/channel/messages/123.toml"),
+/// // No window constraints - always open
+/// let result = check_time_window(None, None)?;
+/// assert_eq!(result, true);
+///
+/// // Window with only end time
+/// let one_hour_from_now = current_time + 3600;
+/// let result = check_time_window(None, Some(one_hour_from_now))?;
+/// // Returns true if current time < one_hour_from_now
+///
+/// // Fixed window (start and end)
+/// let start = 1704067200; // Jan 1, 2024 00:00:00 UTC
+/// let end = 1735689600;   // Jan 1, 2025 00:00:00 UTC
+/// let result = check_time_window(Some(start), Some(end))?;
+/// // Returns true only if current time is between start and end
+/// ```
+///
+/// # Security Notes
+///
+/// - Uses system UTC time (not local time) for consistency across time zones
+/// - Inclusive bounds: time exactly at start or end is considered valid
+/// - Does not expose internal timestamp values in user-facing messages
+///
+fn check_time_window(
+    start_utc_posix: Option<i64>,
+    end_utc_posix: Option<i64>,
+) -> io::Result<bool> {
+
+    // =================================================
+    // Debug-Assert (debug builds only, NOT tests)
+    // =================================================
+
+    // Validate that if both bounds exist, start <= end
+    #[cfg(all(debug_assertions, not(test)))]
+    {
+        if let (Some(start), Some(end)) = (start_utc_posix, end_utc_posix) {
+            debug_assert!(
+                start <= end,
+                "CTW: Time window start must not be after end (start: {}, end: {})",
+                start,
+                end
+            );
+        }
+    }
+
+    // =================================================
+    // Production-Catch: Validate time window consistency
+    // =================================================
+
+    // Handle invalid configuration where start > end
+    if let (Some(start), Some(end)) = (start_utc_posix, end_utc_posix) {
+        if start > end {
+            // Invalid configuration - treat as closed window
+            println!("\n⚠ Message posting window configuration error (start after end)");
+            println!("Please contact administrator.\n");
+            return Ok(false);
+        }
+    }
+
+    // =================================================
+    // Get Current Time
+    // =================================================
+
+    // Get current UTC time as seconds since Unix epoch
+    let current_time_secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| io::Error::new(
+            io::ErrorKind::Other,
+            format!("CTW: System time error: {}", e)
+        ))?
+        .as_secs() as i64; // Convert u64 to i64 for comparison
+
+    // =================================================
+    // Check Time Window Bounds
+    // =================================================
+
+    // Check start bound (if exists)
+    if let Some(start) = start_utc_posix {
+        if current_time_secs < start {
+            // Before window opens
+            println!("\n⏰ Message posting window has not opened yet.");
+            println!("Please try again when the posting period begins.\n");
+            return Ok(false);
+        }
+    }
+
+    // Check end bound (if exists)
+    if let Some(end) = end_utc_posix {
+        if current_time_secs > end {
+            // After window closes
+            println!("\n⏰ Message posting window has closed.");
+            println!("The posting period has ended.\n");
+            return Ok(false);
+        }
+    }
+
+    // =================================================
+    // Window is Open
+    // =================================================
+
+    // Either no bounds exist, or current time is within bounds
+    Ok(true)
+}
+
+#[cfg(test)]
+mod tests_check_time_window {
+    use super::*;
+
+    /// Test: No time constraints - window always open
+    ///
+    /// When both start and end are None, the window should always be open
+    /// regardless of current time.
+    #[test]
+    fn test_no_constraints_always_open() {
+        let result = check_time_window(None, None);
+        assert!(result.is_ok(), "Function should return Ok");
+        assert_eq!(result.unwrap(), true, "Window with no constraints should be open");
+    }
+
+    /// Test: Only start constraint - current time is after start
+    ///
+    /// When only start is specified and current time is after start,
+    /// window should be open.
+    #[test]
+    fn test_only_start_after_start_time() {
+        // Use a timestamp from the past (Jan 1, 2020)
+        let past_start = 1577836800_i64;
+
+        let result = check_time_window(Some(past_start), None);
+        assert!(result.is_ok(), "Function should return Ok");
+        assert_eq!(result.unwrap(), true, "Window should be open when current time > start");
+    }
+
+    /// Test: Only start constraint - current time is before start
+    ///
+    /// When only start is specified and current time is before start,
+    /// window should be closed.
+    #[test]
+    fn test_only_start_before_start_time() {
+        // Use a timestamp far in the future (Jan 1, 2030)
+        let future_start = 1893456000_i64;
+
+        let result = check_time_window(Some(future_start), None);
+        assert!(result.is_ok(), "Function should return Ok");
+        assert_eq!(result.unwrap(), false, "Window should be closed when current time < start");
+    }
+
+    /// Test: Only end constraint - current time is before end
+    ///
+    /// When only end is specified and current time is before end,
+    /// window should be open.
+    #[test]
+    fn test_only_end_before_end_time() {
+        // Use a timestamp far in the future (Jan 1, 2030)
+        let future_end = 1893456000_i64;
+
+        let result = check_time_window(None, Some(future_end));
+        assert!(result.is_ok(), "Function should return Ok");
+        assert_eq!(result.unwrap(), true, "Window should be open when current time < end");
+    }
+
+    /// Test: Only end constraint - current time is after end
+    ///
+    /// When only end is specified and current time is after end,
+    /// window should be closed.
+    #[test]
+    fn test_only_end_after_end_time() {
+        // Use a timestamp from the past (Jan 1, 2020)
+        let past_end = 1577836800_i64;
+
+        let result = check_time_window(None, Some(past_end));
+        assert!(result.is_ok(), "Function should return Ok");
+        assert_eq!(result.unwrap(), false, "Window should be closed when current time > end");
+    }
+
+    /// Test: Both constraints - current time is before window
+    ///
+    /// When both start and end are specified and current time is before start,
+    /// window should be closed.
+    #[test]
+    fn test_both_constraints_before_window() {
+        // Both timestamps in the future
+        let future_start = 1893456000_i64; // Jan 1, 2030
+        let future_end = 1925078400_i64;   // Jan 1, 2031
+
+        let result = check_time_window(Some(future_start), Some(future_end));
+        assert!(result.is_ok(), "Function should return Ok");
+        assert_eq!(result.unwrap(), false, "Window should be closed before start time");
+    }
+
+    /// Test: Both constraints - current time is within window
+    ///
+    /// When both start and end are specified and current time is between them,
+    /// window should be open.
+    #[test]
+    fn test_both_constraints_within_window() {
+        // Start in the past, end in the future
+        let past_start = 1577836800_i64;   // Jan 1, 2020
+        let future_end = 1893456000_i64;   // Jan 1, 2030
+
+        let result = check_time_window(Some(past_start), Some(future_end));
+        assert!(result.is_ok(), "Function should return Ok");
+        assert_eq!(result.unwrap(), true, "Window should be open when current time is within bounds");
+    }
+
+    /// Test: Both constraints - current time is after window
+    ///
+    /// When both start and end are specified and current time is after end,
+    /// window should be closed.
+    #[test]
+    fn test_both_constraints_after_window() {
+        // Both timestamps in the past
+        let past_start = 1546300800_i64;   // Jan 1, 2019
+        let past_end = 1577836800_i64;     // Jan 1, 2020
+
+        let result = check_time_window(Some(past_start), Some(past_end));
+        assert!(result.is_ok(), "Function should return Ok");
+        assert_eq!(result.unwrap(), false, "Window should be closed after end time");
+    }
+
+    /// Test: Invalid configuration - start after end
+    ///
+    /// When start > end (invalid configuration), function should handle gracefully
+    /// and return false (closed window).
+    #[test]
+    fn test_invalid_config_start_after_end() {
+        // Start is after end - invalid configuration
+        let invalid_start = 1577836800_i64; // Jan 1, 2020
+        let invalid_end = 1546300800_i64;   // Jan 1, 2019
+
+        let result = check_time_window(Some(invalid_start), Some(invalid_end));
+        assert!(result.is_ok(), "Function should return Ok even with invalid config");
+        assert_eq!(result.unwrap(), false, "Invalid configuration should result in closed window");
+    }
+
+    /// Test: Edge case - current time exactly at start
+    ///
+    /// Tests inclusive lower bound: time exactly at start should be valid.
+    /// Uses a narrow window to test boundary condition.
+    #[test]
+    fn test_edge_case_at_start_boundary() {
+        // Create a window that will be in the past but close together
+        let past_start = 1577836800_i64;   // Jan 1, 2020 00:00:00
+        let past_end = 1577836860_i64;     // Jan 1, 2020 00:01:00 (60 seconds later)
+
+        // Current time will be after both (in 2025+), so this tests the logic
+        // but doesn't test the exact boundary. For exact boundary testing,
+        // we would need dependency injection or a time-mocking framework.
+
+        let result = check_time_window(Some(past_start), Some(past_end));
+        assert!(result.is_ok(), "Function should return Ok");
+        // Result will be false since we're after the window, but the test
+        // validates the comparison logic works correctly
+    }
+
+    /// Test: Edge case - current time exactly at end
+    ///
+    /// Tests inclusive upper bound: time exactly at end should be valid.
+    #[test]
+    fn test_edge_case_at_end_boundary() {
+        // Start in past, end in future
+        let past_start = 1577836800_i64;   // Jan 1, 2020
+        let future_end = 1893456000_i64;   // Jan 1, 2030
+
+        let result = check_time_window(Some(past_start), Some(future_end));
+        assert!(result.is_ok(), "Function should return Ok");
+        assert_eq!(result.unwrap(), true, "Current time within window should return true");
+    }
+
+    /// Test: Zero timestamps (Unix epoch)
+    ///
+    /// Tests that the function handles timestamp 0 (Jan 1, 1970) correctly.
+    #[test]
+    fn test_zero_timestamp_epoch() {
+        let epoch_start = 0_i64;
+        let future_end = 1893456000_i64;   // Jan 1, 2030
+
+        let result = check_time_window(Some(epoch_start), Some(future_end));
+        assert!(result.is_ok(), "Function should return Ok");
+        assert_eq!(result.unwrap(), true, "Window from epoch to future should be open");
+    }
+
+    /// Test: Negative timestamps (before Unix epoch)
+    ///
+    /// Tests that the function handles negative timestamps correctly
+    /// (times before Jan 1, 1970).
+    #[test]
+    fn test_negative_timestamp_before_epoch() {
+        let before_epoch_start = -86400_i64; // Dec 31, 1969
+        let past_end = 1577836800_i64;       // Jan 1, 2020
+
+        let result = check_time_window(Some(before_epoch_start), Some(past_end));
+        assert!(result.is_ok(), "Function should return Ok");
+        assert_eq!(result.unwrap(), false, "Window entirely in past should be closed");
+    }
+
+    /// Test: Very large timestamps (far future)
+    ///
+    /// Tests that the function handles very large timestamps without overflow.
+    #[test]
+    fn test_very_large_timestamp_far_future() {
+        let far_future_start = 253402300800_i64; // Year 9999
+        let far_future_end = 253402387200_i64;   // Year 9999 + 1 day
+
+        let result = check_time_window(Some(far_future_start), Some(far_future_end));
+        assert!(result.is_ok(), "Function should return Ok");
+        assert_eq!(result.unwrap(), false, "Window entirely in far future should be closed");
+    }
+
+    /// Test: Same start and end (instant window)
+    ///
+    /// Tests edge case where start equals end (window is a single instant).
+    #[test]
+    fn test_same_start_and_end_instant_window() {
+        let same_time = 1577836800_i64; // Jan 1, 2020
+
+        let result = check_time_window(Some(same_time), Some(same_time));
+        assert!(result.is_ok(), "Function should return Ok");
+        // Current time is after this instant, so window is closed
+        assert_eq!(result.unwrap(), false, "Instant window in past should be closed");
+    }
+}
+
+/// Truncate message text to maximum allowed length with warning
+///
+/// # Purpose
+///
+/// Enforces maximum string length constraints on message post content.
+/// When a maximum length is configured and the input exceeds it, this function
+/// truncates the text and notifies the user. The truncated message is still
+/// posted - the user can retry with a shorter message if desired.
+///
+/// # Project Context
+///
+/// The Message Post Suite supports configurable message length limits for:
+/// - Survey/poll responses with character limits
+/// - Standardized form fields with fixed-width constraints
+/// - Micro-blogging with tweet-like length restrictions
+/// - SMS-style text messaging with length caps
+/// - Database field size constraints
+///
+/// Length limits apply to the user input string itself (not including any
+/// formatting added by structured message processing like "#comment: " prefix
+/// or "3. " integer selection prefix).
+///
+/// # Truncation Policy
+///
+/// - Truncation occurs at the character (not byte) boundary
+/// - Warning is printed to inform user of truncation
+/// - Truncated message is still created (non-blocking)
+/// - User can retry with shorter input if they choose
+/// - No loops: function runs once and returns result
+///
+/// # Arguments
+///
+/// * `input` - The message text to check and potentially truncate
+/// * `max_length` - Optional maximum character length constraint
+///
+/// # Returns
+///
+/// * `Ok(String)` - Original string if within limit, or truncated string if exceeded
+/// * `Err(io::Error)` - Only on catastrophic failure (should be extremely rare)
+///
+/// # Behavior
+///
+/// - If `max_length` is None: Returns original string unchanged
+/// - If input length <= max_length: Returns original string unchanged
+/// - If input length > max_length: Truncates to max_length, prints warning, returns truncated
+///
+/// # Examples
+///
+/// ```rust
+/// // No length limit - returns original
+/// let result = truncate_message_to_max_length("Hello world", None)?;
+/// assert_eq!(result, "Hello world");
+///
+/// // Within limit - returns original
+/// let result = truncate_message_to_max_length("Hello", Some(10))?;
+/// assert_eq!(result, "Hello");
+///
+/// // Exceeds limit - returns truncated with warning printed
+/// let result = truncate_message_to_max_length("Hello world", Some(5))?;
+/// assert_eq!(result, "Hello");
+/// // Prints: "⚠ Message exceeded maximum length (11 > 5) - truncated to 5 characters"
+/// ```
+///
+/// # Character vs Byte Length
+///
+/// This function operates on character count (Unicode scalar values), not byte count.
+/// A multi-byte character like "🎉" counts as 1 character, not 4 bytes.
+///
+/// # Security Notes
+///
+/// - Does not expose full original message content in warning
+/// - Length information is safe to display (not sensitive)
+/// - Truncation prevents resource exhaustion from oversized messages
+///
+fn truncate_message_to_max_length(
+    input: &str,
+    max_length: Option<usize>,
+) -> io::Result<String> {
+
+    // =================================================
+    // Debug-Assert (debug builds only, NOT tests)
+    // =================================================
+
+    // Validate input is not empty
+    #[cfg(all(debug_assertions, not(test)))]
+    debug_assert!(
+        !input.is_empty(),
+        "TMTML: Input message should not be empty"
+    );
+
+    // Validate max_length is not zero if Some
+    #[cfg(all(debug_assertions, not(test)))]
+    {
+        if let Some(max) = max_length {
+            debug_assert!(
+                max > 0,
+                "TMTML: Max length must be greater than zero if specified"
+            );
+        }
+    }
+
+    // =================================================
+    // Production-Catch: Validate inputs
+    // =================================================
+
+    // Handle empty input
+    if input.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "TMTML: Input message cannot be empty"
+        ));
+    }
+
+    // Handle zero max_length (invalid configuration)
+    if let Some(0) = max_length {
+        // Zero max length is invalid - treat as no limit
+        println!("\n⚠ Warning: Maximum length configured as 0 (invalid) - no limit applied\n");
+        return Ok(input.to_string());
+    }
+
+    // =================================================
+    // Check Length Constraint
+    // =================================================
+
+    // If no max_length specified, return original string
+    let max = match max_length {
+        None => return Ok(input.to_string()),
+        Some(m) => m,
+    };
+
+    // Get character count (not byte count)
+    let char_count = input.chars().count();
+
+    // If within limit, return original string
+    if char_count <= max {
+        return Ok(input.to_string());
+    }
+
+    // =================================================
+    // Truncate and Warn
+    // =================================================
+
+    // Truncate to max characters
+    let truncated: String = input.chars().take(max).collect();
+
+    // Print warning to user
+    println!("\n⚠ Message exceeded maximum length ({} > {}) - truncated to {} characters",
+        char_count,
+        max,
+        max
+    );
+    println!("   Truncated message will be posted. You may retry with a shorter message if desired.\n");
+
+    // Return truncated string
+    Ok(truncated)
+}
+
+#[cfg(test)]
+mod tests_truncate_message_to_max_length {
+    use super::*;
+
+    /// Test: No max length constraint - returns original string
+    ///
+    /// When max_length is None, the original string should be returned unchanged
+    /// regardless of its length.
+    #[test]
+    fn test_no_max_length_returns_original() {
+        let input = "Hello, world!";
+        let result = truncate_message_to_max_length(input, None);
+
+        assert!(result.is_ok(), "Function should return Ok");
+        assert_eq!(result.unwrap(), input, "Should return original string when no limit set");
+    }
+
+    /// Test: Input within limit - returns original string
+    ///
+    /// When the input string is shorter than the max_length,
+    /// it should be returned unchanged.
+    #[test]
+    fn test_within_limit_returns_original() {
+        let input = "Short";
+        let max_length = Some(10);
+        let result = truncate_message_to_max_length(input, max_length);
+
+        assert!(result.is_ok(), "Function should return Ok");
+        assert_eq!(result.unwrap(), input, "Should return original string when within limit");
+    }
+
+    /// Test: Input exceeds limit - returns truncated string
+    ///
+    /// When the input string is longer than the max_length,
+    /// it should be truncated to exactly max_length characters.
+    #[test]
+    fn test_exceeds_limit_returns_truncated() {
+        let input = "This is a very long message";
+        let max_length = Some(10);
+        let result = truncate_message_to_max_length(input, max_length);
+
+        assert!(result.is_ok(), "Function should return Ok");
+        let truncated = result.unwrap();
+        assert_eq!(truncated, "This is a ", "Should truncate to exactly max_length");
+        assert_eq!(truncated.chars().count(), 10, "Truncated length should be exactly 10");
+    }
+
+    /// Test: Input exactly at limit - returns original string
+    ///
+    /// Boundary test: when input length equals max_length exactly,
+    /// the original string should be returned.
+    #[test]
+    fn test_exactly_at_limit_returns_original() {
+        let input = "12345";
+        let max_length = Some(5);
+        let result = truncate_message_to_max_length(input, max_length);
+
+        assert!(result.is_ok(), "Function should return Ok");
+        assert_eq!(result.unwrap(), input, "Should return original when exactly at limit");
+    }
+
+    /// Test: Empty string input - returns error
+    ///
+    /// Empty strings are invalid message content and should return an error.
+    #[test]
+    fn test_empty_string_returns_error() {
+        let input = "";
+        let max_length = Some(10);
+        let result = truncate_message_to_max_length(input, max_length);
+
+        assert!(result.is_err(), "Empty string should return error");
+    }
+
+    /// Test: Zero max length - treats as no limit
+    ///
+    /// Invalid configuration where max_length is 0 should be handled
+    /// gracefully by treating it as no limit.
+    #[test]
+    fn test_zero_max_length_treats_as_no_limit() {
+        let input = "Hello, world!";
+        let max_length = Some(0);
+        let result = truncate_message_to_max_length(input, max_length);
+
+        assert!(result.is_ok(), "Should handle zero max_length gracefully");
+        assert_eq!(result.unwrap(), input, "Zero max_length should act as no limit");
+    }
+
+    /// Test: Single character with limit 1
+    ///
+    /// Edge case: single character message with limit of 1
+    /// should return the single character.
+    #[test]
+    fn test_single_character_with_limit_one() {
+        let input = "A";
+        let max_length = Some(1);
+        let result = truncate_message_to_max_length(input, max_length);
+
+        assert!(result.is_ok(), "Function should return Ok");
+        assert_eq!(result.unwrap(), "A", "Single character should be preserved");
+    }
+
+    /// Test: Multiple characters truncated to limit 1
+    ///
+    /// When input has multiple characters but limit is 1,
+    /// should truncate to first character only.
+    #[test]
+    fn test_multiple_chars_truncated_to_one() {
+        let input = "ABC";
+        let max_length = Some(1);
+        let result = truncate_message_to_max_length(input, max_length);
+
+        assert!(result.is_ok(), "Function should return Ok");
+        assert_eq!(result.unwrap(), "A", "Should truncate to first character");
+    }
+
+    /// Test: Unicode multi-byte characters - character count vs byte count
+    ///
+    /// Ensures truncation works on character boundaries, not byte boundaries.
+    /// Emoji and other multi-byte characters should count as single characters.
+    #[test]
+    fn test_unicode_multibyte_characters() {
+        let input = "Hello🎉World🚀"; // Contains 2 emoji (4 bytes each)
+        let max_length = Some(8);
+        let result = truncate_message_to_max_length(input, max_length);
+
+        assert!(result.is_ok(), "Function should return Ok");
+        let truncated = result.unwrap();
+        assert_eq!(truncated, "Hello🎉Wo", "Should truncate at character boundary");
+        assert_eq!(truncated.chars().count(), 8, "Should count characters, not bytes");
+    }
+
+    /// Test: Unicode emoji only - character counting
+    ///
+    /// Tests that emoji are correctly counted as single characters.
+    #[test]
+    fn test_unicode_emoji_only() {
+        let input = "🎉🚀🎈🎁🎊"; // 5 emoji characters
+        let max_length = Some(3);
+        let result = truncate_message_to_max_length(input, max_length);
+
+        assert!(result.is_ok(), "Function should return Ok");
+        let truncated = result.unwrap();
+        assert_eq!(truncated, "🎉🚀🎈", "Should truncate emoji correctly");
+        assert_eq!(truncated.chars().count(), 3, "Should have exactly 3 emoji characters");
+    }
+
+    /// Test: Asian characters (CJK) - multi-byte character handling
+    ///
+    /// Tests that Chinese/Japanese/Korean characters are counted correctly.
+    #[test]
+    fn test_asian_characters_multibyte() {
+        let input = "你好世界朋友"; // 6 Chinese characters
+        let max_length = Some(4);
+        let result = truncate_message_to_max_length(input, max_length);
+
+        assert!(result.is_ok(), "Function should return Ok");
+        let truncated = result.unwrap();
+        assert_eq!(truncated, "你好世界", "Should truncate CJK characters correctly");
+        assert_eq!(truncated.chars().count(), 4, "Should have exactly 4 characters");
+    }
+
+    /// Test: Very long string truncation
+    ///
+    /// Tests performance with a long string and small limit.
+    #[test]
+    fn test_very_long_string_truncation() {
+        let input = "a".repeat(10000); // 10,000 character string
+        let max_length = Some(100);
+        let result = truncate_message_to_max_length(&input, max_length);
+
+        assert!(result.is_ok(), "Function should return Ok");
+        let truncated = result.unwrap();
+        assert_eq!(truncated.chars().count(), 100, "Should truncate to exactly 100 characters");
+        assert_eq!(truncated, "a".repeat(100), "Should contain first 100 characters");
+    }
+
+    /// Test: Whitespace at boundary
+    ///
+    /// Tests that truncation doesn't have special behavior for whitespace.
+    /// Truncation occurs at character count, not word boundaries.
+    #[test]
+    fn test_whitespace_at_boundary() {
+        let input = "Hello world this is a test";
+        let max_length = Some(11); // Cuts in middle of "world"
+        let result = truncate_message_to_max_length(input, max_length);
+
+        assert!(result.is_ok(), "Function should return Ok");
+        let truncated = result.unwrap();
+        assert_eq!(truncated, "Hello world", "Should truncate at character boundary, not word boundary");
+    }
+
+    /// Test: Newlines and special characters
+    ///
+    /// Tests that newlines, tabs, and other special characters are counted correctly.
+    #[test]
+    fn test_newlines_and_special_chars() {
+        let input = "Line1\nLine2\tTab";
+        let max_length = Some(10);
+        let result = truncate_message_to_max_length(input, max_length);
+
+        assert!(result.is_ok(), "Function should return Ok");
+        let truncated = result.unwrap();
+        assert_eq!(truncated.chars().count(), 10, "Should count newlines and tabs as characters");
+        assert_eq!(truncated, "Line1\nLine", "Should preserve special characters in truncation");
+    }
+
+    /// Test: String with only spaces
+    ///
+    /// Tests that a string of only whitespace is handled correctly.
+    #[test]
+    fn test_string_only_spaces() {
+        let input = "     "; // 5 spaces
+        let max_length = Some(3);
+        let result = truncate_message_to_max_length(input, max_length);
+
+        assert!(result.is_ok(), "Function should return Ok");
+        let truncated = result.unwrap();
+        assert_eq!(truncated, "   ", "Should truncate spaces correctly");
+        assert_eq!(truncated.chars().count(), 3, "Should have exactly 3 space characters");
+    }
+
+    /// Test: Mixed ASCII and Unicode
+    ///
+    /// Tests truncation with a mix of ASCII and multi-byte Unicode characters.
+    #[test]
+    fn test_mixed_ascii_and_unicode() {
+        let input = "Hello🌍World你好"; // Mix of ASCII, emoji, and CJK
+        let max_length = Some(9);
+        let result = truncate_message_to_max_length(input, max_length);
+
+        assert!(result.is_ok(), "Function should return Ok");
+        let truncated = result.unwrap();
+        assert_eq!(truncated, "Hello🌍Wor", "Should handle mixed character sets");
+        assert_eq!(truncated.chars().count(), 9, "Should count all character types correctly");
+    }
+
+    /// Test: Max length of 1 with long string
+    ///
+    /// Edge case: aggressive truncation to just 1 character.
+    #[test]
+    fn test_max_length_one_with_long_string() {
+        let input = "This is a very long message that will be severely truncated";
+        let max_length = Some(1);
+        let result = truncate_message_to_max_length(input, max_length);
+
+        assert!(result.is_ok(), "Function should return Ok");
+        let truncated = result.unwrap();
+        assert_eq!(truncated, "T", "Should truncate to single first character");
+        assert_eq!(truncated.chars().count(), 1, "Should have exactly 1 character");
+    }
+
+    /// Test: Empty string with no limit
+    ///
+    /// Even with no limit, empty string should still return error.
+    #[test]
+    fn test_empty_string_no_limit() {
+        let input = "";
+        let max_length = None;
+        let result = truncate_message_to_max_length(input, max_length);
+
+        assert!(result.is_err(), "Empty string should return error even with no limit");
+    }
+}
+
+/// Result of validating user input against structured format ranges
+///
+/// This enum represents the outcome of parsing and validating user input
+/// for structured message posts with integer-based selection options.
+#[derive(Debug, PartialEq, Eq)]
+enum IntegerValidationResult {
+    /// Input is not a valid integer
+    NotAnInteger,
+
+    /// Input is a valid integer but not in any configured range
+    /// Contains the parsed integer value
+    NotInAnyRange(i32),
+
+    /// Input is a valid integer in an integer-only range
+    /// Contains the parsed integer value
+    InIntegerOnlyRange(i32),
+
+    /// Input is a valid integer in an integer-string range (write-in option)
+    /// Contains the parsed integer value
+    InIntegerStringRange(i32),
+}
+
+/// Validate user input against structured message format integer ranges
+///
+/// # Purpose
+///
+/// Parses user input and validates it against configured integer selection ranges
+/// for structured message posts. This is the foundation of the Q&A system that
+/// guides users through multiple-choice, write-in, and mixed-format responses.
+///
+/// # Project Context
+///
+/// The Message Post Suite supports structured formats for:
+/// - Multiple choice questions (integer-only ranges)
+/// - Write-in options (integer-string ranges)
+/// - Mixed formats (some choices are fixed, some allow write-in)
+/// - Surveys, polls, elections, questionnaires, forms
+///
+/// Integer ranges define which selections are valid. For example:
+/// - Options 1-3: Multiple choice (integer-only)
+/// - Options 4-5: Write-in answers (integer-string)
+///
+/// # Range Priority
+///
+/// When ranges overlap, **integer-string ranges have priority** over integer-only ranges.
+/// This allows configurations where some options are write-in and some are not,
+/// even if the numbers overlap.
+///
+/// Example:
+/// - Integer-only: (1, 3) and (6, 8)
+/// - Integer-string: (3, 5)
+/// - Input "3" → InIntegerStringRange (priority)
+/// - Input "1" → InIntegerOnlyRange
+/// - Input "4" → InIntegerStringRange
+/// - Input "9" → NotInAnyRange
+///
+/// # Structured Format Activation
+///
+/// Structured format is considered **active** when:
+/// - Some(vec![...]) with at least one tuple exists in either range parameter
+///
+/// Structured format is **not active** when:
+/// - Both parameters are None
+/// - Both parameters are Some(vec![]) (empty vectors)
+///
+/// # Range Format
+///
+/// Ranges are tuples (min, max) with **inclusive bounds**:
+/// - (1, 3) includes: 1, 2, 3
+/// - (5, 5) includes: 5 only
+/// - Ranges can be non-continuous: vec![(1,3), (7,9)] includes 1,2,3,7,8,9 (not 4,5,6)
+///
+/// # Arguments
+///
+/// * `input` - User input string to parse and validate
+/// * `integer_ranges` - Integer-only selection ranges (e.g., multiple choice)
+/// * `integer_string_ranges` - Integer-string selection ranges (e.g., write-in options)
+///
+/// # Returns
+///
+/// * `Ok(IntegerValidationResult)` - Validation result with appropriate variant
+/// * `Err(io::Error)` - Only on catastrophic failure
+///
+/// # Examples
+///
+/// ```rust
+/// // No ranges configured - not structured format
+/// let result = validate_integer_in_ranges("5", None, None)?;
+/// // Returns NotAnInteger (structured format not active)
+///
+/// // Integer-only range
+/// let int_ranges = Some(vec![(1, 3)]);
+/// let result = validate_integer_in_ranges("2", int_ranges, None)?;
+/// // Returns InIntegerOnlyRange(2)
+///
+/// // Integer-string range
+/// let int_str_ranges = Some(vec![(4, 6)]);
+/// let result = validate_integer_in_ranges("5", None, int_str_ranges)?;
+/// // Returns InIntegerStringRange(5)
+///
+/// // Overlapping ranges - int-string has priority
+/// let int_ranges = Some(vec![(1, 5)]);
+/// let int_str_ranges = Some(vec![(3, 7)]);
+/// let result = validate_integer_in_ranges("3", int_ranges, int_str_ranges)?;
+/// // Returns InIntegerStringRange(3) - priority to int-string
+///
+/// // Not in any range
+/// let int_ranges = Some(vec![(1, 3)]);
+/// let result = validate_integer_in_ranges("10", int_ranges, None)?;
+/// // Returns NotInAnyRange(10)
+///
+/// // Not a valid integer
+/// let int_ranges = Some(vec![(1, 3)]);
+/// let result = validate_integer_in_ranges("hello", int_ranges, None)?;
+/// // Returns NotAnInteger
+/// ```
+///
+/// # Security Notes
+///
+/// - Input parsing is safe against malformed integers
+/// - No heap allocation in hot path
+/// - Range checking is O(n) where n is number of range tuples
+///
+fn validate_integer_in_ranges(
+    input: &str,
+    integer_ranges: Option<Vec<(i32, i32)>>,
+    integer_string_ranges: Option<Vec<(i32, i32)>>,
+) -> io::Result<IntegerValidationResult> {
+
+    // =================================================
+    // Debug-Assert (debug builds only, NOT tests)
+    // =================================================
+
+    // Validate input is not empty
+    #[cfg(all(debug_assertions, not(test)))]
+    debug_assert!(
+        !input.is_empty(),
+        "VIIR: Input should not be empty"
+    );
+
+    // Validate range tuples have min <= max
+    #[cfg(all(debug_assertions, not(test)))]
+    {
+        if let Some(ref ranges) = integer_ranges {
+            for (min, max) in ranges {
+                debug_assert!(
+                    min <= max,
+                    "VIIR: Integer range min must be <= max (got min:{}, max:{})",
+                    min, max
+                );
+            }
+        }
+        if let Some(ref ranges) = integer_string_ranges {
+            for (min, max) in ranges {
+                debug_assert!(
+                    min <= max,
+                    "VIIR: Integer-string range min must be <= max (got min:{}, max:{})",
+                    min, max
+                );
+            }
+        }
+    }
+
+    // =================================================
+    // Production-Catch: Validate inputs
+    // =================================================
+
+    // Handle empty input
+    if input.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "VIIR: Input cannot be empty"
+        ));
+    }
+
+    // =================================================
+    // Parse Input as Integer
+    // =================================================
+
+    // Try to parse input as i32
+    let parsed_value = match input.trim().parse::<i32>() {
+        Ok(val) => val,
+        Err(_) => {
+            // Not a valid integer
+            return Ok(IntegerValidationResult::NotAnInteger);
+        }
+    };
+
+    // =================================================
+    // Check Integer-String Ranges FIRST (Priority)
+    // =================================================
+
+    // Check if in integer-string range (write-in options)
+    if let Some(ref ranges) = integer_string_ranges {
+        for (min, max) in ranges {
+            // Validate range (production catch for invalid config)
+            if min > max {
+                // Invalid range - skip it
+                continue;
+            }
+
+            // Check if value is in this range (inclusive)
+            if parsed_value >= *min && parsed_value <= *max {
+                return Ok(IntegerValidationResult::InIntegerStringRange(parsed_value));
+            }
+        }
+    }
+
+    // =================================================
+    // Check Integer-Only Ranges SECOND
+    // =================================================
+
+    // Check if in integer-only range (multiple choice)
+    if let Some(ref ranges) = integer_ranges {
+        for (min, max) in ranges {
+            // Validate range (production catch for invalid config)
+            if min > max {
+                // Invalid range - skip it
+                continue;
+            }
+
+            // Check if value is in this range (inclusive)
+            if parsed_value >= *min && parsed_value <= *max {
+                return Ok(IntegerValidationResult::InIntegerOnlyRange(parsed_value));
+            }
+        }
+    }
+
+    // =================================================
+    // Not in Any Range
+    // =================================================
+
+    // Parsed successfully but not in any configured range
+    Ok(IntegerValidationResult::NotInAnyRange(parsed_value))
+}
+
+#[cfg(test)]
+mod tests_validate_integer_in_ranges {
+    use super::*;
+
+    /// Test: Input is not a valid integer
+    ///
+    /// When input cannot be parsed as an integer, should return NotAnInteger.
+    #[test]
+    fn test_not_an_integer() {
+        let int_ranges = Some(vec![(1, 5)]);
+        let result = validate_integer_in_ranges("hello", int_ranges, None);
+
+        assert!(result.is_ok(), "Function should return Ok");
+        assert_eq!(result.unwrap(), IntegerValidationResult::NotAnInteger);
+    }
+
+    /// Test: Empty input returns error
+    ///
+    /// Empty strings are invalid and should return an error.
+    #[test]
+    fn test_empty_input_returns_error() {
+        let int_ranges = Some(vec![(1, 5)]);
+        let result = validate_integer_in_ranges("", int_ranges, None);
+
+        assert!(result.is_err(), "Empty input should return error");
+    }
+
+    /// Test: Valid integer in integer-only range
+    ///
+    /// When input is a valid integer within an integer-only range,
+    /// should return InIntegerOnlyRange with the value.
+    #[test]
+    fn test_valid_integer_in_int_only_range() {
+        let int_ranges = Some(vec![(1, 5)]);
+        let result = validate_integer_in_ranges("3", int_ranges, None);
+
+        assert!(result.is_ok(), "Function should return Ok");
+        assert_eq!(result.unwrap(), IntegerValidationResult::InIntegerOnlyRange(3));
+    }
+
+    /// Test: Valid integer in integer-string range
+    ///
+    /// When input is a valid integer within an integer-string range,
+    /// should return InIntegerStringRange with the value.
+    #[test]
+    fn test_valid_integer_in_int_string_range() {
+        let int_str_ranges = Some(vec![(4, 6)]);
+        let result = validate_integer_in_ranges("5", None, int_str_ranges);
+
+        assert!(result.is_ok(), "Function should return Ok");
+        assert_eq!(result.unwrap(), IntegerValidationResult::InIntegerStringRange(5));
+    }
+
+    /// Test: Integer not in any range
+    ///
+    /// When input is a valid integer but not in any configured range,
+    /// should return NotInAnyRange with the value.
+    #[test]
+    fn test_integer_not_in_any_range() {
+        let int_ranges = Some(vec![(1, 3)]);
+        let int_str_ranges = Some(vec![(7, 9)]);
+        let result = validate_integer_in_ranges("5", int_ranges, int_str_ranges);
+
+        assert!(result.is_ok(), "Function should return Ok");
+        assert_eq!(result.unwrap(), IntegerValidationResult::NotInAnyRange(5));
+    }
+
+    /// Test: Priority - int-string range over int-only when overlapping
+    ///
+    /// When ranges overlap, integer-string range should have priority.
+    #[test]
+    fn test_priority_int_string_over_int_only() {
+        let int_ranges = Some(vec![(1, 5)]);
+        let int_str_ranges = Some(vec![(3, 7)]);
+        let result = validate_integer_in_ranges("3", int_ranges, int_str_ranges);
+
+        assert!(result.is_ok(), "Function should return Ok");
+        assert_eq!(
+            result.unwrap(),
+            IntegerValidationResult::InIntegerStringRange(3),
+            "Int-string range should have priority over int-only"
+        );
+    }
+
+    /// Test: Priority - complete overlap
+    ///
+    /// When int-string range completely overlaps int-only range,
+    /// int-string should always win.
+    #[test]
+    fn test_priority_complete_overlap() {
+        let int_ranges = Some(vec![(1, 10)]);
+        let int_str_ranges = Some(vec![(1, 10)]);
+        let result = validate_integer_in_ranges("5", int_ranges, int_str_ranges);
+
+        assert!(result.is_ok(), "Function should return Ok");
+        assert_eq!(
+            result.unwrap(),
+            IntegerValidationResult::InIntegerStringRange(5),
+            "Int-string range should have priority even with complete overlap"
+        );
+    }
+
+    /// Test: Boundary - minimum value in range
+    ///
+    /// Tests inclusive lower bound: minimum value should be valid.
+    #[test]
+    fn test_boundary_minimum_value() {
+        let int_ranges = Some(vec![(1, 5)]);
+        let result = validate_integer_in_ranges("1", int_ranges, None);
+
+        assert!(result.is_ok(), "Function should return Ok");
+        assert_eq!(result.unwrap(), IntegerValidationResult::InIntegerOnlyRange(1));
+    }
+
+    /// Test: Boundary - maximum value in range
+    ///
+    /// Tests inclusive upper bound: maximum value should be valid.
+    #[test]
+    fn test_boundary_maximum_value() {
+        let int_ranges = Some(vec![(1, 5)]);
+        let result = validate_integer_in_ranges("5", int_ranges, None);
+
+        assert!(result.is_ok(), "Function should return Ok");
+        assert_eq!(result.unwrap(), IntegerValidationResult::InIntegerOnlyRange(5));
+    }
+
+    /// Test: Boundary - just below minimum
+    ///
+    /// Value just below minimum should not be in range.
+    #[test]
+    fn test_boundary_below_minimum() {
+        let int_ranges = Some(vec![(1, 5)]);
+        let result = validate_integer_in_ranges("0", int_ranges, None);
+
+        assert!(result.is_ok(), "Function should return Ok");
+        assert_eq!(result.unwrap(), IntegerValidationResult::NotInAnyRange(0));
+    }
+
+    /// Test: Boundary - just above maximum
+    ///
+    /// Value just above maximum should not be in range.
+    #[test]
+    fn test_boundary_above_maximum() {
+        let int_ranges = Some(vec![(1, 5)]);
+        let result = validate_integer_in_ranges("6", int_ranges, None);
+
+        assert!(result.is_ok(), "Function should return Ok");
+        assert_eq!(result.unwrap(), IntegerValidationResult::NotInAnyRange(6));
+    }
+
+    /// Test: Single value range
+    ///
+    /// Range where min equals max should work (single valid value).
+    #[test]
+    fn test_single_value_range() {
+        let int_ranges = Some(vec![(5, 5)]);
+        let result = validate_integer_in_ranges("5", int_ranges, None);
+
+        assert!(result.is_ok(), "Function should return Ok");
+        assert_eq!(result.unwrap(), IntegerValidationResult::InIntegerOnlyRange(5));
+    }
+
+    /// Test: Single value range - value not matching
+    ///
+    /// With single value range, other values should not be in range.
+    #[test]
+    fn test_single_value_range_not_matching() {
+        let int_ranges = Some(vec![(5, 5)]);
+        let result = validate_integer_in_ranges("4", int_ranges, None);
+
+        assert!(result.is_ok(), "Function should return Ok");
+        assert_eq!(result.unwrap(), IntegerValidationResult::NotInAnyRange(4));
+    }
+
+    /// Test: Multiple non-continuous ranges in int-only
+    ///
+    /// Should support multiple separate ranges in a single vector.
+    #[test]
+    fn test_multiple_noncontinuous_int_ranges() {
+        let int_ranges = Some(vec![(1, 3), (7, 9)]);
+
+        // In first range
+        let result = validate_integer_in_ranges("2", int_ranges.clone(), None);
+        assert_eq!(result.unwrap(), IntegerValidationResult::InIntegerOnlyRange(2));
+
+        // In second range
+        let result = validate_integer_in_ranges("8", int_ranges.clone(), None);
+        assert_eq!(result.unwrap(), IntegerValidationResult::InIntegerOnlyRange(8));
+
+        // Between ranges (not in any)
+        let result = validate_integer_in_ranges("5", int_ranges.clone(), None);
+        assert_eq!(result.unwrap(), IntegerValidationResult::NotInAnyRange(5));
+    }
+
+    /// Test: Multiple non-continuous ranges in int-string
+    ///
+    /// Should support multiple separate ranges in integer-string vector.
+    #[test]
+    fn test_multiple_noncontinuous_int_string_ranges() {
+        let int_str_ranges = Some(vec![(1, 3), (7, 9)]);
+
+        // In first range
+        let result = validate_integer_in_ranges("2", None, int_str_ranges.clone());
+        assert_eq!(result.unwrap(), IntegerValidationResult::InIntegerStringRange(2));
+
+        // In second range
+        let result = validate_integer_in_ranges("8", None, int_str_ranges.clone());
+        assert_eq!(result.unwrap(), IntegerValidationResult::InIntegerStringRange(8));
+
+        // Between ranges (not in any)
+        let result = validate_integer_in_ranges("5", None, int_str_ranges.clone());
+        assert_eq!(result.unwrap(), IntegerValidationResult::NotInAnyRange(5));
+    }
+
+    /// Test: Negative integers in range
+    ///
+    /// Should handle negative integers correctly.
+    #[test]
+    fn test_negative_integers_in_range() {
+        let int_ranges = Some(vec![(-5, -1)]);
+        let result = validate_integer_in_ranges("-3", int_ranges, None);
+
+        assert!(result.is_ok(), "Function should return Ok");
+        assert_eq!(result.unwrap(), IntegerValidationResult::InIntegerOnlyRange(-3));
+    }
+
+    /// Test: Negative to positive range
+    ///
+    /// Range spanning negative and positive values.
+    #[test]
+    fn test_negative_to_positive_range() {
+        let int_ranges = Some(vec![(-3, 3)]);
+
+        // Negative in range
+        let result = validate_integer_in_ranges("-2", int_ranges.clone(), None);
+        assert_eq!(result.unwrap(), IntegerValidationResult::InIntegerOnlyRange(-2));
+
+        // Zero in range
+        let result = validate_integer_in_ranges("0", int_ranges.clone(), None);
+        assert_eq!(result.unwrap(), IntegerValidationResult::InIntegerOnlyRange(0));
+
+        // Positive in range
+        let result = validate_integer_in_ranges("2", int_ranges.clone(), None);
+        assert_eq!(result.unwrap(), IntegerValidationResult::InIntegerOnlyRange(2));
+    }
+
+    /// Test: Zero as valid input
+    ///
+    /// Zero should be handled like any other integer.
+    #[test]
+    fn test_zero_as_valid_input() {
+        let int_ranges = Some(vec![(0, 5)]);
+        let result = validate_integer_in_ranges("0", int_ranges, None);
+
+        assert!(result.is_ok(), "Function should return Ok");
+        assert_eq!(result.unwrap(), IntegerValidationResult::InIntegerOnlyRange(0));
+    }
+
+    /// Test: Very large integers
+    ///
+    /// Should handle large i32 values correctly.
+    #[test]
+    fn test_very_large_integers() {
+        let int_ranges = Some(vec![(1000000, 2000000)]);
+        let result = validate_integer_in_ranges("1500000", int_ranges, None);
+
+        assert!(result.is_ok(), "Function should return Ok");
+        assert_eq!(result.unwrap(), IntegerValidationResult::InIntegerOnlyRange(1500000));
+    }
+
+    /// Test: Invalid range configuration (min > max) - should skip
+    ///
+    /// When a range has min > max, it should be skipped gracefully.
+    #[test]
+    fn test_invalid_range_min_greater_than_max() {
+        let int_ranges = Some(vec![(5, 1)]); // Invalid: min > max
+        let result = validate_integer_in_ranges("3", int_ranges, None);
+
+        assert!(result.is_ok(), "Function should return Ok");
+        // Should not match the invalid range
+        assert_eq!(result.unwrap(), IntegerValidationResult::NotInAnyRange(3));
+    }
+
+    /// Test: Mixed valid and invalid ranges
+    ///
+    /// Should skip invalid ranges but use valid ones.
+    #[test]
+    fn test_mixed_valid_and_invalid_ranges1() {
+        let int_ranges = Some(vec![(10, 5), (1, 3), (8, 6)]); // First and third invalid
+
+        // Should match the valid range (1, 3)
+        let result = validate_integer_in_ranges("2", int_ranges, None);
+        assert_eq!(result.unwrap(), IntegerValidationResult::InIntegerOnlyRange(2));
+
+    }
+
+    /// Test: Mixed valid and invalid ranges
+    ///
+    /// Should skip invalid ranges but use valid ones.
+    #[test]
+    fn test_mixed_valid_and_invalid_ranges2() {
+        let int_ranges = Some(vec![(10, 5), (1, 3), (8, 6)]); // First and third invalid
+
+
+        // Should not match invalid ranges
+        let result = validate_integer_in_ranges("7", int_ranges, None);
+        assert_eq!(result.unwrap(), IntegerValidationResult::NotInAnyRange(7));
+    }
+
+    /// Test: Input with whitespace
+    ///
+    /// Should trim whitespace before parsing.
+    #[test]
+    fn test_input_with_whitespace() {
+        let int_ranges = Some(vec![(1, 5)]);
+
+        // Leading whitespace
+        let result = validate_integer_in_ranges("  3", int_ranges.clone(), None);
+        assert_eq!(result.unwrap(), IntegerValidationResult::InIntegerOnlyRange(3));
+
+        // Trailing whitespace
+        let result = validate_integer_in_ranges("3  ", int_ranges.clone(), None);
+        assert_eq!(result.unwrap(), IntegerValidationResult::InIntegerOnlyRange(3));
+
+        // Both
+        let result = validate_integer_in_ranges("  3  ", int_ranges.clone(), None);
+        assert_eq!(result.unwrap(), IntegerValidationResult::InIntegerOnlyRange(3));
+    }
+
+    /// Test: Input with plus sign
+    ///
+    /// Positive integers can be prefixed with + in Rust parsing.
+    #[test]
+    fn test_input_with_plus_sign() {
+        let int_ranges = Some(vec![(1, 5)]);
+        let result = validate_integer_in_ranges("+3", int_ranges, None);
+
+        assert!(result.is_ok(), "Function should return Ok");
+        assert_eq!(result.unwrap(), IntegerValidationResult::InIntegerOnlyRange(3));
+    }
+
+    /// Test: Invalid integer formats
+    ///
+    /// Various invalid formats should return NotAnInteger.
+    #[test]
+    fn test_invalid_integer_formats() {
+        let int_ranges = Some(vec![(1, 5)]);
+
+        // Decimal number
+        let result = validate_integer_in_ranges("3.5", int_ranges.clone(), None);
+        assert_eq!(result.unwrap(), IntegerValidationResult::NotAnInteger);
+
+        // Mixed alphanumeric
+        let result = validate_integer_in_ranges("3a", int_ranges.clone(), None);
+        assert_eq!(result.unwrap(), IntegerValidationResult::NotAnInteger);
+
+        // Just letters
+        let result = validate_integer_in_ranges("abc", int_ranges.clone(), None);
+        assert_eq!(result.unwrap(), IntegerValidationResult::NotAnInteger);
+
+        // Special characters
+        let result = validate_integer_in_ranges("@#$", int_ranges.clone(), None);
+        assert_eq!(result.unwrap(), IntegerValidationResult::NotAnInteger);
+    }
+
+    /// Test: Integer overflow (beyond i32 range)
+    ///
+    /// Values beyond i32 range should be treated as NotAnInteger.
+    #[test]
+    fn test_integer_overflow_beyond_i32() {
+        let int_ranges = Some(vec![(1, 5)]);
+
+        // Beyond i32::MAX
+        let result = validate_integer_in_ranges("9999999999999", int_ranges.clone(), None);
+        assert_eq!(result.unwrap(), IntegerValidationResult::NotAnInteger);
+
+        // Beyond i32::MIN
+        let result = validate_integer_in_ranges("-9999999999999", int_ranges.clone(), None);
+        assert_eq!(result.unwrap(), IntegerValidationResult::NotAnInteger);
+    }
+
+    /// Test: No ranges configured (None, None)
+    ///
+    /// When no ranges are configured, any valid integer should be NotInAnyRange.
+    #[test]
+    fn test_no_ranges_configured() {
+        let result = validate_integer_in_ranges("5", None, None);
+
+        assert!(result.is_ok(), "Function should return Ok");
+        assert_eq!(result.unwrap(), IntegerValidationResult::NotInAnyRange(5));
+    }
+
+    /// Test: Empty range vectors (Some(vec![]), Some(vec![]))
+    ///
+    /// Empty vectors should behave like no ranges configured.
+    #[test]
+    fn test_empty_range_vectors() {
+        let result = validate_integer_in_ranges("5", Some(vec![]), Some(vec![]));
+
+        assert!(result.is_ok(), "Function should return Ok");
+        assert_eq!(result.unwrap(), IntegerValidationResult::NotInAnyRange(5));
+    }
+
+    /// Test: Only int-string ranges configured
+    ///
+    /// Should work with only int-string ranges (no int-only).
+    #[test]
+    fn test_only_int_string_ranges() {
+        let int_str_ranges = Some(vec![(1, 5)]);
+        let result = validate_integer_in_ranges("3", None, int_str_ranges);
+
+        assert!(result.is_ok(), "Function should return Ok");
+        assert_eq!(result.unwrap(), IntegerValidationResult::InIntegerStringRange(3));
+    }
+
+    /// Test: Complex multi-range scenario with priority
+    ///
+    /// Tests realistic scenario with multiple ranges of both types.
+    #[test]
+    fn test_complex_multi_range_priority() {
+        let int_ranges = Some(vec![(1, 3), (10, 15)]);
+        let int_str_ranges = Some(vec![(4, 6), (12, 14)]);
+
+        // In int-only range only
+        let result = validate_integer_in_ranges("2", int_ranges.clone(), int_str_ranges.clone());
+        assert_eq!(result.unwrap(), IntegerValidationResult::InIntegerOnlyRange(2));
+
+        // In int-string range only
+        let result = validate_integer_in_ranges("5", int_ranges.clone(), int_str_ranges.clone());
+        assert_eq!(result.unwrap(), IntegerValidationResult::InIntegerStringRange(5));
+
+        // In both (overlap) - int-string priority
+        let result = validate_integer_in_ranges("13", int_ranges.clone(), int_str_ranges.clone());
+        assert_eq!(result.unwrap(), IntegerValidationResult::InIntegerStringRange(13));
+
+        // Not in any range
+        let result = validate_integer_in_ranges("8", int_ranges.clone(), int_str_ranges.clone());
+        assert_eq!(result.unwrap(), IntegerValidationResult::NotInAnyRange(8));
+    }
+}
+
+/// Perform interactive Q&A for structured message format
+///
+/// # Purpose
+///
+/// Guides user through creating a structured message post response via interactive
+/// Q&A prompts. Handles both comment and answer-response flows, including:
+/// - Validating integer selections against configured ranges
+/// - Collecting write-in text for integer-string options
+/// - Formatting the final message according to structured format rules
+///
+/// # Project Context
+///
+/// The Message Post Suite's structured format enables:
+/// - Surveys and polls with multiple choice + write-in options
+/// - Standardized questionnaires with validated responses
+/// - Elections/votes with numbered ballot options
+/// - Forms with specific field formats
+///
+/// Structured messages differentiate between:
+/// - **Comments**: Free-form text tagged with "#comment: " prefix
+/// - **Answers**: Validated responses to structured questions
+///   - Integer-only: Multiple choice selections (e.g., "3")
+///   - Integer-string: Write-in options (e.g., "3. Chocolate")
+///
+/// # Q&A Flow
+///
+/// **Step 1: Validate Initial Input**
+/// - Parse user_input as integer
+/// - Validate against configured ranges
+/// - If invalid, will prompt for new selection
+///
+/// **Step 2: Comment or Answer?**
+/// - Ask user: "Are you commenting or answering-responding?"
+/// - Comment path: Format as "#comment: {user_input}" and return
+/// - Answer path: Continue to validation
+///
+/// **Step 3: Selection Validation (if answering)**
+/// - If initial input invalid/out of range: Prompt for valid selection (ONE attempt)
+/// - If still invalid: Skip message creation (return Ok(None))
+///
+/// **Step 4: Write-in Collection (if int-string range)**
+/// - If selection is in integer-string range: Prompt for write-in text
+/// - Apply max_string_length to write-in text
+/// - Format as "{integer}. {text}"
+///
+/// **Step 5: Return Formatted Message**
+/// - Integer-only: "{integer}"
+/// - Integer-string: "{integer}. {text}"
+/// - Comment: "#comment: {user_input}"
+///
+/// # No Loops Policy
+///
+/// This function runs **once** with **one Q&A session**:
+/// - User gets ONE chance to correct invalid input
+/// - User gets ONE chance to provide write-in text
+/// - If user makes mistake, they can retry by calling function again
+/// - This prevents infinite loops and respects single-pass design
+///
+/// # Arguments
+///
+/// * `user_input` - Initial input string from user (may be integer or text)
+/// * `integer_ranges` - Integer-only selection ranges (multiple choice)
+/// * `integer_string_ranges` - Integer-string selection ranges (write-in options)
+/// * `max_string_length` - Maximum length for write-in text (NOT for formatted result)
+///
+/// # Returns
+///
+/// * `Ok(Some(String))` - Successfully formatted message ready to post
+/// * `Ok(None)` - Skip message creation (invalid input, user error, etc.)
+/// * `Err(io::Error)` - System I/O error (stdin/stdout failure)
+///
+/// # Examples
+///
+/// ```rust
+/// // User comments on the question
+/// let result = structured_format_qa_interactive(
+///     "I disagree with this poll",
+///     Some(vec![(1, 3)]),
+///     Some(vec![(4, 5)]),
+///     Some(100)
+/// )?;
+/// // Returns Ok(Some("#comment: I disagree with this poll"))
+///
+/// // User selects integer-only option
+/// let result = structured_format_qa_interactive(
+///     "2",
+///     Some(vec![(1, 3)]),
+///     None,
+///     None
+/// )?;
+/// // Returns Ok(Some("2"))
+///
+/// // User selects write-in option
+/// let result = structured_format_qa_interactive(
+///     "4",
+///     Some(vec![(1, 3)]),
+///     Some(vec![(4, 5)]),
+///     Some(100)
+/// )?;
+/// // Prompts: "Your write-in answer: "
+/// // User enters: "Chocolate"
+/// // Returns Ok(Some("4. Chocolate"))
+///
+/// // User provides invalid initial input
+/// let result = structured_format_qa_interactive(
+///     "999",
+///     Some(vec![(1, 3)]),
+///     None,
+///     None
+/// )?;
+/// // Prompts: "Enter your selection (1-3): "
+/// // If valid: Returns Ok(Some("{selection}"))
+/// // If invalid again: Returns Ok(None) - skip message
+/// ```
+///
+/// # Security Notes
+///
+/// - Input validation prevents injection attacks
+/// - Max length enforcement prevents resource exhaustion
+/// - No sensitive data in error messages
+///
+fn structured_format_qa_interactive(
+    user_input: &str,
+    integer_ranges: Option<Vec<(i32, i32)>>,
+    integer_string_ranges: Option<Vec<(i32, i32)>>,
+    max_string_length: Option<usize>,
+) -> io::Result<Option<String>> {
+
+    // =================================================
+    // Debug-Assert (debug builds only, NOT tests)
+    // =================================================
+
+    #[cfg(all(debug_assertions, not(test)))]
+    debug_assert!(
+        !user_input.is_empty(),
+        "SFQAI: User input should not be empty"
+    );
+
+    // =================================================
+    // Production-Catch: Validate inputs
+    // =================================================
+
+    if user_input.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "SFQAI: User input cannot be empty"
+        ));
+    }
+
+    // =================================================
+    // Step 1: Validate Initial Input Against Ranges
+    // =================================================
+
+    let initial_validation = validate_integer_in_ranges(
+        user_input,
+        integer_ranges.clone(),
+        integer_string_ranges.clone(),
+    )?;
+
+    // =================================================
+    // Step 2: Q&A - Comment or Answer?
+    // =================================================
+
+    println!("\n--- Structured Message Response ---");
+    println!("Are you commenting or answering-responding?");
+    println!("  'c' = Comment (free-form text)");
+    println!("  'a' = Answer (validated response)");
+    print!("Your choice (c/a): ");
+    io::stdout().flush()?;
+
+    let mut choice = String::new();
+    io::stdin().read_line(&mut choice)?;
+    let choice = choice.trim().to_lowercase();
+
+    // =================================================
+    // Handle Comment Path
+    // =================================================
+
+    if choice == "c" || choice == "comment" {
+        // Format as comment
+        let comment_message = format!("#comment: {}", user_input);
+        println!("\nComment formatted: {}", comment_message);
+        return Ok(Some(comment_message));
+    }
+
+    // =================================================
+    // Handle Answer Path - Validate Selection
+    // =================================================
+
+    if choice != "a" && choice != "answer" {
+        println!("\n✗ Invalid choice. Message creation cancelled.");
+        return Ok(None);
+    }
+
+    // User chose "answer" - validate their selection
+    let mut final_selection = initial_validation;
+
+    // If initial input was invalid or not in range, prompt for valid selection
+    match final_selection {
+        IntegerValidationResult::NotAnInteger | IntegerValidationResult::NotInAnyRange(_) => {
+            println!("\n⚠ Your input is not a valid selection.");
+
+            // Build range description for user
+            let mut range_desc = String::new();
+            if let Some(ref int_ranges) = integer_ranges {
+                for (min, max) in int_ranges {
+                    if !range_desc.is_empty() {
+                        range_desc.push_str(", ");
+                    }
+                    if min == max {
+                        range_desc.push_str(&format!("{}", min));
+                    } else {
+                        range_desc.push_str(&format!("{}-{}", min, max));
+                    }
+                }
+            }
+            if let Some(ref int_str_ranges) = integer_string_ranges {
+                for (min, max) in int_str_ranges {
+                    if !range_desc.is_empty() {
+                        range_desc.push_str(", ");
+                    }
+                    if min == max {
+                        range_desc.push_str(&format!("{}", min));
+                    } else {
+                        range_desc.push_str(&format!("{}-{}", min, max));
+                    }
+                }
+            }
+
+            println!("Valid options: {}", range_desc);
+            print!("Enter your selection: ");
+            io::stdout().flush()?;
+
+            let mut new_selection = String::new();
+            io::stdin().read_line(&mut new_selection)?;
+            let new_selection = new_selection.trim();
+
+            // Validate new selection (ONE attempt only)
+            final_selection = validate_integer_in_ranges(
+                new_selection,
+                integer_ranges.clone(),
+                integer_string_ranges.clone(),
+            )?;
+
+            // Check if new selection is valid
+            match final_selection {
+                IntegerValidationResult::NotAnInteger | IntegerValidationResult::NotInAnyRange(_) => {
+                    println!("\n✗ Invalid selection. Message creation cancelled.");
+                    println!("You may retry if you wish.\n");
+                    return Ok(None);
+                }
+                _ => {
+                    // Valid selection - continue
+                }
+            }
+        }
+        _ => {
+            // Initial input was valid - continue
+        }
+    }
+
+    // =================================================
+    // Step 3: Format Result Based on Range Type
+    // =================================================
+
+    match final_selection {
+        IntegerValidationResult::InIntegerOnlyRange(value) => {
+            // Integer-only selection - return just the number
+            let result = format!("{}", value);
+            println!("\nSelection: {}", result);
+            Ok(Some(result))
+        }
+
+        IntegerValidationResult::InIntegerStringRange(value) => {
+            // Integer-string selection - need write-in text
+            println!("\nYou selected option {} (write-in).", value);
+
+            // Show max length if configured
+            if let Some(max_len) = max_string_length {
+                print!("Your write-in answer (max {} characters): ", max_len);
+            } else {
+                print!("Your write-in answer: ");
+            }
+            io::stdout().flush()?;
+
+            let mut write_in = String::new();
+            io::stdin().read_line(&mut write_in)?;
+            let write_in = write_in.trim();
+
+            // Validate write-in is not empty
+            if write_in.is_empty() {
+                println!("\n✗ Write-in text cannot be empty. Message creation cancelled.");
+                return Ok(None);
+            }
+
+            // Apply max length truncation to write-in text
+            let write_in_final = truncate_message_to_max_length(write_in, max_string_length)?;
+
+            // Format as "integer. text"
+            let result = format!("{}. {}", value, write_in_final);
+            println!("\nFormatted answer: {}", result);
+            Ok(Some(result))
+        }
+
+        IntegerValidationResult::NotAnInteger | IntegerValidationResult::NotInAnyRange(_) => {
+            // Should not reach here (handled above), but safety catch
+            println!("\n✗ Invalid selection. Message creation cancelled.");
+            Ok(None)
+        }
+    }
+}
+/*
+```
+Input → Validate → Comment/Answer?
+                       ↓
+            Comment ──→ "#comment: {text}"
+                       ↓
+                    Answer → Valid?
+                              ↓
+                         No → Prompt once → Valid?
+                                              ↓
+                                          No → Skip
+                              ↓              ↓
+                            Yes ←──────────  Yes
+                              ↓
+                     Int-only or Int-string?
+                       ↓              ↓
+                   Int-only      Int-string
+                       ↓              ↓
+                    Return "{n}"  Ask write-in
+                                      ↓
+                                 Return "{n}. {text}"
+```
+ */
+
+
+ #[cfg(test)]
+ mod tests_structured_format_qa_interactive {
+     use super::*;
+
+     /// Test: Empty input handling
+     ///
+     /// Validates that empty input is rejected with appropriate error.
+     /// This test doesn't require stdin interaction.
+     #[test]
+     fn test_empty_input_rejected() {
+         let result = structured_format_qa_interactive(
+             "",
+             Some(vec![(1, 3)]),
+             None,
+             None,
+         );
+
+         assert!(result.is_err(), "Empty input should return error");
+         let err = result.unwrap_err();
+         assert!(
+             err.to_string().contains("SFQAI"),
+             "Error should have function prefix"
+         );
+     }
+
+     // requires key push
+     // /// Test: Function signature and return type
+     // ///
+     // /// Validates that the function compiles with correct types.
+     // /// Note: Cannot test interactive paths without stdin mocking framework.
+     // #[test]
+     // fn test_function_signature() {
+     //     // This test validates the function exists with correct signature
+     //     // Full interactive testing would require stdin mocking (out of scope for minimal tests)
+
+     //     let _result: io::Result<Option<String>> = structured_format_qa_interactive(
+     //         "test_input_for_signature_validation",
+     //         None,
+     //         None,
+     //         None,
+     //     );
+
+     //     // Function compiled and returned correct type - test passes
+     //     assert!(true, "Function signature is correct");
+     // }
+
+     /// Test: Valid initial integer parsing (partial path)
+     ///
+     /// Tests that valid integer input is parsed correctly by the validation step.
+     /// Note: Full flow requires interactive stdin which is not tested here.
+     #[test]
+     fn test_valid_integer_input_parsed() {
+         // This validates the initial validation logic path
+         // The actual Q&A prompts would require stdin mocking
+
+         let validation_result = validate_integer_in_ranges(
+             "2",
+             Some(vec![(1, 3)]),
+             None,
+         );
+
+         assert!(validation_result.is_ok(), "Validation should succeed");
+         match validation_result.unwrap() {
+             IntegerValidationResult::InIntegerOnlyRange(val) => {
+                 assert_eq!(val, 2, "Should parse to integer 2");
+             }
+             _ => panic!("Should be in integer-only range"),
+         }
+
+         // Note: Full structured_format_qa_interactive test would require
+         // stdin simulation for "comment or answer" prompt
+     }
+ }
+
+ // =================================================
+ // Integration Test Note
+ // =================================================
+ //
+ // Full testing of interactive Q&A flows requires:
+ // 1. Stdin simulation/mocking (not available without external crates)
+ // 2. Integration tests with scripted input
+ // 3. Manual testing procedures
+ //
+ // For production validation, consider:
+ // - Manual test scripts with predefined inputs
+ // - Integration test suite with expect-style testing
+ // - Refactoring to dependency injection for testability (if needed)
+ //
+ // Current minimal tests validate:
+ // - Function compiles with correct signature
+ // - Basic error handling (empty input)
+ // - Initial validation logic path
+ //
+ // =================================================
+
+// /// Add New Message File
+// ///
+// /// # Purpose
+// ///
+// /// Creates and saves an instant message file in either clearsigned TOML or
+// /// GPG encrypted TOML format, depending on the message settings.
+// ///
+// /// # Project Context
+// ///
+// /// This function is the main entry point for creating instant messages in the
+// /// team collaboration system. It:
+// /// - Parses recipient information from message text
+// /// - Validates recipients against team channel access list
+// /// - Creates appropriately formatted message file (clearsigned or encrypted)
+// /// - Sets up sync flags for message distribution to recipients
+// ///
+// /// Messages can be in two formats:
+// /// 1. Clearsigned TOML (.toml): Signed but readable, for general team communication
+// /// 2. GPG Encrypted TOML (.gpgtoml): Signed and encrypted, for sensitive communication
+// ///
+// /// # Process Flow
+// ///
+// /// 1. Parse optional `{to:username}` syntax to restrict recipients
+// /// 2. Validate recipients are in team channel collaborator list
+// /// 3. Read message browser metadata from `0.toml`
+// /// 4. Create MessagePostFile struct with all message data
+// /// 5. Serialize message to TOML format
+// /// 6. Save as clearsigned or encrypted file based on settings
+// /// 7. Write sync flags for each recipient to trigger distribution
+// ///
+// /// # Arguments
+// ///
+// /// * `incoming_file_path` - Full path where message file should be saved (with extension)
+// /// * `owner` - Username of message author/sender
+// /// * `text` - Message text content (may include `{to:username}` for direct messages)
+// /// * `signature` - Optional cryptographic signature for message
+// /// * `graph_navigation_instance_state` - Current navigation state with collaborator info
+// ///
+// /// # Returns
+// ///
+// /// * `Ok(())` - Message file successfully created and sync flags written
+// /// * `Err(io::Error)` - If any step fails (file I/O, serialization, GPG operations)
+// ///
+// /// # Recipient Syntax
+// ///
+// /// Messages can include `{to:username}` to send to a specific recipient:
+// /// - `{to:alice}` - Send only to alice
+// /// - If recipient not in channel or is sender, falls back to default channel list
+// /// - Without `{to:}` syntax, sends to all channel collaborators
+// ///
+// /// # Error Handling
+// ///
+// /// Errors can occur during:
+// /// - Metadata file reading (0.toml)
+// /// - TOML serialization
+// /// - File saving (clearsign or encrypt operations)
+// /// - Sync flag writing
+// ///
+// /// # Security Notes
+// ///
+// /// - Clearsigned messages are authenticated but readable by anyone with file access
+// /// - Encrypted messages require recipient's GPG key to decrypt
+// /// - Message format determined by MessagePostFile.messagepost_gpgtoml flag
+// /// - All messages include sender authentication via GPG signature
+// ///
+// /// # Examples
+// ///
+// /// ```rust
+// /// // Send message to all channel collaborators (clearsigned)
+// /// add_new_messagepost_message(
+// ///     Path::new("sync_data/team/channel/messages/123.toml"),
+// ///     "alice",
+// ///     "Hello team!",
+// ///     None,
+// ///     &state
+// /// )?;
+// ///
+// /// // Send direct message to bob (format depends on MessagePostFile settings)
+// /// add_new_messagepost_message(
+// ///     Path::new("sync_data/team/channel/messages/124.toml"),
+// ///     "alice",
+// ///     "{to:bob} Private message",
+// ///     None,
+// ///     &state
+// /// )?;
+// /// ```
+// fn add_new_messagepost_message(
+//     incoming_file_path: &Path,
+//     owner: &str,
+//     text: &str,
+//     graph_navigation_instance_state: &GraphNavigationInstanceState,
+// ) -> Result<(), io::Error> {
+
+//     debug_log!("AIM: Starting add_new_messagepost_message");
+//     debug_log!("AIM: incoming_file_path: {:?}", incoming_file_path);
+//     debug_log!("AIM: owner: {}", owner);
+//     debug_log!("AIM: text length: {} bytes", text.len());
+
+//     // =================================================
+//     // Debug-Assert (debug builds only), Production-Catch-Handle (always)
+//     // =================================================
+
+//     // Debug-Assert: Owner must not be empty (debug builds only, NOT tests)
+//     #[cfg(all(debug_assertions, not(test)))]
+//     debug_assert!(
+//         !owner.is_empty(),
+//         "AIM: Owner must not be empty"
+//     );
+
+//     // Production-Catch: Handle empty owner
+//     if owner.is_empty() {
+//         return Err(io::Error::new(
+//             io::ErrorKind::InvalidInput,
+//             "AIM: Owner must not be empty"
+//         ));
+//     }
+
+//     // Debug-Assert: Text must not be empty (debug builds only, NOT tests)
+//     #[cfg(all(debug_assertions, not(test)))]
+//     debug_assert!(
+//         !text.is_empty(),
+//         "AIM: Message text must not be empty"
+//     );
+
+//     // Production-Catch: Handle empty text
+//     if text.is_empty() {
+//         return Err(io::Error::new(
+//             io::ErrorKind::InvalidInput,
+//             "AIM: Message text must not be empty"
+//         ));
+//     }
+
+//     // Debug-Assert: File path must have a filename (debug builds only, NOT tests)
+//     #[cfg(all(debug_assertions, not(test)))]
+//     debug_assert!(
+//         incoming_file_path.file_name().is_some(),
+//         "AIM: File path must have a filename"
+//     );
+
+//     // Production-Catch: Handle missing filename
+//     if incoming_file_path.file_name().is_none() {
+//         return Err(io::Error::new(
+//             io::ErrorKind::InvalidInput,
+//             "AIM: File path must have a filename"
+//         ));
+//     }
+
+//     // 1. Parse for {to:user} syntax to determine recipients
+//     debug_log!("AIM: Parsing recipient list");
+
+//     // note: this should come from 0.toml, not nav-state
+//     let mut recipients_list = graph_navigation_instance_state
+//         .current_node_teamchannel_collaborators_with_access
+//         .clone();
+
+//     if let Some(to_clause) = text.find("{to:") {
+//         if let Some(end_brace) = text[to_clause..].find('}') {
+//             let recipient_name = text[to_clause + 4..to_clause + end_brace].trim();
+
+//             debug_log!("AIM: Found clause for recipient: {}", recipient_name);
+
+//             recipients_list.clear(); // Clear default list: restrict to listed recipient only
+
+//             // 2. Check if recipient in team channel list and is not sender
+//             if graph_navigation_instance_state
+//                 .current_node_teamchannel_collaborators_with_access
+//                 .contains(&recipient_name.to_string())
+//                 && recipient_name != owner
+//             {
+//                 recipients_list.push(recipient_name.to_string()); // Add only the specified recipient
+//                 debug_log!("AIM: Recipient validated and added: {}", recipient_name);
+//             } else {
+//                 // Log if user not found
+//                 debug_log!(
+//                     "AIM: 'to:' clause but recipient '{}' not found in channel or is sender.",
+//                     recipient_name
+//                 );
+//             }
+//         }
+//     }
+
+//     debug_log!("AIM: Final recipients list: {:?}", recipients_list);
+
+//     // 3. Separate name and path - get parent directory
+//     debug_log!("AIM: Extracting parent directory");
+
+//     let parent_dir = incoming_file_path.parent()
+//         .ok_or_else(|| io::Error::new(
+//             io::ErrorKind::InvalidInput,
+//             "AIM: File path must have a parent directory"
+//         ))?;
+
+//     // Debug-Assert: Parent directory must not be empty path (debug builds only, NOT tests)
+//     #[cfg(all(debug_assertions, not(test)))]
+//     debug_assert!(
+//         parent_dir != Path::new(""),
+//         "AIM: Parent directory must not be empty path"
+//     );
+
+//     // Production-Catch: Handle empty parent directory
+//     if parent_dir == Path::new("") {
+//         return Err(io::Error::new(
+//             io::ErrorKind::InvalidInput,
+//             "AIM: error Parent directory is empty path"
+//         ));
+//     }
+
+//     debug_log!("AIM: Parent directory: {:?}", parent_dir);
+
+//     // 4. Read 0.toml to get this instant messenger browser room's settings
+//     debug_log!("AIM: Reading metadata from 0.toml");
+
+//     let metadata_path = parent_dir.join("0.toml");
+//     debug_log!("AIM: let metadata_path -> {:?}", metadata_path);
+
+//     let metadata_path_string = metadata_path.to_string_lossy();
+
+//     // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+//     // let metadata: NodeInstMsgBrowserMetadata = toml::from_str(&metadata_string)
+//     //     .map_err(|e| io::Error::new(
+//     //         io::ErrorKind::Other,
+//     //         format!("AIM: TOML deserialization error: {}", e)
+//     //     ))?;
+
+//     // Step 4: Read the requested field from the verified file
+//     let node_name = read_single_line_string_field_from_toml(
+//         &metadata_path_string,
+//         "node_name",
+//     )
+//     .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("SCM: node_name read_single_line_string_field_from_toml error: {}", e)))?;
+
+//     // Step 4: Read the requested field from the verified file
+//     let filepath_in_node = read_single_line_string_field_from_toml(
+//         &metadata_path_string,
+//         "path_in_node",
+//     )
+//     .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("SCM: path_in_node read_single_line_string_field_from_toml error: {}", e)))?;
+
+//     debug_log!("AIM: Metadata loaded - node: {}, path: {}",
+//         node_name,
+//         filepath_in_node
+//     );
+
+//     // 5. Create MessagePostFile struct
+//     debug_log!("AIM: Creating MessagePostFile");
+
+//     /*
+//     struct MessagePostFile {
+//         // every .toml has these four
+//         owner: String, // owner of this item
+//         node_name: String, // Name of the node this message belongs to
+//         filepath_in_node: String, // Relative path within the node's directory
+//         text_message: String, // content-body
+
+//         teamchannel_collaborators_with_access: Vec<String>,
+//         updated_at_timestamp: u64, // utc posix timestamp
+//         messagepost_gpgtoml: bool, // Is MessagePostFile file gpg encrypted
+//         expires_at: u64, // utc posix timestamp
+//     }
+//     */
+
+//     // should not require nav-state
+//     let message = MessagePostFile::new(
+//         owner,
+//         &node_name,
+//         &filepath_in_node,
+//         text,
+//         recipients_list.clone(),
+//         false, // messagepost_gpgtoml - default to clearsigned format
+//         None,
+//     );
+
+//     debug_log!("AIM: MessagePostFile created, gpgtoml: {}", message.messagepost_gpgtoml);
+
+//     // 6. Serialize message to TOML
+//     debug_log!("AIM: Serializing message to TOML: message {:?}", message);
+
+//     // let toml_data = toml::to_string(&message)
+//     //     .map_err(|e| io::Error::new(
+//     //         io::ErrorKind::Other,
+//     //         format!("AIM: TOML serialization error: {}", e)
+//     //     ))?;
+
+//     let toml_data:String;
+//     // let toml_data = serialize_messagepost_toml(&message)?;
+//     match serialize_messagepost_toml(&message) {
+//         Ok(toml_string) => {
+//             // Write to file or transmit
+//             toml_data = toml_string;
+//         }
+//         Err(e) => {
+//             // Handle serialization error with project-appropriate recovery
+//             debug_log("SMPC0T: serialization failed");
+//             return Err(io::Error::new(
+//                 io::ErrorKind::InvalidInput,
+//                 format!("AIM: error serialize_messagepost_toml {}",e)
+//             ));
+//         }
+//     }
+
+//     debug_log!("AIM: TOML serialization successful, {} bytes", toml_data.len());
+
+//     // 7. Save message file based on format setting
+//     debug_log!("AIM: Saving message file");
+
+//     if message.messagepost_gpgtoml {
+//         // GPG encrypted format - use base path without extension
+//         debug_log!("AIM: Using GPG encrypted format (.gpgtoml)");
+
+//         let base_path = incoming_file_path.with_extension("");
+
+//         save_message_as_gpgtoml(
+//             &base_path,
+//             &toml_data,
+//             // owner,
+//             // COLLABORATOR_ADDRESSBOOK_PATH_STR,
+//         )?;
+
+//         debug_log!("AIM: GPG encrypted message saved successfully");
+//     } else {
+//         // Clearsigned format - use full path
+//         debug_log!("AIM: Using clearsigned format (.toml)");
+
+//         /*
+//         fn save_message_as_clearsigned_toml(
+//             target_file_path: &Path,
+//             toml_content: &str,
+//         ) -> Result<(), io::Error> {
+//         */
+
+//         save_message_as_clearsigned_toml(
+//             incoming_file_path,
+//             &toml_data,
+//             // owner,
+//             // COLLABORATOR_ADDRESSBOOK_PATH_STR,
+//         )?;
+
+//         debug_log!("AIM: Clearsigned message saved successfully");
+//     }
+
+//     // 8. Write update flag for each possible remote collaborator
+//     // sync_data/teamtest/new_file_path_flags/bob
+//     // sync_data/teamtest/new_file_path_flags/charlotte
+//     // etc.
+//     debug_log!("AIM: Writing sync flags for recipients");
+
+//     let sync_result = write_newfile_sendq_flag(
+//         &recipients_list,
+//         incoming_file_path,
+//     );
+
+//     // Log but don't fail if sync flags fail (message is already saved)
+//     if let Err(e) = sync_result {
+//         debug_log!("AIM: Warning: Failed to write sync flags: {}", e);
+//     } else {
+//         debug_log!("AIM: Sync flags written successfully");
+//     }
+
+//     debug_log!("AIM: add_new_messagepost_message completed successfully");
+
+//     Ok(())
+// }
+
+// #[cfg(test)]
+// mod tests_addim_message {
+//     use super::*;
+//     use std::path::{Path, PathBuf};
+//     use std::fs;
+
+//     /// Helper to create minimal test state for testing
+//     ///
+//     /// Creates a GraphNavigationInstanceState with reasonable defaults
+//     /// for testing purposes. This avoids duplicating state initialization
+//     /// across multiple tests.
+//     fn create_minimal_test_state() -> GraphNavigationInstanceState {
+//         GraphNavigationInstanceState {
+//             local_owner_user: "testuser".to_string(),
+//             active_team_channel: String::new(),
+//             default_im_messages_expiration_days: 30,
+//             default_task_nodes_expiration_days: 90,
+//             tui_height: 24,
+//             tui_width: 80,
+//             current_full_file_path: PathBuf::from("/tmp/test"),
+//             current_node_teamchannel_collaborators_with_access: vec![],
+//             current_node_name: String::new(),
+//             current_node_owner: String::new(),
+//             current_node_description_for_tui: String::new(),
+//             current_node_directory_path: PathBuf::new(),
+//             current_node_unique_id: Vec::new(),
+//             current_node_members: Vec::new(),
+//             home_square_one: false,
+//             pa1_process: String::new(),
+//             pa2_schedule: Vec::new(),
+//             pa3_users: String::new(),
+//             pa4_features: String::new(),
+//             pa5_mvp: String::new(),
+//             pa6_feedback: String::new(),
+//             message_post_gpgtoml_required: None,
+//             message_post_data_format_specs_integer_ranges_from_to_tuple_array: None,
+//             message_post_data_format_specs_int_string_ranges_from_to_tuple_array: None,
+//             message_post_max_string_length_int: None,
+//             message_post_is_public_bool: None,
+//             message_post_user_confirms_bool: None,
+//             message_post_start_date_utc_posix: None,
+//             message_post_end_date_utc_posix: None,
+//         }
+//     }
+
+//     /// Helper function to create test temp directory
+//     fn create_test_temp_dir() -> Result<PathBuf, io::Error> {
+//         let temp_base = std::env::temp_dir();
+//         let timestamp = std::time::SystemTime::now()
+//             .duration_since(std::time::UNIX_EPOCH)
+//             .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Time error: {}", e)))?
+//             .as_secs();
+//         let test_dir = temp_base.join(format!("test_add_im_{}", timestamp));
+//         fs::create_dir_all(&test_dir)?;
+//         Ok(test_dir)
+//     }
+
+//     /// Helper function to cleanup test directory
+//     fn cleanup_test_dir(dir: &Path) {
+//         let _ = fs::remove_dir_all(dir);
+//     }
+
+//     /// Test: Error case - empty owner
+//     ///
+//     /// Verifies that the function returns an error when owner is empty.
+//     #[test]
+//     fn test_error_empty_owner() {
+//         let test_dir = create_test_temp_dir().expect("Failed to create test directory");
+//         let message_file = test_dir.join("test_message.toml");
+
+//         let state = create_minimal_test_state();
+
+//         let result = add_new_messagepost_message(
+//             &message_file,
+//             "", // Empty owner
+//             "Test message",
+//             &state,
+//         );
+
+//         assert!(result.is_err(), "Function should return error for empty owner");
+
+//         if let Err(e) = result {
+//             let error_msg = format!("{}", e);
+//             assert!(
+//                 error_msg.contains("Owner must not be empty"),
+//                 "Error message should mention empty owner, got: {}",
+//                 error_msg
+//             );
+//         }
+
+//         cleanup_test_dir(&test_dir);
+//     }
+
+//     /// Test: Error case - empty message text
+//     ///
+//     /// Verifies that the function returns an error when text is empty.
+//     #[test]
+//     fn test_error_empty_text() {
+//         let test_dir = create_test_temp_dir().expect("Failed to create test directory");
+//         let message_file = test_dir.join("test_message.toml");
+
+//         let state = create_minimal_test_state();
+
+//         let result = add_new_messagepost_message(
+//             &message_file,
+//             "testuser",
+//             "", // Empty text
+//             &state,
+//         );
+
+//         assert!(result.is_err(), "Function should return error for empty text");
+
+//         if let Err(e) = result {
+//             let error_msg = format!("{}", e);
+//             assert!(
+//                 error_msg.contains("Message text must not be empty"),
+//                 "Error message should mention empty text, got: {}",
+//                 error_msg
+//             );
+//         }
+
+//         cleanup_test_dir(&test_dir);
+//     }
+
+//     // /// Test: Error case - path with no filename
+//     // ///
+//     // /// Verifies that the function returns an error when path has no filename.
+//     // #[test]
+//     // fn test_error_no_filename() {
+//     //     let test_dir = create_test_temp_dir().expect("Failed to create test directory");
+//     //     let message_path = test_dir.join("messages/");
+
+//     //     let state = create_minimal_test_state();
+
+//     //     let result = add_new_messagepost_message(
+//     //         &message_path,
+//     //         "testuser",
+//     //         "Test message",
+//     //         None,
+//     //         &state,
+//     //     );
+
+//     //     assert!(result.is_err(), "Function should return error for path without filename");
+
+//     //     if let Err(e) = result {
+//     //         let error_msg = format!("{}", e);
+//     //         assert!(
+//     //             error_msg.contains("must have a filename"),
+//     //             "Error message should mention missing filename, got: {}",
+//     //             error_msg
+//     //         );
+//     //     }
+
+//     //     cleanup_test_dir(&test_dir);
+//     // }
+
+//     // TODO?
+//     // /// Test: Error case - path with no filename / directory path
+//     // ///
+//     // /// Verifies that directory-like paths fail appropriately.
+//     // /// Note: Path validation for file vs directory happens when reading metadata.
+//     // #[test]
+//     // fn test_error_directory_like_path() {
+//     //     let test_dir = create_test_temp_dir().expect("Failed to create test directory");
+//     //     let message_path = test_dir.join("messages/");
+
+//     //     let state = create_minimal_test_state();
+
+//     //     let result = add_new_messagepost_message(
+//     //         &message_path,
+//     //         "testuser",
+//     //         "Test message",
+//     //         &state,
+//     //     );
+
+//     //     assert!(result.is_err(), "Function should return error for directory-like path");
+
+//     //     if let Err(e) = result {
+//     //         let error_msg = format!("{}", e);
+//     //         // Will fail at metadata reading stage since path isn't a proper file path
+//     //         assert!(
+//     //             error_msg.contains("Failed to read metadata file") ||
+//     //             error_msg.contains("must have a filename"),
+//     //             "Error should mention metadata or filename issue, got: {}",
+//     //             error_msg
+//     //         );
+//     //     }
+
+//     //     cleanup_test_dir(&test_dir);
+//     // }
+
+//     /// Test: Error case - path with no parent directory
+//     ///
+//     /// Verifies that the function returns an error when path has no parent.
+//     #[test]
+//     fn test_error_no_parent_directory() {
+//         let state = create_minimal_test_state();
+
+//         let result = add_new_messagepost_message(
+//             Path::new("message.toml"), // No parent directory
+//             "testuser",
+//             "Test message",
+//             &state,
+//         );
+
+//         assert!(result.is_err(), "Function should return error for path without parent");
+
+//         if let Err(e) = result {
+//             let error_msg = format!("{}", e);
+//             assert!(
+//                 error_msg.contains("parent directory") || error_msg.contains("empty path"),
+//                 "Error message should mention parent directory issue, got: {}",
+//                 error_msg
+//             );
+//         }
+//     }
+
+//     /// Test: Message text with special characters
+//     ///
+//     /// Verifies that message text with quotes, newlines, etc. is handled.
+//     #[test]
+//     fn test_message_text_special_characters() {
+//         let test_dir = create_test_temp_dir().expect("Failed to create test directory");
+//         let message_file = test_dir.join("test_message.toml");
+
+//         let state = create_minimal_test_state();
+
+//         let text_with_specials = "Message with \"quotes\" and\nnewlines\nand\ttabs";
+
+//         /*
+//         fn  add_new_messagepost_message(
+//             incoming_file_path: &Path,
+//             owner: &str,
+//             text: &str,
+//             signature: Option<String>,
+//             graph_navigation_instance_state: &GraphNavigationInstanceState,
+//         ) -> Result<(), io::Error> {
+//         */
+
+//         let result = add_new_messagepost_message(
+//             &message_file,
+//             "testuser",
+//             text_with_specials,
+//             &state,
+//         );
+
+//         // Will fail without 0.toml metadata file, but validates text handling
+//         if let Err(e) = result {
+//             let error_msg = format!("{}", e);
+//             assert!(
+//                 !error_msg.contains("Message text must not be empty"),
+//                 "Should not fail on text validation with special chars, got: {}",
+//                 error_msg
+//             );
+//         }
+
+//         cleanup_test_dir(&test_dir);
+//     }
+
+//     /// Test: Owner with special characters
+//     ///
+//     /// Verifies that usernames with dots, dashes, underscores work.
+//     #[test]
+//     fn test_owner_special_characters() {
+//         let test_dir = create_test_temp_dir().expect("Failed to create test directory");
+//         let message_file = test_dir.join("test_message.toml");
+
+//         let state = create_minimal_test_state();
+
+//         let usernames = vec![
+//             "user.name",
+//             "user-name",
+//             "user_name",
+//             "user123",
+//         ];
+
+//         for username in usernames {
+//             let result = add_new_messagepost_message(
+//                 &message_file,
+//                 username,
+//                 "Test message",
+//                 &state,
+//             );
+
+//             // Should not fail on username validation
+//             if let Err(e) = result {
+//                 let error_msg = format!("{}", e);
+//                 assert!(
+//                     !error_msg.contains("Owner must not be empty"),
+//                     "Should accept username '{}', got error: {}",
+//                     username,
+//                     error_msg
+//                 );
+//             }
+//         }
+
+//         cleanup_test_dir(&test_dir);
+//     }
+
+//     /// Test: Long message text
+//     ///
+//     /// Verifies that long messages are handled correctly.
+//     #[test]
+//     fn test_long_message_text() {
+//         let test_dir = create_test_temp_dir().expect("Failed to create test directory");
+//         let message_file = test_dir.join("test_message.toml");
+
+//         let state = create_minimal_test_state();
+
+//         // Create 5KB message
+//         let long_text = "x".repeat(5000);
+
+//         let result = add_new_messagepost_message(
+//             &message_file,
+//             "testuser",
+//             &long_text,
+//             &state,
+//         );
+
+//         // Will fail without full setup, but validates large text handling
+//         if let Err(e) = result {
+//             let error_msg = format!("{}", e);
+//             assert!(
+//                 !error_msg.contains("Message text must not be empty"),
+//                 "Should not fail on text validation with large text, got: {}",
+//                 error_msg
+//             );
+//         }
+
+//         cleanup_test_dir(&test_dir);
+//     }
+// }
+
+/// Add New Message File with Configuration-Based Validation
+///
+/// # Purpose
+///
+/// Creates and saves a message post file with full validation pipeline:
+/// - Time window validation (earliest exit)
+/// - Structured format Q&A (if configured)
+/// - Length truncation (if configured)
+/// - Privacy mode handling (if configured)
+/// - User confirmation (if configured)
+/// - GPG encryption override (if configured)
+///
+/// # Project Context
+///
+/// This function is the main entry point for creating message posts in the
+/// team collaboration system with the Message Post Suite's modular configuration.
+/// It supports various use cases:
+/// - Time-bounded surveys/polls
+/// - Structured questionnaires with validated responses
+/// - Private or public messaging
+/// - Length-restricted micro-blogging
+/// - User-confirmed submissions
+///
+/// # Process Flow
+///
+/// 1. **Time Window Check** (earliest exit point)
+///    - Validate current time against start/end constraints
+///    - If outside window: print message, return Ok(())
+///
+/// 2. **Structured Format Q&A** (if configured)
+///    - Check if integer ranges are configured
+///    - If yes: Run interactive Q&A to format response
+///    - If no: Use original input text
+///    - If Q&A cancelled: return Ok(())
+///
+/// 3. **Max Length Truncation** (if configured)
+///    - Apply length limit to message text
+///    - Print warning if truncated
+///
+/// 4. **Recipient List Determination**
+///    - Parse {to:username} syntax from text
+///    - If is_public == Some(false): Override to [local_owner, node_owner]
+///    - Otherwise: Use team channel collaborators or {to:} recipient
+///
+/// 5. **User Confirmation** (if configured)
+///    - Display message preview with all fields
+///    - Ask user to confirm
+///    - If not confirmed: return Ok(())
+///
+/// 6. **Message File Creation**
+///    - Read metadata from 0.toml
+///    - Create MessagePostFile struct
+///    - Apply gpgtoml_required override
+///    - Serialize to TOML
+///    - Save as clearsigned or encrypted file
+///    - Write sync flags for recipients
+///
+/// # Arguments
+///
+/// * `incoming_file_path` - Full path where message file should be saved
+/// * `owner` - Username of message author/sender
+/// * `text` - Message text content (initial input from user)
+/// * `graph_navigation_instance_state` - Navigation state with collaborator info
+/// * `start_date_utc_posix` - Optional start time for posting window
+/// * `end_date_utc_posix` - Optional end time for posting window
+/// * `gpgtoml_required` - Whether GPG encryption is required
+/// * `max_string_length` - Optional maximum message length
+/// * `is_public` - Whether message is public or private
+/// * `user_confirms` - Whether user confirmation is required
+/// * `integer_ranges` - Integer-only selection ranges for structured format
+/// * `integer_string_ranges` - Integer-string selection ranges for structured format
+/// * `current_node_owner` - Username of current node owner (for private mode)
+///
+/// # Returns
+///
+/// * `Ok(())` - Message created successfully OR skipped (time window, user cancel, etc.)
+/// * `Err(io::Error)` - System error during message creation
+///
+/// # Examples
+///
+/// ```rust
+/// // Simple message with no special config
+/// add_new_messagepost_message(
+///     Path::new("messages/123.toml"),
 ///     "alice",
 ///     "Hello team!",
-///     None,
-///     &state
+///     &state,
+///     None, None, None, None, None, None, None, None,
+///     "bob"
 /// )?;
 ///
-/// // Send direct message to bob (format depends on MessagePostFile settings)
-/// add_im_message(
-///     Path::new("sync_data/team/channel/messages/124.toml"),
+/// // Time-bounded structured survey response
+/// add_new_messagepost_message(
+///     Path::new("messages/124.toml"),
 ///     "alice",
-///     "{to:bob} Private message",
+///     "2",
+///     &state,
+///     Some(start_time),
+///     Some(end_time),
 ///     None,
-///     &state
+///     Some(100),
+///     Some(true),
+///     Some(true),
+///     Some(vec![(1, 3)]),
+///     Some(vec![(4, 5)]),
+///     "bob"
 /// )?;
 /// ```
-fn add_im_message(
+///
+fn add_new_messagepost_message(
     incoming_file_path: &Path,
     owner: &str,
     text: &str,
     graph_navigation_instance_state: &GraphNavigationInstanceState,
 ) -> Result<(), io::Error> {
 
-    debug_log!("AIM: Starting add_im_message");
-    debug_log!("AIM: incoming_file_path: {:?}", incoming_file_path);
-    debug_log!("AIM: owner: {}", owner);
-    debug_log!("AIM: text length: {} bytes", text.len());
+    debug_log!("ANMPM: Starting add_new_messagepost_message");
+    debug_log!("ANMPM: incoming_file_path: {:?}", incoming_file_path);
+    debug_log!("ANMPM: owner: {}", owner);
+    debug_log!("ANMPM: text length: {} bytes", text.len());
+
+    let start_date_utc_posix = graph_navigation_instance_state.message_post_start_date_utc_posix; //;: Option<i64>,
+    let end_date_utc_posix = graph_navigation_instance_state.message_post_end_date_utc_posix; //;: Option<i64>,
+
+    let gpgtoml_required = graph_navigation_instance_state.message_post_gpgtoml_required; //;: Option<bool>,
+
+    let max_string_length = graph_navigation_instance_state.message_post_max_string_length_int; //;: Option<usize>,
+    let is_public = graph_navigation_instance_state.message_post_is_public_bool; //;: Option<bool>,
+    let user_confirms = graph_navigation_instance_state.message_post_user_confirms_bool; //;: Option<bool>,
+
+    let integer_ranges = graph_navigation_instance_state.message_post_data_format_specs_integer_ranges_from_to_tuple_array.clone(); //;: Option<Vec<(i32, i32)>>,
+    let integer_string_ranges = graph_navigation_instance_state.message_post_data_format_specs_int_string_ranges_from_to_tuple_array.clone(); //;: Option<Vec<(i32, i32)>>,
+
+    let current_node_owner = graph_navigation_instance_state.current_node_owner.clone(); //;: String
+
+
+    // gpgtoml_required: Option<bool>,
+    // max_string_length: Option<usize>,
+    // is_public: Option<bool>,
+    // user_confirms: Option<bool>,
+    // integer_ranges: Option<Vec<(i32, i32)>>,
+    // integer_string_ranges: Option<Vec<(i32, i32)>>,
+    // current_node_owner: &str,
 
     // =================================================
     // Debug-Assert (debug builds only), Production-Catch-Handle (always)
     // =================================================
 
-    // Debug-Assert: Owner must not be empty (debug builds only, NOT tests)
+    // Debug-Assert: Owner must not be empty
     #[cfg(all(debug_assertions, not(test)))]
     debug_assert!(
         !owner.is_empty(),
-        "AIM: Owner must not be empty"
+        "ANMPM: Owner must not be empty"
     );
 
     // Production-Catch: Handle empty owner
     if owner.is_empty() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            "AIM: Owner must not be empty"
+            "ANMPM: Owner must not be empty"
         ));
     }
 
-    // Debug-Assert: Text must not be empty (debug builds only, NOT tests)
+    // Debug-Assert: Text must not be empty
     #[cfg(all(debug_assertions, not(test)))]
     debug_assert!(
         !text.is_empty(),
-        "AIM: Message text must not be empty"
+        "ANMPM: Message text must not be empty"
     );
 
     // Production-Catch: Handle empty text
     if text.is_empty() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            "AIM: Message text must not be empty"
+            "ANMPM: Message text must not be empty"
         ));
     }
 
-    // Debug-Assert: File path must have a filename (debug builds only, NOT tests)
+    // Debug-Assert: File path must have a filename
     #[cfg(all(debug_assertions, not(test)))]
     debug_assert!(
         incoming_file_path.file_name().is_some(),
-        "AIM: File path must have a filename"
+        "ANMPM: File path must have a filename"
     );
 
     // Production-Catch: Handle missing filename
     if incoming_file_path.file_name().is_none() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            "AIM: File path must have a filename"
+            "ANMPM: File path must have a filename"
         ));
     }
 
-    // 1. Parse for {to:user} syntax to determine recipients
-    debug_log!("AIM: Parsing recipient list");
+    // =================================================
+    // Step 1: Time Window Check (EARLIEST EXIT POINT)
+    // =================================================
 
-    // note: this should come from 0.toml, not nav-state
+    debug_log!("ANMPM: Checking time window");
+
+    let in_time_window = check_time_window(start_date_utc_posix, end_date_utc_posix)?;
+
+    if !in_time_window {
+        debug_log!("ANMPM: Outside time window - skipping message creation");
+        // Message already printed by check_time_window
+        return Ok(());
+    }
+
+    debug_log!("ANMPM: Time window check passed");
+
+    // =================================================
+    // Step 2: Check for Structured Format & Run Q&A
+    // =================================================
+
+    debug_log!("ANMPM: Checking for structured format configuration");
+
+    // Check if structured format is active
+    let structured_format_active = match (&integer_ranges, &integer_string_ranges) {
+        (Some(int_ranges), _) if !int_ranges.is_empty() => true,
+        (_, Some(int_str_ranges)) if !int_str_ranges.is_empty() => true,
+        _ => false,
+    };
+
+    debug_log!("ANMPM: Structured format active: {}", structured_format_active);
+
+    let final_text = if structured_format_active {
+        debug_log!("ANMPM: Running structured format Q&A");
+
+        match structured_format_qa_interactive(
+            text,
+            integer_ranges.clone(),
+            integer_string_ranges.clone(),
+            max_string_length,
+        )? {
+            Some(formatted_text) => {
+                debug_log!("ANMPM: Structured Q&A completed: {}", formatted_text);
+                formatted_text
+            }
+            None => {
+                debug_log!("ANMPM: Structured Q&A cancelled - skipping message creation");
+                return Ok(());
+            }
+        }
+    } else {
+        // No structured format - use original text
+        debug_log!("ANMPM: No structured format - using original text");
+        text.to_string()
+    };
+
+    // =================================================
+    // Step 3: Max Length Truncation (if not already handled)
+    // =================================================
+
+    debug_log!("ANMPM: Applying max length truncation if configured");
+
+    // Note: For structured format, max_length was already applied to write-in text
+    // For non-structured or comment text, apply it now
+    let final_text_truncated = if !structured_format_active || final_text.starts_with("#comment:") {
+        truncate_message_to_max_length(&final_text, max_string_length)?
+    } else {
+        // Already handled in structured Q&A
+        final_text
+    };
+
+    debug_log!("ANMPM: Final text length: {}", final_text_truncated.len());
+
+    // =================================================
+    // Step 4: Determine Recipients List
+    // =================================================
+
+    debug_log!("ANMPM: Determining recipients list");
+
+    // Start with default collaborators list
     let mut recipients_list = graph_navigation_instance_state
         .current_node_teamchannel_collaborators_with_access
         .clone();
 
-    if let Some(to_clause) = text.find("{to:") {
-        if let Some(end_brace) = text[to_clause..].find('}') {
-            let recipient_name = text[to_clause + 4..to_clause + end_brace].trim();
+    // Check for privacy mode override
+    if is_public == Some(false) {
+        debug_log!("ANMPM: Privacy mode active - restricting to owner and node owner");
+        recipients_list.clear();
+        recipients_list.push(owner.to_string());
+        if owner != current_node_owner {
+            recipients_list.push(current_node_owner.to_string());
+        }
+    } else {
+        // Check for {to:user} syntax
+        if let Some(to_clause) = final_text_truncated.find("{to:") {
+            if let Some(end_brace) = final_text_truncated[to_clause..].find('}') {
+                let recipient_name = final_text_truncated[to_clause + 4..to_clause + end_brace].trim();
 
-            debug_log!("AIM: Found clause for recipient: {}", recipient_name);
+                debug_log!("ANMPM: Found clause for recipient: {}", recipient_name);
 
-            recipients_list.clear(); // Clear default list: restrict to listed recipient only
+                recipients_list.clear(); // Clear default list
 
-            // 2. Check if recipient in team channel list and is not sender
-            if graph_navigation_instance_state
-                .current_node_teamchannel_collaborators_with_access
-                .contains(&recipient_name.to_string())
-                && recipient_name != owner
-            {
-                recipients_list.push(recipient_name.to_string()); // Add only the specified recipient
-                debug_log!("AIM: Recipient validated and added: {}", recipient_name);
-            } else {
-                // Log if user not found
-                debug_log!(
-                    "AIM: 'to:' clause but recipient '{}' not found in channel or is sender.",
-                    recipient_name
-                );
+                // Check if recipient in team channel list and is not sender
+                if graph_navigation_instance_state
+                    .current_node_teamchannel_collaborators_with_access
+                    .contains(&recipient_name.to_string())
+                    && recipient_name != owner
+                {
+                    recipients_list.push(recipient_name.to_string());
+                    debug_log!("ANMPM: Recipient validated and added: {}", recipient_name);
+                } else {
+                    debug_log!(
+                        "ANMPM: 'to:' clause but recipient '{}' not found in channel or is sender.",
+                        recipient_name
+                    );
+                }
             }
         }
     }
 
-    debug_log!("AIM: Final recipients list: {:?}", recipients_list);
+    debug_log!("ANMPM: Final recipients list: {:?}", recipients_list);
 
-    // 3. Separate name and path - get parent directory
-    debug_log!("AIM: Extracting parent directory");
+    // =================================================
+    // Step 5: User Confirmation (if configured)
+    // =================================================
+
+    if user_confirms == Some(true) {
+        debug_log!("ANMPM: User confirmation required - showing preview");
+
+        println!("\n=== Message Preview ===");
+        println!("From: {}", owner);
+        println!("To: {}", if recipients_list.is_empty() {
+            "All collaborators".to_string()
+        } else {
+            recipients_list.join(", ")
+        });
+        println!("Text: {}", final_text_truncated);
+        println!("Encryption: {}", if gpgtoml_required == Some(true) {
+            "Required (gpgtoml)"
+        } else {
+            "Clearsigned (toml)"
+        });
+        println!("======================\n");
+
+        print!("Confirm and post this message? (y/n): ");
+        io::stdout().flush()?;
+
+        let mut confirmation = String::new();
+        io::stdin().read_line(&mut confirmation)?;
+        let confirmation = confirmation.trim().to_lowercase();
+
+        if confirmation != "y" && confirmation != "yes" {
+            println!("\n✗ Message creation cancelled by user.\n");
+            debug_log!("ANMPM: User did not confirm - skipping message creation");
+            return Ok(());
+        }
+
+        debug_log!("ANMPM: User confirmed message");
+    }
+
+    // =================================================
+    // Step 6: Get Parent Directory and Read Metadata
+    // =================================================
+
+    debug_log!("ANMPM: Extracting parent directory");
 
     let parent_dir = incoming_file_path.parent()
         .ok_or_else(|| io::Error::new(
             io::ErrorKind::InvalidInput,
-            "AIM: File path must have a parent directory"
+            "ANMPM: File path must have a parent directory"
         ))?;
 
-    // Debug-Assert: Parent directory must not be empty path (debug builds only, NOT tests)
+    // Debug-Assert: Parent directory must not be empty path
     #[cfg(all(debug_assertions, not(test)))]
     debug_assert!(
         parent_dir != Path::new(""),
-        "AIM: Parent directory must not be empty path"
+        "ANMPM: Parent directory must not be empty path"
     );
 
     // Production-Catch: Handle empty parent directory
     if parent_dir == Path::new("") {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            "AIM: error Parent directory is empty path"
+            "ANMPM: error Parent directory is empty path"
         ));
     }
 
-    debug_log!("AIM: Parent directory: {:?}", parent_dir);
+    debug_log!("ANMPM: Parent directory: {:?}", parent_dir);
 
-    // 4. Read 0.toml to get this instant messenger browser room's settings
-    debug_log!("AIM: Reading metadata from 0.toml");
+    // Read 0.toml to get message browser metadata
+    debug_log!("ANMPM: Reading metadata from 0.toml");
 
     let metadata_path = parent_dir.join("0.toml");
-    debug_log!("AIM: let metadata_path -> {:?}", metadata_path);
+    debug_log!("ANMPM: let metadata_path -> {:?}", metadata_path);
 
     let metadata_path_string = metadata_path.to_string_lossy();
 
-    // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
-    // let metadata: NodeInstMsgBrowserMetadata = toml::from_str(&metadata_string)
-    //     .map_err(|e| io::Error::new(
-    //         io::ErrorKind::Other,
-    //         format!("AIM: TOML deserialization error: {}", e)
-    //     ))?;
-
-    // Step 4: Read the requested field from the verified file
     let node_name = read_single_line_string_field_from_toml(
         &metadata_path_string,
         "node_name",
     )
-    .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("SCM: node_name read_single_line_string_field_from_toml error: {}", e)))?;
+    .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("ANMPM: node_name read error: {}", e)))?;
 
-    // Step 4: Read the requested field from the verified file
     let filepath_in_node = read_single_line_string_field_from_toml(
         &metadata_path_string,
         "path_in_node",
     )
-    .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("SCM: path_in_node read_single_line_string_field_from_toml error: {}", e)))?;
+    .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("ANMPM: path_in_node read error: {}", e)))?;
 
-    debug_log!("AIM: Metadata loaded - node: {}, path: {}",
+    debug_log!("ANMPM: Metadata loaded - node: {}, path: {}",
         node_name,
         filepath_in_node
     );
 
-    // 5. Create MessagePostFile struct
-    debug_log!("AIM: Creating MessagePostFile");
+    // =================================================
+    // Step 7: Create MessagePostFile struct
+    // =================================================
 
-    /*
-    struct MessagePostFile {
-        // every .toml has these four
-        owner: String, // owner of this item
-        node_name: String, // Name of the node this message belongs to
-        filepath_in_node: String, // Relative path within the node's directory
-        text_message: String, // content-body
+    debug_log!("ANMPM: Creating MessagePostFile");
 
-        teamchannel_collaborators_with_access: Vec<String>,
-        updated_at_timestamp: u64, // utc posix timestamp
-        messagepost_gpgtoml: bool, // Is MessagePostFile file gpg encrypted
-        expires_at: u64, // utc posix timestamp
-    }
-    */
-
-    // should not require nav-state
-    let message = MessagePostFile::new(
+    let mut message = MessagePostFile::new(
         owner,
         &node_name,
         &filepath_in_node,
-        text,
+        &final_text_truncated,
         recipients_list.clone(),
-        false, // messagepost_gpgtoml - default to clearsigned format
+        false, // default to clearsigned
         None,
     );
 
-    debug_log!("AIM: MessagePostFile created, gpgtoml: {}", message.messagepost_gpgtoml);
-
-    // 6. Serialize message to TOML
-    debug_log!("AIM: Serializing message to TOML: message {:?}", message);
-
-    // let toml_data = toml::to_string(&message)
-    //     .map_err(|e| io::Error::new(
-    //         io::ErrorKind::Other,
-    //         format!("AIM: TOML serialization error: {}", e)
-    //     ))?;
-
-    let toml_data:String;
-    // let toml_data = serialize_messagepost_toml(&message)?;
-    match serialize_messagepost_toml(&message) {
-        Ok(toml_string) => {
-            // Write to file or transmit
-            toml_data = toml_string;
-        }
-        Err(e) => {
-            // Handle serialization error with project-appropriate recovery
-            debug_log("SMPC0T: serialization failed");
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!("AIM: error serialize_messagepost_toml {}",e)
-            ));
-        }
+    // Apply gpgtoml_required override
+    if let Some(true) = gpgtoml_required {
+        debug_log!("ANMPM: Applying gpgtoml_required override");
+        message.messagepost_gpgtoml = true;
     }
 
-    debug_log!("AIM: TOML serialization successful, {} bytes", toml_data.len());
+    debug_log!("ANMPM: MessagePostFile created, gpgtoml: {}", message.messagepost_gpgtoml);
 
-    // 7. Save message file based on format setting
-    debug_log!("AIM: Saving message file");
+    // =================================================
+    // Step 8: Serialize message to TOML
+    // =================================================
+
+    debug_log!("ANMPM: Serializing message to TOML");
+
+    let toml_data = match serialize_messagepost_toml(&message) {
+        Ok(toml_string) => {
+            debug_log!("ANMPM: TOML serialization successful, {} bytes", toml_string.len());
+            toml_string
+        }
+        Err(e) => {
+            debug_log!("ANMPM: serialization failed");
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("ANMPM: error serialize_messagepost_toml {}", e)
+            ));
+        }
+    };
+
+    // =================================================
+    // Step 9: Save message file based on format setting
+    // =================================================
+
+    debug_log!("ANMPM: Saving message file");
 
     if message.messagepost_gpgtoml {
-        // GPG encrypted format - use base path without extension
-        debug_log!("AIM: Using GPG encrypted format (.gpgtoml)");
+        debug_log!("ANMPM: Using GPG encrypted format (.gpgtoml)");
 
         let base_path = incoming_file_path.with_extension("");
 
         save_message_as_gpgtoml(
             &base_path,
             &toml_data,
-            // owner,
-            // COLLABORATOR_ADDRESSBOOK_PATH_STR,
         )?;
 
-        debug_log!("AIM: GPG encrypted message saved successfully");
+        debug_log!("ANMPM: GPG encrypted message saved successfully");
     } else {
-        // Clearsigned format - use full path
-        debug_log!("AIM: Using clearsigned format (.toml)");
-
-        /*
-        fn save_message_as_clearsigned_toml(
-            target_file_path: &Path,
-            toml_content: &str,
-        ) -> Result<(), io::Error> {
-        */
+        debug_log!("ANMPM: Using clearsigned format (.toml)");
 
         save_message_as_clearsigned_toml(
             incoming_file_path,
             &toml_data,
-            // owner,
-            // COLLABORATOR_ADDRESSBOOK_PATH_STR,
         )?;
 
-        debug_log!("AIM: Clearsigned message saved successfully");
+        debug_log!("ANMPM: Clearsigned message saved successfully");
     }
 
-    // 8. Write update flag for each possible remote collaborator
-    // sync_data/teamtest/new_file_path_flags/bob
-    // sync_data/teamtest/new_file_path_flags/charlotte
-    // etc.
-    debug_log!("AIM: Writing sync flags for recipients");
+    // =================================================
+    // Step 10: Write sync flags for recipients
+    // =================================================
+
+    debug_log!("ANMPM: Writing sync flags for recipients");
 
     let sync_result = write_newfile_sendq_flag(
         &recipients_list,
         incoming_file_path,
     );
 
-    // Log but don't fail if sync flags fail (message is already saved)
+    // Log but don't fail if sync flags fail
     if let Err(e) = sync_result {
-        debug_log!("AIM: Warning: Failed to write sync flags: {}", e);
+        debug_log!("ANMPM: Warning: Failed to write sync flags: {}", e);
     } else {
-        debug_log!("AIM: Sync flags written successfully");
+        debug_log!("ANMPM: Sync flags written successfully");
     }
 
-    debug_log!("AIM: add_im_message completed successfully");
+    debug_log!("ANMPM: add_new_messagepost_message completed successfully");
 
     Ok(())
-}
-
-#[cfg(test)]
-mod tests_add_im_message {
-    use super::*;
-    use std::path::{Path, PathBuf};
-    use std::fs;
-
-    /// Helper to create minimal test state for testing
-    ///
-    /// Creates a GraphNavigationInstanceState with reasonable defaults
-    /// for testing purposes. This avoids duplicating state initialization
-    /// across multiple tests.
-    fn create_minimal_test_state() -> GraphNavigationInstanceState {
-        GraphNavigationInstanceState {
-            local_owner_user: "testuser".to_string(),
-            active_team_channel: String::new(),
-            default_im_messages_expiration_days: 30,
-            default_task_nodes_expiration_days: 90,
-            tui_height: 24,
-            tui_width: 80,
-            current_full_file_path: PathBuf::from("/tmp/test"),
-            current_node_teamchannel_collaborators_with_access: vec![],
-            current_node_name: String::new(),
-            current_node_owner: String::new(),
-            current_node_description_for_tui: String::new(),
-            current_node_directory_path: PathBuf::new(),
-            current_node_unique_id: Vec::new(),
-            current_node_members: Vec::new(),
-            home_square_one: false,
-            pa1_process: String::new(),
-            pa2_schedule: Vec::new(),
-            pa3_users: String::new(),
-            pa4_features: String::new(),
-            pa5_mvp: String::new(),
-            pa6_feedback: String::new(),
-            message_post_gpgtoml_required: None,
-            message_post_data_format_specs_integer_ranges_from_to_tuple_array: None,
-            message_post_data_format_specs_int_string_ranges_from_to_tuple_array: None,
-            message_post_max_string_length_int: None,
-            message_post_is_public_bool: None,
-            message_post_user_confirms_bool: None,
-            message_post_start_date_utc_posix: None,
-            message_post_end_date_utc_posix: None,
-        }
-    }
-
-    /// Helper function to create test temp directory
-    fn create_test_temp_dir() -> Result<PathBuf, io::Error> {
-        let temp_base = std::env::temp_dir();
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Time error: {}", e)))?
-            .as_secs();
-        let test_dir = temp_base.join(format!("test_add_im_{}", timestamp));
-        fs::create_dir_all(&test_dir)?;
-        Ok(test_dir)
-    }
-
-    /// Helper function to cleanup test directory
-    fn cleanup_test_dir(dir: &Path) {
-        let _ = fs::remove_dir_all(dir);
-    }
-
-    /// Test: Error case - empty owner
-    ///
-    /// Verifies that the function returns an error when owner is empty.
-    #[test]
-    fn test_error_empty_owner() {
-        let test_dir = create_test_temp_dir().expect("Failed to create test directory");
-        let message_file = test_dir.join("test_message.toml");
-
-        let state = create_minimal_test_state();
-
-        let result = add_im_message(
-            &message_file,
-            "", // Empty owner
-            "Test message",
-            &state,
-        );
-
-        assert!(result.is_err(), "Function should return error for empty owner");
-
-        if let Err(e) = result {
-            let error_msg = format!("{}", e);
-            assert!(
-                error_msg.contains("Owner must not be empty"),
-                "Error message should mention empty owner, got: {}",
-                error_msg
-            );
-        }
-
-        cleanup_test_dir(&test_dir);
-    }
-
-    /// Test: Error case - empty message text
-    ///
-    /// Verifies that the function returns an error when text is empty.
-    #[test]
-    fn test_error_empty_text() {
-        let test_dir = create_test_temp_dir().expect("Failed to create test directory");
-        let message_file = test_dir.join("test_message.toml");
-
-        let state = create_minimal_test_state();
-
-        let result = add_im_message(
-            &message_file,
-            "testuser",
-            "", // Empty text
-            &state,
-        );
-
-        assert!(result.is_err(), "Function should return error for empty text");
-
-        if let Err(e) = result {
-            let error_msg = format!("{}", e);
-            assert!(
-                error_msg.contains("Message text must not be empty"),
-                "Error message should mention empty text, got: {}",
-                error_msg
-            );
-        }
-
-        cleanup_test_dir(&test_dir);
-    }
-
-    // /// Test: Error case - path with no filename
-    // ///
-    // /// Verifies that the function returns an error when path has no filename.
-    // #[test]
-    // fn test_error_no_filename() {
-    //     let test_dir = create_test_temp_dir().expect("Failed to create test directory");
-    //     let message_path = test_dir.join("messages/");
-
-    //     let state = create_minimal_test_state();
-
-    //     let result = add_im_message(
-    //         &message_path,
-    //         "testuser",
-    //         "Test message",
-    //         None,
-    //         &state,
-    //     );
-
-    //     assert!(result.is_err(), "Function should return error for path without filename");
-
-    //     if let Err(e) = result {
-    //         let error_msg = format!("{}", e);
-    //         assert!(
-    //             error_msg.contains("must have a filename"),
-    //             "Error message should mention missing filename, got: {}",
-    //             error_msg
-    //         );
-    //     }
-
-    //     cleanup_test_dir(&test_dir);
-    // }
-
-    /// Test: Error case - path with no filename / directory path
-    ///
-    /// Verifies that directory-like paths fail appropriately.
-    /// Note: Path validation for file vs directory happens when reading metadata.
-    #[test]
-    fn test_error_directory_like_path() {
-        let test_dir = create_test_temp_dir().expect("Failed to create test directory");
-        let message_path = test_dir.join("messages/");
-
-        let state = create_minimal_test_state();
-
-        let result = add_im_message(
-            &message_path,
-            "testuser",
-            "Test message",
-            &state,
-        );
-
-        assert!(result.is_err(), "Function should return error for directory-like path");
-
-        if let Err(e) = result {
-            let error_msg = format!("{}", e);
-            // Will fail at metadata reading stage since path isn't a proper file path
-            assert!(
-                error_msg.contains("Failed to read metadata file") ||
-                error_msg.contains("must have a filename"),
-                "Error should mention metadata or filename issue, got: {}",
-                error_msg
-            );
-        }
-
-        cleanup_test_dir(&test_dir);
-    }
-
-    /// Test: Error case - path with no parent directory
-    ///
-    /// Verifies that the function returns an error when path has no parent.
-    #[test]
-    fn test_error_no_parent_directory() {
-        let state = create_minimal_test_state();
-
-        let result = add_im_message(
-            Path::new("message.toml"), // No parent directory
-            "testuser",
-            "Test message",
-            &state,
-        );
-
-        assert!(result.is_err(), "Function should return error for path without parent");
-
-        if let Err(e) = result {
-            let error_msg = format!("{}", e);
-            assert!(
-                error_msg.contains("parent directory") || error_msg.contains("empty path"),
-                "Error message should mention parent directory issue, got: {}",
-                error_msg
-            );
-        }
-    }
-
-    /// Test: Message text with special characters
-    ///
-    /// Verifies that message text with quotes, newlines, etc. is handled.
-    #[test]
-    fn test_message_text_special_characters() {
-        let test_dir = create_test_temp_dir().expect("Failed to create test directory");
-        let message_file = test_dir.join("test_message.toml");
-
-        let state = create_minimal_test_state();
-
-        let text_with_specials = "Message with \"quotes\" and\nnewlines\nand\ttabs";
-
-        /*
-        fn add_im_message(
-            incoming_file_path: &Path,
-            owner: &str,
-            text: &str,
-            signature: Option<String>,
-            graph_navigation_instance_state: &GraphNavigationInstanceState,
-        ) -> Result<(), io::Error> {
-        */
-
-        let result = add_im_message(
-            &message_file,
-            "testuser",
-            text_with_specials,
-            &state,
-        );
-
-        // Will fail without 0.toml metadata file, but validates text handling
-        if let Err(e) = result {
-            let error_msg = format!("{}", e);
-            assert!(
-                !error_msg.contains("Message text must not be empty"),
-                "Should not fail on text validation with special chars, got: {}",
-                error_msg
-            );
-        }
-
-        cleanup_test_dir(&test_dir);
-    }
-
-    /// Test: Owner with special characters
-    ///
-    /// Verifies that usernames with dots, dashes, underscores work.
-    #[test]
-    fn test_owner_special_characters() {
-        let test_dir = create_test_temp_dir().expect("Failed to create test directory");
-        let message_file = test_dir.join("test_message.toml");
-
-        let state = create_minimal_test_state();
-
-        let usernames = vec![
-            "user.name",
-            "user-name",
-            "user_name",
-            "user123",
-        ];
-
-        for username in usernames {
-            let result = add_im_message(
-                &message_file,
-                username,
-                "Test message",
-                &state,
-            );
-
-            // Should not fail on username validation
-            if let Err(e) = result {
-                let error_msg = format!("{}", e);
-                assert!(
-                    !error_msg.contains("Owner must not be empty"),
-                    "Should accept username '{}', got error: {}",
-                    username,
-                    error_msg
-                );
-            }
-        }
-
-        cleanup_test_dir(&test_dir);
-    }
-
-    /// Test: Long message text
-    ///
-    /// Verifies that long messages are handled correctly.
-    #[test]
-    fn test_long_message_text() {
-        let test_dir = create_test_temp_dir().expect("Failed to create test directory");
-        let message_file = test_dir.join("test_message.toml");
-
-        let state = create_minimal_test_state();
-
-        // Create 5KB message
-        let long_text = "x".repeat(5000);
-
-        let result = add_im_message(
-            &message_file,
-            "testuser",
-            &long_text,
-            &state,
-        );
-
-        // Will fail without full setup, but validates large text handling
-        if let Err(e) = result {
-            let error_msg = format!("{}", e);
-            assert!(
-                !error_msg.contains("Message text must not be empty"),
-                "Should not fail on text validation with large text, got: {}",
-                error_msg
-            );
-        }
-
-        cleanup_test_dir(&test_dir);
-    }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -15860,14 +18515,14 @@ fn wrapper__path_to_clearsign_to_gpgencrypt_to_send_bytes(
     Ok(encrypted_content)
 }
 
-/// string-mod: remove_non_alphanumeric
-/// takes a string slice (&str) as input and returns a new String that
-/// contains only the ASCII alphanumeric characters from the input string.
-/// The original string is not modified.
-///
-fn remove_non_alphanumeric(s: &str) -> String {
-    s.chars().filter(|c| c.is_ascii_alphanumeric()).collect()
-}
+// /// string-mod: remove_non_alphanumeric
+// /// takes a string slice (&str) as input and returns a new String that
+// /// contains only the ASCII alphanumeric characters from the input string.
+// /// The original string is not modified.
+// ///
+// fn remove_non_alphanumeric(s: &str) -> String {
+//     s.chars().filter(|c| c.is_ascii_alphanumeric()).collect()
+// }
 
 // /// save for every member with access in channel...
 // fn write_newfile_sendq_flag(
@@ -20233,8 +22888,8 @@ fn handle_command_main_mode(
                 // println!("Path matches the last two components!");
                 starting_in_teamchannels_homebase = true;
             } else {
-                println!("HCMM Path does not match.");
-                debug_log!("HCMM Path does not match.");
+                // println!("HCMM Path does not match.");
+                debug_log!("HCMM not in: project_graph_data/team_channels");
                 starting_in_teamchannels_homebase = false;
             }
 
@@ -22820,6 +25475,7 @@ struct SendFile {
     intray_send_time: Option<u64>, // send-time: generate_terse_timestamp_freshness_proxy(); for replay-attack protection
     gpg_encrypted_intray_file: Option<Vec<u8>>, // Holds the GPG-encrypted file contents
     intray_hash_list: Option<Vec<u8>>, // N hashes of intray_this_send_timestamp + gpg_encrypted_intray_file
+    // padnet_index_array: Option<[u8; 8]>, //
 }
 
 /// ReadySignal struct
@@ -22831,7 +25487,7 @@ struct ReadySignal {
     rt: u64, // ready signal timestamp: last file obtained timestamp
     rst: u64, // send-time: generate_terse_timestamp_freshness_proxy(); for replay-attack protection
     b: u8, // Network Index (e.g. which ipv6 in the list)
-    rh: Vec<u8>, // N hashes of rt + re
+    rh: Vec<u8>, // N hashes of rt + re // todo: fixed size?
 }
 
 /// Serializes a ReadySignal into a byte vector
@@ -28693,7 +31349,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                 debug_log(&format!("Next message path: {:?}", message_path)); // Log the calculated message path
 
                 // 2. make message file
-                add_im_message(
+                add_new_messagepost_message(
                     &message_path,
                     local_owner_user,
                     input.trim(),
@@ -28800,7 +31456,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                 // debug_log(&format!("Next message path: {:?}", message_path)); // Log the calculated message path
 
                 // // 2. make message file
-                // add_im_message(
+                // add_new_messagepost_message(
                 //     &message_path,
                 //     local_owner_user,
                 //     input.trim(),

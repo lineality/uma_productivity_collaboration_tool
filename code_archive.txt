@@ -10043,3 +10043,11 @@ fn get_latest_received_from_rc_in_teamchannel_file_timestamp_filecrawl(
     //     simple_render_list_passive(&message_list, path);
     //     Ok(())
     // }
+/// string-mod: remove_non_alphanumeric
+/// takes a string slice (&str) as input and returns a new String that
+/// contains only the ASCII alphanumeric characters from the input string.
+/// The original string is not modified.
+///
+fn remove_non_alphanumeric(s: &str) -> String {
+    s.chars().filter(|c| c.is_ascii_alphanumeric()).collect()
+}
