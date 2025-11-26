@@ -5935,7 +5935,7 @@ impl App {
             tui_textmessage_list: Vec::new(), // Initialize files
             messagepost_display_offset: 0,
             tui_width: 80, // default posix terminal size
-            tui_height: 17, // default posix terminal size
+            tui_height: 18, // default posix terminal size
             command_input_integer: None,
             current_command_input: None,
             current_text_input: None,
@@ -7183,8 +7183,11 @@ impl App {
             self.tui_textmessage_list.push(format!("{}: {}", owner, text_message));
             loaded_count += 1;
 
-            // Note: temp file cleanup is handled by the OS or explicit cleanup
-            // depending on how get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml works
+            // Cleansup Time!
+            let _ = cleanup_collaborator_temp_file(
+                &message_readcopy_path,
+                &base_uma_temp_directory_path,
+                );
         }
 
         debug_log!("LIM: Finished loading messages: {} messages loaded, {} problems", loaded_count, error_count);
@@ -16875,7 +16878,7 @@ fn run_passive_message_mode(path: &Path) -> io::Result<()> {
     let mut last_directory_state = get_directory_hash(path)?;
 
     // 3. Initial display
-    tiny_tui::passive_display_messages(path)?;
+    passive_display_messages(path)?;
 
     // 4. Enter refresh loop
     loop {
@@ -16883,7 +16886,7 @@ fn run_passive_message_mode(path: &Path) -> io::Result<()> {
 
         if current_directory_state != last_directory_state {
             print!("\x1B[2J\x1B[1;1H"); // Clear screen
-            tiny_tui::passive_display_messages(path)?;
+            passive_display_messages(path)?;
             last_directory_state = current_directory_state;
         }
 
@@ -16891,7 +16894,390 @@ fn run_passive_message_mode(path: &Path) -> io::Result<()> {
     }
 }
 
+/// Passive Message Display with GPG Support (Read-Only Auto-Refresh View)
+///
+/// # Purpose
+///
+/// Loads and displays instant messages in passive (read-only) view mode with
+/// full GPG support. This function handles both plain clearsigned `.toml` files
+/// and encrypted `.gpgtoml` files, matching the interactive view's capabilities
+/// while maintaining passive-only operation (no user input, auto-refresh only).
+///
+/// This is the passive-view equivalent of `load_im_messages()`, with key differences:
+/// - No interactive prompts (if empty, shows empty list)
+/// - All errors are logged and skipped (never halts viewing)
+/// - No state management (reads fresh each time)
+/// - Fixed display height (18 lines, scrolldown default)
+///
+/// # Process Flow
+///
+/// 1. **Setup Phase:**
+///    - Read GPG fingerprint from uma.toml
+///    - Get uma temp directory path
+///    - If either fails: log error, show empty display, return Ok
+///
+/// 2. **Collection Phase:**
+///    - Collect all file entries from target directory (max depth 1)
+///    - Sort entries by numeric prefix in filename (1__, 2__, 3__, etc.)
+///    - Filter out metadata file (0.toml)
+///
+/// 3. **Processing Phase (per file):**
+///    - Get readable temp copy via `get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml()`
+///      - For `.toml`: verifies clearsign and creates temp readable copy
+///      - For `.gpgtoml`: decrypts and creates temp readable copy
+///    - Read `owner` field from temp copy
+///    - Read `text_message` field from temp copy
+///    - Add formatted message to display list
+///    - Clean up temp copy via `cleanup_collaborator_temp_file()`
+///    - On ANY error: log with "PDM:" prefix and skip to next file
+///
+/// 4. **Display Phase:**
+///    - Render complete message list via `simple_render_list_passive()`
+///    - Shows bottom N messages (scrolldown default, N=18)
+///
+/// # Message File Formats Supported
+///
+/// - `.toml` files: Clearsigned TOML format (authenticated, verifiable)
+///   - Contains GPG clearsign armor wrapping TOML content
+///   - Verified during temp copy creation
+///
+/// - `.gpgtoml` files: Encrypted TOML format (confidential, authenticated)
+///   - Contains GPG encrypted message
+///   - Decrypted during temp copy creation
+///
+/// - `0.toml`: Metadata file (excluded from message list)
+///
+/// - Expected filename format: `<number>__<identifier>.toml` or `.gpgtoml`
+///   - Examples: `1__alice.toml`, `2__bob.gpgtoml`, `15__charlie.toml`
+///
+/// # Sorting Behavior
+///
+/// Messages are sorted by extracting the numeric prefix before the first `__`
+/// in the filename:
+/// - `1__alice.toml` → 1
+/// - `2__bob.gpgtoml` → 2
+/// - `15__charlie.toml` → 15
+/// - Files without numeric prefix are placed at the end (sorted as u64::MAX)
+///
+/// # Error Handling Philosophy (Passive View)
+///
+/// **Critical principle: Never interrupt viewing**
+///
+/// All errors are handled with "log and skip" approach:
+/// - GPG fingerprint read failure → log, show empty display, return Ok
+/// - Temp directory access failure → log, show empty display, return Ok
+/// - Individual file read errors → log with "PDM:" prefix, skip file, continue
+/// - Temp copy creation errors → log, skip file, continue
+/// - Field read errors → log, skip file, continue
+/// - Cleanup errors → log, continue (already read)
+///
+/// Error logs include:
+/// - Unique function prefix "PDM:" (PassiveDisplayMessages)
+/// - File path (debug mode only)
+/// - Error description
+/// - Action taken (skipping)
+///
+/// # Comparison with Interactive Version
+///
+/// **Same:**
+/// - File reading logic (GPG handling, temp copies)
+/// - Field extraction (owner, text_message)
+/// - Sorting algorithm
+/// - Message format
+///
+/// **Different:**
+/// - No first-message prompt (shows empty if no messages)
+/// - No state management (no App struct)
+/// - All errors skip silently (no user prompts)
+/// - Fixed display height
+/// - No pagination controls
+///
+/// # Security Notes
+///
+/// - Requires valid GPG fingerprint in uma.toml
+/// - Verifies clearsigned messages
+/// - Decrypts encrypted messages using local GPG key
+/// - Temp files cleaned up after reading
+/// - No data written (read-only operation)
+///
+/// # Parameters
+///
+/// * `path` - Directory path containing message files (message_posts_browser)
+///
+/// # Returns
+///
+/// * `Ok(())` - Always returns Ok (errors logged and handled internally)
+/// * `Err(io::Error)` - Only for catastrophic directory access issues (rare)
+///
+/// # Platform Support
+///
+/// - Linux, macOS, BSD variants, Android, Redox
+/// - Requires GPG installed and configured
+/// - Requires uma.toml with GPG fingerprint
+///
+/// # Related Functions
+///
+/// - `load_im_messages()` - Interactive version with state management
+/// - `get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml()` - Gets readable temp copy
+/// - `cleanup_collaborator_temp_file()` - Cleans up temp files
+/// - `simple_render_list_passive()` - Renders message list
+/// - `run_passive_message_mode()` - Refresh loop that calls this function
+///
+/// # Example Usage
+///
+/// ```no_run
+/// use std::path::Path;
+///
+/// let message_dir = Path::new("/path/to/team/channel/message_posts_browser");
+/// passive_display_messages(message_dir)?;
+/// // Displays messages, handling both .toml and .gpgtoml files
+/// // All errors logged and skipped, never interrupts display
+/// ```
+///
+/// # Debug Logging
+///
+/// All log messages prefixed with "PDM:" for easy filtering:
+/// - "PDM: Starting passive message display"
+/// - "PDM: Failed to read GPG fingerprint: [error]"
+/// - "PDM: Failed to get temp directory: [error]"
+/// - "PDM: Failed to get readable copy of [file]: [error] (skipping)"
+/// - "PDM: Failed to read owner from [file]: [error] (skipping)"
+/// - "PDM: Failed to read text_message from [file]: [error] (skipping)"
+/// - "PDM: Successfully loaded N messages, M files skipped"
+pub fn passive_display_messages(path: &Path) -> io::Result<()> {
+    debug_log!("PDM: Starting passive message display for path: {:?}", path);
 
+    // Initialize empty message list
+    let mut message_list: Vec<String> = Vec::new();
+
+    // ============================================================
+    // SETUP PHASE: Get GPG fingerprint and temp directory
+    // ============================================================
+
+    // Get GPG fingerprint from uma.toml for decryption/verification
+    let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+        Ok(fingerprint) => {
+            debug_log!("PDM: GPG fingerprint retrieved: {}", fingerprint);
+            fingerprint
+        }
+        Err(e) => {
+            debug_log!("PDM: Failed to read GPG fingerprint from uma.toml: {} (showing empty display)", e);
+            // Show empty display and return - cannot process any files without GPG
+            tiny_tui::simple_render_list_passive(&message_list, path);
+            return Ok(());
+        }
+    };
+
+    // Get temp directory for creating readable copies
+    let base_uma_temp_directory_path = match get_base_uma_temp_directory_path() {
+        Ok(temp_path) => {
+            debug_log!("PDM: Temp directory path retrieved: {:?}", temp_path);
+            temp_path
+        }
+        Err(e) => {
+            debug_log!("PDM: Failed to get temp directory path: {} (showing empty display)", e);
+            // Show empty display and return - cannot create temp copies without temp dir
+            tiny_tui::simple_render_list_passive(&message_list, path);
+            return Ok(());
+        }
+    };
+
+    // ============================================================
+    // COLLECTION PHASE: Gather and sort message files
+    // ============================================================
+
+    debug_log!("PDM: Collecting file entries from directory");
+
+    // Collect all file entries from directory (max depth 1)
+    let mut entries: Vec<_> = WalkDir::new(path)
+        .max_depth(1)
+        .into_iter()
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.path().is_file())
+        .collect();
+
+    debug_log!("PDM: Found {} file entries", entries.len());
+
+    // Sort entries by numeric prefix in filename (1__, 2__, 3__, etc.)
+    entries.sort_by_key(|entry| {
+        entry
+            .path()
+            .file_name()
+            .and_then(|n| n.to_str())
+            .and_then(|s| s.split("__").next()) // Get part before "__"
+            .and_then(|num_str| num_str.parse::<u64>().ok()) // Parse as number
+            .unwrap_or(u64::MAX) // Put unparseable names at end
+    });
+
+    debug_log!("PDM: Entries sorted by numeric prefix");
+
+    // ============================================================
+    // PROCESSING PHASE: Read and process each message file
+    // ============================================================
+
+    let mut loaded_count = 0;
+    let mut skipped_count = 0;
+
+    for entry in entries {
+        // Get filename for logging and filtering
+        let file_name = match entry.path().file_name() {
+            Some(name) => name.to_string_lossy().to_string(),
+            None => {
+                debug_log!("PDM: Entry has no filename: {:?} (skipping)", entry.path());
+                skipped_count += 1;
+                continue;
+            }
+        };
+
+        // Skip metadata file (0.toml)
+        if file_name == "0.toml" {
+            debug_log!("PDM: Skipping metadata file: {}", file_name);
+            continue;
+        }
+
+        debug_log!("PDM: Processing message file: {}", file_name);
+
+        // ------------------------------------------------------------
+        // Get readable temp copy (handles both .toml and .gpgtoml)
+        // ------------------------------------------------------------
+        let message_readcopy_path = match get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
+            entry.path(),
+            &gpg_full_fingerprint_key_id_string,
+            &base_uma_temp_directory_path,
+        ) {
+            Ok(temp_path) => {
+                debug_log!("PDM: Created temp readable copy at: {}", temp_path);
+                temp_path
+            }
+            Err(e) => {
+                debug_log!(
+                    "PDM: Failed to get readable copy of {:?}: {:?} (skipping)",
+                    entry.path(),
+                    e
+                );
+                skipped_count += 1;
+                continue;
+            }
+        };
+
+        // ------------------------------------------------------------
+        // Read owner field from temp copy
+        // ------------------------------------------------------------
+        let owner = match read_single_line_string_field_from_toml(
+            &message_readcopy_path,
+            "owner",
+        ) {
+            Ok(owner_value) => {
+                // Validate owner is not empty
+                if owner_value.is_empty() {
+                    debug_log!("PDM: Owner field is empty in {} (skipping)", file_name);
+                    skipped_count += 1;
+                    // Clean up temp file before continuing
+                    let _ = cleanup_collaborator_temp_file(
+                        &message_readcopy_path,
+                        &base_uma_temp_directory_path,
+                    );
+                    continue;
+                }
+                owner_value
+            }
+            Err(e) => {
+                debug_log!(
+                    "PDM: Failed to read owner field from {}: {} (skipping)",
+                    file_name,
+                    e
+                );
+                skipped_count += 1;
+                // Clean up temp file before continuing
+                let _ = cleanup_collaborator_temp_file(
+                    &message_readcopy_path,
+                    &base_uma_temp_directory_path,
+                );
+                continue;
+            }
+        };
+
+        // ------------------------------------------------------------
+        // Read text_message field from temp copy
+        // ------------------------------------------------------------
+        let text_message = match read_single_line_string_field_from_toml(
+            &message_readcopy_path,
+            "text_message",
+        ) {
+            Ok(text_value) => {
+                // Validate text_message is not empty
+                if text_value.is_empty() {
+                    debug_log!("PDM: text_message field is empty in {} (skipping)", file_name);
+                    skipped_count += 1;
+                    // Clean up temp file before continuing
+                    let _ = cleanup_collaborator_temp_file(
+                        &message_readcopy_path,
+                        &base_uma_temp_directory_path,
+                    );
+                    continue;
+                }
+                text_value
+            }
+            Err(e) => {
+                debug_log!(
+                    "PDM: Failed to read text_message field from {}: {} (skipping)",
+                    file_name,
+                    e
+                );
+                skipped_count += 1;
+                // Clean up temp file before continuing
+                let _ = cleanup_collaborator_temp_file(
+                    &message_readcopy_path,
+                    &base_uma_temp_directory_path,
+                );
+                continue;
+            }
+        };
+
+        // ------------------------------------------------------------
+        // Clean up temp file (ignore cleanup errors)
+        // ------------------------------------------------------------
+        if let Err(e) = cleanup_collaborator_temp_file(
+            &message_readcopy_path,
+            &base_uma_temp_directory_path,
+        ) {
+            debug_log!(
+                "PDM: Failed to cleanup temp file for {} (continuing): {}",
+                file_name,
+                e
+            );
+            // Continue anyway - we already got the data we needed
+        }
+
+        // ------------------------------------------------------------
+        // Add formatted message to display list
+        // ------------------------------------------------------------
+        debug_log!(
+            "PDM: Successfully loaded message from {}: owner={}, text_len={}",
+            file_name,
+            owner,
+            text_message.len()
+        );
+
+        message_list.push(format!("{}: {}", owner, text_message));
+        loaded_count += 1;
+    }
+
+    // ============================================================
+    // DISPLAY PHASE: Render message list
+    // ============================================================
+
+    debug_log!(
+        "PDM: Finished processing. Loaded: {}, Skipped: {}",
+        loaded_count,
+        skipped_count
+    );
+
+    // Display messages using passive renderer (handles scrolldown internally)
+    tiny_tui::simple_render_list_passive(&message_list, path);
+
+    Ok(())
+}
 
 
 
@@ -20728,7 +21114,7 @@ fn share_team_channel_with_existing_collaborator_converts_to_abs(
         ))
     })?;
     // remove temp file
-    cleanup_collaborator_temp_file(
+    let _  = cleanup_collaborator_temp_file(
         &local_owner_addressbook_readcopy_path_string,
         &base_uma_temp_directory_path,
         );
@@ -23717,6 +24103,286 @@ fn handle_command_main_mode(
 
                 // TODO experimental state refresh
                 app.enter_modal_message_posts_browser(app.current_path.clone())?;
+            }
+
+            // Tmux Vertical Split Message Passive View Handler
+            //
+            // Command aliases: "mpv" | "pmv" | "message-passive-vsplit"
+            //
+            // # Purpose
+            //
+            // Launches passive message viewer in a new tmux vertical split pane.
+            // Unlike the "mp" command which opens a new terminal window, this creates
+            // a split within the current tmux session for side-by-side viewing.
+            //
+            // # User Experience
+            //
+            // User types "mpv" in main Uma application:
+            // - Current pane continues running Uma normally
+            // - New vertical pane appears to the right (or left, depending on tmux config)
+            // - New pane shows passive message view (auto-refreshing, read-only)
+            // - User can switch between panes with tmux keybindings (default: Ctrl+b arrow)
+            // - Passive view runs independently until manually closed
+            //
+            // # Tmux Split Behavior
+            //
+            // Creates vertical split with:
+            // - Direction: Vertical (side-by-side panes)
+            // - Command: uma --passive_vsplit_message_mode [path]
+            // - Working directory: Inherited from current pane
+            // - Size: Equal split (tmux default, user can resize)
+            //
+            // # Process Flow
+            //
+            // 1. Validate current path + message_posts_browser directory exists
+            // 2. Get path to current Uma executable
+            // 3. Build tmux command string
+            // 4. Execute: tmux split-window -v "uma --passive_vsplit_message_mode [path]"
+            // 5. Main Uma continues in original pane
+            // 6. Passive view starts in new split pane
+            //
+            // # Prerequisites
+            //
+            // - Must be running inside a tmux session
+            // - tmux must be installed and available in PATH
+            // - Uma executable must be accessible
+            //
+            // # Error Handling
+            //
+            // All errors log and return gracefully (never panic):
+            // - Directory not found: Print error, return Ok(false)
+            // - Cannot get Uma executable path: Log error, return Ok(false)
+            // - tmux command fails: Log error, return Ok(false)
+            //
+            // If not in tmux session: Command fails silently (tmux returns error)
+            //
+            // # Command Line Executed
+            //
+            // ```bash
+            // tmux split-window -v "uma --passive_vsplit_message_mode /path/to/message_posts_browser"
+            // ```
+            //
+            // # Related Commands
+            //
+            // - "mp" / "message-passive": Opens in new terminal window
+            // - "mph" / "message-passive-hsplit": Opens in tmux horizontal split
+            // - "m" / "message": Opens interactive modal message browser
+            //
+            // # Related Functions
+            //
+            // - `optional_passive_mode()`: Handles --passive_vsplit_message_mode flag
+            // - `run_passive_message_mode()`: Runs the passive view loop
+            // - `passive_display_messages()`: Displays messages in passive view
+            "mpv" | "pmv" | "message-passive-vsplit" => {
+                debug_log("mpv command selected - launching passive message view in tmux vsplit");
+
+                // ============================================================
+                // PATH VALIDATION: Verify message directory exists
+                // ============================================================
+                let mut this_team_message_path = app.current_path.clone();
+                this_team_message_path.push("message_posts_browser");
+
+                debug_log!("mpv: message_path {:?}", this_team_message_path);
+
+                // Check if directory exists
+                if !this_team_message_path.exists() {
+                    println!("Message directory not found!");
+                    debug_log!("mpv: message directory does not exist: {:?}", this_team_message_path);
+                    return Ok(false);
+                }
+
+                // Convert path to string for command
+                let message_path_str = this_team_message_path.to_string_lossy().into_owned();
+
+                // ============================================================
+                // EXECUTABLE PATH: Get path to current Uma binary
+                // ============================================================
+                let uma_path = match env::current_exe() {
+                    Ok(path) => path,
+                    Err(e) => {
+                        debug_log!("mpv: Failed to get current executable path: {}", e);
+                        println!("Error: Cannot determine Uma executable path");
+                        return Ok(false);
+                    }
+                };
+
+                let uma_path_str = match uma_path.to_str() {
+                    Some(path_str) => path_str,
+                    None => {
+                        debug_log!("mpv: Failed to convert executable path to string");
+                        println!("Error: Invalid executable path");
+                        return Ok(false);
+                    }
+                };
+
+                // ============================================================
+                // TMUX COMMAND: Build and execute tmux split command
+                // ============================================================
+                // Build command string for tmux to execute in new pane
+                let uma_command = format!(
+                    "{} --passive_vsplit_message_mode {}",
+                    uma_path_str,
+                    message_path_str
+                );
+
+                debug_log!("mpv: Executing tmux command: split-window -v {}", uma_command);
+
+                // Execute tmux split-window command
+                match StdCommand::new("tmux")
+                    .args(["split-window", "-v", &uma_command])
+                    .spawn()
+                {
+                    Ok(_) => {
+                        debug_log!("mpv: Successfully launched passive view in tmux vsplit");
+                    }
+                    Err(e) => {
+                        debug_log!("mpv: Failed to create tmux vsplit: {}", e);
+                        println!("Error: Failed to create tmux split. Are you running inside tmux?");
+                        return Ok(false);
+                    }
+                }
+
+                debug_log!("mpv: Command handler completed successfully");
+            }
+
+            // Tmux Horizontal Split Message Passive View Handler
+            //
+            // Command aliases: "mph" | "pmh" | "message-passive-hsplit"
+            //
+            // # Purpose
+            //
+            // Launches passive message viewer in a new tmux horizontal split pane.
+            // Unlike the "mp" command which opens a new terminal window, this creates
+            // a split within the current tmux session for top-bottom viewing.
+            //
+            // # User Experience
+            //
+            // User types "mph" in main Uma application:
+            // - Current pane continues running Uma normally
+            // - New horizontal pane appears below (or above, depending on tmux config)
+            // - New pane shows passive message view (auto-refreshing, read-only)
+            // - User can switch between panes with tmux keybindings (default: Ctrl+b arrow)
+            // - Passive view runs independently until manually closed
+            //
+            // # Tmux Split Behavior
+            //
+            // Creates horizontal split with:
+            // - Direction: Horizontal (top-bottom panes)
+            // - Command: uma --passive_hsplit_message_mode [path]
+            // - Working directory: Inherited from current pane
+            // - Size: Equal split (tmux default, user can resize)
+            //
+            // # Process Flow
+            //
+            // 1. Validate current path + message_posts_browser directory exists
+            // 2. Get path to current Uma executable
+            // 3. Build tmux command string
+            // 4. Execute: tmux split-window -h "uma --passive_hsplit_message_mode [path]"
+            // 5. Main Uma continues in original pane
+            // 6. Passive view starts in new split pane
+            //
+            // # Prerequisites
+            //
+            // - Must be running inside a tmux session
+            // - tmux must be installed and available in PATH
+            // - Uma executable must be accessible
+            //
+            // # Error Handling
+            //
+            // All errors log and return gracefully (never panic):
+            // - Directory not found: Print error, return Ok(false)
+            // - Cannot get Uma executable path: Log error, return Ok(false)
+            // - tmux command fails: Log error, return Ok(false)
+            //
+            // If not in tmux session: Command fails silently (tmux returns error)
+            //
+            // # Command Line Executed
+            //
+            // ```bash
+            // tmux split-window -h "uma --passive_hsplit_message_mode /path/to/message_posts_browser"
+            // ```
+            //
+            // # Related Commands
+            //
+            // - "mp" / "message-passive": Opens in new terminal window
+            // - "mpv" / "message-passive-vsplit": Opens in tmux vertical split
+            // - "m" / "message": Opens interactive modal message browser
+            //
+            // # Related Functions
+            //
+            // - `optional_passive_mode()`: Handles --passive_hsplit_message_mode flag
+            // - `run_passive_message_mode()`: Runs the passive view loop
+            // - `passive_display_messages()`: Displays messages in passive view
+            "mph" | "pmh" | "message-passive-hsplit" => {
+                debug_log("mph command selected - launching passive message view in tmux hsplit");
+
+                // ============================================================
+                // PATH VALIDATION: Verify message directory exists
+                // ============================================================
+                let mut this_team_message_path = app.current_path.clone();
+                this_team_message_path.push("message_posts_browser");
+
+                debug_log!("mph: message_path {:?}", this_team_message_path);
+
+                // Check if directory exists
+                if !this_team_message_path.exists() {
+                    println!("Message directory not found!");
+                    debug_log!("mph: message directory does not exist: {:?}", this_team_message_path);
+                    return Ok(false);
+                }
+
+                // Convert path to string for command
+                let message_path_str = this_team_message_path.to_string_lossy().into_owned();
+
+                // ============================================================
+                // EXECUTABLE PATH: Get path to current Uma binary
+                // ============================================================
+                let uma_path = match env::current_exe() {
+                    Ok(path) => path,
+                    Err(e) => {
+                        debug_log!("mph: Failed to get current executable path: {}", e);
+                        println!("Error: Cannot determine Uma executable path");
+                        return Ok(false);
+                    }
+                };
+
+                let uma_path_str = match uma_path.to_str() {
+                    Some(path_str) => path_str,
+                    None => {
+                        debug_log!("mph: Failed to convert executable path to string");
+                        println!("Error: Invalid executable path");
+                        return Ok(false);
+                    }
+                };
+
+                // ============================================================
+                // TMUX COMMAND: Build and execute tmux split command
+                // ============================================================
+                // Build command string for tmux to execute in new pane
+                let uma_command = format!(
+                    "{} --passive_hsplit_message_mode {}",
+                    uma_path_str,
+                    message_path_str
+                );
+
+                debug_log!("mph: Executing tmux command: split-window -h {}", uma_command);
+
+                // Execute tmux split-window command
+                match StdCommand::new("tmux")
+                    .args(["split-window", "-h", &uma_command])
+                    .spawn()
+                {
+                    Ok(_) => {
+                        debug_log!("mph: Successfully launched passive view in tmux hsplit");
+                    }
+                    Err(e) => {
+                        debug_log!("mph: Failed to create tmux hsplit: {}", e);
+                        println!("Error: Failed to create tmux split. Are you running inside tmux?");
+                        return Ok(false);
+                    }
+                }
+
+                debug_log!("mph: Command handler completed successfully");
             }
 
             "mp" | "pm" | "message-passive" => {
@@ -32315,45 +32981,263 @@ pub fn no_restart_set_hard_reset_flag_to_false() -> Result<(), io::Error> {
 //     }
 //     return;
 // }
-/// Check for user input argument flag to launch int passive mode
-/// - message mode passsive
-/// or
-/// - task mode passive
-/// if so, return True (after running that mode)
-/// else: return false
+
+// /// Check for user input argument flag to launch int passive mode
+// /// - message mode passsive
+// /// or
+// /// - task mode passive
+// /// if so, return True (after running that mode)
+// /// else: return false
+// ///
+// /// use in main with:
+// /// ```
+// /// if optional_passive_mode() {
+// ///     return;
+// /// };
+// /// ```
+// ///
+// fn optional_passive_mode() -> bool {
+//     // TODO spin these two off into a function optional_passive_mode();
+//     // if return true, return?
+//     // Get command line arguments
+//     let args: Vec<String> = env::args().collect();
+//     // Check for passive message mode
+//     if args.len() >= 3 && args[1] == "--passive_message_mode" {
+//         let path = Path::new(&args[2]);
+//         if let Err(e) = run_passive_message_mode(path) {
+//             eprintln!("Error in passive message mode: {}", e);
+//             process::exit(1);
+//         }
+//         return true;
+//     }
+//     // Check for passive message mode
+//     if args.len() >= 3 && args[1] == "--passive_task_mode" {
+//         let path = Path::new(&args[2]);
+//         if let Err(e) = run_passive_task_mode(path) {
+//             eprintln!("Error in passive message mode: {}", e);
+//             process::exit(1);
+//         }
+//         return true;
+//     }
+
+//     return false;
+// }
+
+/// Check for Command-Line Flags to Launch Passive Mode
 ///
-/// use in main with:
-/// ```
-/// if optional_passive_mode() {
-///     return;
-/// };
+/// # Purpose
+///
+/// Detects if Uma was launched with a passive mode flag and, if so, runs
+/// the appropriate passive viewer instead of the main interactive application.
+/// This allows Uma to act as both an interactive application and a passive
+/// viewer depending on command-line arguments.
+///
+/// # Supported Passive Modes
+///
+/// 1. **Message Passive Mode** (new terminal window)
+///    - Flag: `--passive_message_mode [path]`
+///    - Launched by: "mp" / "pm" / "message-passive" commands
+///    - Creates: New terminal window with passive message viewer
+///
+/// 2. **Message Passive Vsplit Mode** (tmux vertical split)
+///    - Flag: `--passive_vsplit_message_mode [path]`
+///    - Launched by: "mpv" / "pmv" / "message-passive-vsplit" commands
+///    - Creates: Tmux vertical split pane with passive message viewer
+///
+/// 3. **Message Passive Hsplit Mode** (tmux horizontal split)
+///    - Flag: `--passive_hsplit_message_mode [path]`
+///    - Launched by: "mph" / "pmh" / "message-passive-hsplit" commands
+///    - Creates: Tmux horizontal split pane with passive message viewer
+///
+/// 4. **Task Passive Mode** (existing, for tasks)
+///    - Flag: `--passive_task_mode [path]`
+///    - Launched by: Task-related commands
+///    - Creates: Passive task viewer
+///
+/// # Usage in main()
+///
+/// This function should be called at the very start of main():
+///
+/// ```rust
+/// fn main() {
+///     // Check if launched in passive mode
+///     if optional_passive_mode() {
+///         return; // Exit main - passive mode handles everything
+///     }
+///
+///     // Otherwise, continue with normal interactive Uma startup
+///     // ...
+/// }
 /// ```
 ///
+/// # Process Flow
+///
+/// 1. Parse command-line arguments via `env::args()`
+/// 2. Check if first argument matches a passive mode flag
+/// 3. If match found:
+///    - Extract path from second argument
+///    - Run appropriate passive mode function
+///    - Return true (signaling main should exit)
+/// 4. If no match:
+///    - Return false (signaling main should continue normally)
+///
+/// # Passive Mode Execution
+///
+/// When a passive mode flag is detected:
+/// - The corresponding passive viewer function is called
+/// - That function enters an infinite refresh loop
+/// - Main() returns after the loop exits (user closes viewer)
+/// - Interactive Uma never starts
+///
+/// # Command-Line Format
+///
+/// All passive mode invocations follow this pattern:
+/// ```bash
+/// uma --[passive_mode_flag] /path/to/target/directory
+/// ```
+///
+/// Examples:
+/// ```bash
+/// # New terminal window
+/// uma --passive_message_mode /tmp/uma_team1/channel1/message_posts_browser
+///
+/// # Tmux vertical split
+/// uma --passive_vsplit_message_mode /tmp/uma_team1/channel1/message_posts_browser
+///
+/// # Tmux horizontal split
+/// uma --passive_hsplit_message_mode /tmp/uma_team1/channel1/message_posts_browser
+/// ```
+///
+/// # Error Handling
+///
+/// - If passive mode function returns error: Print to stderr and exit(1)
+/// - This ensures viewer failures don't leave zombie processes
+/// - Main Uma process is unaffected (different process)
+///
+/// # Return Value
+///
+/// * `true` - Passive mode was detected and executed (main should return)
+/// * `false` - No passive mode flag found (main should continue normally)
+///
+/// # Design Rationale
+///
+/// **Why check in main instead of during command handling?**
+/// - Passive viewers run in separate processes
+/// - They need to skip entire Uma initialization
+/// - Checking at main entry is most efficient
+///
+/// **Why same function for all passive modes?**
+/// - Single point of truth for passive mode detection
+/// - Easier to maintain and extend
+/// - Consistent error handling across all modes
+///
+/// **Why exit(1) on error instead of returning error?**
+/// - Passive viewers are spawned processes, not library calls
+/// - Need definitive termination signal for parent process
+/// - Stderr message already printed for debugging
+///
+/// # Related Functions
+///
+/// - `run_passive_message_mode()`: Message viewer refresh loop
+/// - `run_passive_task_mode()`: Task viewer refresh loop
+/// - Command handlers: "mp", "mpv", "mph" that spawn with these flags
+///
+/// # Future Extensions
+///
+/// To add new passive modes:
+/// 1. Add new flag check in this function
+/// 2. Create corresponding `run_passive_*_mode()` function
+/// 3. Add command handler that spawns with new flag
 fn optional_passive_mode() -> bool {
-    // TODO spin these two off into a function optional_passive_mode();
-    // if return true, return?
+    debug_log("OPM: Checking for passive mode command-line flags");
+
     // Get command line arguments
     let args: Vec<String> = env::args().collect();
-    // Check for passive message mode
+
+    // Log arguments for debugging
+    debug_log!("OPM: Command-line args: {:?}", args);
+
+    // ============================================================
+    // MESSAGE PASSIVE MODE: New terminal window
+    // ============================================================
     if args.len() >= 3 && args[1] == "--passive_message_mode" {
+        debug_log!("OPM: Detected --passive_message_mode flag");
+
         let path = Path::new(&args[2]);
+        debug_log!("OPM: Message path: {:?}", path);
+
         if let Err(e) = run_passive_message_mode(path) {
             eprintln!("Error in passive message mode: {}", e);
+            debug_log!("OPM: Passive message mode failed: {}", e);
             process::exit(1);
         }
-        return true;
-    }
-    // Check for passive message mode
-    if args.len() >= 3 && args[1] == "--passive_task_mode" {
-        let path = Path::new(&args[2]);
-        if let Err(e) = run_passive_task_mode(path) {
-            eprintln!("Error in passive message mode: {}", e);
-            process::exit(1);
-        }
+
+        debug_log!("OPM: Passive message mode completed");
         return true;
     }
 
-    return false;
+    // ============================================================
+    // MESSAGE PASSIVE VSPLIT MODE: Tmux vertical split
+    // ============================================================
+    if args.len() >= 3 && args[1] == "--passive_vsplit_message_mode" {
+        debug_log!("OPM: Detected --passive_vsplit_message_mode flag");
+
+        let path = Path::new(&args[2]);
+        debug_log!("OPM: Message path (vsplit): {:?}", path);
+
+        if let Err(e) = run_passive_message_mode(path) {
+            eprintln!("Error in passive message vsplit mode: {}", e);
+            debug_log!("OPM: Passive message vsplit mode failed: {}", e);
+            process::exit(1);
+        }
+
+        debug_log!("OPM: Passive message vsplit mode completed");
+        return true;
+    }
+
+    // ============================================================
+    // MESSAGE PASSIVE HSPLIT MODE: Tmux horizontal split
+    // ============================================================
+    if args.len() >= 3 && args[1] == "--passive_hsplit_message_mode" {
+        debug_log!("OPM: Detected --passive_hsplit_message_mode flag");
+
+        let path = Path::new(&args[2]);
+        debug_log!("OPM: Message path (hsplit): {:?}", path);
+
+        if let Err(e) = run_passive_message_mode(path) {
+            eprintln!("Error in passive message hsplit mode: {}", e);
+            debug_log!("OPM: Passive message hsplit mode failed: {}", e);
+            process::exit(1);
+        }
+
+        debug_log!("OPM: Passive message hsplit mode completed");
+        return true;
+    }
+
+    // ============================================================
+    // TASK PASSIVE MODE: Existing task viewer
+    // ============================================================
+    if args.len() >= 3 && args[1] == "--passive_task_mode" {
+        debug_log!("OPM: Detected --passive_task_mode flag");
+
+        let path = Path::new(&args[2]);
+        debug_log!("OPM: Task path: {:?}", path);
+
+        if let Err(e) = run_passive_task_mode(path) {
+            eprintln!("Error in passive task mode: {}", e);
+            debug_log!("OPM: Passive task mode failed: {}", e);
+            process::exit(1);
+        }
+
+        debug_log!("OPM: Passive task mode completed");
+        return true;
+    }
+
+    // ============================================================
+    // NO PASSIVE MODE: Continue with normal Uma startup
+    // ============================================================
+    debug_log!("OPM: No passive mode flag detected, continuing normal startup");
+    false
 }
 
 /*

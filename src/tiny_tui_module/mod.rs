@@ -148,10 +148,204 @@ pub mod tiny_tui {
     //     }
     // }
 
-    /// for passive view mode
-    /// this should contain some indication of passive-mode
+    // /// for passive view mode
+    // /// this should contain some indication of passive-mode
+    // pub fn simple_render_list_passive(list: &Vec<String>, current_path: &Path) {
+    //     // Display path
+    //     let path_components: Vec<_> = current_path.components().collect();
+    //     if path_components.len() > 2 {
+    //         let relevant_path = path_components[2..]
+    //             .iter()
+    //             .map(|c| c.as_os_str().to_string_lossy())
+    //             .collect::<Vec<_>>()
+    //             .join("/");
+    //         println!("Current Path: /{}", relevant_path);
+    //     }
+
+    //     // Display messages
+    //     for (i, item) in list.iter().enumerate() {
+    //         println!("{}. {}", i + 1, item);
+    //     }
+    // }
+
+    /// Render Message List for Passive View with Bottom-Scroll Display
+    ///
+    /// # Purpose
+    ///
+    /// Displays a list of messages in passive (read-only) view mode with automatic
+    /// bottom-scroll behavior. Shows the most recent N messages (where N=18, the
+    /// default POSIX terminal height), simulating a scrolled-down view of a message
+    /// feed. This matches the interactive view's default scrolldown position but
+    /// without interactive controls.
+    ///
+    /// # Display Behavior
+    ///
+    /// **Bottom-Scroll Logic (Scrolldown Default):**
+    /// - If total messages ≤ 18: Show all messages from beginning
+    /// - If total messages > 18: Show only last 18 messages (most recent)
+    ///
+    /// This creates a "bottom of the scroll" view where new messages appear
+    /// at the bottom and old messages scroll off the top automatically.
+    ///
+    /// # Display Format
+    ///
+    /// ```text
+    /// Current Path: /team_name/channel_name/message_posts_browser
+    /// [Showing last 18 of 42 messages]
+    ///
+    /// 25. alice: Hello everyone
+    /// 26. bob: Hi Alice!
+    /// 27. charlie: Good morning
+    /// ...
+    /// 42. alice: Latest message here
+    /// ```
+    ///
+    /// # Message Numbering
+    ///
+    /// Messages retain their original sequential numbers from the full list:
+    /// - Full list has messages 1-42
+    /// - Display shows messages 25-42 (last 18)
+    /// - Numbering reflects position in full list, not display position
+    ///
+    /// This helps users understand:
+    /// - How many total messages exist
+    /// - Which portion they're viewing
+    /// - That older messages exist but aren't shown
+    ///
+    /// # Height Configuration
+    ///
+    /// Hard-coded constant for passive view:
+    /// - `PASSIVE_VIEW_HEIGHT = 18`
+    /// - Based on default POSIX terminal height
+    /// - Not configurable in passive mode (unlike interactive mode)
+    /// - Ensures consistent display across all passive view instances
+    ///
+    /// # Path Display
+    ///
+    /// Shows relevant path components:
+    /// - Strips first two components (typically /tmp/uma_* or similar base)
+    /// - Shows team/channel/message_posts_browser hierarchy
+    /// - Helps user identify which channel they're viewing
+    /// - Format: "Current Path: /team/channel/message_posts_browser"
+    ///
+    /// # Passive Mode Indicators
+    ///
+    /// Clear visual indicators that this is passive mode:
+    /// - Header banner: "PASSIVE VIEW MODE"
+    /// - Subtitle: "(Auto-refresh, read-only, no input)"
+    /// - Message count indicator when scrolled: "[Showing last N of M messages]"
+    ///
+    /// These indicators prevent confusion with interactive mode and set
+    /// correct user expectations (no input, auto-refresh only).
+    ///
+    /// # Comparison with Interactive Version
+    ///
+    /// **Interactive (`render_message_browser_screen`):**
+    /// - Shows mode indicator (Refresh/Insert)
+    /// - Shows input buffer
+    /// - User can scroll with j/k commands
+    /// - Variable height (user can adjust)
+    /// - Shows pagination controls
+    ///
+    /// **Passive (this function):**
+    /// - Shows passive mode indicator
+    /// - No input buffer
+    /// - No scroll controls (always bottom-scroll)
+    /// - Fixed height (18 lines)
+    /// - No pagination controls
+    ///
+    /// # Empty Channel Handling
+    ///
+    /// If message list is empty:
+    /// - Shows passive mode header
+    /// - Shows path
+    /// - Shows "(No messages yet)" indicator
+    /// - Does not prompt for input (unlike interactive mode)
+    ///
+    /// # Error Handling
+    ///
+    /// This function performs display only, no I/O operations:
+    /// - No file reading (receives pre-built list)
+    /// - No user input (passive mode)
+    /// - No network operations
+    /// - Cannot fail in normal operation
+    ///
+    /// Edge cases handled:
+    /// - Empty list: Shows empty indicator
+    /// - Single message: Shows that one message
+    /// - Exactly 18 messages: Shows all (no scroll indicator)
+    /// - More than 18: Shows last 18 with scroll indicator
+    ///
+    /// # Performance Notes
+    ///
+    /// - Slice operation for bottom N is O(1) reference
+    /// - No copying of message data
+    /// - Minimal string allocation (only for display formatting)
+    /// - Suitable for lists with thousands of messages
+    ///
+    /// # Parameters
+    ///
+    /// * `list` - Complete list of formatted messages (format: "owner: text")
+    /// * `current_path` - Path to message directory for display
+    ///
+    /// # Returns
+    ///
+    /// This function does not return a value (display only).
+    ///
+    /// # Related Functions
+    ///
+    /// - `passive_display_messages()` - Builds message list and calls this
+    /// - `render_message_browser_screen()` - Interactive equivalent
+    /// - `run_passive_message_mode()` - Refresh loop that triggers display
+    ///
+    /// # Example Usage
+    ///
+    /// ```no_run
+    /// use std::path::Path;
+    ///
+    /// let messages = vec![
+    ///     "alice: Hello".to_string(),
+    ///     "bob: Hi there".to_string(),
+    ///     // ... many more messages ...
+    /// ];
+    /// let path = Path::new("/path/to/team/channel/message_posts_browser");
+    ///
+    /// simple_render_list_passive(&messages, path);
+    /// // Displays last 18 messages with passive mode indicator
+    /// ```
+    ///
+    /// # Design Rationale
+    ///
+    /// **Why bottom-scroll default?**
+    /// - Matches chat/messaging UX conventions (newest at bottom)
+    /// - Matches interactive view's default position
+    /// - Most users want to see recent messages first
+    /// - Simulates natural "scrolled down" reading position
+    ///
+    /// **Why fixed height?**
+    /// - Passive mode has no user interaction to adjust height
+    /// - Consistent experience across all passive view instances
+    /// - Matches standard POSIX terminal default
+    /// - Simplifies implementation (no state management)
+    ///
+    /// **Why show message numbers from full list?**
+    /// - User can see total message count
+    /// - User can see they're viewing a subset
+    /// - Numbers remain stable (don't change when scrolling in interactive)
+    /// - Helps identify specific messages when switching between views
     pub fn simple_render_list_passive(list: &Vec<String>, current_path: &Path) {
-        // Display path
+        // ============================================================
+        // CONFIGURATION: Hard-coded height for passive view
+        // ============================================================
+        const PASSIVE_VIEW_HEIGHT: usize = 18;
+
+        // ============================================================
+        // HEADER: Display passive mode indicator
+        // ============================================================
+
+        // ============================================================
+        // PATH DISPLAY: Show relevant path components
+        // ============================================================
         let path_components: Vec<_> = current_path.components().collect();
         if path_components.len() > 2 {
             let relevant_path = path_components[2..]
@@ -159,13 +353,58 @@ pub mod tiny_tui {
                 .map(|c| c.as_os_str().to_string_lossy())
                 .collect::<Vec<_>>()
                 .join("/");
-            println!("Current Path: /{}", relevant_path);
+            println!("Current Path: /{}\n", relevant_path);
+        } else {
+            // Fallback: show full path if structure unexpected
+            println!("Current Path: {}\n", current_path.display());
         }
 
-        // Display messages
-        for (i, item) in list.iter().enumerate() {
-            println!("{}. {}", i + 1, item);
+        // ============================================================
+        // EMPTY LIST HANDLING: Show indicator for empty channel
+        // ============================================================
+        if list.is_empty() {
+            println!("(No messages yet)\n");
+            return;
         }
+
+        // ============================================================
+        // SCROLLDOWN CALCULATION: Determine which messages to display
+        // ============================================================
+        let total_message_count = list.len();
+
+        // Calculate display range (bottom N messages)
+        let (display_start_index, display_messages) = if total_message_count <= PASSIVE_VIEW_HEIGHT
+        {
+            // Show all messages if list is short enough
+            (0, &list[..])
+        } else {
+            // Show only last N messages (bottom-scroll)
+            let start_index = total_message_count - PASSIVE_VIEW_HEIGHT;
+            (start_index, &list[start_index..])
+        };
+
+        // ============================================================
+        // SCROLL INDICATOR: Show if viewing subset of messages
+        // ============================================================
+        if total_message_count > PASSIVE_VIEW_HEIGHT {
+            println!(
+                "[Showing last {} of {} messages]",
+                PASSIVE_VIEW_HEIGHT, total_message_count
+            );
+        }
+
+        // ============================================================
+        // MESSAGE DISPLAY: Render messages with original numbering
+        // ============================================================
+        for (display_index, message) in display_messages.iter().enumerate() {
+            // Calculate original message number (1-indexed from full list)
+            let original_message_number = display_start_index + display_index + 1;
+
+            println!("{}. {}", original_message_number, message);
+        }
+
+        // Add blank line for spacing
+        println!();
     }
 
     /// Converts a Unix timestamp (seconds since 1970-01-01 00:00:00 UTC) to a YYYY-MM-DD formatted date string
@@ -200,131 +439,131 @@ pub mod tiny_tui {
 
     use crate::clearsign_toml_module::read_single_line_string_field_from_toml;
 
-    /// for passive view mode
-    /// Display instant messages in passive (read-only) view mode
-    ///
-    /// # Purpose
-    ///
-    /// Loads and displays all instant message files from a specified directory
-    /// in read-only mode. Unlike `load_im_messages()`, this function reads plain
-    /// TOML files directly without GPG encryption/signature handling and renders
-    /// them without interactive TUI state.
-    ///
-    /// # Process Flow
-    ///
-    /// 1. Collect all file entries from target directory (max depth 1)
-    /// 2. Sort entries by numeric prefix in filename (1__, 2__, 3__, etc.)
-    /// 3. For each file (excluding 0.toml metadata):
-    ///    - Read owner field from TOML
-    ///    - Read text_message field from TOML
-    ///    - Add formatted message to display list
-    ///    - Skip files with read errors (logged in debug builds)
-    /// 4. Render complete message list in passive view
-    ///
-    /// # Message File Formats
-    ///
-    /// - `.toml` files: Plain TOML format with `owner` and `text_message` fields
-    /// - `0.toml`: Metadata file (excluded from message list)
-    /// - Expected filename format: `<number>__<identifier>.toml` (e.g., `1__alice.toml`)
-    ///
-    /// # Sorting Behavior
-    ///
-    /// Messages are sorted by extracting the numeric prefix before the first `__`
-    /// in the filename:
-    /// - `1__alice.toml` → 1
-    /// - `2__bob.toml` → 2
-    /// - `15__charlie.toml` → 15
-    /// - Files without numeric prefix are placed at the end (sorted as u64::MAX)
-    ///
-    /// # Error Handling
-    ///
-    /// - Individual file read errors are logged (debug builds) and skipped
-    /// - Allows partial message display if some files are malformed
-    /// - Directory traversal errors propagate as `io::Result::Err`
-    ///
-    /// # Parameters
-    ///
-    /// * `path` - Directory path containing message TOML files
-    ///
-    /// # Returns
-    ///
-    /// * `Ok(())` - Messages successfully loaded and displayed
-    /// * `Err(io::Error)` - Directory traversal or access error
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// use std::path::Path;
-    ///
-    /// let channel_path = Path::new("/path/to/channel");
-    /// passive_display_messages(channel_path)?;
-    /// ```
-    pub fn passive_display_messages(path: &Path) -> io::Result<()> {
-        let mut message_list = Vec::new();
+    // /// for passive view mode
+    // /// Display instant messages in passive (read-only) view mode
+    // ///
+    // /// # Purpose
+    // ///
+    // /// Loads and displays all instant message files from a specified directory
+    // /// in read-only mode. Unlike `load_im_messages()`, this function reads plain
+    // /// TOML files directly without GPG encryption/signature handling and renders
+    // /// them without interactive TUI state.
+    // ///
+    // /// # Process Flow
+    // ///
+    // /// 1. Collect all file entries from target directory (max depth 1)
+    // /// 2. Sort entries by numeric prefix in filename (1__, 2__, 3__, etc.)
+    // /// 3. For each file (excluding 0.toml metadata):
+    // ///    - Read owner field from TOML
+    // ///    - Read text_message field from TOML
+    // ///    - Add formatted message to display list
+    // ///    - Skip files with read errors (logged in debug builds)
+    // /// 4. Render complete message list in passive view
+    // ///
+    // /// # Message File Formats
+    // ///
+    // /// - `.toml` files: Plain TOML format with `owner` and `text_message` fields
+    // /// - `0.toml`: Metadata file (excluded from message list)
+    // /// - Expected filename format: `<number>__<identifier>.toml` (e.g., `1__alice.toml`)
+    // ///
+    // /// # Sorting Behavior
+    // ///
+    // /// Messages are sorted by extracting the numeric prefix before the first `__`
+    // /// in the filename:
+    // /// - `1__alice.toml` → 1
+    // /// - `2__bob.toml` → 2
+    // /// - `15__charlie.toml` → 15
+    // /// - Files without numeric prefix are placed at the end (sorted as u64::MAX)
+    // ///
+    // /// # Error Handling
+    // ///
+    // /// - Individual file read errors are logged (debug builds) and skipped
+    // /// - Allows partial message display if some files are malformed
+    // /// - Directory traversal errors propagate as `io::Result::Err`
+    // ///
+    // /// # Parameters
+    // ///
+    // /// * `path` - Directory path containing message TOML files
+    // ///
+    // /// # Returns
+    // ///
+    // /// * `Ok(())` - Messages successfully loaded and displayed
+    // /// * `Err(io::Error)` - Directory traversal or access error
+    // ///
+    // /// # Example
+    // ///
+    // /// ```no_run
+    // /// use std::path::Path;
+    // ///
+    // /// let channel_path = Path::new("/path/to/channel");
+    // /// passive_display_messages(channel_path)?;
+    // /// ```
+    // pub fn passive_display_messages(path: &Path) -> io::Result<()> {
+    //     let mut message_list = Vec::new();
 
-        // Collect all entries first
-        let mut entries: Vec<_> = WalkDir::new(path)
-            .max_depth(1)
-            .into_iter()
-            .filter_map(|entry| entry.ok())
-            .filter(|entry| entry.path().is_file())
-            .collect();
+    //     // Collect all entries first
+    //     let mut entries: Vec<_> = WalkDir::new(path)
+    //         .max_depth(1)
+    //         .into_iter()
+    //         .filter_map(|entry| entry.ok())
+    //         .filter(|entry| entry.path().is_file())
+    //         .collect();
 
-        // Sort entries by numeric prefix in filename (1__, 2__, 3__, etc.)
-        entries.sort_by_key(|entry| {
-            entry
-                .path()
-                .file_name()
-                .and_then(|n| n.to_str())
-                .and_then(|s| s.split("__").next()) // Get part before "__"
-                .and_then(|num_str| num_str.parse::<u64>().ok()) // Parse as number
-                .unwrap_or(u64::MAX) // Put unparseable names at end
-        });
+    //     // Sort entries by numeric prefix in filename (1__, 2__, 3__, etc.)
+    //     entries.sort_by_key(|entry| {
+    //         entry
+    //             .path()
+    //             .file_name()
+    //             .and_then(|n| n.to_str())
+    //             .and_then(|s| s.split("__").next()) // Get part before "__"
+    //             .and_then(|num_str| num_str.parse::<u64>().ok()) // Parse as number
+    //             .unwrap_or(u64::MAX) // Put unparseable names at end
+    //     });
 
-        // Process sorted entries
-        for entry in entries {
-            let file_name = entry.file_name().to_string_lossy();
-            if file_name != "0.toml" {
-                let owner = match read_single_line_string_field_from_toml(
-                    &entry.path().to_string_lossy(),
-                    "owner",
-                ) {
-                    Ok(o) => o,
-                    Err(e) => {
-                        #[cfg(debug_assertions)]
-                        debug_log!(
-                            "PDM: Failed to read owner field from {:?}: {} (skipping)",
-                            entry.path(),
-                            e
-                        );
-                        continue;
-                    }
-                };
+    //     // Process sorted entries
+    //     for entry in entries {
+    //         let file_name = entry.file_name().to_string_lossy();
+    //         if file_name != "0.toml" {
+    //             let owner = match read_single_line_string_field_from_toml(
+    //                 &entry.path().to_string_lossy(),
+    //                 "owner",
+    //             ) {
+    //                 Ok(o) => o,
+    //                 Err(e) => {
+    //                     #[cfg(debug_assertions)]
+    //                     debug_log!(
+    //                         "PDM: Failed to read owner field from {:?}: {} (skipping)",
+    //                         entry.path(),
+    //                         e
+    //                     );
+    //                     continue;
+    //                 }
+    //             };
 
-                let text_message = match read_single_line_string_field_from_toml(
-                    &entry.path().to_string_lossy(),
-                    "text_message",
-                ) {
-                    Ok(o) => o,
-                    Err(e) => {
-                        #[cfg(debug_assertions)]
-                        debug_log!(
-                            "PDM: Failed to read text_message field from {:?}: {} (skipping)",
-                            entry.path(),
-                            e
-                        );
-                        continue;
-                    }
-                };
+    //             let text_message = match read_single_line_string_field_from_toml(
+    //                 &entry.path().to_string_lossy(),
+    //                 "text_message",
+    //             ) {
+    //                 Ok(o) => o,
+    //                 Err(e) => {
+    //                     #[cfg(debug_assertions)]
+    //                     debug_log!(
+    //                         "PDM: Failed to read text_message field from {:?}: {} (skipping)",
+    //                         entry.path(),
+    //                         e
+    //                     );
+    //                     continue;
+    //                 }
+    //             };
 
-                message_list.push(format!("{}: {}", owner, text_message));
-            }
-        }
+    //             message_list.push(format!("{}: {}", owner, text_message));
+    //         }
+    //     }
 
-        // Display using modified version of simple_render_list
-        simple_render_list_passive(&message_list, path);
-        Ok(())
-    }
+    //     // Display using modified version of simple_render_list
+    //     simple_render_list_passive(&message_list, path);
+    //     Ok(())
+    // }
 
     //////////////////
     // Tables, Tasks
