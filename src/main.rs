@@ -5597,6 +5597,28 @@ fn get_collaborator_names_from_node_toml(node_toml_path: &Path) -> Result<Vec<St
     Ok(collaborator_names_array)
 }
 
+/// Calculate the visible message range for pagination
+/// Returns (start_index, end_index) for slicing tui_textmessage_list
+fn calculate_message_display_range(
+    total_messages: usize,
+    tui_height: usize,
+    messagepost_display_offset: usize,
+) -> (usize, usize) {
+    // Guard: if messages fit in one screen, show all
+    if total_messages <= tui_height {
+        return (0, total_messages);
+    }
+
+    // Calculate base and effective offsets
+    let base_offset = total_messages.saturating_sub(tui_height);
+    let effective_offset = base_offset.saturating_sub(messagepost_display_offset);
+
+    // Calculate end (capped at total)
+    let end_index = (effective_offset + tui_height).min(total_messages);
+
+    (effective_offset, end_index)
+}
+
 /// Extracts the abstract port assignments from a team channel's `node.toml` file.
 ///
 /// This function reads the `node.toml` file, parses the TOML data, and extracts the
@@ -5849,7 +5871,9 @@ struct App {
     tui_file_list: Vec<String>,       // For files in the current path
     tui_focus: usize,                  // Index of the highlighted item in the TUI list
     tui_textmessage_list: Vec<String>, // Content of messages in the current IM conversation
-    tui_width: usize,
+    messagepost_display_offset: usize,    //
+
+    tui_width: usize,               // the number of items to display is dereived from this
     tui_height: usize,
 
     current_path: PathBuf,              // Current directory being used
@@ -5909,8 +5933,9 @@ impl App {
             tui_file_list: Vec::new(), // Initialize files
             tui_directory_list: Vec::new(), // Initialize files
             tui_textmessage_list: Vec::new(), // Initialize files
+            messagepost_display_offset: 0,
             tui_width: 80, // default posix terminal size
-            tui_height: 42, // default posix terminal size
+            tui_height: 17, // default posix terminal size
             command_input_integer: None,
             current_command_input: None,
             current_text_input: None,
@@ -6278,6 +6303,39 @@ impl App {
                                 self.create_custom_message_interactive()?;
                                 self.load_im_messages();
                                 needs_display_refresh = true;
+                            },
+
+                            // Pagination commands
+                            "k" | "up" => {
+                                // Page up (older messages)
+                                let base_offset = self.tui_textmessage_list.len()
+                                    .saturating_sub(self.tui_height);
+                                if self.messagepost_display_offset < base_offset {
+                                    self.messagepost_display_offset += 1;
+                                    needs_display_refresh = true;
+                                }
+                                user_input_buffer.clear();
+                            },
+                            "j" | "down" => {
+                                // Page down (newer messages)
+                                if self.messagepost_display_offset > 0 {
+                                    self.messagepost_display_offset =
+                                        self.messagepost_display_offset.saturating_sub(1);
+                                    needs_display_refresh = true;
+                                }
+                                user_input_buffer.clear();
+                            },
+                            "tall+" => {
+                                self.tui_height += 1;
+                                needs_display_refresh = true;
+                                user_input_buffer.clear();
+                            },
+                            "tall-" => {
+                                if self.tui_height > 1 {
+                                    self.tui_height = self.tui_height.saturating_sub(1);
+                                    needs_display_refresh = true;
+                                }
+                                user_input_buffer.clear();
                             },
                             _ => {
                                 // println!("EMMPB calling ANMFI");
@@ -6738,7 +6796,21 @@ impl App {
         let _ = write_formatted_messagepost_legend_to_tui();
 
         // 1. Display messages using existing function
-        tiny_tui::simple_render_list(&self.tui_textmessage_list, &self.current_path);
+        // tiny_tui::simple_render_list(&self.tui_textmessage_list, &self.current_path);
+        // Calculate visible range
+        let (start_idx, end_idx) = calculate_message_display_range(
+            self.tui_textmessage_list.len(),
+            self.tui_height,
+            self.messagepost_display_offset,
+        );
+
+        // Create slice and convert to Vec for simple_render_list
+        let visible_messages: Vec<String> = self.tui_textmessage_list[start_idx..end_idx]
+            .to_vec();
+
+        // Display with pagination info in path/header
+        tiny_tui::simple_render_list(&visible_messages, &self.current_path);
+
 
         // 2. Fill remaining space to position info bar correctly
         let path_lines = 6; // Header line showing path
@@ -6751,12 +6823,16 @@ impl App {
 
         // 3. Display mode info bar with clear instructions
         match message_view_mode {
-            MessageViewMode::Refresh => print!("\\|/  Refresh Mode (empty-Enter -> insert) > "),
-            MessageViewMode::Insert => print!(">_  Insert Mode (empty-Enter -> refresh) try --custom > "),
+            MessageViewMode::Refresh => print!("\\|/  Refresh Mode "),
+            MessageViewMode::Insert => print!(">_  Insert Mode "),
         }
 
         // 4. Display input prompt with current buffer
-        print!("{}", input_buffer);
+        // print!("{}", input_buffer);
+        // println!("Showing {}-{} of {} | ↑k ↓j | ↑↓:{} >",             start_idx + 1, end_idx, self.tui_textmessage_list.len(), self.tui_height);
+
+        println!("Showing {}-{} of {} | ↑k ↓j >",
+            start_idx + 1, end_idx, self.tui_textmessage_list.len());
         io::stdout().flush()
     }
 
@@ -7803,18 +7879,21 @@ fn write_formatted_messagepost_legend_to_tui() -> Result<(),Error> {
     // write_red_hotkey("M", "essage|")?;
 
     // write_red_hotkey("A", "dd Node|")?;
-    write_red_hotkey("Enter", " toggle Refesh/Insert mode|")?;
-    write_red_hotkey("--custom", " config")?;
+    write_red_hotkey("Enter", " toggle Refesh/Insert|")?;
+    write_red_hotkey("--custom", "|")?;
     // write_red_hotkey("hex", " ")?;
 
     // // View operations group
-    // write_red_hotkey("r", "aw|")?;
-    // write_red_hotkey("p", "asty ")?;
+    write_red_hotkey("tall-", " ")?;
+    write_red_hotkey("tall+", "|")?;
     // write_red_hotkey("cvy", "|")?;
 
     // // Navigation group
-    // write_red_hotkey("w", "rd,")?;
-    // write_red_hotkey("b", ",")?;
+    write_red_hotkey("k", "/")?;
+    write_red_hotkey("up", " ")?;
+    write_red_hotkey("j", "/")?;
+    write_red_hotkey("down", "|")?;
+
     // write_red_hotkey("e", "nd ")?;
 
     // // Comment/indent group
@@ -31431,6 +31510,8 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
 
     // bootstrap: TUI display:
     print!("\x1B[2J\x1B[1;1H"); // Clear the screen
+    let _ = write_formatted_navigation_legend_to_tui();
+
     tiny_tui::simple_render_list(
         &app.tui_directory_list,
         &app.current_path,
@@ -31746,6 +31827,8 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         debug_log!("app.current_path.to_string_lossy() -> {:?}", app.current_path.to_string_lossy());
 
         if app.current_path.to_string_lossy() == "project_graph_data/team_channels" {
+            let _ = write_formatted_navigation_legend_to_tui();
+            println!("Select a Team-Channel (by number):");
             tiny_tui::simple_render_list(
                 &app.tui_directory_list,
                 &app.current_path);

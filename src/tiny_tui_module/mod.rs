@@ -101,8 +101,8 @@ pub mod tiny_tui {
                 .map(|c| c.as_os_str().to_string_lossy())
                 .collect::<Vec<_>>()
                 .join("/");
-            let _ = write_formatted_navigation_legend_to_tui();
-            println!("Select a Team-Channel (by number):");
+            // let _ = write_formatted_navigation_legend_to_tui();
+            // println!("Select a Team-Channel (by number):");
             println!("Current Path: /{}", relevant_path);
         } else {
             println!("Select a Team-Channel (by number):");
@@ -113,6 +113,40 @@ pub mod tiny_tui {
             println!("{}. {}", i + 1, item);
         }
     }
+
+    // /// doc strings needed
+    // /// I thnk this is for message-mode view
+    // /// which may work for various text line items
+    // /// - instand messenger
+    // /// - votes polls surveys
+    // ///
+    // /// switching to absolute paths...the system for getting the
+    // /// path from home directory may need to change
+    // ///
+    // pub fn simple_render_list(list: &Vec<String>, current_path: &Path) {
+    //     // 1. Get the path components
+    //     let path_components: Vec<_> = current_path.components().collect();
+
+    //     // this no longer works
+    //     // 2. Display the path, skipping the first two components
+    //     if path_components.len() > 2 {
+    //         let relevant_path = path_components[2..]
+    //             .iter()
+    //             .map(|c| c.as_os_str().to_string_lossy())
+    //             .collect::<Vec<_>>()
+    //             .join("/");
+    //         // let _ = write_formatted_navigation_legend_to_tui();
+    //         println!("Select a Team-Channel (by number):");
+    //         println!("Current Path: /{}", relevant_path);
+    //     } else {
+    //         println!("Select a Team-Channel (by number):");
+    //     }
+
+    //     // 3. Display the list items as before
+    //     for (i, item) in list.iter().enumerate() {
+    //         println!("{}. {}", i + 1, item);
+    //     }
+    // }
 
     /// for passive view mode
     /// this should contain some indication of passive-mode
