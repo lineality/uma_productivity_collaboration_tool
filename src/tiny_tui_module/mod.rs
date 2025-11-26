@@ -9,6 +9,7 @@ pub mod tiny_tui {
         Write,
         debug_log,
         write_formatted_navigation_legend_to_tui,
+        write_formatted_taskbored_legend_to_tui,
     };
     use std::fs;
     use std::fs::read_dir;
@@ -337,7 +338,7 @@ pub mod tiny_tui {
         // ============================================================
         // CONFIGURATION: Hard-coded height for passive view
         // ============================================================
-        const PASSIVE_VIEW_HEIGHT: usize = 18;
+        const PASSIVE_VIEW_HEIGHT: usize = 17;
 
         // ============================================================
         // HEADER: Display passive mode indicator
@@ -353,10 +354,10 @@ pub mod tiny_tui {
                 .map(|c| c.as_os_str().to_string_lossy())
                 .collect::<Vec<_>>()
                 .join("/");
-            println!("Current Path: /{}\n", relevant_path);
+            println!("View MessagePosts: /{}", relevant_path);
         } else {
             // Fallback: show full path if structure unexpected
-            println!("Current Path: {}\n", current_path.display());
+            println!("View MessagePosts: {}", current_path.display());
         }
 
         // ============================================================
@@ -384,16 +385,6 @@ pub mod tiny_tui {
         };
 
         // ============================================================
-        // SCROLL INDICATOR: Show if viewing subset of messages
-        // ============================================================
-        if total_message_count > PASSIVE_VIEW_HEIGHT {
-            println!(
-                "[Showing last {} of {} messages]",
-                PASSIVE_VIEW_HEIGHT, total_message_count
-            );
-        }
-
-        // ============================================================
         // MESSAGE DISPLAY: Render messages with original numbering
         // ============================================================
         for (display_index, message) in display_messages.iter().enumerate() {
@@ -403,8 +394,15 @@ pub mod tiny_tui {
             println!("{}. {}", original_message_number, message);
         }
 
-        // Add blank line for spacing
-        println!();
+        // ============================================================
+        // SCROLL INDICATOR: Show if viewing subset of messages
+        // ============================================================
+        if total_message_count > PASSIVE_VIEW_HEIGHT {
+            println!(
+                "Last {}:{} , ctrl+c to close, ctrl+b -> o tmux toggle",
+                PASSIVE_VIEW_HEIGHT, total_message_count
+            );
+        }
     }
 
     /// Converts a Unix timestamp (seconds since 1970-01-01 00:00:00 UTC) to a YYYY-MM-DD formatted date string
@@ -573,13 +571,15 @@ pub mod tiny_tui {
         debug_log("starting: render_tasks_list");
         // 1. Display Current Path
         print!("\x1B[2J\x1B[1;1H"); // Clear the screen
-        println!("Current Path: {}", current_path.display());
+        let _ = write_formatted_taskbored_legend_to_tui();
+        println!("Tasks: {}", current_path.display());
 
         // 2. Display Table (reuse display_tasks_table from tiny_tui_module)
         display_tasks_table(headers, data);
 
         // 3. (Optional) Display any other task-specific information or instructions.
-        println!("Select a Task (by number):");
+        // TODO: why not printing?
+        println!("\nSelect Task (by number) > ");
     }
 
     // pub fn render_list(list: &Vec<String>, current_path: &Path) {
@@ -658,13 +658,13 @@ pub mod tiny_tui {
         debug_log("starting: render_tasks_table_passive");
         // 1. Display Current Path
         print!("\x1B[2J\x1B[1;1H"); // Clear the screen
-        println!("Current Path: {}", current_path.display());
+        println!("Tasks Path: {}", current_path.display());
 
         // 2. Display Table (reuse existing display_tasks_table)
         display_tasks_table(headers, data);
 
         // 3. No input prompt for passive view
-        println!("\nPassive View Mode - Updates Automatically");
+        println!("\nView, ctrl+c to exit, ctrl+b -> o for tmux toggle");
     }
 
     /// Display tasks in passive view mode using the existing table infrastructure

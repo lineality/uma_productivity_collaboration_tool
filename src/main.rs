@@ -6831,7 +6831,7 @@ impl App {
         // print!("{}", input_buffer);
         // println!("Showing {}-{} of {} | ↑k ↓j | ↑↓:{} >",             start_idx + 1, end_idx, self.tui_textmessage_list.len(), self.tui_height);
 
-        println!("Showing {}-{} of {} | ↑k ↓j >",
+        print!("Showing {}-{} of {} | ↑k ↓j > ",
             start_idx + 1, end_idx, self.tui_textmessage_list.len());
         io::stdout().flush()
     }
@@ -7983,7 +7983,120 @@ fn write_formatted_navigation_legend_to_tui() -> Result<(),Error> {
     // write_red_hotkey("hex", " ")?;
 
     // // View operations group
-    write_red_hotkey("pt/pm", " passive refresh")?;
+
+    write_red_green_hotkey("pt", "v", "/")?;
+
+    write_red_green_hotkey("pm", "v", " ")?;
+
+    write_red_hotkey("", " passive ")?;
+
+    write_red_green_hotkey("", "tmux split", "")?;
+
+    write_red_hotkey("", " refresh|")?;
+
+    // write_red_hotkey("p", "asty ")?;
+    // write_red_hotkey("cvy", "|")?;
+
+    // // Navigation group
+    // write_red_hotkey("w", "rd,")?;
+    // write_red_hotkey("b", ",")?;
+    // write_red_hotkey("e", "nd ")?;
+
+    // // Comment/indent group
+    // // Three Colour
+    // write_red_green_hotkey("/", "/", "/cmnt ")?;
+    // // Red only
+    // write_red_hotkey("[]", "idnt ")?;
+
+    // // Movement group
+    // write_red_hotkey("hjkl", "")?;
+
+    // Clear formatting: ANSI color codes are stateful
+    // Make sure NEXT prints
+    // are not also formatted.
+    buffy_print("{}", &[BuffyFormatArg::Str(RESET)])?;
+
+    // Complete the line with newline \n
+    buffy_println("", &[])?;
+
+    // Done
+    Ok(())
+}
+
+
+/// Writes the complete navigation legend directly to terminal
+///
+/// ## Project Context
+/// Displays all available keyboard commands for file navigation with
+/// color-coded hotkeys. Each command section written independently for
+/// maintainability - adding/removing commands requires no argument counting.
+///
+/// ## Memory: ZERO HEAP
+/// All output written directly to terminal using buffy functions.
+/// No intermediate String building, no heap allocation.
+///
+/// ## Operation
+/// Writes legend in modular sections:
+/// - Each command written separately via write_red_hotkey()
+/// - Colors applied per-command (RED hotkey, YELLOW description)
+/// - RESET applied at end
+/// - Modular: Add/remove commands without affecting others
+///
+/// ## Safety & Error Handling
+/// - Returns io::Result for write failures
+/// - Each command write is independent
+/// - Failure in one command doesn't affect others structurally
+///
+/// ## Legend Commands
+/// - q: quit application
+/// - sav: save current state (red and green and yellow)
+/// - re: reload/refresh
+/// - undo: undo last operation
+/// - del: delete item
+/// - nrm: normal mode
+/// - ins: insert mode
+/// - vis: visual mode
+/// - hex: hex editor mode
+/// - raw: raw view
+/// - pasty: paste operation
+/// - cvy: copy operation
+/// - wrd,b,end: word navigation
+/// - ///cmnt: comment operations (red and green and yellow)
+/// - []idnt: indent operations
+/// - hjkl: vim-style navigation
+///
+/// ## Example
+/// ```rust
+/// // In main display loop:
+/// write_formatted_navigation_legend_to_tui()?;
+/// ```
+fn write_formatted_taskbored_legend_to_tui() -> Result<(),Error> {
+    // File operations group
+        write_red_hotkey("q", "uit ")?;
+
+    // // Mode operations group
+    write_red_hotkey("b", "ack|" )?;
+    // write_red_hotkey("t", "ask ")?;
+    // // Three Colour
+    // write_red_green_hotkey("s", "a", "v ")?;
+    // // // Red only
+    // write_red_hotkey("m", "essage|")?;
+
+    write_red_hotkey("a", "dd task/node|")?;
+    write_red_hotkey("int", " go to task-node")?;
+
+    // // View operations group
+
+    // write_red_green_hotkey("pt", "v", "/")?;
+
+    // write_red_green_hotkey("pm", "v", " ")?;
+
+    // write_red_hotkey("", " passive ")?;
+
+    // write_red_green_hotkey("", "tmux split", "")?;
+
+    // write_red_hotkey("", " refresh|")?;
+
     // write_red_hotkey("p", "asty ")?;
     // write_red_hotkey("cvy", "|")?;
 
@@ -16746,33 +16859,295 @@ fn create_core_node(
     }
 }
 
-/// for passive view mode
+
+/// Calculate directory hash for task board structure (two levels deep)
+///
+/// # Purpose
+///
+/// Generates a hash of task board state by examining both column directories
+/// and the task directories within them. This two-level hashing is necessary
+/// because tasks are nested: tasks live inside column directories.
+///
+/// # Task Board Structure
+///
+/// ```text
+/// task_board/
+///   1_plan/              <- Level 1: Column directories
+///     task_alpha/        <- Level 2: Task directories
+///     task_beta/
+///   2_doing/
+///     task_gamma/
+///   3_done/
+///     task_delta/
+/// ```
+///
+/// # What Changes Trigger Hash Change
+///
+/// - Column directory added/removed/renamed
+/// - Task directory added/removed/renamed within any column
+/// - Task moved between columns
+///
+/// # What Does NOT Trigger Hash Change
+///
+/// - File content changes within task directories
+/// - Timestamp changes
+/// - Permission changes
+///
+/// This is intentional - we only detect structural changes (tasks moving/appearing),
+/// not content edits within existing tasks.
+///
+/// # Hashing Algorithm
+///
+/// 1. For each column directory (sorted):
+///    - Add column directory name to hash input
+///    - For each task within column (sorted):
+///      - Add task directory name to hash input
+/// 2. Hash the complete concatenated string
+///
+/// # Parameters
+///
+/// * `path` - Path to task board directory
+///
+/// # Returns
+///
+/// * `Ok(String)` - Hash string representing current state
+/// * `Err(io::Error)` - If directory cannot be read
+///
+/// # Example
+///
+/// ```no_run
+/// let hash1 = get_task_directory_hash(Path::new("/tmp/uma/team/board"))?;
+/// // ... task moves from plan to doing ...
+/// let hash2 = get_task_directory_hash(Path::new("/tmp/uma/team/board"))?;
+/// assert_ne!(hash1, hash2); // Hashes differ after task move
+/// ```
+fn get_task_directory_hash(path: &Path) -> io::Result<String> {
+    use std::collections::BTreeMap;
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    debug_log!("GTH: Getting task directory hash for: {:?}", path);
+
+    let mut hash_input = String::new();
+
+    // Collect all column directories (1_plan, 2_doing, etc.)
+    let mut columns: BTreeMap<String, Vec<String>> = BTreeMap::new();
+
+    // Read level 1: column directories
+    for entry in fs::read_dir(path)? {
+        let entry = entry?;
+        let file_name = entry.file_name().to_string_lossy().into_owned();
+
+        if entry.file_type()?.is_dir() {
+            // This is a column directory
+            let mut tasks = Vec::new();
+
+            // Read level 2: task directories within this column
+            if let Ok(task_entries) = fs::read_dir(entry.path()) {
+                for task_entry in task_entries {
+                    if let Ok(task_entry) = task_entry {
+                        if let Ok(task_type) = task_entry.file_type() {
+                            if task_type.is_dir() {
+                                tasks.push(task_entry.file_name().to_string_lossy().into_owned());
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Sort tasks for consistent hashing
+            tasks.sort();
+            columns.insert(file_name, tasks);
+        }
+    }
+
+    // Build hash input string from sorted structure
+    for (column_name, tasks) in columns.iter() {
+        hash_input.push_str(column_name);
+        hash_input.push(':');
+        for task in tasks {
+            hash_input.push_str(task);
+            hash_input.push(',');
+        }
+        hash_input.push(';');
+    }
+
+    // Calculate hash
+    let mut hasher = DefaultHasher::new();
+    hash_input.hash(&mut hasher);
+    let hash_value = hasher.finish();
+
+    debug_log!("GTH: Hash input string: {}", hash_input);
+    debug_log!("GTH: Hash value: {}", hash_value);
+
+    Ok(format!("{:x}", hash_value))
+}
+
+/// Passive Task View Mode - Auto-Refresh Task Board Display
+///
+/// # Purpose
+///
+/// Runs a passive (read-only, no input) task board viewer that automatically
+/// refreshes when the task board structure changes. Monitors task board directory
+/// for structural changes (tasks added/removed/moved) and updates display.
+///
+/// # Task Board Structure
+///
+/// Expects Kanban-style board with column directories containing task directories:
+/// ```text
+/// task_board/
+///   1_plan/
+///     task_alpha/
+///     task_beta/
+///   2_doing/
+///     task_gamma/
+///   3_done/
+///     task_delta/
+/// ```
+///
+/// # Change Detection
+///
+/// Uses two-level directory hashing to detect:
+/// - Tasks added to any column
+/// - Tasks removed from any column
+/// - Tasks moved between columns
+/// - Column directories added/removed
+///
+/// Does NOT detect:
+/// - File content changes within tasks
+/// - Metadata/timestamp changes
+///
+/// # Refresh Behavior
+///
+/// - Checks for changes every 10 seconds (configurable)
+/// - Only refreshes display when structure changes detected
+/// - Avoids unnecessary redraws for better performance
+///
+/// # Display Format
+///
+/// Shows task board as table with columns and tasks listed under each column.
+/// No pagination (shows all tasks), no input prompts (passive view).
+///
+/// # Error Handling
+///
+/// - Initial display error: Returns error (can't start without display)
+/// - Hash calculation error: Logs and continues (keeps showing last good state)
+/// - Refresh display error: Logs and continues (keeps monitoring)
+///
+/// # Parameters
+///
+/// * `path` - Path to task board directory
+///
+/// # Returns
+///
+/// * `Ok(())` - Never returns normally (infinite loop until killed)
+/// * `Err(io::Error)` - Only if initial setup fails
+///
+/// # Related Functions
+///
+/// - `get_task_directory_hash()` - Detects structural changes
+/// - `passive_display_tasks()` - Renders task board
+/// - `optional_passive_mode()` - Launches this function
 fn run_passive_task_mode(path: &Path) -> io::Result<()> {
-    debug_log("Starting passive task mode...");
+    debug_log("RPTM: Starting passive task mode");
+    debug_log!("RPTM: Task board path: {:?}", path);
 
-    // 1. Read refresh rate from uma.toml (similar to log mode)
-    // let refresh_rate = get_refresh_rate()?;
-    let refresh_rate: f32 = 10.0;
+    // ============================================================
+    // CONFIGURATION: Set refresh rate
+    // ============================================================
+    let refresh_rate: f32 = 10.0; // seconds between checks
+    debug_log!("RPTM: Refresh rate: {} seconds", refresh_rate);
 
-    // 2. Initialize last known state
-    let mut last_directory_state = get_directory_hash(path)?;
+    // ============================================================
+    // INITIALIZATION: Get initial state and display
+    // ============================================================
+    let mut last_directory_state = match get_task_directory_hash(path) {
+        Ok(hash) => {
+            debug_log!("RPTM: Initial hash: {}", hash);
+            hash
+        }
+        Err(e) => {
+            debug_log!("RPTM: Failed to get initial hash: {}", e);
+            return Err(e);
+        }
+    };
 
-    // 3. Initial display
+    // Initial display
+    debug_log("RPTM: Displaying initial task board");
     tiny_tui::passive_display_tasks(path)?;
 
-    // 4. Enter refresh loop
-    loop {
-        let current_directory_state = get_directory_hash(path)?;
+    // ============================================================
+    // REFRESH LOOP: Monitor and update display
+    // ============================================================
+    debug_log("RPTM: Entering refresh loop");
 
+    loop {
+        // Check current state
+        let current_directory_state = match get_task_directory_hash(path) {
+            Ok(hash) => hash,
+            Err(e) => {
+                debug_log!("RPTM: Failed to get current hash (continuing with last state): {}", e);
+                // Continue loop - keep showing last good state
+                thread::sleep(Duration::from_secs_f32(refresh_rate));
+                continue;
+            }
+        };
+
+        // Compare states
         if current_directory_state != last_directory_state {
-            print!("\x1B[2J\x1B[1;1H"); // Clear screen
-            tiny_tui::passive_display_tasks(path)?;
-            last_directory_state = current_directory_state;
+            debug_log!("RPTM: Directory state changed, refreshing display");
+            debug_log!("RPTM: Old hash: {}", last_directory_state);
+            debug_log!("RPTM: New hash: {}", current_directory_state);
+
+            // Clear screen and redisplay
+            print!("\x1B[2J\x1B[1;1H");
+
+            match tiny_tui::passive_display_tasks(path) {
+                Ok(_) => {
+                    debug_log!("RPTM: Display refreshed successfully");
+                    last_directory_state = current_directory_state;
+                }
+                Err(e) => {
+                    debug_log!("RPTM: Failed to refresh display (keeping last state): {}", e);
+                    // Don't update last_directory_state - will retry next cycle
+                }
+            }
+        } else {
+            debug_log!("RPTM: No changes detected");
         }
 
+        // Sleep until next check
         thread::sleep(Duration::from_secs_f32(refresh_rate));
     }
 }
+
+// /// for passive view mode
+// fn run_passive_task_mode(path: &Path) -> io::Result<()> {
+//     debug_log("Starting passive task mode...");
+
+//     // 1. Read refresh rate from uma.toml (similar to log mode)
+//     // let refresh_rate = get_refresh_rate()?;
+//     let refresh_rate: f32 = 10.0;
+
+//     // 2. Initialize last known state
+//     let mut last_directory_state = get_task_directory_hash(path)?;
+
+//     // 3. Initial display
+//     tiny_tui::passive_display_tasks(path)?;
+
+//     // 4. Enter refresh loop
+//     loop {
+//         let current_directory_state = get_task_directory_hash(path)?;
+
+//         if current_directory_state != last_directory_state {
+//             print!("\x1B[2J\x1B[1;1H"); // Clear screen
+//             tiny_tui::passive_display_tasks(path)?;
+//             last_directory_state = current_directory_state;
+//         }
+
+//         thread::sleep(Duration::from_secs_f32(refresh_rate));
+//     }
+// }
 
 
 /// for passive view mode
@@ -24385,41 +24760,255 @@ fn handle_command_main_mode(
                 debug_log!("mph: Command handler completed successfully");
             }
 
+            // Message Passive Mode Handler - New Terminal Window
+            //
+            // Command aliases: "mp" | "pm" | "message-passive"
+            //
+            // # Purpose
+            //
+            // Launches passive message viewer in a new terminal window.
+            // Attempts platform-appropriate terminal emulator with fallback options.
+            //
+            // # Platform Support
+            //
+            // - Linux: gnome-terminal, xterm (fallback)
+            // - Android/Termux: Same as Linux (Termux is terminal)
+            // - macOS: Terminal.app
+            // - BSD variants: xterm
+            // - Redox: Redox terminal (if available)
+            //
+            // # Process Flow
+            //
+            // 1. Validate message directory exists
+            // 2. Get Uma executable path
+            // 3. Try platform-specific terminal launcher
+            // 4. If launch fails: Log error, inform user, return Ok(false)
+            //
+            // # Error Handling
+            //
+            // All errors handled gracefully:
+            // - Directory not found: Print message, return Ok(false)
+            // - Executable path error: Log and return Ok(false)
+            // - Terminal launch fails: Log and return Ok(false)
             "mp" | "pm" | "message-passive" => {
-                debug_log("m selected");
+                debug_log("mp selected - launching passive message view in new terminal");
 
-                /////////////////
-                // Passive View
-                /////////////////
+                // ============================================================
+                // PATH VALIDATION: Verify message directory exists
+                // ============================================================
                 let mut this_team_message_path = app.current_path.clone();
                 this_team_message_path.push("message_posts_browser");
 
-                debug_log!("message_path {:?}", this_team_message_path);
+                debug_log!("mp: message_path {:?}", this_team_message_path);
 
-                // Check if directory exists
                 if !this_team_message_path.exists() {
-                    println!("handle comand 'm', Message directory not found!");
-                    return Ok(false);  // Changed to match expected return type
+                    println!("Message directory not found!");
+                    debug_log!("mp: message directory does not exist: {:?}", this_team_message_path);
+                    return Ok(false);
                 }
 
                 let message_path_str = this_team_message_path.to_string_lossy().into_owned();
 
-                #[cfg(target_os = "linux")]
+                // ============================================================
+                // EXECUTABLE PATH: Get path to current Uma binary
+                // ============================================================
+                let uma_path = match env::current_exe() {
+                    Ok(path) => path,
+                    Err(e) => {
+                        debug_log!("mp: Failed to get current executable path: {}", e);
+                        println!("Error: Cannot determine Uma executable path");
+                        return Ok(false);
+                    }
+                };
+
+                let uma_path_str = match uma_path.to_str() {
+                    Some(path_str) => path_str,
+                    None => {
+                        debug_log!("mp: Failed to convert executable path to string");
+                        println!("Error: Invalid executable path");
+                        return Ok(false);
+                    }
+                };
+
+                // ============================================================
+                // PLATFORM-SPECIFIC TERMINAL LAUNCH
+                // ============================================================
+
+                // Linux and Android/Termux (same POSIX terminal approach)
+                #[cfg(any(target_os = "linux", target_os = "android"))]
                 {
-                    if let Ok(uma_path) = env::current_exe() {
-                        if let Some(uma_path_str) = uma_path.to_str() {
-                            StdCommand::new("gnome-terminal")
-                                .arg("--")
-                                .arg(uma_path_str)
-                                .arg("--passive_message_mode")
-                                .arg(&message_path_str)
-                                .spawn()?;
+                    debug_log!("mp: Linux/Android platform detected");
+
+                    // Try gnome-terminal first (most common on Linux)
+                    let result = StdCommand::new("gnome-terminal")
+                        .arg("--")
+                        .arg(uma_path_str)
+                        .arg("--passive_message_mode")
+                        .arg(&message_path_str)
+                        .spawn();
+
+                    if result.is_ok() {
+                        debug_log!("mp: Successfully launched with gnome-terminal");
+                    } else {
+                        debug_log!("mp: gnome-terminal failed, trying xterm fallback");
+
+                        // Fallback to xterm (more universal)
+                        match StdCommand::new("xterm")
+                            .arg("-e")
+                            .arg(uma_path_str)
+                            .arg("--passive_message_mode")
+                            .arg(&message_path_str)
+                            .spawn()
+                        {
+                            Ok(_) => {
+                                debug_log!("mp: Successfully launched with xterm");
+                            }
+                            Err(e) => {
+                                debug_log!("mp: Failed to launch terminal: {}", e);
+                                println!("Error: Could not launch terminal. Please install gnome-terminal or xterm.");
+                                return Ok(false);
+                            }
                         }
                     }
                 }
 
-                debug_log(&format!("handle command 'mp'/'message-passive' app.current_path {:?}", app.current_path));
+                // macOS (use Terminal.app)
+                #[cfg(target_os = "macos")]
+                {
+                    debug_log!("mp: macOS platform detected");
+
+                    // Use osascript to launch Terminal.app with command
+                    // This is more reliable than `open -a Terminal`
+                    let terminal_command = format!(
+                        "tell application \"Terminal\" to do script \"{} --passive_message_mode {}\"",
+                        uma_path_str,
+                        message_path_str
+                    );
+
+                    match StdCommand::new("osascript")
+                        .arg("-e")
+                        .arg(&terminal_command)
+                        .spawn()
+                    {
+                        Ok(_) => {
+                            debug_log!("mp: Successfully launched with Terminal.app");
+                        }
+                        Err(e) => {
+                            debug_log!("mp: Failed to launch Terminal.app: {}", e);
+                            println!("Error: Could not launch Terminal.app");
+                            return Ok(false);
+                        }
+                    }
+                }
+
+                // BSD variants (FreeBSD, OpenBSD, NetBSD - use xterm)
+                #[cfg(any(
+                    target_os = "freebsd",
+                    target_os = "openbsd",
+                    target_os = "netbsd",
+                    target_os = "dragonfly"
+                ))]
+                {
+                    debug_log!("mp: BSD platform detected");
+
+                    match StdCommand::new("xterm")
+                        .arg("-e")
+                        .arg(uma_path_str)
+                        .arg("--passive_message_mode")
+                        .arg(&message_path_str)
+                        .spawn()
+                    {
+                        Ok(_) => {
+                            debug_log!("mp: Successfully launched with xterm");
+                        }
+                        Err(e) => {
+                            debug_log!("mp: Failed to launch xterm: {}", e);
+                            println!("Error: Could not launch xterm. Please install xterm.");
+                            return Ok(false);
+                        }
+                    }
+                }
+
+                // Redox OS (use Redox terminal if available)
+                #[cfg(target_os = "redox")]
+                {
+                    debug_log!("mp: Redox OS platform detected");
+
+                    // Try Redox's terminal emulator
+                    match StdCommand::new("terminal")
+                        .arg(uma_path_str)
+                        .arg("--passive_message_mode")
+                        .arg(&message_path_str)
+                        .spawn()
+                    {
+                        Ok(_) => {
+                            debug_log!("mp: Successfully launched with Redox terminal");
+                        }
+                        Err(e) => {
+                            debug_log!("mp: Failed to launch Redox terminal: {}", e);
+                            println!("Error: Could not launch terminal on Redox");
+                            return Ok(false);
+                        }
+                    }
+                }
+
+                // Catch-all for unsupported platforms
+                #[cfg(not(any(
+                    target_os = "linux",
+                    target_os = "android",
+                    target_os = "macos",
+                    target_os = "freebsd",
+                    target_os = "openbsd",
+                    target_os = "netbsd",
+                    target_os = "dragonfly",
+                    target_os = "redox"
+                )))]
+                {
+                    debug_log!("mp: Unsupported platform for terminal launch");
+                    println!("Error: Terminal launch not supported on this platform");
+                    println!("You can use tmux splits instead: 'mpv' or 'mph'");
+                    return Ok(false);
+                }
+
+                debug_log!("mp: Command handler completed");
             }
+
+            // "mp" | "pm" | "message-passive" => {
+            //     debug_log("m selected");
+
+            //     /////////////////
+            //     // Passive View
+            //     /////////////////
+            //     let mut this_team_message_path = app.current_path.clone();
+            //     this_team_message_path.push("message_posts_browser");
+
+            //     debug_log!("message_path {:?}", this_team_message_path);
+
+            //     // Check if directory exists
+            //     if !this_team_message_path.exists() {
+            //         println!("handle comand 'm', Message directory not found!");
+            //         return Ok(false);  // Changed to match expected return type
+            //     }
+
+            //     let message_path_str = this_team_message_path.to_string_lossy().into_owned();
+
+            //     #[cfg(target_os = "linux")]
+            //     {
+            //         if let Ok(uma_path) = env::current_exe() {
+            //             if let Some(uma_path_str) = uma_path.to_str() {
+            //                 StdCommand::new("gnome-terminal")
+            //                     .arg("--")
+            //                     .arg(uma_path_str)
+            //                     .arg("--passive_message_mode")
+            //                     .arg(&message_path_str)
+            //                     .spawn()?;
+            //             }
+            //         }
+            //     }
+
+
+            //     debug_log(&format!("handle command 'mp'/'message-passive' app.current_path {:?}", app.current_path));
+            // }
 
             "t" | "task" | "tasks" => {
                 debug_log("t selected: task browser launching");
@@ -24474,7 +25063,7 @@ fn handle_command_main_mode(
             }
 
 
-            "tp" | "task-passive" | "tasks-passive" => {
+            "tp" | "pt" | "task-passive" | "tasks-passive" => {
                 debug_log("t selected: task browser launching");
 
                 /////////////////
@@ -24504,11 +25093,289 @@ fn handle_command_main_mode(
                         }
                     }
                 }
-
-
                 debug_log(&format!("'tp' 'task-passive' app.current_path {:?}", app.current_path));
-
             }
+
+            // Tmux Vertical Split Task Passive View Handler
+            //
+            // Command aliases: "tpv" | "ptv" | "task-passive-vsplit"
+            //
+            // # Purpose
+            //
+            // Launches passive task board viewer in a new tmux vertical split pane.
+            // Unlike the "tp" command (new terminal), this creates a split within
+            // the current tmux session for side-by-side viewing of task board.
+            //
+            // # User Experience
+            //
+            // User types "tpv" in main Uma application:
+            // - Current pane continues running Uma normally
+            // - New vertical pane appears with passive task board view
+            // - Task board auto-refreshes when changes detected
+            // - User can switch between panes with tmux keybindings
+            // - Passive view runs independently until manually closed
+            //
+            // # Tmux Split Behavior
+            //
+            // Creates vertical split with:
+            // - Direction: Vertical (side-by-side panes)
+            // - Command: uma --passive_vsplit_task_mode [path]
+            // - Working directory: Inherited from current pane
+            // - Size: Equal split (tmux default, user can resize)
+            //
+            // # Process Flow
+            //
+            // 1. Validate current path + task_board directory exists
+            // 2. Get path to current Uma executable
+            // 3. Build tmux command string
+            // 4. Execute: tmux split-window -v "uma --passive_vsplit_task_mode [path]"
+            // 5. Main Uma continues in original pane
+            // 6. Passive task view starts in new split pane
+            //
+            // # Prerequisites
+            //
+            // - Must be running inside a tmux session
+            // - tmux must be installed and available in PATH
+            // - Uma executable must be accessible
+            //
+            // # Error Handling
+            //
+            // All errors log and return gracefully (never panic):
+            // - Directory not found: Print error, return Ok(false)
+            // - Cannot get Uma executable path: Log error, return Ok(false)
+            // - tmux command fails: Log error, return Ok(false)
+            //
+            // If not in tmux session: Command fails with helpful message
+            //
+            // # Command Line Executed
+            //
+            // ```bash
+            // tmux split-window -v "uma --passive_vsplit_task_mode /path/to/task_board"
+            // ```
+            //
+            // # Related Commands
+            //
+            // - "tp" / "task-passive": Opens in new terminal window
+            // - "tph" / "task-passive-hsplit": Opens in tmux horizontal split
+            // - "t" / "task": Opens interactive task board
+            //
+            // # Related Functions
+            //
+            // - `optional_passive_mode()`: Handles --passive_vsplit_task_mode flag
+            // - `run_passive_task_mode()`: Runs the passive task view loop
+            // - `passive_display_tasks()`: Displays task board in passive view
+            "tpv" | "ptv" | "task-passive-vsplit" => {
+                debug_log("tpv command selected - launching passive task view in tmux vsplit");
+
+                // ============================================================
+                // PATH VALIDATION: Verify task board directory exists
+                // ============================================================
+                let mut this_team_task_board_path = app.current_path.clone();
+                this_team_task_board_path.push("task_browser");
+
+                debug_log!("tpv: task_board_path {:?}", this_team_task_board_path);
+
+                // Check if directory exists
+                if !this_team_task_board_path.exists() {
+                    println!("Task board directory not found!");
+                    debug_log!("tpv: task_board directory does not exist: {:?}", this_team_task_board_path);
+                    return Ok(false);
+                }
+
+                // Convert path to string for command
+                let task_board_path_str = this_team_task_board_path.to_string_lossy().into_owned();
+
+                // ============================================================
+                // EXECUTABLE PATH: Get path to current Uma binary
+                // ============================================================
+                let uma_path = match env::current_exe() {
+                    Ok(path) => path,
+                    Err(e) => {
+                        debug_log!("tpv: Failed to get current executable path: {}", e);
+                        println!("Error: Cannot determine Uma executable path");
+                        return Ok(false);
+                    }
+                };
+
+                let uma_path_str = match uma_path.to_str() {
+                    Some(path_str) => path_str,
+                    None => {
+                        debug_log!("tpv: Failed to convert executable path to string");
+                        println!("Error: Invalid executable path");
+                        return Ok(false);
+                    }
+                };
+
+                // ============================================================
+                // TMUX COMMAND: Build and execute tmux split command
+                // ============================================================
+                // Build command string for tmux to execute in new pane
+                let uma_command = format!(
+                    "{} --passive_vsplit_task_mode {}",
+                    uma_path_str,
+                    task_board_path_str
+                );
+
+                debug_log!("tpv: Executing tmux command: split-window -v {}", uma_command);
+
+                // Execute tmux split-window command
+                match StdCommand::new("tmux")
+                    .args(["split-window", "-v", &uma_command])
+                    .spawn()
+                {
+                    Ok(_) => {
+                        debug_log!("tpv: Successfully launched passive task view in tmux vsplit");
+                    }
+                    Err(e) => {
+                        debug_log!("tpv: Failed to create tmux vsplit: {}", e);
+                        println!("Error: Failed to create tmux split. Are you running inside tmux?");
+                        return Ok(false);
+                    }
+                }
+
+                debug_log!("tpv: Command handler completed successfully");
+            }
+
+            // Tmux Horizontal Split Task Passive View Handler
+            //
+            // Command aliases: "tph" | "pth" | "task-passive-hsplit"
+            //
+            // # Purpose
+            //
+            // Launches passive task board viewer in a new tmux horizontal split pane.
+            // Unlike the "tp" command (new terminal), this creates a split within
+            // the current tmux session for top-bottom viewing of task board.
+            //
+            // # User Experience
+            //
+            // User types "tph" in main Uma application:
+            // - Current pane continues running Uma normally
+            // - New horizontal pane appears with passive task board view
+            // - Task board auto-refreshes when changes detected
+            // - User can switch between panes with tmux keybindings
+            // - Passive view runs independently until manually closed
+            //
+            // # Tmux Split Behavior
+            //
+            // Creates horizontal split with:
+            // - Direction: Horizontal (top-bottom panes)
+            // - Command: uma --passive_hsplit_task_mode [path]
+            // - Working directory: Inherited from current pane
+            // - Size: Equal split (tmux default, user can resize)
+            //
+            // # Process Flow
+            //
+            // 1. Validate current path + task_board directory exists
+            // 2. Get path to current Uma executable
+            // 3. Build tmux command string
+            // 4. Execute: tmux split-window -h "uma --passive_hsplit_task_mode [path]"
+            // 5. Main Uma continues in original pane
+            // 6. Passive task view starts in new split pane
+            //
+            // # Prerequisites
+            //
+            // - Must be running inside a tmux session
+            // - tmux must be installed and available in PATH
+            // - Uma executable must be accessible
+            //
+            // # Error Handling
+            //
+            // All errors log and return gracefully (never panic):
+            // - Directory not found: Print error, return Ok(false)
+            // - Cannot get Uma executable path: Log error, return Ok(false)
+            // - tmux command fails: Log error, return Ok(false)
+            //
+            // If not in tmux session: Command fails with helpful message
+            //
+            // # Command Line Executed
+            //
+            // ```bash
+            // tmux split-window -h "uma --passive_hsplit_task_mode /path/to/task_board"
+            // ```
+            //
+            // # Related Commands
+            //
+            // - "tp" / "task-passive": Opens in new terminal window
+            // - "tpv" / "task-passive-vsplit": Opens in tmux vertical split
+            // - "t" / "task": Opens interactive task board
+            //
+            // # Related Functions
+            //
+            // - `optional_passive_mode()`: Handles --passive_hsplit_task_mode flag
+            // - `run_passive_task_mode()`: Runs the passive task view loop
+            // - `passive_display_tasks()`: Displays task board in passive view
+            "tph" | "pth" | "task-passive-hsplit" => {
+                debug_log("tph command selected - launching passive task view in tmux hsplit");
+
+                // ============================================================
+                // PATH VALIDATION: Verify task board directory exists
+                // ============================================================
+                let mut this_team_task_board_path = app.current_path.clone();
+                this_team_task_board_path.push("task_browser");
+
+                debug_log!("tph: task_board_path {:?}", this_team_task_board_path);
+
+                // Check if directory exists
+                if !this_team_task_board_path.exists() {
+                    println!("Task board directory not found!");
+                    debug_log!("tph: task_board directory does not exist: {:?}", this_team_task_board_path);
+                    return Ok(false);
+                }
+
+                // Convert path to string for command
+                let task_board_path_str = this_team_task_board_path.to_string_lossy().into_owned();
+
+                // ============================================================
+                // EXECUTABLE PATH: Get path to current Uma binary
+                // ============================================================
+                let uma_path = match env::current_exe() {
+                    Ok(path) => path,
+                    Err(e) => {
+                        debug_log!("tph: Failed to get current executable path: {}", e);
+                        println!("Error: Cannot determine Uma executable path");
+                        return Ok(false);
+                    }
+                };
+
+                let uma_path_str = match uma_path.to_str() {
+                    Some(path_str) => path_str,
+                    None => {
+                        debug_log!("tph: Failed to convert executable path to string");
+                        println!("Error: Invalid executable path");
+                        return Ok(false);
+                    }
+                };
+
+                // ============================================================
+                // TMUX COMMAND: Build and execute tmux split command
+                // ============================================================
+                // Build command string for tmux to execute in new pane
+                let uma_command = format!(
+                    "{} --passive_hsplit_task_mode {}",
+                    uma_path_str,
+                    task_board_path_str
+                );
+
+                debug_log!("tph: Executing tmux command: split-window -h {}", uma_command);
+
+                // Execute tmux split-window command
+                match StdCommand::new("tmux")
+                    .args(["split-window", "-h", &uma_command])
+                    .spawn()
+                {
+                    Ok(_) => {
+                        debug_log!("tph: Successfully launched passive task view in tmux hsplit");
+                    }
+                    Err(e) => {
+                        debug_log!("tph: Failed to create tmux hsplit: {}", e);
+                        println!("Error: Failed to create tmux split. Are you running inside tmux?");
+                        return Ok(false);
+                    }
+                }
+
+                debug_log!("tph: Command handler completed successfully");
+            }
+
 
             "q" | "quit" | "exit" => {
                 debug_log("quit");
@@ -33232,6 +34099,45 @@ fn optional_passive_mode() -> bool {
         debug_log!("OPM: Passive task mode completed");
         return true;
     }
+
+    // ============================================================
+    // TASK PASSIVE VSPLIT MODE: Tmux vertical split
+    // ============================================================
+    if args.len() >= 3 && args[1] == "--passive_vsplit_task_mode" {
+        debug_log!("OPM: Detected --passive_vsplit_task_mode flag");
+
+        let path = Path::new(&args[2]);
+        debug_log!("OPM: Task board path (vsplit): {:?}", path);
+
+        if let Err(e) = run_passive_task_mode(path) {
+            eprintln!("Error in passive task vsplit mode: {}", e);
+            debug_log!("OPM: Passive task vsplit mode failed: {}", e);
+            process::exit(1);
+        }
+
+        debug_log!("OPM: Passive task vsplit mode completed");
+        return true;
+    }
+
+    // ============================================================
+    // TASK PASSIVE HSPLIT MODE: Tmux horizontal split
+    // ============================================================
+    if args.len() >= 3 && args[1] == "--passive_hsplit_task_mode" {
+        debug_log!("OPM: Detected --passive_hsplit_task_mode flag");
+
+        let path = Path::new(&args[2]);
+        debug_log!("OPM: Task board path (hsplit): {:?}", path);
+
+        if let Err(e) = run_passive_task_mode(path) {
+            eprintln!("Error in passive task hsplit mode: {}", e);
+            debug_log!("OPM: Passive task hsplit mode failed: {}", e);
+            process::exit(1);
+        }
+
+        debug_log!("OPM: Passive task hsplit mode completed");
+        return true;
+    }
+
 
     // ============================================================
     // NO PASSIVE MODE: Continue with normal Uma startup
