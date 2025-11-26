@@ -6734,13 +6734,16 @@ impl App {
         // Clear screen
         print!("\x1B[2J\x1B[1;1H");
 
+        // Header/Legend
+        let _ = write_formatted_messagepost_legend_to_tui();
+
         // 1. Display messages using existing function
         tiny_tui::simple_render_list(&self.tui_textmessage_list, &self.current_path);
 
         // 2. Fill remaining space to position info bar correctly
-        let path_lines = 1; // Header line showing path
+        let path_lines = 6; // Header line showing path
         let message_count = self.tui_textmessage_list.len();
-        let info_bar_position = (terminal_height - 2) as usize;
+        let info_bar_position = (terminal_height) as usize;
 
         for _ in 0..info_bar_position.saturating_sub(path_lines + message_count) {
             println!();
@@ -6748,12 +6751,12 @@ impl App {
 
         // 3. Display mode info bar with clear instructions
         match message_view_mode {
-            MessageViewMode::Refresh => println!("\\|/  Refresh Mode - (empty-Enter -> insert mode)"),
-            MessageViewMode::Insert => println!(">_  Insert Mode - (empty-Enter -> refresh mode) try --custom"),
+            MessageViewMode::Refresh => print!("\\|/  Refresh Mode (empty-Enter -> insert) > "),
+            MessageViewMode::Insert => print!(">_  Insert Mode (empty-Enter -> refresh) try --custom > "),
         }
 
         // 4. Display input prompt with current buffer
-        print!("> {}", input_buffer);
+        print!("{}", input_buffer);
         io::stdout().flush()
     }
 
@@ -7785,23 +7788,23 @@ fn write_red_green_hotkey(hotkey_1: &str, hotkey_2: &str, description: &str) -> 
 /// ## Example
 /// ```rust
 /// // In main display loop:
-/// write_formatted_navigation_legend_to_tui()?;
+/// write_formatted_messagepost_legend_to_tui()?;
 /// ```
-fn write_formatted_navigation_legend_to_tui() -> Result<(),Error> {
+fn write_formatted_messagepost_legend_to_tui() -> Result<(),Error> {
     // File operations group
         write_red_hotkey("Q", "uit ")?;
 
     // // Mode operations group
     write_red_hotkey("B", "ack|" )?;
-    write_red_hotkey("T", "ask ")?;
+    // write_red_hotkey("T", "ask ")?;
     // // Three Colour
     // write_red_green_hotkey("s", "a", "v ")?;
     // // Red only
-    write_red_hotkey("M", "essage |")?;
+    // write_red_hotkey("M", "essage|")?;
 
-    write_red_hotkey("A", "dd Node")?;
-    // write_red_hotkey("i", "ns ")?;
-    // write_red_hotkey("v", "is ")?;
+    // write_red_hotkey("A", "dd Node|")?;
+    write_red_hotkey("Enter", " toggle Refesh/Insert mode|")?;
+    write_red_hotkey("--custom", " config")?;
     // write_red_hotkey("hex", " ")?;
 
     // // View operations group
@@ -7835,6 +7838,98 @@ fn write_formatted_navigation_legend_to_tui() -> Result<(),Error> {
     Ok(())
 }
 
+
+/// Writes the complete navigation legend directly to terminal
+///
+/// ## Project Context
+/// Displays all available keyboard commands for file navigation with
+/// color-coded hotkeys. Each command section written independently for
+/// maintainability - adding/removing commands requires no argument counting.
+///
+/// ## Memory: ZERO HEAP
+/// All output written directly to terminal using buffy functions.
+/// No intermediate String building, no heap allocation.
+///
+/// ## Operation
+/// Writes legend in modular sections:
+/// - Each command written separately via write_red_hotkey()
+/// - Colors applied per-command (RED hotkey, YELLOW description)
+/// - RESET applied at end
+/// - Modular: Add/remove commands without affecting others
+///
+/// ## Safety & Error Handling
+/// - Returns io::Result for write failures
+/// - Each command write is independent
+/// - Failure in one command doesn't affect others structurally
+///
+/// ## Legend Commands
+/// - q: quit application
+/// - sav: save current state (red and green and yellow)
+/// - re: reload/refresh
+/// - undo: undo last operation
+/// - del: delete item
+/// - nrm: normal mode
+/// - ins: insert mode
+/// - vis: visual mode
+/// - hex: hex editor mode
+/// - raw: raw view
+/// - pasty: paste operation
+/// - cvy: copy operation
+/// - wrd,b,end: word navigation
+/// - ///cmnt: comment operations (red and green and yellow)
+/// - []idnt: indent operations
+/// - hjkl: vim-style navigation
+///
+/// ## Example
+/// ```rust
+/// // In main display loop:
+/// write_formatted_navigation_legend_to_tui()?;
+/// ```
+fn write_formatted_navigation_legend_to_tui() -> Result<(),Error> {
+    // File operations group
+        write_red_hotkey("q", "uit ")?;
+
+    // // Mode operations group
+    write_red_hotkey("b", "ack|" )?;
+    write_red_hotkey("t", "ask ")?;
+    // // Three Colour
+    // write_red_green_hotkey("s", "a", "v ")?;
+    // // Red only
+    write_red_hotkey("m", "essage|")?;
+
+    write_red_hotkey("a", "dd node|")?;
+    // write_red_hotkey("hex", " ")?;
+
+    // // View operations group
+    write_red_hotkey("pt/pm", " passive refresh")?;
+    // write_red_hotkey("p", "asty ")?;
+    // write_red_hotkey("cvy", "|")?;
+
+    // // Navigation group
+    // write_red_hotkey("w", "rd,")?;
+    // write_red_hotkey("b", ",")?;
+    // write_red_hotkey("e", "nd ")?;
+
+    // // Comment/indent group
+    // // Three Colour
+    // write_red_green_hotkey("/", "/", "/cmnt ")?;
+    // // Red only
+    // write_red_hotkey("[]", "idnt ")?;
+
+    // // Movement group
+    // write_red_hotkey("hjkl", "")?;
+
+    // Clear formatting: ANSI color codes are stateful
+    // Make sure NEXT prints
+    // are not also formatted.
+    buffy_print("{}", &[BuffyFormatArg::Str(RESET)])?;
+
+    // Complete the line with newline \n
+    buffy_println("", &[])?;
+
+    // Done
+    Ok(())
+}
 
 /// Adds a new collaborator by creating a TOML configuration file in the executable-relative
 /// collaborator directory.

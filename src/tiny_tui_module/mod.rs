@@ -8,6 +8,7 @@ pub mod tiny_tui {
         OpenOptions,
         Write,
         debug_log,
+        write_formatted_navigation_legend_to_tui,
     };
     use std::fs;
     use std::fs::read_dir;
@@ -42,6 +43,9 @@ pub mod tiny_tui {
                 .map(|c| c.as_os_str().to_string_lossy())
                 .collect::<Vec<_>>()
                 .join("/");
+
+            let _ = write_formatted_navigation_legend_to_tui();
+
             println!("Current Path: /{}", relevant_path);
         } else {
             println!("Select a Team-Channel (by number):");
@@ -89,6 +93,7 @@ pub mod tiny_tui {
         // 1. Get the path components
         let path_components: Vec<_> = current_path.components().collect();
 
+        // this no longer works
         // 2. Display the path, skipping the first two components
         if path_components.len() > 2 {
             let relevant_path = path_components[2..]
@@ -96,6 +101,8 @@ pub mod tiny_tui {
                 .map(|c| c.as_os_str().to_string_lossy())
                 .collect::<Vec<_>>()
                 .join("/");
+            let _ = write_formatted_navigation_legend_to_tui();
+            println!("Select a Team-Channel (by number):");
             println!("Current Path: /{}", relevant_path);
         } else {
             println!("Select a Team-Channel (by number):");
