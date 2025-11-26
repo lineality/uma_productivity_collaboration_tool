@@ -4355,6 +4355,22 @@ pub fn collect_and_validate_collaborators(
     }
 }
 
+fn remove_dir_contents_if_exists<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
+    let path = path.as_ref();
+    if path.exists() {
+        for entry in fs::read_dir(path)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_dir() {
+                fs::remove_dir_all(path)?;
+            } else {
+                fs::remove_file(path)?;
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Generates a unique port not in the exclusion list.
 ///
 /// # Parameters
@@ -20320,10 +20336,19 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
             io_err
         ))?;
 
+    // Clear contents: TODO (dev: xcomment this out to track remaining files)
+    if let Err(e) = remove_dir_contents_if_exists(&base_uma_temp_directory_path) {
+        eprintln!("Error clearing directory: {}", e);
+    }
+
+
     // Ensure base_uma_temp_directory_path exists
     if !base_uma_temp_directory_path.exists() {
         fs::create_dir_all(&base_uma_temp_directory_path).expect("Failed to create base_uma_temp_directory_path directory");
     }
+
+    // debug_log!("IUA: base_uma_temp_directory_path -> {:?}", base_uma_temp_directory_path);
+
 
     debug_log!("IUA: base_uma_temp_directory_path -> {:?}", base_uma_temp_directory_path);
 
@@ -20409,7 +20434,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
 
 
     // To stop sync from starting before a channel is entered:
-    initialize_ok_to_start_sync_flag_to_false();
+    let _ = initialize_ok_to_start_sync_flag_to_false();
 
     // Check if there are any directories in project_graph_data/team_channels
     debug_log("let number_of_team_channels = fs::read_dir(&team_channels_dir)");
@@ -20420,10 +20445,14 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         COLLABORATOR_ADDRESSBOOK_PATH_STR,
     );
 
+
+
     // if !dir_at_path_is_empty_returns_false(Path::new(COLLABORATOR_ADDRESSBOOK_PATH_STR)) {
     if !dir_at_path_is_empty_returns_false(
         &collaborator_files_address_book_dir
             ) {
+
+        debug_log("IUA if !dir_at_path_is_empty_returns_false");
 
         // If there are no existing users, prompt the user to add a new user
         println!("Welcome to the application!");
@@ -20488,10 +20517,10 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         // new Q&A workflow, not requiring the user to open a new terminal and use gpg cli
 
         // Get armored public key, using key-id (full fingerprint in)
-        let mut full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+        let full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
             Ok(fingerprint) => fingerprint,
             Err(e) => {
-                eprintln!("Failed to read GPG fingerprint from uma.toml: {}", e);
+                eprintln!("IUA Failed to read GPG fingerprint from uma.toml: {}", e);
                 return Ok(false);
             }
         };
@@ -20504,22 +20533,22 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
                 gpg_key_public = armored_key;
             }
             Err(e) => {
-                eprintln!("Error: {}", e);
+                eprintln!("IUA Error: {}", e);
             }
         }
 
         println!("GPG key entered:\n{}", gpg_key_public); // Confirmation (remove in production)
-        debug_log("GPG key entered");
+        debug_log("IUA GPG key entered");
 
         // // Salt List!
-        debug_log("Salt List");
+        debug_log("IUA Salt List");
         // Generate salt list (4 random u128 values)
         let new_usersalt_list: Vec<u128> = (0..4)
             .map(|_| rand::rng().random())
             .collect();
 
         println!("Using salts: {:?}", new_usersalt_list);
-        debug_log!("Using salts: {:?}", new_usersalt_list);
+        debug_log!("IUA Using salts: {:?}", new_usersalt_list);
 
         // // Add a new user to Uma file system
         let _ = make_new_collaborator_addressbook_toml_file(
@@ -20573,7 +20602,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
                             }
                         },
                         Err(e) => {
-                            println!("Error accessing directory entry: {}", e);
+                            println!("IUA Error accessing directory entry: {}", e);
                             None // Skip this entry due to error
                         }
                     }
@@ -20581,7 +20610,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
                 .count()
         },
         Err(e) => {
-            println!("Error reading directory {}: {}", team_channels_dir.display(), e);
+            println!("IUA Error reading directory {}: {}", team_channels_dir.display(), e);
             0 // Default to 0 channels if directory can't be read
         }
     };
@@ -20590,6 +20619,8 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
     // let number_of_team_channels = count_subdirectories_executabledirectoryrelative_default_zero(&team_channels_dir);
 
     if number_of_team_channels == 0 {
+        debug_log("IUA if number_of_team_channels == 0");
+
         // If no team channels exist, create the first one
         println!("There are no existing team channels. Let's create one.");
         println!("Enter a name for a new Team-Channel:");
@@ -20617,12 +20648,12 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
             team_channel_name,
             uma_local_owner_user.clone(),
         );
-        }
+    }
 
-        // TODO
-        // maybe check for node file made?
+    // TODO
+    // maybe check for node file made?
 
-        debug_log("after create_new_team_channel()");
+    debug_log("IUA after create_new_team_channel()");
 
 
     //////////////////////////////////////////////////////////////////////////
@@ -20672,7 +20703,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
     // }
 
     // Get armored public key, using key-id (full fingerprint in)
-    let mut full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+    let full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
         Ok(fingerprint) => fingerprint,
         Err(e) => {
             eprintln!("Failed to read GPG fingerprint from uma.toml: {}", e);
@@ -20724,250 +20755,10 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         return Err(Box::new(e)); // Or handle the error as needed, including halting Uma with an informative message
     };
 
+    debug_log("IUA: all done");
+
     Ok(true) // Indicate online mode only when valid IP data has been obtained, parsed, converted, and written to sync data state files correctly
 }
-
-// fn handle_numeric_input(
-//     input: &str,
-//     app: &mut App,
-//     graph_navigation_instance_state: &GraphNavigationInstanceState,
-// ) -> Result<bool, Box<dyn std::error::Error>> {
-//     if let Ok(index) = input.parse::<usize>() {
-//         let item_index = index - 1; // Adjust for 0-based indexing
-//         if item_index < app.tui_directory_list.len() {
-//             // Special handling for team channels directory
-//             if app.current_path.display().to_string() == "project_graph_data/team_channels".to_string() {
-//                 let selected_channel = &app.tui_directory_list[item_index];
-//                 debug_log(&format!("Selected channel: {}", selected_channel));
-
-//                 // Enable sync flag
-//                 set_sync_start_ok_flag_to_true();
-
-//                 // Update paths
-//                 app.current_path = app.current_path.join(selected_channel);
-//                 app.graph_navigation_instance_state.current_full_file_path = app.current_path.clone();
-
-//                 // Update navigation state
-//                 app.graph_navigation_instance_state.nav_graph_look_read_node_toml();
-//             }
-//             // Handle regular directory navigation
-//             else {
-//                 app.current_path = app.current_path.join(&app.tui_directory_list[item_index]);
-//             }
-//             return Ok(true);
-//         }
-//     }
-//     Ok(false)
-// }
-
-// // use std::process::Command;
-// /// Exports the user's public GPG key to a specified location for sharing
-// ///
-// /// # Arguments
-// /// * `config_path` - Path to the uma.toml configuration file
-// /// * `output_directory` - Directory where the exported key should be saved
-// ///
-// /// # Returns
-// /// * `Result<String, ThisProjectError>` - Returns the path to the exported key file or an error
-// pub fn export_public_gpg_key_converts_to_abs_path(
-//     config_path: &Path,
-//     output_directory: &Path,
-// ) -> Result<String, ThisProjectError> {
-//     // Step 1: Get username from uma.toml
-//     let config_path_str = config_path.to_str()
-//         .ok_or_else(|| ThisProjectError::InvalidInput("Invalid path".to_string()))?;
-
-//     // TODO make uma.toml a clearsign toml probably
-//     // let username = read_field_from_toml(config_path_str, "uma_local_owner_user");
-//     let username = read_single_line_string_field_from_toml(config_path_str, "uma_local_owner_user");
-
-//     // Step 2: Construct path to user's config file
-//     let user_config_path = Path::new(COLLABORATOR_ADDRESSBOOK_PATH_STR)
-//         .join(format!("{}__collaborator.toml", username));
-
-//     // Step 3: Get GPG key ID from user's config file
-//     let user_config_path_str = user_config_path.to_str()
-//         .ok_or_else(|| ThisProjectError::InvalidInput("Invalid user config path".to_string()))?;
-//     let gpg_key_id = read_singleline_string_from_clearsigntoml(user_config_path_str, "gpg_publickey_id");
-
-//     // Create the output directory if it doesn't exist
-//     fs::create_dir_all(output_directory)
-//         .map_err(|e| ThisProjectError::IoError(e))?;
-
-//     // Generate the output file path
-//     let output_file = output_directory.join("key.asc");
-
-//     // Export the GPG key
-//     let output = StdCommand::new("gpg")
-//         .arg("--armor")
-//         .arg("--export")
-//         .arg(&gpg_key_id)
-//         .output()
-//         .map_err(|e| ThisProjectError::IoError(e))?;
-
-//     // Check if the command was successful
-//     if !output.status.success() {
-//         let error_message = String::from_utf8_lossy(&output.stderr);
-//         return Err(ThisProjectError::GpgError(error_message.to_string()));
-//     }
-
-//     // Write the output to a file
-//     fs::write(&output_file, output.stdout)
-//         .map_err(|e| ThisProjectError::IoError(e))?;
-
-
-
-//     /*
-//     Check for invitation:
-//     for share key... just give instructions?
-
-//     look here fn export_addressbook()
-//     encrypt with theirs and clearsign wtih theirs?
-//     ?
-//     use tomlclearsign files??? yes...
-
-//     1. is there a key in invtes_updates/incoming/gpg_key_for_invites_here
-//     2. if so:
-//     (look for an invite function or command with some of this code...)
-//     3. get current owner user name
-//     4. get current owner user addressbook path
-//     5. get key-id for current owner user? or not need clearsign?
-//     6. use key in folder to encrypt file at path step 4
-//     6. put the result in outgoing named whateer .asc
-
-//     */
-
-//     // Return the path to the exported key file
-//     Ok(output_file.to_string_lossy().into_owned())
-// }
-
-
-// // use std::fs;
-// // use std::path::Path;
-// // use std::process::Command as StdCommand;
-
-// /// Exports the user's public GPG key to a specified location for sharing.
-// ///
-// /// This function performs the following steps:
-// /// 1. Retrieves the username from the configuration file
-// /// 2. Locates the corresponding collaborator file for that user
-// /// 3. Extracts the GPG public key ID from the collaborator file
-// /// 4. Uses GPG to export the public key in ASCII-armored format
-// /// 5. Saves the exported key to the specified output directory
-// ///
-// /// # Arguments
-// /// * `config_path` - Path to the uma.toml configuration file
-// /// * `output_directory` - Directory where the exported key should be saved
-// ///
-// /// # Returns
-// /// * `Result<String, ThisProjectError>` - Returns the path to the exported key file on success,
-// ///   or an appropriate error if any step fails
-// ///
-// /// # Errors
-// /// * `ThisProjectError::InvalidInput` - If paths cannot be converted to strings
-// /// * `ThisProjectError::TomlVanillaDeserialStrError` - If reading from TOML files fails
-// /// * `ThisProjectError::IoError` - If file operations fail
-// /// * `ThisProjectError::GpgError` - If the GPG key export operation fails
-// pub fn export_public_gpg_key_converts_to_abs_path(
-//     config_path: &Path,
-//     output_directory: &Path,
-// ) -> Result<String, ThisProjectError> {
-
-//     debug_log("\n\nStarting -> fn export_public_gpg_key_converts_to_abs_path()");
-
-//     // Convert config path to string for TOML reading functions
-//     let config_path_str = config_path.to_str()
-//         .ok_or_else(|| ThisProjectError::InvalidInput("Cannot convert config path to string".to_string()))?;
-
-//     // Read username from the configuration file, mapping any reading errors to our error type
-//     let uma_localowneruser_username = read_single_line_string_field_from_toml(config_path_str, "uma_local_owner_user")
-//         .map_err(|error_message| ThisProjectError::TomlVanillaDeserialStrError(
-//             format!("Failed to read uma_localowneruser_username from config: {}", error_message)
-//         ))?;
-
-//     debug_log!("uma_localowneruser_username {}", uma_localowneruser_username);
-
-//     // Construct the path to the user's collaborator file, which contains their GPG key ID
-//     let collaborator_files_directory = COLLABORATOR_ADDRESSBOOK_PATH_STR;
-//     let collaborator_filename = format!("{}__collaborator.toml", uma_localowneruser_username);
-//     let user_config_path = Path::new(collaborator_files_directory).join(collaborator_filename);
-
-//     debug_log!("user_config_path {}", user_config_path.display());
-
-
-//     // Convert the collaborator file path to string for TOML reading
-//     let user_config_path_str = user_config_path.to_str()
-//         .ok_or_else(|| ThisProjectError::InvalidInput("Cannot convert collaborator file path to string".to_string()))?;
-
-
-//     debug_log!("user_config_path {}", user_config_path.display());
-
-//     // Extract the GPG key ID from the collaborator file
-//     let gpg_key_id = read_singleline_string_from_clearsigntoml(user_config_path_str, "gpg_publickey_id")
-//         .map_err(|error_message| ThisProjectError::TomlVanillaDeserialStrError(
-//             format!("Failed to read GPG key ID from collaborator file: {}", error_message)
-//         ))?;
-
-//     // Ensure the output directory exists, creating it if necessary
-//     fs::create_dir_all(output_directory)
-//         .map_err(|io_error| ThisProjectError::IoError(io_error))?;
-
-//     // Define the output file path where the exported key will be saved
-//     let output_file_path = output_directory.join("key.asc");
-
-//     debug_log!("output_file_path {}", output_file_path.display());
-
-//     // Call GPG to export the public key in ASCII-armored format
-//     let gpg_export_result = StdCommand::new("gpg")
-//         .arg("--armor")           // ASCII-armored format for text-based sharing
-//         .arg("--export")          // Export operation
-//         .arg(&gpg_key_id)         // The key ID to export
-//         .output()
-//         .map_err(|io_error| ThisProjectError::IoError(io_error))?;
-
-//     debug_log!("gpg_export_result {:?}", gpg_export_result);
-
-//     // Verify the GPG command executed successfully
-//     if !gpg_export_result.status.success() {
-//         // If GPG failed, extract the error message and return it
-//         let gpg_error_message = String::from_utf8_lossy(&gpg_export_result.stderr);
-//         return Err(ThisProjectError::GpgError(
-//             format!("GPG key export failed: {}", gpg_error_message)
-//         ));
-//     }
-
-//     // Write the exported key to the output file
-//     fs::write(&output_file_path, &gpg_export_result.stdout)
-//         .map_err(|io_error| ThisProjectError::IoError(io_error))?;
-//     /*
-//     Check for invitation:
-//     for share key... just give instructions?
-
-//     look here fn export_addressbook()
-//     encrypt with theirs and clearsign wtih theirs?
-//     ?
-//     use tomlclearsign files??? yes...
-
-//     1. is there a key in invtes_updates/incoming/gpg_key_for_invites_here
-//     2. if so:
-//     (look for an invite function or command with some of this code...)
-//     3. get current owner user name
-//     4. get current owner user addressbook path
-//     5. get key-id for current owner user? or not need clearsign?
-//     6. use key in folder to encrypt file at path step 4
-//     6. put the result in outgoing named whateer .asc
-
-//     */
-
-
-//     // Return the path to the exported key file as a string
-//     let result_path = output_file_path.to_string_lossy().into_owned();
-
-//     debug_log!("\n\n Ending -> fn export_public_gpg_key_converts_to_abs_path(), result_path -> {:?}", &result_path);
-
-//     Ok(result_path)
-// }
-
 
 /// Exports the user's public GPG key to a specified location for sharing.
 ///
