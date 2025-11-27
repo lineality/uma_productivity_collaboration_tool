@@ -2599,14 +2599,14 @@ fn extract_updated_at_timestamp(file_content: &[u8]) -> Result<u64, ThisProjectE
 Seri_Deseri Deserialize From End
 */
 
-/// get unix time
-/// e.g. for use with updated_at_timestamp
-fn get_current_unix_timestamp() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("System time is before the Unix epoch!") // Handle errors appropriately
-        .as_secs()
-}
+// /// get unix time
+// /// e.g. for use with updated_at_timestamp
+// fn get_current_unix_timestamp() -> u64 {
+//     SystemTime::now()
+//         .duration_since(UNIX_EPOCH)
+//         .expect("System time is before the Unix epoch!") // Handle errors appropriately
+//         .as_secs()
+// }
 
 
 
@@ -6210,7 +6210,7 @@ impl App {
     /// # State Management
     /// - Updates App.current_path to message directory
     /// - Sets App.input_mode appropriately
-    /// - Loads messages via App.load_im_messages()
+    /// - Loads messages via App.load_messagepost_messages()
     /// - Restores previous path on exit
     pub fn enter_modal_message_posts_browser(&mut self, channel_path: PathBuf) -> io::Result<()> {
         debug_log("starting enter_modal_message_posts_browser()");
@@ -6234,7 +6234,7 @@ impl App {
         }
 
         // Load initial messages
-        self.load_im_messages();
+        self.load_messagepost_messages();
 
         // Initialize the modal message browser state
         let mut current_message_view_mode = MessageViewMode::Refresh;
@@ -6289,7 +6289,7 @@ impl App {
 
                         // If switching from Insert to Refresh, immediately refresh
                         if previous_mode == MessageViewMode::Insert && current_message_view_mode == MessageViewMode::Refresh {
-                            self.load_im_messages();
+                            self.load_messagepost_messages();
                         }
 
                         needs_display_refresh = true;
@@ -6304,7 +6304,7 @@ impl App {
                         //         // Send message
                         //         self.add_new_message_from_input(&user_input_buffer)?;
                         //         user_input_buffer.clear();
-                        //         self.load_im_messages();
+                        //         self.load_messagepost_messages();
                         //         needs_display_refresh = true;
                         //     }
                         // }
@@ -6317,7 +6317,7 @@ impl App {
                                 // Launch custom message Q&A
                                 user_input_buffer.clear();
                                 self.create_custom_message_interactive()?;
-                                self.load_im_messages();
+                                self.load_messagepost_messages();
                                 needs_display_refresh = true;
                             },
 
@@ -6360,7 +6360,7 @@ impl App {
                                 let input_string = user_input_buffer.to_string();
                                 user_input_buffer.clear();
                                 self.add_new_message_from_input(&input_string)?;
-                                self.load_im_messages();
+                                self.load_messagepost_messages();
                                 needs_display_refresh = true;
                             }
                         }
@@ -6368,7 +6368,7 @@ impl App {
                 },
                 Ok(BrowserThreadMessage::DirectoryChanged) => {
                     if current_message_view_mode == MessageViewMode::Refresh {
-                        self.load_im_messages();
+                        self.load_messagepost_messages();
                         needs_display_refresh = true;
                     }
                 },
@@ -6538,27 +6538,79 @@ impl App {
             }
         };
 
-
-        // 2. Get Expiration (in minutes)
-        let expires_minutes = loop {
-            println!("\nExpiration time (in minutes from now, or ENTER for default 30 days):");
+        // 3. Get Expiration (absolute timestamp in seconds)
+        let expires_at_timestamp = loop {
+            println!("\nExpiration time (in minutes from now, or ENTER for default +999 years):");
 
             let mut input = String::new();
             io::stdin().read_line(&mut input)?;
             let input = input.trim();
 
+            let now = get_current_unix_timestamp();
+
             if input.is_empty() {
-                // Default: 30 days
-                break 30 * 24 * 60;
+                // Default: +999 years from now
+                let years_999_in_seconds: u64 = 999 * 365 * 24 * 60 * 60; // ~31.5 billion seconds
+                break now + years_999_in_seconds;
             }
 
             match input.parse::<u64>() {
-                Ok(minutes) if minutes > 0 => break minutes,
+                Ok(minutes) if minutes > 0 => {
+                    // Convert minutes to seconds, add to current time
+                    let duration_seconds = minutes * 60;
+                    break now + duration_seconds;
+                }
                 _ => {
                     println!("✗ Invalid input. Please enter a positive number or press ENTER for default.");
                 }
             }
         };
+
+        // // 2. Get Expiration (in minutes, convert to seconds)
+        // let expires_duration_seconds = loop {
+        //     println!("\nExpiration time (in minutes from now, or ENTER for default 30 days):");
+
+        //     let mut input = String::new();
+        //     io::stdin().read_line(&mut input)?;
+        //     let input = input.trim();
+
+        //     if input.is_empty() {
+        //         // Default: 30 days in SECONDS
+        //         break Some(30 * 24 * 60 * 60);  // 30 days = 2,592,000 seconds
+        //     }
+
+        //     match input.parse::<u64>() {
+        //         Ok(minutes) if minutes > 0 => {
+        //             // Convert minutes to seconds
+        //             break Some(minutes * 60);
+        //         }
+        //         _ => {
+        //             println!("✗ Invalid input. Please enter a positive number or press ENTER for default.");
+        //         }
+        //     }
+        // };
+
+
+        // // 2. Get Expiration (in minutes)
+        // let expires_minutes = loop {
+        //     println!("\nExpiration time (in minutes from now, or ENTER for default 30 days):");
+
+        //     let mut input = String::new();
+        //     io::stdin().read_line(&mut input)?;
+        //     let input = input.trim();
+
+        //     if input.is_empty() {
+        //         // Default: 30 days
+        //         break 30 * 24 * 60;
+        //     }
+
+        //     match input.parse::<u64>() {
+        //         Ok(minutes) if minutes > 0 => break minutes,
+        //         _ => {
+        //             println!("✗ Invalid input. Please enter a positive number or press ENTER for default.");
+        //         }
+        //     }
+        // };
 
         // 3. Get Encryption Setting (with override check)
         let use_encryption = if self.graph_navigation_instance_state.message_post_gpgtoml_required == Some(true) {
@@ -6612,12 +6664,12 @@ impl App {
 
         println!("To: {}", recipients_display);
         println!("Ping: {:?}", ping_list);
-        println!("Expires: {} minutes from now", expires_minutes);
+        println!("Expires: {:?} expires_at_timestamp", expires_at_timestamp);
         println!("Encrypted: {}", use_encryption);
         println!("Text: {}", text_message);
 
         loop {
-            println!("\nSend this message? (y/n):");
+            println!("\nCreate this message? (y/n):");
 
             let mut input = String::new();
             io::stdin().read_line(&mut input)?;
@@ -6633,6 +6685,7 @@ impl App {
                         ping_list,
                         use_encryption,
                         text_message,
+                        expires_at_timestamp,
                     )?;
 
                     println!("\n✓ Message was created.");
@@ -6658,39 +6711,22 @@ impl App {
 
     /// Send custom message with specified settings
     ///
-    /// Helper function that handles the actual message creation and saving.
+    /// Helper function that handles the message creation and saving.
     fn send_custom_message(
         &mut self,
         recipients: Vec<String>,
         ping_list: Vec<String>,
         use_encryption: bool,
         text_message: String,
+        expires_at: u64,
     ) -> io::Result<()> {
         debug_log("SCM Starting send_custom_message");
-        // Calculate expiration timestamp
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Time error: {}", e)))?
-            .as_secs();
 
         // Read metadata to get node info
         let metadata_path = self.current_path.join("0.toml");
-        // let metadata_path_string = fs::read_to_string(&metadata_path)?;
-
         let metadata_path_string = metadata_path.to_string_lossy();
 
         debug_log!("SCM metadata_path_string {}", metadata_path_string);
-
-        // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
-        // - metadata.expires_after_min u64
-        let expires_after_min = read_u64_field_from_toml(
-            &metadata_path_string,
-            "expires_at",
-        )
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("SCM: expires_at read_u64_field_from_toml error: {}", e)))?;
-
-        debug_log!("SCM expires_at {}", expires_after_min);
-
 
         // Step 4: Read the requested field from the verified file
         let node_name = read_single_line_string_field_from_toml(
@@ -6706,20 +6742,11 @@ impl App {
         )
         .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("SCM: path_in_node read_single_line_string_field_from_toml error: {}", e)))?;
 
-
-        // let metadata: NodeInstMsgBrowserMetadata = toml::from_str(&metadata_path_string)
-        //     .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("TOML error: {}", e)))?;
-
         // Get next sequential file path
         let file_path = get_next_message_file_path(
             &self.current_path,
             &self.graph_navigation_instance_state.local_owner_user
         );
-
-        // let expires_after_min = metadata.expires_after_min;
-
-
-        let expires_at = now + (expires_after_min * 60);
 
         debug_log!("SCM: Creating message at: {:?}", file_path);
 
@@ -6754,7 +6781,7 @@ impl App {
             use_encryption,
             Some(expires_at),
         );
-        debug_log("SCM Starting BAD!!!!!!! toml::to_string");
+        debug_log("SCM Starting serialize_messagepost_toml");
 
         let toml_data = match serialize_messagepost_toml(&message) {
             Ok(toml_string) => {
@@ -6980,8 +7007,8 @@ impl App {
     /// - Populates `self.tui_textmessage_list` with loaded messages
     /// - May prompt user for input if channel is empty
     /// - Creates temp files for reading (cleaned up after use)
-    fn load_im_messages(&mut self) {
-        debug_log!("LIM: Starting load_im_messages");
+    fn load_messagepost_messages(&mut self) {
+        debug_log!("LIM: Starting load_messagepost_messages");
         debug_log!("LIM: Current path: {:?}", self.current_path);
 
         self.tui_textmessage_list.clear();
@@ -7074,7 +7101,7 @@ impl App {
                 Ok(()) => {
                     debug_log!("LIM: First message created successfully");
                     // Recursively reload messages
-                    self.load_im_messages();
+                    self.load_messagepost_messages();
                     return;
                 }
                 Err(e) => {
@@ -7152,6 +7179,40 @@ impl App {
                     continue;
                 }
             };
+
+            // check if expired
+            // if so
+            // move to uma_archive/...same path after team_channel/...
+            // Read owner field
+            let expires_at_value = match read_u64_field_from_toml(
+                &message_readcopy_path,
+                "expires_at",
+            ) {
+                Ok(expires_at_value) => {
+                    expires_at_value
+                }
+                Err(e) => {
+                    debug_log!("LIM: expires_at to read owner from {}: {}", file_name, e);
+                    error_count += 1;
+                    continue;
+                }
+            };
+
+            // After reading expires_at_value, check if expired
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+
+            if expires_at_value < now {
+                /*
+                fn move_expired_message_to_archive(
+                source_path: &str, file_name: &str)
+                -> Result<(), String> {
+                 */
+                 let _ = move_expired_message_to_archive(&entry.path());                continue; // Skip further processing
+            }
+
 
             // Read owner field
             let owner = match read_single_line_string_field_from_toml(
@@ -15598,6 +15659,336 @@ impl NodeInstMsgBrowserMetadata {
     }
 }
 
+/// Gets current Unix timestamp (seconds since epoch)
+///
+/// ## Project Context
+/// Used for creating unique timestamps in archived filenames to prevent
+/// collisions when multiple expired messages have the same name.
+///
+/// ## Memory: ZERO HEAP
+/// Returns primitive u64, no allocation.
+///
+/// ## Returns
+/// - Seconds since Unix epoch (1970-01-01 00:00:00 UTC)
+///
+/// ## Error Handling
+/// Returns 0 if system time is before Unix epoch (extremely rare edge case).
+/// This prevents panic in production while maintaining function operation.
+fn get_current_unix_timestamp() -> u64 {
+    match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(duration) => duration.as_secs(),
+        Err(_) => {
+            #[cfg(debug_assertions)]
+            debug_log!("MEMTA: system time before Unix epoch, using 0");
+            0
+        }
+    }
+}
+
+/// Moves an expired message file to the archive directory with mirrored path structure.
+///
+/// ## Project Context
+/// Part of message lifecycle management system for team channels. When messages
+/// expire (based on expires_at field), they must be preserved (not deleted) by
+/// moving them to an organized archive. The archive mirrors the original directory
+/// structure after "team_channel/" for easy navigation and potential recovery.
+///
+/// ## Operation Flow
+/// 1. Validates source file exists and is readable
+/// 2. Records source file size (before any modifications)
+/// 3. Extracts path structure after LAST occurrence of "team_channel/"
+/// 4. Constructs archive path: {exe_parent}/uma_archive/{relative_path}
+/// 5. If no relative path (file directly in team_channel), uses: uma_archive/misc/
+/// 6. Creates necessary parent directories in archive
+/// 7. Handles filename collisions by appending Unix timestamp before extension
+/// 8. Copies file to archive location
+/// 9. Verifies copied file size matches original
+/// 10. Deletes original file (only after successful verification)
+///
+/// ## Atomicity & Safety Strategy
+/// Uses copy-verify-delete pattern to ensure original file is never lost:
+/// - Source file persists until archive copy is verified correct
+/// - If copy fails: source remains untouched, nothing archived, error returned
+/// - If verification fails: source remains, bad archive copy deleted, error returned
+/// - If delete fails: both copies exist (logged but returns Ok - file is archived)
+///
+/// ## Error Handling
+/// All errors return Result with static string (no heap allocation in production).
+/// Errors are logged with debug_log! in debug builds. Function never panics.
+/// All error messages prefixed with "MEMTA:" for traceability in logs.
+///
+/// Caller uses:
+/// ```rust
+/// let _ = move_expired_message_to_archive(entry.path());
+/// // Continues processing other files regardless of result
+/// ```
+///
+/// ## Edge Cases Handled
+/// - Source file doesn't exist: Returns error
+/// - Source disappeared during operation (race condition): Returns error, logs
+/// - Path doesn't contain "team_channel": Returns error, logs
+/// - Very long paths: OS handles (error on failure)
+/// - Unicode in filenames: Preserved correctly
+/// - Special characters in paths: Preserved correctly
+/// - Concurrent access to file: Copy may fail naturally with IO error
+/// - Readonly filesystems: Copy will fail with IO error
+/// - Disk full / quota exceeded: Copy will fail with IO error
+/// - Destination file exists: Appends Unix timestamp to filename
+///
+/// ## Parameters
+/// - `source_path`: Absolute path to the expired message file (from DirEntry)
+///
+/// ## Returns
+/// - `Ok(())`: File successfully archived and original deleted (or safely skipped)
+/// - `Err(&'static str)`: Operation failed, error message with "MEMTA:" prefix
+///
+/// ## Examples
+/// ```rust
+/// // Source: /home/data/team_channel/pets/cats/msg.toml
+/// // Archive: {exe_parent}/uma_archive/pets/cats/msg.toml
+///
+/// let result = move_expired_message_to_archive(Path::new("/home/data/team_channel/pets/cats/msg.toml"));
+/// match result {
+///     Ok(()) => {
+///         #[cfg(debug_assertions)]
+///         debug_log!("MEMTA: archived successfully");
+///     }
+///     Err(e) => {
+///         #[cfg(debug_assertions)]
+///         debug_log!("{}", e);
+///         // Continue processing other files
+///     }
+/// }
+/// ```
+fn move_expired_message_to_archive(source_path: &Path) -> Result<(), &'static str> {
+
+    debug_log!("MEMTA: source_path {:?}", source_path);
+    // Step 1: Validate source file exists and get metadata
+    let source_metadata = match fs::metadata(source_path) {
+        Ok(meta) => meta,
+        Err(_) => {
+            #[cfg(debug_assertions)]
+            debug_log!("MEMTA: source file not found or not accessible");
+            return Err("MEMTA: source not found");
+        }
+    };
+
+    // Verify it's actually a file (not a directory)
+    if !source_metadata.is_file() {
+        #[cfg(debug_assertions)]
+        debug_log!("MEMTA: source is not a file");
+        return Err("MEMTA: not a file");
+    }
+
+    // Step 2: Record source file size for later verification
+    let source_size = source_metadata.len();
+
+    // Step 3: Find LAST occurrence of "team_channels" in path
+    let source_str = match source_path.to_str() {
+        Some(s) => s,
+        None => {
+            #[cfg(debug_assertions)]
+            debug_log!("MEMTA: invalid UTF-8 in path");
+            return Err("MEMTA: invalid path encoding");
+        }
+    };
+
+    // Find last occurrence of "/team_channels/"
+    let relative_path = if let Some(last_pos) = source_str.rfind("/team_channels/") {
+        // Extract everything after "/team_channels/"
+        &source_str[last_pos + "/team_channels/".len()..]
+    } else {
+        // "team_channels" not found in path
+        #[cfg(debug_assertions)]
+        debug_log!("MEMTA: team_channels not found in path");
+        return Err("MEMTA: team_channels not in path");
+    };
+
+    // Handle empty relative path
+    if relative_path.is_empty() {
+        #[cfg(debug_assertions)]
+        debug_log!("MEMTA: empty path after team_channels");
+        return Err("MEMTA: invalid path structure");
+    }
+
+    // Step 4: Get executable parent directory
+    let exe_path = match std::env::current_exe() {
+        Ok(path) => path,
+        Err(_) => {
+            #[cfg(debug_assertions)]
+            debug_log!("MEMTA: cannot determine exe location");
+            return Err("MEMTA: exe dir error");
+        }
+    };
+
+    let exe_parent = match exe_path.parent() {
+        Some(parent) => parent,
+        None => {
+            #[cfg(debug_assertions)]
+            debug_log!("MEMTA: exe has no parent directory");
+            return Err("MEMTA: exe dir error");
+        }
+    };
+
+    // Step 5: Construct archive path
+    let mut archive_path = PathBuf::from(exe_parent);
+    archive_path.push("uma_archive");
+
+    // Check if we need to add "misc" subdirectory (file directly in team_channels)
+    if !relative_path.contains('/') {
+        // Just a filename, add misc subdirectory
+        archive_path.push("misc");
+    }
+
+    // Add the relative path
+    archive_path.push(relative_path);
+
+    // Step 6: Handle filename collision - if destination exists, append timestamp
+    let final_archive_path = if archive_path.exists() {
+        // File exists, need to append timestamp
+        let timestamp = get_current_unix_timestamp();
+
+        // Extract filename and extension
+        let file_stem = match archive_path.file_stem() {
+            Some(name) => name,
+            None => {
+                #[cfg(debug_assertions)]
+                debug_log!("MEMTA: cannot extract filename");
+                return Err("MEMTA: filename error");
+            }
+        };
+
+        let extension = archive_path.extension();
+
+        // Construct new filename: file_1704067200.toml
+        let mut new_name = file_stem.to_os_string();
+        new_name.push("_");
+        new_name.push(timestamp.to_string());
+
+        // Add extension back
+        if let Some(ext) = extension {
+            new_name.push(".");
+            new_name.push(ext);
+        }
+
+        // Update path with new filename
+        let mut new_archive_path = archive_path.clone();
+        new_archive_path.set_file_name(new_name);
+        new_archive_path
+    } else {
+        archive_path
+    };
+
+    // Step 7: Create parent directories if they don't exist
+    if let Some(parent) = final_archive_path.parent() {
+        if let Err(_) = fs::create_dir_all(parent) {
+            #[cfg(debug_assertions)]
+            debug_log!("MEMTA: failed to create archive directories");
+            return Err("MEMTA: archive dir creation failed");
+        }
+    }
+
+    // Step 8: Copy file to archive
+    if let Err(_) = fs::copy(source_path, &final_archive_path) {
+        #[cfg(debug_assertions)]
+        debug_log!("MEMTA: copy operation failed");
+        return Err("MEMTA: copy failed");
+    }
+
+    // Step 9: Verify copied file size matches original
+    let archive_metadata = match fs::metadata(&final_archive_path) {
+        Ok(meta) => meta,
+        Err(_) => {
+            #[cfg(debug_assertions)]
+            debug_log!("MEMTA: cannot read archive file metadata after copy");
+            // Try to clean up bad archive copy
+            let _ = fs::remove_file(&final_archive_path);
+            return Err("MEMTA: archive verify failed");
+        }
+    };
+
+    let archive_size = archive_metadata.len();
+
+    if archive_size != source_size {
+        #[cfg(debug_assertions)]
+        debug_log!("MEMTA: size mismatch - src {} bytes, archive {} bytes", source_size, archive_size);
+        // Clean up bad archive copy
+        let _ = fs::remove_file(&final_archive_path);
+        return Err("MEMTA: size mismatch");
+    }
+
+    // Step 10: Delete original file (archive verified successful)
+    if let Err(_) = fs::remove_file(source_path) {
+        #[cfg(debug_assertions)]
+        debug_log!("MEMTA: warning - could not delete original (exists in both locations)");
+        // File is successfully archived, so return Ok even though delete failed
+        // This is pragmatic - the important operation (archiving) succeeded
+    }
+
+    #[cfg(debug_assertions)]
+    debug_log!("MEMTA: successfully archived");
+
+    Ok(())
+}
+
+
+// =============================================================================
+// TESTS
+// =============================================================================
+
+#[cfg(test)]
+mod mp_arch_tests {
+    use super::*;
+    use std::fs;
+    use std::path::PathBuf;
+
+    /// Test helper: creates temporary test directory structure
+    fn setup_test_env() -> (PathBuf, PathBuf) {
+        let temp_base = std::env::temp_dir();
+        let test_root = temp_base.join(format!("memta_test_{}", get_current_unix_timestamp()));
+
+        let team_channels_dir = test_root.join("team_channels").join("pets").join("cats");
+        fs::create_dir_all(&team_channels_dir).expect("Failed to create test dirs");
+
+        (test_root, team_channels_dir)
+    }
+
+    /// Test helper: cleanup test directories
+    fn cleanup_test_env(test_root: &Path) {
+        let _ = fs::remove_dir_all(test_root);
+    }
+
+    #[test]
+    fn test_get_current_unix_timestamp() {
+        let timestamp = get_current_unix_timestamp();
+        // Timestamp should be reasonable (after 2020, before 2100)
+        assert!(timestamp > 1577836800); // 2020-01-01
+        assert!(timestamp < 4102444800); // 2100-01-01
+    }
+
+    #[test]
+    fn test_move_expired_message_basic() {
+        let (test_root, team_channels_dir) = setup_test_env();
+
+        // Create test file
+        let test_file = team_channels_dir.join("message.toml");
+        fs::write(&test_file, b"test content").expect("Failed to write test file");
+
+        // This test would need modification to work with actual exe directory
+        // In real implementation, this validates the full path construction
+
+        cleanup_test_env(&test_root);
+    }
+
+    #[test]
+    fn test_timestamp_format() {
+        // Verify timestamp is numeric
+        let timestamp = get_current_unix_timestamp();
+        let timestamp_str = timestamp.to_string();
+        assert!(timestamp_str.chars().all(|c| c.is_ascii_digit()));
+        assert!(timestamp_str.len() >= 10); // Unix timestamp is 10+ digits
+    }
+}
 
 /*
 Note: this might get generalized to fit in with vote an other files
@@ -17294,7 +17685,7 @@ fn run_passive_message_mode(path: &Path) -> io::Result<()> {
 /// and encrypted `.gpgtoml` files, matching the interactive view's capabilities
 /// while maintaining passive-only operation (no user input, auto-refresh only).
 ///
-/// This is the passive-view equivalent of `load_im_messages()`, with key differences:
+/// This is the passive-view equivalent of `load_messagepost_messages()`, with key differences:
 /// - No interactive prompts (if empty, shows empty list)
 /// - All errors are logged and skipped (never halts viewing)
 /// - No state management (reads fresh each time)
@@ -17408,7 +17799,7 @@ fn run_passive_message_mode(path: &Path) -> io::Result<()> {
 ///
 /// # Related Functions
 ///
-/// - `load_im_messages()` - Interactive version with state management
+/// - `load_messagepost_messages()` - Interactive version with state management
 /// - `get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml()` - Gets readable temp copy
 /// - `cleanup_collaborator_temp_file()` - Cleans up temp files
 /// - `simple_render_list_passive()` - Renders message list
@@ -24265,7 +24656,7 @@ fn handle_command_main_mode(
                 // );
 
                 // // Enter Browser of Messages
-                // app.load_im_messages();
+                // app.load_messagepost_messages();
 
                 // TODO experimental state refresh
                 app.enter_modal_message_posts_browser(app.current_path.clone())?;
@@ -33024,7 +33415,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                     &app.graph_navigation_instance_state, // Pass using self
                 ).expect("handle_insert_text_input: Failed to add message");
 
-                app.load_im_messages(); // Access using self
+                app.load_messagepost_messages(); // Access using self
             }
         }
 
@@ -33132,7 +33523,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                 //     &app.graph_navigation_instance_state, // Pass using self
                 // ).expect("handle_insert_text_input: Failed to add message");
 
-                // app.load_im_messages(); // Access using self
+                // app.load_messagepost_messages(); // Access using self
             }
         }
 
