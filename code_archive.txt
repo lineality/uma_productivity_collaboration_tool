@@ -10528,3 +10528,16 @@ fn remove_non_alphanumeric(s: &str) -> String {
 
 //     Ok(result_path)
 // }
+
+// /// for an intermediate step in converting data types
+// #[derive(Debug, Deserialize, serde::Serialize, Clone)]
+// struct RawProtoDataToml {
+//     user_name: String,
+//     user_salt_list: Vec<String>,
+//     ipv4_addresses: Option<Vec<Ipv4Addr>>,
+//     ipv6_addresses: Option<Vec<Ipv6Addr>>,
+//     gpg_publickey_id: String,
+//     gpg_key_public: String,
+//     sync_interval: u64,
+//     updated_at_timestamp: u64,
+// }

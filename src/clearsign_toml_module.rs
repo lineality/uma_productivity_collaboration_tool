@@ -11212,6 +11212,613 @@ pub fn read_option_bool_field_from_toml(
     Ok(None)
 }
 
+/// Reads a boolean field from a TOML configuration file with fail-safe binary semantics.
+///
+/// # Project Context & Purpose
+/// This function is designed for reading optional boolean feature flags and permission
+/// settings from TOML configuration files in production systems where reliability and
+/// fail-safe behavior are critical. It implements a "deny by default" security policy:
+/// features are disabled unless explicitly enabled.
+///
+/// # Binary Fail-Safe Philosophy
+/// This is NOT a general-purpose TOML parser. It implements specific fail-safe semantics
+/// for production systems where:
+/// - Safety is prioritized over error reporting
+/// - Features must be explicitly enabled (not accidentally enabled)
+/// - Any ambiguity or error results in the safe default (false/disabled)
+/// - The system must NEVER halt/panic/crash due to configuration issues
+///
+/// # Use Cases in This Project
+/// - Feature flags: `enable_advanced_mode = true` (disabled by default)
+/// - Permission checks: `user_is_admin = true` (deny by default)
+/// - Safety settings: `allow_destructive_operations = true` (deny by default)
+/// - Public visibility: `message_post_is_public_bool = true` (private by default)
+///
+/// # Binary Return Semantics (The Critical Design Decision)
+/// Returns `bool` NOT `Result<bool, String>` because:
+/// 1. In production, configuration errors should not halt the system
+/// 2. The safe default (false) is always valid and actionable
+/// 3. Explicit error handling at call sites would force panic-or-continue decisions
+/// 4. This function's purpose is "is feature explicitly enabled?" not "parse TOML"
+///
+/// ## Return Value Truth Table
+/// | Condition                          | Returns | Rationale                           |
+/// |------------------------------------|---------|-------------------------------------|
+/// | Field exists with `true`           | `true`  | Explicit enable                     |
+/// | Field exists with `false`          | `false` | Explicit disable                    |
+/// | Field not found                    | `false` | Default: feature disabled           |
+/// | File cannot be opened              | `false` | Fail-safe: deny if config missing   |
+/// | File read error                    | `false` | Fail-safe: deny if config corrupted |
+/// | Field has invalid value            | `false` | Fail-safe: deny if config invalid   |
+/// | Field has empty value              | `false` | Fail-safe: deny if config malformed |
+/// | Field value is "True" or "TRUE"    | `false` | Case-sensitive: only lowercase      |
+/// | Field value is "1" or "yes"        | `false` | Strict: only "true"/"false" valid   |
+/// | Field value is `"true"` (quoted)   | `false` | Quoted strings are not booleans     |
+///
+/// # Arguments
+/// * `absolute_file_path` - Absolute path to the TOML configuration file.
+///                          Relative paths are accepted but absolute paths are
+///                          strongly recommended for production systems to avoid
+///                          ambiguity about working directory.
+///
+/// * `field_name` - The exact name of the TOML field to read (case-sensitive).
+///                  Must match the key name before the `=` in the TOML file.
+///
+/// # Returns
+/// * `true` - If and ONLY if the field exists and has the exact value `true`
+/// * `false` - In ALL other cases (this is the fail-safe default)
+///
+/// # TOML Format Requirements
+/// Valid TOML boolean format:
+/// ```toml
+/// field_name = true   # Returns: true
+/// field_name = false  # Returns: false
+/// ```
+///
+/// Invalid formats (all return false):
+/// ```toml
+/// field_name = True   # Wrong case
+/// field_name = "true" # Quoted (string, not boolean)
+/// field_name = 1      # Number, not boolean
+/// field_name =        # Empty value
+/// # field_name missing entirely
+/// ```
+///
+/// # Performance & Resource Characteristics
+/// - **Memory**: Reads line-by-line; never loads entire file into memory
+/// - **I/O**: Sequential read, stops immediately when field is found
+/// - **Allocation**: Minimal heap allocation (BufReader buffer only)
+/// - **Time Complexity**: O(n) where n is the number of lines before the field
+///
+/// # Error Handling Philosophy (Critical Production Behavior)
+/// This function NEVER panics, NEVER crashes, NEVER halts the program.
+/// All errors are silently converted to `false` (the safe default) because:
+///
+/// 1. **Fail-Safe**: In production, it's safer to deny a feature than to crash
+/// 2. **Continuous Operation**: The system must continue running even if config is corrupt
+/// 3. **Defense in Depth**: Higher-level code can implement additional logging/monitoring
+/// 4. **Separation of Concerns**: This function answers "is enabled?" not "debug config"
+///
+/// Errors that are handled (all return false):
+/// - File does not exist
+/// - File cannot be opened (permissions, locked, etc.)
+/// - File cannot be read (I/O errors, corrupted filesystem)
+/// - Line cannot be read (encoding errors, corrupted data)
+/// - Invalid TOML syntax in the specific field
+/// - Wrong data type for the field
+///
+/// # Debug vs Production Behavior
+/// - **Production builds**: Silent fail-safe behavior, returns false on any issue
+/// - **Debug builds**: Same behavior but with debug logging to stderr
+/// - **Test builds**: Can use test assertions in separate test functions (not here)
+///
+/// # Security Considerations
+/// - File paths are NOT leaked in production (debug only)
+/// - File contents are NOT leaked in production (debug only)
+/// - Error details are NOT exposed to potential attackers (debug only)
+/// - This follows "fail closed" security policy (deny if uncertain)
+///
+/// # Example Usage
+/// ```rust
+/// // Feature flag check
+/// if read_bool_field_from_toml("/etc/myapp/config.toml", "enable_experimental_feature") {
+///     activate_experimental_feature();
+/// }
+/// // If config is missing/corrupt, experimental feature stays disabled (safe)
+///
+/// // Permission check
+/// let user_is_admin = read_bool_field_from_toml(
+///     "/var/myapp/users/user123.toml",
+///     "admin_privileges"
+/// );
+/// if user_is_admin {
+///     allow_admin_action();
+/// } else {
+///     deny_admin_action();
+/// }
+/// // If user file is corrupted, admin access is denied (safe)
+///
+/// // Public visibility check
+/// let is_public = read_bool_field_from_toml(
+///     "/data/messages/msg456.toml",
+///     "message_post_is_public_bool"
+/// );
+/// if is_public {
+///     show_to_all_users();
+/// } else {
+///     show_to_owner_only();
+/// }
+/// // If message file is missing, post is private (safe)
+/// ```
+///
+/// # Comparison with Previous Version
+/// **Old**: `fn(...) -> Result<bool, String>` - required error handling at every call site
+/// **New**: `fn(...) -> bool` - caller just uses the result, system never crashes
+///
+/// The new version is more appropriate for production because:
+/// - Configuration errors don't require application code changes
+/// - No risk of forgetting `.unwrap()` or `.expect()` at call sites
+/// - Clear semantics: "Is this feature enabled? Yes or no."
+/// - Fail-safe by design: worst case is feature disabled, not system crashed
+///
+/// # Testing Strategy
+/// Because this function never panics, testing must verify:
+/// 1. Returns true for valid "true" values
+/// 2. Returns false for "false" values
+/// 3. Returns false for missing files
+/// 4. Returns false for missing fields
+/// 5. Returns false for invalid values
+/// 6. Returns false for malformed TOML
+/// 7. Does not panic for any input (fuzz testing recommended)
+///
+/// # Known Limitations & Assumptions
+/// 1. **Not a full TOML parser**: Only reads top-level key=value pairs
+/// 2. **No section support**: Cannot read `[section]` nested values
+/// 3. **No table support**: Cannot read `[table.subtable]` values
+/// 4. **No array support**: Cannot read array elements
+/// 5. **Line-based parsing**: Assumes field is on a single line
+/// 6. **Case-sensitive**: `True` and `true` are different
+/// 7. **No inline comments**: `field = true # comment` may fail (value includes comment)
+/// 8. **First match wins**: If field appears multiple times, first value is used
+///
+/// These limitations are acceptable because:
+/// - This is for simple top-level boolean flags
+/// - Complex configuration should use a proper TOML library
+/// - Simplicity reduces attack surface and failure modes
+///
+/// # Future Considerations
+/// If more complex TOML parsing is needed, consider:
+/// - Using a full TOML library (but this adds dependency risk)
+/// - Creating a more robust parser (but this increases complexity)
+/// - Current approach is intentionally minimal for reliability
+pub fn read_bool_field_fromtoml_binary(absolute_file_path: &str, field_name: &str) -> bool {
+    // =================================================
+    // Defensive Input Validation
+    // =================================================
+
+    // Check for empty path (should never happen but handle gracefully)
+    if absolute_file_path.is_empty() {
+        #[cfg(debug_assertions)]
+        eprintln!(
+            "[DEBUG] read_bool_field_from_toml: empty file path provided, \
+             field='{}', returning false",
+            field_name
+        );
+        return false;
+    }
+
+    // Check for empty field name (should never happen but handle gracefully)
+    if field_name.is_empty() {
+        #[cfg(debug_assertions)]
+        eprintln!(
+            "[DEBUG] read_bool_field_from_toml: empty field name provided, \
+             path='{}', returning false",
+            absolute_file_path
+        );
+        return false;
+    }
+
+    // =================================================
+    // Attempt to Open File
+    // =================================================
+
+    // Try to open the TOML configuration file
+    // Fail-safe: If file cannot be opened (missing, permissions, locked, etc.),
+    // return false (feature disabled by default)
+    let file = match File::open(absolute_file_path) {
+        Ok(opened_file) => opened_file,
+        Err(io_error) => {
+            // In debug builds, log why we failed to open the file
+            // In production builds, silently return false (fail-safe)
+            #[cfg(debug_assertions)]
+            eprintln!(
+                "[DEBUG] read_bool_field_from_toml: cannot open file, \
+                 path='{}', field='{}', error='{}', returning false",
+                absolute_file_path, field_name, io_error
+            );
+            return false;
+        }
+    };
+
+    // =================================================
+    // Create Buffered Reader for Line-by-Line Processing
+    // =================================================
+
+    // Use BufReader for efficient line-by-line reading
+    // This ensures we don't load the entire file into memory
+    // Memory-efficient: only one line in memory at a time
+    let buffered_reader = io::BufReader::new(file);
+
+    // =================================================
+    // Parse TOML File Line by Line
+    // =================================================
+
+    // Iterate through each line in the file
+    // We use lines() which returns an iterator of Result<String, io::Error>
+    for line_result in buffered_reader.lines() {
+        // Try to read the current line
+        // Fail-safe: If line cannot be read (I/O error, encoding issue, corruption),
+        // skip this line and continue to the next line
+        let line = match line_result {
+            Ok(line_string) => line_string,
+            Err(io_error) => {
+                // Debug log the error but continue processing other lines
+                #[cfg(debug_assertions)]
+                eprintln!(
+                    "[DEBUG] read_bool_field_from_toml: cannot read line, \
+                     path='{}', field='{}', error='{}', skipping line",
+                    absolute_file_path, field_name, io_error
+                );
+                // Skip this corrupted line and continue to next line
+                // This allows partial file corruption to not break the entire config
+                continue;
+            }
+        };
+
+        // Remove leading and trailing whitespace from the line
+        let trimmed_line = line.trim();
+
+        // =================================================
+        // Skip Empty Lines and Comments
+        // =================================================
+
+        // Empty lines are not TOML fields, skip them
+        if trimmed_line.is_empty() {
+            continue;
+        }
+
+        // TOML comments start with '#', skip comment lines
+        if trimmed_line.starts_with('#') {
+            continue;
+        }
+
+        // =================================================
+        // Parse Key-Value Pair
+        // =================================================
+
+        // TOML key-value pairs have format: key = value
+        // Find the position of the '=' character
+        let equals_position = match trimmed_line.find('=') {
+            Some(position) => position,
+            None => {
+                // This line doesn't have '=', so it's not a key-value pair
+                // Skip this line (might be malformed TOML or section header)
+                continue;
+            }
+        };
+
+        // Extract the key (everything before '=')
+        let key_part = trimmed_line[..equals_position].trim();
+
+        // =================================================
+        // Check if This Line Contains Our Target Field
+        // =================================================
+
+        // Compare the key with our target field name (case-sensitive)
+        if key_part != field_name {
+            // This is not the field we're looking for, continue to next line
+            continue;
+        }
+
+        // =================================================
+        // Found Our Field - Parse the Value
+        // =================================================
+
+        // Extract the value (everything after '=')
+        let value_part = trimmed_line[equals_position + 1..].trim();
+
+        // Check for empty value after '='
+        // Example: field_name =
+        if value_part.is_empty() {
+            #[cfg(debug_assertions)]
+            eprintln!(
+                "[DEBUG] read_bool_field_from_toml: field has empty value, \
+                 path='{}', field='{}', returning false",
+                absolute_file_path, field_name
+            );
+            return false;
+        }
+
+        // =================================================
+        // Parse Boolean Value with Strict Validation
+        // =================================================
+
+        // Only accept exact lowercase "true" or "false"
+        // This is intentionally strict for security and clarity
+        match value_part {
+            "true" => {
+                // SUCCESS: Found explicit "true" value
+                #[cfg(debug_assertions)]
+                eprintln!(
+                    "[DEBUG] read_bool_field_from_toml: found true, \
+                     path='{}', field='{}'",
+                    absolute_file_path, field_name
+                );
+                return true;
+            }
+            "false" => {
+                // Found explicit "false" value
+                #[cfg(debug_assertions)]
+                eprintln!(
+                    "[DEBUG] read_bool_field_from_toml: found false, \
+                     path='{}', field='{}'",
+                    absolute_file_path, field_name
+                );
+                return false;
+            }
+            _ => {
+                // Field exists but has invalid boolean value
+                // Examples: "True", "1", "yes", "\"true\"", etc.
+                #[cfg(debug_assertions)]
+                eprintln!(
+                    "[DEBUG] read_bool_field_from_toml: field has invalid boolean value, \
+                     path='{}', field='{}', value='{}', returning false",
+                    absolute_file_path, field_name, value_part
+                );
+                return false;
+            }
+        }
+
+        // Note: We return immediately after finding the field, so we never
+        // reach here. If the field appears multiple times in the file,
+        // the first occurrence wins (this is intentional for simplicity).
+    }
+
+    // =================================================
+    // Field Not Found in File
+    // =================================================
+
+    // We've read through the entire file and didn't find the field
+    // This is NOT an error - it's the expected case for optional fields
+    // Return false (feature disabled by default)
+    #[cfg(debug_assertions)]
+    eprintln!(
+        "[DEBUG] read_bool_field_from_toml: field not found in file, \
+         path='{}', field='{}', returning false (default)",
+        absolute_file_path, field_name
+    );
+
+    false
+}
+
+// =================================================
+// Unit Tests
+// =================================================
+
+#[cfg(test)]
+mod binaryboolean_tests {
+    use super::*;
+    use std::io::Write;
+    use std::path::PathBuf;
+
+    /// Helper function to create a temporary test file with given content
+    /// Returns the absolute path to the created file
+    fn create_test_toml_file(content: &str, test_name: &str) -> PathBuf {
+        let temp_dir = std::env::temp_dir();
+        let file_path = temp_dir.join(format!(
+            "test_toml_{}_{}.toml",
+            test_name,
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+
+        let mut file = File::create(&file_path).expect("Failed to create test file");
+        file.write_all(content.as_bytes())
+            .expect("Failed to write test file");
+
+        file_path
+    }
+
+    /// Test: Field with value "true" returns true
+    #[test]
+    fn test_field_with_true_value() {
+        let content = "test_field = true\n";
+        let path = create_test_toml_file(content, "true_value");
+        let path_str = path.to_str().unwrap();
+
+        let result = read_bool_field_fromtoml_binary(path_str, "test_field");
+
+        assert!(result, "Field with 'true' value should return true");
+
+        // Cleanup
+        let _ = std::fs::remove_file(path);
+    }
+
+    /// Test: Field with value "false" returns false
+    #[test]
+    fn test_field_with_false_value() {
+        let content = "test_field = false\n";
+        let path = create_test_toml_file(content, "false_value");
+        let path_str = path.to_str().unwrap();
+
+        let result = read_bool_field_fromtoml_binary(path_str, "test_field");
+
+        assert!(!result, "Field with 'false' value should return false");
+
+        // Cleanup
+        let _ = std::fs::remove_file(path);
+    }
+
+    /// Test: Missing field returns false (fail-safe default)
+    #[test]
+    fn test_missing_field() {
+        let content = "other_field = true\n";
+        let path = create_test_toml_file(content, "missing_field");
+        let path_str = path.to_str().unwrap();
+
+        let result = read_bool_field_fromtoml_binary(path_str, "missing_field");
+
+        assert!(!result, "Missing field should return false (fail-safe)");
+
+        // Cleanup
+        let _ = std::fs::remove_file(path);
+    }
+
+    /// Test: Non-existent file returns false (fail-safe)
+    #[test]
+    fn test_nonexistent_file() {
+        let result = read_bool_field_fromtoml_binary("/nonexistent/path/to/file.toml", "any_field");
+
+        assert!(!result, "Non-existent file should return false (fail-safe)");
+    }
+
+    /// Test: Invalid boolean value returns false
+    #[test]
+    fn test_invalid_boolean_value() {
+        let content = "test_field = True\n"; // Wrong case
+        let path = create_test_toml_file(content, "invalid_value");
+        let path_str = path.to_str().unwrap();
+
+        let result = read_bool_field_fromtoml_binary(path_str, "test_field");
+
+        assert!(
+            !result,
+            "Invalid boolean value (wrong case) should return false"
+        );
+
+        // Cleanup
+        let _ = std::fs::remove_file(path);
+    }
+
+    /// Test: Empty value returns false
+    #[test]
+    fn test_empty_value() {
+        let content = "test_field = \n";
+        let path = create_test_toml_file(content, "empty_value");
+        let path_str = path.to_str().unwrap();
+
+        let result = read_bool_field_fromtoml_binary(path_str, "test_field");
+
+        assert!(!result, "Empty value should return false");
+
+        // Cleanup
+        let _ = std::fs::remove_file(path);
+    }
+
+    /// Test: Quoted boolean string returns false (not a boolean type)
+    #[test]
+    fn test_quoted_boolean() {
+        let content = "test_field = \"true\"\n";
+        let path = create_test_toml_file(content, "quoted_bool");
+        let path_str = path.to_str().unwrap();
+
+        let result = read_bool_field_fromtoml_binary(path_str, "test_field");
+
+        assert!(
+            !result,
+            "Quoted 'true' is a string, not a boolean, should return false"
+        );
+
+        // Cleanup
+        let _ = std::fs::remove_file(path);
+    }
+
+    /// Test: Comments and empty lines are handled correctly
+    #[test]
+    fn test_comments_and_empty_lines() {
+        let content = "# This is a comment\n\ntest_field = true\n# Another comment\n";
+        let path = create_test_toml_file(content, "comments");
+        let path_str = path.to_str().unwrap();
+
+        let result = read_bool_field_fromtoml_binary(path_str, "test_field");
+
+        assert!(
+            result,
+            "Should correctly parse field despite comments and empty lines"
+        );
+
+        // Cleanup
+        let _ = std::fs::remove_file(path);
+    }
+
+    /// Test: Whitespace handling around key and value
+    #[test]
+    fn test_whitespace_handling() {
+        let content = "  test_field   =   true  \n";
+        let path = create_test_toml_file(content, "whitespace");
+        let path_str = path.to_str().unwrap();
+
+        let result = read_bool_field_fromtoml_binary(path_str, "test_field");
+
+        assert!(
+            result,
+            "Should correctly handle whitespace around key and value"
+        );
+
+        // Cleanup
+        let _ = std::fs::remove_file(path);
+    }
+
+    /// Test: Empty file path returns false
+    #[test]
+    fn test_empty_file_path() {
+        let result = read_bool_field_fromtoml_binary("", "test_field");
+
+        assert!(
+            !result,
+            "Empty file path should return false (defensive check)"
+        );
+    }
+
+    /// Test: Empty field name returns false
+    #[test]
+    fn test_empty_field_name() {
+        let content = "test_field = true\n";
+        let path = create_test_toml_file(content, "empty_field_name");
+        let path_str = path.to_str().unwrap();
+
+        let result = read_bool_field_fromtoml_binary(path_str, "");
+
+        assert!(
+            !result,
+            "Empty field name should return false (defensive check)"
+        );
+
+        // Cleanup
+        let _ = std::fs::remove_file(path);
+    }
+
+    /// Test: First occurrence wins if field appears multiple times
+    #[test]
+    fn test_duplicate_fields() {
+        let content = "test_field = true\ntest_field = false\n";
+        let path = create_test_toml_file(content, "duplicates");
+        let path_str = path.to_str().unwrap();
+
+        let result = read_bool_field_fromtoml_binary(path_str, "test_field");
+
+        assert!(
+            result,
+            "First occurrence should be used (true), not second (false)"
+        );
+
+        // Cleanup
+        let _ = std::fs::remove_file(path);
+    }
+}
+
 /// Reads an optional boolean field from a TOML file into an Option<bool>.
 ///
 /// # Purpose

@@ -406,45 +406,7 @@ toml crates
 // For toml and clearsigntoml
 mod clearsign_toml_module;
 use crate::clearsign_toml_module::{
-    GpgError,
-    read_string_array_field_from_toml,
-    convert_tomlfile_without_keyid_using_gpgtomlkeyid_into_clearsigntoml_inplace,
-    verify_clearsign,
-    convert_toml_filewithkeyid_into_clearsigntoml_inplace,
-    q_and_a_user_selects_gpg_key_full_fingerprint,
-    read_single_line_string_field_from_toml,
-    read_u8_field_from_toml,
-    read_u64_field_from_toml,
-    read_float_f32_field_from_toml,
-    read_singleline_string_from_clearsigntoml,
-    read_multiline_string_from_clearsigntoml,
-    read_str_array_field_clearsigntoml,
-    extract_verify_store_gpg_encrypted_clearsign_toml,
-    verify_clearsigned_file_and_extract_content_to_output,
-    clearsign_and_encrypt_file_for_recipient,
-    gpg_make_input_path_name_abs_executabledirectoryrelative_nocheck,
-    decrypt_gpgfile_to_output,
-    // read_all_collaborator_port_assignments_clearsigntoml_optimized,
-    read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyid,
-    // read_teamchannel_collaborators_with_access_from_clearsigntoml,
-    read_singleline_string_from_clearsigntoml_without_publicgpgkey,
-    read_u8_array_from_clearsigntoml_without_publicgpgkey,
-    read_pathbuf_from_clearsigntoml_without_publicgpgkey,
-    read_u64_from_clearsigntoml_without_publicgpgkey,
-    read_stringarray_from_clearsigntoml_without_publicgpgkey,
-    read_option_i32_tuple_array_from_clearsigntoml_without_publicgpgkey,
-    read_option_usize_from_clearsigntoml_without_publicgpgkey,
-    read_option_bool_from_clearsigntoml_without_publicgpgkey,
-    read_bool_from_clearsigntoml_without_publicgpgkey,
-    read_abstract_ports_from_clearsigntoml_without_publicgpgkey,
-    read_option_i64_from_clearsigntoml_without_publicgpgkey,
-    read_teamchannel_collaborator_ports_clearsigntoml_without_keyid,
-    read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml,
-    get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml,
-    get_pathstring_to_temp_plaintoml_verified_extracted,
-    get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml,
-    cleanup_collaborator_temp_file,
-    read_u64_array_from_clearsigntoml_without_publicgpgkey,
+    GpgError, cleanup_collaborator_temp_file, clearsign_and_encrypt_file_for_recipient, convert_toml_filewithkeyid_into_clearsigntoml_inplace, convert_tomlfile_without_keyid_using_gpgtomlkeyid_into_clearsigntoml_inplace, decrypt_gpgfile_to_output, extract_verify_store_gpg_encrypted_clearsign_toml, get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml, get_pathstring_to_temp_plaintoml_verified_extracted, get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml, gpg_make_input_path_name_abs_executabledirectoryrelative_nocheck, q_and_a_user_selects_gpg_key_full_fingerprint, read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyid, read_abstract_ports_from_clearsigntoml_without_publicgpgkey, read_bool_field_from_toml, read_bool_field_fromtoml_binary, read_bool_from_clearsigntoml_without_publicgpgkey, read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml, read_float_f32_field_from_toml, read_multiline_string_from_clearsigntoml, read_option_bool_from_clearsigntoml_without_publicgpgkey, read_option_i32_tuple_array_from_clearsigntoml_without_publicgpgkey, read_option_i64_from_clearsigntoml_without_publicgpgkey, read_option_usize_from_clearsigntoml_without_publicgpgkey, read_pathbuf_from_clearsigntoml_without_publicgpgkey, read_single_line_string_field_from_toml, read_singleline_string_from_clearsigntoml, read_singleline_string_from_clearsigntoml_without_publicgpgkey, read_str_array_field_clearsigntoml, read_string_array_field_from_toml, read_stringarray_from_clearsigntoml_without_publicgpgkey, read_teamchannel_collaborator_ports_clearsigntoml_without_keyid, read_u8_array_from_clearsigntoml_without_publicgpgkey, read_u8_field_from_toml, read_u64_array_from_clearsigntoml_without_publicgpgkey, read_u64_field_from_toml, read_u64_from_clearsigntoml_without_publicgpgkey, verify_clearsign, verify_clearsigned_file_and_extract_content_to_output
 };
 
 
@@ -461,6 +423,8 @@ use manage_absolute_executable_directory_relative_paths::{
     // count_subdirectories_executabledirectoryrelative_default_zero,
 };
 
+mod padnet_otp_module;
+use padnet_otp_module::padnet_writer_strict_cleanup_continuous_xor_file;
 
 // For TUI
 #[macro_use]
@@ -5335,6 +5299,8 @@ struct MeetingRoomSyncDataset {
     remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip: u16, // locally: 'you' listen to their port on 'their' desk
     remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip: u16, // locally: 'you' add files to their port on 'their' desk
     remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip: u16, // locally: 'you' listen to their port on 'their' desk
+    // team_channel_name: String,
+    use_padnet: bool,
 }
 
 /// ForLocalOwnerDeskThread data from MeetingRoomSyncDataset
@@ -5355,6 +5321,7 @@ struct ForLocalOwnerDeskThread {
     local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip: u16, // locally: 'you' send a signal through your port on your desk
     localuser_intray_port__yourdesk_youlisten__bind_yourlocal_ip: u16, // locally: 'you' listen for files sent by the other collaborator
     local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip: u16, // locally: 'you' send a signal through your port on your desk
+    use_padnet: bool,
 }
 
 /// ForRemoteCollaboratorDeskThread data from MeetingRoomSyncDataset
@@ -5375,6 +5342,7 @@ struct ForRemoteCollaboratorDeskThread {
     remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip: u16, // locally: 'you' listen to their port on 'their' desk
     remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip: u16, // locally: 'you' add files to their port on 'their' desk
     remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip: u16, // locally: 'you' listen to their port on 'their' desk
+    use_padnet: bool,
 }
 
 /// for translate_port_assignments() to export as
@@ -7647,18 +7615,6 @@ log_mode_refresh = {}"#,
 
 }
 
-/// for an intermediate step in converting data types
-#[derive(Debug, Deserialize, serde::Serialize, Clone)]
-struct RawProtoDataToml {
-    user_name: String,
-    user_salt_list: Vec<String>,
-    ipv4_addresses: Option<Vec<Ipv4Addr>>,
-    ipv6_addresses: Option<Vec<Ipv6Addr>>,
-    gpg_publickey_id: String,
-    gpg_key_public: String,
-    sync_interval: u64,
-    updated_at_timestamp: u64,
-}
 
 #[derive(Debug, Deserialize, serde::Serialize, Clone)]
 struct CollaboratorTomlData {
@@ -8667,9 +8623,12 @@ struct GraphNavigationInstanceState {
     message_post_end_date_utc_posix: Option<i64>,
 
 	// // limit of how many posts (or per time duration)
- //    max_posts: Option<i64>,
- //    duration_for_maxposts: MaxPostsDurationUnitsEnum, // hours, days, weeks
- //    n_durations_for_maxposts: Option<i64>,
+    //    max_posts: Option<i64>,
+    //    duration_for_maxposts: MaxPostsDurationUnitsEnum, // hours, days, weeks
+    //    n_durations_for_maxposts: Option<i64>,
+
+    /// Padnet Network Layer
+    use_padnet: bool,
 }
 
 impl GraphNavigationInstanceState {
@@ -9189,6 +9148,9 @@ struct CoreNode {
     // pub max_posts: Option<i64>,
     // pub duration_for_maxposts: MaxPostsDurationUnitsEnum, // hours, days, weeks
     // pub n_durations_for_maxposts: Option<i64>,
+
+    // Padnet
+    pub use_padnet: Option<bool>,
 }
 
 /// Creates a new `CoreNode` instance.
@@ -9280,6 +9242,7 @@ impl CoreNode {
         message_post_user_confirms_bool: Option<bool>,
         message_post_start_date_utc_posix: Option<i64>,
         message_post_end_date_utc_posix: Option<i64>,
+        use_padnet: Option<bool>,
     ) -> Result<CoreNode, ThisProjectError> {
 
         debug_log!("Starting CoreNode:new");
@@ -9368,6 +9331,7 @@ impl CoreNode {
             message_post_user_confirms_bool,
             message_post_start_date_utc_posix,
             message_post_end_date_utc_posix,
+            use_padnet,
         };
         debug_log!("Successfully created CoreNode instance");
 
@@ -10859,6 +10823,16 @@ struct CoreNode {
 
     */
 
+    // Example: Read _ from the clearsigned TOML file
+    let use_padnet = read_option_bool_from_clearsigntoml_without_publicgpgkey(
+        &addressbook_readcopy_path_string,  // Config file containing GPG key
+        &node_readcopy_path,                // Target clearsigned file
+        "use_padnet"                  // Field to read
+    ).map_err(|e| {
+        cleanup_closure(); // Run cleanup on error
+        format!("LCNFTF: node_name Failed to read corenode_gpgtoml: {}", e)
+    })?;
+
     // 6. Deserialize into CoreNode Struct (Manually)
     let core_node = CoreNode {
         // node_name: toml_value.get("node_name").and_then(Value::as_str).unwrap_or("").to_string(),
@@ -10899,6 +10873,9 @@ struct CoreNode {
         message_post_user_confirms_bool,
         message_post_start_date_utc_posix,
         message_post_end_date_utc_posix,
+
+        // padnet
+        use_padnet,
     };
 
     // TODO
@@ -14494,7 +14471,7 @@ Input → Validate → Comment/Answer?
 //     let metadata_path_string = metadata_path.to_string_lossy();
 
 //     // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
-//     // let metadata: NodeInstMsgBrowserMetadata = toml::from_str(&metadata_string)
+//     // let metadata: NodeMessagePostBrowserMetadata = toml::from_str(&metadata_string)
 //     //     .map_err(|e| io::Error::new(
 //     //         io::ErrorKind::Other,
 //     //         format!("AIM: TOML deserialization error: {}", e)
@@ -15562,7 +15539,7 @@ fn read_user_confirmation(prompt: &str) -> io::Result<bool> {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-struct NodeInstMsgBrowserMetadata {
+struct NodeMessagePostBrowserMetadata {
     // every .toml has these four
     owner: String, // owner of this item
     teamchannel_collaborators_with_access: Vec<String>,
@@ -15602,7 +15579,7 @@ struct NodeInstMsgBrowserMetadata {
     message_post_end_date_utc_posix: Option<i64>,
 }
 
-impl NodeInstMsgBrowserMetadata {
+impl NodeMessagePostBrowserMetadata {
     fn new(
         node_name: &str,
         owner: String,
@@ -15618,8 +15595,8 @@ impl NodeInstMsgBrowserMetadata {
         message_post_start_date_utc_posix: Option<i64>,
         message_post_end_date_utc_posix: Option<i64>,
 
-    ) -> NodeInstMsgBrowserMetadata {
-        NodeInstMsgBrowserMetadata {
+    ) -> NodeMessagePostBrowserMetadata {
+        NodeMessagePostBrowserMetadata {
             node_name: node_name.to_string(),
             path_in_node: "/message_posts_browser".to_string(), // TODO
             max_message_size_char: 4096, // Default: 4096 characters...too big?
@@ -16443,7 +16420,7 @@ fn create_new_team_channel(
 
     // 2. Create and Save 0.toml Metadata (with error handling)
     let metadata_path = instant_msg_path.join("0.toml");
-    let metadata = NodeInstMsgBrowserMetadata::new(
+    let metadata = NodeMessagePostBrowserMetadata::new(
         &team_channel_name,
         owner.clone(),
         teamchannel_collaborators_with_access.clone(),
@@ -16528,6 +16505,15 @@ fn create_new_team_channel(
         }
     };
 
+    let use_padnet = match q_and_a_get_use_padnet() {
+        Ok(data) => data,
+        Err(e) => {
+            debug_log!("CTC: Error getting use_padnet Feedback: {}", e);
+            return Err(e);
+        }
+    };
+
+
     debug_log!("CTC: All project area data retrieved successfully");
 
     // 3. Create and Save CoreNode
@@ -16558,6 +16544,8 @@ fn create_new_team_channel(
         None,  // message_post_user_confirms_bool
         None,  // message_post_start_date_utc_posix
         None,  // message_post_end_date_utc_posix
+
+        use_padnet,
     );
 
     debug_log!("CTC: CoreNode creation complete, saving...");
@@ -17128,6 +17116,7 @@ fn update_core_node(
 fn create_core_node(
     node_path: PathBuf,
     teamchannel_collaborators_with_access: Vec<String>,
+    use_padnet: Option<bool>,
 ) -> Result<(), ThisProjectError> {
     debug_log!("start create_core_node(), node_path -> {:?}", node_path);
 
@@ -17207,7 +17196,7 @@ fn create_core_node(
 
     // Create and Save metadata
     let metadata_path = message_dir.join("0.toml");
-    let metadata = NodeInstMsgBrowserMetadata::new(
+    let metadata = NodeMessagePostBrowserMetadata::new(
         &node_name,
         owner.clone(),
         teamchannel_collaborators_with_access.clone(),
@@ -17251,6 +17240,9 @@ fn create_core_node(
         message_post_user_confirms,
         message_post_start_date,
         message_post_end_date,
+
+        // Padnet
+        use_padnet,
     );
 
     match new_node_result {
@@ -18831,8 +18823,6 @@ fn q_and_a_get_corenode_gpgtoml() -> Result<bool, ThisProjectError> {
     }
 }
 
-
-
 /// Gets user input for message post start date with component-based input
 ///
 /// This function provides multiple input options:
@@ -18900,6 +18890,31 @@ fn q_and_a_get_message_post_start_date() -> Result<Option<i64>, ThisProjectError
         }
     }
 }
+
+
+/// Gets user input for whether user confirmation is required before posting
+///
+/// # Returns
+/// * `Result<Option<bool>, ThisProjectError>` - Whether user confirmation is required or None
+fn q_and_a_get_use_padnet() -> Result<Option<bool>, ThisProjectError> {
+    println!("Team Channel uses One-Time-Pad Network-Layer?  (requires make/share 'pad') -> (y)es / (n)o / Press-Enter to skip):");
+
+    let mut input = String::new();
+    io::stdout().flush()?;
+    io::stdin().read_line(&mut input)?;
+
+    let input = input.trim().to_lowercase();
+    if input.is_empty() {
+        return Ok(None);
+    }
+
+    match input.as_str() {
+        "yes" | "y" | "true" | "1" => Ok(Some(true)),
+        "no" | "n" | "false" | "0" => Ok(Some(false)),
+        _ => Err(ThisProjectError::InvalidInput(format!("Invalid boolean value: {}. Use yes/no", input)))
+    }
+}
+
 
 /// Handles the "now" option by getting current UTC time
 ///
@@ -19986,6 +20001,28 @@ fn extract_clearsign_data(clearsigned_data: &[u8]) -> Result<Vec<u8>, ThisProjec
     let message_content = message_lines.join("\n");
 
     Ok(message_content.as_bytes().to_vec())
+}
+
+
+fn optional_padnetopt_to_gpg_bytes(
+    file_path: &Path,
+    recipient_public_key: &str,
+    remote_collaborator_gpg_publickey_id: &String,
+
+) -> Result<Vec<u8>, ThisProjectError> {
+
+    /*
+
+    */
+
+
+    let file_bytes2send = wrapper__path_to_clearsign_to_gpgencrypt_to_send_bytes(
+        &file_path,
+        &recipient_public_key,
+        // &room_sync_input.remote_collaborator_gpg_publickey_id,
+    )?;
+
+    Ok(file_bytes2send)
 }
 
 // TODO: this may be mostly right: directing to readcopy .toml?
@@ -24257,6 +24294,7 @@ fn handle_command_main_mode(
                 let _ = create_core_node(
                     app.current_path.clone(), // node_path: PathBuf,
                     app.graph_navigation_instance_state.current_node_teamchannel_collaborators_with_access.clone(),  // teamchannel_collaborators_with_access: Vec<String>,
+                    Some(app.graph_navigation_instance_state.use_padnet.clone()), // Padnet Option(bool)
                 );
             }
 
@@ -26648,6 +26686,13 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
     );
 
     // get node_owners_public_gpg_key
+    // Example: Read _ from the clearsigned TOML file
+    let use_padnet = read_bool_field_from_toml(
+        &channel_node_tomlpath_string,                // Target clearsigned file
+        "use_padnet"                  // Field to read
+    ).map_err(|e| {
+        format!("LCNFTF: node_name Failed to read corenode_gpgtoml: {}", e)
+    })?;
 
     let file_owner_username = match read_single_line_string_field_from_toml(
         &channel_node_tomlpath_string,  // TODO convert to string?
@@ -26983,6 +27028,7 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
             remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip: role_based_ports.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip,
             remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip: role_based_ports.remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip,
             remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip: role_based_ports.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip,
+            use_padnet: use_padnet,
         };
 
         // --- 12. add meeting room to set-of-rooms-table ---
@@ -30730,7 +30776,7 @@ fn deserialize_ready_signal(bytes: &[u8], salt_list: &[u128]) -> Result<ReadySig
 /// Deserializes a byte slice into a SendFile struct.
 ///
 /// This function performs the reverse operation of serializing a SendFile struct.
-/// It takes a byte slice as input and extracts the fields to construct a SendFile instance.
+/// It takes a byte slice as input and extracts the fields to construct a SendFile struct instance.
 /// It includes error handling for invalid data lengths and returns a Result to indicate success or failure.
 ///
 /// # Arguments
@@ -30758,6 +30804,7 @@ fn deserialize_intray_send_file_struct(bytes: &[u8]) -> Result<SendFile, ThisPro
 
 
     // 2. Extract intray_send_time (as before)
+    // // TODO: NO UNWRAP!!!!
     let intray_send_time = u64::from_be_bytes(bytes[0..timestamp_len].try_into().unwrap());
 
     // 3. Extract intray_hash_list  (Corrected)
@@ -30778,11 +30825,15 @@ fn deserialize_intray_send_file_struct(bytes: &[u8]) -> Result<SendFile, ThisPro
         None // Or handle the empty case appropriately
     };
 
+    // 5. Padnet OTP index-array
+    // let padnet_index_array = ...;// placeholder
+
     // ... [Construction of SendFile as before, but use Some() wrappers]
     Ok(SendFile {
         intray_send_time: Some(intray_send_time),
         gpg_encrypted_intray_file, // No need for clone, the value is already owned
         intray_hash_list,  // Use the corrected Option<Vec<u8>>
+        // padnet_index_array
     })
 }
 
@@ -32442,7 +32493,8 @@ fn handle_remote_collaborator_meetingroom_desk(
                                  }
                              };
 
-                             // // 1. Paths & Reading-Copies Part 1: node.toml path and read-copy
+                             // 1. Paths & Reading-Copies Part 1: node.toml path and read-copy
+
 
                              // Get the UME temp directory path with explicit String conversion
                              let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
@@ -32464,10 +32516,113 @@ fn handle_remote_collaborator_meetingroom_desk(
                             // converst from path-string to path-type path
                             let path_sendfile_readcopy_path = Path::new(&sendfile_readcopy_pathstring);
 
+                            // TODO: Padnet
+                            // adding a new factor/path
+                            // if file contains a padnet_otp=true flag (  let file_flag_padnet =)
+                            // set file_flag_padnet = true
+                            //
+                            //
+                            // - check file for flag
+                            // 1. flag for padnet-mode where?
+                            // 2. get RC key-id (state)
+                            // 3. get write-pad path (with id)
+                            //  -- /padnet/to/{team_channel}/{RC key-id}
+                            //
+                            // 4. write XOR, get array-index
+                            // 5. use that for file_bytes2send
+                            // 6. use arry index in struct
+
+
                             // 4.2.1 Get File Send Time
                             let intray_send_time = get_current_unix_timestamp();
 
-                            // TODO maybe store files as the gpg blob
+                            let use_padnet_flag = &room_sync_input.use_padnet;
+
+                            let team_channel_name = match get_current_team_channel_name_from_nav_path() {
+                                Some(name) => name,
+                                None => {
+                                    debug_log!("Error: Could not get current channel name. Skipping set_as_active.");
+                                    return Err(ThisProjectError::InvalidData("Could not get team channel name".into()));
+                                },
+                            };
+                            let rc_key_id = &room_sync_input.remote_collaborator_gpg_publickey_id;
+
+                            // 3. get write-pad path (with id)
+                            //  -- /padnet/to/{team_channel}/{RC key-id}
+                            let mut padnet_directory_path = make_input_path_name_abs_executabledirectoryrelative_nocheck(
+                                "padnet/to"
+                            )?;
+                            padnet_directory_path.push(&team_channel_name);
+                            padnet_directory_path.push(rc_key_id);
+
+                            // Get the UME temp directory path with explicit String conversion
+                            let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
+                                .map_err(|io_err| {
+                                    let gpg_error = GpgError::ValidationError(
+                                        format!("LCNFTF: Failed to get UME temp directory path: {}", io_err)
+                                    );
+                                    // Convert GpgError to String for the function's return type
+                                    format!("LCNFTF: {:?}", gpg_error)
+                                })?;
+
+                            let temp_filepath_padnet = create_unique_temp_filepathbuf(
+                            &base_uma_temp_directory_path,    // base_path: &Path,
+                            "padnet",    // prefix: &str,
+                            5,    // number_of_attempts: u32,
+                            16,    // retry_delay_ms: u64,
+                            )?;
+
+
+
+                            /*
+                            /// ## Error Handling
+                            /// - On ANY error: delete temp file, return error
+                            /// - Lines already deleted stay deleted (cannot retry from same position)
+                            /// - Caller must restart from new first-available line
+                            ///
+                            /// # Arguments
+                            /// * `path_to_target_file` - Absolute path to file to XOR
+                            /// * `result_path` - Absolute path for output file
+                            /// * `path_to_padset` - Absolute path to padset root
+                            ///
+                            /// # Returns
+                            /// * `Ok((PadIndex, usize))` - Starting index used and bytes processed
+                            /// * `Err(PadnetError)` - Operation failed, no output created
+                            pub fn padnet_writer_strict_cleanup_continuous_xor_file(
+                                path_to_target_file: &Path,
+                                result_path: &Path,
+                                path_to_padset: &Path,
+                            ) -> Result<(PadIndex, usize), PadnetError> {
+                             */
+
+                            let (padnet_index_array, bytes_encrypted) = match padnet_writer_strict_cleanup_continuous_xor_file(
+                                &path_sendfile_readcopy_path, // path_to_target_file
+                                &temp_filepath_padnet, // result_path
+                                &padnet_directory_path, // path_to_padset
+                            ) {
+                                Ok((idx, bytes)) => {
+                                    println!("  ✓ Encrypted {} bytes", bytes);
+                                    println!("  ✓ Starting index: {:?}", idx);
+                                    (idx, bytes)
+                                }
+                                Err(e) => {
+                                    println!("  ✗ Failed: {}", e);
+                                    continue;
+                                }
+                            };
+
+                            // let file_bytes2send = if use_padnet_flag {
+
+                            //
+
+                            // TODO
+                            // 1. get &room_sync_input.remote_collaborator_gpg_publickey_id,
+                            // 2. look at bool field from file if there: padnet_opt: true
+                            // TODO, maybe this gets OPT array etc
+
+                            /*
+
+
                             // Wrapper of bytes to bytes:
                             // 4.2.2 Read File Contents
                             // 4.3.1 GPG Clearsign the File (with your private key)
@@ -32480,6 +32635,8 @@ fn handle_remote_collaborator_meetingroom_desk(
                             debug_log(
                                 "HRCD 4.2, 4.3.1, 4.3.2 done gpg wrapper"
                             );
+
+                            // }
 
                             // // 4.5. Calculate SendFile Struct Hashes (Using Collaborator's Salts)
                             // 4.5 calculate hashes: HRCD
@@ -32508,7 +32665,67 @@ fn handle_remote_collaborator_meetingroom_desk(
                                 intray_send_time: Some(intray_send_time),
                                 gpg_encrypted_intray_file: Some(file_bytes2send), // Clone needed here if file_bytes2send is used later
                                 intray_hash_list: Some(calculated_hashes),  // Clone here as well
+                                padnet_index_array: None,
+
                             };
+
+                            make novel path with timestamp
+
+
+
+                            if any issues: continue;
+                             */
+
+
+                            // } else {
+
+                            // Wrapper of bytes to bytes:
+                            // 4.2.2 Read File Contents
+                            // 4.3.1 GPG Clearsign the File (with your private key)
+                            // 4.3.2 GPG Encrypt File (with their public key)
+                            let file_bytes2send = wrapper__path_to_clearsign_to_gpgencrypt_to_send_bytes(
+                                &path_sendfile_readcopy_path,
+                                &room_sync_input.remote_collaborator_public_gpg,
+                            )?;
+
+                            debug_log(
+                                "HRCD 4.2, 4.3.1, 4.3.2 done gpg wrapper"
+                            );
+
+                            // }
+
+                            // // 4.5. Calculate SendFile Struct Hashes (Using Collaborator's Salts)
+                            // 4.5 calculate hashes: HRCD
+                            let calculated_hrcd_sendfile_hashes = hash_sendfile_struct_fields(
+                                &room_sync_input.local_user_salt_list,
+                                intray_send_time,
+                                &file_bytes2send,
+                            );
+
+                            // Handle the Result from hash_sendfile_struct_fields
+                            let calculated_hashes = match calculated_hrcd_sendfile_hashes {
+                                Ok(hashes) => hashes,
+                                Err(e) => {
+                                    debug_log!("HRCD 4.5 Error calculating hashes: {}", e);
+                                    continue; // Skip to the next file if hashing fails
+                                }
+                            };
+
+                            debug_log!(
+                                "HRCD 4.5 calculated_hashes {:?}",
+                                calculated_hashes
+                            );
+
+                            // 4.6. Create SendFile Struct
+                            let sendfile_struct = SendFile {
+                                intray_send_time: Some(intray_send_time),
+                                gpg_encrypted_intray_file: Some(file_bytes2send), // Clone needed here if file_bytes2send is used later
+                                intray_hash_list: Some(calculated_hashes),  // Clone here as well
+                                // padnet_index_array: None,
+
+                            };
+
+                            // maybe end of if-else for padnet
 
                             debug_log!(
                                 "HRCD 4.6 Create sendfile_struct {:?}",
@@ -32910,6 +33127,7 @@ fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
             localuser_intray_port__yourdesk_youlisten__bind_yourlocal_ip: this_meetingroom_iter.localuser_intray_port__yourdesk_youlisten__bind_yourlocal_ip,
             // got-it! (local)
             local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip: this_meetingroom_iter.local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip,
+            use_padnet: this_meetingroom_iter.use_padnet.clone(),
         };
         let data_baggy_for_collaborator_desk = ForRemoteCollaboratorDeskThread {
             remote_collaborator_name: this_meetingroom_iter.remote_collaborator_name.clone(),
@@ -32929,6 +33147,7 @@ fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
             remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip: this_meetingroom_iter.remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip,
             // got-it! (remote)
             remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip: this_meetingroom_iter.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip,
+            use_padnet: this_meetingroom_iter.use_padnet.clone(),
         };
 
         // Create the two "meeting room desks" for each collaborator pair:
@@ -33120,6 +33339,16 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         io::Error::new(io::ErrorKind::InvalidData, error_msg)
     })?;
 
+    // Read use_padnet from uma.toml
+    let use_padnet = read_bool_field_from_toml(
+        absolute_uma_toml_path_str,
+        "use_padnet"
+    ).map_err(|e| {
+        let error_msg = format!("WLPL Failed to read LOCAL OWNER USER's name: {}", e);
+        println!("Error: {}", error_msg);
+        io::Error::new(io::ErrorKind::InvalidData, error_msg)
+    })?;
+
     // node-graph navigation 'state' initial setup
     let graph_navigation_instance_state = GraphNavigationInstanceState {
         // local_owner_user: user_metadata["uma_local_owner_user"].as_str().unwrap().to_string(),
@@ -33199,6 +33428,9 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
 
         // End time for accepting posts (UTC POSIX timestamp)
         message_post_end_date_utc_posix: None,
+
+        // Use OTP network layer (bool)
+        use_padnet: use_padnet,
     };
 
     // if !verify_gpg_signature(&local_user) {
@@ -33688,6 +33920,480 @@ pub fn set_sync_start_ok_flag_to_true() -> Result<(), io::Error> {
 /// * Writing to the file fails
 pub fn initialize_ok_to_start_sync_flag_to_false() -> Result<(), io::Error> {
     set_sync_flag(b"0", "initialized sync flag to false")
+}
+
+/// Creates a unique temporary file in the specified base directory with configurable retry logic.
+///
+/// # Project Context
+/// This function generates temporary file names for intermediate processing
+/// in our application where we cannot use third-party dependencies. The file
+/// is created atomically to prevent race conditions where multiple processes
+/// or threads might generate the same name. This version allows the caller
+/// to configure retry behavior based on their specific use case (e.g., high
+/// contention environments may need more retries, low-priority operations
+/// may want fewer retries to fail fast).
+///
+/// # Implementation Strategy
+/// - Uses process ID, thread ID, and nanosecond timestamp for uniqueness
+/// - Attempts atomic file creation with `create_new(true)` flag
+/// - Retries up to `number_of_attempts` times with configurable delay
+/// - Different timestamps on each retry provide additional uniqueness
+/// - Parameterized retry logic allows tuning for different deployment scenarios
+///
+/// # Arguments
+/// * `base_path` - The directory where the temporary file will be created (must exist)
+/// * `prefix` - A prefix for the filename to identify the file's purpose (e.g., "cache", "upload")
+/// * `number_of_attempts` - Maximum number of creation attempts (recommended: 3-10)
+/// * `retry_delay_ms` - Milliseconds to wait between retry attempts (recommended: 1-100)
+///
+/// # Returns
+/// * `Ok(PathBuf)` - Absolute path to the newly created unique temporary file
+/// * `Err(io::Error)` - If file creation fails after all retry attempts or other I/O error
+///
+/// # Error Conditions
+/// - `CUTF: system time unavailable` - System clock error (rare, catastrophic)
+/// - `CUTF: max retry attempts exceeded` - Could not create unique file after all attempts
+/// - `CUTF: unexpected loop exit` - Internal logic error (should never occur)
+/// - Standard I/O errors: permission denied, disk full, path not found, etc.
+///
+/// # Safety & Reliability
+/// - No panic: all error cases return Result
+/// - No heap allocation in error messages (uses static strings with CUTF prefix)
+/// - Bounded retry loop (caller-specified maximum attempts)
+/// - Atomic file creation prevents race conditions
+/// - Thread-safe: uses thread-local IDs
+/// - Handles system clock errors gracefully
+///
+/// # Configuration Guidelines
+/// - **Low contention** (single-threaded, low frequency): `number_of_attempts = 3`, `retry_delay_ms = 1`
+/// - **Medium contention** (multi-threaded application): `number_of_attempts = 5`, `retry_delay_ms = 1-5`
+/// - **High contention** (distributed system, many processes): `number_of_attempts = 10`, `retry_delay_ms = 10-50`
+/// - **Fast-fail scenarios** (can afford to fail): `number_of_attempts = 1`, `retry_delay_ms = 0`
+///
+/// # Edge Cases Handled
+/// - Zero attempts: Function will try once (loop runs 0..0 means 0 iterations, caught by unreachable error)
+/// - System time moves backwards: Handled gracefully with retry
+/// - Concurrent file creation: Atomic `create_new` prevents race conditions
+/// - Disk full or permission errors: Immediate return without retries
+///
+/// # Example
+/// ```
+/// use std::path::Path;
+///
+/// let base = Path::new("/tmp");
+///
+/// // Standard usage
+/// match create_unique_temp_filepathbuf(base, "myapp", 5, 1) {
+///     Ok(path) => {
+///         println!("Created: {:?}", path);
+///         // Use the file...
+///         // Remember to delete it when done!
+///         let _ = std::fs::remove_file(path);
+///     },
+///     Err(e) => {
+///         eprintln!("Failed to create temp file: {}", e);
+///         // Handle error - application continues
+///     }
+/// }
+///
+/// // High-contention scenario
+/// match create_unique_temp_filepathbuf(base, "distributed", 10, 10) {
+///     Ok(path) => { /* use file */ },
+///     Err(e) => { /* handle gracefully */ }
+/// }
+/// ```
+///
+/// # Security Considerations
+/// - File names are predictable (not cryptographically random)
+/// - Suitable for temporary storage, not for security-critical scenarios
+/// - Consider file permissions on created files (inherits from OpenOptions defaults)
+/// - Caller must ensure base_path is in a secure location
+///
+/// # Performance Considerations
+/// - Each retry costs `retry_delay_ms` milliseconds
+/// - Maximum possible delay: `number_of_attempts * retry_delay_ms`
+/// - Nanosecond timestamp provides ~1 billion unique values per second per thread
+/// - Thread ID formatting allocates small string (unavoidable with std::thread API)
+pub fn create_unique_temp_filepathbuf(
+    base_path: &Path,
+    prefix: &str,
+    number_of_attempts: u32,
+    retry_delay_ms: u64,
+) -> Result<PathBuf, io::Error> {
+    use std::process;
+    use std::thread;
+    use std::time::{SystemTime, UNIX_EPOCH, Duration};
+    use std::fs::OpenOptions;
+    use std::io;
+
+    // Production catch: validate number_of_attempts is non-zero
+    // Zero attempts would make function always fail
+    if number_of_attempts == 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "CUTF: number_of_attempts must be greater than zero",
+        ));
+    }
+
+    // Get process ID once (constant for this process)
+    let pid = process::id();
+
+    // Get thread ID and format it for filename use
+    let thread_id = thread::current().id();
+    let thread_id_string = format!("{:?}", thread_id);
+
+    // Clean thread ID: remove "ThreadId(" prefix and ")" suffix
+    // This converts "ThreadId(123)" to "123"
+    let thread_id_clean = thread_id_string
+        .trim_start_matches("ThreadId(")
+        .trim_end_matches(')');
+
+    // Attempt to create unique file with retry logic
+    for attempt in 0..number_of_attempts {
+        // Get current timestamp with nanosecond precision
+        // This provides uniqueness across time
+        let timestamp_result = SystemTime::now().duration_since(UNIX_EPOCH);
+
+        let timestamp_nanos = match timestamp_result {
+            Ok(duration) => duration.as_nanos(),
+            Err(_) => {
+                // System time error (e.g., clock moved backwards)
+                // In production, we handle this gracefully and continue
+                if attempt == number_of_attempts - 1 {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "CUTF: system time unavailable",
+                    ));
+                }
+                // Try again with next attempt
+                thread::sleep(Duration::from_millis(retry_delay_ms));
+                continue;
+            }
+        };
+
+        // Construct filename: prefix_pid_threadid_timestamp.tmp
+        // Example: myapp_12345_67_1234567890123456789.tmp
+        let filename = format!(
+            "{}_{}_{}_{}.tmp",
+            prefix, pid, thread_id_clean, timestamp_nanos
+        );
+
+        // Build absolute path
+        let file_path = base_path.join(&filename);
+
+        // Attempt to create file atomically
+        // create_new(true) ensures the operation fails if file exists
+        // This prevents race conditions with other processes/threads
+        match OpenOptions::new()
+            .write(true)
+            .create_new(true)  // Critical: fails if file already exists
+            .open(&file_path)
+        {
+            Ok(_file) => {
+                // Success: file created exclusively
+                // File handle is dropped here, closing the file
+                // Caller is responsible for file cleanup
+                return Ok(file_path);
+            }
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+                // File name collision detected
+                // This is expected in high-concurrency scenarios
+
+                // Production catch: check if we've exhausted retries
+                if attempt == number_of_attempts - 1 {
+                    // Final attempt failed - return descriptive error
+                    return Err(io::Error::new(
+                        io::ErrorKind::AlreadyExists,
+                        "CUTF: max retry attempts exceeded",
+                    ));
+                }
+
+                // Wait briefly before retry
+                // This allows timestamp to change and reduces contention
+                thread::sleep(Duration::from_millis(retry_delay_ms));
+
+                // Continue to next attempt
+                continue;
+            }
+            Err(e) => {
+                // Other error occurred (permissions, disk full, etc.)
+                // Return immediately - retrying won't help
+                return Err(e);
+            }
+        }
+    }
+
+    // Should be unreachable due to loop logic, but rust requires this
+    // Production safety: return error rather than panic
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "CUTF: unexpected loop exit",
+    ))
+}
+
+// =============================================================================
+// Tests
+// =============================================================================
+
+#[cfg(test)]
+mod tempname_tests {
+    use super::*;
+    use std::fs;
+
+    /// Test basic functionality: can we create a temp file with standard parameters?
+    #[test]
+    fn test_create_temp_file_basic() {
+        let temp_dir = std::env::temp_dir();
+
+        let result = create_unique_temp_filepathbuf(&temp_dir, "test", 5, 1);
+
+        assert!(result.is_ok(), "Should successfully create temp file");
+
+        let path = result.unwrap();
+        assert!(path.exists(), "Created file should exist");
+        assert!(path.starts_with(&temp_dir), "File should be in temp directory");
+
+        // Cleanup
+        let _ = fs::remove_file(path);
+    }
+
+    /// Test that multiple files created rapidly are unique
+    #[test]
+    fn test_create_multiple_unique_files() {
+        let temp_dir = std::env::temp_dir();
+        let mut paths = Vec::new();
+
+        // Create 5 temp files in rapid succession
+        for _ in 0..5 {
+            let result = create_unique_temp_filepathbuf(&temp_dir, "multi", 5, 1);
+            assert!(result.is_ok(), "Should create file");
+            paths.push(result.unwrap());
+        }
+
+        // Verify all paths are unique
+        for i in 0..paths.len() {
+            for j in (i + 1)..paths.len() {
+                assert_ne!(paths[i], paths[j], "Paths should be unique");
+            }
+        }
+
+        // Verify all files exist
+        for path in &paths {
+            assert!(path.exists(), "File should exist");
+        }
+
+        // Cleanup
+        for path in paths {
+            let _ = fs::remove_file(path);
+        }
+    }
+
+    /// Test that function returns error for non-existent directory
+    #[test]
+    fn test_nonexistent_directory() {
+        let bad_path = Path::new("/this/path/definitely/does/not/exist/nowhere/12345");
+
+        let result = create_unique_temp_filepathbuf(bad_path, "test", 3, 1);
+
+        assert!(result.is_err(), "Should fail for non-existent directory");
+    }
+
+    /// Test filename format contains expected components
+    #[test]
+    fn test_filename_format() {
+        let temp_dir = std::env::temp_dir();
+
+        let result = create_unique_temp_filepathbuf(&temp_dir, "prefix", 5, 1);
+        assert!(result.is_ok(), "Should create file");
+
+        let path = result.unwrap();
+        let filename = path.file_name().unwrap().to_str().unwrap();
+
+        // Verify filename contains prefix
+        assert!(filename.starts_with("prefix_"), "Filename should start with prefix");
+
+        // Verify filename ends with .tmp
+        assert!(filename.ends_with(".tmp"), "Filename should end with .tmp");
+
+        // Verify filename contains underscores (pid_threadid_timestamp structure)
+        assert!(filename.matches('_').count() >= 3, "Filename should have at least 3 underscores");
+
+        // Cleanup
+        let _ = fs::remove_file(path);
+    }
+
+    /// Test with zero attempts parameter (should return error immediately)
+    #[test]
+    fn test_zero_attempts() {
+        let temp_dir = std::env::temp_dir();
+
+        let result = create_unique_temp_filepathbuf(&temp_dir, "zero", 0, 1);
+
+        assert!(result.is_err(), "Should fail with zero attempts");
+
+        if let Err(e) = result {
+            let error_msg = format!("{}", e);
+            assert!(error_msg.contains("CUTF"), "Error should have CUTF prefix");
+            assert!(
+                error_msg.contains("greater than zero") || error_msg.contains("number_of_attempts"),
+                "Error should mention invalid attempt count"
+            );
+        }
+    }
+
+    /// Test with single attempt (should work in low-contention)
+    #[test]
+    fn test_single_attempt() {
+        let temp_dir = std::env::temp_dir();
+
+        let result = create_unique_temp_filepathbuf(&temp_dir, "single", 1, 1);
+
+        assert!(result.is_ok(), "Should succeed with single attempt in low contention");
+
+        if let Ok(path) = result {
+            assert!(path.exists(), "File should exist");
+            let _ = fs::remove_file(path);
+        }
+    }
+
+    /// Test with different delay values (ensures parameter is used)
+    #[test]
+    fn test_different_delays() {
+        let temp_dir = std::env::temp_dir();
+
+        // Test with zero delay
+        let result1 = create_unique_temp_filepathbuf(&temp_dir, "delay0", 3, 0);
+        assert!(result1.is_ok(), "Should work with zero delay");
+        if let Ok(path) = result1 {
+            let _ = fs::remove_file(path);
+        }
+
+        // Test with larger delay
+        let result2 = create_unique_temp_filepathbuf(&temp_dir, "delay100", 3, 100);
+        assert!(result2.is_ok(), "Should work with 100ms delay");
+        if let Ok(path) = result2 {
+            let _ = fs::remove_file(path);
+        }
+    }
+
+    /// Test with high number of attempts (stress test)
+    #[test]
+    fn test_many_attempts() {
+        let temp_dir = std::env::temp_dir();
+
+        let result = create_unique_temp_filepathbuf(&temp_dir, "many", 20, 1);
+
+        assert!(result.is_ok(), "Should work with many attempts");
+
+        if let Ok(path) = result {
+            assert!(path.exists(), "File should exist");
+            let _ = fs::remove_file(path);
+        }
+    }
+
+    /// Test prefix with special characters (edge case)
+    #[test]
+    fn test_prefix_with_special_chars() {
+        let temp_dir = std::env::temp_dir();
+
+        // Test with prefix containing hyphens and underscores
+        let result = create_unique_temp_filepathbuf(&temp_dir, "my-app_v2", 5, 1);
+
+        assert!(result.is_ok(), "Should handle prefix with special chars");
+
+        if let Ok(path) = result {
+            let filename = path.file_name().unwrap().to_str().unwrap();
+            assert!(filename.starts_with("my-app_v2_"), "Filename should preserve prefix");
+            let _ = fs::remove_file(path);
+        }
+    }
+
+    /// Test that created file is actually writable
+    #[test]
+    fn test_file_is_writable() {
+        let temp_dir = std::env::temp_dir();
+
+        let result = create_unique_temp_filepathbuf(&temp_dir, "writable", 5, 1);
+        assert!(result.is_ok(), "Should create file");
+
+        let path = result.unwrap();
+
+        // Try to open and write to the file
+        let write_result = OpenOptions::new()
+            .write(true)
+            .open(&path);
+
+        assert!(write_result.is_ok(), "Should be able to open file for writing");
+
+        // Cleanup
+        let _ = fs::remove_file(path);
+    }
+
+    /// Test concurrent creation from multiple threads
+    #[test]
+    fn test_concurrent_creation() {
+        use std::sync::Arc;
+
+        let temp_dir = Arc::new(std::env::temp_dir());
+        let mut handles = vec![];
+
+        // Spawn 5 threads that each create 2 files
+        for thread_num in 0..5 {
+            let temp_dir_clone = Arc::clone(&temp_dir);
+
+            let handle = thread::spawn(move || {
+                let mut created_paths = Vec::new();
+
+                for file_num in 0..2 {
+                    let prefix = format!("concurrent_t{}_f{}", thread_num, file_num);
+                    let result = create_unique_temp_filepathbuf(&temp_dir_clone, &prefix, 10, 5);
+
+                    assert!(result.is_ok(), "Should create file from thread");
+                    created_paths.push(result.unwrap());
+                }
+
+                created_paths
+            });
+
+            handles.push(handle);
+        }
+
+        // Collect all created paths
+        let mut all_paths = Vec::new();
+        for handle in handles {
+            let paths = handle.join().expect("Thread should complete");
+            all_paths.extend(paths);
+        }
+
+        // Verify all paths are unique
+        for i in 0..all_paths.len() {
+            for j in (i + 1)..all_paths.len() {
+                assert_ne!(all_paths[i], all_paths[j], "All paths from all threads should be unique");
+            }
+        }
+
+        // Verify all files exist
+        for path in &all_paths {
+            assert!(path.exists(), "All created files should exist");
+        }
+
+        // Cleanup
+        for path in all_paths {
+            let _ = fs::remove_file(path);
+        }
+    }
+
+    /// Test error message format for debugging
+    #[test]
+    fn test_error_messages_have_cutf_prefix() {
+        let temp_dir = std::env::temp_dir();
+
+        // Test zero attempts error
+        let result = create_unique_temp_filepathbuf(&temp_dir, "test", 0, 1);
+        if let Err(e) = result {
+            assert!(format!("{}", e).contains("CUTF"), "Error should have CUTF prefix");
+        }
+    }
 }
 
 /// Sets a collaborator as "active" by creating a stub file in the sync_data directory.
