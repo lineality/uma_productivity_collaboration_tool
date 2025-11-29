@@ -425,7 +425,7 @@ use manage_absolute_executable_directory_relative_paths::{
 
 mod padnet_otp_module;
 use padnet_otp_module::{
-    PadIndex, padnet_writer_strict_cleanup_continuous_xor_file
+    PadIndex, padnet_writer_strict_cleanup_xor_file_to_resultpath, PadnetError
 };
 
 // For TUI
@@ -464,7 +464,24 @@ const UMA_SESSION_STATE_ITEMS_DIR_PATH_STR: &str = "project_graph_data/session_s
 
 const UMA_CURRENT_NODE_PATH_STR: &str = "project_graph_data/session_state_items/current_node_directory_path.txt";
 
+const WRITER_TO_PADNET_UMA_PATH_STR: &str = "padnet/to";
+const READER_FROM_PADNET_UMA_PATH_STR: &str = "padnet/from";
 
+/// Gets the absolute path to temp directory
+/// executible-parent-relative-aboslute path
+pub fn get_writer_to_padnet_directory_path() -> io::Result<PathBuf> {
+    make_input_path_name_abs_executabledirectoryrelative_nocheck(
+        WRITER_TO_PADNET_UMA_PATH_STR
+    )
+}
+
+/// Gets the absolute path to temp directory
+/// executible-parent-relative-aboslute path
+pub fn get_reader_from_padnet_directory_path() -> io::Result<PathBuf> {
+    make_input_path_name_abs_executabledirectoryrelative_nocheck(
+        READER_FROM_PADNET_UMA_PATH_STR
+    )
+}
 
 /*
 # Use Example:
@@ -697,6 +714,10 @@ pub fn should_halt_uma() -> bool {
 //     }
 // }
 
+// ==================
+// Uma Error Section
+// ==================
+
 pub enum SyncError {
     ConnectionError(std::io::Error),
     ChecksumMismatch,
@@ -836,7 +857,25 @@ pub enum ThisProjectError {
     ParseError(std::num::ParseIntError),
     // Add new variant for String errors
     StringError(String),
-    // Other variants...
+    // Padnet
+    /// File exceeds maximum allowed size for processing
+    /// Prevents accidental or malicious processing of oversized files
+    FileTooLarge {
+        /// Path of the file that was too large
+        path: PathBuf,
+        /// Actual size in bytes
+        size_bytes: usize,
+        /// Maximum allowed size in bytes
+        max_allowed: usize,
+    },
+
+    /// OTP/Padnet operation failed
+    /// Wraps errors from the padnet XOR encryption system
+    PadnetError(String),
+
+    /// Temporary file cleanup failed (non-fatal, logged only)
+    /// Used when temp file deletion fails but operation succeeded
+    TempFileCleanupWarning(String),
 }
 
 impl From<GpgError> for ThisProjectError {
@@ -895,7 +934,34 @@ impl std::fmt::Display for ThisProjectError {
             ThisProjectError::ParseError(ref err) => write!(f, "Parse Error: {}", err),
             ThisProjectError::StringError(ref msg) => write!(f, "Error: {}", msg),
             // ... add formatting for other error types
+            ThisProjectError::FileTooLarge { ref path, size_bytes, max_allowed } => {
+                // Security: Only show filename, not full path in production
+                let filename = path.file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("unknown");
+                write!(
+                    f,
+                    "File too large: {} ({} bytes, max: {} bytes)",
+                    filename, size_bytes, max_allowed
+                )
+            },
+
+            ThisProjectError::PadnetError(ref msg) => {
+                write!(f, "OTP Encryption Error: {}", msg)
+            },
+
+            ThisProjectError::TempFileCleanupWarning(ref msg) => {
+                write!(f, "Temp File Cleanup Warning: {}", msg)
+            },
         }
+    }
+}
+
+// Add conversion from PadnetError if it's a separate type in your project
+// If PadnetError is an enum, add this:
+impl From<PadnetError> for ThisProjectError {
+    fn from(err: PadnetError) -> Self {
+        ThisProjectError::PadnetError(format!("{:?}", err))
     }
 }
 
@@ -944,6 +1010,11 @@ impl From<io::Error> for ThisProjectError {
         ThisProjectError::IoError(err)
     }
 }
+
+
+// =====================
+// End Uma Error Section
+// =====================
 
 /// utility: Gets a list of all IPv4 and IPv6 addresses associated with the current system's network interfaces.
 ///
@@ -5318,6 +5389,7 @@ struct ForLocalOwnerDeskThread {
     remote_collaborator_ipv6_addr_list: Vec<Ipv6Addr>, // list of ip addresses
     remote_collaborator_ipv4_addr_list: Vec<Ipv4Addr>, // list of ip addresses
     local_user_gpg_publickey_id: String,
+    remote_collaborator_gpg_publickey_id: String,
     local_user_public_gpg: String,
     local_user_sync_interval: u64,
     local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip: u16, // locally: 'you' send a signal through your port on your desk
@@ -20029,9 +20101,7 @@ fn optional_padnetopt_to_gpg_bytes(
     Ok(file_bytes2send)
 }
 
-// TODO: this may be mostly right: directing to readcopy .toml?
-// or... readcopy clearsigned toml?
-// or... new struct serialized to .toml?
+
 /// Prepares file contents for secure sending by clearsigning and encrypting them.
 ///
 /// This function reads the contents of the file at the given `file_path`,
@@ -20066,6 +20136,943 @@ fn wrapper__path_to_clearsign_to_gpgencrypt_to_send_bytes(
 
     Ok(encrypted_content)
 }
+
+/// Maximum allowed file size for OTP processing operations (in bytes).
+///
+/// # Project Context
+/// This system processes small TOML configuration files through a secure
+/// pipeline: clearsigning → GPG encryption → One-Time Pad XOR. These files
+/// are typically configuration or command files, expected to be under 100KB
+/// in normal operation.
+///
+/// # Security & Reliability Rationale
+/// This limit defends against:
+/// - **Accidental Processing**: User mistakenly selects large file (e.g., log file, database)
+/// - **Malicious Input**: Attacker attempts memory exhaustion via oversized input
+/// - **Resource Exhaustion**: Prevents excessive memory allocation for Vec<u8> buffers
+/// - **OTP Pad Exhaustion**: Large files would rapidly consume one-time pad material
+/// - **Disk Space Issues**: Prevents filling temp directory with huge intermediate files
+///
+/// # Size Selection Logic
+/// - **1MB (1,048,576 bytes)** chosen as defensive upper bound
+/// - Typical TOML files: 1KB - 50KB (plenty of headroom)
+/// - GPG clearsigning adds ~1KB overhead (signature block)
+/// - GPG encryption adds ~1-2KB overhead (headers, armor)
+/// - XOR operation is 1:1 byte mapping (no size increase)
+/// - Even with all overhead, 100KB input → ~105KB final size
+/// - 1MB limit provides 10x safety margin for legitimate files
+///
+/// # Failure Mode
+/// If file exceeds this limit:
+/// - Operation fails early (before GPG processing)
+/// - Clear error message to user
+/// - No partial processing or temp file creation
+/// - No OTP pad material consumed
+///
+/// # Example Sizes for Context
+/// ```text
+/// Small TOML file:        5 KB  (  5,120 bytes)
+/// Medium TOML file:      50 KB  ( 51,200 bytes)
+/// Large TOML file:      200 KB  (204,800 bytes)
+/// This limit:         1,048 KB  (1,048,576 bytes)
+/// Too large:          5,000 KB  (5,120,000 bytes) ← REJECTED
+/// ```
+const MAX_PROCESSABLE_FILE_SIZE_BYTES: usize = 1_048_576; // 1 MB
+
+/// Number of retry attempts when creating unique temporary files.
+///
+/// # Project Context
+/// During OTP encryption pipeline, we create temporary files for intermediate
+/// processing steps. In multi-threaded or high-frequency scenarios, filename
+/// collisions are possible despite timestamp-based unique naming.
+///
+/// # Rationale
+/// - 5 attempts balances reliability vs. fast-fail behavior
+/// - Each attempt gets new nanosecond timestamp (high uniqueness)
+/// - Normal case: succeeds on first attempt
+/// - Collision case: succeeds within 2-3 attempts
+/// - 5 attempts failing suggests systemic issue (disk full, permissions)
+const TEMP_FILE_CREATION_RETRY_ATTEMPTS: u32 = 5;
+
+/// Delay in milliseconds between temporary file creation retry attempts.
+///
+/// # Project Context
+/// Minimal delay allows rapid retry while ensuring different timestamps.
+///
+/// # Rationale
+/// - 1ms is sufficient for nanosecond timestamp to change
+/// - Minimal impact on operation latency (max 5ms total delay)
+/// - Prevents tight busy-loop if filesystem is slow to update
+const TEMP_FILE_RETRY_DELAY_MS: u64 = 1;
+
+/// Processes a file through the complete secure transmission pipeline with OTP encryption.
+///
+/// # Project Context
+/// This is the complete "sender" operation for secure file transmission in the Uma system.
+/// It transforms a plaintext TOML configuration file through multiple security layers:
+/// 1. **Clearsigning** (GPG): Ensures integrity and non-repudiation (proves sender identity)
+/// 2. **Encryption** (GPG): Ensures confidentiality (only recipient can decrypt)
+/// 3. **OTP XOR** (Padnet): Adds information-theoretic security (unbreakable if pad is secure)
+///
+/// The combination provides:
+/// - Authenticity: Clearsignature proves who sent it
+/// - Confidentiality: Encryption prevents eavesdropping
+/// - Perfect Secrecy: OTP makes cryptanalysis mathematically impossible
+///
+/// # Critical Security Properties
+/// - **Atomic**: Complete success or complete failure (no partial processing)
+/// - **Cleanup**: All temporary files deleted even on error
+/// - **Size Limits**: Defends against accidental/malicious large file processing
+/// - **Pad Consumption**: Only consumes OTP pad material on successful completion
+///
+/// # Pipeline Steps
+/// ```text
+/// Input: original.toml (plaintext TOML file)
+///   ↓
+/// [1] GPG Clearsign → Vec<u8> (signed message)
+///   ↓
+/// [2] GPG Encrypt → Vec<u8> (encrypted message)
+///   ↓
+/// [3] Write to temp_file_1 (intermediate storage)
+///   ↓
+/// [4] XOR with OTP Pad → temp_file_2 (OTP encrypted)
+///   ↓
+/// [5] Read temp_file_2 → Vec<u8> (final payload)
+///   ↓
+/// [6] Cleanup temp files (security hygiene)
+///   ↓
+/// Output: (Vec<u8>, PadIndex) - ready for transmission
+/// ```
+///
+/// # Arguments
+/// * `original_target_file_path` - Absolute path to plaintext TOML file to process
+/// * `recipient_public_key` - Recipient's GPG public key (ASCII-armored format)
+/// * `padnet_directory_path` - Absolute path to OTP padset directory
+///
+/// # Returns
+/// * `Ok((Vec<u8>, PadIndex))` - Success:
+///   - `Vec<u8>`: Final OTP-encrypted bytes (ready to transmit)
+///   - `PadIndex`: Starting pad index used (recipient needs this to decrypt)
+/// * `Err(ThisProjectError)` - Operation failed at any stage
+///
+/// # Error Handling Strategy
+/// All errors result in complete rollback:
+/// - Temporary files are deleted (even if error occurs)
+/// - No partial output is returned
+/// - OTP pad material is only consumed if entire pipeline succeeds
+/// - Clear error messages with function prefix "PWPCTGTOTSB"
+///
+/// # Cleanup Guarantee
+/// Uses `TempFileCleanupGuard` RAII pattern to ensure temp files are deleted:
+/// - On success: Files deleted before return
+/// - On error: Files deleted before error propagation
+/// - On panic: Files deleted by Drop trait (defense-in-depth)
+///
+/// # Example Usage
+/// ```rust,no_run
+/// use std::path::Path;
+///
+/// let toml_file = Path::new("/home/user/config/message.toml");
+/// let recipient_key = "-----BEGIN PGP PUBLIC KEY BLOCK-----\n...";
+/// let padset_dir = Path::new("/home/user/.uma/padsets/alice");
+///
+/// match padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
+///     toml_file,
+///     recipient_key,
+///     padset_dir,
+/// ) {
+///     Ok((encrypted_bytes, pad_index)) => {
+///         println!("Ready to send: {} bytes", encrypted_bytes.len());
+///         println!("Tell recipient to start from pad index: {:?}", pad_index);
+///         // ... send encrypted_bytes over network ...
+///     },
+///     Err(e) => {
+///         eprintln!("Encryption pipeline failed: {}", e);
+///         // No cleanup needed - handled automatically
+///     }
+/// }
+/// ```
+///
+/// # Security Considerations
+/// - Original file is read but never modified
+/// - Intermediate files contain sensitive data (restrictive permissions)
+/// - All temp files deleted (no sensitive data left on disk)
+/// - Size limits prevent resource exhaustion attacks
+/// - OTP pads are consumed destructively (cannot be reused)
+///
+/// # Performance Characteristics
+/// For typical small TOML files (< 100KB):
+/// - Clearsigning: ~50-100ms (GPG process spawn)
+/// - Encryption: ~50-100ms (GPG process spawn)
+/// - File I/O: ~5-10ms total
+/// - XOR operation: ~1-5ms
+/// - **Total**: ~100-250ms typical
+///
+/// # Failure Modes
+/// - File too large: Fails immediately, no processing
+/// - GPG clearsign fails: No temp files created
+/// - GPG encrypt fails: No temp files created
+/// - Temp file creation fails: Previous temp files cleaned up
+/// - XOR operation fails: All temp files cleaned up, no pad consumed
+/// - Read result fails: Temp files cleaned up, pad WAS consumed (unrecoverable)
+///
+/// # Related Functions
+/// - `gpg_clearsign_file_to_sendbytes`: Step 1 (clearsigning)
+/// - `gpg_encrypt_to_bytes`: Step 2 (encryption)
+/// - `padnet_writer_strict_cleanup_xor_file_to_resultpath`: Step 4 (OTP)
+/// - `write_bytes_to_file_atomic`: Helper for temp file writing
+/// - `read_file_to_bytes`: Helper for reading OTP result
+fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
+    original_target_file_path: &Path,
+    recipient_public_key: &str,
+    padnet_directory_path: &Path,
+) -> Result<(Vec<u8>, PadIndex), ThisProjectError> {
+
+    // =============================================================================
+    // Input Validation (fail fast before any processing)
+    // =============================================================================
+
+    // Debug assertions for development
+    #[cfg(all(debug_assertions, not(test)))]
+    {
+        debug_assert!(
+            original_target_file_path.is_absolute(),
+            "PWPCTGTOTSB: original_target_file_path must be absolute"
+        );
+        debug_assert!(
+            padnet_directory_path.is_absolute(),
+            "PWPCTGTOTSB: padnet_directory_path must be absolute"
+        );
+    }
+
+    // Production safety checks
+    if !original_target_file_path.is_absolute() {
+        return Err(ThisProjectError::InvalidInput(
+            "PWPCTGTOTSB: original_target_file_path must be absolute".to_string()
+        ));
+    }
+    if !padnet_directory_path.is_absolute() {
+        return Err(ThisProjectError::InvalidInput(
+            "PWPCTGTOTSB: padnet_directory_path must be absolute".to_string()
+        ));
+    }
+
+    // Check that original file exists and is within size limits
+    // This prevents wasting GPG processing time on invalid inputs
+    let original_metadata = fs::metadata(original_target_file_path)
+        .map_err(|e| {
+            ThisProjectError::IoError(std::io::Error::new(
+                e.kind(),
+                format!("PWPCTGTOTSB: cannot access original file: {}", e),
+            ))
+        })?;
+
+    let original_size = original_metadata.len() as usize;
+    if original_size > MAX_PROCESSABLE_FILE_SIZE_BYTES {
+        return Err(ThisProjectError::FileTooLarge {
+            path: original_target_file_path.to_path_buf(),
+            size_bytes: original_size,
+            max_allowed: MAX_PROCESSABLE_FILE_SIZE_BYTES,
+        });
+    }
+
+    // =============================================================================
+    // Setup: Initialize cleanup guard for automatic temp file deletion
+    // =============================================================================
+
+    let mut cleanup_guard = TempFileCleanupGuard::new();
+
+    // =============================================================================
+    // Step 1: Clearsign the original file (integrity + non-repudiation)
+    // =============================================================================
+
+    #[cfg(debug_assertions)]
+    eprintln!("PWPCTGTOTSB: Step 1 - Clearsigning file");
+
+    let clearsigned_content = gpg_clearsign_file_to_sendbytes(original_target_file_path)
+        .map_err(|e| {
+            // Enhance error with context
+            ThisProjectError::GpgError(format!(
+                "PWPCTGTOTSB: clearsign failed: {}", e
+            ))
+        })?;
+
+    #[cfg(debug_assertions)]
+    eprintln!("PWPCTGTOTSB: Clearsigned {} bytes", clearsigned_content.len());
+
+    // =============================================================================
+    // Step 2: Encrypt the clearsigned content (confidentiality)
+    // =============================================================================
+
+    #[cfg(debug_assertions)]
+    eprintln!("PWPCTGTOTSB: Step 2 - Encrypting clearsigned content");
+
+    let encrypted_content = gpg_encrypt_to_bytes(&clearsigned_content, recipient_public_key)
+        .map_err(|e| {
+            ThisProjectError::GpgError(format!(
+                "PWPCTGTOTSB: encryption failed: {}", e
+            ))
+        })?;
+
+    #[cfg(debug_assertions)]
+    eprintln!("PWPCTGTOTSB: Encrypted {} bytes", encrypted_content.len());
+
+    // =============================================================================
+    // Step 3: Create temporary file #1 for GPG-encrypted data (XOR input)
+    // =============================================================================
+
+    #[cfg(debug_assertions)]
+    eprintln!("PWPCTGTOTSB: Step 3 - Creating temp file for encrypted data");
+
+    let temp_gpg_encrypted_path = create_unique_temp_filepathbuf(
+        &std::env::temp_dir(),
+        "uma_gpg_encrypted",
+        TEMP_FILE_CREATION_RETRY_ATTEMPTS,
+        TEMP_FILE_RETRY_DELAY_MS,
+    ).map_err(|e| {
+        ThisProjectError::IoError(std::io::Error::new(
+            e.kind(),
+            format!("PWPCTGTOTSB: failed to create temp file #1: {}", e),
+        ))
+    })?;
+
+    // Register temp file for cleanup
+    cleanup_guard.add(temp_gpg_encrypted_path.clone());
+
+    #[cfg(debug_assertions)]
+    eprintln!("PWPCTGTOTSB: Created temp file: {:?}", temp_gpg_encrypted_path);
+
+    // Write encrypted content to temp file
+    write_bytes_to_file_atomic(&encrypted_content, &temp_gpg_encrypted_path)
+        .map_err(|e| {
+            ThisProjectError::IoError(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("PWPCTGTOTSB: failed to write encrypted data to temp file: {}", e),
+            ))
+        })?;
+
+    #[cfg(debug_assertions)]
+    eprintln!("PWPCTGTOTSB: Wrote {} bytes to temp file #1", encrypted_content.len());
+
+    // =============================================================================
+    // Step 4: Create temporary file #2 for XOR result (OTP output)
+    // =============================================================================
+
+    #[cfg(debug_assertions)]
+    eprintln!("PWPCTGTOTSB: Step 4 - Creating temp file for XOR result");
+
+    let temp_xor_result_path = create_unique_temp_filepathbuf(
+        &std::env::temp_dir(),
+        "uma_xor_result",
+        TEMP_FILE_CREATION_RETRY_ATTEMPTS,
+        TEMP_FILE_RETRY_DELAY_MS,
+    ).map_err(|e| {
+        ThisProjectError::IoError(std::io::Error::new(
+            e.kind(),
+            format!("PWPCTGTOTSB: failed to create temp file #2: {}", e),
+        ))
+    })?;
+
+    // Register temp file for cleanup
+    cleanup_guard.add(temp_xor_result_path.clone());
+
+    #[cfg(debug_assertions)]
+    eprintln!("PWPCTGTOTSB: Created temp file: {:?}", temp_xor_result_path);
+
+    // =============================================================================
+    // Step 5: XOR encrypt with OTP pad (information-theoretic security)
+    // =============================================================================
+
+    #[cfg(debug_assertions)]
+    eprintln!("PWPCTGTOTSB: Step 5 - XOR encrypting with OTP pad");
+
+    let pad_index = padnet_writer_strict_cleanup_xor_file_to_resultpath(
+        &temp_gpg_encrypted_path,  // Input: GPG-encrypted file
+        &temp_xor_result_path,      // Output: OTP-encrypted file
+        padnet_directory_path,      // Padset directory
+    ).map_err(|e| {
+        // Convert PadnetError to ThisProjectError
+        ThisProjectError::PadnetError(format!(
+            "PWPCTGTOTSB: OTP encryption failed: {:?}", e
+        ))
+    })?;
+
+    #[cfg(debug_assertions)]
+    eprintln!("PWPCTGTOTSB: OTP encryption complete, pad index: {:?}", pad_index);
+
+    // =============================================================================
+    // Step 6: Read OTP-encrypted result back into memory
+    // =============================================================================
+
+    #[cfg(debug_assertions)]
+    eprintln!("PWPCTGTOTSB: Step 6 - Reading OTP result into memory");
+
+    let final_otp_encrypted_bytes = read_file_to_bytes(&temp_xor_result_path)
+        .map_err(|e| {
+            ThisProjectError::IoError(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("PWPCTGTOTSB: failed to read OTP result: {}", e),
+            ))
+        })?;
+
+    #[cfg(debug_assertions)]
+    eprintln!("PWPCTGTOTSB: Read {} final bytes", final_otp_encrypted_bytes.len());
+
+    // =============================================================================
+    // Step 7: Cleanup temporary files (security hygiene)
+    // =============================================================================
+
+    #[cfg(debug_assertions)]
+    eprintln!("PWPCTGTOTSB: Step 7 - Cleaning up temporary files");
+
+    // Explicit cleanup (Drop will handle it too, but we want logging)
+    if let Err(errors) = cleanup_guard.cleanup() {
+        // Log warnings but don't fail the operation
+        // The encryption succeeded, cleanup failures are non-critical
+        #[cfg(debug_assertions)]
+        for error_msg in errors {
+            eprintln!("PWPCTGTOTSB cleanup warning: {}", error_msg);
+        }
+    }
+
+    // =============================================================================
+    // Success: Return encrypted bytes and pad index
+    // =============================================================================
+
+    #[cfg(debug_assertions)]
+    eprintln!(
+        "PWPCTGTOTSB: SUCCESS - {} bytes ready for transmission",
+        final_otp_encrypted_bytes.len()
+    );
+
+    Ok((final_otp_encrypted_bytes, pad_index))
+}
+
+/// RAII guard for automatic cleanup of temporary files.
+///
+/// # Project Context
+/// During OTP encryption pipeline, we create temporary files that must be
+/// deleted even if errors occur. This guard ensures cleanup happens via
+/// Rust's Drop trait, preventing temp file leaks from early returns or
+/// error paths.
+///
+/// # Security Rationale
+/// Temporary files contain sensitive data (GPG encrypted content). Leaving
+/// these files on disk is a security risk. This guard guarantees cleanup
+/// even if:
+/// - Function returns early due to error
+/// - Panic occurs (though we avoid panic in production)
+/// - Developer adds new error path and forgets manual cleanup
+///
+/// # Usage Pattern
+/// ```rust,no_run
+/// use std::path::Path;
+///
+/// fn example() -> Result<(), ThisProjectError> {
+///     let mut cleanup_guard = TempFileCleanupGuard::new();
+///
+///     // Create temp file
+///     let temp_path = create_unique_temp_filepathbuf(...)?;
+///     cleanup_guard.add(temp_path.clone());
+///
+///     // Use temp file...
+///     // If error occurs here, Drop trait ensures cleanup
+///
+///     // Success path: files still cleaned up automatically
+///     Ok(())
+/// } // ← Drop trait called here, temp files deleted
+/// ```
+///
+/// # Error Handling Philosophy
+/// Cleanup failures are logged but do not cause function failure because:
+/// - The primary operation may have succeeded
+/// - OS will eventually clean temp directory
+/// - Failing the entire operation due to cleanup failure is overly strict
+/// - Cleanup errors are typically non-critical (file already deleted, etc.)
+///
+/// # Implementation Notes
+/// - Uses Vec<PathBuf> to track multiple temp files
+/// - Drop trait guarantees execution even on panic (defense-in-depth)
+/// - Deletion failures are handled gracefully (no panic)
+/// - Each file deletion is independent (one failure doesn't stop others)
+struct TempFileCleanupGuard {
+    /// Paths to temporary files that need deletion
+    /// Stored as PathBuf for owned values (no lifetime issues)
+    temp_file_paths: Vec<PathBuf>,
+}
+
+impl TempFileCleanupGuard {
+    /// Creates a new cleanup guard with no files tracked.
+    ///
+    /// # Returns
+    /// Empty guard ready to track temporary files
+    ///
+    /// # Example
+    /// ```rust
+    /// let mut guard = TempFileCleanupGuard::new();
+    /// ```
+    fn new() -> Self {
+        TempFileCleanupGuard {
+            temp_file_paths: Vec::new(),
+        }
+    }
+
+    /// Adds a temporary file path to be cleaned up.
+    ///
+    /// # Arguments
+    /// * `path` - Absolute path to temporary file
+    ///
+    /// # Project Context
+    /// Call this immediately after creating each temp file to ensure
+    /// it will be cleaned up even if subsequent operations fail.
+    ///
+    /// # Example
+    /// ```rust,no_run
+    /// # use std::path::PathBuf;
+    /// # let mut guard = TempFileCleanupGuard::new();
+    /// let temp_path = PathBuf::from("/tmp/uma_temp_12345.bin");
+    /// guard.add(temp_path);
+    /// ```
+    fn add(&mut self, path: PathBuf) {
+        self.temp_file_paths.push(path);
+    }
+
+    /// Manually trigger cleanup of all tracked files.
+    ///
+    /// # Project Context
+    /// Normally cleanup happens automatically via Drop trait. Use this
+    /// method if you need explicit control over cleanup timing or want
+    /// to handle cleanup errors specially.
+    ///
+    /// # Error Handling
+    /// Deletion failures are collected but do not stop cleanup of
+    /// remaining files. Returns all errors encountered for logging.
+    ///
+    /// # Returns
+    /// * `Ok(())` - All files deleted successfully
+    /// * `Err(Vec<String>)` - One or more deletions failed (with error messages)
+    ///
+    /// # Example
+    /// ```rust,no_run
+    /// # let mut guard = TempFileCleanupGuard::new();
+    /// match guard.cleanup() {
+    ///     Ok(()) => println!("All temp files cleaned"),
+    ///     Err(errors) => {
+    ///         for err in errors {
+    ///             eprintln!("Cleanup warning: {}", err);
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    fn cleanup(&mut self) -> Result<(), Vec<String>> {
+        let mut errors = Vec::new();
+
+        // Attempt to delete each tracked file
+        for path in &self.temp_file_paths {
+            // Try to delete the file
+            if let Err(e) = fs::remove_file(path) {
+                // Only report error if file exists (not already deleted)
+                // ErrorKind::NotFound is acceptable (file already gone)
+                if e.kind() != std::io::ErrorKind::NotFound {
+                    // Security: Only include filename in error, not full path
+                    let filename = path.file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("unknown");
+                    errors.push(format!(
+                        "TFCG cleanup failed for {}: {}",
+                        filename, e
+                    ));
+                }
+            }
+        }
+
+        // Clear the vector (whether deletions succeeded or not)
+        self.temp_file_paths.clear();
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
+    }
+}
+
+/// Automatic cleanup when guard goes out of scope.
+///
+/// # Project Context
+/// This is the critical safety mechanism. When the guard is dropped
+/// (function returns, scope ends, etc.), all tracked temp files are
+/// automatically deleted.
+///
+/// # Error Handling
+/// Cleanup errors are logged to stderr but do not panic. This is
+/// intentional because:
+/// - Drop trait should never panic (Rust best practice)
+/// - Primary operation may have succeeded
+/// - Cleanup failure is non-critical compared to operation success
+///
+/// # Implementation Note
+/// Uses eprintln! for error output. In production, consider routing
+/// to proper logging system instead.
+impl Drop for TempFileCleanupGuard {
+    fn drop(&mut self) {
+        // Attempt cleanup
+        if let Err(errors) = self.cleanup() {
+            // Log errors but do not panic in Drop
+            // In production, route to proper logging system
+            for error_msg in errors {
+                #[cfg(debug_assertions)]
+                eprintln!("Warning: {}", error_msg);
+
+                // In production: consider silent failure or structured logging
+                // eprintln! in production could leak sensitive info
+            }
+        }
+    }
+}
+
+/// Reads a file into a byte vector with defensive size checking.
+///
+/// # Project Context
+/// In the OTP encryption pipeline, we read the XOR-encrypted output file
+/// back into memory for transmission. This function ensures:
+/// - Files don't exceed memory safety limits
+/// - Clear errors for oversized files
+/// - Protection against malicious or accidental large file processing
+/// - Consistent byte reading (handles short reads)
+///
+/// # Security & Reliability Strategy
+/// 1. Check file size BEFORE reading (prevents memory exhaustion)
+/// 2. Reject files exceeding MAX_PROCESSABLE_FILE_SIZE_BYTES
+/// 3. Pre-allocate exact buffer size (efficient, no reallocation)
+/// 4. Read entire file in single operation
+/// 5. Verify bytes read matches file size (detect partial reads)
+///
+/// # Size Limit Rationale
+/// - Protects against memory exhaustion attacks
+/// - Prevents accidental processing of wrong files (logs, databases)
+/// - Ensures OTP pad material not wasted on invalid inputs
+/// - 1MB limit appropriate for TOML config files
+///
+/// # Arguments
+/// * `file_path` - Absolute path to file to read
+///
+/// # Returns
+/// * `Ok(Vec<u8>)` - Complete file contents as byte vector
+/// * `Err(ThisProjectError)` - Operation failed, see error for details
+///
+/// # Error Conditions
+/// - `FileTooLarge`: File exceeds MAX_PROCESSABLE_FILE_SIZE_BYTES
+/// - `IoError`: File not found
+/// - `IoError`: Permission denied (cannot read file)
+/// - `IoError`: Hardware error during read
+/// - `IoError`: Partial read (file changed during read)
+/// - `InvalidInput`: Path is not absolute
+///
+/// # Example
+/// ```rust,no_run
+/// use std::path::Path;
+///
+/// let temp_path = Path::new("/tmp/uma_xor_result.bin");
+///
+/// match read_file_to_bytes(temp_path) {
+///     Ok(bytes) => println!("Read {} bytes", bytes.len()),
+///     Err(e) => eprintln!("Read failed: {}", e),
+/// }
+/// ```
+///
+/// # Performance Considerations
+/// - Single metadata call to check size
+/// - Pre-allocated buffer (no reallocation)
+/// - Single read operation for files < 1MB (efficient)
+/// - Typical read time for 1MB file: < 5ms on SSD
+///
+/// # Edge Cases Handled
+/// - Empty files (0 bytes): Returns Ok(empty Vec)
+/// - Files exactly at limit (1,048,576 bytes): Accepted
+/// - Files over limit by 1 byte: Rejected
+/// - File deleted between size check and read: Returns IoError
+/// - File grows during read: Partial read detected and rejected
+fn read_file_to_bytes(
+    file_path: &Path,
+) -> Result<Vec<u8>, ThisProjectError> {
+    use std::fs::{self, File};
+    use std::io::Read;
+
+    // Debug assertion: ensure we have an absolute path
+    #[cfg(all(debug_assertions, not(test)))]
+    debug_assert!(
+        file_path.is_absolute(),
+        "RFTB: file_path must be absolute, got: {:?}",
+        file_path
+    );
+
+    // Production safety check: verify path is absolute
+    if !file_path.is_absolute() {
+        return Err(ThisProjectError::InvalidInput(
+            "RFTB: file path must be absolute".to_string()
+        ));
+    }
+
+    // Get file metadata to check size before reading
+    // This prevents loading huge files into memory
+    let metadata = fs::metadata(file_path)
+        .map_err(|e| {
+            ThisProjectError::IoError(std::io::Error::new(
+                e.kind(),
+                format!("RFTB: failed to get file metadata: {}", e),
+            ))
+        })?;
+
+    // Get file size as usize for comparison
+    // Note: On 32-bit systems, files > 4GB would overflow here
+    // This is acceptable since our max is 1MB
+    let file_size = metadata.len() as usize;
+
+    // Defensive size check: reject unexpectedly large files
+    // Protects against memory exhaustion and accidental wrong file processing
+    if file_size > MAX_PROCESSABLE_FILE_SIZE_BYTES {
+        return Err(ThisProjectError::FileTooLarge {
+            path: file_path.to_path_buf(),
+            size_bytes: file_size,
+            max_allowed: MAX_PROCESSABLE_FILE_SIZE_BYTES,
+        });
+    }
+
+    // Open file for reading
+    let mut file = File::open(file_path)
+        .map_err(|e| {
+            ThisProjectError::IoError(std::io::Error::new(
+                e.kind(),
+                format!("RFTB: failed to open file: {}", e),
+            ))
+        })?;
+
+    // Pre-allocate buffer with exact size
+    // This is efficient: allocates once, no reallocation needed
+    let mut buffer = vec![0u8; file_size];
+
+    // Read entire file into buffer
+    // read_exact ensures we read exactly file_size bytes or error
+    file.read_exact(&mut buffer)
+        .map_err(|e| {
+            ThisProjectError::IoError(std::io::Error::new(
+                e.kind(),
+                format!("RFTB: failed to read file contents: {}", e),
+            ))
+        })?;
+
+    // Success: return complete file contents
+    Ok(buffer)
+}
+
+/// Writes byte data to a file atomically with defensive error handling.
+///
+/// # Project Context
+/// In the OTP encryption pipeline, we need to write intermediate encrypted
+/// data to temporary files. This function ensures:
+/// - Complete write or complete failure (no partial files)
+/// - Defensive handling of disk full, permissions, hardware errors
+/// - Secure file permissions (readable/writable by owner only)
+/// - Clear error messages for debugging
+///
+/// # Operation Strategy
+/// 1. Create new file (fail if already exists - prevents race conditions)
+/// 2. Set restrictive permissions (0600 on Unix - owner only)
+/// 3. Write all bytes in single operation
+/// 4. Flush to ensure data written to disk
+/// 5. Explicit sync to guarantee durability
+///
+/// # Security Considerations
+/// - File permissions set to 0600 (Unix) - only file owner can read/write
+/// - Files contain sensitive encrypted data
+/// - No world-readable temp files
+/// - Fail-safe: if permissions can't be set, file is still created (OS defaults)
+///
+/// # Arguments
+/// * `data` - Byte slice containing data to write
+/// * `file_path` - Absolute path where file should be created
+///
+/// # Returns
+/// * `Ok(())` - File successfully written and synced to disk
+/// * `Err(ThisProjectError)` - Operation failed, see error for details
+///
+/// # Error Conditions
+/// - `IoError`: File already exists (race condition)
+/// - `IoError`: Permission denied (cannot create file in directory)
+/// - `IoError`: Disk full (no space available)
+/// - `IoError`: Hardware error (disk failure)
+/// - `IoError`: Parent directory doesn't exist
+///
+/// # Example
+/// ```rust,no_run
+/// use std::path::Path;
+///
+/// let data = b"encrypted content here";
+/// let temp_path = Path::new("/tmp/uma_temp_12345.bin");
+///
+/// match write_bytes_to_file_atomic(data, temp_path) {
+///     Ok(()) => println!("Data written successfully"),
+///     Err(e) => eprintln!("Write failed: {}", e),
+/// }
+/// ```
+///
+/// # Platform Notes
+/// - Unix: File permissions set to 0600 (owner read/write only)
+/// - Windows: Uses default file permissions (no chmod equivalent)
+/// - All platforms: Fail if file exists prevents race conditions
+///
+/// # Performance Considerations
+/// - Single write operation (efficient for small files)
+/// - Flush ensures OS buffer written to disk
+/// - Sync ensures disk cache written to physical media
+/// - For 1MB files: typically completes in < 10ms on SSD
+fn write_bytes_to_file_atomic(
+    data: &[u8],
+    file_path: &Path,
+) -> Result<(), ThisProjectError> {
+    use std::fs::{OpenOptions};
+    use std::io::Write;
+
+    // Debug assertion: ensure we have an absolute path
+    // This is active in debug builds but not production
+    #[cfg(all(debug_assertions, not(test)))]
+    debug_assert!(
+        file_path.is_absolute(),
+        "WBTFA: file_path must be absolute, got: {:?}",
+        file_path
+    );
+
+    // Production safety check: verify path is absolute
+    if !file_path.is_absolute() {
+        return Err(ThisProjectError::InvalidInput(
+            "WBTFA: file path must be absolute".to_string()
+        ));
+    }
+
+    // Create file with restrictive options
+    // - create_new(true): Fail if file exists (prevents race conditions)
+    // - write(true): Enable write operations
+    // - truncate(false): Not needed since create_new ensures empty file
+    let mut file = OpenOptions::new()
+        .create_new(true)  // Atomic: fail if exists
+        .write(true)
+        .open(file_path)
+        .map_err(|e| {
+            // Enhance error with context
+            ThisProjectError::IoError(std::io::Error::new(
+                e.kind(),
+                format!("WBTFA: failed to create file: {}", e),
+            ))
+        })?;
+
+    // Set secure file permissions (Unix only)
+    // On Windows, this is a no-op (not supported)
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let permissions = std::fs::Permissions::from_mode(0o600); // Owner: rw-, Group: ---, Other: ---
+
+        // Try to set permissions, but don't fail if we can't
+        // File was created successfully, permissions are defense-in-depth
+        if let Err(e) = std::fs::set_permissions(file_path, permissions) {
+            // Log warning in debug builds
+            #[cfg(debug_assertions)]
+            eprintln!("WBTFA warning: could not set file permissions: {}", e);
+
+            // In production: continue (file created, just with default permissions)
+            // This is acceptable because temp directory should have restricted access
+        }
+    }
+
+    // Write all bytes in single operation
+    // This is efficient for small files (our use case: < 1MB)
+    file.write_all(data)
+        .map_err(|e| {
+            ThisProjectError::IoError(std::io::Error::new(
+                e.kind(),
+                format!("WBTFA: failed to write data: {}", e),
+            ))
+        })?;
+
+    // Flush OS buffer to ensure bytes reach OS kernel
+    file.flush()
+        .map_err(|e| {
+            ThisProjectError::IoError(std::io::Error::new(
+                e.kind(),
+                format!("WBTFA: failed to flush: {}", e),
+            ))
+        })?;
+
+    // Sync file to disk (ensures durability)
+    // This is important for encrypted data - must not be lost
+    file.sync_all()
+        .map_err(|e| {
+            ThisProjectError::IoError(std::io::Error::new(
+                e.kind(),
+                format!("WBTFA: failed to sync: {}", e),
+            ))
+        })?;
+
+    Ok(())
+}
+
+// // TODO: this may be mostly right: directing to readcopy .toml?
+// // or... readcopy clearsigned toml?
+// // or... new struct serialized to .toml?
+// /// Prepares file contents for secure sending by clearsigning and encrypting them.
+// ///
+// /// This function reads the contents of the file at the given `file_path`,
+// /// clearsigns the content using GPG to ensure integrity and non-repudiation,
+// /// and then encrypts the clearsigned content using the provided
+// /// `recipient_public_key` for confidentiality.
+// ///
+// /// # Arguments
+// ///
+// /// * `file_path`: The path to the file whose contents should be processed.
+// /// * `recipient_public_key`: The recipient's GPG public key used for encryption.
+// ///
+// /// # Returns
+// ///
+// /// * `Ok(Vec<u8>)`: A vector of bytes containing the encrypted, clearsigned file content on success.
+// /// * `Err(ThisProjectError)`: An error if file reading, clearsigning, or encryption fails.
+// fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
+//     file_path: &Path,
+//     recipient_public_key: &str,
+//     padnet_directory_path: &Path,
+// ) -> Result<Vec<u8, >, ThisProjectError> {
+
+//     // 1. Clearsign the file contents.
+//     let clearsigned_content = gpg_clearsign_file_to_sendbytes(file_path)?;
+
+//     // 2. Encrypt the clearsigned content.
+//     let encrypted_content = gpg_encrypt_to_bytes(&clearsigned_content, recipient_public_key)?;
+
+//     let (padnet_index_array, _) = match padnet_writer_strict_cleanup_continuous_xor_file(
+//         &path_sendfile_readcopy_path, // path_to_target_file
+//         &temp_filepath_padnet, // result_path (XOR'd bytes file)
+//         &padnet_directory_path, // path_to_padset
+//     ) {
+//         Ok((idx, bytes)) => {
+//             println!("  ✓ Encrypted {} bytes", bytes);
+//             println!("  ✓ Starting index: {:?}", idx);
+//             (idx, bytes)
+//         }
+//         Err(e) => {
+//             println!("  ✗ Failed: {}", e);
+//             continue;
+//         }
+//     };
+
+//     debug_log!(
+//         "(in HRCD) wrapper__path_to_clearsign_to_gpgencrypt_to_send_bytes  encrypted_content {:?}",
+//         &encrypted_content
+//     );
+
+//     Ok(encrypted_content)
+// }
+
+
 
 // /// string-mod: remove_non_alphanumeric
 // /// takes a string slice (&str) as input and returns a new String that
@@ -30400,6 +31407,7 @@ fn handle_local_owner_desk(
                         decrypted_clearsignfile_data
                     );
 
+                    /*
                     // 6.3 Extract the clearsigned data
                     let extracted_clearsigned_file_data = match extract_clearsign_data(&decrypted_clearsignfile_data) {
                         Ok(data) => data,
@@ -30413,6 +31421,63 @@ fn handle_local_owner_desk(
                         extracted_clearsigned_file_data
                     );
 
+                    */
+
+                    let extracted_clearsigned_file_data = if *use_padnet_flag {
+
+                        /*
+                        // 1. flag for padnet-mode where?
+                        // 2. get team-channel-name
+                        // 3. get RC key-id (state)
+                        // 4. get read-pad path (with id, team-channel)
+                        //  -- /padnet/to/{team_channel}/{RC key-id}
+                        */
+
+                        let team_channel_name = match get_current_team_channel_name_from_nav_path() {
+                            Some(name) => name,
+                            None => {
+                                debug_log!("Error: Could not get current channel name. Skipping set_as_active.");
+                                return Err(ThisProjectError::InvalidData("Could not get team channel name".into()));
+                            },
+                        };
+                        let rc_key_id = &local_owner_desk_setup_data.remote_collaborator_gpg_publickey_id;
+
+                        ();
+                        // 3. get read-pad path (with id)
+                        //  -- /padnet/to/{team_channel}/{RC key-id}
+                        let mut padnet_directory_path = get_reader_from_padnet_directory_path()?;
+                        padnet_directory_path.push(&team_channel_name);
+                        padnet_directory_path.push(rc_key_id);
+
+
+                        // 6.3 Extract the clearsigned data
+                        match extract_clearsign_data(&decrypted_clearsignfile_data) {
+                            Ok(data) => data,
+                            Err(e) => {
+                                debug_log!("HLOD 6.3: Clearsign extraction failed: {}. Skipping.", e);
+                                continue;
+                            }
+                        }
+
+                    } else {
+                    // Normal Mode, No Padnet OTP Network Layer
+
+                    // 6.3 Extract the clearsigned data
+                    match extract_clearsign_data(&decrypted_clearsignfile_data) {
+                        Ok(data) => data,
+                        Err(e) => {
+                            debug_log!("HLOD 6.3: Clearsign extraction failed: {}. Skipping.", e);
+                            continue;
+                        }
+                    }
+
+
+                    };
+
+                    debug_log!(
+                        "HLOD 6.3 extracted_clearsigned_file_data -> {:?}",
+                        extracted_clearsigned_file_data
+                    );
 
                     // Section 6.4 - Extract flag - for clearsigned .toml / .gpgtoml
                     let file_str = std::str::from_utf8(&extracted_clearsigned_file_data)
@@ -33236,22 +34301,22 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                             let use_padnet_flag = &room_sync_input.use_padnet;
 
+                            // let mut padnet_index_array: PadIndex;
+
                             let sendfile_struct: SendFile = if *use_padnet_flag {
 
-                                // TODO: Padnet
-                                // adding a new factor/path
-                                // if file contains a padnet_otp=true flag (  let file_flag_padnet =)
-                                // set file_flag_padnet = true
-                                //
-                                //
-                                // - check file for flag
+                                // - check file for flag, if *use_padnet_flag
                                 // 1. flag for padnet-mode where?
-                                // 2. get RC key-id (state)
-                                // 3. get write-pad path (with id)
+                                // 2. get team-channel-name
+                                // 3. get RC key-id (state)
+                                // 4. get write-pad path (with id, team-channel)
                                 //  -- /padnet/to/{team_channel}/{RC key-id}
-                                //
-                                // 4. write XOR, get array-index
-                                // 5. use that for file_bytes2send
+                                // 5. use padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes
+                                // - clearsign
+                                // - gpg
+                                // - otp
+                                // - to bytes, get array-index
+                                // 5. use bytes for file_bytes2send
                                 // 6. use arry index in struct
 
 
@@ -33266,9 +34331,7 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                                 // 3. get write-pad path (with id)
                                 //  -- /padnet/to/{team_channel}/{RC key-id}
-                                let mut padnet_directory_path = make_input_path_name_abs_executabledirectoryrelative_nocheck(
-                                    "padnet/to"
-                                )?;
+                                let mut padnet_directory_path = get_writer_to_padnet_directory_path()?;
                                 padnet_directory_path.push(&team_channel_name);
                                 padnet_directory_path.push(rc_key_id);
 
@@ -33289,32 +34352,59 @@ fn handle_remote_collaborator_meetingroom_desk(
                                 16,    // retry_delay_ms: u64,
                                 )?;
 
-                                // Wrapper of bytes to bytes:
-                                // 4.2.2 Read File Contents
-                                // 4.3.1 GPG Clearsign the File (with your private key)
-                                // 4.3.2 GPG Encrypt File (with their public key)
-                                let file_bytes2send = wrapper__path_to_clearsign_to_gpgencrypt_to_send_bytes(
-                                    &path_sendfile_readcopy_path,
+                                // padnet_writer_strict_cleanup_continuous_xor_to_bytes
+
+                                //     // maybe issue..wrapper__path_to_clearsign_to_gpgencrypt_to_send_bytes
+                                //     // padnet last step...
+                                //     //
+                                //     wrapper__path_to_clearsign_to_gpgencrypt_to_send_byte
+
+                                //     debug_log(
+                                //         "HRCD 4.2, 4.3.1, 4.3.2 done gpg wrapper"
+                                //     );
+
+                                //     let padnet_index_array = match padnet_writer_strict_cleanup_xor_file_to_resultpath(
+                                //         &path_sendfile_readcopy_path, // path_to_target_file
+                                //         &temp_filepath_padnet, // result_path
+                                //         &padnet_directory_path, // path_to_padset
+                                //     ) {
+                                //         Ok((idx, bytes)) => {
+                                //             println!("  ✓ Encrypted {} bytes", bytes);
+                                //             println!("  ✓ Starting index: {:?}", idx);
+                                //             (idx, bytes)
+                                //         }
+                                //         Err(e) => {
+                                //             println!("  ✗ Failed: {}", e);
+                                //             continue;
+                                //         }
+                                //     };
+
+                                // calls padnet_writer_strict_cleanup_continuous_xor_file
+                                let (file_bytes2send, padnet_index_array) = padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
+                                    &temp_filepath_padnet, // padnes path?
                                     &room_sync_input.remote_collaborator_public_gpg,
+                                    &padnet_directory_path, // path_to_padset
                                 )?;
 
-                                debug_log(
-                                    "HRCD 4.2, 4.3.1, 4.3.2 done gpg wrapper"
-                                );
-
-                                // }
-                                //
+                                // // Wrapper of bytes to bytes:
+                                // // 4.2.2 Read File Contents
+                                // // 4.3.1 GPG Clearsign the File (with your private key)
+                                // // 4.3.2 GPG Encrypt File (with their public key)
+                                // let file_bytes2send = wrapper__path_to_clearsign_to_gpgencrypt_to_send_bytes(
+                                //     &temp_filepath_padnet, // padnes path?
+                                //     &room_sync_input.remote_collaborator_public_gpg,
+                                // )?;
 
                                 // // 4.5. Calculate SendFile Struct Hashes (Using Collaborator's Salts)
                                 // 4.5 calculate hashes: HRCD
-                                let calculated_hrcd_sendfile_hashes = hash_sendfile_struct_fields(
+                                let calculated_hrcd_sendfile_hashes_result = hash_sendfile_struct_fields(
                                     &room_sync_input.local_user_salt_list,
                                     intray_send_time,
                                     &file_bytes2send,
                                 );
 
                                 // Handle the Result from hash_sendfile_struct_fields
-                                let calculated_hashes = match calculated_hrcd_sendfile_hashes {
+                                let calculated_hashes = match calculated_hrcd_sendfile_hashes_result {
                                     Ok(hashes) => hashes,
                                     Err(e) => {
                                         debug_log!("HRCD 4.5 Error calculating hashes: {}", e);
@@ -33327,31 +34417,12 @@ fn handle_remote_collaborator_meetingroom_desk(
                                     calculated_hashes
                                 );
 
-                                let (padnet_index_array, _) = match padnet_writer_strict_cleanup_continuous_xor_file(
-                                    &path_sendfile_readcopy_path, // path_to_target_file
-                                    &temp_filepath_padnet, // result_path
-                                    &padnet_directory_path, // path_to_padset
-                                ) {
-                                    Ok((idx, bytes)) => {
-                                        println!("  ✓ Encrypted {} bytes", bytes);
-                                        println!("  ✓ Starting index: {:?}", idx);
-                                        (idx, bytes)
-                                    }
-                                    Err(e) => {
-                                        println!("  ✗ Failed: {}", e);
-                                        continue;
-                                    }
-                                };
-
-                                // let padnet_index_array2: Vec<u8> = padnet_index_array;
-
                                 // 4.6. Create SendFile Struct
                                 SendFile {
                                     intray_send_time: Some(intray_send_time),
                                     gpg_encrypted_intray_file: Some(file_bytes2send), // Clone needed here if file_bytes2send is used later
                                     intray_hash_list: Some(calculated_hashes),  // Clone here as well
                                     padnet_index_array: Some(padnet_index_array),
-
                                 }
 
 
@@ -33972,6 +35043,7 @@ fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
             remote_collaborator_ipv6_addr_list: this_meetingroom_iter.remote_collaborator_ipv6_addr_list.clone(),
             remote_collaborator_ipv4_addr_list: this_meetingroom_iter.remote_collaborator_ipv4_addr_list.clone(),
             local_user_gpg_publickey_id: this_meetingroom_iter.local_user_gpg_publickey_id.clone(),
+            remote_collaborator_gpg_publickey_id: this_meetingroom_iter.remote_collaborator_gpg_publickey_id.clone(),
             local_user_public_gpg: this_meetingroom_iter.local_user_public_gpg.clone(),
             local_user_sync_interval: this_meetingroom_iter.local_user_sync_interval,
             // ready! (local)

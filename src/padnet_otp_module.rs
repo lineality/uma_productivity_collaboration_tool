@@ -1997,7 +1997,7 @@ pub fn padnet_reader_xor_file(
     ));
 
     // Perform XOR operation (cleanup temp on error)
-    let bytes_processed = match perform_xor_operation(
+    let bytes_processed = match perform_pto_xor_get_bytecount_newpath(
         path_to_target_file,
         &temp_file_path,
         path_to_padset,
@@ -2117,7 +2117,7 @@ pub fn padnet_reader_xor_file(
 /// // start_idx: pad position to send to receiver
 /// // byte_count: how many bytes were encrypted (file size)
 /// ```
-/// Note: byte count is NOT used for ANYTHING functional
+/// Note: byte count is NOT used for ANYTHING functional in the codebase
 pub fn padnet_writer_strict_cleanup_continuous_xor_file(
     path_to_target_file: &Path,
     result_path: &Path,
@@ -2179,7 +2179,7 @@ pub fn padnet_writer_strict_cleanup_continuous_xor_file(
 
     // Perform XOR operation (cleanup temp on error)
     // Note: Lines are deleted during operation - cannot fully rollback
-    let bytes_processed = match perform_xor_operation(
+    let bytes_processed = match perform_pto_xor_get_bytecount_newpath(
         path_to_target_file,
         &temp_file_path,
         path_to_padset,
@@ -2210,6 +2210,186 @@ pub fn padnet_writer_strict_cleanup_continuous_xor_file(
     })?;
 
     Ok((starting_index, bytes_processed))
+}
+
+/// XOR a file with padset (writer mode - destructive, strict, atomic)
+///
+/// ## Project Context
+/// Writer mode creates OTP-encrypted files for transmission. This is the
+/// "sender" operation. It automatically finds the first available line,
+/// consumes (deletes) pad lines as it proceeds, and returns the starting
+/// index so the receiver knows where to start decryption.
+///
+/// ## Critical Properties
+/// - Strict: ANY error causes complete rollback
+/// - Atomic: Either complete success or complete failure (no partial output)
+/// - Continuous: Pad bytes must be continuous (no gaps from errors)
+/// - Destructive: All consumed lines are deleted (zero-overwrite + delete)
+///
+/// ## Operation
+/// 1. Find first available line in padset
+/// 2. Open target file (read)
+/// 3. Create temp output file
+/// 4. Load and delete line from pad
+/// 5. Read target byte-by-byte, XOR with pad bytes
+/// 6. When pad line exhausted, load and delete next line
+/// 7. Write XOR'd bytes to temp file
+/// 8. Move temp to final result location (atomic)
+/// 9. Return starting index
+///
+/// ## Error Handling
+/// - On ANY error: delete temp file, return error
+/// - Lines already deleted stay deleted (cannot retry from same position)
+/// - Caller must restart from new first-available line
+///
+/// # Arguments
+/// * `path_to_target_file` - Absolute path to file to XOR
+/// * `result_path` - Absolute path for output file
+/// * `path_to_padset` - Absolute path to padset root
+///
+/// # Returns
+/// * `Ok((PadIndex, usize))` - Starting index used and bytes processed
+/// * `Err(PadnetError)` - Operation failed, no output created
+/// XOR a file with padset (writer mode - destructive, strict, atomic)
+///
+/// ## Project Context
+/// Writer mode creates OTP-encrypted files for transmission. This is the
+/// "sender" operation. It automatically finds the first available line,
+/// consumes (deletes) pad lines as it proceeds, and returns the starting
+/// index so the receiver knows where to start decryption.
+///
+/// ## Output
+/// - Creates encrypted file at `result_path`
+/// - Returns starting pad index and byte count
+/// - Byte count = number of input bytes read = output bytes written
+///
+/// ## Operation
+/// 1. Find first available line in padset
+/// 2. Open target file (read)
+/// 3. Create temp output file
+/// 4. Load and delete line from pad
+/// 5. Read target byte-by-byte, XOR with pad bytes
+/// 6. When pad line exhausted, load and delete next line
+/// 7. Write XOR'd bytes to temp file ← ENCRYPTED DATA WRITTEN HERE
+/// 8. Move temp to final result location (atomic) ← OUTPUT FILE CREATED
+/// 9. Return starting index and byte count
+///
+/// ## Error Handling
+/// - On ANY error: delete temp file, return error
+/// - Lines already deleted stay deleted (cannot retry from same position)
+/// - Caller must restart from new first-available line
+///
+/// # Arguments
+/// * `path_to_target_file` - Absolute path to plaintext file to encrypt
+/// * `result_path` - Absolute path for encrypted output file (will be created)
+/// * `path_to_padset` - Absolute path to padset root
+///
+/// # Returns
+/// * `Ok(PadIndex)` - Starting pad index used
+/// * `Err(PadnetError)` - Operation failed, no output file created
+///
+/// # Example
+/// ```rust,no_run
+/// // Encrypt "message.txt" to "message.enc"
+/// let (start_idx, byte_count) = padnet_writer_strict_cleanup_continuous_xor_file(
+///     Path::new("/absolute/path/to/message.txt"),
+///     Path::new("/absolute/path/to/message.enc"),  // ← encrypted file created here
+///     Path::new("/absolute/path/to/padset"),
+/// )?;
+/// // start_idx: pad position to send to receiver
+/// ```
+pub fn padnet_writer_strict_cleanup_xor_file_to_resultpath(
+    path_to_target_file: &Path,
+    result_path: &Path,
+    path_to_padset: &Path,
+) -> Result<PadIndex, PadnetError> {
+    // Validate inputs
+    if !path_to_target_file.is_absolute() {
+        return Err(PadnetError::AssertionViolation(
+            "PWSCCXF: target path must be absolute".into(),
+        ));
+    }
+    if !result_path.is_absolute() {
+        return Err(PadnetError::AssertionViolation(
+            "PWSCCXF: result path must be absolute".into(),
+        ));
+    }
+    if !path_to_padset.is_absolute() {
+        return Err(PadnetError::AssertionViolation(
+            "PWSCCXF: padset path must be absolute".into(),
+        ));
+    }
+
+    // Check target file exists
+    if !path_to_target_file.exists() {
+        return Err(PadnetError::IoError("PWSCCXF: target not found".into()));
+    }
+
+    // Find first available line (determines index size)
+    let size = PadIndexMaxSize::Standard4Byte; // TODO: detect from padset structure
+    let starting_index = find_first_available_line(path_to_padset, size)?
+        .ok_or_else(|| PadnetError::IoError("PWSCCXF: padset empty".into()))?;
+
+    // Create temp directory if needed
+    let temp_dir = result_path
+        .parent()
+        .ok_or_else(|| PadnetError::IoError("PWSCCXF: invalid result path".into()))?
+        .join("padnet_temp");
+
+    fs::create_dir_all(&temp_dir).map_err(|e| {
+        #[cfg(debug_assertions)]
+        {
+            PadnetError::IoError(format!("PWSCCXF: temp dir creation failed: {}", e))
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            let _ = e;
+            PadnetError::IoError("PWSCCXF: temp dir failed".into())
+        }
+    })?;
+
+    // Create temp output file
+    let temp_file_path = temp_dir.join(format!(
+        "temp_xor_{}.tmp",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs()
+    ));
+
+    // Perform XOR operation (cleanup temp on error)
+    // Note: Lines are deleted during operation - cannot fully rollback
+    let _ = match perform_pto_xor_get_bytecount_newpath(
+        path_to_target_file,
+        &temp_file_path,
+        path_to_padset,
+        &starting_index,
+        true, // destructive (writer mode)
+    ) {
+        Ok(n) => n,
+        Err(e) => {
+            // Clean up temp file
+            let _ = fs::remove_file(&temp_file_path);
+            return Err(e);
+        }
+    };
+
+    // Move temp file to final location (atomic)
+    fs::rename(&temp_file_path, result_path).map_err(|e| {
+        // Clean up temp file on move failure
+        let _ = fs::remove_file(&temp_file_path);
+        #[cfg(debug_assertions)]
+        {
+            PadnetError::IoError(format!("PWSCCXF: move to result failed: {}", e))
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            let _ = e;
+            PadnetError::IoError("PWSCCXF: move failed".into())
+        }
+    })?;
+
+    Ok(starting_index)
 }
 
 /// Core XOR operation implementation (used by both reader and writer)
@@ -2247,7 +2427,177 @@ pub fn padnet_writer_strict_cleanup_continuous_xor_file(
 /// # Returns
 /// * `Ok(usize)` - Number of bytes processed
 /// * `Err(PadnetError)` - Operation failed
-fn perform_xor_operation(
+fn perform_pto_xor_get_bytecount_newpath(
+    target_path: &Path,
+    output_path: &Path,
+    padset_path: &Path,
+    start_index: &PadIndex,
+    destructive: bool,
+) -> Result<usize, PadnetError> {
+    // Open target file
+    let mut target_file = File::open(target_path).map_err(|e| {
+        #[cfg(debug_assertions)]
+        {
+            PadnetError::IoError(format!("PXO: open target failed: {}", e))
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            let _ = e;
+            PadnetError::IoError("PXO: open target failed".into())
+        }
+    })?;
+
+    // Create output file
+    let mut output_file = File::create(output_path).map_err(|e| {
+        #[cfg(debug_assertions)]
+        {
+            PadnetError::IoError(format!("PXO: create output failed: {}", e))
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            let _ = e;
+            PadnetError::IoError("PXO: create output failed".into())
+        }
+    })?;
+
+    // Current index for pad line loading
+    let mut current_index = start_index.clone();
+
+    // Load first pad line
+    let mut pad_line_buffer = if destructive {
+        padnet_load_delete_read_one_byteline(padset_path, &current_index)?
+    } else {
+        read_padset_one_byteline(padset_path, &current_index)?
+    };
+
+    let mut pad_line_position = 0;
+    let mut total_bytes_processed = 0;
+
+    // Read target file one byte at a time
+    let mut target_buffer = [0u8; 1];
+
+    // max for loop
+    const MAX_XOR_ITERATIONS: usize = usize::MAX; // Or reasonable limit
+    let mut iteration_count = 0;
+
+    loop {
+        iteration_count += 1;
+        if iteration_count > MAX_XOR_ITERATIONS {
+            return Err(PadnetError::IoError("PXO: iteration limit exceeded".into()));
+        }
+        // Check if we need to load next pad line
+        if pad_line_position >= pad_line_buffer.len() {
+            // Check if we're at max BEFORE incrementing
+            if current_index.is_max() {
+                return Err(PadnetError::IoError("PXO: pad exhausted".into()));
+            }
+
+            // Current line exhausted, load next
+            current_index
+                .increment()
+                .ok_or_else(|| PadnetError::IoError("PXO: pad exhausted".into()))?;
+
+            pad_line_buffer = if destructive {
+                padnet_load_delete_read_one_byteline(padset_path, &current_index)?
+            } else {
+                read_padset_one_byteline(padset_path, &current_index)?
+            };
+
+            pad_line_position = 0;
+        }
+
+        // Read one byte from target
+        let bytes_read = target_file.read(&mut target_buffer).map_err(|e| {
+            #[cfg(debug_assertions)]
+            {
+                PadnetError::IoError(format!("PXO: read target failed: {}", e))
+            }
+            #[cfg(not(debug_assertions))]
+            {
+                let _ = e;
+                PadnetError::IoError("PXO: read target failed".into())
+            }
+        })?;
+
+        // Check for end of file
+        if bytes_read == 0 {
+            break; // Done processing
+        }
+
+        // XOR byte with pad byte
+        let target_byte = target_buffer[0];
+        let pad_byte = pad_line_buffer[pad_line_position];
+        let xor_byte = target_byte ^ pad_byte;
+
+        // Write XOR'd byte to output
+        output_file.write_all(&[xor_byte]).map_err(|e| {
+            #[cfg(debug_assertions)]
+            {
+                PadnetError::IoError(format!("PXO: write output failed: {}", e))
+            }
+            #[cfg(not(debug_assertions))]
+            {
+                let _ = e;
+                PadnetError::IoError("PXO: write output failed".into())
+            }
+        })?;
+
+        pad_line_position += 1;
+        total_bytes_processed += 1;
+    }
+
+    // Sync output to disk
+    output_file.sync_all().map_err(|e| {
+        #[cfg(debug_assertions)]
+        {
+            PadnetError::IoError(format!("PXO: sync output failed: {}", e))
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            let _ = e;
+            PadnetError::IoError("PXO: sync failed".into())
+        }
+    })?;
+
+    Ok(total_bytes_processed)
+}
+
+/// Core XOR operation implementation (used by both reader and writer)
+///
+/// ## Project Context
+/// This is the core byte-by-byte XOR loop shared by both reader and writer modes.
+/// The only difference is whether lines are deleted after loading (destructive)
+/// or preserved (non-destructive).
+///
+/// ## Algorithm
+/// 1. Open target file for reading
+/// 2. Create output file for writing
+/// 3. Load first pad line
+/// 4. Loop through target file byte-by-byte:
+///    - If pad line buffer empty: load next line, increment index
+///    - Read one byte from target
+///    - XOR with next byte from pad line buffer
+///    - Write XOR'd byte to output
+/// 5. Close files
+///
+/// ## Error Cases
+/// - Target file read error: abort
+/// - Pad line load error: abort
+/// - Pad exhausted (no more lines): abort
+/// - Output write error: abort
+/// - Index overflow: abort
+///
+/// # Arguments
+/// * `target_path` - File to XOR
+/// * `output_path` - Where to write XOR'd output
+/// * `padset_path` - Padset root
+/// * `start_index` - Starting pad line index
+/// * `destructive` - If true, delete lines after loading (writer mode)
+///
+/// # Returns
+/// * `Ok(usize)` - Number of bytes processed
+/// * `Err(PadnetError)` - Operation failed
+fn perform_pto_xor_get_newbytes_newpath(
     target_path: &Path,
     output_path: &Path,
     padset_path: &Path,
