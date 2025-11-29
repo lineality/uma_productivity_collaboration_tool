@@ -372,7 +372,7 @@ use serde::{
 use std::ffi::OsStr;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::process::Command;
+// use std::process::Command;
 
 // For Sync
 use rand::prelude::{
@@ -424,7 +424,9 @@ use manage_absolute_executable_directory_relative_paths::{
 };
 
 mod padnet_otp_module;
-use padnet_otp_module::padnet_writer_strict_cleanup_continuous_xor_file;
+use padnet_otp_module::{
+    PadIndex, padnet_writer_strict_cleanup_continuous_xor_file
+};
 
 // For TUI
 #[macro_use]
@@ -10383,93 +10385,93 @@ fn load_core_node_from_toml_file(
     Option<bool>,
     Option<i64>,
 
-Functions:
+    Functions:
 
-all use these parameters:
-    pathstr_to_config_file_that_contains_gpg_key: &str,
-    pathstr_to_target_clearsigned_file: &str,
-    name_of_toml_field_key_to_read: &str,
+    all use these parameters:
+        pathstr_to_config_file_that_contains_gpg_key: &str,
+        pathstr_to_target_clearsigned_file: &str,
+        name_of_toml_field_key_to_read: &str,
 
 
-    string -> read_singleline_string_from_clearsigntoml_without_publicgpgkey()
-    vec<u8> -> read_u8_array_from_clearsigntoml_without_publicgpgkey()
-    PathBuf -> read_pathbuf_from_clearsigntoml_without_publicgpgkey()
-    u64 -> read_u64_from_clearsigntoml_without_publicgpgkey()
-    vec<String> -> read_stringarray_from_clearsigntoml_without_publicgpgkey()
+        string -> read_singleline_string_from_clearsigntoml_without_publicgpgkey()
+        vec<u8> -> read_u8_array_from_clearsigntoml_without_publicgpgkey()
+        PathBuf -> read_pathbuf_from_clearsigntoml_without_publicgpgkey()
+        u64 -> read_u64_from_clearsigntoml_without_publicgpgkey()
+        vec<String> -> read_stringarray_from_clearsigntoml_without_publicgpgkey()
 
-   HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
--> read_hashmap_corenode_ports_from_clearsigntoml_without_publicgpgkey()
+    HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
+    -> read_hashmap_corenode_ports_from_clearsigntoml_without_publicgpgkey()
 
-Option<Vec<(i32, i32)>> -> read_option_i32_tuple_array_from_clearsigntoml_without_publicgpgkey()
-    Option<usize> -> read_option_usize_from_clearsigntoml_without_publicgpgkey()
-    Option<bool> -> read_option_bool_from_clearsigntoml_without_publicgpgkey()
-    Option<i64> -> read_option_i64_from_clearsigntoml_without_publicgpgkey()
+    Option<Vec<(i32, i32)>> -> read_option_i32_tuple_array_from_clearsigntoml_without_publicgpgkey()
+        Option<usize> -> read_option_usize_from_clearsigntoml_without_publicgpgkey()
+        Option<bool> -> read_option_bool_from_clearsigntoml_without_publicgpgkey()
+        Option<i64> -> read_option_i64_from_clearsigntoml_without_publicgpgkey()
 
-struct CoreNode {
-    /// The name of the node. This is used for display and identification.
-    node_name: String,
-    /// A description of the node, intended for display in the TUI.
-    description_for_tui: String,
-    /// A unique identifier for the node, generated using pearson hashes of the other fields
-    node_unique_id: Vec<u8>,
-    /// The path to the directory on the file system where the node's data is stored.
-    directory_path: PathBuf,
-    /// An order number used to define the node's position within a list or hierarchy.
-    // order_number: u32,
-    /// The priority of the node, which can be High, Medium, or Low.
-    // priority: NodePriority,
-    /// The username of the owner of the node.
-    owner: String,
-    /// The Unix timestamp representing when the node was last updated.
-    updated_at_timestamp: u64,
-    /// The Unix timestamp representing when the node will expire.
-    expires_at: u64,
-    /// A vector of `CoreNode` structs representing the child nodes of this node.
-    // children: Vec<CoreNode>,
-    /// An ordered vector of collaborator usernames associated with this node.
-    teamchannel_collaborators_with_access: Vec<String>,
-    /// A map containing port assignments for each collaborator associated with the node.
-    abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
+    struct CoreNode {
+        /// The name of the node. This is used for display and identification.
+        node_name: String,
+        /// A description of the node, intended for display in the TUI.
+        description_for_tui: String,
+        /// A unique identifier for the node, generated using pearson hashes of the other fields
+        node_unique_id: Vec<u8>,
+        /// The path to the directory on the file system where the node's data is stored.
+        directory_path: PathBuf,
+        /// An order number used to define the node's position within a list or hierarchy.
+        // order_number: u32,
+        /// The priority of the node, which can be High, Medium, or Low.
+        // priority: NodePriority,
+        /// The username of the owner of the node.
+        owner: String,
+        /// The Unix timestamp representing when the node was last updated.
+        updated_at_timestamp: u64,
+        /// The Unix timestamp representing when the node will expire.
+        expires_at: u64,
+        /// A vector of `CoreNode` structs representing the child nodes of this node.
+        // children: Vec<CoreNode>,
+        /// An ordered vector of collaborator usernames associated with this node.
+        teamchannel_collaborators_with_access: Vec<String>,
+        /// A map containing port assignments for each collaborator associated with the node.
+        abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
 
-    // project areas: project module items as task-ish thing
-    pa1_process: String,
-    pa2_schedule: Vec<u64>,
-    pa3_users: String,
-    pa4_features: String,
-    pa5_mvp: String,
-    pa6_feedback: String,
+        // project areas: project module items as task-ish thing
+        pa1_process: String,
+        pa2_schedule: Vec<u64>,
+        pa3_users: String,
+        pa4_features: String,
+        pa5_mvp: String,
+        pa6_feedback: String,
 
-    /////////////////
-    // message_posts
-    /////////////////
+        /////////////////
+        // message_posts
+        /////////////////
 
-    /// Integer validation ranges as tuples (min, max) - inclusive bounds
-    pub message_post_data_format_specs_integer_ranges_from_to_tuple_array: Option<Vec<(i32, i32)>>,
+        /// Integer validation ranges as tuples (min, max) - inclusive bounds
+        pub message_post_data_format_specs_integer_ranges_from_to_tuple_array: Option<Vec<(i32, i32)>>,
 
-    /// Integer-string validation ranges as tuples (min, max) for the integer part
-    pub message_post_data_format_specs_int_string_ranges_from_to_tuple_array: Option<Vec<(i32, i32)>>,
+        /// Integer-string validation ranges as tuples (min, max) for the integer part
+        pub message_post_data_format_specs_int_string_ranges_from_to_tuple_array: Option<Vec<(i32, i32)>>,
 
-    /// Maximum string length
-    pub message_post_max_string_length_int: Option<usize>,
+        /// Maximum string length
+        pub message_post_max_string_length_int: Option<usize>,
 
-    /// Whether posts are public or private
-    pub message_post_is_public_bool: Option<bool>,
+        /// Whether posts are public or private
+        pub message_post_is_public_bool: Option<bool>,
 
-    /// Whether user confirmation is required before posting
-    pub message_post_user_confirms_bool: Option<bool>,
+        /// Whether user confirmation is required before posting
+        pub message_post_user_confirms_bool: Option<bool>,
 
-    /// Start time for accepting posts (UTC POSIX timestamp)
-    pub message_post_start_date_utc_posix: Option<i64>,
+        /// Start time for accepting posts (UTC POSIX timestamp)
+        pub message_post_start_date_utc_posix: Option<i64>,
 
-    /// End time for accepting posts (UTC POSIX timestamp)
-    pub message_post_end_date_utc_posix: Option<i64>,
+        /// End time for accepting posts (UTC POSIX timestamp)
+        pub message_post_end_date_utc_posix: Option<i64>,
 
-	// limit of how many posts (or per time duration)
-    // pub max_posts: Option<i64>,
-    // pub duration_for_maxposts: MaxPostsDurationUnitsEnum, // hours, days, weeks
-    // pub n_durations_for_maxposts: Option<i64>,
-    }
-    */
+    	// limit of how many posts (or per time duration)
+        // pub max_posts: Option<i64>,
+        // pub duration_for_maxposts: MaxPostsDurationUnitsEnum, // hours, days, weeks
+        // pub n_durations_for_maxposts: Option<i64>,
+        }
+        */
 
 
     // 1. Read File Contents
@@ -26748,6 +26750,7 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
         e
     ))?;
 
+    // todo use where?
     // Define cleanup closure
     let cleanup_closure = || {
         let _ = cleanup_collaborator_temp_file(
@@ -27574,12 +27577,13 @@ fn sendfile_UDP_to_intray(
 
 /// Struct for sending file to in-tray (file sync)
 /// Salted-Pearson-Hash-List system for quick verification that packet is intact and sent by owner at timestamp
-#[derive(Serialize, Deserialize, Debug)] // Add Serialize/Deserialize for sending/receiving
+// #[derive(Serialize, Deserialize, Debug)] // Add Serialize/Deserialize for sending/receiving
+#[derive(Debug)] // Add Serialize/Deserialize for sending/receiving
 struct SendFile {
     intray_send_time: Option<u64>, // send-time: generate_terse_timestamp_freshness_proxy(); for replay-attack protection
     gpg_encrypted_intray_file: Option<Vec<u8>>, // Holds the GPG-encrypted file contents
     intray_hash_list: Option<Vec<u8>>, // N hashes of intray_this_send_timestamp + gpg_encrypted_intray_file
-    // padnet_index_array: Option<[u8; 8]>, //
+    padnet_index_array: Option<PadIndex>, //
 }
 
 /// ReadySignal struct
@@ -29974,7 +29978,11 @@ fn handle_local_owner_desk(
                     // --- 3.5.3 Deserialize the SendFile signal ---
                     // let incoming_intray_file_struct: SendFile = deserialize_intray_send_file_struct(&clearsigned_data)?;  // Deserialize from clearsigned data
 
-                    let incoming_intray_file_struct: SendFile = match deserialize_intray_send_file_struct(&buf[..amt]) {
+                    // TODO PADNET
+                    let incoming_intray_file_struct: SendFile = match deserialize_intray_send_file_struct(
+                        &buf[..amt],
+                        None,
+                    ) {
                         Ok(incoming_intray_file_struct) => {
                             debug_log("HLOD-InTray 2.3 SendFile listener: Receive File Data...do you copy, gold leader... >*<");
 
@@ -30785,7 +30793,10 @@ fn deserialize_ready_signal(bytes: &[u8], salt_list: &[u128]) -> Result<ReadySig
 /// # Returns
 ///
 /// * `Result<SendFile, ThisProjectError>`:  A Result containing the deserialized SendFile on success, or a ThisProjectError on failure.
-fn deserialize_intray_send_file_struct(bytes: &[u8]) -> Result<SendFile, ThisProjectError> {
+fn deserialize_intray_send_file_struct(
+    bytes: &[u8],
+    padnet_index_array: Option<PadIndex>,
+) -> Result<SendFile, ThisProjectError> {
     // 1. Check Minimum Length
     let timestamp_len = std::mem::size_of::<u64>();
     let min_length = timestamp_len; // Minimum length for just the timestamp
@@ -30833,7 +30844,7 @@ fn deserialize_intray_send_file_struct(bytes: &[u8]) -> Result<SendFile, ThisPro
         intray_send_time: Some(intray_send_time),
         gpg_encrypted_intray_file, // No need for clone, the value is already owned
         intray_hash_list,  // Use the corrected Option<Vec<u8>>
-        // padnet_index_array
+        padnet_index_array,
     })
 }
 
@@ -32516,63 +32527,6 @@ fn handle_remote_collaborator_meetingroom_desk(
                             // converst from path-string to path-type path
                             let path_sendfile_readcopy_path = Path::new(&sendfile_readcopy_pathstring);
 
-                            // TODO: Padnet
-                            // adding a new factor/path
-                            // if file contains a padnet_otp=true flag (  let file_flag_padnet =)
-                            // set file_flag_padnet = true
-                            //
-                            //
-                            // - check file for flag
-                            // 1. flag for padnet-mode where?
-                            // 2. get RC key-id (state)
-                            // 3. get write-pad path (with id)
-                            //  -- /padnet/to/{team_channel}/{RC key-id}
-                            //
-                            // 4. write XOR, get array-index
-                            // 5. use that for file_bytes2send
-                            // 6. use arry index in struct
-
-
-                            // 4.2.1 Get File Send Time
-                            let intray_send_time = get_current_unix_timestamp();
-
-                            let use_padnet_flag = &room_sync_input.use_padnet;
-
-                            let team_channel_name = match get_current_team_channel_name_from_nav_path() {
-                                Some(name) => name,
-                                None => {
-                                    debug_log!("Error: Could not get current channel name. Skipping set_as_active.");
-                                    return Err(ThisProjectError::InvalidData("Could not get team channel name".into()));
-                                },
-                            };
-                            let rc_key_id = &room_sync_input.remote_collaborator_gpg_publickey_id;
-
-                            // 3. get write-pad path (with id)
-                            //  -- /padnet/to/{team_channel}/{RC key-id}
-                            let mut padnet_directory_path = make_input_path_name_abs_executabledirectoryrelative_nocheck(
-                                "padnet/to"
-                            )?;
-                            padnet_directory_path.push(&team_channel_name);
-                            padnet_directory_path.push(rc_key_id);
-
-                            // Get the UME temp directory path with explicit String conversion
-                            let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
-                                .map_err(|io_err| {
-                                    let gpg_error = GpgError::ValidationError(
-                                        format!("LCNFTF: Failed to get UME temp directory path: {}", io_err)
-                                    );
-                                    // Convert GpgError to String for the function's return type
-                                    format!("LCNFTF: {:?}", gpg_error)
-                                })?;
-
-                            let temp_filepath_padnet = create_unique_temp_filepathbuf(
-                            &base_uma_temp_directory_path,    // base_path: &Path,
-                            "padnet",    // prefix: &str,
-                            5,    // number_of_attempts: u32,
-                            16,    // retry_delay_ms: u64,
-                            )?;
-
-
 
                             /*
                             /// ## Error Handling
@@ -32593,27 +32547,184 @@ fn handle_remote_collaborator_meetingroom_desk(
                                 result_path: &Path,
                                 path_to_padset: &Path,
                             ) -> Result<(PadIndex, usize), PadnetError> {
-                             */
+                            */
 
-                            let (padnet_index_array, bytes_encrypted) = match padnet_writer_strict_cleanup_continuous_xor_file(
-                                &path_sendfile_readcopy_path, // path_to_target_file
-                                &temp_filepath_padnet, // result_path
-                                &padnet_directory_path, // path_to_padset
-                            ) {
-                                Ok((idx, bytes)) => {
-                                    println!("  ✓ Encrypted {} bytes", bytes);
-                                    println!("  ✓ Starting index: {:?}", idx);
-                                    (idx, bytes)
-                                }
-                                Err(e) => {
-                                    println!("  ✗ Failed: {}", e);
-                                    continue;
-                                }
+                            // 4.2.1 Get File Send Time
+                            let intray_send_time = get_current_unix_timestamp();
+
+                            let use_padnet_flag = &room_sync_input.use_padnet;
+
+                            let sendfile_struct = if *use_padnet_flag {
+
+                                // TODO: Padnet
+                                // adding a new factor/path
+                                // if file contains a padnet_otp=true flag (  let file_flag_padnet =)
+                                // set file_flag_padnet = true
+                                //
+                                //
+                                // - check file for flag
+                                // 1. flag for padnet-mode where?
+                                // 2. get RC key-id (state)
+                                // 3. get write-pad path (with id)
+                                //  -- /padnet/to/{team_channel}/{RC key-id}
+                                //
+                                // 4. write XOR, get array-index
+                                // 5. use that for file_bytes2send
+                                // 6. use arry index in struct
+
+
+                                let team_channel_name = match get_current_team_channel_name_from_nav_path() {
+                                    Some(name) => name,
+                                    None => {
+                                        debug_log!("Error: Could not get current channel name. Skipping set_as_active.");
+                                        return Err(ThisProjectError::InvalidData("Could not get team channel name".into()));
+                                    },
+                                };
+                                let rc_key_id = &room_sync_input.remote_collaborator_gpg_publickey_id;
+
+                                // 3. get write-pad path (with id)
+                                //  -- /padnet/to/{team_channel}/{RC key-id}
+                                let mut padnet_directory_path = make_input_path_name_abs_executabledirectoryrelative_nocheck(
+                                    "padnet/to"
+                                )?;
+                                padnet_directory_path.push(&team_channel_name);
+                                padnet_directory_path.push(rc_key_id);
+
+                                // Get temp directory path with explicit String conversion
+                                let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
+                                    .map_err(|io_err| {
+                                        let gpg_error = GpgError::ValidationError(
+                                            format!("HRCMD: Failed to get UME temp directory path: {}", io_err)
+                                        );
+                                        // Convert GpgError to String for the function's return type
+                                        format!("HRCMD: {:?}", gpg_error)
+                                    })?;
+
+                                let temp_filepath_padnet = create_unique_temp_filepathbuf(
+                                &base_uma_temp_directory_path,    // base_path: &Path,
+                                "padnet",    // prefix: &str,
+                                5,    // number_of_attempts: u32,
+                                16,    // retry_delay_ms: u64,
+                                )?;
+
+                                // Wrapper of bytes to bytes:
+                                // 4.2.2 Read File Contents
+                                // 4.3.1 GPG Clearsign the File (with your private key)
+                                // 4.3.2 GPG Encrypt File (with their public key)
+                                let file_bytes2send = wrapper__path_to_clearsign_to_gpgencrypt_to_send_bytes(
+                                    &path_sendfile_readcopy_path,
+                                    &room_sync_input.remote_collaborator_public_gpg,
+                                )?;
+
+                                debug_log(
+                                    "HRCD 4.2, 4.3.1, 4.3.2 done gpg wrapper"
+                                );
+
+                                // }
+                                //
+
+                                // // 4.5. Calculate SendFile Struct Hashes (Using Collaborator's Salts)
+                                // 4.5 calculate hashes: HRCD
+                                let calculated_hrcd_sendfile_hashes = hash_sendfile_struct_fields(
+                                    &room_sync_input.local_user_salt_list,
+                                    intray_send_time,
+                                    &file_bytes2send,
+                                );
+
+                                // Handle the Result from hash_sendfile_struct_fields
+                                let calculated_hashes = match calculated_hrcd_sendfile_hashes {
+                                    Ok(hashes) => hashes,
+                                    Err(e) => {
+                                        debug_log!("HRCD 4.5 Error calculating hashes: {}", e);
+                                        continue; // Skip to the next file if hashing fails
+                                    }
+                                };
+
+                                debug_log!(
+                                    "HRCD 4.5 calculated_hashes {:?}",
+                                    calculated_hashes
+                                );
+
+                                let (padnet_index_array, _) = match padnet_writer_strict_cleanup_continuous_xor_file(
+                                    &path_sendfile_readcopy_path, // path_to_target_file
+                                    &temp_filepath_padnet, // result_path
+                                    &padnet_directory_path, // path_to_padset
+                                ) {
+                                    Ok((idx, bytes)) => {
+                                        println!("  ✓ Encrypted {} bytes", bytes);
+                                        println!("  ✓ Starting index: {:?}", idx);
+                                        (idx, bytes)
+                                    }
+                                    Err(e) => {
+                                        println!("  ✗ Failed: {}", e);
+                                        continue;
+                                    }
+                                };
+
+                                // let padnet_index_array2: Vec<u8> = padnet_index_array;
+
+                                // 4.6. Create SendFile Struct
+                                SendFile {
+                                    intray_send_time: Some(intray_send_time),
+                                    gpg_encrypted_intray_file: Some(file_bytes2send), // Clone needed here if file_bytes2send is used later
+                                    intray_hash_list: Some(calculated_hashes),  // Clone here as well
+                                    padnet_index_array: Some(padnet_index_array),
+
+                                };
+
+
+                            } else {
+
+                                // Wrapper of bytes to bytes:
+                                // 4.2.2 Read File Contents
+                                // 4.3.1 GPG Clearsign the File (with your private key)
+                                // 4.3.2 GPG Encrypt File (with their public key)
+                                let file_bytes2send = wrapper__path_to_clearsign_to_gpgencrypt_to_send_bytes(
+                                    &path_sendfile_readcopy_path,
+                                    &room_sync_input.remote_collaborator_public_gpg,
+                                )?;
+
+                                debug_log(
+                                    "HRCD 4.2, 4.3.1, 4.3.2 done gpg wrapper"
+                                );
+
+                                // }
+                                //
+
+                                // // 4.5. Calculate SendFile Struct Hashes (Using Collaborator's Salts)
+                                // 4.5 calculate hashes: HRCD
+                                let calculated_hrcd_sendfile_hashes = hash_sendfile_struct_fields(
+                                    &room_sync_input.local_user_salt_list,
+                                    intray_send_time,
+                                    &file_bytes2send,
+                                );
+
+                                // Handle the Result from hash_sendfile_struct_fields
+                                let calculated_hashes = match calculated_hrcd_sendfile_hashes {
+                                    Ok(hashes) => hashes,
+                                    Err(e) => {
+                                        debug_log!("HRCD 4.5 Error calculating hashes: {}", e);
+                                        continue; // Skip to the next file if hashing fails
+                                    }
+                                };
+
+                                debug_log!(
+                                    "HRCD 4.5 calculated_hashes {:?}",
+                                    calculated_hashes
+                                );
+
+                                // 4.6. Create SendFile Struct
+                                SendFile {
+                                    intray_send_time: Some(intray_send_time),
+                                    gpg_encrypted_intray_file: Some(file_bytes2send), // Clone needed here if file_bytes2send is used later
+                                    intray_hash_list: Some(calculated_hashes),  // Clone here as well
+                                    padnet_index_array: None,
+
+                                };
+
                             };
 
-                            // let file_bytes2send = if use_padnet_flag {
 
-                            //
 
                             // TODO
                             // 1. get &room_sync_input.remote_collaborator_gpg_publickey_id,
@@ -32635,6 +32746,12 @@ fn handle_remote_collaborator_meetingroom_desk(
                             debug_log(
                                 "HRCD 4.2, 4.3.1, 4.3.2 done gpg wrapper"
                             );
+
+                            // remove file... clean function
+                            let _ = cleanup_collaborator_temp_file(
+                                &node_readcopy_path,
+                                &base_uma_temp_directory_path,
+                                );
 
                             // }
 
@@ -32693,6 +32810,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                             );
 
                             // }
+                            //
 
                             // // 4.5. Calculate SendFile Struct Hashes (Using Collaborator's Salts)
                             // 4.5 calculate hashes: HRCD
@@ -32721,11 +32839,11 @@ fn handle_remote_collaborator_meetingroom_desk(
                                 intray_send_time: Some(intray_send_time),
                                 gpg_encrypted_intray_file: Some(file_bytes2send), // Clone needed here if file_bytes2send is used later
                                 intray_hash_list: Some(calculated_hashes),  // Clone here as well
-                                // padnet_index_array: None,
+                                padnet_index_array: None,
 
                             };
 
-                            // maybe end of if-else for padnet
+                            // end padnet if?
 
                             debug_log!(
                                 "HRCD 4.6 Create sendfile_struct {:?}",
