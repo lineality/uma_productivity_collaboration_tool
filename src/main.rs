@@ -27567,7 +27567,7 @@ fn sendfile_UDP_to_intray(
     port: u16,
 ) -> Result<(), ThisProjectError> {
     // 1. Serialize the SendFile struct.
-    let serialized_data = serialize_send_file(send_file)?;
+    let serialized_data = serialize_send_file_struct(send_file)?;
 
     // 2. Send the serialized data using UDP.
     send_data_via_udp(&serialized_data, target_addr, port)?;
@@ -27583,7 +27583,7 @@ struct SendFile {
     intray_send_time: Option<u64>, // send-time: generate_terse_timestamp_freshness_proxy(); for replay-attack protection
     gpg_encrypted_intray_file: Option<Vec<u8>>, // Holds the GPG-encrypted file contents
     intray_hash_list: Option<Vec<u8>>, // N hashes of intray_this_send_timestamp + gpg_encrypted_intray_file
-    padnet_index_array: Option<PadIndex>, //
+    padnet_index_array: Option<PadIndex>, // New Field 4 bytes
 }
 
 /// ReadySignal struct
@@ -29978,10 +29978,17 @@ fn handle_local_owner_desk(
                     // --- 3.5.3 Deserialize the SendFile signal ---
                     // let incoming_intray_file_struct: SendFile = deserialize_intray_send_file_struct(&clearsigned_data)?;  // Deserialize from clearsigned data
 
+                    // get value for use_padnet from ~state
+
+                    let use_padnet_flag = &local_owner_desk_setup_data.use_padnet;
+
+                    let mut incoming_intray_file_struct: SendFile;
+
+                    if
+
                     // TODO PADNET
                     let incoming_intray_file_struct: SendFile = match deserialize_intray_send_file_struct(
                         &buf[..amt],
-                        None,
                     ) {
                         Ok(incoming_intray_file_struct) => {
                             debug_log("HLOD-InTray 2.3 SendFile listener: Receive File Data...do you copy, gold leader... >*<");
@@ -30795,7 +30802,6 @@ fn deserialize_ready_signal(bytes: &[u8], salt_list: &[u128]) -> Result<ReadySig
 /// * `Result<SendFile, ThisProjectError>`:  A Result containing the deserialized SendFile on success, or a ThisProjectError on failure.
 fn deserialize_intray_send_file_struct(
     bytes: &[u8],
-    padnet_index_array: Option<PadIndex>,
 ) -> Result<SendFile, ThisProjectError> {
     // 1. Check Minimum Length
     let timestamp_len = std::mem::size_of::<u64>();
@@ -30836,15 +30842,12 @@ fn deserialize_intray_send_file_struct(
         None // Or handle the empty case appropriately
     };
 
-    // 5. Padnet OTP index-array
-    // let padnet_index_array = ...;// placeholder
-
     // ... [Construction of SendFile as before, but use Some() wrappers]
     Ok(SendFile {
         intray_send_time: Some(intray_send_time),
         gpg_encrypted_intray_file, // No need for clone, the value is already owned
         intray_hash_list,  // Use the corrected Option<Vec<u8>>
-        padnet_index_array,
+        padnet_index_array: None,
     })
 }
 
@@ -30857,7 +30860,7 @@ fn deserialize_intray_send_file_struct(
 ///
 /// * `Result<Vec<u8>, ThisProjectError>`:  The serialized `SendFile` data as a `Vec<u8>` on success, or a
 ///   `ThisProjectError` if serialization fails.
-fn serialize_send_file(send_file: &SendFile) -> Result<Vec<u8>, ThisProjectError> {
+fn serialize_send_file_struct(send_file: &SendFile) -> Result<Vec<u8>, ThisProjectError> {
     let mut serialized_data: Vec<u8> = Vec::new();
 
     // Add intray_send_time
@@ -30889,6 +30892,456 @@ fn serialize_gotit_signal(signal: &GotItSignal) -> std::io::Result<Vec<u8>> {
     bytes.extend_from_slice(&signal.gh);             // gh is now Vec<u8>, no Option
 
     Ok(bytes)
+}
+
+/// Serializes a `SendFile` struct with padnet index into a byte vector.
+///
+/// ## Project Context
+/// This function creates a wire-format message for padnet-enabled file synchronization.
+/// The padnet index array is placed at the start of the message to identify the destination
+/// location in the one-time-pad filesystem hierarchy before any other data is processed.
+/// This allows early routing decisions without deserializing the entire payload.
+///
+/// ## Wire Format (Total: 16+ bytes)
+/// ```
+/// [padnet_index: 4 bytes]     ← Destination in OTP filesystem (Standard variant only)
+/// [timestamp: 8 bytes]         ← Replay attack protection
+/// [hash_list: 4 bytes]         ← Salted Pearson hash verification
+/// [encrypted_file: variable]   ← GPG-encrypted file contents
+/// ```
+///
+/// ## Current Limitation
+/// Only supports `PadIndex::Standard` (4-byte) variant. The `Extended` (8-byte) variant
+/// will return an error. This design is modular to allow future 8-byte support by
+/// changing the constant `PADNET_WIRE_FORMAT_SIZE` and updating the match arm.
+///
+/// ## Error Conditions
+/// - Missing `padnet_index_array` (None)
+/// - Extended variant provided (not yet supported)
+/// - Missing `intray_send_time` (None)
+/// - Missing `intray_hash_list` (None)
+/// - Missing `gpg_encrypted_intray_file` (None)
+///
+/// # Arguments
+/// * `send_file`: The `SendFile` instance to serialize with padnet index.
+///
+/// # Returns
+/// * `Result<Vec<u8>, ThisProjectError>`: The serialized data as `Vec<u8>` on success,
+///   or a `ThisProjectError` with "PSS error: " prefix if serialization fails.
+///
+/// # Example Error Messages
+/// - "PSS error: padnet_index_array is None"
+/// - "PSS error: Extended variant not supported in wire format"
+/// - "PSS error: Missing intray_send_time"
+fn padnet_serialize_sendfile_struct(send_file: &SendFile) -> Result<Vec<u8>, ThisProjectError> {
+    // Future-proofing: Change this constant to 8 when Extended variant is supported
+    const PADNET_WIRE_FORMAT_SIZE: usize = 4;
+
+    let mut serialized_data: Vec<u8> = Vec::new();
+
+    // ========================================
+    // 1. Extract and Add Padnet Index (4 bytes at START)
+    // ========================================
+    // Project Context: The padnet index must be first in the wire format to allow
+    // receiving systems to route the message to the correct OTP location before
+    // decrypting or verifying the payload.
+
+    let padnet_index_bytes: [u8; PADNET_WIRE_FORMAT_SIZE] = match &send_file.padnet_index_array {
+        Some(PadIndex::Standard(bytes)) => {
+            // Extract the 4-byte array from Standard variant
+            *bytes
+        }
+        Some(PadIndex::Extended(_)) => {
+            // Extended (8-byte) variant not yet supported in wire format
+            // Future work: Add discriminator byte and handle 8-byte serialization
+            return Err(ThisProjectError::InvalidData(
+                "PSS error: Extended variant not supported in wire format".into()
+            ));
+        }
+        None => {
+            // Padnet index is required for padnet-enabled serialization
+            return Err(ThisProjectError::InvalidData(
+                "PSS error: padnet_index_array is None".into()
+            ));
+        }
+    };
+
+    // Add the 4-byte padnet index to the beginning of serialized data
+    serialized_data.extend_from_slice(&padnet_index_bytes);
+
+    // ========================================
+    // 2. Add Timestamp (8 bytes)
+    // ========================================
+    // Project Context: Timestamp provides replay attack protection by ensuring
+    // messages can be identified as stale if received outside acceptable time window.
+
+    let timestamp = send_file.intray_send_time
+        .ok_or(ThisProjectError::InvalidData("PSS error: Missing intray_send_time".into()))?;
+
+    serialized_data.extend_from_slice(&timestamp.to_be_bytes());
+
+    // ========================================
+    // 3. Add Hash List (4 bytes)
+    // ========================================
+    // Project Context: Salted Pearson hash list allows quick verification that the
+    // packet is intact and was sent by the owner at the specified timestamp.
+    // This provides integrity checking without full decryption.
+
+    let hash_list = send_file.intray_hash_list
+        .as_ref()
+        .ok_or(ThisProjectError::InvalidData("PSS error: intray_hash_list is None".into()))?;
+
+    serialized_data.extend_from_slice(hash_list);
+
+    // ========================================
+    // 4. Add GPG Encrypted File Contents (variable length)
+    // ========================================
+    // Project Context: The actual file payload, encrypted with GPG. This is the
+    // final component and can be any length, which is why all fixed-size metadata
+    // comes before it in the wire format.
+
+    let encrypted_file = send_file.gpg_encrypted_intray_file
+        .as_ref()
+        .ok_or(ThisProjectError::InvalidData("PSS error: gpg_encrypted_intray_file is None".into()))?;
+
+    serialized_data.extend_from_slice(encrypted_file);
+
+    // Return the complete serialized byte vector
+    Ok(serialized_data)
+}
+
+
+/// Deserializes a byte slice into a SendFile struct with padnet index.
+///
+/// ## Project Context
+/// This function reconstructs a `SendFile` from the padnet wire format. It performs
+/// the reverse operation of `padnet_serialize_sendfile_struct()`, extracting the
+/// destination padnet index, timestamp, verification hashes, and encrypted payload
+/// from a received message.
+///
+/// ## Wire Format Expected (Total: 16+ bytes minimum)
+/// ```
+/// [padnet_index: 4 bytes]     ← Destination in OTP filesystem
+/// [timestamp: 8 bytes]         ← Replay attack protection
+/// [hash_list: 4 bytes]         ← Salted Pearson hash verification
+/// [encrypted_file: variable]   ← GPG-encrypted file contents (may be empty)
+/// ```
+///
+/// ## Current Limitation
+/// Only constructs `PadIndex::Standard` (4-byte) variant. Future 8-byte support
+/// requires updating `PADNET_WIRE_FORMAT_SIZE` and extraction logic.
+///
+/// ## Defensive Programming
+/// - Validates minimum length before any extraction
+/// - Uses `try_into()` with proper error handling (no unwrap)
+/// - Returns specific error messages with "PDISFS error: " prefix
+/// - Handles variable-length encrypted file (may be empty after fixed fields)
+///
+/// ## Error Conditions
+/// - Byte slice too short (< 16 bytes)
+/// - Invalid array conversion during extraction
+///
+/// # Arguments
+/// * `bytes`: The byte slice containing the serialized SendFile data with padnet index.
+///
+/// # Returns
+/// * `Result<SendFile, ThisProjectError>`: A Result containing the deserialized SendFile
+///   on success, or a ThisProjectError with "PDISFS error: " prefix on failure.
+///
+/// # Example Error Messages
+/// - "PDISFS error: Invalid byte array length, minimum 16 bytes required"
+/// - "PDISFS error: Failed to extract padnet_index_array"
+/// - "PDISFS error: Failed to extract intray_send_time"
+fn padnet_deserialize_intray_sendfile_struct(
+    bytes: &[u8],
+) -> Result<SendFile, ThisProjectError> {
+    // Future-proofing: Change this constant to 8 when Extended variant is supported
+    const PADNET_WIRE_FORMAT_SIZE: usize = 4;
+    const TIMESTAMP_SIZE: usize = std::mem::size_of::<u64>(); // 8 bytes
+    const HASH_LIST_SIZE: usize = 4; // 4 bytes for hash list
+
+    // Minimum length: padnet_index + timestamp + hash_list = 4 + 8 + 4 = 16 bytes
+    const MIN_LENGTH: usize = PADNET_WIRE_FORMAT_SIZE + TIMESTAMP_SIZE + HASH_LIST_SIZE;
+
+    debug_log!(
+        "PDISFS Starting padnet_deserialize_intray_sendfile_struct() with {} bytes",
+        bytes.len()
+    );
+
+    // ========================================
+    // 1. Validate Minimum Length
+    // ========================================
+    // Project Context: We must have at least the fixed-size fields present.
+    // The encrypted file may be empty (0 bytes) but all metadata must be present.
+
+    if bytes.len() < MIN_LENGTH {
+        debug_log!(
+            "PDISFS bytes.len() {} < MIN_LENGTH {} -> returning error",
+            bytes.len(),
+            MIN_LENGTH
+        );
+        return Err(ThisProjectError::InvalidData(
+            "PDISFS error: Invalid byte array length, minimum 16 bytes required".into()
+        ));
+    }
+
+    debug_log!("PDISFS bytes.len() >= MIN_LENGTH, proceeding with extraction");
+
+    // ========================================
+    // 2. Extract Padnet Index (4 bytes from START)
+    // ========================================
+    // Project Context: The padnet index indicates where in the OTP filesystem
+    // hierarchy this file should be stored/retrieved. It maps directly to
+    // directory structure: padnest_0/pad/page/line
+
+    let padnet_index_end = PADNET_WIRE_FORMAT_SIZE;
+
+    let padnet_index_array_bytes: [u8; PADNET_WIRE_FORMAT_SIZE] =
+        bytes[0..padnet_index_end]
+            .try_into()
+            .map_err(|_| ThisProjectError::InvalidData(
+                "PDISFS error: Failed to extract padnet_index_array".into()
+            ))?;
+
+    let padnet_index_array = Some(PadIndex::Standard(padnet_index_array_bytes));
+
+    debug_log!(
+        "PDISFS Extracted padnet_index_array: {:?}",
+        padnet_index_array_bytes
+    );
+
+    // ========================================
+    // 3. Extract Timestamp (8 bytes)
+    // ========================================
+    // Project Context: Timestamp for replay attack protection. Receiving system
+    // can reject messages that are too old or from the future.
+
+    let timestamp_start = padnet_index_end;
+    let timestamp_end = timestamp_start + TIMESTAMP_SIZE;
+
+    let timestamp_bytes: [u8; TIMESTAMP_SIZE] =
+        bytes[timestamp_start..timestamp_end]
+            .try_into()
+            .map_err(|_| ThisProjectError::InvalidData(
+                "PDISFS error: Failed to extract intray_send_time".into()
+            ))?;
+
+    let intray_send_time = Some(u64::from_be_bytes(timestamp_bytes));
+
+    debug_log!("PDISFS Extracted intray_send_time: {:?}", intray_send_time);
+
+    // ========================================
+    // 4. Extract Hash List (4 bytes)
+    // ========================================
+    // Project Context: Salted Pearson hash list for integrity verification.
+    // This allows quick validation that the message hasn't been corrupted
+    // or tampered with, without requiring full GPG decryption.
+
+    let hash_list_start = timestamp_end;
+    let hash_list_end = hash_list_start + HASH_LIST_SIZE;
+
+    let intray_hash_list = Some(bytes[hash_list_start..hash_list_end].to_vec());
+
+    debug_log!("PDISFS Extracted intray_hash_list (4 bytes)");
+
+    // ========================================
+    // 5. Extract GPG Encrypted File Contents (remaining bytes)
+    // ========================================
+    // Project Context: The actual encrypted payload. This may be empty (0 bytes)
+    // in some cases (e.g., deletion markers, control messages), so we handle
+    // that case by creating an empty Vec rather than None.
+
+    let gpg_encrypted_file_start = hash_list_end;
+
+    let gpg_encrypted_intray_file = if bytes.len() > gpg_encrypted_file_start {
+        Some(bytes[gpg_encrypted_file_start..].to_vec())
+    } else {
+        // No encrypted file content present (empty payload)
+        Some(Vec::new())
+    };
+
+    debug_log!(
+        "PDISFS Extracted gpg_encrypted_intray_file ({} bytes)",
+        bytes.len().saturating_sub(gpg_encrypted_file_start)
+    );
+
+    // ========================================
+    // 6. Construct and Return SendFile
+    // ========================================
+    debug_log!("PDISFS Successfully deserialized SendFile with padnet index");
+
+    Ok(SendFile {
+        intray_send_time,
+        gpg_encrypted_intray_file,
+        intray_hash_list,
+        padnet_index_array,
+    })
+}
+
+
+// ========================================
+// TESTS for Padnet Serialization/Deserialization
+// ========================================
+
+#[cfg(test)]
+mod padnet_sds_tests {
+    use super::*;
+
+    /// Test: Successful round-trip serialization/deserialization with Standard variant
+    ///
+    /// Project Context: This verifies that a SendFile with all fields populated
+    /// can be serialized and then deserialized back to an equivalent struct.
+    #[test]
+    fn test_padnet_roundtrip_standard_variant() {
+        // Create a test SendFile with Standard padnet index
+        let original = SendFile {
+            intray_send_time: Some(1234567890u64),
+            gpg_encrypted_intray_file: Some(vec![0xDE, 0xAD, 0xBE, 0xEF]),
+            intray_hash_list: Some(vec![0x01, 0x02, 0x03, 0x04]),
+            padnet_index_array: Some(PadIndex::Standard([0xAA, 0xBB, 0xCC, 0xDD])),
+        };
+
+        // Serialize
+        let serialized = padnet_serialize_sendfile_struct(&original)
+            .expect("Serialization should succeed");
+
+        // Verify length: 4 (padnet) + 8 (timestamp) + 4 (hash) + 4 (file) = 20 bytes
+        assert_eq!(serialized.len(), 20);
+
+        // Verify padnet index is at the start
+        assert_eq!(&serialized[0..4], &[0xAA, 0xBB, 0xCC, 0xDD]);
+
+        // Deserialize
+        let deserialized = padnet_deserialize_intray_sendfile_struct(&serialized)
+            .expect("Deserialization should succeed");
+
+        // Verify all fields match
+        assert_eq!(deserialized.intray_send_time, original.intray_send_time);
+        assert_eq!(deserialized.gpg_encrypted_intray_file, original.gpg_encrypted_intray_file);
+        assert_eq!(deserialized.intray_hash_list, original.intray_hash_list);
+        assert_eq!(deserialized.padnet_index_array, original.padnet_index_array);
+    }
+
+    /// Test: Serialization fails with None padnet_index_array
+    ///
+    /// Project Context: Padnet serialization requires a valid destination index.
+    /// This test ensures we properly reject messages without routing information.
+    #[test]
+    fn test_padnet_serialize_missing_padnet_index() {
+        let send_file = SendFile {
+            intray_send_time: Some(1234567890u64),
+            gpg_encrypted_intray_file: Some(vec![0xDE, 0xAD, 0xBE, 0xEF]),
+            intray_hash_list: Some(vec![0x01, 0x02, 0x03, 0x04]),
+            padnet_index_array: None, // Missing!
+        };
+
+        let result = padnet_serialize_sendfile_struct(&send_file);
+
+        assert!(result.is_err());
+        if let Err(ThisProjectError::InvalidData(msg)) = result {
+            assert!(msg.contains("PSS error: padnet_index_array is None"));
+        } else {
+            panic!("Expected InvalidData error");
+        }
+    }
+
+    /// Test: Serialization fails with Extended variant (not yet supported)
+    ///
+    /// Project Context: Current wire format only supports 4-byte Standard variant.
+    /// Extended (8-byte) support is planned but not implemented.
+    #[test]
+    fn test_padnet_serialize_extended_variant_not_supported() {
+        let send_file = SendFile {
+            intray_send_time: Some(1234567890u64),
+            gpg_encrypted_intray_file: Some(vec![0xDE, 0xAD, 0xBE, 0xEF]),
+            intray_hash_list: Some(vec![0x01, 0x02, 0x03, 0x04]),
+            padnet_index_array: Some(PadIndex::Extended([0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00, 0x11])),
+        };
+
+        let result = padnet_serialize_sendfile_struct(&send_file);
+
+        assert!(result.is_err());
+        if let Err(ThisProjectError::InvalidData(msg)) = result {
+            assert!(msg.contains("PSS error: Extended variant not supported"));
+        } else {
+            panic!("Expected InvalidData error");
+        }
+    }
+
+    /// Test: Deserialization fails with insufficient bytes
+    ///
+    /// Project Context: Wire format requires minimum 16 bytes of metadata.
+    /// This test ensures we reject malformed or truncated messages.
+    #[test]
+    fn test_padnet_deserialize_insufficient_bytes() {
+        let short_bytes = vec![0x01, 0x02, 0x03]; // Only 3 bytes, need 16
+
+        let result = padnet_deserialize_intray_sendfile_struct(&short_bytes);
+
+        assert!(result.is_err());
+        if let Err(ThisProjectError::InvalidData(msg)) = result {
+            assert!(msg.contains("PDISFS error: Invalid byte array length"));
+        } else {
+            panic!("Expected InvalidData error");
+        }
+    }
+
+    /// Test: Deserialization with exactly minimum length (no encrypted file)
+    ///
+    /// Project Context: Some messages (e.g., control messages, deletion markers)
+    /// may not have an encrypted file payload, only metadata.
+    #[test]
+    fn test_padnet_deserialize_minimum_length_no_payload() {
+        let mut bytes = Vec::new();
+
+        // Padnet index: 4 bytes
+        bytes.extend_from_slice(&[0x11, 0x22, 0x33, 0x44]);
+
+        // Timestamp: 8 bytes
+        bytes.extend_from_slice(&9876543210u64.to_be_bytes());
+
+        // Hash list: 4 bytes
+        bytes.extend_from_slice(&[0xAA, 0xBB, 0xCC, 0xDD]);
+
+        // No encrypted file (total: exactly 16 bytes)
+
+        let deserialized = padnet_deserialize_intray_sendfile_struct(&bytes)
+            .expect("Should deserialize minimum length message");
+
+        assert_eq!(deserialized.padnet_index_array, Some(PadIndex::Standard([0x11, 0x22, 0x33, 0x44])));
+        assert_eq!(deserialized.intray_send_time, Some(9876543210u64));
+        assert_eq!(deserialized.intray_hash_list, Some(vec![0xAA, 0xBB, 0xCC, 0xDD]));
+        assert_eq!(deserialized.gpg_encrypted_intray_file, Some(Vec::new())); // Empty but Some
+    }
+
+    /// Test: Verify wire format byte positions
+    ///
+    /// Project Context: This test documents and verifies the exact byte layout
+    /// of the wire format, which is critical for interoperability and debugging.
+    #[test]
+    fn test_padnet_wire_format_byte_positions() {
+        let send_file = SendFile {
+            intray_send_time: Some(0x0102030405060708u64),
+            gpg_encrypted_intray_file: Some(vec![0xFF, 0xEE]),
+            intray_hash_list: Some(vec![0x10, 0x20, 0x30, 0x40]),
+            padnet_index_array: Some(PadIndex::Standard([0xA0, 0xB0, 0xC0, 0xD0])),
+        };
+
+        let serialized = padnet_serialize_sendfile_struct(&send_file)
+            .expect("Serialization should succeed");
+
+        // Verify padnet index at bytes 0-3
+        assert_eq!(&serialized[0..4], &[0xA0, 0xB0, 0xC0, 0xD0]);
+
+        // Verify timestamp at bytes 4-11
+        assert_eq!(&serialized[4..12], &[0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]);
+
+        // Verify hash list at bytes 12-15
+        assert_eq!(&serialized[12..16], &[0x10, 0x20, 0x30, 0x40]);
+
+        // Verify encrypted file at bytes 16+
+        assert_eq!(&serialized[16..], &[0xFF, 0xEE]);
+    }
 }
 
 fn get_absolute_team_channel_path(team_channel_name: &str) -> io::Result<PathBuf> {
@@ -32554,7 +33007,7 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                             let use_padnet_flag = &room_sync_input.use_padnet;
 
-                            let sendfile_struct = if *use_padnet_flag {
+                            let sendfile_struct: SendFile = if *use_padnet_flag {
 
                                 // TODO: Padnet
                                 // adding a new factor/path
@@ -32670,7 +33123,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                                     intray_hash_list: Some(calculated_hashes),  // Clone here as well
                                     padnet_index_array: Some(padnet_index_array),
 
-                                };
+                                }
 
 
                             } else {
@@ -32720,7 +33173,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                                     intray_hash_list: Some(calculated_hashes),  // Clone here as well
                                     padnet_index_array: None,
 
-                                };
+                                }
 
                             };
 
@@ -32794,54 +33247,54 @@ fn handle_remote_collaborator_meetingroom_desk(
                              */
 
 
-                            // } else {
+                            // // } else {
 
-                            // Wrapper of bytes to bytes:
-                            // 4.2.2 Read File Contents
-                            // 4.3.1 GPG Clearsign the File (with your private key)
-                            // 4.3.2 GPG Encrypt File (with their public key)
-                            let file_bytes2send = wrapper__path_to_clearsign_to_gpgencrypt_to_send_bytes(
-                                &path_sendfile_readcopy_path,
-                                &room_sync_input.remote_collaborator_public_gpg,
-                            )?;
+                            // // Wrapper of bytes to bytes:
+                            // // 4.2.2 Read File Contents
+                            // // 4.3.1 GPG Clearsign the File (with your private key)
+                            // // 4.3.2 GPG Encrypt File (with their public key)
+                            // let file_bytes2send = wrapper__path_to_clearsign_to_gpgencrypt_to_send_bytes(
+                            //     &path_sendfile_readcopy_path,
+                            //     &room_sync_input.remote_collaborator_public_gpg,
+                            // )?;
 
-                            debug_log(
-                                "HRCD 4.2, 4.3.1, 4.3.2 done gpg wrapper"
-                            );
+                            // debug_log(
+                            //     "HRCD 4.2, 4.3.1, 4.3.2 done gpg wrapper"
+                            // );
 
-                            // }
-                            //
+                            // // }
+                            // //
 
-                            // // 4.5. Calculate SendFile Struct Hashes (Using Collaborator's Salts)
-                            // 4.5 calculate hashes: HRCD
-                            let calculated_hrcd_sendfile_hashes = hash_sendfile_struct_fields(
-                                &room_sync_input.local_user_salt_list,
-                                intray_send_time,
-                                &file_bytes2send,
-                            );
+                            // // // 4.5. Calculate SendFile Struct Hashes (Using Collaborator's Salts)
+                            // // 4.5 calculate hashes: HRCD
+                            // let calculated_hrcd_sendfile_hashes = hash_sendfile_struct_fields(
+                            //     &room_sync_input.local_user_salt_list,
+                            //     intray_send_time,
+                            //     &file_bytes2send,
+                            // );
 
-                            // Handle the Result from hash_sendfile_struct_fields
-                            let calculated_hashes = match calculated_hrcd_sendfile_hashes {
-                                Ok(hashes) => hashes,
-                                Err(e) => {
-                                    debug_log!("HRCD 4.5 Error calculating hashes: {}", e);
-                                    continue; // Skip to the next file if hashing fails
-                                }
-                            };
+                            // // Handle the Result from hash_sendfile_struct_fields
+                            // let calculated_hashes = match calculated_hrcd_sendfile_hashes {
+                            //     Ok(hashes) => hashes,
+                            //     Err(e) => {
+                            //         debug_log!("HRCD 4.5 Error calculating hashes: {}", e);
+                            //         continue; // Skip to the next file if hashing fails
+                            //     }
+                            // };
 
-                            debug_log!(
-                                "HRCD 4.5 calculated_hashes {:?}",
-                                calculated_hashes
-                            );
+                            // debug_log!(
+                            //     "HRCD 4.5 calculated_hashes {:?}",
+                            //     calculated_hashes
+                            // );
 
-                            // 4.6. Create SendFile Struct
-                            let sendfile_struct = SendFile {
-                                intray_send_time: Some(intray_send_time),
-                                gpg_encrypted_intray_file: Some(file_bytes2send), // Clone needed here if file_bytes2send is used later
-                                intray_hash_list: Some(calculated_hashes),  // Clone here as well
-                                padnet_index_array: None,
+                            // // 4.6. Create SendFile Struct
+                            // let sendfile_struct = SendFile {
+                            //     intray_send_time: Some(intray_send_time),
+                            //     gpg_encrypted_intray_file: Some(file_bytes2send), // Clone needed here if file_bytes2send is used later
+                            //     intray_hash_list: Some(calculated_hashes),  // Clone here as well
+                            //     padnet_index_array: None,
 
-                            };
+                            // };
 
                             // end padnet if?
 
@@ -32873,47 +33326,100 @@ fn handle_remote_collaborator_meetingroom_desk(
                                 sendfile_struct
                             );
 
-                            let serialized_file_struct_to_send = serialize_send_file(&sendfile_struct);
 
-                            // --- 4.7 Send serializd-file: send UDP to intray ---
-                            // 4.7.1 Send file
-                            // 4.7 Send serializd-file Send if serialization was successful (handle Result)
-                            match serialized_file_struct_to_send {
-                                Ok(extracted_serialized_data) => {  // Serialization OK
-                                    match send_data_via_udp(
-                                        &extracted_serialized_data,
-                                        src,
-                                        room_sync_input.remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip,
-                                        ) {
-                                        Ok(_) => {
-                                            debug_log!("HRCD 4.7 File sent successfully");
-                                            // ... (Handle successful send, e.g., update timestamp log)
+                            if *use_padnet_flag {
 
-                                            // --- 4.7.3 Get Timestamp ---
-                                            //  Timestamp Log is depricated (most likely)
-                                            debug_log("HRCD calling calling get_toml_file_updated_at_timestamp(), yes...");
-                                            // if let Ok(timestamp) = get_toml_file_updated_at_timestamp(&file_path) {
-                                            // //     update_collaborator_sendqueue_timestamp_log(
-                                            // //         // TODO: Replace with the actual team channel name
-                                            // //         &this_team_channelname,
-                                            // //         &room_sync_input.remote_collaborator_name,
-                                            // //     )?;
-                                            //     // debug_log!("HRCD 4.7.3  Updated timestamp log for {}", room_sync_input.remote_collaborator_name);
-                                            // }
-                                        }
-                                        Err(e) => {
-                                            debug_log!("Error sending data: {}", e);
-                                            // Handle the send error (e.g., log, retry, etc.)
+                                // Padnet Netowrk Layer
+                                let serialized_file_struct_to_send = padnet_serialize_sendfile_struct(&sendfile_struct);
+
+                                // --- 4.7 Send serializd-file: send UDP to intray ---
+                                // 4.7.1 Send file
+                                // 4.7 Send serializd-file Send if serialization was successful (handle Result)
+                                match serialized_file_struct_to_send {
+                                    Ok(extracted_serialized_data) => {  // Serialization OK
+                                        match send_data_via_udp(
+                                            &extracted_serialized_data,
+                                            src,
+                                            room_sync_input.remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip,
+                                            ) {
+                                            Ok(_) => {
+                                                debug_log!("HRCD 4.7 File sent successfully");
+                                                // ... (Handle successful send, e.g., update timestamp log)
+
+                                                // --- 4.7.3 Get Timestamp ---
+                                                //  Timestamp Log is depricated (most likely)
+                                                debug_log("HRCD calling calling get_toml_file_updated_at_timestamp(), yes...");
+                                                // if let Ok(timestamp) = get_toml_file_updated_at_timestamp(&file_path) {
+                                                // //     update_collaborator_sendqueue_timestamp_log(
+                                                // //         // TODO: Replace with the actual team channel name
+                                                // //         &this_team_channelname,
+                                                // //         &room_sync_input.remote_collaborator_name,
+                                                // //     )?;
+                                                //     // debug_log!("HRCD 4.7.3  Updated timestamp log for {}", room_sync_input.remote_collaborator_name);
+                                                // }
+                                            }
+                                            Err(e) => {
+                                                debug_log!("Error sending data: {}", e);
+                                                // Handle the send error (e.g., log, retry, etc.)
+                                            }
                                         }
                                     }
+                                    Err(e) => { // Serialization error
+                                        debug_log!("Serialization error: {}", e);
+                                        // Handle the serialization error (e.g., log, skip file)
+                                    }
                                 }
-                                Err(e) => { // Serialization error
-                                    debug_log!("Serialization error: {}", e);
-                                    // Handle the serialization error (e.g., log, skip file)
+
+
+                            } else {
+
+                                let serialized_file_struct_to_send = serialize_send_file_struct(&sendfile_struct);
+
+                                // --- 4.7 Send serializd-file: send UDP to intray ---
+                                // 4.7.1 Send file
+                                // 4.7 Send serializd-file Send if serialization was successful (handle Result)
+                                match serialized_file_struct_to_send {
+                                    Ok(extracted_serialized_data) => {  // Serialization OK
+                                        match send_data_via_udp(
+                                            &extracted_serialized_data,
+                                            src,
+                                            room_sync_input.remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip,
+                                            ) {
+                                            Ok(_) => {
+                                                debug_log!("HRCD 4.7 File sent successfully");
+                                                // ... (Handle successful send, e.g., update timestamp log)
+
+                                                // --- 4.7.3 Get Timestamp ---
+                                                //  Timestamp Log is depricated (most likely)
+                                                debug_log("HRCD calling calling get_toml_file_updated_at_timestamp(), yes...");
+                                                // if let Ok(timestamp) = get_toml_file_updated_at_timestamp(&file_path) {
+                                                // //     update_collaborator_sendqueue_timestamp_log(
+                                                // //         // TODO: Replace with the actual team channel name
+                                                // //         &this_team_channelname,
+                                                // //         &room_sync_input.remote_collaborator_name,
+                                                // //     )?;
+                                                //     // debug_log!("HRCD 4.7.3  Updated timestamp log for {}", room_sync_input.remote_collaborator_name);
+                                                // }
+                                            }
+                                            Err(e) => {
+                                                debug_log!("Error sending data: {}", e);
+                                                // Handle the send error (e.g., log, retry, etc.)
+                                            }
+                                        }
+                                    }
+                                    Err(e) => { // Serialization error
+                                        debug_log!("Serialization error: {}", e);
+                                        // Handle the serialization error (e.g., log, skip file)
+                                    }
                                 }
+
+
                             }
+
                             // debugpause(30);
                             debug_log!("\nHRCD: bottom of ready_signal listener. (maybe)\n");
+
+
 
 
                         } // end of while
