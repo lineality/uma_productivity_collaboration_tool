@@ -8025,13 +8025,14 @@ fn write_formatted_navigation_legend_to_tui() -> Result<(),Error> {
 
     write_red_green_hotkey("pm", "v", " ")?;
 
-    write_red_hotkey("", "passive ")?;
+    // chagne name to refresh view?
+    // write_red_hotkey("", "passive ")?;
 
     write_red_green_hotkey("", "tmux split", "")?;
 
     write_red_hotkey("", " refresh|")?;
 
-    // write_red_hotkey("p", "asty ")?;
+    write_red_hotkey("invite", "")?;
     // write_red_hotkey("cvy", "|")?;
 
     // // Navigation group
@@ -21235,7 +21236,7 @@ pub fn export_public_gpg_key_converts_to_abs_path(
     output_directory: &Path,
 ) -> Result<String, ThisProjectError> {
 
-    debug_log("\n\nStarting -> fn export_public_gpg_key_converts_to_abs_path()");
+    debug_log("\n\n EPGKCTAP Starting -> fn export_public_gpg_key_converts_to_abs_path()");
 
     // Convert config_path to an absolute path relative to the executable directory
     let absolute_config_path = make_file_path_abs_executabledirectoryrelative_canonicalized_or_error(config_path)
@@ -21243,40 +21244,154 @@ pub fn export_public_gpg_key_converts_to_abs_path(
 
     // Convert config path to string for TOML reading functions
     let config_path_str = absolute_config_path.to_str()
-        .ok_or_else(|| ThisProjectError::InvalidInput("Cannot convert config path to string".to_string()))?;
+        .ok_or_else(|| ThisProjectError::InvalidInput("EPGKCTAP Cannot convert config path to string".to_string()))?;
 
     // Read username from the configuration file, mapping any reading errors to our error type
     let uma_localowneruser_username = read_single_line_string_field_from_toml(config_path_str, "uma_local_owner_user")
         .map_err(|error_message| ThisProjectError::TomlVanillaDeserialStrError(
-            format!("Failed to read uma_localowneruser_username from config: {}", error_message)
+            format!("EPGKCTAP Failed to read uma_localowneruser_username from config: {}", error_message)
         ))?;
 
-    debug_log!("uma_localowneruser_username {}", uma_localowneruser_username);
+    debug_log!("EPGKCTAP uma_localowneruser_username {}", uma_localowneruser_username);
 
-    // Convert the collaborator files directory to an absolute path based on the executable's location
-    // AND verify that the directory exists (returns error if not found or not a directory)
-    let addressbook_files_directory_relative = COLLABORATOR_ADDRESSBOOK_PATH_STR;
-    let addressbook_files_directory_absolute = make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(
-        addressbook_files_directory_relative
-    ).map_err(|io_error| ThisProjectError::IoError(io_error))?;
+    // clearsigned toml and .gpgtoml
 
-    // Construct the path to the user's collaborator file, which contains their GPG key ID
-    let collaborator_filename = format!("{}__collaborator.toml", uma_localowneruser_username);
-    let user_config_path = addressbook_files_directory_absolute.join(collaborator_filename);
+    // Get absolute path to uma.toml configuration file
+    let relative_uma_toml_path = UMA_TOML_CONFIGFILE_PATH_STR;
+    let absolute_uma_toml_path = make_file_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_uma_toml_path)
+        .map_err(|e| GpgError::PathError(format!("SLABIK Failed to locate uma.toml configuration file: {}", e)))?;
 
-    debug_log!("user_config_path {}", user_config_path.display());
+    debug_log!("EPGKCTAP UMA TOML absolute path: {}", absolute_uma_toml_path.display());
+    debug_log!("EPGKCTAP UMA TOML file exists: {}", absolute_uma_toml_path.exists());
 
-    // Convert the collaborator file path to string for TOML reading
-    let user_config_path_str = user_config_path.to_str()
-        .ok_or_else(|| ThisProjectError::InvalidInput("Cannot convert collaborator file path to string".to_string()))?;
+    // Get local owner username from configuration - REFACTORED FOR DEBUGGING
+    // Convert PathBuf to string first
+    let absolute_uma_toml_path_str = absolute_uma_toml_path
+        .to_str()
+        .ok_or_else(|| GpgError::PathError("EPGKCTAP Unable to convert UMA TOML path to string".to_string()))?;
 
-    debug_log!("user_config_path {}", user_config_path.display());
-    println!("user_config_path {}", user_config_path.display());
+    // Log the exact string that will be used by the TOML reader
+    debug_log!("EPGKCTAP Attempting to read from UMA TOML file at path string: {}", absolute_uma_toml_path_str);
+
+    // Now attempt to read the actual field value
+    let local_owner_user_name = read_single_line_string_field_from_toml(
+        absolute_uma_toml_path_str,
+        "uma_local_owner_user"
+    ).map_err(|e| GpgError::ValidationError(format!("EPGKCTAP Failed to read local owner username: {}", e)))?;
+
+    debug_log!("EPGKCTAP Successfully read local_owner_user_name: {}", &local_owner_user_name);
+    println!("Local owner username (whose address book we are sharing): {}", local_owner_user_name);
+
+    let absolute_addressbook_directory_pathbuf = match get_addressbook_directory_path() {
+        Ok(path) => path,
+        Err(e) => {
+            debug_log!("EPGKCTAP Failed to get absolute path: {}", e);
+            return Err(ThisProjectError::GpgError(
+                format!("EPGKCTAP GPG key export failed: get_addressbook_directory_path {}", e)
+            ));
+        }
+    };
+
+    // Check for both file types
+    let toml_path = absolute_addressbook_directory_pathbuf
+        .join(format!("{}__collaborator.toml", local_owner_user_name));
+    let gpgtoml_path = absolute_addressbook_directory_pathbuf
+        .join(format!("{}__collaborator.gpgtoml", local_owner_user_name));
+
+    // Determine which file exists and use that path
+    let raw_addressbook_path = if toml_path.exists() {
+        // Prefer plain .toml if both exist
+        toml_path
+    } else if gpgtoml_path.exists() {
+        gpgtoml_path
+    } else {
+        // Neither exists, skip this directory
+        #[cfg(debug_assertions)]
+        debug_log!(
+            "EPGKCTAP Skipping directory (no node.toml or node.gpgtoml): {:?}",
+            &absolute_addressbook_directory_pathbuf
+        );
+        return Err(ThisProjectError::GpgError(format!(
+            "EPGKCTAP Err Invalid path encoding for addressbook file: {}",
+            absolute_addressbook_directory_pathbuf.display()
+        )));
+    };
+
+    // Get GPG fingerprint (could move this outside the loop if same for all)
+    let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+        Ok(fingerprint) => fingerprint,
+        Err(e) => {
+            #[cfg(debug_assertions)]
+            debug_log!(
+                "EPGKCTAP error Failed to read GPG fingerprint for: {} (skipping)",
+                e
+            );
+            // continue; // Skip this directory, continue with next
+            return Err(ThisProjectError::GpgError(
+                "EPGKCTAP error gpg_full_fingerprint_key_id_string".to_string()));
+        }
+    };
+
+    // Get temp directory path (could move this outside the loop if same for all)
+    let base_uma_temp_directory_path = match get_base_uma_temp_directory_path() {
+        Ok(path) => path,
+        Err(e) => {
+            #[cfg(debug_assertions)]
+            debug_log!(
+                "SLABIK error Failed to get temp directory path: {} (skipping)",
+                e
+            );
+            return Err(ThisProjectError::GpgError(
+                "EPGKCTAP error get_base_uma_temp_directory_path".to_string()));
+        }
+    };
+
+    // Get readable copy
+    let user_config_path_str = match get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
+        &raw_addressbook_path,
+        &gpg_full_fingerprint_key_id_string,
+        &base_uma_temp_directory_path,
+    ) {
+        Ok(path) => path,
+        Err(e) => {
+            #[cfg(debug_assertions)]
+            debug_log!(
+                "EPGKCTAP Failed to get read copy for {:?}: {:?} (skipping)",
+                raw_addressbook_path,
+                e
+            );
+            return Err(ThisProjectError::GpgError(
+                "EPGKCTAP error get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml".to_string()));
+        }
+    };
+
+    debug_log!("EPGKCTAP Absolute local owner address book path user_config_path_str: {}", user_config_path_str);
+
+
+    // // Convert the collaborator files directory to an absolute path based on the executable's location
+    // // AND verify that the directory exists (returns error if not found or not a directory)
+    // let addressbook_files_directory_relative = COLLABORATOR_ADDRESSBOOK_PATH_STR;
+    // let addressbook_files_directory_absolute = make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(
+    //     addressbook_files_directory_relative
+    // ).map_err(|io_error| ThisProjectError::IoError(io_error))?;
+
+    // // Construct the path to the user's collaborator file, which contains their GPG key ID
+    // let collaborator_filename = format!("{}__collaborator.toml", uma_localowneruser_username);
+    // let user_config_path = addressbook_files_directory_absolute.join(collaborator_filename);
+
+    debug_log!("EPGKCTAP user_config_path_str {}", user_config_path_str);
+
+    // // Convert the collaborator file path to string for TOML reading
+    // let user_config_path_str = user_config_path.to_str()
+    //     .ok_or_else(|| ThisProjectError::InvalidInput("Cannot convert collaborator file path to string".to_string()))?;
+
+    debug_log!("EPGKCTAP user_config_path_str {}", user_config_path_str);
+    println!("user_config_path_str {}", user_config_path_str);
 
     // Extract the GPG key ID from the collaborator file
-    let gpg_key_id = read_singleline_string_from_clearsigntoml(user_config_path_str, "gpg_publickey_id")
+    let gpg_key_id = read_singleline_string_from_clearsigntoml(&user_config_path_str, "gpg_publickey_id")
         .map_err(|error_message| ThisProjectError::TomlVanillaDeserialStrError(
-            format!("export_public_gpg_key_converts_to_abs_path() Failed read_singleline_string_from_clearsigntoml() to read GPG key ID from clearsigntoml collaborator file: {}", error_message)
+            format!("EPGKCTAP export_public_gpg_key_converts_to_abs_path() Failed read_singleline_string_from_clearsigntoml() to read GPG key ID from clearsigntoml collaborator file: {}", error_message)
         ))?;
 
     // Convert output_directory to an absolute path relative to the executable directory
@@ -21291,7 +21406,7 @@ pub fn export_public_gpg_key_converts_to_abs_path(
     // Define the output file path where the exported key will be saved
     let output_file_path = absolute_output_directory.join("key.asc");
 
-    debug_log!("output_file_path {}", output_file_path.display());
+    debug_log!("EPGKCTAP output_file_path {}", output_file_path.display());
 
     // Call GPG to export the public key in ASCII-armored format
     let gpg_export_result = StdCommand::new("gpg")
@@ -21301,14 +21416,14 @@ pub fn export_public_gpg_key_converts_to_abs_path(
         .output()
         .map_err(|io_error| ThisProjectError::IoError(io_error))?;
 
-    debug_log!("gpg_export_result {:?}", gpg_export_result);
+    debug_log!("EPGKCTAP gpg_export_result {:?}", gpg_export_result);
 
     // Verify the GPG command executed successfully
     if !gpg_export_result.status.success() {
         // If GPG failed, extract the error message and return it
         let gpg_error_message = String::from_utf8_lossy(&gpg_export_result.stderr);
         return Err(ThisProjectError::GpgError(
-            format!("GPG key export failed: {}", gpg_error_message)
+            format!("EPGKCTAP GPG key export failed: {}", gpg_error_message)
         ));
     }
 
@@ -21338,7 +21453,7 @@ pub fn export_public_gpg_key_converts_to_abs_path(
     // Return the path to the exported key file as a string
     let result_path = output_file_path.to_string_lossy().into_owned();
 
-    debug_log!("\n\n Ending -> fn export_public_gpg_key_converts_to_abs_path(), result_path -> {:?}", &result_path);
+    debug_log!("\n\n EPGKCTAP Ending -> fn export_public_gpg_key_converts_to_abs_path(), result_path -> {:?}", &result_path);
 
     Ok(result_path)
 }
@@ -21662,6 +21777,9 @@ fn share_team_channel_with_existing_collaborator_converts_to_abs(
         ))
     })?;
 
+    debug_log!("TCS: remote_collaborator_addressbook_readcopy_path_string -> {}", remote_collaborator_addressbook_readcopy_path_string);
+
+
     /*
     // remove temp file
     cleanup_collaborator_temp_file(&remote_collaborator_addressbook_readcopy_path_string);
@@ -21675,6 +21793,9 @@ fn share_team_channel_with_existing_collaborator_converts_to_abs(
     ).map_err(|e| GpgError::ValidationError(format!(
         "TCS: Failed to read remote collaborator's public GPG key from address book: {}", e
     )))?;
+
+    debug_log!("TCS: remote_collaborator_public_gpg_key -> {}", remote_collaborator_public_gpg_key);
+
 
     // remove temp file
     let _ = cleanup_collaborator_temp_file(
@@ -22010,6 +22131,15 @@ fn share_lou_address_book_with_existingcollaborator(recipient_name: &str) -> Res
     println!("The encrypted LOCAL OWNER USER'S address book file is saved to:");
     println!("{}", absolute_output_dir.join(format!("{}__collaborator.gpgtoml", local_owner_user_name)).display());
 
+    println!("Press Enter to continue...");
+
+    // this does nothing, press enter to proceed.
+    let mut input = String::new();
+    let _ = io::stdin()
+        .read_line(&mut input)
+        .map_err(|e| format!("Failed to read input: {:?}", e));
+
+
     // TODO check file exits?
     debug_log("SLABE end!, The encrypted LOCAL OWNER USER'S address book file was saved...");
 
@@ -22049,7 +22179,7 @@ fn prompt_user_for_save_format_choice() -> Result<bool, GpgError> {
         println!("     - Still signed but NOT encrypted");
         println!("     - Type 'no' to select this option");
         println!();
-        println!("Choice: Press Enter for encrypted (default), or type 'no' for clearsigned:");
+        println!("Choice: Press Enter for encrypted (default), or type 'clearsigned' to clearly authorized clearsigned:");
 
         // Read user input
         let mut user_input = String::new();
@@ -22072,7 +22202,7 @@ fn prompt_user_for_save_format_choice() -> Result<bool, GpgError> {
                 return Ok(true);
             },
             // Explicit no = clearsigned format
-            "n" | "no" | "2" => {
+            "n" | "no" | "2" | "clearsign" | "clearsigned" => {
                 println!("Selected: Clearsigned .toml format (not encrypted)");
                 return Ok(false);
             },
@@ -22188,24 +22318,50 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
 
     // Get absolute path to the collaborator files directory
     let relative_collab_dir = COLLABORATOR_ADDRESSBOOK_PATH_STR;
-    let absolute_collab_dir = make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_collab_dir)
+    let absolute_addressbook_directory_pathbuf = make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_collab_dir)
         .map_err(|e| {
             let error_msg = format!("PIECA Failed to locate collaborator files directory: {}", e);
             println!("Error: {}", error_msg);
             GpgError::PathError(error_msg)
         })?;
 
-    // Path to the LOCAL OWNER USER's addressbook file (absolute path)
-    let local_owner_address_book_filename = format!("{}__collaborator.toml", local_owner_user_name);
-    let absolute_local_owner_address_book_path = absolute_collab_dir.join(&local_owner_address_book_filename);
+    // // Path to the LOCAL OWNER USER's addressbook file (absolute path)
+    // let local_owner_address_book_filename = format!("{}__collaborator.toml", local_owner_user_name);
+    // let absolute_local_owner_address_book_path = absolute_collab_dir.join(&local_owner_address_book_filename);
 
-    debug_log!("PIECA LOCAL OWNER USER's addressbook path: {}", absolute_local_owner_address_book_path.display());
+    // Check for both file types
+    let toml_path = absolute_addressbook_directory_pathbuf
+        .join(format!("{}__collaborator.toml", local_owner_user_name));
+    let gpgtoml_path = absolute_addressbook_directory_pathbuf
+        .join(format!("{}__collaborator.gpgtoml", local_owner_user_name));
+
+    // Determine which file exists and use that path
+    let raw_addressbook_path = if toml_path.exists() {
+        // Prefer plain .toml if both exist
+        toml_path
+    } else if gpgtoml_path.exists() {
+        gpgtoml_path
+    } else {
+        // Neither exists, skip this directory
+        #[cfg(debug_assertions)]
+        debug_log!(
+            "Skipping directory (no node.toml or node.gpgtoml): {:?}",
+            &absolute_addressbook_directory_pathbuf
+        );
+        return Err(GpgError::PathError(format!(
+            "CAPITCCV Err Invalid path encoding for addressbook file: {}",
+            absolute_addressbook_directory_pathbuf.display()
+        )));
+    };
+
+
+    debug_log!("PIECA LOCAL OWNER USER's addressbook path: {}", raw_addressbook_path.display());
 
     // Verify the LOCAL OWNER USER's addressbook file exists
-    if !absolute_local_owner_address_book_path.exists() {
+    if !raw_addressbook_path.exists() {
         let error_msg = format!(
             "PIECA LOCAL OWNER USER's addressbook file not found at: {}",
-            absolute_local_owner_address_book_path.display()
+            raw_addressbook_path.display()
         );
         println!("Error: {}", error_msg);
         return Err(GpgError::PathError(error_msg));
@@ -22213,24 +22369,73 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
 
     debug_log!("PIECA LOCAL OWNER USER's addressbook file exists");
 
-    // Convert the LOCAL OWNER USER's addressbook path to string for TOML reading
-    let absolute_local_owner_address_book_path_str = absolute_local_owner_address_book_path
-        .to_str()
-        .ok_or_else(|| {
-            let error_msg = format!(
-                "PIECA Unable to convert LOCAL OWNER USER's addressbook path to string: {}",
-                absolute_local_owner_address_book_path.display()
+    // // Convert the LOCAL OWNER USER's addressbook path to string for TOML reading
+    // let absolute_local_owner_address_book_path_str = raw_addressbook_path
+    //     .to_str()
+    //     .ok_or_else(|| {
+    //         let error_msg = format!(
+    //             "PIECA Unable to convert LOCAL OWNER USER's addressbook path to string: {}",
+    //             raw_addressbook_path.display()
+    //         );
+    //         println!("Error: {}", error_msg);
+    //         GpgError::PathError(error_msg)
+    //     })?;
+
+
+    // Get GPG fingerprint (could move this outside the loop if same for all)
+    let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+        Ok(fingerprint) => fingerprint,
+        Err(e) => {
+            #[cfg(debug_assertions)]
+            debug_log!(
+                "SLABIK error Failed to read GPG fingerprint for: {} (skipping)",
+                e
             );
-            println!("Error: {}", error_msg);
-            GpgError::PathError(error_msg)
-        })?;
+            // continue; // Skip this directory, continue with next
+            return Err(GpgError::PathError(
+                "SLABIK error gpg_full_fingerprint_key_id_string".to_string()));
+        }
+    };
+
+    // Get temp directory path (could move this outside the loop if same for all)
+    let base_uma_temp_directory_path = match get_base_uma_temp_directory_path() {
+        Ok(path) => path,
+        Err(e) => {
+            #[cfg(debug_assertions)]
+            debug_log!(
+                "SLABIK error Failed to get temp directory path: {} (skipping)",
+                e
+            );
+            return Err(GpgError::PathError(
+                "SLABIK error get_base_uma_temp_directory_path".to_string()));
+        }
+    };
+
+    // Get readable copy
+    let specific_readcopy_addressbook_path = match get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
+        &raw_addressbook_path,
+        &gpg_full_fingerprint_key_id_string,
+        &base_uma_temp_directory_path,
+    ) {
+        Ok(path) => path,
+        Err(e) => {
+            #[cfg(debug_assertions)]
+            debug_log!(
+                "CAPITCCV Failed to get read copy for {:?}: {:?} (skipping)",
+                raw_addressbook_path,
+                e
+            );
+            return Err(GpgError::PathError(
+                "SLABIK error get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml".to_string()));
+        }
+    };
 
     // Read the LOCAL OWNER USER's GPG key ID from their addressbook file
     // This is the key ID needed to identify which private key to use for decryption
     debug_log!("PIECA Attempting to read GPG key ID from LOCAL OWNER USER's addressbook file");
 
     let local_owner_gpg_key_id = read_singleline_string_from_clearsigntoml(
-        absolute_local_owner_address_book_path_str,
+        &specific_readcopy_addressbook_path,
         "gpg_publickey_id"
     ).map_err(|e| {
         let error_msg = format!("PIECA Failed to read LOCAL OWNER USER's GPG key ID: {}", e);
@@ -22513,7 +22718,7 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
         format!("{}__collaborator.toml", remote_collaborator_username)
     };
 
-    let output_file_path = absolute_collab_dir.join(&output_filename);
+    let output_file_path = absolute_addressbook_directory_pathbuf.join(&output_filename);
 
     debug_log!("PIECA Saving file to: {}", output_file_path.display());
 
@@ -22779,9 +22984,12 @@ fn share_lou_addressbook_with_incomingkey() -> Result<(), GpgError> {
 
     // Path to recipient's public key file in the incoming directory with absolute path
     let relative_incoming_key_path = INCOMING_PUBLICGPG_KEYASC_FILEPATH_STR;
+    println!("SLABIK relative_incoming_key_path {}", relative_incoming_key_path);
+
+
     let absolute_recipient_public_key_path = make_file_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_incoming_key_path)
         .map_err(|e| GpgError::PathError(format!(
-            "Recipient's public key not found at: {} - Error: {}",
+            "SLABIK Recipient's public key not found at: {} - Error: {}",
             relative_incoming_key_path, e
         )))?;
 
@@ -23877,7 +24085,6 @@ pub fn invite_wizard() -> Result<(), GpgError> {
                     println!(" in this path (in this directory) -> ");
                     println!(" ");
                     println!("```path ");
-                    // println!("invites_updates/incoming/key.asc ");
                     println!("{}", demo_key_path.to_string_lossy());
                     println!("``` ");
                     println!(" ");
@@ -23891,6 +24098,7 @@ pub fn invite_wizard() -> Result<(), GpgError> {
 
                     }
                     /*
+                    e.g.
                     ```path
                     project_graph_data/collaborator_files_address_book/USERNAMEHERE__collaborator.toml
                     ```
@@ -24274,6 +24482,12 @@ fn handle_command_main_mode(
                 debug_log("invite / update wizard");
                 /*
                 */
+                let gone_home_result = quit_set_continue_uma_to_false();
+
+                println!("Starting Safe Out-of-band -> {:?} [Should say: 'Ok(())']", gone_home_result);
+                debug_log!("'invite' Safe out of band: gone_home_result {:?}", gone_home_result);
+
+
                 let _ = invite_wizard();
             }
 
