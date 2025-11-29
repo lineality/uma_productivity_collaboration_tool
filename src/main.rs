@@ -425,7 +425,7 @@ use manage_absolute_executable_directory_relative_paths::{
 
 mod padnet_otp_module;
 use padnet_otp_module::{
-    PadIndex, padnet_writer_strict_cleanup_xor_file_to_resultpath, PadnetError
+    PadIndex, padnet_writer_strict_cleanup_xor_file_to_resultpath, PadnetError, padnet_reader_xor_file
 };
 
 // For TUI
@@ -30732,64 +30732,13 @@ fn handle_local_owner_desk(
     // TODO maybe a flag here to exit the function?
     // let mut exit_hlod = false;
 
-    // find a valid local owner ip address
-    // e.g. to pass a single ip to later functions
-    // set empty and fill later or exit
-    // let local_user_ipv6_address: Option<Ipv6Addr> = find_valid_local_owner_ip_address(
-    //     &local_owner_desk_setup_data.local_user_ipv6_addr_list,
-    //     );
-
-    // let local_user_ipv6_address = local_user_ipv6_address.ok_or(
-    //     ThisProjectError::NetworkError("No valid local IPv6 address found".to_string()),
-    // )?;
-    // // set empty and fill later or exit
-    // let mut local_user_ipv6_address: Ipv6Addr;
-
-    // let option_localuseripv6address = find_valid_local_owner_ip_address(
-    //     &local_owner_desk_setup_data.local_user_ipv6_addr_list,
-    // );
-
-    // if let Some(option_fill) = option_localuseripv6address {
-    //     // Use the valid IPv6 address
-    //     local_user_ipv6_address = option_fill;
-
-    // } else {
-    //     // Handle the case where no valid IPv6 address was found
-    //     return Err(ThisProjectError::NetworkError("No valid local IPv6 address found".to_string()));  // Or another appropriate error
-
-    //     // TODO: maybe signal uma to hault
-    // }
-
     debug_log("HLOD Starting the handle_local_owner_desk()");
 
-
-    // Clone the values
-    // let salt_list_1 = local_owner_desk_setup_data.local_user_salt_list.clone();
-    // let salt_list_2 = local_owner_desk_setup_data.local_user_salt_list.clone();
-
-    // let readyport_1 = local_owner_desk_setup_data.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip.clone();
-    // let readyport_2 = local_owner_desk_setup_data.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip.clone();
     let localowner_gotit_port = local_owner_desk_setup_data.local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip.clone();
 
     let remote_collaborator_name = local_owner_desk_setup_data.remote_collaborator_name.clone();
 
     debug_log("HLOD setup: cloned values.");
-
-    // Instead of storing Option<&Ipv6Addr>, store the owned Ipv6Addr
-    // let local_user_ipv6_address_2 = local_user_ipv6_address.clone();
-
-
-    /*
-    Works but moving to new more future-proofed system
-    */
-
-    // let ipv6_addr_list = local_owner_desk_setup_data.local_user_ipv6_addr_list.clone();
-
-    // // Clone the address when extracting it
-    // if let Some(addr) = ipv6_addr_list.get(0) {
-    //     ipv6_addr_1 = Some(*addr); // Dereference and clone the IPv6 address
-    //     ipv6_addr_2 = Some(*addr);
-    // }
 
     /////////////////////////////////////////
     // Band: Load Network Band Configuration
@@ -30803,11 +30752,7 @@ fn handle_local_owner_desk(
 
     nt/ni (typd/index) will be used for making and sending ReadySignal structs
     network Type + ipv6/ipv4 will be used to listen for files
-
     */
-
-
-
     // Load local owner band configuration data
     let (
         band_local_network_type,
@@ -30846,83 +30791,6 @@ fn handle_local_owner_desk(
         return Err(ThisProjectError::NetworkError("Handshake failed".into()));
         };
     debug_log("HLOD setup: hlod_udp_handshake__rc_network_type_rc_ip_addr() run");
-
-
-    // let (
-    //     network_type,
-    //     network_index,
-    //     this_ipv4,
-    //     this_ipv6,
-    //     ) = read_band__network_config_type_index_specs();
-
-
-    // // 1. Use find_valid_local_owner_ip_address to get a valid address or an error.
-    // let local_user_ipv6_address = find_valid_local_owner_ipv6_address(
-    //     &local_owner_desk_setup_data.local_user_ipv6_addr_list
-    // )
-    //     .ok_or(ThisProjectError::NetworkError("No valid local IPv6 address found".to_string()))?;
-
-
-    // let option_ipindexint = read_sync_state_ip_availability_data();
-
-    // let ip_index_int = match option_ipindexint {
-    //     Ok(Some(Ok(ip_index))) => {
-    //         match get_ip_by_index(
-    //             ip_index,
-    //             &local_owner_desk_setup_data.local_user_ipv4_addr_list,
-    //             &local_owner_desk_setup_data.local_user_ipv6_addr_list,
-    //         ) {
-    //             Some(ip_addr) => ip_addr,
-    //             None => {
-    //                 // Handle the error case here
-    //                 // Return a default value
-    //                 std::net::IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0))
-    //             }
-    //         }
-    //     }
-    //     _ => {
-    //         // Handle the error case here
-    //         // Return a default value
-    //         std::net::IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0))
-    //     }
-    // };
-
-
-
-    // //
-    // let local_user_ipv6_address = get_ip_by_index(
-    //     ip_index_int, // as int_index
-    //     &local_owner_desk_setup_data.local_user_ipv4_addr_list, // for ipv4_list,
-    //     &local_owner_desk_setup_data.local_user_ipv6_addr_list, // for ipv6_list,
-    // );
-
-
-
-
-
-    // starting with ipv4 len and ipv6 len, see which list the ip is in,
-    // and return the list item
-    // challenge: the type of the output: ipv4 and ipv6 are not the same type
-
-
-
-    // // get index of valid IP v6
-    // let ip_index = get_index_byof_ip(
-    //     &local_owner_desk_setup_data.local_user_ipv6_addr_list, // as ip_list
-    //     &local_user_ipv6_address, // as ip_address
-    // );
-
-    // debug_log!(
-    //     "Found IP/index <{:?} {:?}>",
-    //     local_user_ipv6_address,
-    //     ip_index
-    // );
-
-    // // set ipv6 state-file
-    // // path: sync_data/ip.toml
-    // write_local_band__save_network_band__type_index(
-    //     ip_index.expect("REASON"),
-    // );
 
     loop { // 1. start overall loop to (re)start whole desk
         debug_log("HLOD 1. start overall loop to (re)start whole desk");
@@ -31074,16 +30942,6 @@ fn handle_local_owner_desk(
                     band_local_network_index, //network_index: u8, // for ni
                 );
 
-                // if let Some(addr_1) = ipv6_addr_1 {
-                //     send_ready_signal(
-                //         &salt_list_1_drone_clone,
-                //         &addr_1,
-                //         readyport_1,
-                //         latest_received_from_rc_file_timestamp,
-                //         false,
-                //     );
-                // }
-
                 debug_log!("\n");
             } // end drone loop (ready-signals)
         }); // end ready_thread
@@ -31127,15 +30985,6 @@ fn handle_local_owner_desk(
                 local_owner_desk_setup_data.localuser_intray_port__yourdesk_youlisten__bind_yourlocal_ip,
             )?;
             debug_log!("HLOD: Intray socket created.");
-
-
-
-            // debug_log("HLOD Creating intray socket listening UDP...");
-            // let intray_socket = create_rc_udp_socket(
-            //     &local_owner_desk_setup_data.local_user_ipv6_addr_list,
-            //     local_owner_desk_setup_data.localuser_intray_port__yourdesk_youlisten__bind_yourlocal_ip,
-            // )?;
-            // debug_log!("HLOD: Intray socket created.");
 
             // --- 3.5 in-tray Send-File Event ---
             // "Listener"?
@@ -31187,12 +31036,9 @@ fn handle_local_owner_desk(
                     );
 
                     // --- 3.5.3 Deserialize the SendFile signal ---
-                    // let incoming_intray_file_struct: SendFile = deserialize_intray_send_file_struct(&clearsigned_data)?;  // Deserialize from clearsigned data
-
-                    // get value for use_padnet from ~state
-
                     let use_padnet_flag = &local_owner_desk_setup_data.use_padnet;
 
+                    // If Padnet
                     let incoming_intray_file_struct: SendFile = if *use_padnet_flag {
 
                         // Padnet
@@ -31292,17 +31138,6 @@ fn handle_local_owner_desk(
                         continue;
                     }
 
-                    // // --- 5 Hash-Check for SendFile Struct ---
-                    // // HLOD 5 Drop packet when fail check
-                    // if !verify_intray_sendfile_hashes( // make this function TODO
-                    //     &incoming_intray_file_struct,
-                    //     &local_owner_desk_setup_data.remote_collaborator_salt_list,
-                    // ) {
-                    //     debug_log("HLOD 5: SendFile Struct hash verification failed. Discarding signal.");
-                    //     continue; // Discard the signal and continue listening
-                    // }
-
-
                     // --- 5.0 Hash-Check for SendFile Struct ---
                     // HLOD 5.0 Drop packet when fail check
                     // Check the hash of the incoming file against the provided list of salts
@@ -31319,47 +31154,8 @@ fn handle_local_owner_desk(
 
                     debug_log!("Passed HLOD 5.0: SendFile Struct hash verified.");
 
-                    // // replace this block
-                    // match calculate_and_verify_sendfile_hashes(
-                    //     &incoming_intray_file_struct,
-                    //     &local_owner_desk_setup_data.remote_collaborator_salt_list,
-                    // ) {
-                    //     Ok((calculated_hashes, all_hashes_match)) => {
-                    //         if !all_hashes_match {
-                    //             debug_log("HLOD 5: SendFile Struct hash verification failed. Discarding signal.");
-                    //             continue; // Discard the signal and continue listening
-                    //         }
-                    //         // If all hashes match, you can use the calculated_hashes for further processing if needed
-                    //     }
-                    //     Err(e) => {
-                    //         debug_log(&format!("Error calculating and verifying SendFile hashes: {}", e));
-                    //         continue; // Discard the signal and continue listening
-                    //     }
-                    // }
-
-                    // // replace with this code (incomplete)
-                    // // if result is fail
-                    // match hash_checker_for_sendfile_struct(
-                    //     salt_list: &[u128],
-                    //     incoming_intray_file_struct.intray_send_time: u64,
-                    //     incoming_intray_file_struct.gpg_encrypted_intray_file: &[u8], // Use a slice
-                    //     incoming_intray_file_struct.intray_hash_list// compare_to_this_hashvec: &[u8], // Use a slice
-                    // ) {
-                    //     Ok(all_hashes_match) => {
-                    //         if !all_hashes_match {
-                    //             debug_log("HLOD 5: SendFile Struct hash verification failed. Discarding signal.");
-                    //             continue; // Discard the signal and continue listening
-                    //         }
-                    //         // If all hashes match, you can use the calculated_hashes for further processing if needed
-                    //     }
-                    //     Err(e) => {
-                    //         debug_log(&format!("Error calculating and verifying SendFile hashes: {}", e));
-                    //         continue; // Discard the signal and continue listening
-                    //     }
-                    // }
-
                     /*
-                    Maybe here:
+                    TODO?
 
                     If message file:
                     look in Navigation-State for Messages requires gpg-encrypted
@@ -31374,34 +31170,193 @@ fn handle_local_owner_desk(
                     A. save as a temp file (no os-temp, uma-data temp)
                     B. make read-copy
                     C. look for flag
-
                     */
 
+
                     // --- 6. HLOD decypt ---
+                    /*
+                    For padnet:
+                    - get blob
+                    - get array
+                    - run read
+                    - turn file into new blob
+
+                    /// # Returns
+                    /// * `Ok(usize)` - Number of bytes processed
+                    /// * `Err(PadnetError)` - Operation failed, no output created
+                    pub fn padnet_reader_xor_file(
+                        path_to_target_file: &Path, // `path_to_target_file` - Absolute path to file to XOR
+                        result_path: &Path,         // `result_path` - Absolute path for output file
+                        path_to_padset: &Path,      // `path_to_padset` - Absolute path to padset root
+                        pad_index: &PadIndex,       // `pad_index` - Starting line index for XOR operation
+                    ) -> Result<usize, PadnetError> {
+                    */
+
                     // 6.1  Handle the Option<Vec<u8>> for gpg_encrypted_intray_file
                     let still_encrypted_file_blob = match &incoming_intray_file_struct.gpg_encrypted_intray_file {
+
                         Some(data) => data,  // Extract the Vec<u8> if Some
                         None => {
                             debug_log!("HLOD 6.1: gpg_encrypted_intray_file is None. Skipping.");
                             continue; // Or handle the None case differently (e.g., return an error)
                         }
                     };
+
                     debug_log!(
                         "HLOD 6.1 still_encrypted_file_blob -> {:?}",
                         still_encrypted_file_blob
                     );
 
-                    // 6.2 *Now* decrypt the data
-                    let decrypted_clearsignfile_data = match gpg_decrypt_from_bytes(
-                        still_encrypted_file_blob,
-                        &local_owner_desk_setup_data.local_user_gpg_publickey_id
-                    ) { // Pass the extracted data
-                        Ok(data) => data,
-                        Err(e) => {
-                            debug_log!("HLOD 6.2: GPG decryption failed: {}. Skipping.", e);
-                            continue; // Skip to the next packet if decryption fails
+                    let padnet_index_array = match &incoming_intray_file_struct.padnet_index_array {
+                        Some(data) => data,  // Extract the Vec<u8> if Some
+                        None => {
+                            debug_log!("HLOD 6.1: padnet_index_array is None. Skipping.");
+                            continue; // Or handle the None case differently (e.g., return an error)
                         }
                     };
+
+                    let decrypted_clearsignfile_data = if *use_padnet_flag {
+                        /*
+                        return: vec<u8> bytes
+
+                        1. still OTP layer, get blob
+                        2. make paths; 1. to write OTP blob to, 2. to write gpg blob to
+                        3. write OTP blob
+                        4. get padnet_directory_path
+                        5. read OTP file, make gpg file
+                        6. get bytes from file
+                        */
+
+                        // 1. still OTP layer, get blob
+                        let still_otp_encrypted_file_blob = match &incoming_intray_file_struct.gpg_encrypted_intray_file {
+                            Some(data) => data,  // Extract the Vec<u8> if Some
+                            None => {
+                                debug_log!("HLOD 6.1: gpg_encrypted_intray_file is None. Skipping.");
+                                continue; // Or handle the None case differently (e.g., return an error)
+                            }
+                        };
+
+                        // 2. make paths; 1. to write OTP blob to, 2. to write gpg blob to
+                        let otp_blob_file_path = create_unique_temp_filepathbuf(
+                            &std::env::temp_dir(),
+                            "uma_xor_result",
+                            TEMP_FILE_CREATION_RETRY_ATTEMPTS,
+                            TEMP_FILE_RETRY_DELAY_MS,
+                        ).map_err(|e| {
+                            ThisProjectError::IoError(std::io::Error::new(
+                                e.kind(),
+                                format!("PWPCTGTOTSB: failed to create temp file #2: {}", e),
+                            ))
+                        })?;
+
+                        let gpg_blob_file_path = create_unique_temp_filepathbuf(
+                            &std::env::temp_dir(),
+                            "uma_xor_result",
+                            TEMP_FILE_CREATION_RETRY_ATTEMPTS,
+                            TEMP_FILE_RETRY_DELAY_MS,
+                        ).map_err(|e| {
+                            ThisProjectError::IoError(std::io::Error::new(
+                                e.kind(),
+                                format!("PWPCTGTOTSB: failed to create temp file #2: {}", e),
+                            ))
+                        })?;
+
+
+                        // 3. write OTP blob to file
+                        // set blob to blob_as_file_path;
+                        /*
+                        fn write_bytes_to_file_atomic(
+                            data: &[u8],
+                            file_path: &Path,
+                        ) -> Result<(), ThisProjectError> {
+                        */
+                        let _ = write_bytes_to_file_atomic(
+                            still_otp_encrypted_file_blob, // data: &[u8],
+                            &gpg_blob_file_path, // file_path: &Path,
+                        )?;
+
+                        // 4. get padnet_directory_path, read-pad path (with id and channel name)
+                        let team_channel_name = match get_current_team_channel_name_from_nav_path() {
+                            Some(name) => name,
+                            None => {
+                                debug_log!("Error: Could not get current channel name. Skipping set_as_active.");
+                                return Err(ThisProjectError::InvalidData("Could not get team channel name".into()));
+                            },
+                        };
+                        let rc_key_id = &local_owner_desk_setup_data.remote_collaborator_gpg_publickey_id;
+
+                        // make name
+                        //  -- /padnet/to/{team_channel}/{RC key-id}
+                        let mut padnet_directory_path = get_reader_from_padnet_directory_path()?;
+                        padnet_directory_path.push(&team_channel_name);
+                        padnet_directory_path.push(rc_key_id);
+
+                        // 5. read OTP file, make gpg file
+                        /*
+
+                        /// # Arguments
+                        /// * `path_to_target_file` - Absolute path to file to XOR
+                        /// * `result_path` - Absolute path for output file
+                        /// * `path_to_padset` - Absolute path to padset root
+                        /// * `pad_index` - Starting line index for XOR operation
+                        ///
+                        /// # Returns
+                        /// * `Ok(usize)` - Number of bytes processed
+                        /// * `Err(PadnetError)` - Operation failed, no output created
+                        pub fn padnet_reader_xor_file(
+                            path_to_target_file: &Path, // `path_to_target_file` - Absolute path to file to XOR
+                            result_path: &Path,         // `result_path` - Absolute path for output file
+                            path_to_padset: &Path,      // `path_to_padset` - Absolute path to padset root
+                            pad_index: &PadIndex,       // `pad_index` - Starting line index for XOR operation
+                        ) -> Result<usize, PadnetError> {
+                        */
+
+
+                        let _ = padnet_reader_xor_file(
+                            &otp_blob_file_path,  // path_to_target_file: &Path, // `path_to_target_file` - Absolute path to file to XOR
+                            &gpg_blob_file_path,         // `result_path` - Absolute path for output file
+                            &padnet_directory_path,      // `path_to_padset` - Absolute path to padset root
+                            padnet_index_array, // pad_index: &PadIndex,       // `pad_index` - Starting line index for XOR operation
+                        );
+
+                        // 6. get bytes from file
+                        /*
+                        fn read_file_to_bytes(
+                            file_path: &Path,
+                        ) -> Result<Vec<u8>, ThisProjectError> {
+                        */
+                        // 6. get bytes from file
+                        match read_file_to_bytes(&gpg_blob_file_path) {
+                            Ok(bytes) => {
+                                #[cfg(debug_assertions)]
+                                println!("HLOD 6.6: Read {} bytes from GPG file", bytes.len());
+
+                                bytes  // ← Return the Vec<u8> (no semicolon!)
+                            },
+                            Err(e) => {
+                                debug_log!("HLOD 6.6: Read failed: {}. Skipping.", e);
+                                continue; // Skip to next packet
+                            }
+                        }
+                    } else {
+
+
+
+                        // 6.2 *Now* decrypt the data
+                        // let decrypted_clearsignfile_data = match gpg_decrypt_from_bytes(
+                        match gpg_decrypt_from_bytes(
+                            still_encrypted_file_blob,
+                            &local_owner_desk_setup_data.local_user_gpg_publickey_id
+                        ) { // Pass the extracted data
+                            Ok(data) => data,
+                            Err(e) => {
+                                debug_log!("HLOD 6.2: GPG decryption failed: {}. Skipping.", e);
+                                continue; // Skip to the next packet if decryption fails
+                            }
+                        }
+
+                     };
+
                     debug_log!(
                         "HLOD 6.2 decrypt the data decrypted_clearsignfile_data -> {:?}",
                         decrypted_clearsignfile_data
@@ -34352,48 +34307,12 @@ fn handle_remote_collaborator_meetingroom_desk(
                                 16,    // retry_delay_ms: u64,
                                 )?;
 
-                                // padnet_writer_strict_cleanup_continuous_xor_to_bytes
-
-                                //     // maybe issue..wrapper__path_to_clearsign_to_gpgencrypt_to_send_bytes
-                                //     // padnet last step...
-                                //     //
-                                //     wrapper__path_to_clearsign_to_gpgencrypt_to_send_byte
-
-                                //     debug_log(
-                                //         "HRCD 4.2, 4.3.1, 4.3.2 done gpg wrapper"
-                                //     );
-
-                                //     let padnet_index_array = match padnet_writer_strict_cleanup_xor_file_to_resultpath(
-                                //         &path_sendfile_readcopy_path, // path_to_target_file
-                                //         &temp_filepath_padnet, // result_path
-                                //         &padnet_directory_path, // path_to_padset
-                                //     ) {
-                                //         Ok((idx, bytes)) => {
-                                //             println!("  ✓ Encrypted {} bytes", bytes);
-                                //             println!("  ✓ Starting index: {:?}", idx);
-                                //             (idx, bytes)
-                                //         }
-                                //         Err(e) => {
-                                //             println!("  ✗ Failed: {}", e);
-                                //             continue;
-                                //         }
-                                //     };
-
                                 // calls padnet_writer_strict_cleanup_continuous_xor_file
                                 let (file_bytes2send, padnet_index_array) = padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
                                     &temp_filepath_padnet, // padnes path?
                                     &room_sync_input.remote_collaborator_public_gpg,
                                     &padnet_directory_path, // path_to_padset
                                 )?;
-
-                                // // Wrapper of bytes to bytes:
-                                // // 4.2.2 Read File Contents
-                                // // 4.3.1 GPG Clearsign the File (with your private key)
-                                // // 4.3.2 GPG Encrypt File (with their public key)
-                                // let file_bytes2send = wrapper__path_to_clearsign_to_gpgencrypt_to_send_bytes(
-                                //     &temp_filepath_padnet, // padnes path?
-                                //     &room_sync_input.remote_collaborator_public_gpg,
-                                // )?;
 
                                 // // 4.5. Calculate SendFile Struct Hashes (Using Collaborator's Salts)
                                 // 4.5 calculate hashes: HRCD
@@ -34425,7 +34344,6 @@ fn handle_remote_collaborator_meetingroom_desk(
                                     padnet_index_array: Some(padnet_index_array),
                                 }
 
-
                             } else {
 
                                 // Wrapper of bytes to bytes:
@@ -34440,9 +34358,6 @@ fn handle_remote_collaborator_meetingroom_desk(
                                 debug_log(
                                     "HRCD 4.2, 4.3.1, 4.3.2 done gpg wrapper"
                                 );
-
-                                // }
-                                //
 
                                 // // 4.5. Calculate SendFile Struct Hashes (Using Collaborator's Salts)
                                 // 4.5 calculate hashes: HRCD
@@ -34466,18 +34381,15 @@ fn handle_remote_collaborator_meetingroom_desk(
                                     calculated_hashes
                                 );
 
-                                // 4.6. Create SendFile Struct
+                                // 4.6. Create SendFile Struct (no padnet)
                                 SendFile {
                                     intray_send_time: Some(intray_send_time),
                                     gpg_encrypted_intray_file: Some(file_bytes2send), // Clone needed here if file_bytes2send is used later
                                     intray_hash_list: Some(calculated_hashes),  // Clone here as well
                                     padnet_index_array: None,
-
                                 }
 
                             };
-
-
 
                             // TODO
                             // 1. get &room_sync_input.remote_collaborator_gpg_publickey_id,

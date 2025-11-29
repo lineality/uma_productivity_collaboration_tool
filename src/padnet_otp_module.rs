@@ -1942,10 +1942,10 @@ mod line_loading_tests {
 /// * `Ok(usize)` - Number of bytes processed
 /// * `Err(PadnetError)` - Operation failed, no output created
 pub fn padnet_reader_xor_file(
-    path_to_target_file: &Path,
-    result_path: &Path,
-    path_to_padset: &Path,
-    pad_index: &PadIndex,
+    path_to_target_file: &Path, // `path_to_target_file` - Absolute path to file to XOR
+    result_path: &Path,         // `result_path` - Absolute path for output file
+    path_to_padset: &Path,      // `path_to_padset` - Absolute path to padset root
+    pad_index: &PadIndex,       // `pad_index` - Starting line index for XOR operation
 ) -> Result<usize, PadnetError> {
     // Validate inputs
     if !path_to_target_file.is_absolute() {
@@ -4349,3 +4349,283 @@ fn main() {
 }
 
  */
+/*
+Helpers
+
+use std::fs::{self, File};
+use std::io::Read;
+use std::path::Path;
+
+/// Reads a file into a byte vector with defensive size checking.
+///
+/// # Project Context
+/// In the OTP encryption pipeline, we read the XOR-encrypted output file
+/// back into memory for transmission. This function ensures:
+/// - Files don't exceed memory safety limits
+/// - Clear errors for oversized files
+/// - Protection against malicious or accidental large file processing
+/// - Consistent byte reading (handles short reads)
+///
+/// # Security & Reliability Strategy
+/// 1. Check file size BEFORE reading (prevents memory exhaustion)
+/// 2. Reject files exceeding MAX_PROCESSABLE_FILE_SIZE_BYTES
+/// 3. Pre-allocate exact buffer size (efficient, no reallocation)
+/// 4. Read entire file in single operation
+/// 5. Verify bytes read matches file size (detect partial reads)
+///
+/// # Size Limit Rationale
+/// - Protects against memory exhaustion attacks
+/// - Prevents accidental processing of wrong files (logs, databases)
+/// - Ensures OTP pad material not wasted on invalid inputs
+/// - 1MB limit appropriate for TOML config files
+///
+/// # Arguments
+/// * `file_path` - Absolute path to file to read
+///
+/// # Returns
+/// * `Ok(Vec<u8>)` - Complete file contents as byte vector
+/// * `Err(ThisProjectError)` - Operation failed, see error for details
+///
+/// # Error Conditions
+/// - `FileTooLarge`: File exceeds MAX_PROCESSABLE_FILE_SIZE_BYTES
+/// - `IoError`: File not found
+/// - `IoError`: Permission denied (cannot read file)
+/// - `IoError`: Hardware error during read
+/// - `IoError`: Partial read (file changed during read)
+/// - `InvalidInput`: Path is not absolute
+///
+/// # Example
+/// ```rust,no_run
+/// use std::path::Path;
+///
+/// let temp_path = Path::new("/tmp/uma_xor_result.bin");
+///
+/// match read_file_to_bytes(temp_path) {
+///     Ok(bytes) => println!("Read {} bytes", bytes.len()),
+///     Err(e) => eprintln!("Read failed: {}", e),
+/// }
+/// ```
+///
+/// # Performance Considerations
+/// - Single metadata call to check size
+/// - Pre-allocated buffer (no reallocation)
+/// - Single read operation for files < 1MB (efficient)
+/// - Typical read time for 1MB file: < 5ms on SSD
+///
+/// # Edge Cases Handled
+/// - Empty files (0 bytes): Returns Ok(empty Vec)
+/// - Files exactly at limit (1,048,576 bytes): Accepted
+/// - Files over limit by 1 byte: Rejected
+/// - File deleted between size check and read: Returns IoError
+/// - File grows during read: Partial read detected and rejected
+fn read_file_to_bytes(file_path: &Path) -> Result<Vec<u8>, ThisProjectError> {
+    // Debug assertion: ensure we have an absolute path
+    #[cfg(all(debug_assertions, not(test)))]
+    debug_assert!(
+        file_path.is_absolute(),
+        "RFTB: file_path must be absolute, got: {:?}",
+        file_path
+    );
+
+    // Production safety check: verify path is absolute
+    if !file_path.is_absolute() {
+        return Err(ThisProjectError::InvalidInput(
+            "RFTB: file path must be absolute".to_string(),
+        ));
+    }
+
+    // Get file metadata to check size before reading
+    // This prevents loading huge files into memory
+    let metadata = fs::metadata(file_path).map_err(|e| {
+        ThisProjectError::IoError(std::io::Error::new(
+            e.kind(),
+            format!("RFTB: failed to get file metadata: {}", e),
+        ))
+    })?;
+
+    // Get file size as usize for comparison
+    // Note: On 32-bit systems, files > 4GB would overflow here
+    // This is acceptable since our max is 1MB
+    let file_size = metadata.len() as usize;
+
+    // Defensive size check: reject unexpectedly large files
+    // Protects against memory exhaustion and accidental wrong file processing
+    if file_size > MAX_PROCESSABLE_FILE_SIZE_BYTES {
+        return Err(ThisProjectError::FileTooLarge {
+            path: file_path.to_path_buf(),
+            size_bytes: file_size,
+            max_allowed: MAX_PROCESSABLE_FILE_SIZE_BYTES,
+        });
+    }
+
+    // Open file for reading
+    let mut file = File::open(file_path).map_err(|e| {
+        ThisProjectError::IoError(std::io::Error::new(
+            e.kind(),
+            format!("RFTB: failed to open file: {}", e),
+        ))
+    })?;
+
+    // Pre-allocate buffer with exact size
+    // This is efficient: allocates once, no reallocation needed
+    let mut buffer = vec![0u8; file_size];
+
+    // Read entire file into buffer
+    // read_exact ensures we read exactly file_size bytes or error
+    file.read_exact(&mut buffer).map_err(|e| {
+        ThisProjectError::IoError(std::io::Error::new(
+            e.kind(),
+            format!("RFTB: failed to read file contents: {}", e),
+        ))
+    })?;
+
+    // Success: return complete file contents
+    Ok(buffer)
+}
+
+use std::fs::{File, OpenOptions};
+use std::io::Write;
+use std::path::Path;
+
+/// Writes byte data to a file atomically with defensive error handling.
+///
+/// # Project Context
+/// In the OTP encryption pipeline, we need to write intermediate encrypted
+/// data to temporary files. This function ensures:
+/// - Complete write or complete failure (no partial files)
+/// - Defensive handling of disk full, permissions, hardware errors
+/// - Secure file permissions (readable/writable by owner only)
+/// - Clear error messages for debugging
+///
+/// # Operation Strategy
+/// 1. Create new file (fail if already exists - prevents race conditions)
+/// 2. Set restrictive permissions (0600 on Unix - owner only)
+/// 3. Write all bytes in single operation
+/// 4. Flush to ensure data written to disk
+/// 5. Explicit sync to guarantee durability
+///
+/// # Security Considerations
+/// - File permissions set to 0600 (Unix) - only file owner can read/write
+/// - Files contain sensitive encrypted data
+/// - No world-readable temp files
+/// - Fail-safe: if permissions can't be set, file is still created (OS defaults)
+///
+/// # Arguments
+/// * `data` - Byte slice containing data to write
+/// * `file_path` - Absolute path where file should be created
+///
+/// # Returns
+/// * `Ok(())` - File successfully written and synced to disk
+/// * `Err(ThisProjectError)` - Operation failed, see error for details
+///
+/// # Error Conditions
+/// - `IoError`: File already exists (race condition)
+/// - `IoError`: Permission denied (cannot create file in directory)
+/// - `IoError`: Disk full (no space available)
+/// - `IoError`: Hardware error (disk failure)
+/// - `IoError`: Parent directory doesn't exist
+///
+/// # Example
+/// ```rust,no_run
+/// use std::path::Path;
+///
+/// let data = b"encrypted content here";
+/// let temp_path = Path::new("/tmp/uma_temp_12345.bin");
+///
+/// match write_bytes_to_file_atomic(data, temp_path) {
+///     Ok(()) => println!("Data written successfully"),
+///     Err(e) => eprintln!("Write failed: {}", e),
+/// }
+/// ```
+///
+/// # Platform Notes
+/// - Unix: File permissions set to 0600 (owner read/write only)
+/// - Windows: Uses default file permissions (no chmod equivalent)
+/// - All platforms: Fail if file exists prevents race conditions
+///
+/// # Performance Considerations
+/// - Single write operation (efficient for small files)
+/// - Flush ensures OS buffer written to disk
+/// - Sync ensures disk cache written to physical media
+/// - For 1MB files: typically completes in < 10ms on SSD
+fn write_bytes_to_file_atomic(data: &[u8], file_path: &Path) -> Result<(), ThisProjectError> {
+    // Debug assertion: ensure we have an absolute path
+    // This is active in debug builds but not production
+    #[cfg(all(debug_assertions, not(test)))]
+    debug_assert!(
+        file_path.is_absolute(),
+        "WBTFA: file_path must be absolute, got: {:?}",
+        file_path
+    );
+
+    // Production safety check: verify path is absolute
+    if !file_path.is_absolute() {
+        return Err(ThisProjectError::InvalidInput(
+            "WBTFA: file path must be absolute".to_string(),
+        ));
+    }
+
+    // Create file with restrictive options
+    // - create_new(true): Fail if file exists (prevents race conditions)
+    // - write(true): Enable write operations
+    // - truncate(false): Not needed since create_new ensures empty file
+    let mut file = OpenOptions::new()
+        .create_new(true) // Atomic: fail if exists
+        .write(true)
+        .open(file_path)
+        .map_err(|e| {
+            // Enhance error with context
+            ThisProjectError::IoError(std::io::Error::new(
+                e.kind(),
+                format!("WBTFA: failed to create file: {}", e),
+            ))
+        })?;
+
+    // Set secure file permissions (Unix only)
+    // On Windows, this is a no-op (not supported)
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let permissions = std::fs::Permissions::from_mode(0o600); // Owner: rw-, Group: ---, Other: ---
+
+        // Try to set permissions, but don't fail if we can't
+        // File was created successfully, permissions are defense-in-depth
+        if let Err(e) = std::fs::set_permissions(file_path, permissions) {
+            // Log warning in debug builds
+            #[cfg(debug_assertions)]
+            eprintln!("WBTFA warning: could not set file permissions: {}", e);
+
+            // In production: continue (file created, just with default permissions)
+            // This is acceptable because temp directory should have restricted access
+        }
+    }
+
+    // Write all bytes in single operation
+    // This is efficient for small files (our use case: < 1MB)
+    file.write_all(data).map_err(|e| {
+        ThisProjectError::IoError(std::io::Error::new(
+            e.kind(),
+            format!("WBTFA: failed to write data: {}", e),
+        ))
+    })?;
+
+    // Flush OS buffer to ensure bytes reach OS kernel
+    file.flush().map_err(|e| {
+        ThisProjectError::IoError(std::io::Error::new(
+            e.kind(),
+            format!("WBTFA: failed to flush: {}", e),
+        ))
+    })?;
+
+    // Sync file to disk (ensures durability)
+    // This is important for encrypted data - must not be lost
+    file.sync_all().map_err(|e| {
+        ThisProjectError::IoError(std::io::Error::new(
+            e.kind(),
+            format!("WBTFA: failed to sync: {}", e),
+        ))
+    })?;
+
+    Ok(())
+}
+*/
