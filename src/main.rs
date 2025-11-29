@@ -29982,27 +29982,52 @@ fn handle_local_owner_desk(
 
                     let use_padnet_flag = &local_owner_desk_setup_data.use_padnet;
 
-                    let mut incoming_intray_file_struct: SendFile;
+                    let incoming_intray_file_struct: SendFile = if *use_padnet_flag {
 
-                    if
+                        // Padnet
+                        // let incoming_intray_file_struct: SendFile = match padnet_deserialize_intray_sendfile_struct(
+                        match padnet_deserialize_intray_sendfile_struct(
 
-                    // TODO PADNET
-                    let incoming_intray_file_struct: SendFile = match deserialize_intray_send_file_struct(
-                        &buf[..amt],
-                    ) {
-                        Ok(incoming_intray_file_struct) => {
-                            debug_log("HLOD-InTray 2.3 SendFile listener: Receive File Data...do you copy, gold leader... >*<");
+                            &buf[..amt],
+                        ) {
+                            Ok(incoming_intray_file_struct) => {
+                                debug_log("HLOD-InTray 2.3 SendFile listener: Receive File Data...do you copy, gold leader... >*<");
 
-                            debug_log!("HLOD-InTray 2.3 Deserialize Ok(incoming_intray_file_struct) {}: Received SendFile: {:?}",
-                                local_owner_desk_setup_data.remote_collaborator_name,
+                                debug_log!("HLOD-InTray 2.3 Deserialize Ok(incoming_intray_file_struct) {}: Received SendFile: {:?}",
+                                    local_owner_desk_setup_data.remote_collaborator_name,
+                                    incoming_intray_file_struct
+                                ); // Log the signal
                                 incoming_intray_file_struct
-                            ); // Log the signal
-                            incoming_intray_file_struct
-                        },
-                        Err(e) => {
-                            debug_log!("HLOD-InTray 2.3 Deserialize Err Receive data Failed to parse ready signal: {}", e);
-                            continue; // Continue to the next iteration of the loop
-                        }
+                            },
+                            Err(e) => {
+                                debug_log!("HLOD-InTray 2.3 Deserialize Err Receive data Failed to parse ready signal: {}", e);
+                                continue; // Continue to the next iteration of the loop
+                            }
+                        } // no semicolon, to pass value
+
+                    } else {
+
+                        // TODO PADNET
+                        // let incoming_intray_file_struct: SendFile = match deserialize_intray_send_file_struct(
+                       match deserialize_intray_send_file_struct(
+
+                            &buf[..amt],
+                        ) {
+                            Ok(incoming_intray_file_struct) => {
+                                debug_log("HLOD-InTray 2.3 SendFile listener: Receive File Data...do you copy, gold leader... >*<");
+
+                                debug_log!("HLOD-InTray 2.3 Deserialize Ok(incoming_intray_file_struct) {}: Received SendFile: {:?}",
+                                    local_owner_desk_setup_data.remote_collaborator_name,
+                                    incoming_intray_file_struct
+                                ); // Log the signal
+                                incoming_intray_file_struct
+                            },
+                            Err(e) => {
+                                debug_log!("HLOD-InTray 2.3 Deserialize Err Receive data Failed to parse ready signal: {}", e);
+                                continue; // Continue to the next iteration of the loop
+                            }
+                        } // no semicolon, to pass value
+
                     };
 
                     debug_log("##HLOD-InTray## starting checks(hound's tooth, they say) 2.4");
