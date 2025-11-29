@@ -10541,3 +10541,97 @@ fn remove_non_alphanumeric(s: &str) -> String {
 //     sync_interval: u64,
 //     updated_at_timestamp: u64,
 // }
+
+
+
+// /// Exports the user's public GPG key to a specified location for sharing
+// ///
+// /// # Arguments
+// /// * `config_path` - Path to the uma.toml configuration file
+// /// * `output_directory` - Directory where the exported key should be saved
+// ///
+// /// # Returns
+// /// * `Result<String, ThisProjectError>` - Returns the path to the exported key file or an error
+// pub fn export_public_gpg_key_converts_to_abs_path(
+//     config_path: &Path,
+//     output_directory: &Path,
+// ) -> Result<String, ThisProjectError> {
+//     // Convert Path to &str for read_field_from_toml
+//     let config_path_str = config_path.to_str()
+//         .ok_or_else(|| ThisProjectError::InvalidInput("Invalid path".to_string()))?;
+
+//     // Read the GPG key ID from the configuration
+//     let key_id = read_field_from_toml(config_path_str, "uma_local_owner_user");
+
+//     // Create the output directory if it doesn't exist
+//     fs::create_dir_all(output_directory)
+//         .map_err(|e| ThisProjectError::IoError(e))?;
+
+//     // Generate the output file path
+//     let output_file = output_directory.join("key.asc");
+
+//     // Construct the GPG command
+//     let output = Command::new("gpg")
+//         .arg("--armor")
+//         .arg("--export")
+//         .arg(&key_id)
+//         .output()
+//         .map_err(|e| ThisProjectError::IoError(e))?;
+
+//     // Check if the command was successful
+//     if !output.status.success() {
+//         let error_message = String::from_utf8_lossy(&output.stderr);
+//         return Err(ThisProjectError::GpgError(error_message.to_string()));
+//     }
+
+//     // Write the output to a file
+//     fs::write(&output_file, output.stdout)
+//         .map_err(|e| ThisProjectError::IoError(e))?;
+
+//     // Return the path to the exported key file
+//     Ok(output_file.to_string_lossy().into_owned())
+// }
+// /// Exports the user's public GPG key to a specified location for sharing
+// ///
+// /// # Arguments
+// /// * `config_path` - Path to the uma.toml configuration file
+// /// * `output_directory` - Directory where the exported key should be saved
+// ///
+// /// # Returns
+// /// * `Result<String, Box<dyn Error>>` - Returns the path to the exported key file or an error
+// pub fn export_public_gpg_key_converts_to_abs_path(
+//     config_path: &Path,
+//     output_directory: &Path,
+// ) -> Result<String, Box<dyn Error>> {
+//     // Read the GPG key ID from the configuration
+//     let key_id = read_field_from_toml(config_path, "uma_local_owner_user")?;
+
+//     // Create the output directory if it doesn't exist
+//     fs::create_dir_all(output_directory)?;
+
+//     // Generate the output file path
+//     let output_file = output_directory.join("key.asc");
+
+//     // Construct the GPG command
+//     let output = Command::new("gpg")
+//         .arg("--armor")
+//         .arg("--export")
+//         .arg(&key_id)
+//         .output()?;
+
+//     // Check if the command was successful
+//     if !output.status.success() {
+//         let error_message = String::from_utf8_lossy(&output.stderr);
+//         return Err(format!("GPG key export failed: {}", error_message).into());
+//     }
+
+//     // Write the output to a file
+//     fs::write(&output_file, output.stdout)?;
+
+//     // Return the path to the exported key file
+//     Ok(output_file.to_string_lossy().into_owned())
+// }
+
+
+// use std::path::Path;
+// use std::io;

@@ -3120,7 +3120,7 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
 
         */
 
-        let node_readcopy_path_path = Path::new(&node_readcopy_path_string);
+        // let node_readcopy_path_path = Path::new(&node_readcopy_path_string);
 
         let absolute_addressbook_directory_pathbuf = match get_addressbook_directory_path() {
             Ok(path) => path,
@@ -8005,7 +8005,8 @@ fn write_formatted_messagepost_legend_to_tui() -> Result<(),Error> {
 /// ```
 fn write_formatted_navigation_legend_to_tui() -> Result<(),Error> {
     // File operations group
-        write_red_hotkey("q", "uit ")?;
+    write_red_hotkey("q", "uit ")?;
+    write_red_hotkey("home ", "")?;
 
     // // Mode operations group
     write_red_hotkey("b", "ack|" )?;
@@ -8015,7 +8016,7 @@ fn write_formatted_navigation_legend_to_tui() -> Result<(),Error> {
     // // Red only
     write_red_hotkey("m", "essage|")?;
 
-    write_red_hotkey("a", "dd node|")?;
+    write_red_hotkey("add", " node|")?;
     // write_red_hotkey("hex", " ")?;
 
     // // View operations group
@@ -8024,7 +8025,7 @@ fn write_formatted_navigation_legend_to_tui() -> Result<(),Error> {
 
     write_red_green_hotkey("pm", "v", " ")?;
 
-    write_red_hotkey("", " passive ")?;
+    write_red_hotkey("", "passive ")?;
 
     write_red_green_hotkey("", "tmux split", "")?;
 
@@ -20760,6 +20761,16 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
     debug_log!("IUA: team_channels_dir -> {:?}", team_channels_dir);
 
 
+    // invite/update
+    let outgoing_dir_result = make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path(
+        "invites_updates/outgoing"
+    );
+    debug_log!("IUA: outgoing_dir_result outgoing -> {:?}", outgoing_dir_result);
+    let incoming_dir_result = make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path(
+        "invites_updates/incoming"
+    );
+    debug_log!("IUA: incoming_dir_result outgoing -> {:?}", incoming_dir_result);
+
     // Get the UME temp directory path with error handling
     let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
         .map_err(|io_err| format!(
@@ -21332,100 +21343,8 @@ pub fn export_public_gpg_key_converts_to_abs_path(
     Ok(result_path)
 }
 
-// /// Exports the user's public GPG key to a specified location for sharing
-// ///
-// /// # Arguments
-// /// * `config_path` - Path to the uma.toml configuration file
-// /// * `output_directory` - Directory where the exported key should be saved
-// ///
-// /// # Returns
-// /// * `Result<String, ThisProjectError>` - Returns the path to the exported key file or an error
-// pub fn export_public_gpg_key_converts_to_abs_path(
-//     config_path: &Path,
-//     output_directory: &Path,
-// ) -> Result<String, ThisProjectError> {
-//     // Convert Path to &str for read_field_from_toml
-//     let config_path_str = config_path.to_str()
-//         .ok_or_else(|| ThisProjectError::InvalidInput("Invalid path".to_string()))?;
-
-//     // Read the GPG key ID from the configuration
-//     let key_id = read_field_from_toml(config_path_str, "uma_local_owner_user");
-
-//     // Create the output directory if it doesn't exist
-//     fs::create_dir_all(output_directory)
-//         .map_err(|e| ThisProjectError::IoError(e))?;
-
-//     // Generate the output file path
-//     let output_file = output_directory.join("key.asc");
-
-//     // Construct the GPG command
-//     let output = Command::new("gpg")
-//         .arg("--armor")
-//         .arg("--export")
-//         .arg(&key_id)
-//         .output()
-//         .map_err(|e| ThisProjectError::IoError(e))?;
-
-//     // Check if the command was successful
-//     if !output.status.success() {
-//         let error_message = String::from_utf8_lossy(&output.stderr);
-//         return Err(ThisProjectError::GpgError(error_message.to_string()));
-//     }
-
-//     // Write the output to a file
-//     fs::write(&output_file, output.stdout)
-//         .map_err(|e| ThisProjectError::IoError(e))?;
-
-//     // Return the path to the exported key file
-//     Ok(output_file.to_string_lossy().into_owned())
-// }
-// /// Exports the user's public GPG key to a specified location for sharing
-// ///
-// /// # Arguments
-// /// * `config_path` - Path to the uma.toml configuration file
-// /// * `output_directory` - Directory where the exported key should be saved
-// ///
-// /// # Returns
-// /// * `Result<String, Box<dyn Error>>` - Returns the path to the exported key file or an error
-// pub fn export_public_gpg_key_converts_to_abs_path(
-//     config_path: &Path,
-//     output_directory: &Path,
-// ) -> Result<String, Box<dyn Error>> {
-//     // Read the GPG key ID from the configuration
-//     let key_id = read_field_from_toml(config_path, "uma_local_owner_user")?;
-
-//     // Create the output directory if it doesn't exist
-//     fs::create_dir_all(output_directory)?;
-
-//     // Generate the output file path
-//     let output_file = output_directory.join("key.asc");
-
-//     // Construct the GPG command
-//     let output = Command::new("gpg")
-//         .arg("--armor")
-//         .arg("--export")
-//         .arg(&key_id)
-//         .output()?;
-
-//     // Check if the command was successful
-//     if !output.status.success() {
-//         let error_message = String::from_utf8_lossy(&output.stderr);
-//         return Err(format!("GPG key export failed: {}", error_message).into());
-//     }
-
-//     // Write the output to a file
-//     fs::write(&output_file, output.stdout)?;
-
-//     // Return the path to the exported key file
-//     Ok(output_file.to_string_lossy().into_owned())
-// }
-
-
-// use std::path::Path;
-// use std::io;
-
-
-// KEEP this for later
+/*
+// KEEP this for later !!!!
 /// Process address book sharing for a specific recipient
 ///
 /// # Arguments
@@ -21491,6 +21410,8 @@ fn generic_share_address_book(recipient_name: &str) -> Result<(), GpgError> {
 
     Ok(())
 }
+// KEEP this for later !!!!
+*/
 
 /// Share a team channel with an existing remote collaborator
 ///
@@ -21695,11 +21616,7 @@ fn share_team_channel_with_existing_collaborator_converts_to_abs(
         ))
     })?;
 
-    let local_owner_addressbookreadcopy_path = Path::new(&local_owner_addressbook_readcopy_path_string);
-
-
     // ======== STEP 4 Read local owner's GPG key ID  ========
-
     // Read local owner's GPG key ID from their address book
     let local_owner_gpg_key_id = read_singleline_string_from_clearsigntoml(
         &local_owner_addressbook_readcopy_path_string, // &str
@@ -21749,9 +21666,6 @@ fn share_team_channel_with_existing_collaborator_converts_to_abs(
     // remove temp file
     cleanup_collaborator_temp_file(&remote_collaborator_addressbook_readcopy_path_string);
     */
-
-    let remote_collaborator_addressbookreadcopy_path = Path::new(&remote_collaborator_addressbook_readcopy_path_string);
-
     // TODO: remove temp files upon any error
 
     // Read remote collaborator's public GPG key from their address book
@@ -21959,11 +21873,6 @@ fn share_lou_address_book_with_existingcollaborator(recipient_name: &str) -> Res
 
     debug_log!("SLABE Successfully read local_owner_user_name: {}", &local_owner_user_name);
 
-    // let local_owner_user_name = read_single_line_string_field_from_toml(
-    //     absolute_uma_toml_path.to_str().ok_or_else(|| GpgError::PathError("Unable to convert UMA TOML path to string".to_string()))?,
-    //     "local_owner_user"
-    // ).map_err(|e| GpgError::ValidationError(format!("Failed to read local owner username: {}", e)))?;
-
     println!("Local owner username (whose address book we are sharing): {}", local_owner_user_name);
     debug_log!("SLABE local_owner_user_name {}", &local_owner_user_name);
 
@@ -22011,31 +21920,6 @@ fn share_lou_address_book_with_existingcollaborator(recipient_name: &str) -> Res
     })?;
 
     let addressbookreadcopy_path = Path::new(&addressbook_readcopy_path_string);
-
-    // // Path to the LOCAL OWNER USER'S address book file (absolute path)
-    // let local_owner_address_book_filename = format!("{}__collaborator.toml", local_owner_user_name);
-    // let absolute_local_owner_address_book_path = absolute_collab_dir.join(&local_owner_address_book_filename);
-
-    // debug_log!("SLABE absolute_local_owner_address_book_path {}", &absolute_local_owner_address_book_path.display());
-
-    // // Verify the LOCAL OWNER USER'S address book file exists
-    // if !absolute_local_owner_address_book_path.exists() {
-    //     return Err(GpgError::PathError(format!(
-    //         "SLABE LOCAL OWNER USER'S address book file not found at: {}",
-    //         absolute_local_owner_address_book_path.display()
-    //     )));
-    // } else {
-    //     debug_log("SLABE LOCAL OWNER USER'S address book file exists");
-    // }
-
-    // // Get LOCAL OWNER USER'S GPG key ID - REFACTORED FOR DEBUGGING
-    // // First convert the absolute path to a string
-    // let absolute_local_owner_address_book_path_str = absolute_local_owner_address_book_path
-    //     .to_str()
-    //     .ok_or_else(|| GpgError::PathError(
-    //         format!("Unable to convert local owner address book path to string: {}",
-    //                 absolute_local_owner_address_book_path.display())
-    //     ))?;
 
     // Log the exact path string being used for TOML reading
     debug_log!("SLABE Attempting to read GPG key ID from file at path: {}", addressbook_readcopy_path_string);
@@ -22099,8 +21983,6 @@ fn share_lou_address_book_with_existingcollaborator(recipient_name: &str) -> Res
         "LOCAL OWNER USER'S address book file to be shared: {}",
         addressbook_readcopy_path_string,
         );
-
-
 
     // Use our existing function to clearsign and encrypt the LOCAL OWNER USER'S address book
     // We are:
@@ -22795,44 +22677,97 @@ fn share_lou_addressbook_with_incomingkey() -> Result<(), GpgError> {
     debug_log!("SLABIK Successfully read local_owner_user_name: {}", &local_owner_user_name);
     println!("Local owner username (whose address book we are sharing): {}", local_owner_user_name);
 
-    // Get absolute path to the collaborator files directory
-    let relative_collab_dir = COLLABORATOR_ADDRESSBOOK_PATH_STR;
-    let absolute_collab_dir = make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_collab_dir)
-        .map_err(|e| GpgError::PathError(format!("SLABIK Failed to locate collaborator files directory: {}", e)))?;
+    let absolute_addressbook_directory_pathbuf = match get_addressbook_directory_path() {
+        Ok(path) => path,
+        Err(e) => {
+            debug_log!("CAPITCCV Failed to get absolute path: {}", e);
 
-    debug_log!("SLABIK Collaborator directory absolute path: {}", absolute_collab_dir.display());
+            return Err(GpgError::PathError(
+                "SLABIK absolute_addressbook_directory_pathbuf not found".to_string()));
+        }
+    };
 
-    // Path to the LOCAL OWNER USER'S address book file (absolute path)
-    let local_owner_address_book_filename = format!("{}__collaborator.toml", local_owner_user_name);
-    let absolute_local_owner_address_book_path = absolute_collab_dir.join(&local_owner_address_book_filename);
+    // Check for both file types
+    let toml_path = absolute_addressbook_directory_pathbuf
+        .join(format!("{}__collaborator.toml", local_owner_user_name));
+    let gpgtoml_path = absolute_addressbook_directory_pathbuf
+        .join(format!("{}__collaborator.gpgtoml", local_owner_user_name));
 
-    debug_log!("SLABIK Absolute local owner address book path: {}", absolute_local_owner_address_book_path.display());
-
-    // Verify the LOCAL OWNER USER'S address book file exists
-    if !absolute_local_owner_address_book_path.exists() {
+    // Determine which file exists and use that path
+    let raw_addressbook_path = if toml_path.exists() {
+        // Prefer plain .toml if both exist
+        toml_path
+    } else if gpgtoml_path.exists() {
+        gpgtoml_path
+    } else {
+        // Neither exists, skip this directory
+        #[cfg(debug_assertions)]
+        debug_log!(
+            "Skipping directory (no node.toml or node.gpgtoml): {:?}",
+            &absolute_addressbook_directory_pathbuf
+        );
         return Err(GpgError::PathError(format!(
-            "LOCAL OWNER USER'S address book file not found at: {}",
-            absolute_local_owner_address_book_path.display()
+            "CAPITCCV Err Invalid path encoding for addressbook file: {}",
+            absolute_addressbook_directory_pathbuf.display()
         )));
-    }
+    };
 
-    debug_log!("SLABIK LOCAL OWNER USER'S address book file exists: {}", absolute_local_owner_address_book_path.exists());
+    // Get GPG fingerprint (could move this outside the loop if same for all)
+    let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+        Ok(fingerprint) => fingerprint,
+        Err(e) => {
+            #[cfg(debug_assertions)]
+            debug_log!(
+                "SLABIK error Failed to read GPG fingerprint for: {} (skipping)",
+                e
+            );
+            // continue; // Skip this directory, continue with next
+            return Err(GpgError::PathError(
+                "SLABIK error gpg_full_fingerprint_key_id_string".to_string()));
+        }
+    };
 
-    // Get LOCAL OWNER USER'S GPG key ID - REFACTORED FOR DEBUGGING
-    // First convert the absolute path to a string
-    let absolute_local_owner_address_book_path_str = absolute_local_owner_address_book_path
-        .to_str()
-        .ok_or_else(|| GpgError::PathError(
-            format!("SLABIK Unable to convert local owner address book path to string: {}",
-                    absolute_local_owner_address_book_path.display())
-        ))?;
+    // Get temp directory path (could move this outside the loop if same for all)
+    let base_uma_temp_directory_path = match get_base_uma_temp_directory_path() {
+        Ok(path) => path,
+        Err(e) => {
+            #[cfg(debug_assertions)]
+            debug_log!(
+                "SLABIK error Failed to get temp directory path: {} (skipping)",
+                e
+            );
+            return Err(GpgError::PathError(
+                "SLABIK error get_base_uma_temp_directory_path".to_string()));
+        }
+    };
+
+    // Get readable copy
+    let specific_readcopy_addressbook_path = match get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
+        &raw_addressbook_path,
+        &gpg_full_fingerprint_key_id_string,
+        &base_uma_temp_directory_path,
+    ) {
+        Ok(path) => path,
+        Err(e) => {
+            #[cfg(debug_assertions)]
+            debug_log!(
+                "CAPITCCV Failed to get read copy for {:?}: {:?} (skipping)",
+                raw_addressbook_path,
+                e
+            );
+            return Err(GpgError::PathError(
+                "SLABIK error get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml".to_string()));
+        }
+    };
+
+    debug_log!("SLABIK Absolute local owner address book path: {}", specific_readcopy_addressbook_path);
 
     // Log the exact path string being used for TOML reading
-    debug_log!("SLABIK Attempting to read GPG key ID from file at path: {}", absolute_local_owner_address_book_path_str);
+    debug_log!("SLABIK Attempting to read GPG key ID from file at path: {}", specific_readcopy_addressbook_path);
 
     // Now attempt to read the GPG key ID field
     let owner_gpg_key_id = read_singleline_string_from_clearsigntoml(
-        absolute_local_owner_address_book_path_str,
+        &specific_readcopy_addressbook_path,
         "gpg_publickey_id"
     ).map_err(|e| {
         debug_log!("ERROR: SLABIK Failed to read GPG key ID with field name 'gpg_publickey_id'");
@@ -22856,7 +22791,10 @@ fn share_lou_addressbook_with_incomingkey() -> Result<(), GpgError> {
     println!("\nProcessing with:");
     println!("LOCAL OWNER USER'S signing key ID: {}", owner_gpg_key_id);
     println!("Recipient's public key file: {}", absolute_recipient_public_key_path.display());
-    println!("LOCAL OWNER USER'S address book file to be shared: {}", absolute_local_owner_address_book_path.display());
+    println!("LOCAL OWNER USER'S address book file to be shared: {}", specific_readcopy_addressbook_path);
+
+    let path_addressbook_path = Path::new(&specific_readcopy_addressbook_path);
+
 
     // Use our existing function to clearsign and encrypt the LOCAL OWNER USER'S address book
     // We are:
@@ -22864,7 +22802,7 @@ fn share_lou_addressbook_with_incomingkey() -> Result<(), GpgError> {
     // 2. Signing it with the LOCAL OWNER USER'S private key (via their key ID)
     // 3. Encrypting it with the recipient's public key from the incoming directory
     clearsign_and_encrypt_file_for_recipient(
-        &absolute_local_owner_address_book_path,   // THE LOCAL OWNER USER'S ADDRESS BOOK (absolute path)
+        &path_addressbook_path,   // THE LOCAL OWNER USER'S ADDRESS BOOK (absolute path)
         &owner_gpg_key_id,                        // LOCAL OWNER USER'S KEY FOR SIGNING
         &absolute_recipient_public_key_path       // RECIPIENT'S PUBLIC KEY FOR ENCRYPTION (absolute path)
     )?;
@@ -23849,6 +23787,28 @@ pub fn invite_wizard() -> Result<(), GpgError> {
                 }
             };
 
+
+            // Ensure the project graph data directory exists relative to the executable
+            let incoming_dir_result = match make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path(
+                "invites_updates/incoming"
+            ) {
+                Ok(directory_path) => {
+                    debug_log!("IUA: incoming_dir_result outgoing -> {}", directory_path.to_string_lossy());
+
+                    directory_path
+                }
+                Err(io_error) => {
+                    let error_msg = format!(
+                        "IWiz Failed to ensure team_channels_dir exists: {}",
+                        io_error
+                    );
+                    debug_log!("IWiz ERROR: {}", error_msg);
+                    eprintln!("IWiz ERROR: {}", error_msg);
+                    return Err(GpgError::ValidationError("No signing key ID provided".to_string()));
+                }
+            };
+
+
             match subchoice {
                 1 => {
                     println!(" --- to existing remote collaborator --- ");
@@ -23891,12 +23851,34 @@ pub fn invite_wizard() -> Result<(), GpgError> {
                     share_lou_address_book_with_existingcollaborator(username_of_remote_collaborator.trim())?;
                     }
                 2 => {
+
+                    // show full path
+                    let demo_key_path = match make_input_path_name_abs_executabledirectoryrelative_nocheck(
+                        "invites_updates/incoming/key.asc"
+                    ) {
+                        Ok(directory_path) => {
+                            debug_log!("IUA: incoming_dir_result outgoing -> {}", directory_path.to_string_lossy());
+
+                            directory_path
+                        }
+                        Err(io_error) => {
+                            let error_msg = format!(
+                                "IWiz Failed to ensure team_channels_dir exists: {}",
+                                io_error
+                            );
+                            debug_log!("IWiz ERROR: {}", error_msg);
+                            eprintln!("IWiz ERROR: {}", error_msg);
+                            return Err(GpgError::ValidationError("No signing key ID provided".to_string()));
+                        }
+                    };
+
                     println!(" --- to new remote collaborator --- ");
                     println!("Please put the remote collaborator's gpg key.asc file");
                     println!(" in this path (in this directory) -> ");
                     println!(" ");
                     println!("```path ");
-                    println!("invites_updates/incoming/key.asc ");
+                    // println!("invites_updates/incoming/key.asc ");
+                    println!("{}", demo_key_path.to_string_lossy());
                     println!("``` ");
                     println!(" ");
                     println!("Then, press Enter when this is done.\n");
@@ -23915,10 +23897,18 @@ pub fn invite_wizard() -> Result<(), GpgError> {
                     */
 
                 3 => {
+
+                    // // get make real path
+                    // let incoming_dir_result = make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path(
+                    //     "invites_updates/incoming"
+                    // );
+                    // debug_log!("IUA: incoming_dir_result outgoing -> {:?}", incoming_dir_result);
+
+
                     println!(" --- FROM a remote collaborator, TO you --- ");
                     println!("Please put their FILENAME.gpgtoml file in the");
                     println!("```path");
-                    println!("invites_updates/incoming/ ");
+                    println!("{}", incoming_dir_result.to_string_lossy());
                     println!("```");
                     println!("directory (folder)");
                     println!("Press enter when this is done.");
