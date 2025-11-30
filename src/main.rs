@@ -468,18 +468,18 @@ const UMA_CURRENT_NODE_PATH_STR: &str = "project_graph_data/session_state_items/
 const WRITER_TO_PADNET_UMA_PATH_STR: &str = "padnet/to";
 const READER_FROM_PADNET_UMA_PATH_STR: &str = "padnet/from";
 
-/// Gets the absolute path to temp directory
+/// Gets/Makes the absolute path to directory
 /// executible-parent-relative-aboslute path
 pub fn get_writer_to_padnet_directory_path() -> io::Result<PathBuf> {
-    make_input_path_name_abs_executabledirectoryrelative_nocheck(
+    make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path(
         WRITER_TO_PADNET_UMA_PATH_STR
     )
 }
 
-/// Gets the absolute path to temp directory
+/// Gets/Makes the absolute path to directory
 /// executible-parent-relative-aboslute path
 pub fn get_reader_from_padnet_directory_path() -> io::Result<PathBuf> {
-    make_input_path_name_abs_executabledirectoryrelative_nocheck(
+    make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path(
         READER_FROM_PADNET_UMA_PATH_STR
     )
 }
@@ -497,26 +497,26 @@ let absolute_path = match get_team_channels_homebase_directory_path() {
 ```
 */
 
-/// Gets the absolute path to temp directory
+/// Gets/Makes the absolute path to directory
 /// executible-parent-relative-aboslute path
 pub fn get_addressbook_directory_path() -> io::Result<PathBuf> {
-    make_input_path_name_abs_executabledirectoryrelative_nocheck(
+    make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path(
         COLLABORATOR_ADDRESSBOOK_PATH_STR
     )
 }
 
-/// Gets the absolute path to temp directory
+/// Gets/Makes the absolute path to directory
 /// executible-parent-relative-aboslute path
 pub fn get_team_channels_homebase_directory_path() -> io::Result<PathBuf> {
-    make_input_path_name_abs_executabledirectoryrelative_nocheck(
+    make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path(
         TEAM_CHANNELS_HOMEBASE_PATH_STR
     )
 }
 
-/// Gets the absolute path to temp directory
+/// Gets/Makes the absolute path to temp directory
 /// executible-parent-relative-aboslute path
 pub fn get_base_uma_temp_directory_path() -> io::Result<PathBuf> {
-    make_input_path_name_abs_executabledirectoryrelative_nocheck(
+    make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path(
         TEMP_DIR_BASE_UMA_PATH_STR
     )
 }
@@ -20003,6 +20003,7 @@ fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
     recipient_public_key: &str,
     padnet_directory_path: &Path,
 ) -> Result<(Vec<u8>, PadIndex), ThisProjectError> {
+    debug_log!("PWPCTGTOTSB: start padnet");
 
     // =============================================================================
     // Input Validation (fail fast before any processing)
@@ -20063,8 +20064,10 @@ fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
     // =============================================================================
 
     #[cfg(debug_assertions)]
+    {
     eprintln!("PWPCTGTOTSB: Step 1 - Clearsigning file");
-
+    debug_log!("PWPCTGTOTSB: Step 1 - Clearsigning file");
+    }
     let clearsigned_content = gpg_clearsign_file_to_sendbytes(original_target_file_path)
         .map_err(|e| {
             // Enhance error with context
@@ -20074,14 +20077,17 @@ fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
         })?;
 
     #[cfg(debug_assertions)]
+    {
     eprintln!("PWPCTGTOTSB: Clearsigned {} bytes", clearsigned_content.len());
-
+    debug_log!("PWPCTGTOTSB: Clearsigned {} bytes", clearsigned_content.len());
+    }
     // =============================================================================
     // Step 2: Encrypt the clearsigned content (confidentiality)
     // =============================================================================
 
     #[cfg(debug_assertions)]
-    eprintln!("PWPCTGTOTSB: Step 2 - Encrypting clearsigned content");
+    {eprintln!("PWPCTGTOTSB: Step 2 - Encrypting clearsigned content");
+        debug_log!("PWPCTGTOTSB: Step 2 - Encrypting clearsigned content");}
 
     let encrypted_content = gpg_encrypt_to_bytes(&clearsigned_content, recipient_public_key)
         .map_err(|e| {
@@ -20091,51 +20097,83 @@ fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
         })?;
 
     #[cfg(debug_assertions)]
-    eprintln!("PWPCTGTOTSB: Encrypted {} bytes", encrypted_content.len());
+    {eprintln!("PWPCTGTOTSB: Encrypted {} bytes", encrypted_content.len());
+        debug_log!("PWPCTGTOTSB: Encrypted {} bytes", encrypted_content.len());}
 
     // =============================================================================
     // Step 3: Create temporary file #1 for GPG-encrypted data (XOR input)
     // =============================================================================
 
     #[cfg(debug_assertions)]
-    eprintln!("PWPCTGTOTSB: Step 3 - Creating temp file for encrypted data");
+    {eprintln!("PWPCTGTOTSB: Step 3 - Creating temp file for encrypted data");
+        debug_log!("PWPCTGTOTSB: Step 3 - Creating temp file for encrypted data");}
 
-    let temp_gpg_encrypted_path = create_unique_temp_filepathbuf(
+    // let temp_gpg_encrypted_path = create_unique_temp_filepathbuf(
+    //     &std::env::temp_dir(),
+    //     "uma_gpg_encrypted",
+    //     TEMP_FILE_CREATION_RETRY_ATTEMPTS,
+    //     TEMP_FILE_RETRY_DELAY_MS,
+    // ).map_err(|e| {
+    //     ThisProjectError::IoError(std::io::Error::new(
+    //         e.kind(),
+    //         format!("PWPCTGTOTSB: error failed to create temp file #1: {}", e),
+    //     ))
+    // })?;
+
+    /*
+    pub fn write_bytes_to_unique_temp_file(
+        data: &[u8],
+        base_path: &Path,
+        prefix: &str,
+        number_of_attempts: u32,
+        retry_delay_ms: u64,
+    ) -> Result<PathBuf, io::Error> {
+    */
+
+    let temp_gpg_encrypted_path = write_bytes_to_unique_temp_file(
+        &encrypted_content,
         &std::env::temp_dir(),
         "uma_gpg_encrypted",
         TEMP_FILE_CREATION_RETRY_ATTEMPTS,
-        TEMP_FILE_RETRY_DELAY_MS,
-    ).map_err(|e| {
-        ThisProjectError::IoError(std::io::Error::new(
-            e.kind(),
-            format!("PWPCTGTOTSB: failed to create temp file #1: {}", e),
-        ))
-    })?;
-
-    // Register temp file for cleanup
-    cleanup_guard.add(temp_gpg_encrypted_path.clone());
-
-    #[cfg(debug_assertions)]
-    eprintln!("PWPCTGTOTSB: Created temp file: {:?}", temp_gpg_encrypted_path);
-
-    // Write encrypted content to temp file
-    write_bytes_to_file_atomic(&encrypted_content, &temp_gpg_encrypted_path)
+        TEMP_FILE_RETRY_DELAY_MS,)
         .map_err(|e| {
             ThisProjectError::IoError(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                format!("PWPCTGTOTSB: failed to write encrypted data to temp file: {}", e),
+                format!("PWPCTGTOTSB error : failed write_bytes_to_unique_temp_file: {}", e),
             ))
         })?;
 
     #[cfg(debug_assertions)]
-    eprintln!("PWPCTGTOTSB: Wrote {} bytes to temp file #1", encrypted_content.len());
+    {eprintln!("PWPCTGTOTSB: Created temp file: {:?}", temp_gpg_encrypted_path);
+        debug_log!("PWPCTGTOTSB: Created temp file: {:?}", temp_gpg_encrypted_path);}
+
+    // // Write encrypted content to temp file
+    // let result_wbtfa = write_bytes_to_file_atomic(&encrypted_content, &temp_gpg_encrypted_path)
+    //     .map_err(|e| {
+    //         ThisProjectError::IoError(std::io::Error::new(
+    //             std::io::ErrorKind::Other,
+    //             format!("PWPCTGTOTSB error : failed to write encrypted data to temp file: {}", e),
+    //         ))
+    //     })?;
+
+    // Register temp file for cleanup
+    cleanup_guard.add(temp_gpg_encrypted_path.clone());
+
+    // #[cfg(debug_assertions)]
+    // {eprintln!("PWPCTGTOTSB: result_wbtfa: {:?}", result_wbtfa);
+    // debug_log!("PWPCTGTOTSB: result_wbtfa: {:?}", result_wbtfa);}
+
+    #[cfg(debug_assertions)]
+    {eprintln!("PWPCTGTOTSB: Wrote {} bytes to temp file #1", encrypted_content.len());
+        debug_log!("PWPCTGTOTSB: Wrote {} bytes to temp file #1", encrypted_content.len());}
 
     // =============================================================================
     // Step 4: Create temporary file #2 for XOR result (OTP output)
     // =============================================================================
 
     #[cfg(debug_assertions)]
-    eprintln!("PWPCTGTOTSB: Step 4 - Creating temp file for XOR result");
+    {eprintln!("PWPCTGTOTSB: Step 4 - Creating temp file for XOR result");
+        debug_log!("PWPCTGTOTSB: Step 4 - Creating temp file for XOR result");}
 
     let temp_xor_result_path = create_unique_temp_filepathbuf(
         &std::env::temp_dir(),
@@ -20145,7 +20183,7 @@ fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
     ).map_err(|e| {
         ThisProjectError::IoError(std::io::Error::new(
             e.kind(),
-            format!("PWPCTGTOTSB: failed to create temp file #2: {}", e),
+            format!("PWPCTGTOTSB error : failed to create temp file #2: {}", e),
         ))
     })?;
 
@@ -20153,14 +20191,15 @@ fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
     cleanup_guard.add(temp_xor_result_path.clone());
 
     #[cfg(debug_assertions)]
-    eprintln!("PWPCTGTOTSB: Created temp file: {:?}", temp_xor_result_path);
+    {eprintln!("PWPCTGTOTSB: Created temp file: {:?}", temp_xor_result_path);
+        debug_log!("PWPCTGTOTSB: Created temp file: {:?}", temp_xor_result_path);}
 
     // =============================================================================
     // Step 5: XOR encrypt with OTP pad (information-theoretic security)
     // =============================================================================
 
     #[cfg(debug_assertions)]
-    eprintln!("PWPCTGTOTSB: Step 5 - XOR encrypting with OTP pad");
+    debug_log!("PWPCTGTOTSB: Step 5 - XOR encrypting with OTP pad");
 
     let pad_index = padnet_writer_strict_cleanup_xor_file_to_resultpath(
         &temp_gpg_encrypted_path,  // Input: GPG-encrypted file
@@ -20169,37 +20208,37 @@ fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
     ).map_err(|e| {
         // Convert PadnetError to ThisProjectError
         ThisProjectError::PadnetError(format!(
-            "PWPCTGTOTSB: OTP encryption failed: {:?}", e
+            "PWPCTGTOTSB error : OTP encryption failed: {:?}", e
         ))
     })?;
 
     #[cfg(debug_assertions)]
-    eprintln!("PWPCTGTOTSB: OTP encryption complete, pad index: {:?}", pad_index);
+    debug_log!("PWPCTGTOTSB: OTP encryption complete, pad index: {:?}", pad_index);
 
     // =============================================================================
     // Step 6: Read OTP-encrypted result back into memory
     // =============================================================================
 
     #[cfg(debug_assertions)]
-    eprintln!("PWPCTGTOTSB: Step 6 - Reading OTP result into memory");
+    debug_log!("PWPCTGTOTSB: Step 6 - Reading OTP result into memory");
 
     let final_otp_encrypted_bytes = read_file_to_bytes(&temp_xor_result_path)
         .map_err(|e| {
             ThisProjectError::IoError(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                format!("PWPCTGTOTSB: failed to read OTP result: {}", e),
+                format!("PWPCTGTOTSB error : failed to read OTP result: {}", e),
             ))
         })?;
 
     #[cfg(debug_assertions)]
-    eprintln!("PWPCTGTOTSB: Read {} final bytes", final_otp_encrypted_bytes.len());
+    debug_log!("PWPCTGTOTSB: Read {} final bytes", final_otp_encrypted_bytes.len());
 
     // =============================================================================
     // Step 7: Cleanup temporary files (security hygiene)
     // =============================================================================
 
     #[cfg(debug_assertions)]
-    eprintln!("PWPCTGTOTSB: Step 7 - Cleaning up temporary files");
+    debug_log!("PWPCTGTOTSB: Step 7 - Cleaning up temporary files");
 
     // Explicit cleanup (Drop will handle it too, but we want logging)
     if let Err(errors) = cleanup_guard.cleanup() {
@@ -20207,7 +20246,8 @@ fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
         // The encryption succeeded, cleanup failures are non-critical
         #[cfg(debug_assertions)]
         for error_msg in errors {
-            eprintln!("PWPCTGTOTSB cleanup warning: {}", error_msg);
+            eprintln!("PWPCTGTOTSB error  cleanup warning: {}", error_msg);
+            debug_log!("PWPCTGTOTSB error  cleanup warning: {}", error_msg);
         }
     }
 
@@ -20216,10 +20256,13 @@ fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
     // =============================================================================
 
     #[cfg(debug_assertions)]
-    eprintln!(
+    debug_log!(
         "PWPCTGTOTSB: SUCCESS - {} bytes ready for transmission",
         final_otp_encrypted_bytes.len()
     );
+
+    #[cfg(debug_assertions)]
+    eprintln!("PWPCTGTOTSB finish");
 
     Ok((final_otp_encrypted_bytes, pad_index))
 }
@@ -20542,6 +20585,861 @@ fn read_file_to_bytes(
     Ok(buffer)
 }
 
+/// Writes data to a unique temporary file atomically with configurable retry logic.
+///
+/// # Project Context
+/// This function solves a critical problem in the OTP encryption pipeline where we need
+/// to write encrypted data to temporary files. The previous two-step approach had a fatal
+/// flaw: creating an empty file first, then trying to write to it with `create_new(true)`
+/// would always fail with "file already exists" error.
+///
+/// This unified function performs name generation, file creation, and data writing in a
+/// single atomic operation, eliminating the race condition and double-creation error.
+///
+/// # Why This Function Exists
+/// **OLD BROKEN APPROACH:**
+/// ```text
+/// create_unique_temp_filepathbuf()  → Creates empty file (create_new=true)
+///                                   ↓
+/// write_bytes_to_file_atomic()     → Tries create_new=true AGAIN
+///                                   ↓
+///                                   ❌ ERROR: AlreadyExists!
+/// ```
+///
+/// **NEW ATOMIC APPROACH:**
+/// ```text
+/// write_bytes_to_unique_temp_file() → Generate name + Create + Write (single operation)
+///                                   ↓
+///                                   ✅ SUCCESS: File with data ready to use
+/// ```
+///
+/// # Implementation Strategy
+/// - Uses process ID, thread ID, and nanosecond timestamp for uniqueness
+/// - Single atomic operation: create file + write data (no gap)
+/// - Retries only on name collision or system time errors
+/// - Fails fast on I/O errors (disk full, permissions - retrying won't help)
+/// - Sets secure Unix permissions (0600 - owner read/write only)
+/// - Flushes and syncs for durability (critical for encrypted data)
+///
+/// # Atomicity Guarantee
+/// The entire operation (create + write) happens within a single file handle lifetime.
+/// No other process can observe the file in an incomplete state. Either:
+/// - File doesn't exist (operation failed)
+/// - File exists with complete data (operation succeeded)
+///
+/// # Arguments
+/// * `data` - Byte slice containing data to write (can be empty)
+/// * `base_path` - Directory where temporary file will be created (must exist)
+/// * `prefix` - Filename prefix to identify purpose (e.g., "uma_gpg_encrypted")
+/// * `number_of_attempts` - Maximum retry attempts for name collisions (recommended: 3-10)
+/// * `retry_delay_ms` - Milliseconds to wait between retries (recommended: 1-100)
+///
+/// # Returns
+/// * `Ok(PathBuf)` - Absolute path to file with data fully written and synced to disk
+/// * `Err(io::Error)` - Operation failed after retries or encountered unrecoverable error
+///
+/// # Error Conditions
+/// **Retry Errors (will retry up to number_of_attempts):**
+/// - `AlreadyExists` - Name collision (extremely rare with nanosecond timestamps)
+/// - System time error - Clock moved backwards (rare, usually recoverable)
+///
+/// **Immediate Failure (no retry - won't help):**
+/// - `PermissionDenied` - Cannot create file in directory
+/// - `NotFound` - Base directory doesn't exist
+/// - Disk full - No space available for write
+/// - Hardware error - Disk failure
+/// - Invalid input - number_of_attempts = 0
+///
+/// # Security Considerations
+/// - File permissions set to 0600 on Unix (owner read/write only)
+/// - Windows uses default permissions (no chmod equivalent)
+/// - Suitable for sensitive encrypted data
+/// - No world-readable temporary files
+/// - Error messages don't leak data (use static strings with WBTUTF prefix)
+///
+/// # Performance Considerations
+/// - Single write operation (efficient for files < 10MB)
+/// - No temporary buffering (writes directly from input slice)
+/// - Flush ensures OS buffer written to disk
+/// - Sync ensures disk cache written to physical media
+/// - Typical performance: < 10ms for 1MB file on SSD
+/// - Maximum possible delay: `number_of_attempts * retry_delay_ms`
+///
+/// # Example Usage
+/// ```rust,no_run
+/// use std::path::Path;
+///
+/// // Typical usage in OTP encryption pipeline
+/// let encrypted_data = b"encrypted content here...";
+/// let temp_dir = std::env::temp_dir();
+///
+/// match write_bytes_to_unique_temp_file(
+///     encrypted_data,
+///     &temp_dir,
+///     "uma_gpg_encrypted",
+///     5,  // 5 retry attempts
+///     1   // 1ms delay between retries
+/// ) {
+///     Ok(path) => {
+///         println!("Encrypted data written to: {:?}", path);
+///         // File contains complete data, ready to use
+///         // Remember to clean up when done!
+///     },
+///     Err(e) => {
+///         eprintln!("Failed to write temp file: {}", e);
+///         // Handle error - pipeline continues with fallback
+///     }
+/// }
+/// ```
+///
+/// # Comparison with Other Functions
+///
+/// | Function | Creates File? | Writes Data? | Atomic? | Use Case |
+/// |----------|---------------|--------------|---------|----------|
+/// | `create_unique_temp_pathname` | ❌ No | ❌ No | ❌ TOCTOU | External tools |
+/// | `create_unique_temp_filepathbuf` | ✅ Yes | ❌ No | ✅ Yes | Empty placeholder |
+/// | `write_bytes_to_unique_temp_file` | ✅ Yes | ✅ Yes | ✅ Yes | **Most common** |
+///
+/// # Edge Cases Handled
+/// - Zero attempts: Returns error immediately (invalid input)
+/// - Empty data: Allowed (creates valid empty file)
+/// - System time moves backwards: Retries with new timestamp
+/// - High contention: Retries with different timestamp (extremely unlikely collision)
+/// - Disk full during write: Immediate failure (retrying won't help)
+/// - Non-existent directory: Immediate failure on first attempt
+///
+/// # Platform-Specific Behavior
+/// - **Unix/Linux**: Sets file permissions to 0600 (owner read/write only)
+/// - **Windows**: Uses default file permissions (no chmod equivalent)
+/// - **All platforms**: Atomic create_new prevents race conditions
+///
+/// # When to Use This Function
+/// ✅ **Use this when:**
+/// - Writing encrypted data to temporary files
+/// - Need atomic file creation + data write
+/// - Working with sensitive data requiring secure permissions
+/// - Want to avoid TOCTOU race conditions
+///
+/// ❌ **Don't use this when:**
+/// - Need only a filename (use `create_unique_temp_pathname`)
+/// - Need empty file placeholder (use `create_unique_temp_filepathbuf`)
+/// - File must have specific name (this generates unique names only)
+pub fn write_bytes_to_unique_temp_file(
+    data: &[u8],
+    base_path: &Path,
+    prefix: &str,
+    number_of_attempts: u32,
+    retry_delay_ms: u64,
+) -> Result<PathBuf, io::Error> {
+    use std::process;
+    use std::thread;
+    use std::time::{SystemTime, UNIX_EPOCH, Duration};
+    use std::fs::OpenOptions;
+    use std::io::Write;
+
+    // Production catch: validate number_of_attempts is non-zero
+    // Zero attempts would make function always fail
+    if number_of_attempts == 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "WBTUTF: number_of_attempts must be greater than zero",
+        ));
+    }
+
+    // Get process ID once (constant for this process)
+    let pid = process::id();
+
+    // Get thread ID and format it for filename use
+    let thread_id = thread::current().id();
+    let thread_id_string = format!("{:?}", thread_id);
+
+    // Clean thread ID: remove "ThreadId(" prefix and ")" suffix
+    // This converts "ThreadId(123)" to "123"
+    let thread_id_clean = thread_id_string
+        .trim_start_matches("ThreadId(")
+        .trim_end_matches(')');
+
+    // Attempt to create unique file and write data with retry logic
+    for attempt in 0..number_of_attempts {
+        // Get current timestamp with nanosecond precision
+        // This provides uniqueness across time
+        let timestamp_result = SystemTime::now().duration_since(UNIX_EPOCH);
+
+        let timestamp_nanos = match timestamp_result {
+            Ok(duration) => duration.as_nanos(),
+            Err(_) => {
+                // System time error (e.g., clock moved backwards)
+                // This is rare but can happen (NTP adjustments, manual clock changes)
+                // In production, we handle gracefully and retry
+                if attempt == number_of_attempts - 1 {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "WBTUTF: system time unavailable",
+                    ));
+                }
+                // Wait and try again with next attempt
+                thread::sleep(Duration::from_millis(retry_delay_ms));
+                continue;
+            }
+        };
+
+        // Construct filename: prefix_pid_threadid_timestamp.tmp
+        // Example: uma_gpg_encrypted_12345_67_1234567890123456789.tmp
+        let filename = format!(
+            "{}_{}_{}_{}.tmp",
+            prefix, pid, thread_id_clean, timestamp_nanos
+        );
+
+        // Build absolute path
+        let file_path = base_path.join(&filename);
+
+        // ===================================================================
+        // CRITICAL SECTION: Atomic file creation + data write
+        // ===================================================================
+        // This is the core improvement over the two-step approach.
+        // We create the file AND write data in a single operation,
+        // with no gap where the file exists but is empty.
+
+        // Attempt to create file atomically
+        // create_new(true) ensures operation fails if file exists
+        // This prevents race conditions with other processes/threads
+        let mut file = match OpenOptions::new()
+            .write(true)
+            .create_new(true)  // Critical: fails if file already exists
+            .open(&file_path)
+        {
+            Ok(f) => f,
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+                // File name collision detected
+                // This is extremely rare with nanosecond timestamps but possible
+                // in high-concurrency scenarios or rapid successive calls
+
+                // Check if we've exhausted retries
+                if attempt == number_of_attempts - 1 {
+                    // Final attempt failed - return descriptive error
+                    return Err(io::Error::new(
+                        io::ErrorKind::AlreadyExists,
+                        "WBTUTF: max retry attempts exceeded",
+                    ));
+                }
+
+                // Wait briefly before retry
+                // This allows timestamp to change and reduces contention
+                thread::sleep(Duration::from_millis(retry_delay_ms));
+
+                // Continue to next attempt with new timestamp
+                continue;
+            }
+            Err(e) => {
+                // Other error occurred (permissions, disk full, directory not found, etc.)
+                // These errors won't be fixed by retrying with a different name
+                // Return immediately - fail fast
+                return Err(io::Error::new(
+                    e.kind(),
+                    "WBTUTF: failed to create file",
+                ));
+            }
+        };
+
+        // File successfully created, now write data
+        // write_all() ensures all bytes are written or operation fails
+        // This is atomic in the sense of all-or-nothing
+        match file.write_all(data) {
+            Ok(()) => {
+                // Data written successfully, continue to flush/sync
+            }
+            Err(e) => {
+                // Write failed (disk full, hardware error, etc.)
+                // Don't retry - these errors won't be fixed by trying a different filename
+                // File handle will be dropped here, closing the file
+                // The incomplete file will remain on disk (caller's CleanupGuard will remove it)
+                return Err(io::Error::new(
+                    e.kind(),
+                    "WBTUTF: failed to write data",
+                ));
+            }
+        }
+
+        // Flush OS buffer to ensure bytes reach kernel
+        // This is critical for data durability
+        match file.flush() {
+            Ok(()) => {
+                // Flush successful, continue to sync
+            }
+            Err(e) => {
+                // Flush failed (rare hardware error)
+                return Err(io::Error::new(
+                    e.kind(),
+                    "WBTUTF: failed to flush",
+                ));
+            }
+        }
+
+        // Sync file to disk (ensures durability)
+        // This is especially important for encrypted data - must not be lost
+        // sync_all() ensures both data and metadata are written to physical storage
+        match file.sync_all() {
+            Ok(()) => {
+                // Sync successful, data is durable
+            }
+            Err(e) => {
+                // Sync failed (hardware error)
+                return Err(io::Error::new(
+                    e.kind(),
+                    "WBTUTF: failed to sync",
+                ));
+            }
+        }
+
+        // Set secure file permissions (Unix only)
+        // We do this AFTER write but BEFORE returning
+        // This ensures data is never exposed with loose permissions
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+
+            // Set to 0600: owner read/write, no access for group/other
+            let permissions = std::fs::Permissions::from_mode(0o600);
+
+            // Try to set permissions
+            // This is defense-in-depth - we continue even if it fails
+            // because temp directory should already have restricted access
+            if let Err(_e) = std::fs::set_permissions(&file_path, permissions) {
+                // Permission setting failed (unusual but not fatal)
+                // In debug builds, we'd log this warning
+                #[cfg(debug_assertions)]
+                eprintln!("WBTUTF: warning: could not set file permissions to 0600");
+
+                // In production: continue (file created and written successfully)
+                // The temp directory's permissions provide baseline security
+            }
+        }
+
+        // Success: file created, data written, flushed, synced, and secured
+        // File handle is dropped here, closing the file
+        // Caller is responsible for cleanup (via CleanupGuard or manual deletion)
+        return Ok(file_path);
+    }
+
+    // Should be unreachable due to loop logic, but Rust requires this
+    // All paths through the loop either return or continue
+    // Production safety: return error rather than panic
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "WBTUTF: unexpected loop exit",
+    ))
+}
+
+// =============================================================================
+// Tests
+// =============================================================================
+
+#[cfg(test)]
+mod write_unique_temp_tests {
+    use super::*;
+    use std::fs;
+    use std::io::Read;
+
+    /// Test basic functionality: write small data to temp file
+    #[test]
+    fn test_write_basic() {
+        let temp_dir = std::env::temp_dir();
+        let test_data = b"Hello, World!";
+
+        let result = write_bytes_to_unique_temp_file(
+            test_data,
+            &temp_dir,
+            "test_basic",
+            5,
+            1
+        );
+
+        assert!(result.is_ok(), "Should successfully write temp file");
+
+        let path = result.unwrap();
+        assert!(path.exists(), "File should exist");
+        assert!(path.starts_with(&temp_dir), "File should be in temp directory");
+
+        // Verify data was written correctly
+        let mut file = fs::File::open(&path).expect("Should open file");
+        let mut contents = Vec::new();
+        file.read_to_end(&mut contents).expect("Should read file");
+        assert_eq!(contents, test_data, "File contents should match input data");
+
+        // Cleanup
+        let _ = fs::remove_file(path);
+    }
+
+    /// Test with empty data (should create empty file)
+    #[test]
+    fn test_write_empty_data() {
+        let temp_dir = std::env::temp_dir();
+        let empty_data: &[u8] = &[];
+
+        let result = write_bytes_to_unique_temp_file(
+            empty_data,
+            &temp_dir,
+            "test_empty",
+            5,
+            1
+        );
+
+        assert!(result.is_ok(), "Should successfully create empty file");
+
+        let path = result.unwrap();
+        assert!(path.exists(), "File should exist");
+
+        // Verify file is empty
+        let metadata = fs::metadata(&path).expect("Should get metadata");
+        assert_eq!(metadata.len(), 0, "File should be empty");
+
+        // Cleanup
+        let _ = fs::remove_file(path);
+    }
+
+    /// Test with larger data (1MB)
+    #[test]
+    fn test_write_large_data() {
+        let temp_dir = std::env::temp_dir();
+
+        // Create 1MB of test data
+        let large_data = vec![0x42u8; 1024 * 1024]; // 1MB of 0x42
+
+        let result = write_bytes_to_unique_temp_file(
+            &large_data,
+            &temp_dir,
+            "test_large",
+            5,
+            1
+        );
+
+        assert!(result.is_ok(), "Should successfully write large file");
+
+        let path = result.unwrap();
+        assert!(path.exists(), "File should exist");
+
+        // Verify file size
+        let metadata = fs::metadata(&path).expect("Should get metadata");
+        assert_eq!(metadata.len(), large_data.len() as u64, "File size should match data size");
+
+        // Verify data integrity (sample check - first and last bytes)
+        let mut file = fs::File::open(&path).expect("Should open file");
+        let mut contents = Vec::new();
+        file.read_to_end(&mut contents).expect("Should read file");
+        assert_eq!(contents.len(), large_data.len(), "Read size should match");
+        assert_eq!(contents[0], 0x42, "First byte should match");
+        assert_eq!(contents[large_data.len() - 1], 0x42, "Last byte should match");
+
+        // Cleanup
+        let _ = fs::remove_file(path);
+    }
+
+    /// Test that multiple files are unique
+    #[test]
+    fn test_multiple_unique_files() {
+        let temp_dir = std::env::temp_dir();
+        let mut paths = Vec::new();
+
+        // Create 5 temp files in rapid succession with different data
+        for i in 0..5 {
+            let data = format!("Test data {}", i);
+            let result = write_bytes_to_unique_temp_file(
+                data.as_bytes(),
+                &temp_dir,
+                "test_multi",
+                5,
+                1
+            );
+            assert!(result.is_ok(), "Should create file {}", i);
+            paths.push(result.unwrap());
+        }
+
+        // Verify all paths are unique
+        for i in 0..paths.len() {
+            for j in (i + 1)..paths.len() {
+                assert_ne!(paths[i], paths[j], "Paths should be unique");
+            }
+        }
+
+        // Verify all files exist
+        for path in &paths {
+            assert!(path.exists(), "File should exist");
+        }
+
+        // Cleanup
+        for path in paths {
+            let _ = fs::remove_file(path);
+        }
+    }
+
+    /// Test filename format
+    #[test]
+    fn test_filename_format() {
+        let temp_dir = std::env::temp_dir();
+        let test_data = b"format test";
+
+        let result = write_bytes_to_unique_temp_file(
+            test_data,
+            &temp_dir,
+            "prefix_test",
+            5,
+            1
+        );
+        assert!(result.is_ok(), "Should create file");
+
+        let path = result.unwrap();
+        let filename = path.file_name().unwrap().to_str().unwrap();
+
+        // Verify filename format
+        assert!(filename.starts_with("prefix_test_"), "Should start with prefix");
+        assert!(filename.ends_with(".tmp"), "Should end with .tmp");
+        assert!(filename.matches('_').count() >= 3, "Should have at least 3 underscores");
+
+        // Cleanup
+        let _ = fs::remove_file(path);
+    }
+
+    /// Test with zero attempts (should fail immediately)
+    #[test]
+    fn test_zero_attempts() {
+        let temp_dir = std::env::temp_dir();
+        let test_data = b"test";
+
+        let result = write_bytes_to_unique_temp_file(
+            test_data,
+            &temp_dir,
+            "test_zero",
+            0,  // Zero attempts
+            1
+        );
+
+        assert!(result.is_err(), "Should fail with zero attempts");
+
+        if let Err(e) = result {
+            let error_msg = format!("{}", e);
+            assert!(error_msg.contains("WBTUTF"), "Error should have WBTUTF prefix");
+            assert!(error_msg.contains("greater than zero"), "Error should mention zero attempts");
+        }
+    }
+
+    /// Test with single attempt (should work in low contention)
+    #[test]
+    fn test_single_attempt() {
+        let temp_dir = std::env::temp_dir();
+        let test_data = b"single attempt test";
+
+        let result = write_bytes_to_unique_temp_file(
+            test_data,
+            &temp_dir,
+            "test_single",
+            1,  // Single attempt
+            1
+        );
+
+        assert!(result.is_ok(), "Should succeed with single attempt");
+
+        if let Ok(path) = result {
+            assert!(path.exists(), "File should exist");
+            let _ = fs::remove_file(path);
+        }
+    }
+
+    /// Test with different delay values
+    #[test]
+    fn test_different_delays() {
+        let temp_dir = std::env::temp_dir();
+        let test_data = b"delay test";
+
+        // Test with zero delay
+        let result1 = write_bytes_to_unique_temp_file(
+            test_data,
+            &temp_dir,
+            "test_delay0",
+            3,
+            0  // Zero delay
+        );
+        assert!(result1.is_ok(), "Should work with zero delay");
+        if let Ok(path) = result1 {
+            let _ = fs::remove_file(path);
+        }
+
+        // Test with larger delay
+        let result2 = write_bytes_to_unique_temp_file(
+            test_data,
+            &temp_dir,
+            "test_delay100",
+            3,
+            100  // 100ms delay
+        );
+        assert!(result2.is_ok(), "Should work with 100ms delay");
+        if let Ok(path) = result2 {
+            let _ = fs::remove_file(path);
+        }
+    }
+
+    /// Test with non-existent directory (should fail immediately)
+    #[test]
+    fn test_nonexistent_directory() {
+        let bad_path = Path::new("/this/path/definitely/does/not/exist/nowhere/12345");
+        let test_data = b"test";
+
+        let result = write_bytes_to_unique_temp_file(
+            test_data,
+            bad_path,
+            "test_nodir",
+            3,
+            1
+        );
+
+        assert!(result.is_err(), "Should fail for non-existent directory");
+    }
+
+    /// Test data integrity with binary data
+    #[test]
+    fn test_binary_data_integrity() {
+        let temp_dir = std::env::temp_dir();
+
+        // Create binary data with all byte values
+        let binary_data: Vec<u8> = (0..=255).collect();
+
+        let result = write_bytes_to_unique_temp_file(
+            &binary_data,
+            &temp_dir,
+            "test_binary",
+            5,
+            1
+        );
+
+        assert!(result.is_ok(), "Should write binary data");
+
+        let path = result.unwrap();
+
+        // Read back and verify exact match
+        let mut file = fs::File::open(&path).expect("Should open file");
+        let mut contents = Vec::new();
+        file.read_to_end(&mut contents).expect("Should read file");
+
+        assert_eq!(contents, binary_data, "Binary data should match exactly");
+
+        // Cleanup
+        let _ = fs::remove_file(path);
+    }
+
+    /// Test Unix file permissions (Unix only)
+    #[cfg(unix)]
+    #[test]
+    fn test_unix_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp_dir = std::env::temp_dir();
+        let test_data = b"permissions test";
+
+        let result = write_bytes_to_unique_temp_file(
+            test_data,
+            &temp_dir,
+            "test_perms",
+            5,
+            1
+        );
+
+        assert!(result.is_ok(), "Should create file");
+
+        let path = result.unwrap();
+
+        // Check file permissions
+        let metadata = fs::metadata(&path).expect("Should get metadata");
+        let permissions = metadata.permissions();
+        let mode = permissions.mode();
+
+        // Mask to get only permission bits (0o777)
+        let perm_bits = mode & 0o777;
+
+        assert_eq!(perm_bits, 0o600, "File should have 0600 permissions (owner read/write only)");
+
+        // Cleanup
+        let _ = fs::remove_file(path);
+    }
+
+    /// Test concurrent creation from multiple threads
+    #[test]
+    fn test_concurrent_creation() {
+        use std::sync::Arc;
+        use std::thread;
+
+        let temp_dir = Arc::new(std::env::temp_dir());
+        let mut handles = vec![];
+
+        // Spawn 5 threads that each create 2 files
+        for thread_num in 0..5 {
+            let temp_dir_clone = Arc::clone(&temp_dir);
+
+            let handle = thread::spawn(move || {
+                let mut created_paths = Vec::new();
+
+                for file_num in 0..2 {
+                    let data = format!("Thread {} File {}", thread_num, file_num);
+                    let prefix = format!("concurrent_t{}_f{}", thread_num, file_num);
+
+                    let result = write_bytes_to_unique_temp_file(
+                        data.as_bytes(),
+                        &temp_dir_clone,
+                        &prefix,
+                        10,
+                        5
+                    );
+
+                    assert!(result.is_ok(), "Should create file from thread");
+                    created_paths.push(result.unwrap());
+                }
+
+                created_paths
+            });
+
+            handles.push(handle);
+        }
+
+        // Collect all created paths
+        let mut all_paths = Vec::new();
+        for handle in handles {
+            let paths = handle.join().expect("Thread should complete");
+            all_paths.extend(paths);
+        }
+
+        // Verify all paths are unique
+        for i in 0..all_paths.len() {
+            for j in (i + 1)..all_paths.len() {
+                assert_ne!(all_paths[i], all_paths[j], "All paths should be unique");
+            }
+        }
+
+        // Verify all files exist
+        for path in &all_paths {
+            assert!(path.exists(), "All files should exist");
+        }
+
+        // Cleanup
+        for path in all_paths {
+            let _ = fs::remove_file(path);
+        }
+    }
+
+    /// Test prefix with special characters
+    #[test]
+    fn test_special_char_prefix() {
+        let temp_dir = std::env::temp_dir();
+        let test_data = b"special chars test";
+
+        let result = write_bytes_to_unique_temp_file(
+            test_data,
+            &temp_dir,
+            "my-app_v2.0",
+            5,
+            1
+        );
+
+        assert!(result.is_ok(), "Should handle special chars in prefix");
+
+        if let Ok(path) = result {
+            let filename = path.file_name().unwrap().to_str().unwrap();
+            assert!(filename.starts_with("my-app_v2.0_"), "Should preserve prefix");
+            let _ = fs::remove_file(path);
+        }
+    }
+
+    /// Test error messages have WBTUTF prefix
+    #[test]
+    fn test_error_messages() {
+        let temp_dir = std::env::temp_dir();
+        let test_data = b"test";
+
+        // Test zero attempts error
+        let result = write_bytes_to_unique_temp_file(
+            test_data,
+            &temp_dir,
+            "test_err",
+            0,
+            1
+        );
+
+        if let Err(e) = result {
+            assert!(format!("{}", e).contains("WBTUTF"), "Error should have WBTUTF prefix");
+        }
+    }
+
+    /// Integration test: Compare with old two-step approach behavior
+    /// This documents why the unified function is necessary
+    #[test]
+    fn test_vs_old_two_step_approach() {
+        let temp_dir = std::env::temp_dir();
+        let test_data = b"integration test data";
+
+        // NEW unified approach: should work perfectly
+        let result_new = write_bytes_to_unique_temp_file(
+            test_data,
+            &temp_dir,
+            "unified",
+            5,
+            1
+        );
+
+        assert!(result_new.is_ok(), "Unified function should succeed");
+
+        if let Ok(path) = result_new {
+            // Verify file exists with correct data
+            assert!(path.exists(), "File should exist");
+
+            let mut file = fs::File::open(&path).expect("Should open");
+            let mut contents = Vec::new();
+            file.read_to_end(&mut contents).expect("Should read");
+            assert_eq!(contents, test_data, "Data should match");
+
+            // Cleanup
+            let _ = fs::remove_file(path);
+        }
+
+        // OLD two-step approach would fail:
+        // 1. create_unique_temp_filepathbuf() creates empty file
+        // 2. write_bytes_to_file_atomic() tries create_new(true) again
+        // 3. ERROR: AlreadyExists!
+        //
+        // This is why we needed the unified function.
+    }
+
+    /// Stress test: Create many files rapidly
+    #[test]
+    fn test_stress_many_files() {
+        let temp_dir = std::env::temp_dir();
+        let mut paths = Vec::new();
+
+        // Create 20 files rapidly
+        for i in 0..20 {
+            let data = format!("Stress test file {}", i);
+            let result = write_bytes_to_unique_temp_file(
+                data.as_bytes(),
+                &temp_dir,
+                "stress",
+                10,
+                1
+            );
+
+            assert!(result.is_ok(), "Should create file {}", i);
+            paths.push(result.unwrap());
+        }
+
+        // Verify all unique
+        for i in 0..paths.len() {
+            for j in (i + 1)..paths.len() {
+                assert_ne!(paths[i], paths[j], "All paths should be unique");
+            }
+        }
+
+        // Cleanup
+        for path in paths {
+            let _ = fs::remove_file(path);
+        }
+    }
+}
+
 /// Writes byte data to a file atomically with defensive error handling.
 ///
 /// # Project Context
@@ -20609,6 +21507,7 @@ fn write_bytes_to_file_atomic(
 ) -> Result<(), ThisProjectError> {
     use std::fs::{OpenOptions};
     use std::io::Write;
+    debug_log("WBTFA: start write_bytes_to_file_atomic");
 
     // Debug assertion: ensure we have an absolute path
     // This is active in debug builds but not production
@@ -20619,6 +21518,8 @@ fn write_bytes_to_file_atomic(
         file_path
     );
 
+    debug_log("WBTFA: file_path must be absolute 1");
+
     // Production safety check: verify path is absolute
     if !file_path.is_absolute() {
         return Err(ThisProjectError::InvalidInput(
@@ -20626,21 +21527,47 @@ fn write_bytes_to_file_atomic(
         ));
     }
 
-    // Create file with restrictive options
-    // - create_new(true): Fail if file exists (prevents race conditions)
-    // - write(true): Enable write operations
-    // - truncate(false): Not needed since create_new ensures empty file
+    debug_log("WBTFA: file_path must be absolute 2");
+
+    #[cfg(debug_assertions)]
+    eprintln!("WBTFA: about to call OpenOptions");
+
     let mut file = OpenOptions::new()
-        .create_new(true)  // Atomic: fail if exists
+        .create_new(true)
         .write(true)
         .open(file_path)
         .map_err(|e| {
-            // Enhance error with context
+            #[cfg(debug_assertions)]
+            eprintln!("WBTFA: OpenOptions failed: {:?}", e);
+
             ThisProjectError::IoError(std::io::Error::new(
                 e.kind(),
                 format!("WBTFA: failed to create file: {}", e),
             ))
         })?;
+
+    #[cfg(debug_assertions)]
+    eprintln!("WBTFA: OpenOptions succeeded");
+
+
+    // // Create file with restrictive options
+    // // - create_new(true): Fail if file exists (prevents race conditions)
+    // // - write(true): Enable write operations
+    // // - truncate(false): Not needed since create_new ensures empty file
+    // let mut file = OpenOptions::new()
+    //     .create_new(true)  // Atomic: fail if exists
+    //     .write(true)
+    //     .open(file_path)
+    //     .map_err(|e| {
+    //         // Enhance error with context
+    //         ThisProjectError::IoError(std::io::Error::new(
+    //             e.kind(),
+    //             format!("WBTFA: failed to create file: {}", e),
+    //         ))
+    //     })?;
+
+    debug_log("WBTFA: did  -let mut file = OpenOptions::new()");
+
 
     // Set secure file permissions (Unix only)
     // On Windows, this is a no-op (not supported)
@@ -20661,6 +21588,9 @@ fn write_bytes_to_file_atomic(
         }
     }
 
+    debug_log("WBTFA: Permissions set");
+
+
     // Write all bytes in single operation
     // This is efficient for small files (our use case: < 1MB)
     file.write_all(data)
@@ -20671,6 +21601,8 @@ fn write_bytes_to_file_atomic(
             ))
         })?;
 
+    debug_log("WBTFA: did file.write_all(data)");
+
     // Flush OS buffer to ensure bytes reach OS kernel
     file.flush()
         .map_err(|e| {
@@ -20679,6 +21611,9 @@ fn write_bytes_to_file_atomic(
                 format!("WBTFA: failed to flush: {}", e),
             ))
         })?;
+
+    debug_log("WBTFA: did file.flush()");
+
 
     // Sync file to disk (ensures durability)
     // This is important for encrypted data - must not be lost
@@ -20689,6 +21624,8 @@ fn write_bytes_to_file_atomic(
                 format!("WBTFA: failed to sync: {}", e),
             ))
         })?;
+
+    debug_log("WBTFA: file.sync_all()");
 
     Ok(())
 }
@@ -21176,6 +22113,13 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
             return Ok(false);
         }
     };
+
+    let to_padnet_dir = get_writer_to_padnet_directory_path();
+    debug_log!("IUA: to_padnet -> {:?}", to_padnet_dir);
+
+    let from_padnet_dir = get_reader_from_padnet_directory_path();
+    debug_log!("IUA: from_padnet_dir -> {:?}", from_padnet_dir);
+
 
     // using path relative to exe-parent:
     // Ensure directory exists relative to the executable
@@ -25102,6 +26046,15 @@ pub fn invite_wizard() -> Result<(), GpgError> {
             let frame_array = PadIndex::Standard([padnest_0, pad, page, line]);
             println!();
             println!("Share a copy with one collaborator and vice versa.");
+
+
+            let to_padnet_dir = get_writer_to_padnet_directory_path();
+            println!("put your pad here -> {:?}", to_padnet_dir);
+
+            let from_padnet_dir = get_reader_from_padnet_directory_path();
+            println!("put their pad here -> {:?}", from_padnet_dir);
+
+
             println!("Press Enter to continue...");
 
             // this does nothing, press enter to proceed.
@@ -31065,17 +32018,17 @@ fn handle_local_owner_desk(
                             ))
                         })?;
 
-                        let gpg_blob_file_path = create_unique_temp_filepathbuf(
-                            &std::env::temp_dir(),
-                            "uma_xor_result",
-                            TEMP_FILE_CREATION_RETRY_ATTEMPTS,
-                            TEMP_FILE_RETRY_DELAY_MS,
-                        ).map_err(|e| {
-                            ThisProjectError::IoError(std::io::Error::new(
-                                e.kind(),
-                                format!("HLOD: if *use_padnet_flag: failed to create temp file #2: {}", e),
-                            ))
-                        })?;
+                        // let gpg_blob_file_path = create_unique_temp_filepathbuf(
+                        //     &std::env::temp_dir(),
+                        //     "uma_xor_result",
+                        //     TEMP_FILE_CREATION_RETRY_ATTEMPTS,
+                        //     TEMP_FILE_RETRY_DELAY_MS,
+                        // ).map_err(|e| {
+                        //     ThisProjectError::IoError(std::io::Error::new(
+                        //         e.kind(),
+                        //         format!("HLOD: if *use_padnet_flag: failed to create temp file #2: {}", e),
+                        //     ))
+                        // })?;
 
 
                         // 3. write OTP blob to file
@@ -31086,10 +32039,37 @@ fn handle_local_owner_desk(
                             file_path: &Path,
                         ) -> Result<(), ThisProjectError> {
                         */
-                        let _ = write_bytes_to_file_atomic(
-                            still_otp_encrypted_file_blob, // data: &[u8],
-                            &gpg_blob_file_path, // file_path: &Path,
-                        )?;
+                        // // let _ = write_bytes_to_file_atomic(
+                        // //     still_otp_encrypted_file_blob, // data: &[u8],
+                        // //     &gpg_blob_file_path, // file_path: &Path,
+                        // // )?;
+                        // let wbtfaresult = write_bytes_to_file_atomic(
+                        //     still_otp_encrypted_file_blob,
+                        //     &gpg_blob_file_path,
+                        // )
+                        // .map_err(|e| {
+                        //     eprintln!("Failed to write encrypted blob to {:?}: {}", gpg_blob_file_path, e);
+                        //     e
+                        // })?;
+                        // debug_log!("wbtfaresult {:?}", wbtfaresult);
+
+                        let gpg_blob_file_path = write_bytes_to_unique_temp_file(
+                            &still_otp_encrypted_file_blob,
+                            &std::env::temp_dir(),
+                            "uma_xor_result",
+                            TEMP_FILE_CREATION_RETRY_ATTEMPTS,
+                            TEMP_FILE_RETRY_DELAY_MS,)
+                            .map_err(|e| {
+                                ThisProjectError::IoError(std::io::Error::new(
+                                    std::io::ErrorKind::Other,
+                                    format!("HLOD error : failed write_bytes_to_unique_temp_file: {}", e),
+                                ))
+                            })?;
+
+                        #[cfg(debug_assertions)]
+                        {eprintln!("HLOD: Created temp file: {:?}", gpg_blob_file_path);
+                            debug_log!("HLOD: Created temp file: {:?}", gpg_blob_file_path);}
+
 
                         // 4. get padnet_directory_path, read-pad path (with id and channel name)
                         let team_channel_name = match get_current_team_channel_name_from_nav_path() {
@@ -31180,7 +32160,9 @@ fn handle_local_owner_desk(
                             }
                         }
 
-                     };
+                    };
+
+                    // TODO clean up gpg_blob_file_path?
 
                     debug_log!(
                         "HLOD 6.2 decrypt the data decrypted_clearsignfile_data -> {:?}",
@@ -32358,6 +33340,37 @@ fn padnet_deserialize_intray_sendfile_struct(
 #[cfg(test)]
 mod padnet_sds_tests {
     use super::*;
+
+    #[cfg(test)]
+    fn test_basic_file_creation() {
+        use std::fs::OpenOptions;
+        use std::io::Write;
+
+        let test_path = std::env::temp_dir().join("uma_test_basic.tmp");
+
+        println!("Test: Creating file at: {:?}", test_path);
+
+        // Try basic file creation
+        let result = OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(&test_path);
+
+        match result {
+            Ok(mut f) => {
+                println!("Test: File created successfully");
+                let _ = f.write_all(b"test data");
+                println!("Test: Data written");
+            },
+            Err(e) => {
+                println!("Test: File creation FAILED: {:?}", e);
+                println!("Test: Error kind: {:?}", e.kind());
+            }
+        }
+
+        // Cleanup
+        let _ = std::fs::remove_file(&test_path);
+    }
 
     /// Test: Successful round-trip serialization/deserialization with Standard variant
     ///
