@@ -3404,11 +3404,13 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
             Err(e) => {
                 validation_failures += 1;
                 println!("Validation node_readcopy_path_string: {}", node_readcopy_path_string);
-                debug_log!("Validation node_readcopy_path_string: {}", node_readcopy_path_string);
+                debug_log!("CAPITCCV Validation node_readcopy_path_string: {}", node_readcopy_path_string);
 
                 eprintln!("  ✗ Validation FAILED cuz: {}", e.to_string());
-                debug_log!("Validation FAILED cuz: {}", e.to_string());
-                eprintln!("  Skipping this channel due to security validation failure");
+                debug_log!("CAPITCCV Validation FAILED cuz: {}", e.to_string());
+
+                debug_log!("CAPITCCV  Skipping this channel {} due to security validation failure", node_file_path.to_string_lossy());
+                eprintln!("  Skipping this channel {} due to security validation failure", node_file_path.to_string_lossy());
                 continue;
             }
         }
@@ -6324,6 +6326,8 @@ impl App {
                 // },
                 Ok(BrowserThreadMessage::Enter) => {
                     if user_input_buffer.is_empty() {
+                        debug_log("EMMPB toggle MessageViewMode::Insert/Refresh");
+
                         // Toggle between Refresh and Insert modes
                         let previous_mode = current_message_view_mode;
                         current_message_view_mode = match current_message_view_mode {
@@ -6402,6 +6406,9 @@ impl App {
                                 debug_log("EMMPB calling ANMFI");
                                 // Normal message send
                                 let input_string = user_input_buffer.to_string();
+
+                                debug_log!("EMMPB input_string->{}", input_string);
+
                                 user_input_buffer.clear();
                                 self.add_new_message_from_input(&input_string)?;
                                 self.load_messagepost_messages();
@@ -7120,6 +7127,9 @@ impl App {
                 return;
             }
 
+            debug_log!("LIM: first_message: {}", first_message);
+
+
             let local_owner_user = self.graph_navigation_instance_state.local_owner_user.clone();
             let this_file_name = format!("1__{}.toml", local_owner_user);
 
@@ -7249,12 +7259,15 @@ impl App {
                 .as_secs();
 
             if expires_at_value < now {
+                debug_log!("LMM ARCHIVING!! MessagePostFile: expires_at_value < now");
+
                 /*
                 fn move_expired_message_to_archive(
                 source_path: &str, file_name: &str)
                 -> Result<(), String> {
                  */
-                 let _ = move_expired_message_to_archive(&entry.path());                continue; // Skip further processing
+                 let _ = move_expired_message_to_archive(&entry.path());
+                 continue; // Skip further processing of this message
             }
 
 
@@ -14232,799 +14245,82 @@ Input → Validate → Comment/Answer?
                                       ↓
                                  Return "{n}. {text}"
 ```
- */
-
-
- #[cfg(test)]
- mod tests_structured_format_qa_interactive {
-     use super::*;
-
-     /// Test: Empty input handling
-     ///
-     /// Validates that empty input is rejected with appropriate error.
-     /// This test doesn't require stdin interaction.
-     #[test]
-     fn test_empty_input_rejected() {
-         let result = structured_format_qa_interactive(
-             "",
-             Some(vec![(1, 3)]),
-             None,
-             None,
-         );
-
-         assert!(result.is_err(), "Empty input should return error");
-         let err = result.unwrap_err();
-         assert!(
-             err.to_string().contains("SFQAI"),
-             "Error should have function prefix"
-         );
-     }
-
-     // requires key push
-     // /// Test: Function signature and return type
-     // ///
-     // /// Validates that the function compiles with correct types.
-     // /// Note: Cannot test interactive paths without stdin mocking framework.
-     // #[test]
-     // fn test_function_signature() {
-     //     // This test validates the function exists with correct signature
-     //     // Full interactive testing would require stdin mocking (out of scope for minimal tests)
-
-     //     let _result: io::Result<Option<String>> = structured_format_qa_interactive(
-     //         "test_input_for_signature_validation",
-     //         None,
-     //         None,
-     //         None,
-     //     );
-
-     //     // Function compiled and returned correct type - test passes
-     //     assert!(true, "Function signature is correct");
-     // }
-
-     /// Test: Valid initial integer parsing (partial path)
-     ///
-     /// Tests that valid integer input is parsed correctly by the validation step.
-     /// Note: Full flow requires interactive stdin which is not tested here.
-     #[test]
-     fn test_valid_integer_input_parsed() {
-         // This validates the initial validation logic path
-         // The actual Q&A prompts would require stdin mocking
-
-         let validation_result = validate_integer_in_ranges(
-             "2",
-             Some(vec![(1, 3)]),
-             None,
-         );
-
-         assert!(validation_result.is_ok(), "Validation should succeed");
-         match validation_result.unwrap() {
-             IntegerValidationResult::InIntegerOnlyRange(val) => {
-                 assert_eq!(val, 2, "Should parse to integer 2");
-             }
-             _ => panic!("Should be in integer-only range"),
-         }
-
-         // Note: Full structured_format_qa_interactive test would require
-         // stdin simulation for "comment or answer" prompt
-     }
- }
-
- // =================================================
- // Integration Test Note
- // =================================================
- //
- // Full testing of interactive Q&A flows requires:
- // 1. Stdin simulation/mocking (not available without external crates)
- // 2. Integration tests with scripted input
- // 3. Manual testing procedures
- //
- // For production validation, consider:
- // - Manual test scripts with predefined inputs
- // - Integration test suite with expect-style testing
- // - Refactoring to dependency injection for testability (if needed)
- //
- // Current minimal tests validate:
- // - Function compiles with correct signature
- // - Basic error handling (empty input)
- // - Initial validation logic path
- //
- // =================================================
-
-// /// Add New Message File
-// ///
-// /// # Purpose
-// ///
-// /// Creates and saves an instant message file in either clearsigned TOML or
-// /// GPG encrypted TOML format, depending on the message settings.
-// ///
-// /// # Project Context
-// ///
-// /// This function is the main entry point for creating instant messages in the
-// /// team collaboration system. It:
-// /// - Parses recipient information from message text
-// /// - Validates recipients against team channel access list
-// /// - Creates appropriately formatted message file (clearsigned or encrypted)
-// /// - Sets up sync flags for message distribution to recipients
-// ///
-// /// Messages can be in two formats:
-// /// 1. Clearsigned TOML (.toml): Signed but readable, for general team communication
-// /// 2. GPG Encrypted TOML (.gpgtoml): Signed and encrypted, for sensitive communication
-// ///
-// /// # Process Flow
-// ///
-// /// 1. Parse optional `{to:username}` syntax to restrict recipients
-// /// 2. Validate recipients are in team channel collaborator list
-// /// 3. Read message browser metadata from `0.toml`
-// /// 4. Create MessagePostFile struct with all message data
-// /// 5. Serialize message to TOML format
-// /// 6. Save as clearsigned or encrypted file based on settings
-// /// 7. Write sync flags for each recipient to trigger distribution
-// ///
-// /// # Arguments
-// ///
-// /// * `incoming_file_path` - Full path where message file should be saved (with extension)
-// /// * `owner` - Username of message author/sender
-// /// * `text` - Message text content (may include `{to:username}` for direct messages)
-// /// * `signature` - Optional cryptographic signature for message
-// /// * `graph_navigation_instance_state` - Current navigation state with collaborator info
-// ///
-// /// # Returns
-// ///
-// /// * `Ok(())` - Message file successfully created and sync flags written
-// /// * `Err(io::Error)` - If any step fails (file I/O, serialization, GPG operations)
-// ///
-// /// # Recipient Syntax
-// ///
-// /// Messages can include `{to:username}` to send to a specific recipient:
-// /// - `{to:alice}` - Send only to alice
-// /// - If recipient not in channel or is sender, falls back to default channel list
-// /// - Without `{to:}` syntax, sends to all channel collaborators
-// ///
-// /// # Error Handling
-// ///
-// /// Errors can occur during:
-// /// - Metadata file reading (0.toml)
-// /// - TOML serialization
-// /// - File saving (clearsign or encrypt operations)
-// /// - Sync flag writing
-// ///
-// /// # Security Notes
-// ///
-// /// - Clearsigned messages are authenticated but readable by anyone with file access
-// /// - Encrypted messages require recipient's GPG key to decrypt
-// /// - Message format determined by MessagePostFile.messagepost_gpgtoml flag
-// /// - All messages include sender authentication via GPG signature
-// ///
-// /// # Examples
-// ///
-// /// ```rust
-// /// // Send message to all channel collaborators (clearsigned)
-// /// add_new_messagepost_message(
-// ///     Path::new("sync_data/team/channel/messages/123.toml"),
-// ///     "alice",
-// ///     "Hello team!",
-// ///     None,
-// ///     &state
-// /// )?;
-// ///
-// /// // Send direct message to bob (format depends on MessagePostFile settings)
-// /// add_new_messagepost_message(
-// ///     Path::new("sync_data/team/channel/messages/124.toml"),
-// ///     "alice",
-// ///     "{to:bob} Private message",
-// ///     None,
-// ///     &state
-// /// )?;
-// /// ```
-// fn add_new_messagepost_message(
-//     incoming_file_path: &Path,
-//     owner: &str,
-//     text: &str,
-//     graph_navigation_instance_state: &GraphNavigationInstanceState,
-// ) -> Result<(), io::Error> {
-
-//     debug_log!("AIM: Starting add_new_messagepost_message");
-//     debug_log!("AIM: incoming_file_path: {:?}", incoming_file_path);
-//     debug_log!("AIM: owner: {}", owner);
-//     debug_log!("AIM: text length: {} bytes", text.len());
-
-//     // =================================================
-//     // Debug-Assert (debug builds only), Production-Catch-Handle (always)
-//     // =================================================
-
-//     // Debug-Assert: Owner must not be empty (debug builds only, NOT tests)
-//     #[cfg(all(debug_assertions, not(test)))]
-//     debug_assert!(
-//         !owner.is_empty(),
-//         "AIM: Owner must not be empty"
-//     );
-
-//     // Production-Catch: Handle empty owner
-//     if owner.is_empty() {
-//         return Err(io::Error::new(
-//             io::ErrorKind::InvalidInput,
-//             "AIM: Owner must not be empty"
-//         ));
-//     }
-
-//     // Debug-Assert: Text must not be empty (debug builds only, NOT tests)
-//     #[cfg(all(debug_assertions, not(test)))]
-//     debug_assert!(
-//         !text.is_empty(),
-//         "AIM: Message text must not be empty"
-//     );
-
-//     // Production-Catch: Handle empty text
-//     if text.is_empty() {
-//         return Err(io::Error::new(
-//             io::ErrorKind::InvalidInput,
-//             "AIM: Message text must not be empty"
-//         ));
-//     }
-
-//     // Debug-Assert: File path must have a filename (debug builds only, NOT tests)
-//     #[cfg(all(debug_assertions, not(test)))]
-//     debug_assert!(
-//         incoming_file_path.file_name().is_some(),
-//         "AIM: File path must have a filename"
-//     );
-
-//     // Production-Catch: Handle missing filename
-//     if incoming_file_path.file_name().is_none() {
-//         return Err(io::Error::new(
-//             io::ErrorKind::InvalidInput,
-//             "AIM: File path must have a filename"
-//         ));
-//     }
-
-//     // 1. Parse for {to:user} syntax to determine recipients
-//     debug_log!("AIM: Parsing recipient list");
-
-//     // note: this should come from 0.toml, not nav-state
-//     let mut recipients_list = graph_navigation_instance_state
-//         .current_node_teamchannel_collaborators_with_access
-//         .clone();
-
-//     if let Some(to_clause) = text.find("{to:") {
-//         if let Some(end_brace) = text[to_clause..].find('}') {
-//             let recipient_name = text[to_clause + 4..to_clause + end_brace].trim();
-
-//             debug_log!("AIM: Found clause for recipient: {}", recipient_name);
-
-//             recipients_list.clear(); // Clear default list: restrict to listed recipient only
-
-//             // 2. Check if recipient in team channel list and is not sender
-//             if graph_navigation_instance_state
-//                 .current_node_teamchannel_collaborators_with_access
-//                 .contains(&recipient_name.to_string())
-//                 && recipient_name != owner
-//             {
-//                 recipients_list.push(recipient_name.to_string()); // Add only the specified recipient
-//                 debug_log!("AIM: Recipient validated and added: {}", recipient_name);
-//             } else {
-//                 // Log if user not found
-//                 debug_log!(
-//                     "AIM: 'to:' clause but recipient '{}' not found in channel or is sender.",
-//                     recipient_name
-//                 );
-//             }
-//         }
-//     }
-
-//     debug_log!("AIM: Final recipients list: {:?}", recipients_list);
-
-//     // 3. Separate name and path - get parent directory
-//     debug_log!("AIM: Extracting parent directory");
-
-//     let parent_dir = incoming_file_path.parent()
-//         .ok_or_else(|| io::Error::new(
-//             io::ErrorKind::InvalidInput,
-//             "AIM: File path must have a parent directory"
-//         ))?;
-
-//     // Debug-Assert: Parent directory must not be empty path (debug builds only, NOT tests)
-//     #[cfg(all(debug_assertions, not(test)))]
-//     debug_assert!(
-//         parent_dir != Path::new(""),
-//         "AIM: Parent directory must not be empty path"
-//     );
-
-//     // Production-Catch: Handle empty parent directory
-//     if parent_dir == Path::new("") {
-//         return Err(io::Error::new(
-//             io::ErrorKind::InvalidInput,
-//             "AIM: error Parent directory is empty path"
-//         ));
-//     }
-
-//     debug_log!("AIM: Parent directory: {:?}", parent_dir);
-
-//     // 4. Read 0.toml to get this instant messenger browser room's settings
-//     debug_log!("AIM: Reading metadata from 0.toml");
-
-//     let metadata_path = parent_dir.join("0.toml");
-//     debug_log!("AIM: let metadata_path -> {:?}", metadata_path);
-
-//     let metadata_path_string = metadata_path.to_string_lossy();
-
-//     // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
-//     // let metadata: NodeMessagePostBrowserMetadata = toml::from_str(&metadata_string)
-//     //     .map_err(|e| io::Error::new(
-//     //         io::ErrorKind::Other,
-//     //         format!("AIM: TOML deserialization error: {}", e)
-//     //     ))?;
-
-//     // Step 4: Read the requested field from the verified file
-//     let node_name = read_single_line_string_field_from_toml(
-//         &metadata_path_string,
-//         "node_name",
-//     )
-//     .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("SCM: node_name read_single_line_string_field_from_toml error: {}", e)))?;
-
-//     // Step 4: Read the requested field from the verified file
-//     let filepath_in_node = read_single_line_string_field_from_toml(
-//         &metadata_path_string,
-//         "path_in_node",
-//     )
-//     .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("SCM: path_in_node read_single_line_string_field_from_toml error: {}", e)))?;
-
-//     debug_log!("AIM: Metadata loaded - node: {}, path: {}",
-//         node_name,
-//         filepath_in_node
-//     );
-
-//     // 5. Create MessagePostFile struct
-//     debug_log!("AIM: Creating MessagePostFile");
-
-//     /*
-//     struct MessagePostFile {
-//         // every .toml has these four
-//         owner: String, // owner of this item
-//         node_name: String, // Name of the node this message belongs to
-//         filepath_in_node: String, // Relative path within the node's directory
-//         text_message: String, // content-body
-
-//         teamchannel_collaborators_with_access: Vec<String>,
-//         updated_at_timestamp: u64, // utc posix timestamp
-//         messagepost_gpgtoml: bool, // Is MessagePostFile file gpg encrypted
-//         expires_at: u64, // utc posix timestamp
-//     }
-//     */
-
-//     // should not require nav-state
-//     let message = MessagePostFile::new(
-//         owner,
-//         &node_name,
-//         &filepath_in_node,
-//         text,
-//         recipients_list.clone(),
-//         false, // messagepost_gpgtoml - default to clearsigned format
-//         None,
-//     );
-
-//     debug_log!("AIM: MessagePostFile created, gpgtoml: {}", message.messagepost_gpgtoml);
-
-//     // 6. Serialize message to TOML
-//     debug_log!("AIM: Serializing message to TOML: message {:?}", message);
-
-//     // let toml_data = toml::to_string(&message)
-//     //     .map_err(|e| io::Error::new(
-//     //         io::ErrorKind::Other,
-//     //         format!("AIM: TOML serialization error: {}", e)
-//     //     ))?;
-
-//     let toml_data:String;
-//     // let toml_data = serialize_messagepost_toml(&message)?;
-//     match serialize_messagepost_toml(&message) {
-//         Ok(toml_string) => {
-//             // Write to file or transmit
-//             toml_data = toml_string;
-//         }
-//         Err(e) => {
-//             // Handle serialization error with project-appropriate recovery
-//             debug_log("SMPC0T: serialization failed");
-//             return Err(io::Error::new(
-//                 io::ErrorKind::InvalidInput,
-//                 format!("AIM: error serialize_messagepost_toml {}",e)
-//             ));
-//         }
-//     }
-
-//     debug_log!("AIM: TOML serialization successful, {} bytes", toml_data.len());
-
-//     // 7. Save message file based on format setting
-//     debug_log!("AIM: Saving message file");
-
-//     if message.messagepost_gpgtoml {
-//         // GPG encrypted format - use base path without extension
-//         debug_log!("AIM: Using GPG encrypted format (.gpgtoml)");
-
-//         let base_path = incoming_file_path.with_extension("");
-
-//         save_message_as_gpgtoml(
-//             &base_path,
-//             &toml_data,
-//             // owner,
-//             // COLLABORATOR_ADDRESSBOOK_PATH_STR,
-//         )?;
-
-//         debug_log!("AIM: GPG encrypted message saved successfully");
-//     } else {
-//         // Clearsigned format - use full path
-//         debug_log!("AIM: Using clearsigned format (.toml)");
-
-//         /*
-//         fn save_message_as_clearsigned_toml(
-//             target_file_path: &Path,
-//             toml_content: &str,
-//         ) -> Result<(), io::Error> {
-//         */
-
-//         save_message_as_clearsigned_toml(
-//             incoming_file_path,
-//             &toml_data,
-//             // owner,
-//             // COLLABORATOR_ADDRESSBOOK_PATH_STR,
-//         )?;
-
-//         debug_log!("AIM: Clearsigned message saved successfully");
-//     }
-
-//     // 8. Write update flag for each possible remote collaborator
-//     // sync_data/teamtest/new_file_path_flags/bob
-//     // sync_data/teamtest/new_file_path_flags/charlotte
-//     // etc.
-//     debug_log!("AIM: Writing sync flags for recipients");
-
-//     let sync_result = write_newfile_sendq_flag(
-//         &recipients_list,
-//         incoming_file_path,
-//     );
-
-//     // Log but don't fail if sync flags fail (message is already saved)
-//     if let Err(e) = sync_result {
-//         debug_log!("AIM: Warning: Failed to write sync flags: {}", e);
-//     } else {
-//         debug_log!("AIM: Sync flags written successfully");
-//     }
-
-//     debug_log!("AIM: add_new_messagepost_message completed successfully");
-
-//     Ok(())
-// }
-
-// #[cfg(test)]
-// mod tests_addim_message {
-//     use super::*;
-//     use std::path::{Path, PathBuf};
-//     use std::fs;
-
-//     /// Helper to create minimal test state for testing
-//     ///
-//     /// Creates a GraphNavigationInstanceState with reasonable defaults
-//     /// for testing purposes. This avoids duplicating state initialization
-//     /// across multiple tests.
-//     fn create_minimal_test_state() -> GraphNavigationInstanceState {
-//         GraphNavigationInstanceState {
-//             local_owner_user: "testuser".to_string(),
-//             active_team_channel: String::new(),
-//             default_im_messages_expiration_days: 30,
-//             default_task_nodes_expiration_days: 90,
-//             tui_height: 24,
-//             tui_width: 80,
-//             current_full_file_path: PathBuf::from("/tmp/test"),
-//             current_node_teamchannel_collaborators_with_access: vec![],
-//             current_node_name: String::new(),
-//             current_node_owner: String::new(),
-//             current_node_description_for_tui: String::new(),
-//             current_node_directory_path: PathBuf::new(),
-//             current_node_unique_id: Vec::new(),
-//             current_node_members: Vec::new(),
-//             home_square_one: false,
-//             pa1_process: String::new(),
-//             pa2_schedule: Vec::new(),
-//             pa3_users: String::new(),
-//             pa4_features: String::new(),
-//             pa5_mvp: String::new(),
-//             pa6_feedback: String::new(),
-//             message_post_gpgtoml_required: None,
-//             message_post_data_format_specs_integer_ranges_from_to_tuple_array: None,
-//             message_post_data_format_specs_int_string_ranges_from_to_tuple_array: None,
-//             message_post_max_string_length_int: None,
-//             message_post_is_public_bool: None,
-//             message_post_user_confirms_bool: None,
-//             message_post_start_date_utc_posix: None,
-//             message_post_end_date_utc_posix: None,
-//         }
-//     }
-
-//     /// Helper function to create test temp directory
-//     fn create_test_temp_dir() -> Result<PathBuf, io::Error> {
-//         let temp_base = std::env::temp_dir();
-//         let timestamp = std::time::SystemTime::now()
-//             .duration_since(std::time::UNIX_EPOCH)
-//             .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Time error: {}", e)))?
-//             .as_secs();
-//         let test_dir = temp_base.join(format!("test_add_im_{}", timestamp));
-//         fs::create_dir_all(&test_dir)?;
-//         Ok(test_dir)
-//     }
-
-//     /// Helper function to cleanup test directory
-//     fn cleanup_test_dir(dir: &Path) {
-//         let _ = fs::remove_dir_all(dir);
-//     }
-
-//     /// Test: Error case - empty owner
-//     ///
-//     /// Verifies that the function returns an error when owner is empty.
-//     #[test]
-//     fn test_error_empty_owner() {
-//         let test_dir = create_test_temp_dir().expect("Failed to create test directory");
-//         let message_file = test_dir.join("test_message.toml");
-
-//         let state = create_minimal_test_state();
-
-//         let result = add_new_messagepost_message(
-//             &message_file,
-//             "", // Empty owner
-//             "Test message",
-//             &state,
-//         );
-
-//         assert!(result.is_err(), "Function should return error for empty owner");
-
-//         if let Err(e) = result {
-//             let error_msg = format!("{}", e);
-//             assert!(
-//                 error_msg.contains("Owner must not be empty"),
-//                 "Error message should mention empty owner, got: {}",
-//                 error_msg
-//             );
-//         }
-
-//         cleanup_test_dir(&test_dir);
-//     }
-
-//     /// Test: Error case - empty message text
-//     ///
-//     /// Verifies that the function returns an error when text is empty.
-//     #[test]
-//     fn test_error_empty_text() {
-//         let test_dir = create_test_temp_dir().expect("Failed to create test directory");
-//         let message_file = test_dir.join("test_message.toml");
-
-//         let state = create_minimal_test_state();
-
-//         let result = add_new_messagepost_message(
-//             &message_file,
-//             "testuser",
-//             "", // Empty text
-//             &state,
-//         );
-
-//         assert!(result.is_err(), "Function should return error for empty text");
-
-//         if let Err(e) = result {
-//             let error_msg = format!("{}", e);
-//             assert!(
-//                 error_msg.contains("Message text must not be empty"),
-//                 "Error message should mention empty text, got: {}",
-//                 error_msg
-//             );
-//         }
-
-//         cleanup_test_dir(&test_dir);
-//     }
-
-//     // /// Test: Error case - path with no filename
-//     // ///
-//     // /// Verifies that the function returns an error when path has no filename.
-//     // #[test]
-//     // fn test_error_no_filename() {
-//     //     let test_dir = create_test_temp_dir().expect("Failed to create test directory");
-//     //     let message_path = test_dir.join("messages/");
-
-//     //     let state = create_minimal_test_state();
-
-//     //     let result = add_new_messagepost_message(
-//     //         &message_path,
-//     //         "testuser",
-//     //         "Test message",
-//     //         None,
-//     //         &state,
-//     //     );
-
-//     //     assert!(result.is_err(), "Function should return error for path without filename");
-
-//     //     if let Err(e) = result {
-//     //         let error_msg = format!("{}", e);
-//     //         assert!(
-//     //             error_msg.contains("must have a filename"),
-//     //             "Error message should mention missing filename, got: {}",
-//     //             error_msg
-//     //         );
-//     //     }
-
-//     //     cleanup_test_dir(&test_dir);
-//     // }
-
-//     // TODO?
-//     // /// Test: Error case - path with no filename / directory path
-//     // ///
-//     // /// Verifies that directory-like paths fail appropriately.
-//     // /// Note: Path validation for file vs directory happens when reading metadata.
-//     // #[test]
-//     // fn test_error_directory_like_path() {
-//     //     let test_dir = create_test_temp_dir().expect("Failed to create test directory");
-//     //     let message_path = test_dir.join("messages/");
-
-//     //     let state = create_minimal_test_state();
-
-//     //     let result = add_new_messagepost_message(
-//     //         &message_path,
-//     //         "testuser",
-//     //         "Test message",
-//     //         &state,
-//     //     );
-
-//     //     assert!(result.is_err(), "Function should return error for directory-like path");
-
-//     //     if let Err(e) = result {
-//     //         let error_msg = format!("{}", e);
-//     //         // Will fail at metadata reading stage since path isn't a proper file path
-//     //         assert!(
-//     //             error_msg.contains("Failed to read metadata file") ||
-//     //             error_msg.contains("must have a filename"),
-//     //             "Error should mention metadata or filename issue, got: {}",
-//     //             error_msg
-//     //         );
-//     //     }
-
-//     //     cleanup_test_dir(&test_dir);
-//     // }
-
-//     /// Test: Error case - path with no parent directory
-//     ///
-//     /// Verifies that the function returns an error when path has no parent.
-//     #[test]
-//     fn test_error_no_parent_directory() {
-//         let state = create_minimal_test_state();
-
-//         let result = add_new_messagepost_message(
-//             Path::new("message.toml"), // No parent directory
-//             "testuser",
-//             "Test message",
-//             &state,
-//         );
-
-//         assert!(result.is_err(), "Function should return error for path without parent");
-
-//         if let Err(e) = result {
-//             let error_msg = format!("{}", e);
-//             assert!(
-//                 error_msg.contains("parent directory") || error_msg.contains("empty path"),
-//                 "Error message should mention parent directory issue, got: {}",
-//                 error_msg
-//             );
-//         }
-//     }
-
-//     /// Test: Message text with special characters
-//     ///
-//     /// Verifies that message text with quotes, newlines, etc. is handled.
-//     #[test]
-//     fn test_message_text_special_characters() {
-//         let test_dir = create_test_temp_dir().expect("Failed to create test directory");
-//         let message_file = test_dir.join("test_message.toml");
-
-//         let state = create_minimal_test_state();
-
-//         let text_with_specials = "Message with \"quotes\" and\nnewlines\nand\ttabs";
-
-//         /*
-//         fn  add_new_messagepost_message(
-//             incoming_file_path: &Path,
-//             owner: &str,
-//             text: &str,
-//             signature: Option<String>,
-//             graph_navigation_instance_state: &GraphNavigationInstanceState,
-//         ) -> Result<(), io::Error> {
-//         */
-
-//         let result = add_new_messagepost_message(
-//             &message_file,
-//             "testuser",
-//             text_with_specials,
-//             &state,
-//         );
-
-//         // Will fail without 0.toml metadata file, but validates text handling
-//         if let Err(e) = result {
-//             let error_msg = format!("{}", e);
-//             assert!(
-//                 !error_msg.contains("Message text must not be empty"),
-//                 "Should not fail on text validation with special chars, got: {}",
-//                 error_msg
-//             );
-//         }
-
-//         cleanup_test_dir(&test_dir);
-//     }
-
-//     /// Test: Owner with special characters
-//     ///
-//     /// Verifies that usernames with dots, dashes, underscores work.
-//     #[test]
-//     fn test_owner_special_characters() {
-//         let test_dir = create_test_temp_dir().expect("Failed to create test directory");
-//         let message_file = test_dir.join("test_message.toml");
-
-//         let state = create_minimal_test_state();
-
-//         let usernames = vec![
-//             "user.name",
-//             "user-name",
-//             "user_name",
-//             "user123",
-//         ];
-
-//         for username in usernames {
-//             let result = add_new_messagepost_message(
-//                 &message_file,
-//                 username,
-//                 "Test message",
-//                 &state,
-//             );
-
-//             // Should not fail on username validation
-//             if let Err(e) = result {
-//                 let error_msg = format!("{}", e);
-//                 assert!(
-//                     !error_msg.contains("Owner must not be empty"),
-//                     "Should accept username '{}', got error: {}",
-//                     username,
-//                     error_msg
-//                 );
-//             }
-//         }
-
-//         cleanup_test_dir(&test_dir);
-//     }
-
-//     /// Test: Long message text
-//     ///
-//     /// Verifies that long messages are handled correctly.
-//     #[test]
-//     fn test_long_message_text() {
-//         let test_dir = create_test_temp_dir().expect("Failed to create test directory");
-//         let message_file = test_dir.join("test_message.toml");
-
-//         let state = create_minimal_test_state();
-
-//         // Create 5KB message
-//         let long_text = "x".repeat(5000);
-
-//         let result = add_new_messagepost_message(
-//             &message_file,
-//             "testuser",
-//             &long_text,
-//             &state,
-//         );
-
-//         // Will fail without full setup, but validates large text handling
-//         if let Err(e) = result {
-//             let error_msg = format!("{}", e);
-//             assert!(
-//                 !error_msg.contains("Message text must not be empty"),
-//                 "Should not fail on text validation with large text, got: {}",
-//                 error_msg
-//             );
-//         }
-
-//         cleanup_test_dir(&test_dir);
-//     }
-// }
+*/
+
+
+#[cfg(test)]
+mod tests_structured_format_qa_interactive {
+    use super::*;
+
+    /// Test: Empty input handling
+    ///
+    /// Validates that empty input is rejected with appropriate error.
+    /// This test doesn't require stdin interaction.
+    #[test]
+    fn test_empty_input_rejected() {
+        let result = structured_format_qa_interactive(
+            "",
+            Some(vec![(1, 3)]),
+            None,
+            None,
+        );
+
+        assert!(result.is_err(), "Empty input should return error");
+        let err = result.unwrap_err();
+        assert!(
+            err.to_string().contains("SFQAI"),
+            "Error should have function prefix"
+        );
+    }
+
+    /// Test: Valid initial integer parsing (partial path)
+    ///
+    /// Tests that valid integer input is parsed correctly by the validation step.
+    /// Note: Full flow requires interactive stdin which is not tested here.
+    #[test]
+    fn test_valid_integer_input_parsed() {
+        // This validates the initial validation logic path
+        // The actual Q&A prompts would require stdin mocking
+
+        let validation_result = validate_integer_in_ranges(
+            "2",
+            Some(vec![(1, 3)]),
+            None,
+        );
+
+        assert!(validation_result.is_ok(), "Validation should succeed");
+        match validation_result.unwrap() {
+            IntegerValidationResult::InIntegerOnlyRange(val) => {
+                assert_eq!(val, 2, "Should parse to integer 2");
+            }
+            _ => panic!("Should be in integer-only range"),
+        }
+
+        // Note: Full structured_format_qa_interactive test would require
+        // stdin simulation for "comment or answer" prompt
+    }
+}
+
+// =================================================
+// Integration Test Note
+// =================================================
+//
+// Full testing of interactive Q&A flows requires:
+// 1. Stdin simulation/mocking (not available without external crates)
+// 2. Integration tests with scripted input
+// 3. Manual testing procedures
+//
+// For production validation, consider:
+// - Manual test scripts with predefined inputs
+// - Integration test suite with expect-style testing
+// - Refactoring to dependency injection for testability (if needed)
+//
+// Current minimal tests validate:
+// - Function compiles with correct signature
+// - Basic error handling (empty input)
+// - Initial validation logic path
+//
+// =================================================
 
 /// Add New Message File with Configuration-Based Validation
 ///
@@ -15468,6 +14764,22 @@ fn add_new_messagepost_message(
     debug_log!("ANMPM: Creating MessagePostFile");
 
     let ping: Vec<String> = Vec::new();
+
+    /*
+    owner: String, // owner of this item
+    node_name: String, // Name of the node this message belongs to
+    filepath_in_node: String, // Relative path within the node's directory
+    text_message: String, // content-body
+
+    teamchannel_collaborators_with_access: Vec<String>,
+
+    /// sent "to the attention of" list => "ping"
+    ping: Vec<String>,
+
+    updated_at_timestamp: u64, // utc posix timestamp
+    messagepost_gpgtoml: bool, // Is MessagePostFile file gpg encrypted
+    expires_at: u64, // utc posix timestamp
+    */
 
     let mut message = MessagePostFile::new(
         owner,
@@ -16090,8 +15402,20 @@ impl MessagePostFile {
         //     timestamp + (graph_navigation_instance_state.default_im_messages_expiration_days * 24 * 60 * 60)
         // });
 
-        // Use custom expiration if provided, otherwise calculate default
-        let expires_at_timestamp = expires_at.unwrap_or_else(|| u64::MAX);
+        // Get the current time as seconds since UNIX_EPOCH
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or(Duration::from_secs(4444444444444)) // Default to year
+            .as_secs();
+
+        // Two years in seconds (approximate - not accounting for leap years)
+        let two_years_seconds = 2 * 365 * 24 * 60 * 60;
+
+        // Calculate default expiration: now + 2 years
+        let default_expiration = now + two_years_seconds;
+
+        // Use custom expiration if provided, otherwise use calculated default
+        let expires_at_timestamp: u64 = expires_at.unwrap_or(default_expiration);
 
         MessagePostFile {
             owner: owner.to_string(),
@@ -16501,7 +15825,7 @@ fn create_new_team_channel(
         &team_channel_name,
         owner.clone(),
         teamchannel_collaborators_with_access.clone(),
-        9999999, // default expiry in minutes
+        99999, // default message expiry in minutes, 99_999 ~ 2-months
 
         // Special configurations (not for team channel)
         None,
@@ -18914,7 +18238,7 @@ fn q_and_a_get_message_expires_after_min() -> Result<u64, ThisProjectError> {
 
     let input = input.trim();
     if input.is_empty() {
-        return Ok(9999999);
+        return Ok(99999);
     }
 
     let max_length = input.parse::<u64>()
@@ -29621,7 +28945,7 @@ fn get_updated_at_timestamp_from_toml_file(file_path: &Path) -> Result<u64, This
             return Err(ThisProjectError::from(e));
         }
     };
-    debug_log!("Read TOML file: {:?}", file_path);
+    debug_log!("GUATFTF Read TOML file: {:?}", file_path);
 
 
     // 2. Parse the TOML string: Handle TOML parsing errors
@@ -29629,7 +28953,7 @@ fn get_updated_at_timestamp_from_toml_file(file_path: &Path) -> Result<u64, This
     let toml_value: Value = match toml::from_str(&toml_string) {
         Ok(value) => value,
         Err(e) => {
-            debug_log!("Error parsing TOML string: {}", e);
+            debug_log!("GUATFTF Error parsing TOML string: {}", e);
             return Err(ThisProjectError::from(e)); // Or handle error differently
         }
     };
@@ -29639,19 +28963,19 @@ fn get_updated_at_timestamp_from_toml_file(file_path: &Path) -> Result<u64, This
     let updated_at_timestamp = match toml_value.get("updated_at_timestamp") {
         Some(Value::Integer(ts)) => *ts as u64, // Convert to u64, handle overflow
         Some(_) => {
-            debug_log!("'updated_at_timestamp' has invalid type");
+            debug_log!("'GUATFTF updated_at_timestamp' has invalid type");
             return Err(ThisProjectError::InvalidData(
-                "'updated_at_timestamp' has invalid type".into(),
+                "GUATFTF 'updated_at_timestamp' has invalid type".into(),
             ));
         }
         None => {
-            debug_log!("'updated_at_timestamp' field not found in TOML file");
+            debug_log!("GUATFTF 'updated_at_timestamp' field not found in TOML file");
             return Err(ThisProjectError::InvalidData(
-                "'updated_at_timestamp' field not found in TOML file".into(),
+                "GUATFTF 'updated_at_timestamp' field not found in TOML file".into(),
             ));
         }
     };
-    debug_log!("Extracted timestamp: {}", updated_at_timestamp);
+    debug_log!("GUATFTF Extracted timestamp: {}", updated_at_timestamp);
 
     Ok(updated_at_timestamp) // Return the timestamp if successful
 }
@@ -31489,13 +30813,14 @@ fn handle_local_owner_desk(
                         still_encrypted_file_blob
                     );
 
-                    let padnet_index_array = match &incoming_intray_file_struct.padnet_index_array {
-                        Some(data) => data,  // Extract the Vec<u8> if Some
-                        None => {
-                            debug_log!("HLOD 6.1: padnet_index_array is None. Skipping.");
-                            continue; // Or handle the None case differently (e.g., return an error)
-                        }
-                    };
+                    // let padnet_index_array = match &incoming_intray_file_struct.padnet_index_array {
+                    //     Some(data) => data,  // Extract the Vec<u8> if Some
+                    //     None => {
+                    //         debug_log!("HLOD 6.1: padnet_index_array is None. Skipping.");
+
+                    //         TODO continue; // Or handle the None case differently (e.g., return an error)
+                    //     }
+                    // };
 
                     let decrypted_clearsignfile_data = if *use_padnet_flag {
                         /*
@@ -31513,7 +30838,7 @@ fn handle_local_owner_desk(
                         let still_otp_encrypted_file_blob = match &incoming_intray_file_struct.gpg_encrypted_intray_file {
                             Some(data) => data,  // Extract the Vec<u8> if Some
                             None => {
-                                debug_log!("HLOD 6.1: gpg_encrypted_intray_file is None. Skipping.");
+                                debug_log!("HLOD: if *use_padnet_flag:  6.1: gpg_encrypted_intray_file is None. Skipping.");
                                 continue; // Or handle the None case differently (e.g., return an error)
                             }
                         };
@@ -31527,7 +30852,7 @@ fn handle_local_owner_desk(
                         ).map_err(|e| {
                             ThisProjectError::IoError(std::io::Error::new(
                                 e.kind(),
-                                format!("PWPCTGTOTSB: failed to create temp file #2: {}", e),
+                                format!("HLOD: if *use_padnet_flag: failed to create temp file #2: {}", e),
                             ))
                         })?;
 
@@ -31539,7 +30864,7 @@ fn handle_local_owner_desk(
                         ).map_err(|e| {
                             ThisProjectError::IoError(std::io::Error::new(
                                 e.kind(),
-                                format!("PWPCTGTOTSB: failed to create temp file #2: {}", e),
+                                format!("HLOD: if *use_padnet_flag: failed to create temp file #2: {}", e),
                             ))
                         })?;
 
@@ -31561,7 +30886,7 @@ fn handle_local_owner_desk(
                         let team_channel_name = match get_current_team_channel_name_from_nav_path() {
                             Some(name) => name,
                             None => {
-                                debug_log!("Error: Could not get current channel name. Skipping set_as_active.");
+                                debug_log!("HLOD: if *use_padnet_flag: Error: Could not get current channel name. Skipping set_as_active.");
                                 return Err(ThisProjectError::InvalidData("Could not get team channel name".into()));
                             },
                         };
@@ -31593,6 +30918,15 @@ fn handle_local_owner_desk(
                         ) -> Result<usize, PadnetError> {
                         */
 
+                        let padnet_index_array = match &incoming_intray_file_struct.padnet_index_array {
+                            Some(data) => data,  // Extract the Vec<u8> if Some
+                            None => {
+                                debug_log!("HLOD: if *use_padnet_flag:  6.1: padnet_index_array is None. Skipping.");
+
+                                continue; // Or handle the None case differently (e.g., return an error)
+                            }
+                        };
+
 
                         let _ = padnet_reader_xor_file(
                             &otp_blob_file_path,  // path_to_target_file: &Path, // `path_to_target_file` - Absolute path to file to XOR
@@ -31611,12 +30945,12 @@ fn handle_local_owner_desk(
                         match read_file_to_bytes(&gpg_blob_file_path) {
                             Ok(bytes) => {
                                 #[cfg(debug_assertions)]
-                                println!("HLOD 6.6: Read {} bytes from GPG file", bytes.len());
+                                println!("HLOD: if *use_padnet_flag:  6.6: Read {} bytes from GPG file", bytes.len());
 
                                 bytes  // ← Return the Vec<u8> (no semicolon!)
                             },
                             Err(e) => {
-                                debug_log!("HLOD 6.6: Read failed: {}. Skipping.", e);
+                                debug_log!("HLOD: if *use_padnet_flag:  6.6: Read failed: {}. Skipping.", e);
                                 continue; // Skip to next packet
                             }
                         }
@@ -31632,7 +30966,7 @@ fn handle_local_owner_desk(
                         ) { // Pass the extracted data
                             Ok(data) => data,
                             Err(e) => {
-                                debug_log!("HLOD 6.2: GPG decryption failed: {}. Skipping.", e);
+                                debug_log!("HLOD NOT*use_padnet_flag: 6.2: GPG decryption failed: {}. Skipping.", e);
                                 continue; // Skip to the next packet if decryption fails
                             }
                         }
