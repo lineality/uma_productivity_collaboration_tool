@@ -17214,20 +17214,108 @@ fn update_core_node(
         .map_err(|e| ThisProjectError::from(format!("System time error: {}", e)))?
         .as_secs();
 
+    // // Step 7: Save the updated node back to disk
+    // println!("\n--- SAVING UPDATES ---");
+    // println!("Saving updated CoreNode to {:?}...", node_path);
+
+    // match existing_node.save_node_to_clearsigned_file() {
+    //     Ok(_) => {
+    //         debug_log!("UCN: CoreNode successfully saved to {:?}", node_path);
+    //         println!("CoreNode updated and saved successfully!");
+    //         Ok(())
+    //     }
+    //     Err(e) => {
+    //         debug_log!("UCN: Failed to save CoreNode: {}", e);
+    //         eprintln!("ERROR: Failed to save updated node: {}", e);
+    //         Err(ThisProjectError::IoError(e))
+    //     }
+    // }
+
     // Step 7: Save the updated node back to disk
     println!("\n--- SAVING UPDATES ---");
+
+    // User Q&A: Ask user to choose file format for node
+    println!("\n=== Node File Format Selection ===");
+    println!("Choose the format for saving the node file:");
+    println!();
+    println!("1. 'gpgtoml' - GPG encrypted clearsigned file (node.gpgtoml) [DEFAULT - RECOMMENDED]");
+    println!("   - Maximum security: encrypted AND signed");
+    println!("   - Only you can decrypt with your private key");
+    println!("   - Integrity verified through clearsigning");
+    println!();
+    println!("2. 'clearsign' - Clearsigned only file (node.toml)");
+    println!("   - Signed for integrity verification");
+    println!("   - Contents readable by anyone");
+    println!("   - Suitable for public/shared nodes");
+    println!();
+    print!("Enter your choice [gpgtoml/clearsign] (press Enter for default 'gpgtoml'): ");
+
+    // Flush stdout to ensure the prompt appears
+    std::io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+
+    // Read user input
+    let mut user_input = String::new();
+    std::io::stdin().read_line(&mut user_input)
+        .map_err(|e| {
+            debug_log!("UCN: Error reading user input: {}", e);
+            ThisProjectError::IoError(e)
+        })?;
+
+    // Trim and convert to lowercase for case-insensitive comparison
+    let choice = user_input.trim().to_lowercase();
+
+    // Determine which save method to use based on user input
+    let use_encrypted = match choice.as_str() {
+        "" => {
+            // Empty input = use default (encrypted)
+            println!("Using default: GPG encrypted clearsigned format (node.gpgtoml)");
+            true
+        },
+        "gpgtoml" | "gpg" | "encrypted" | "secure" => {
+            println!("Selected: GPG encrypted clearsigned format (node.gpgtoml)");
+            true
+        },
+        "clearsign" | "clear" | "signed" | "toml" => {
+            println!("Selected: Clearsigned only format (node.toml)");
+            false
+        },
+        _ => {
+            // Invalid input = use default with warning
+            println!("Invalid input '{}'. Using default: GPG encrypted clearsigned format (node.gpgtoml)", choice);
+            true
+        }
+    };
+
+    // Save with chosen method
     println!("Saving updated CoreNode to {:?}...", node_path);
 
-    match existing_node.save_node_to_clearsigned_file() {
-        Ok(_) => {
-            debug_log!("UCN: CoreNode successfully saved to {:?}", node_path);
-            println!("CoreNode updated and saved successfully!");
-            Ok(())
+    if use_encrypted {
+        // Save as GPG encrypted clearsigned file (node.gpgtoml)
+        match existing_node.save_node_as_gpgtoml() {
+            Ok(_) => {
+                debug_log!("UCN: CoreNode successfully saved as encrypted file to {:?}", node_path);
+                println!("✓ CoreNode updated and saved successfully as node.gpgtoml!");
+                Ok(())
+            }
+            Err(e) => {
+                debug_log!("UCN: Failed to save CoreNode as encrypted file: {}", e);
+                eprintln!("ERROR: Failed to save updated node as encrypted file: {}", e);
+                Err(ThisProjectError::IoError(e))
+            }
         }
-        Err(e) => {
-            debug_log!("UCN: Failed to save CoreNode: {}", e);
-            eprintln!("ERROR: Failed to save updated node: {}", e);
-            Err(ThisProjectError::IoError(e))
+    } else {
+        // Save as clearsigned only file (node.toml)
+        match existing_node.save_node_to_clearsigned_file() {
+            Ok(_) => {
+                debug_log!("UCN: CoreNode successfully saved as clearsigned file to {:?}", node_path);
+                println!("✓ CoreNode updated and saved successfully as node.toml!");
+                Ok(())
+            }
+            Err(e) => {
+                debug_log!("UCN: Failed to save CoreNode as clearsigned file: {}", e);
+                eprintln!("ERROR: Failed to save updated node as clearsigned file: {}", e);
+                Err(ThisProjectError::IoError(e))
+            }
         }
     }
 }
@@ -25450,13 +25538,8 @@ pub fn invite_wizard() -> Result<(), GpgError> {
 
                     directory_path
                 }
-                Err(io_error) => {
-                    let error_msg = format!(
-                        "IWiz Failed to ensure team_channels_dir exists: {}",
-                        io_error
-                    );
-
-                    return Err(GpgError::ValidationError("No signing key ID provided".to_string()));
+                Err(_) => {
+                    return Err(GpgError::ValidationError("IW make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path".to_string()));
                 }
             };
 
@@ -25471,12 +25554,30 @@ pub fn invite_wizard() -> Result<(), GpgError> {
             println!();
             println!("Starting with the first largest dimension [Here, 0, 0, 1])");
 
-            let padnest_0 = prompt_for_u8("How many padsets? (0-255): ");
+            let padnest_0 = prompt_for_u8("How many pad-sets? (0-255): ");
+            println!();
+            println!("And then 'pads' [0, Here, 0, 1])");
             let pad = prompt_for_u8("How many pads? (0-255): ");
+            println!();
+            println!("And 'pages' [0, 0, Here, 1])");
             let page = prompt_for_u8("How many pages? (0-255): ");
+            println!();
+            println!("And 'lines' [0, 0, 0, Here])");
             let line = prompt_for_u8("How many lines? (0-255): ");
-            let per_line: usize = prompt_for_usize("Bytes per line? (0-255): ");
+            println!();
+            let per_line: usize = prompt_for_usize("How many bytes per line? (1-128): ");
             let frame_array = PadIndex::Standard([padnest_0, pad, page, line]);
+            println!();
+            println!("Share a copy with one collaborator and vice versa.");
+            println!("Press Enter to continue...");
+
+            // this does nothing, press enter to proceed.
+            let mut input = String::new();
+            let _ = io::stdin()
+                .read_line(&mut input)
+                .map_err(|e| format!("Failed to read input: {:?}", e));
+
+
 
             /*
             /// ## Arguments
@@ -25523,7 +25624,7 @@ pub fn invite_wizard() -> Result<(), GpgError> {
                 per_line,
                 ValidationLevel::PageLevel
             ) {
-                Ok(()) => println!("  ✓ Alice's padset created (11 lines, 64 bytes each)"),
+                Ok(()) => println!("  ✓ padset created"),
                 Err(e) => {
                     println!("  ✗ IS The Fail: {}", e);
                     return Err(GpgError::GpgOperationError("Invalid choice".to_string()));
