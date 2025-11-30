@@ -425,6 +425,7 @@ use manage_absolute_executable_directory_relative_paths::{
 
 mod padnet_otp_module;
 use padnet_otp_module::{
+    ValidationLevel,padnet_make_one_pad_set,
     PadIndex, padnet_writer_strict_cleanup_xor_file_to_resultpath, PadnetError, padnet_reader_xor_file
 };
 
@@ -435,7 +436,7 @@ use tiny_tui_module::tiny_tui;
 
 
 const FILE_READWRITE_N_RETRIES: u64 = 5;
-const FILE_READWRITE_RETRY_SEC_PAUSE: u64 = 2;
+// const FILE_READWRITE_RETRY_SEC_PAUSE: u64 = 2;
 const FILE_READWRITE_RETRY_SEC_PAUSE_MIN: u64 = 1;
 const FILE_READWRITE_RETRY_SEC_PAUSE_MAX: u64 = 6;
 
@@ -16723,6 +16724,49 @@ fn create_new_team_channel(
     }
 }
 
+
+/// Helper function to prompt the user for a `u8` value.
+fn prompt_for_u8(prompt: &str) -> u8 {
+    loop {
+        print!("{}", prompt);
+        io::stdout().flush().unwrap();
+
+        let mut input = String::new();
+        io::stdin()
+            .read_line(&mut input)
+            .expect("Failed to read input");
+
+        match input.trim().parse::<u8>() {
+            Ok(value) => return value,
+            Err(_) => {
+                println!("Invalid input. Please enter a number between 0 and 255.");
+                continue;
+            }
+        }
+    }
+}
+
+/// Helper function to prompt the user for a `usize` value.
+fn prompt_for_usize(prompt: &str) -> usize {
+    loop {
+        print!("{}", prompt);
+        io::stdout().flush().unwrap();
+
+        let mut input = String::new();
+        io::stdin()
+            .read_line(&mut input)
+            .expect("Failed to read input");
+
+        match input.trim().parse::<usize>() {
+            Ok(value) => return value,
+            Err(_) => {
+                println!("Invalid input. Please enter a number between 1 and 128.");
+                continue;
+            }
+        }
+    }
+}
+
 // todo: deprecated?
 /// Updates an existing CoreNode by walking the user through optional field updates.
 ///
@@ -16792,12 +16836,23 @@ fn update_core_node(
         }
     };
 
+    // require node owner is local owerner user
+    // local owner user name
+    let local_owner_username = get_local_owner_username();
+
     println!("\n=== CoreNode Update Wizard ===");
+    println!("local_owner_username: {}", local_owner_username);
     println!("Node: {}", existing_node.node_name);
     println!("Description: {}", existing_node.description_for_tui);
     println!("Owner: {}", existing_node.owner);
     println!("\nYou will be prompted to update various fields.");
     println!("Press Enter to keep existing values, or type new values when prompted.\n");
+
+    // Safety: require node owner is local owerner user
+    if existing_node.owner != local_owner_username {
+        debug_log("Only owner of node can edit.");
+        return Ok(());
+    }
 
     // Step 2: Update Team Channel Collaborators (main field)
     println!("\n--- TEAM CHANNEL COLLABORATORS UPDATE ---");
@@ -24913,7 +24968,8 @@ pub fn invite_wizard() -> Result<(), GpgError> {
     println!("1. sharing gpg");
     println!("2. sharing address-book file");
     println!("3. sharing team-channel");
-    println!("4. update a team-channel that you own");  // update_core_node()
+    println!("4. update a Node that you own");  // update_core_node()
+    println!("5. make a set of pads (One Time Pad)");
     println!("\nQ: Which step do you want to do now?");
     println!("(Enter: number + enter)");
 
@@ -25341,15 +25397,140 @@ pub fn invite_wizard() -> Result<(), GpgError> {
                     println!("Invalid option. Please select 1, 2, or 3.");
                 }
             }
-/*
-    somewhere around here:
-    1. pick node
-    2.
-    println!("4. update a team-channel that you own");  // update_core_node()
-*/
+            /*
+                somewhere around here:
+                1. pick node
+                2.
+                println!("4. update a team-channel that you own");  // update_core_node()
+            */
+
             // Similar implementation to share_address_book() but with team channel file
             // Would use the same clearsign_and_encrypt_file_for_recipient() function
-        },
+
+        }
+        4 => {
+            // Similar implementation to share_address_book() but with team channel file
+            // Would use the same clearsign_and_encrypt_file_for_recipient() function
+
+            /*
+
+            */
+
+            println!("Enter the file-path of the node you want to edit:");
+
+            // Read user input
+            let mut input = String::new();
+            io::stdin()
+                .read_line(&mut input)
+                .expect("Failed to read line");
+
+            // Trim whitespace and convert to PathBuf
+            let node_path: PathBuf = input.trim().into();
+
+            // let node_path = PathBuf::from("/absolute/path/to/node.toml");
+
+            match update_core_node(node_path) {
+                Ok(()) => println!("Node updated successfully"),
+                Err(e) => eprintln!("Failed to update node: {}", e),
+            }
+
+        }
+        5 => {
+
+            // invite/update
+            // let outgoing_dir_result = make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path(
+            //     "invites_updates/outgoing"
+            // )?;
+
+            let outgoing_dir_result = match make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path(
+                "invites_updates/outgoing"
+            ) {
+                Ok(directory_path) => {
+                    debug_log!("IUA: outgoing_dir_result outgoing -> {}", directory_path.to_string_lossy());
+
+                    directory_path
+                }
+                Err(io_error) => {
+                    let error_msg = format!(
+                        "IWiz Failed to ensure team_channels_dir exists: {}",
+                        io_error
+                    );
+
+                    return Err(GpgError::ValidationError("No signing key ID provided".to_string()));
+                }
+            };
+
+            println!("Specify the four array fields for the pad (0-255), max may fill your drive:");
+            println!("Resulting Pad Here -> {}", outgoing_dir_result.to_string_lossy());
+            println!();
+            println!("a 'padnest_0' is a 0-255 numbered directory of pad");
+            println!("a 'pad' is a 0-255 numbered directory of page directories");
+            println!("a 'page' is a 0-255 numbered directory of 'line' files");
+            println!("a 'line' is a 0-255 numbered file containing N bytes");
+            println!("e.g. PadIndex::new_standard([0, 0, 0, 1])");
+            println!();
+            println!("Starting with the first largest dimension [Here, 0, 0, 1])");
+
+            let padnest_0 = prompt_for_u8("How many padsets? (0-255): ");
+            let pad = prompt_for_u8("How many pads? (0-255): ");
+            let page = prompt_for_u8("How many pages? (0-255): ");
+            let line = prompt_for_u8("How many lines? (0-255): ");
+            let per_line: usize = prompt_for_usize("Bytes per line? (0-255): ");
+            let frame_array = PadIndex::Standard([padnest_0, pad, page, line]);
+
+            /*
+            /// ## Arguments
+            /// * `padset_root` - Absolute path where padset will be created
+            /// * `max_pad_index_array` - Index specifying creation bounds (0-based inclusive)
+            ///   - Each byte specifies max index to create at that level
+            ///   - [0,0,0,1] = 1 nest, 1 pad, 1 page, 2 lines
+            ///   - [1,2,3,4] = 2 nests, 3 pads, 4 pages, 5 lines
+            ///   - Can be 4 or 8 bytes depending on desired hierarchy depth
+            /// * `number_of_bytes_per_line` - How many random bytes per line file (16-4096)
+            /// * `dir_checksum_files` - If true, create hashes at pad/page level
+            ///
+            /// # Returns
+            /// * `Ok(())` - Padset created successfully
+            /// * `Err(PadnetError)` - Creation failed
+            pub fn padnet_make_one_pad_set(
+                padset_root: &Path,
+                max_pad_index_array: &PadIndex,
+                number_of_bytes_per_line: usize,
+                dir_checksum_files: ValidationLevel,
+            ) -> Result<(), PadnetError> {
+
+            /// Integrity validation strategy for pad directories
+            /// Determines if/when dir hashes are created during pad generation
+            #[derive(Debug, Clone, Copy)]
+            pub enum ValidationLevel {
+                /// Hash entire pad directories (pad_XXX level)
+                /// Creates hash_pad_XXX files as siblings to pad directories
+                PadLevel,
+
+                /// Hash each page directory (page_XXX level)
+                /// Creates hash_page_XXX files as siblings to page directories
+                PageLevel,
+
+                /// No validation - trust filesystem integrity
+                None,
+            }
+            */
+
+            // let bounds = PadIndex::new_standard([0, 0, 0, 10]); // 11 lines
+            match padnet_make_one_pad_set(
+                &outgoing_dir_result,
+                &frame_array,
+                per_line,
+                ValidationLevel::PageLevel
+            ) {
+                Ok(()) => println!("  ✓ Alice's padset created (11 lines, 64 bytes each)"),
+                Err(e) => {
+                    println!("  ✗ IS The Fail: {}", e);
+                    return Err(GpgError::GpgOperationError("Invalid choice".to_string()));
+                }
+            }
+
+        }
         _ => {
             return Err(GpgError::GpgOperationError("Invalid choice".to_string()));
         }
