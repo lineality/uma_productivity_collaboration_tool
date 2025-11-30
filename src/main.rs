@@ -11016,7 +11016,7 @@ fn load_core_node_from_toml_file(
 }
 
 
-
+// NO!!!!!! NOT TOML CRATE!!!!!!!!!!!!
 // Generic function to save any serializable data to a TOML file
 pub fn save_toml_to_file<T: Serialize>(data: &T, file_path: &Path) -> Result<(), Error> {
     let toml_string = toml::to_string(data).map_err(|e| {
@@ -14871,60 +14871,261 @@ fn add_new_messagepost_message(
     Ok(())
 }
 
-/// Read user confirmation with clean stdin buffer
-///
-/// # Purpose
-///
-/// Safely reads a yes/no confirmation from user by first clearing
-/// any leftover input in the stdin buffer. This prevents the common
-/// issue where previous operations leave characters in the buffer
-/// that interfere with fresh prompts.
+/// Saves a clearsigned 0.toml configuration file for message post browser.
 ///
 /// # Project Context
+/// Bootstrap function for team channel creation. Creates the initial
+/// configuration file that defines message browser metadata including
+/// ownership, access control, and size limits. This file must be
+/// cryptographically signed to ensure configuration integrity.
 ///
-/// Interactive CLI applications often have stdin buffer pollution when
-/// multiple input operations occur in sequence. This helper ensures
-/// each confirmation prompt starts with a clean slate.
+/// # Purpose
+/// This single-purpose function replaces toml-crate dependency by manually
+/// constructing the TOML string from the metadata struct. Only the 8 required
+/// fields are serialized; all optional message_post_* fields are ignored.
+///
+/// # Process Flow
+/// 1. Validate input metadata (defensive checks)
+/// 2. Manually construct TOML string with exact field ordering
+/// 3. Delegate to save_message_as_clearsigned_toml() for file write + GPG signing
+///
+/// # Field Order (Must Match)
+/// - owner
+/// - teamchannel_collaborators_with_access
+/// - updated_at_timestamp
+/// - messageposts_expire_after_n_min
+/// - node_name
+/// - path_in_node
+/// - max_message_size_char
+/// - total_max_size_mb
 ///
 /// # Arguments
-///
-/// * `prompt` - The question/prompt to display to user
+/// * `metadata` - Metadata struct containing all configuration values
+/// * `file_path` - Absolute path where 0.toml should be created
 ///
 /// # Returns
+/// * `Ok(())` - File successfully created and clearsigned
+/// * `Err(io::Error)` - If validation fails or file operation fails
 ///
-/// * `Ok(true)` - User confirmed (answered 'y' or 'yes')
-/// * `Ok(false)` - User declined (answered 'n' or 'no' or anything else)
-/// * `Err(io::Error)` - I/O error reading from stdin
+/// # Errors
+/// All errors prefixed with "SCMC0:" for traceability
+/// - Invalid input (empty owner, empty node_name, empty path)
+/// - File write or GPG signing failures (from delegated function)
 ///
-/// # Examples
-///
-/// ```rust
-/// if read_user_confirmation("Proceed with deletion?")? {
-///     delete_file()?;
-/// } else {
-///     println!("Cancelled");
-/// }
-/// ```
-fn read_user_confirmation(prompt: &str) -> io::Result<bool> {
-    // Clear stdin buffer first
-    println!("\nPress ENTER to continue...");
-    let mut _buffer_clear = String::new();
-    io::stdin().read_line(&mut _buffer_clear)?;
+/// # Security
+/// The generated file is clearsigned using the local user's GPG key,
+/// ensuring authenticity and integrity of the configuration.
+fn save_clearsigned_messagepost_config_0toml(
+    metadata: &NodeMessagePostBrowserMetadata,
+    file_path: &Path,
+) -> Result<(), io::Error> {
 
-    // Show prompt
-    print!("{} (y/n): ", prompt);
-    io::stdout().flush()?;
+    debug_log!("SCMC0: Starting save_clearsigned_messagepost_config_0toml");
+    debug_log!("SCMC0: Target file path: {:?}", file_path);
 
-    // Read response
-    let mut response = String::new();
-    io::stdin().read_line(&mut response)?;    // Clear stdin buffer first
-    println!("\nPress ENTER to continue...");
-    let mut _buffer_clear = String::new();
-    io::stdin().read_line(&mut _buffer_clear)?;
-    let response = response.trim().to_lowercase();
+    // =================================================
+    // Debug-Assert, Test-Assert, Production-Catch
+    // =================================================
 
-    // Return true only for explicit yes
-    Ok(response == "y" || response == "yes")
+    // Debug-Assert: Owner must not be empty
+    #[cfg(all(debug_assertions, not(test)))]
+    debug_assert!(
+        !metadata.owner.is_empty(),
+        "SCMC0: Owner field must not be empty"
+    );
+
+    // Production-Catch: Owner must not be empty
+    if metadata.owner.is_empty() {
+        debug_log!("SCMC0: Error - Owner field is empty");
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "SCMC0: Owner field must not be empty"
+        ));
+    }
+
+    // Debug-Assert: Node name must not be empty
+    #[cfg(all(debug_assertions, not(test)))]
+    debug_assert!(
+        !metadata.node_name.is_empty(),
+        "SCMC0: Node name must not be empty"
+    );
+
+    // Production-Catch: Node name must not be empty
+    if metadata.node_name.is_empty() {
+        debug_log!("SCMC0: Error - Node name is empty");
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "SCMC0: Node name must not be empty"
+        ));
+    }
+
+    // Debug-Assert: Path in node must not be empty
+    #[cfg(all(debug_assertions, not(test)))]
+    debug_assert!(
+        !metadata.path_in_node.is_empty(),
+        "SCMC0: Path in node must not be empty"
+    );
+
+    // Production-Catch: Path in node must not be empty
+    if metadata.path_in_node.is_empty() {
+        debug_log!("SCMC0: Error - Path in node is empty");
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "SCMC0: Path in node must not be empty"
+        ));
+    }
+
+    debug_log!("SCMC0: Input validation passed");
+    debug_log!("SCMC0: Owner: {}", metadata.owner);
+    debug_log!("SCMC0: Node name: {}", metadata.node_name);
+    debug_log!("SCMC0: Collaborators count: {}", metadata.teamchannel_collaborators_with_access.len());
+
+    // =================================================
+    // Manual TOML String Construction
+    // =================================================
+
+    // Build collaborators array string: ["alice", "bob"]
+    let collaborators_array = if metadata.teamchannel_collaborators_with_access.is_empty() {
+        String::from("[]")
+    } else {
+        let mut array_string = String::from("[");
+        for (i, collaborator) in metadata.teamchannel_collaborators_with_access.iter().enumerate() {
+            if i > 0 {
+                array_string.push_str(", ");
+            }
+            array_string.push('"');
+            array_string.push_str(collaborator);
+            array_string.push('"');
+        }
+        array_string.push(']');
+        array_string
+    };
+
+    debug_log!("SCMC0: Constructed collaborators array: {}", collaborators_array);
+
+    // Construct TOML string with exact field ordering
+    // Field order must match: owner, collaborators, timestamp, expires,
+    // node_name, path, max_char, max_mb
+    let toml_content = format!(
+        "owner = \"{}\"\n\
+         teamchannel_collaborators_with_access = {}\n\
+         updated_at_timestamp = {}\n\
+         messageposts_expire_after_n_min = {}\n\
+         node_name = \"{}\"\n\
+         path_in_node = \"{}\"\n\
+         max_message_size_char = {}\n\
+         total_max_size_mb = {}\n",
+        metadata.owner,
+        collaborators_array,
+        metadata.updated_at_timestamp,
+        metadata.messageposts_expire_after_n_min,
+        metadata.node_name,
+        metadata.path_in_node,
+        metadata.max_message_size_char,
+        metadata.total_max_size_mb
+    );
+
+    debug_log!("SCMC0: TOML content constructed, length: {} bytes", toml_content.len());
+    debug_log!("SCMC0: TOML content preview (first 200 chars): {}",
+        if toml_content.len() > 200 {
+            &toml_content[..200]
+        } else {
+            &toml_content
+        }
+    );
+
+    // =================================================
+    // Delegate to Existing Clearsigning Function
+    // =================================================
+
+    debug_log!("SCMC0: Delegating to save_message_as_clearsigned_toml");
+
+    // Call existing function that handles:
+    // - Directory validation/creation
+    // - File writing
+    // - GPG fingerprint retrieval
+    // - Clearsigning operation
+    save_message_as_clearsigned_toml(file_path, &toml_content)
+        .map_err(|e| {
+            debug_log!("SCMC0: Error from save_message_as_clearsigned_toml: {}", e);
+            io::Error::new(
+                e.kind(),
+                format!("SCMC0: Failed to save clearsigned config: {}", e)
+            )
+        })?;
+
+    debug_log!("SCMC0: Successfully created clearsigned 0.toml at: {:?}", file_path);
+    debug_log!("SCMC0: save_clearsigned_messagepost_config_0toml completed");
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod scmc0_tests {
+    use super::*;
+
+    #[test]
+    fn test_scmc0_empty_owner_fails() {
+        let metadata = NodeMessagePostBrowserMetadata {
+            owner: String::new(), // Empty owner
+            teamchannel_collaborators_with_access: vec!["alice".to_string()],
+            updated_at_timestamp: 1234567890,
+            messageposts_expire_after_n_min: 99999,
+            node_name: "test_node".to_string(),
+            path_in_node: "/test".to_string(),
+            max_message_size_char: 4096,
+            total_max_size_mb: 512,
+            // Special configurations (not for team channel)
+            message_post_gpgtoml_required:None,
+            message_post_data_format_specs_integer_ranges_from_to_tuple_array: None,
+            message_post_data_format_specs_int_string_ranges_from_to_tuple_array: None,
+            message_post_max_string_length_int: None,
+            message_post_is_public_bool: None,
+            message_post_user_confirms_bool : None,
+            message_post_start_date_utc_posix: None,
+            message_post_end_date_utc_posix: None,
+        };
+
+        let temp_path = Path::new("/tmp/test_0.toml");
+        let result = save_clearsigned_messagepost_config_0toml(&metadata, temp_path);
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("SCMC0"));
+    }
+
+    #[test]
+    fn test_scmc0_empty_collaborators_succeeds() {
+        // Test that empty collaborators vec is valid
+        let metadata = NodeMessagePostBrowserMetadata {
+            owner: "alice".to_string(),
+            teamchannel_collaborators_with_access: vec![], // Empty is OK
+            updated_at_timestamp: 1234567890,
+            messageposts_expire_after_n_min: 99999,
+            node_name: "test_node".to_string(),
+            path_in_node: "/test".to_string(),
+            max_message_size_char: 4096,
+            total_max_size_mb: 512,
+            // Special configurations (not for team channel)
+            message_post_gpgtoml_required:None,
+            message_post_data_format_specs_integer_ranges_from_to_tuple_array: None,
+            message_post_data_format_specs_int_string_ranges_from_to_tuple_array: None,
+            message_post_max_string_length_int: None,
+            message_post_is_public_bool: None,
+            message_post_user_confirms_bool : None,
+            message_post_start_date_utc_posix: None,
+            message_post_end_date_utc_posix: None,
+        };
+
+        // Note: This will fail at GPG signing stage in test environment
+        // but validates that empty collaborators passes our checks
+        let temp_path = Path::new("/tmp/test_empty_collab_0.toml");
+        let result = save_clearsigned_messagepost_config_0toml(&metadata, temp_path);
+
+        // If it fails, it should be at GPG stage, not our validation
+        if let Err(e) = result {
+            assert!(!e.to_string().contains("collaborators"));
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -14933,7 +15134,7 @@ struct NodeMessagePostBrowserMetadata {
     owner: String, // owner of this item
     teamchannel_collaborators_with_access: Vec<String>,
     updated_at_timestamp: u64, // utc posix timestamp
-    expires_after_min: u64, // utc posix timestamp
+    messageposts_expire_after_n_min: u64, // utc posix timestamp
 
     node_name: String,
     path_in_node: String,
@@ -14973,7 +15174,7 @@ impl NodeMessagePostBrowserMetadata {
         node_name: &str,
         owner: String,
         teamchannel_collaborators_with_access: Vec<String>,
-        expires_after_min: u64,
+        messageposts_expire_after_n_min: u64,
         // Special configurations
         message_post_gpgtoml_required: Option<bool>,
         message_post_data_format_specs_integer_ranges_from_to_tuple_array: Option<Vec<(i32, i32)>>,
@@ -14991,7 +15192,7 @@ impl NodeMessagePostBrowserMetadata {
             max_message_size_char: 4096, // Default: 4096 characters...too big?
             total_max_size_mb: 512, // Default: 1024 MB
             updated_at_timestamp: get_current_unix_timestamp(),
-            expires_after_min: expires_after_min,  // TODO update this with real something
+            messageposts_expire_after_n_min: messageposts_expire_after_n_min,  // TODO update this with real something
             teamchannel_collaborators_with_access: teamchannel_collaborators_with_access, // by default use state-struct node members
             owner: owner,
 
@@ -15838,13 +16039,21 @@ fn create_new_team_channel(
         None,
     );
 
-    match save_toml_to_file(&metadata, &metadata_path) {
-        Ok(_) => debug_log!("CTC: Saved metadata to 0.toml"),
+    match save_clearsigned_messagepost_config_0toml(&metadata, &metadata_path) {
+        Ok(_) => debug_log!("CTC: Saved clearsigned metadata to 0.toml"),
         Err(e) => {
             debug_log!("CTC: Error saving metadata: {}", e);
             return Err(ThisProjectError::IoError(e));
         }
     }
+
+    // match save_toml_to_file(&metadata, &metadata_path) {
+    //     Ok(_) => debug_log!("CTC: Saved metadata to 0.toml"),
+    //     Err(e) => {
+    //         debug_log!("CTC: Error saving metadata: {}", e);
+    //         return Err(ThisProjectError::IoError(e));
+    //     }
+    // }
 
     // Log the results
     debug_log!("CTC: create_new_team_channel(): Collaborators with access: {:?}", teamchannel_collaborators_with_access);
@@ -16703,7 +16912,7 @@ fn create_core_node(
     let pa6_feedback = q_and_a_get_pa6_feedback()?;
 
     // Get user input for message post configuration fields
-    let expires_after_min = q_and_a_get_message_expires_after_min()?;
+    let messageposts_expire_after_n_min = q_and_a_get_message_messageposts_expire_after_n_min()?;
     print!("\n");
     let message_post_gpgtoml_required = q_and_a_get_message_post_gpgtoml_required()?;
     print!("\n");
@@ -16743,7 +16952,7 @@ fn create_core_node(
         &node_name,
         owner.clone(),
         teamchannel_collaborators_with_access.clone(),
-        expires_after_min,
+        messageposts_expire_after_n_min,
         // Special configurations
         message_post_gpgtoml_required,
         message_post_integer_ranges.clone(),
@@ -18228,7 +18437,7 @@ fn q_and_a_get_message_post_int_string_ranges() -> Result<Option<Vec<(i32, i32)>
 ///
 /// # Returns
 /// * `Result<Option<usize>, ThisProjectError>` - Maximum string length or None
-fn q_and_a_get_message_expires_after_min() -> Result<u64, ThisProjectError> {
+fn q_and_a_get_message_messageposts_expire_after_n_min() -> Result<u64, ThisProjectError> {
     println!("Enter default-lifetime of post in minutes (or press Enter for 9999999):");
     println!("Example: 42 (Massages respire after 42 minutes.");
 
@@ -31033,14 +31242,14 @@ fn handle_local_owner_desk(
                     } else {
                     // Normal Mode, No Padnet OTP Network Layer
 
-                    // 6.3 Extract the clearsigned data
-                    match extract_clearsign_data(&decrypted_clearsignfile_data) {
-                        Ok(data) => data,
-                        Err(e) => {
-                            debug_log!("HLOD 6.3: Clearsign extraction failed: {}. Skipping.", e);
-                            continue;
+                        // 6.3 Extract the clearsigned data
+                        match extract_clearsign_data(&decrypted_clearsignfile_data) {
+                            Ok(data) => data,
+                            Err(e) => {
+                                debug_log!("HLOD 6.3: Clearsign extraction failed: {}. Skipping.", e);
+                                continue;
+                            }
                         }
-                    }
 
 
                     };
@@ -31054,6 +31263,7 @@ fn handle_local_owner_desk(
                     let file_str = std::str::from_utf8(&extracted_clearsigned_file_data)
                         .map_err(|_| ThisProjectError::InvalidData("Invalid UTF-8 in file content".into()))?;
 
+                    // todo?
                     let save_as_gpgtoml = file_str.contains("\nmessagepost_gpgtoml = true\n")
                         || file_str.contains("\ncorenode_gpgtoml = true\n");
 
@@ -31091,7 +31301,16 @@ fn handle_local_owner_desk(
                             "Unable to get team channel name".into())
                         )?;
 
-                    // TODO for now only handling IM and Node files
+                    // ======================
+                    // File Type Processing 1. message Posts
+                    // ======================
+
+                    // TODO handling:
+                    // 1. message Posts <-
+                    // 2. 0toml config for message posts
+                    // 3. Nodes
+                    // future
+                    // 4. Uma Data
                     if file_str.contains("filepath_in_node = \"/message_posts_browser\"") {
                         debug_log!("HLOD-InTray: an instant message file.");
 
@@ -31183,19 +31402,122 @@ fn handle_local_owner_desk(
 
                     }
 
-                    // HEREHERe
-                    // if message file
-                    // if nav-state fule
-                    // if contains gpg "\ngpgtoml = true\n"
-                    if file_str.contains("\nmessagepost_gpgtoml = true\n") || file_str.contains("\ncorenode_gpgtoml = true\n"){
 
-                        // save .gpg version as .gpgtoml
-                        // ...file name if message...
+                    // ======================
+                    // File Type Processing 2: 0toml config for message posts
+                    // ======================
+
+                    // TODO handling:
+                    // 1. message Posts
+                    // 2. 0toml config for message posts <-
+                    // 3. Nodes
+                    // future
+                    // 4. Uma Data
+                    if file_str.contains("messageposts_expire_after_n_min =") {
+                        debug_log!("HLOD-InTray: an instant message file.");
+
+                        // 7.2
+                        // 2. Generating File Path
+
+                        // let mut current_path = PathBuf::from("project_graph_data/team_channels");
+                        let mut current_path = make_input_path_name_abs_executabledirectoryrelative_nocheck(
+                            "project_graph_data/team_channels"
+                        )?;
+
+                        current_path.push(&team_channel_name);
+                        current_path.push("message_posts_browser");
+
+                        // "Always"
+                        current_path.push("0.toml");
+
+                        // incoming_file_path = get_next_message_file_path(
+                        //     &current_path,
+                        //     &local_owner_desk_setup_data.remote_collaborator_name // local user name
+                        // );
+
+
+                        // NEW: Adjust extension based on flag
+                        if save_as_gpgtoml {
+                            current_path.set_extension("gpgtoml");
+                        }
+
+                        debug_log!(
+                            "HLOD 7.2 got-made incoming_file_path -> {:?}",
+                            current_path
+                        );
+
+                        // check: see if this same file was already saved
+                        // 1. Calculate the hash of the received file content using the *local* user's salts and the *raw bytes*:
+                        let received_file_hash_result = calculate_pearson_hashlist_for_string( // Use a byte-oriented hash function
+                            &file_str,  // Hash the raw bytes
+                            &local_owner_desk_setup_data.local_user_salt_list, // Use *local* user's salts
+                        );
+
+                        let received_file_hash = match received_file_hash_result {
+                            Ok(hash) => hash,
+                            Err(e) => {
+                                debug_log!("Error calculating hash for received file: {}", e);
+                                continue; // Skip to next file if hashing fails
+                            }
+                        };
+
+                        // 2. Check for duplicates and insert the hash (as before)
+                        if file_hash_set_session_nonce.contains(&received_file_hash) {
+                            debug_log!("Duplicate file received (hash match). Discarding.");
+                            continue; // Discard the duplicate file
+                        }
+                        file_hash_set_session_nonce.insert(received_file_hash); // Insert BEFORE saving
+
+                        // 3. Saving the File
+                        // MODIFIED: Choose what to save
+                        let data_to_save = if save_as_gpgtoml {
+                            still_encrypted_file_blob  // Save encrypted version
+                        } else {
+                            &decrypted_clearsignfile_data  // Save clearsigned version
+                        };
+
+                        // 3. Saving the File
+
+                        // Create parent directories if they don't exist
+                        if let Some(parent) = Path::new(&current_path).parent() {
+                            if let Err(e) = fs::create_dir_all(parent) {
+                                debug_log!("HLOD-InTray: Failed to create directories: {:?}", e);
+                                return Err(ThisProjectError::from(e));
+                            }
+                        }
+
+                        // 3. Saving the File
+                        if let Err(e) = fs::write(&current_path, data_to_save) {
+                            debug_log!("HLOD-InTray: Failed to write message file: {:?}", e);
+                            return Err(ThisProjectError::from(e));
+                        }
+
+                        debug_log!("7.3 HLOD-InTray: IM message file saved to: {:?}", current_path);
 
                     }
 
 
-                    // TODO for now only handling IM and Node files
+                    // // TODO?
+                    // // if message file
+                    // // if nav-state fule
+                    // // if contains gpg "\ngpgtoml = true\n"
+                    // if file_str.contains("\nmessagepost_gpgtoml = true\n") || file_str.contains("\ncorenode_gpgtoml = true\n"){
+
+                    //     // save .gpg version as .gpgtoml
+                    //     // ...file name if message...
+
+                    // }
+
+                    // ======================
+                    // File Type Processing 3. Node files
+                    // ======================
+
+                    // For now only handling:
+                    // 1. message-post files
+                    // 2. 0toml message-post config files
+                    // 3. Node files <-
+                    // Future:
+                    // 4. Uma Data
                     // TODO, don't load whole file...
                     if file_str.contains("node_unique_id = \"") {
                         debug_log!("HLOD-InTray: an Ode file. (Grecian Urn...you know.)");
@@ -31372,6 +31694,10 @@ fn handle_local_owner_desk(
                                     debug_log!("7.3 HLOD-InTray: moved file moved from: {:?}", &olddir_abs_node_directory_path);
                                     debug_log!("7.3 HLOD-InTray: moved-new file saved to: {:?}", &new_full_abs_node_directory_path);
 
+                                } else if file_str.contains("messageposts_expire_after_n_min =") {
+
+
+
                                 } else {
                                     // 3. saving node as clearsigned .toml or .gpgtoml
 
@@ -31401,7 +31727,6 @@ fn handle_local_owner_desk(
                                     }
 
                                     debug_log!("7.3 HLOD-InTray: new file saved to: {:?}", new_node_file_path);
-
 
 
                                     // Node is new, save it:
@@ -31438,8 +31763,6 @@ fn handle_local_owner_desk(
                             }
                         }
                     }
-
-
 
                       /////////////
                      // Echo Base
@@ -31496,17 +31819,13 @@ fn handle_local_owner_desk(
                     );
 
 
-                    //
-
-
-
                     // 1.4 Send Echo Ready Signal (using a function)
                     // 2nd copy for other threads
                     let rc_network_type_string_2 = rc_network_type_string.clone();
                     let rc_ip_addr_string_2 = rc_ip_addr_string.clone();
 
                     // TODO: how long?
-                    // this lets last item run
+                    // This lets last item run
                     thread::sleep(Duration::from_secs(5));
                     thread::sleep(Duration::from_secs(3));
 
@@ -31519,18 +31838,6 @@ fn handle_local_owner_desk(
                         &band_local_network_type, // network_type: String, // for nt
                         band_local_network_index, //network_index: u8, // for ni
                     )?;
-                    // if let Some(addr_2) = ipv6_addr_2 {
-                    //     send_ready_signal(
-                    //         &salt_list_2,
-                    //         &addr_2,
-                    //         readyport_2,
-                    //         received_file_updatedat_timestamp,
-                    //         false,
-                    //     );
-                    // }
-
-                // },
-                // Err(_) => todo!() // end Ok((amt, src)) => { // end Ok((amt, src)) => {
 
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {

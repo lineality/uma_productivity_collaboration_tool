@@ -1,0 +1,56 @@
+
+/// Read user confirmation with clean stdin buffer
+///
+/// # Purpose
+///
+/// Safely reads a yes/no confirmation from user by first clearing
+/// any leftover input in the stdin buffer. This prevents the common
+/// issue where previous operations leave characters in the buffer
+/// that interfere with fresh prompts.
+///
+/// # Project Context
+///
+/// Interactive CLI applications often have stdin buffer pollution when
+/// multiple input operations occur in sequence. This helper ensures
+/// each confirmation prompt starts with a clean slate.
+///
+/// # Arguments
+///
+/// * `prompt` - The question/prompt to display to user
+///
+/// # Returns
+///
+/// * `Ok(true)` - User confirmed (answered 'y' or 'yes')
+/// * `Ok(false)` - User declined (answered 'n' or 'no' or anything else)
+/// * `Err(io::Error)` - I/O error reading from stdin
+///
+/// # Examples
+///
+/// ```rust
+/// if read_user_confirmation("Proceed with deletion?")? {
+///     delete_file()?;
+/// } else {
+///     println!("Cancelled");
+/// }
+/// ```
+fn read_user_confirmation(prompt: &str) -> io::Result<bool> {
+    // Clear stdin buffer first
+    println!("\nPress ENTER to continue...");
+    let mut _buffer_clear = String::new();
+    io::stdin().read_line(&mut _buffer_clear)?;
+
+    // Show prompt
+    print!("{} (y/n): ", prompt);
+    io::stdout().flush()?;
+
+    // Read response
+    let mut response = String::new();
+    io::stdin().read_line(&mut response)?;    // Clear stdin buffer first
+    println!("\nPress ENTER to continue...");
+    let mut _buffer_clear = String::new();
+    io::stdin().read_line(&mut _buffer_clear)?;
+    let response = response.trim().to_lowercase();
+
+    // Return true only for explicit yes
+    Ok(response == "y" || response == "yes")
+}
