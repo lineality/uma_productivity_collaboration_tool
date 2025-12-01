@@ -429,6 +429,9 @@ use padnet_otp_module::{
     PadIndex, padnet_writer_strict_cleanup_xor_file_to_resultpath, PadnetError, padnet_reader_xor_file
 };
 
+mod source_it_module;
+use source_it_module::{SourcedFile, handle_sourceit_command};
+
 // For TUI
 #[macro_use]
 mod tiny_tui_module;
@@ -8009,10 +8012,10 @@ fn write_formatted_navigation_legend_to_tui() -> Result<(),Error> {
 
     // chagne name to refresh view?
     // write_red_hotkey("", "passive ")?;
+    write_red_hotkey("", "refresh ")?;
+    write_red_green_hotkey("", "tmux-split", "|")?;
 
-    write_red_green_hotkey("", "tmux split", "")?;
 
-    write_red_hotkey("", " refresh|")?;
 
     write_red_hotkey("invite", "")?;
     // write_red_hotkey("cvy", "|")?;
@@ -25438,10 +25441,12 @@ pub fn invite_wizard() -> Result<(), GpgError> {
        invite update
     */
     println!(">> Invite/Update Wizard <<");
-    println!("\nThere are three steps...");
+    println!("\nThere are ~three steps to setup a new team...");
     println!("1. sharing gpg");
     println!("2. sharing address-book file");
     println!("3. sharing team-channel");
+    println!("");
+    println!("Other Setup Tools:");
     println!("4. update a Node that you own");  // update_core_node()
     println!("5. make a set of pads (One Time Pad)");
     println!("\nQ: Which step do you want to do now?");
@@ -37829,6 +37834,236 @@ fn optional_passive_mode() -> bool {
     false
 }
 
+/// Checks if version information was requested via command line arguments.
+///
+/// # Arguments
+///
+/// * `args` - A slice of string references representing command line arguments
+///
+/// # Returns
+///
+/// `true` if either "--version" or "-v" is found in the arguments
+pub fn is_version_requested(args: &[String]) -> bool {
+    args.iter()
+        .any(|arg| arg == "--version" || arg == "-v" || arg == "-V")
+}
+
+/// Version information embedded at compile time from Cargo.toml
+///
+/// These constants are populated by the Rust compiler using the env! macro,
+/// which reads environment variables that Cargo sets during compilation.
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+const PKG_NAME: &str = env!("CARGO_PKG_NAME");
+/// Fallback version string when all else fails
+const FALLBACK_VERSION: &str = "version unknown";
+
+/// Constructs and returns a formatted version statement from compile-time constants.
+///
+/// This function uses compile-time constants as a reliable backup.
+/// It will return SOMETHING even if one constant is empty.
+///
+/// # Returns
+///
+/// * `Ok(String)` containing whatever version info is available
+/// * `Err` only if both constants are completely empty (should never happen)
+///
+/// # Example
+///
+/// ```
+/// match backup_get_version_statement() {
+///     Ok(version) => println!("{}", version),
+///     Err(e) => eprintln!("Error: {}", e),
+/// }
+/// / Output: my-app 1.0.0
+/// ```
+pub fn backup_get_version_statement() -> Result<String, ThisProjectError> {
+    println!("backup_get_version_statement PKG_NAME: {}, VERSION: {}", PKG_NAME, VERSION);
+
+    // Return whatever we have - this is a BACKUP!
+    let result = if !PKG_NAME.is_empty() && !VERSION.is_empty() {
+        // Best case: both available
+        format!("{} {}", PKG_NAME, VERSION)
+    } else if !PKG_NAME.is_empty() {
+        // Only package name available
+        format!("{} (version unknown)", PKG_NAME)
+    } else if !VERSION.is_empty() {
+        // Only version available
+        format!("unknown {}", VERSION)
+    } else {
+        // Both empty - this should never happen with env! macros
+        format!("unknown")
+    };
+
+    Ok(result)
+}
+
+/// Writes version information to stdout with three levels of failsafe.
+///
+/// Attempts to display version information in order of preference:
+/// 1. Full version info from `format_version_info()`
+/// 2. Basic version from compile-time constants (partial data is OK)
+/// 3. Fallback constant string
+///
+/// # Returns
+///
+/// * `Ok(())` if any version information was successfully written
+/// * `Err(FileFantasticError)` only if all attempts to write failed
+///
+/// # Errors
+///
+/// Returns an error only if stdout is completely unavailable and
+/// all three levels of version output failed.
+pub fn display_version() -> Result<(), ThisProjectError> {
+    let mut stdout = io::stdout();
+
+    // Level 2: Try backup version from compile-time constants
+    match backup_get_version_statement() {
+        Ok(backup_version) => {
+            if writeln!(stdout, "{}", backup_version).is_ok() {
+                // Successfully wrote backup version
+
+                    // Successfully wrote, now flush and return
+                    return stdout.flush().map_err(|e| ThisProjectError::IoError(e));
+                           }
+            // Write failed, print warning and continue to final fallback
+            eprintln!("Warning: display_version Failed to write backup version info to stdout");
+        }
+        Err(e) => {
+            // Even backup version construction failed (very unlikely)
+            eprintln!("Warning: display_version Could not construct backup version: {}", e);
+        }
+    }
+
+    // Level 3: Last resort - try to write fallback constant
+    if writeln!(stdout, "{}", FALLBACK_VERSION).is_ok() {
+        // Even the minimal version worked
+        // return stdout.flush().map_err(|e| format!("Error {}", e));
+         return Err(ThisProjectError::from("display_version FALLBACK_VERSION error"));
+    }
+
+    // All attempts failed - stdout is completely broken
+    eprintln!("Error: display_version Could not write any version information to stdout");
+    Err(ThisProjectError::from("Error: display_version Could not write any version information to stdout"))
+}
+
+
+// Developer explicitly lists files to embed
+const FF_SOURCE_FILES: &[SourcedFile] = &[
+    SourcedFile::new("Cargo.toml", include_str!("../Cargo.toml")),
+    SourcedFile::new("src/main.rs", include_str!("main.rs")),
+    SourcedFile::new(
+        "src/buffy_format_write_module.rs",
+        include_str!("buffy_format_write_module.rs"),
+    ),
+    SourcedFile::new(
+        "src/source_it_module.rs",
+        include_str!("source_it_module.rs"),
+    ),
+    SourcedFile::new(
+        "src/padnet_otp_module.rs",
+        include_str!("padnet_otp_module.rs"),
+    ),
+    SourcedFile::new(
+        "src/read_toml_field.rs",
+        include_str!("read_toml_field.rs"),
+    ),
+    SourcedFile::new(
+        "src/source_it_module.rs",
+        include_str!("source_it_module.rs"),
+    ),
+    SourcedFile::new(
+        "src/handle_gpg.rs",
+        include_str!("handle_gpg.rs"),
+    ),
+    SourcedFile::new(
+        "src/clearsign_toml_module.rs",
+        include_str!("clearsign_toml_module.rs"),
+    ),
+    SourcedFile::new("README.md", include_str!("../README.md")),
+    SourcedFile::new("LICENSE", include_str!("../LICENSE")),
+
+    SourcedFile::new(
+        "src/tiny_tui_module/mod.rs",
+        include_str!("tiny_tui_module/mod.rs"),
+    ),
+
+    SourcedFile::new(
+        "src/manage_absolute_executable_directory_relative_paths.rs",
+        include_str!("manage_absolute_executable_directory_relative_paths.rs"),
+    ),
+    SourcedFile::new(".gitignore", include_str!("../.gitignore")),
+];
+
+
+fn handle_args() -> bool {
+
+    // Collect command line arguments
+    // let args: Vec<String> = env::args().collect();
+    let args: Vec<String> = std::env::args().skip(1).collect();
+
+    if is_version_requested(&args) {
+        match display_version() {
+            Ok(()) => {
+                std::process::exit(0)
+            }
+            Err(e) => {
+                // Failed to write to stdout, try stderr as fallback
+                eprintln!("Error displaying version: {}", e);
+                std::process::exit(1);
+            }
+
+
+        }
+    }
+
+    // Module: Source It (export source code)
+    if args.contains(&"--source".to_string()) {
+        match handle_sourceit_command("uma_collaboration_productivity_cli", None, FF_SOURCE_FILES) {
+            Ok(path) => {println!("Source extracted to: {}", path.display());
+                // return true to tell Uma to exit.
+                std::process::exit(0)
+            }
+            Err(e) => {
+                // Failed to write to stdout, try stderr as fallback
+                eprintln!("Failed to extract source: {}", e);
+                std::process::exit(1);
+            }
+            // Err(e) => eprintln!("Failed to extract source: {}", e);
+        }
+    }
+
+    // Check if help was requested
+    if check_for_help_flag_in_args(&args) {
+        println!("Help requested!");
+        println!("pirate's args {:?}", &args);
+        // Display help menu instead of launching file manager
+        match display_help_menu_system() {
+            Ok(()) => {
+                // Help displayed successfully, exit cleanly
+                std::process::exit(0);
+            }
+            Err(e) => {
+                eprintln!("Error displaying help: {}", e);
+                // std::process::exit(1);
+            }
+        }
+        match display_quick_usage_info() {
+            Ok(()) => {
+                // Help displayed successfully, exit cleanly
+                std::process::exit(0);
+            }
+            Err(e) => {
+                eprintln!("Error display_quick_usage_info: {}", e);
+                std::process::exit(1);
+            }
+        }
+        // std::process::exit(0)
+    }
+
+    // Default
+    false
+}
+
 /*
 An Appropriately Svelt Mainland:
 */
@@ -37843,6 +38078,10 @@ An Appropriately Svelt Mainland:
 ///
 /// This also allows the user to manually set the halt signal.
 fn main() {
+
+    if handle_args() {
+        return;
+    };
 
     if optional_passive_mode() {
         return;
@@ -38070,7 +38309,8 @@ enum HelpSection {
     Navigation,
     MessagePostsHelp,
     TasksHelp,
-    // SortingFiltering,
+    PartnerPrograms,
+    CustomMessagePost,
     // SearchOptions,
     // FileOperations,
     // TerminalManagement,
@@ -38094,14 +38334,13 @@ const HELP_MENU_HEADER: &str = r#"
 /// Quick start and examples help section content
 const HELP_SECTION_QUICK_START: &str = r#"
 ═══ QUICK START & EXAMPLES ═══     Press Enter to return to help menu
+ Modal Text User Interface application to run in terminal, cli:
  USAGE in terminal:      uma
-
  OPTIONS:
    -h, --help            Show this help menu
    --source              Get uma source code, Rust 'crate'
    --passive_message_mode [path]
    --passive_task_mode [path]
-
  EXAMPLES:
    uma --help             View uma help menu (Alternative)
    uma --passive_task_mode /wolf_team/cat_task/task_browser
@@ -38119,33 +38358,34 @@ const HELP_SECTION_QUICK_START: &str = r#"
    9. q   -> quit"#;
 
 const HELP_SECTION_MAIN_TOPBAR_LEGEND: &str = r#"
-quit back|term|dir file|name size mod|get-send file v,y,p|str>search|enter>reset
+quit home back|task message|add node|ptv/pmv refresh tmux-split|invite
 
  ═══ THE LEGEND OF TOP-BAR ═══
- quit back...........q for quite ff, b for go-back
+ quit home back...........'q' for quit, 'b' for go-back, 'home' restarts
+ task message................'t' 'm' main two tools
+ add............set up a new node (to go in current node) + Message Post
+ ptv/pmv refresh tmux-split.......'Passive' refresh mode is a TUI view
+    that you can put anywhere on your monitor to keep an eye on.
+    - task and message-post have terminal/tmux options
+    - pt (passive task) pm (passive message post)
+    - ptv/mtv -> vertical Tmux split (must run 'tmux' in terminal first)
+    - pth/mth -> horizontal Tmux split (must run 'tmux' in terminal first)
 
- term................t for open a new terminal
-                     vsplit for new tmux split vertical
-                     hsplit for new tmux split horizontal
+ invite.....Start Q&A 'Invite Wizard'
+            >> Invite/Update Wizard <<
+                1. sharing gpg
+                2. sharing address-book file
+                3. sharing team-channel
+                4. update a Node that you own
+                5. make a set of pads (One Time Pad)
 
- dir file............d/f for view only directories/files
-
- name size mod.......n/s/m to sort name, size, time-modified
-
- get-send file v,y,p.....c,v,y,p,g for Enter Get-Send Mode
-                         a is a shortcut to archive-menu
-
- str>search..........enter string for fuzzy directory search
-                     -r for recursive directory search
-                     or --recursive
-                     -g for to string search text files
-                     or --grep
- enter>reset.........empty enter to reset view
     Press Enter to return to help menu..."#;
 
 /// Navigation commands help section content
 const HELP_SECTION_NAVIGATION: &str = r#"
  ═══ NAVIGATION COMMANDS ═══
+
+ Modal, Text User Interface
  Press enter after you type.
 
  BASIC NAVIGATION:
@@ -38164,50 +38404,99 @@ const HELP_SECTION_NAVIGATION: &str = r#"
 /// Sorting and filtering help section content
 const HELP_MESSAGE_POST_BROWSER: &str = r#"
  ═══ MESSAGE_POSTS ═══    Press Enter to return to help menu...
+   - Post in chronologial order, newest at bottom.
+   - Starts at 'bottom' page (you can scroll up)
 
-One thing that makes raw terminal 'ls' tricky is when there are a
-lot of items and you are looking for... the most recent, or want to
-see only files. With ff you can have these file-manager features
-in your native terminal. Getting a reverse 'modified' 'size' 'name'
-sort is easy: toggle! (And use --count-rows to view/sort data-lines!)
+ WAYS TO VIEW TUI:
+   - Modal Interactive TUI (Normal-standard way)
+   - Passive-View in a Tmux Split (headless OS)
+   - Launch passive view in a new terminal
+   - Stateless boot to passive view
+   uma --passive_message_mode /cats/fish/message_posts_browser
 
- SORTING COMMANDS:       [row-count: (n)ame sort, (c)ount sort)]
-   n                     Sort by name (toggle ascending/descending)
-   s                     Sort by size (toggle ascending/descending)
-   m                     Sort by last-modified date-time (toggle asc/desc)
+ PAGINATION COMMANDS:
+   up/k                View older messages (up)
+   down/j              View newer messages (down)
 
- FILTERING COMMANDS:     [row-count: (h) to remove headers from counts]
-   d                     Show only directories
-   f                     Show only files
-   [Enter]               Reset filter (show all items)
+ RESIZE TUI COMMANDS:
+    tall+/-            Add/Subtract one row to/from height
+    wide+/-            Add/Subtract one character to/from width
 
- SORT ORDER (reverse the order):
-   - First press: ascending order (A-Z, smallest-largest, oldest-newest)
-   - Second press: descending order! Yay!"#;
+ CUSTOM: '--custom-message' Q&A for custom config
+
+ Press Enter to return to help menu... "#;
 
 /// Search options help section content
 const HELP_TASK_BROWSER: &str = r#"
  ═══ TASK_BROWSER ═══
+ - Default is Kanban style:
+ 1 planning    2 started    3 done
 
- BASIC SEARCH:
-   [search term]        Fuzzy search for files/directories
-                        Just start typing to search current directory
+MOVE TASK: 'move' starts Q&A to...
+e.g. move 'find cat' to the 'Done' column
 
- ADVANCED SEARCH:       Tip, combine flags: goodstuff -r -g
-   [term] -r            Recursive search in subdirectories
-   [term] --recursive   Alternative recursive search syntax
-   [term] -g            Grep: search INSIDE text file contents
-   [term] --grep        Alternative grep syntax
-   [term] -c            Case-sensitive string search
-   [term] --case-sensitive
+FRACTAL TASK TREE:
+- Board Columns are task-nodes
+- Tasks-Plans are task nodes (sub-task of column)
+- Sub-Parts of Task-Plans are task nodes.
+- Each node has a Message-Post feature.
 
- SEARCH BEHAVIOR:
-   - Fuzzy matching: finds partial matches
-   - Case-insensitive by default
-   - Fuzzy Results shown with relevance scoring
-        Distance = Levinshtein-Distance
+WAYS TO VIEW TUI:
+ - Modal Interactive TUI (Normal-standard way)
+ - Passive-View in a Tmux Split (headless OS)
+ - Launch passive view in a new terminal
+ - Stateless boot to passive view
+
+GOTO: Select Task (by number) > and you will go to node
 
  Press Enter to return to help menu... "#;
+
+ /// Navigation commands help section content
+ const HELP_PARTNER_PROGRAMS: &str = r#"
+  ═══ PARTNER PROGRAMS ═══
+
+  FF  File Fantastic
+   https://github.com/lineality/ff_file_manager_minimal_rust
+
+  Lines Editor
+    https://github.com/lineality/lines_editor
+
+  Definition Behiavior Studies
+   https://github.com/lineality/definition_behavior_studies
+
+  Coordinated Descisions Studies
+   https://github.com/lineality/Online_Voting_Using_One_Time_Pads
+
+  Press Enter to return to help menu..."#;
+
+
+
+
+  /// Navigation commands help section content
+  const HELP_CUSTOM_MESSAGE_POST: &str = r#"
+   ═══ Custom Message Post ═══
+   'add' COMMAND: Q&A to configure new task-node's message-post
+   feature to your design/purpose:
+    - Classic Instant-Messenger
+    - Poll/Questionaire/Feedback / Vote/Election/Plebiscite
+    - Help Room/Channel/Office
+    - 'Ticket' Request System
+    - Multiple Choice Options / Fill-in Options / Mix
+    etc.
+    TICKET_REQUESTS & OWNERSHIP:
+    A 'ticket request' system could simply be a new node either in the
+        task-manager or anywhere in the team-channel, where the
+        task-manager has the 'columns' 'unassigned/not-owned ->
+        assigned/owned' instead of 'not-started -> Done'
+        Message-Post in that node can 'ping' requests.
+
+   '--custom-message' (if general message area)
+   let's you send a custom message
+    - to specific people
+    - custom expiration in minutes
+    - gpg encryption
+    (future) - ping someone
+   Press Enter to return to help menu..."#;
 
 // /// File operations help section content
 // const HELP_SECTION_FILE_OPERATIONS: &str = r#"
@@ -38398,11 +38687,11 @@ pub fn display_help_menu_system() -> Result<(), ThisProjectError> {
             ansi_colors::MAGENTA,
             ansi_colors::RESET
         );
-        // println!(
-        //     "  {}6.{} Go To File: Opening / Processing a File",
-        //     ansi_colors::MAGENTA,
-        //     ansi_colors::RESET
-        // );
+        println!(
+            "  {}6.{} Custom MessagePost",
+            ansi_colors::MAGENTA,
+            ansi_colors::RESET
+        );
         // println!(
         //     "  {}7.{} Get-Send Mode (Get/Send/Move files & directories)",
         //     ansi_colors::MAGENTA,
@@ -38423,11 +38712,11 @@ pub fn display_help_menu_system() -> Result<(), ThisProjectError> {
         //     ansi_colors::MAGENTA,
         //     ansi_colors::RESET
         // );
-        // println!(
-        //     "  {}11.{} View help menu doc in editor (vi/nano)",
-        //     ansi_colors::GREEN,
-        //     ansi_colors::RESET
-        // );
+        println!(
+            "  {}7.{} View help menu doc in editor (vi/nano)",
+            ansi_colors::GREEN,
+            ansi_colors::RESET
+        );
         println!();
         print!(
             "{}Enter section number (1-10) or 'q' to quit: {}",
@@ -38452,14 +38741,12 @@ pub fn display_help_menu_system() -> Result<(), ThisProjectError> {
             "3" => display_help_section_content(HelpSection::Navigation)?,
             "4" => display_help_section_content(HelpSection::MessagePostsHelp)?,
             "5" => display_help_section_content(HelpSection::TasksHelp)?,
-            // "4" => display_help_section_content(HelpSection::SortingFiltering)?,
-            // "5" => display_help_section_content(HelpSection::SearchOptions)?,
-            // "6" => display_help_section_content(HelpSection::FileOperations)?,
+            "6" => display_help_section_content(HelpSection::CustomMessagePost)?,
             // "7" => display_help_section_content(HelpSection::GetSendModeBlurb)?,
             // "8" => display_help_section_content(HelpSection::ModularViewModes)?,
             // "9" => display_help_section_content(HelpSection::TerminalManagement)?,
             // "10" => display_help_section_content(HelpSection::Configuration)?,
-            // "11" => open_complete_help_in_editor()?,
+            "7" => open_complete_help_in_editor()?,
             "q" | "quit" | "exit" => {
                 println!(
                     "{}Exiting help system...{}",
@@ -38500,8 +38787,8 @@ fn display_help_section_content(section: HelpSection) -> Result<(), ThisProjectE
         HelpSection::Navigation => HELP_SECTION_NAVIGATION,
         HelpSection::MessagePostsHelp => HELP_MESSAGE_POST_BROWSER,
         HelpSection::TasksHelp => HELP_TASK_BROWSER,
-        // HelpSection::FileOperations => HELP_SECTION_FILE_OPERATIONS,
-        // HelpSection::GetSendModeBlurb => HELP_SECTION_GET_SEND_MODE,
+        HelpSection::PartnerPrograms => HELP_PARTNER_PROGRAMS,
+        HelpSection::CustomMessagePost => HELP_CUSTOM_MESSAGE_POST,
         // HelpSection::ModularViewModes => HELP_SECTION_VIEW_MODES,
         // HelpSection::TerminalManagement => HELP_SECTION_TERMINAL,
         // HelpSection::Configuration => HELP_SECTION_CONFIGURATION,
@@ -38536,7 +38823,7 @@ fn open_complete_help_in_editor() -> Result<(), ThisProjectError> {
     let mut complete_help = String::new();
 
     // Add header
-    complete_help.push_str("FILE FANTASTIC (ff) - COMPLETE HELP DOCUMENTATION\n");
+    complete_help.push_str("UMA - HELP DOCUMENTATION\n");
     complete_help.push_str("=".repeat(78).as_str());
     complete_help.push_str("\n\n");
 
@@ -38571,13 +38858,11 @@ fn open_complete_help_in_editor() -> Result<(), ThisProjectError> {
     complete_help.push_str(strip_ansi_codes(HELP_TASK_BROWSER).as_str());
     complete_help.push_str("\n\n");
 
-
-
-    // complete_help.push_str("SORTING & FILTERING\n");
-    // complete_help.push_str("-".repeat(78).as_str());
-    // complete_help.push_str("\n");
-    // complete_help.push_str(strip_ansi_codes(HELP_SECTION_SORTING_FILTERING).as_str());
-    // complete_help.push_str("\n\n");
+    complete_help.push_str("PARTNER PROGRAMS\n");
+    complete_help.push_str("-".repeat(78).as_str());
+    complete_help.push_str("\n");
+    complete_help.push_str(strip_ansi_codes(HELP_PARTNER_PROGRAMS).as_str());
+    complete_help.push_str("\n\n");
 
     // complete_help.push_str("SEARCH OPTIONS\n");
     // complete_help.push_str("-".repeat(78).as_str());

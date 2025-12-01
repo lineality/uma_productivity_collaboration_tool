@@ -11,6 +11,8 @@ sync_data/
 invites/
 invites_updates/
 
+source_crate_uma_collaboration_productivity_cli_*
+
 # uma files
 uma.toml
 uma.log
