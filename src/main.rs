@@ -37991,6 +37991,16 @@ const FF_SOURCE_FILES: &[SourcedFile] = &[
         "src/manage_absolute_executable_directory_relative_paths.rs",
         include_str!("manage_absolute_executable_directory_relative_paths.rs"),
     ),
+
+    SourcedFile::new(
+        "coordinated_decisions.txt",
+        include_str!("../coordinated_decisions.txt"),
+    ),
+    SourcedFile::new(
+        "sys_def_studies.txt",
+        include_str!("../sys_def_studies.txt"),
+    ),
+
     SourcedFile::new(".gitignore", include_str!("../.gitignore")),
 ];
 
