@@ -11842,28 +11842,28 @@ timestamp = 1234567890"#;
         cleanup_test_dir(&test_dir);
     }
 
-    /// Test: Basic functionality with valid inputs
-    ///
-    /// This test requires GPG setup to run fully.
-    #[test]
-    #[ignore] // Requires GPG setup
-    fn test_basic_clearsign_success() {
-        let test_dir = create_test_temp_dir().expect("Failed to create test directory");
+    // /// Test: Basic functionality with valid inputs
+    // ///
+    // /// This test requires GPG setup to run fully.
+    // #[test]
+    // #[ignore] // Requires GPG setup
+    // fn test_basic_clearsign_success() {
+    //     let test_dir = create_test_temp_dir().expect("Failed to create test directory");
 
-        let target_file = test_dir.join("test_message.toml");
-        let toml_content = "owner = \"testuser\"\ntext = \"Test message\"";
+    //     let target_file = test_dir.join("test_message.toml");
+    //     let toml_content = "owner = \"testuser\"\ntext = \"Test message\"";
 
-        let result = save_message_as_clearsigned_toml(
-            &target_file,
-            toml_content,
-        );
+    //     let result = save_message_as_clearsigned_toml(
+    //         &target_file,
+    //         toml_content,
+    //     );
 
-        // With proper GPG setup, this should succeed
-        // assert!(result.is_ok(), "Function should succeed with valid inputs");
-        // assert!(target_file.exists(), "Target file should exist");
+    //     // With proper GPG setup, this should succeed
+    //     // assert!(result.is_ok(), "Function should succeed with valid inputs");
+    //     // assert!(target_file.exists(), "Target file should exist");
 
-        cleanup_test_dir(&test_dir);
-    }
+    //     cleanup_test_dir(&test_dir);
+    // }
 }
 
 /// Saves message content as a GPG encrypted TOML file.
@@ -18450,29 +18450,56 @@ fn q_and_a_get_message_post_gpgtoml_required() -> Result<Option<bool>, ThisProje
     }
 }
 
-
 /// Gets user input for whether user confirmation is required before posting
 ///
 /// # Returns
-/// * `Result<Option<bool>, ThisProjectError>` - Whether user confirmation is required or None
+/// * `Result<bool, ThisProjectError>` - Whether user confirmation is required (defaults to true)
 fn q_and_a_get_corenode_gpgtoml() -> Result<bool, ThisProjectError> {
-    println!("This Node is gpgtoml encrypted?  -> (y)es / (n)o / Press-Enter to skip):");
+    println!("This Node is gpgtoml encrypted? -> (y)es / (n)o / Press-Enter for default [yes]:");
 
     let mut input = String::new();
-    io::stdout().flush()?;
-    io::stdin().read_line(&mut input)?;
+
+    // If flushing or reading fails, default to true
+    let _ = io::stdout().flush();
+    let _ = io::stdin().read_line(&mut input);
 
     let input = input.trim().to_lowercase();
+
+    // Empty input defaults to true
     if input.is_empty() {
-        return Ok(false);
+        return Ok(true);
     }
 
+    // Match responses
     match input.as_str() {
         "yes" | "y" | "true" | "1" => Ok(true),
-        "no" | "n" | "false" | "0" => Ok(false),
-        _ => Err(ThisProjectError::InvalidInput(format!("Invalid boolean value: {}. Use yes/no", input)))
+        "clearsign" | "no" | "n" | "false" | "0" => Ok(false),
+        _ => Ok(true), // Any invalid input defaults to true
     }
 }
+
+// /// Gets user input for whether user confirmation is required before posting
+// ///
+// /// # Returns
+// /// * `Result<Option<bool>, ThisProjectError>` - Whether user confirmation is required or None
+// fn q_and_a_get_corenode_gpgtoml() -> Result<bool, ThisProjectError> {
+//     println!("This Node is gpgtoml encrypted?  -> (y)es / (n)o / Press-Enter to skip):");
+
+//     let mut input = String::new();
+//     io::stdout().flush()?;
+//     io::stdin().read_line(&mut input)?;
+
+//     let input = input.trim().to_lowercase();
+//     if input.is_empty() {
+//         return Ok(false);
+//     }
+
+//     match input.as_str() {
+//         "yes" | "y" | "true" | "1" => Ok(true),
+//         "no" | "n" | "false" | "0" => Ok(false),
+//         _ => Err(ThisProjectError::InvalidInput(format!("Invalid boolean value: {}. Use yes/no", input)))
+//     }
+// }
 
 /// Gets user input for message post start date with component-based input
 ///
@@ -21921,7 +21948,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         println!("This nickname will be the local-owner-user for this Uma 'instance.'");
         println!("Changing 'uma_local_owner_user = ___' in uma.toml");
         println!("will change the local-owner-user when running Uma.");
-        println!("Please enter your username:");
+        println!("Please enter your local-owner name for uma.toml file:");
 
         // let mut owner_input = String::new();
         // io::stdin().read_line(&mut owner_input).unwrap();  // TODO remove this unwrap!!!!!!!!!!!!!!!!!!!!!
@@ -22441,30 +22468,32 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         println!("To get started, please add a new user.");
 
         // Prompt the user to enter a username
-        println!("Enter a username:");
-        let mut username_input = String::new(); // Use a temporary variable for input
+        // println!("Enter a username:");
+        // let mut username_input = String::new(); // Use a temporary variable for input
 
-        let username_for_function: String = match std::io::stdin().read_line(&mut username_input) {
-            Ok(_) => {
-                // Successfully read input, trim it, and this will be the value of username_for_function
-                let trimmed = username_input.trim().to_string();
-                if trimmed.is_empty() {
-                    eprintln!("Username cannot be empty.");
-                    // Handle empty username case, perhaps by returning or panicking
-                    // For now, let's panic as an example, but you should handle it gracefully.
-                    panic!("Username was empty after trimming.");
-                }
-                println!("Hello, (trimmed): '{}'", trimmed); // Debug: Check the trimmed value
-                trimmed
-            },
-            Err(io_error) => {
-                // Handle the error appropriately
-                eprintln!("Failed to read input: {}", io_error);
-                // You must return or panic here, as username_for_function needs a value.
-                // Or provide a default, though that's unlikely for a username.
-                panic!("Failed to read username: {}", io_error);
-            }
-        };
+        let username_for_function = get_local_owner_username();
+
+        // let username_for_function: String = match std::io::stdin().read_line(&mut username_input) {
+        //     Ok(_) => {
+        //         // Successfully read input, trim it, and this will be the value of username_for_function
+        //         let trimmed = username_input.trim().to_string();
+        //         if trimmed.is_empty() {
+        //             eprintln!("Username cannot be empty.");
+        //             // Handle empty username case, perhaps by returning or panicking
+        //             // For now, let's panic as an example, but you should handle it gracefully.
+        //             panic!("Username was empty after trimming.");
+        //         }
+        //         println!("Hello, (trimmed): '{}'", trimmed); // Debug: Check the trimmed value
+        //         trimmed
+        //     },
+        //     Err(io_error) => {
+        //         // Handle the error appropriately
+        //         eprintln!("Failed to read input: {}", io_error);
+        //         // You must return or panic here, as username_for_function needs a value.
+        //         // Or provide a default, though that's unlikely for a username.
+        //         panic!("Failed to read username: {}", io_error);
+        //     }
+        // };
 
         // choice...
         // Get IP address input method
