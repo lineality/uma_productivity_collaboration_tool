@@ -2068,21 +2068,9 @@ fn read_band__network_config_type_index_specs() -> Result<(String, u8, Ipv4Addr,
     Ok((network_type, network_index, ipv4, ipv6))
 }
 
-
-enum IpAddrKind { V4, V6 }
-
-// impl From<toml::de::Error> for ThisProjectError {
-//     fn from(err: toml::de::Error) -> ThisProjectError {
-//         ThisProjectError::TomlDeserializationError(err)
-//     }
-// }
-
-
 /*
 Seri_Deseri Serialize To Start
 */
-
-
 
 /// Serialize struct to .toml file
 /// Serializes a `CollaboratorTomlData` struct into a TOML-formatted string.
@@ -3018,15 +3006,7 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
         }
     };
 
-    // Get collaborator files directory for addressbook lookups
-    let collaborator_files_dir_relative = COLLABORATOR_ADDRESSBOOK_PATH_STR;
-    /*
-    Is this not updated for .gpgclearsign?
-    */
-
     // --- Stage 2: Initialize Tracking Structures ---
-
-    // Why is this making a new struct??
     // Track all port assignments with their context for detailed collision reporting
     #[derive(Debug, Clone)]
     struct PortAssignmentContext {
@@ -3046,12 +3026,6 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
     debug_log!("\n CAPITCCV Scanning for team channel configurations...for entry in WalkDir::new(&team_channels_dir)\n");
 
 
-    // --- Stage 3: Walk Through Team Channels ---
-    // for entry in WalkDir::new(&team_channels_dir) // ⚠️ This recursively walks ALL subdirectories!
-    //     .into_iter()
-    //     .filter_map(|e| e.ok())
-    //     .filter(|e| e.file_type().is_dir())
-    // {
     // --- Stage 3: Walk Through Team Channels (ONE LEVEL ONLY) ---
     for entry in std::fs::read_dir(&team_channels_dir)
         .map_err(|e| ThisProjectError::from(format!("Failed to read team_channels directory: {}", e)))?
@@ -3065,50 +3039,9 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
         to
         A. use helper functions to use clearsigned or .gpgtoml
         B. make a read-copy and use that path
-
-
-
         */
 
-        // // Check the both!
-        // let node_toml_path_a = entry.path().join("node.toml");
-        // let node_toml_path_b = entry.path().join("node.gpgtoml");
-
-
-        // // Skip directories without node.toml
-        // if !node_toml_path_a.exists() & !node_toml_path_b.exists(){
-        //     continue;
-        // }
-
-        // // new code here for gpgtoml
-
-        // // Get armored public key, using key-id (full fingerprint in)
-        // let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
-        //     Ok(fingerprint) => fingerprint,
-        //     Err(e) => {
-        //         // Since the function returns Result<CoreNode, String>, we need to return a String error
-        //         return Err(format!(
-        //             "implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}",
-        //             e
-        //         ).into());
-        //     }
-        // };
-
-        // // code from load_core_node...()
-        // // Get the UME temp directory path with proper GpgError conversion
-        // let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
-        //     .map_err(|io_err| GpgError::ValidationError(
-        //         format!("Failed to get UME temp directory path: {}", io_err)
-        //     ))?;
-
-        // // Using Debug trait for more detailed error information
-        // let node_readcopy_path_string = get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
-        //     &entry.clone().into_path(),
-        //     &gpg_full_fingerprint_key_id_string,
-        //     &base_uma_temp_directory_path,
-        // ).map_err(|e| format!("Failed to get temporary read copy of TOML file: {:?}", e))?;
-
-        // Check for both file types
+        // Check the both! Check for both file types
         let node_toml_path = entry.path().join("node.toml");
         let node_gpgtoml_path = entry.path().join("node.gpgtoml");
 
@@ -3652,90 +3585,6 @@ pub fn make_exclusionlist_from_single_team_channel(
 
     Ok(port_set)
 }
-
-// alt
-/// Searches for a node configuration file in the given directory.
-///
-/// This function looks for either `node.toml` or `node.gpgtoml` in the specified directory.
-/// It checks for `node.toml` first, and if not found, checks for `node.gpgtoml`.
-///
-/// # Arguments
-///
-/// * `input_node_parent_path` - The directory path where to search for the node configuration files
-///
-/// # Returns
-///
-/// * `Some(PathBuf)` - The full path to the found configuration file (either node.toml or node.gpgtoml)
-/// * `None` - Neither configuration file was found in the directory
-///
-/// # Example
-///
-/// ```
-/// let parent_path = Path::new("/home/user/project");
-/// if let Some(config_path) = find_node_toml_or_gpgtoml_file(parent_path) {
-///     println!("Found configuration at: {:?}", config_path);
-/// } else {
-///     println!("No configuration file found");
-/// }
-/// ```
-fn alt_find_node_toml_or_gpgtoml_file(input_node_parent_path: &Path) -> Option<PathBuf> {
-    // First, try to find node.toml in the parent directory
-    let node_toml = input_node_parent_path.join("node.toml");
-
-    // Check if node.toml exists and is a regular file (not a directory)
-    if node_toml.exists() && node_toml.is_file() {
-        // Return the path to node.toml if found
-        return Some(node_toml);
-    }
-
-    // If node.toml wasn't found, try to find node.gpgtoml
-    let node_gpgtoml = input_node_parent_path.join("node.gpgtoml");
-
-    // Check if node.gpgtoml exists and is a regular file (not a directory)
-    if node_gpgtoml.exists() && node_gpgtoml.is_file() {
-        // Return the path to node.gpgtoml if found
-        return Some(node_gpgtoml);
-    }
-
-    // Neither file was found in the directory
-    None
-}
-// // Usage example for your specific case:
-// let current_full_file_path = PathBuf::from("/your/actual/path");
-
-// // Call the function to find either node.toml or node.gpgtoml
-// let node_toml_path = match find_node_toml_or_gpgtoml_file(&current_full_file_path) {
-//     Some(path) => {
-//         // Successfully found one of the configuration files
-//         debug_log!(
-//             "nav_graph_look_read_node_toml() node_toml_path -> {:?}",
-//             path.clone()
-//         );
-
-//         // Add more detailed existence checking
-//         debug_log!("Checking if path exists: {:?}", path.exists());
-//         debug_log!("Checking if path is file: {:?}", path.is_file());
-
-//         // Return the found path
-//         path
-//     },
-//     None => {
-//         // Neither node.toml nor node.gpgtoml was found
-//         debug_log!(
-//             "nav_graph_look_read_node_toml() no configuration file found in: {:?}",
-//             current_full_file_path
-//         );
-
-//         // Handle the error case - you need to decide what to do here
-//         // Option 1: Return an error from your function
-//         return Err("No node configuration file found".to_string());
-
-//         // Option 2: Use a default or panic (not recommended)
-//         // panic!("No node configuration file found");
-//     }
-// };
-
-// // At this point, node_toml_path contains the PathBuf to whichever file was found
 
 /// Searches for a node configuration file in the given directory.
 ///
@@ -4375,8 +4224,6 @@ pub fn collect_and_validate_collaborators(
                     name
                 );
             }
-
-
         }
 
         // Check if all names are valid
@@ -6279,6 +6126,30 @@ impl App {
             return Ok(());
         }
 
+        // =================
+        // Exit if no 0.toml
+        // =================
+        /*
+        Important bootstrap edge case
+        of 0.toml not yet arriving
+        */
+        let mut has_zero_toml = false;
+        if let Ok(entries) = fs::read_dir(&self.current_path) {
+            for entry in entries {
+                if let Ok(entry) = entry {
+                    if let Some(file_name) = entry.path().file_name() {
+                        if file_name == "0.toml" {
+                            has_zero_toml = true;
+                            break; // Exit early if found
+                        }
+                    }
+                }
+            }
+        }
+        if !has_zero_toml {
+            return Ok(());
+        }
+
         // Load initial messages
         self.load_messagepost_messages();
 
@@ -7008,9 +6879,10 @@ impl App {
         // Call Helper Function with All Configuration
         // =================================================
 
-       let input_string = input.to_string();
-       // input.clear();
+        let input_string = input.to_string();
+        // input.clear();
 
+        // TODO stateless add-message needed
         add_new_messagepost_message(
             &message_path,
             local_owner_user,
@@ -7098,20 +6970,44 @@ impl App {
                 .unwrap_or(u64::MAX)  // Put unparseable names at end
         });
 
+        #[cfg(debug_assertions)]
         debug_log!("LIM: Entries sorted by filename prefix");
 
         // Debug: Log all found files
-        debug_log!("LIM: === Files found in directory ===");
-        for entry in &entries {
-            debug_log!("LIM:   {:?}", entry.path());
+        #[cfg(debug_assertions)] {
+            debug_log!("LIM: === Files found in directory ===");
+            for entry in &entries {
+                debug_log!("LIM:   {:?}", entry.path());
+            }
+            debug_log!("LIM: === End of file list ===");
         }
-        debug_log!("LIM: === End of file list ===");
+
+        // // Exit if no 0.toml
+        // let mut has_zero_toml = false;
+        // if let Ok(entries) = fs::read_dir(&self.current_path) {
+        //     for entry in entries {
+        //         if let Ok(entry) = entry {
+        //             if let Some(file_name) = entry.path().file_name() {
+        //                 if file_name == "0.toml" {
+        //                     has_zero_toml = true;
+        //                     break; // Exit early if found
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
+        // if !has_zero_toml {
+        //     return;
+        // }
 
         // Check if directory is empty or only contains 0.toml
         let has_messages = entries.iter().any(|entry| {
+            // Any Files? Let's look
             if let Some(file_name) = entry.path().file_name() {
+                // But NOT Zero-TOml! Just messages...
                 file_name != OsStr::new("0.toml")
             } else {
+                // No message (zero-toml not included) found
                 false
             }
         });
@@ -26250,6 +26146,9 @@ fn handle_command_main_mode(
                 debug_log("Help!");
                 // Display help information
                 // TODO help wizard or blurb?
+
+
+
             }
 
             "sharegpg" | "exportgpg" | "requestinvite" => {
@@ -27258,23 +27157,22 @@ fn handle_command_main_mode(
 
 
                 debug_log(&format!("app.current_path {:?}", app.current_path));
-                app.input_mode = InputMode::InsertText;
 
-                // // TODO Assuming you have a way to get the current node's name:
-                // let current_node_name = app.current_path.file_name().unwrap().to_string_lossy().to_string();
+                // Check if exists yet (bootstrap edge case)
+                if Path::new(&app.current_path.join("task_browser")).exists() {
+                    app.input_mode = InputMode::InsertText;
+                    app.current_path = app.current_path.join("task_browser");
+                    app.graph_navigation_instance_state.current_full_file_path = app.current_path.clone();
+                    app.graph_navigation_instance_state.nav_graph_look_read_node_toml(); // ???
 
-                app.current_path = app.current_path.join("task_browser");
-                app.graph_navigation_instance_state.current_full_file_path = app.current_path.clone();
-                app.graph_navigation_instance_state.nav_graph_look_read_node_toml(); // ???
+                    debug_log!(
+                        "app.current_path after joining 'task_browser': {:?}",
+                        app.current_path
+                    );
 
-                debug_log!(
-                    "app.current_path after joining 'task_browser': {:?}",
-                    app.current_path
-                );
-
-                // Enter Browser of Tasks
-                app.enter_task_browser();
-
+                    // Enter Browser of Tasks
+                    app.enter_task_browser();
+                }
             }
 
 
@@ -35399,21 +35297,15 @@ fn handle_remote_collaborator_meetingroom_desk(
                                 padnet_directory_path.push(rc_key_id);
 
                                 // Get temp directory path with explicit String conversion
-                                let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
-                                    .map_err(|io_err| {
-                                        let gpg_error = GpgError::ValidationError(
-                                            format!("HRCMD: Failed to get UME temp directory path: {}", io_err)
-                                        );
-                                        // Convert GpgError to String for the function's return type
-                                        format!("HRCMD: {:?}", gpg_error)
-                                    })?;
+                                // let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
+                                //     .map_err(|io_err| {
+                                //         let gpg_error = GpgError::ValidationError(
+                                //             format!("HRCMD: Failed to get UME temp directory path: {}", io_err)
+                                //         );
+                                //         // Convert GpgError to String for the function's return type
+                                //         format!("HRCMD: {:?}", gpg_error)
+                                //     })?;
 
-                                // let temp_filepath_padnet = create_unique_temp_filepathbuf(
-                                // &base_uma_temp_directory_path,    // base_path: &Path,
-                                // "padnet",    // prefix: &str,
-                                // 5,    // number_of_attempts: u32,
-                                // 16,    // retry_delay_ms: u64,
-                                // )?;
                                 /*
                                 fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
                                     original_target_file_path: &Path,
@@ -36584,6 +36476,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                 app.input_mode = InputMode::MainCommand; // Access input_mode using self
                 app.current_path.pop(); // Go back to the parent directory
                 app.update_directory_list()?;  // refresh to current cwd display items
+
             } else if input == "q" {
                 debug_log("escape toggled");
                 app.input_mode = InputMode::MainCommand; // Access input_mode using self

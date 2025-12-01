@@ -11353,3 +11353,46 @@ fn remove_non_alphanumeric(s: &str) -> String {
 //         cleanup_test_dir(&test_dir);
 //     }
 // }
+        // let node_toml_path_a = entry.path().join("node.toml");
+        // let node_toml_path_b = entry.path().join("node.gpgtoml");
+
+
+        // // Skip directories without node.toml
+        // if !node_toml_path_a.exists() & !node_toml_path_b.exists(){
+        //     continue;
+        // }
+
+        // // new code here for gpgtoml
+
+        // // Get armored public key, using key-id (full fingerprint in)
+        // let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+        //     Ok(fingerprint) => fingerprint,
+        //     Err(e) => {
+        //         // Since the function returns Result<CoreNode, String>, we need to return a String error
+        //         return Err(format!(
+        //             "implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}",
+        //             e
+        //         ).into());
+        //     }
+        // };
+
+        // // code from load_core_node...()
+        // // Get the UME temp directory path with proper GpgError conversion
+        // let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
+        //     .map_err(|io_err| GpgError::ValidationError(
+        //         format!("Failed to get UME temp directory path: {}", io_err)
+        //     ))?;
+
+        // // Using Debug trait for more detailed error information
+        // let node_readcopy_path_string = get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
+        //     &entry.clone().into_path(),
+        //     &gpg_full_fingerprint_key_id_string,
+        //     &base_uma_temp_directory_path,
+        // ).map_err(|e| format!("Failed to get temporary read copy of TOML file: {:?}", e))?;
+// enum IpAddrKind { V4, V6 }
+
+// impl From<toml::de::Error> for ThisProjectError {
+//     fn from(err: toml::de::Error) -> ThisProjectError {
+//         ThisProjectError::TomlDeserializationError(err)
+//     }
+// }

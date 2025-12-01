@@ -54,3 +54,95 @@ fn read_user_confirmation(prompt: &str) -> io::Result<bool> {
     // Return true only for explicit yes
     Ok(response == "y" || response == "yes")
 }
+
+
+// alt
+/// Searches for a node configuration file in the given directory.
+///
+/// This function looks for either `node.toml` or `node.gpgtoml` in the specified directory.
+/// It checks for `node.toml` first, and if not found, checks for `node.gpgtoml`.
+///
+/// # Arguments
+///
+/// * `input_node_parent_path` - The directory path where to search for the node configuration files
+///
+/// # Returns
+///
+/// * `Some(PathBuf)` - The full path to the found configuration file (either node.toml or node.gpgtoml)
+/// * `None` - Neither configuration file was found in the directory
+///
+/// # Example
+///
+/// ```
+/// let parent_path = Path::new("/home/user/project");
+/// if let Some(config_path) = find_node_toml_or_gpgtoml_file(parent_path) {
+///     println!("Found configuration at: {:?}", config_path);
+/// } else {
+///     println!("No configuration file found");
+/// }
+/// ```
+fn alt_find_node_toml_or_gpgtoml_file(input_node_parent_path: &Path) -> Option<PathBuf> {
+    // First, try to find node.toml in the parent directory
+    let node_toml = input_node_parent_path.join("node.toml");
+
+    // Check if node.toml exists and is a regular file (not a directory)
+    if node_toml.exists() && node_toml.is_file() {
+        // Return the path to node.toml if found
+        return Some(node_toml);
+    }
+
+    // If node.toml wasn't found, try to find node.gpgtoml
+    let node_gpgtoml = input_node_parent_path.join("node.gpgtoml");
+
+    // Check if node.gpgtoml exists and is a regular file (not a directory)
+    if node_gpgtoml.exists() && node_gpgtoml.is_file() {
+        // Return the path to node.gpgtoml if found
+        return Some(node_gpgtoml);
+    }
+
+    // Neither file was found in the directory
+    None
+}
+// // Usage example for your specific case:
+// let current_full_file_path = PathBuf::from("/your/actual/path");
+
+// // Call the function to find either node.toml or node.gpgtoml
+// let node_toml_path = match find_node_toml_or_gpgtoml_file(&current_full_file_path) {
+//     Some(path) => {
+//         // Successfully found one of the configuration files
+//         debug_log!(
+//             "nav_graph_look_read_node_toml() node_toml_path -> {:?}",
+//             path.clone()
+//         );
+
+//         // Add more detailed existence checking
+//         debug_log!("Checking if path exists: {:?}", path.exists());
+//         debug_log!("Checking if path is file: {:?}", path.is_file());
+
+//         // Return the found path
+//         path
+//     },
+//     None => {
+//         // Neither node.toml nor node.gpgtoml was found
+//         debug_log!(
+//             "nav_graph_look_read_node_toml() no configuration file found in: {:?}",
+//             current_full_file_path
+//         );
+
+//         // Handle the error case - you need to decide what to do here
+//         // Option 1: Return an error from your function
+//         return Err("No node configuration file found".to_string());
+
+//         // Option 2: Use a default or panic (not recommended)
+//         // panic!("No node configuration file found");
+//     }
+// };
+
+// // At this point, node_toml_path contains the PathBuf to whichever file was found
+
+    // --- Stage 3: Walk Through Team Channels ---
+    // for entry in WalkDir::new(&team_channels_dir) // ⚠️ This recursively walks ALL subdirectories!
+    //     .into_iter()
+    //     .filter_map(|e| e.ok())
+    //     .filter(|e| e.file_type().is_dir())
+    // {
