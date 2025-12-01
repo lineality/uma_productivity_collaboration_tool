@@ -11396,3 +11396,55 @@ fn remove_non_alphanumeric(s: &str) -> String {
 //         ThisProjectError::TomlDeserializationError(err)
 //     }
 // }
+                // let task_path_str = task_path.to_string_lossy().into_owned();
+
+                // #[cfg(target_os = "linux")]
+                // {
+                //     if let Ok(uma_path) = env::current_exe() {
+                //         if let Some(uma_path_str) = uma_path.to_str() {
+                //             StdCommand::new("gnome-terminal")
+                //                 .arg("--")
+                //                 .arg(uma_path_str)
+                //                 .arg("--passive_task_mode")
+                //                 .arg(&task_path_str)
+                //                 .spawn()?;
+                //         }
+                //     }
+                // }
+
+            // "mp" | "pm" | "message-passive" => {
+            //     debug_log("m selected");
+
+            //     /////////////////
+            //     // Passive View
+            //     /////////////////
+            //     let mut this_team_message_path = app.current_path.clone();
+            //     this_team_message_path.push("message_posts_browser");
+
+            //     debug_log!("message_path {:?}", this_team_message_path);
+
+            //     // Check if directory exists
+            //     if !this_team_message_path.exists() {
+            //         println!("handle comand 'm', Message directory not found!");
+            //         return Ok(false);  // Changed to match expected return type
+            //     }
+
+            //     let message_path_str = this_team_message_path.to_string_lossy().into_owned();
+
+            //     #[cfg(target_os = "linux")]
+            //     {
+            //         if let Ok(uma_path) = env::current_exe() {
+            //             if let Some(uma_path_str) = uma_path.to_str() {
+            //                 StdCommand::new("gnome-terminal")
+            //                     .arg("--")
+            //                     .arg(uma_path_str)
+            //                     .arg("--passive_message_mode")
+            //                     .arg(&message_path_str)
+            //                     .spawn()?;
+            //             }
+            //         }
+            //     }
+
+
+            //     debug_log(&format!("handle command 'mp'/'message-passive' app.current_path {:?}", app.current_path));
+            // }

@@ -26142,13 +26142,12 @@ fn handle_command_main_mode(
     if let Some(command) = parts.first() {
 
         match command.to_lowercase().as_str() {
+
             "h" | "help" => {
-                debug_log("Help!");
+                debug_log("HCMM Help!");
                 // Display help information
                 // TODO help wizard or blurb?
-
-
-
+                let _  = display_help_menu_system(); // open_complete_help_in_editor();
             }
 
             "sharegpg" | "exportgpg" | "requestinvite" => {
@@ -27087,49 +27086,9 @@ fn handle_command_main_mode(
                 debug_log!("mp: Command handler completed");
             }
 
-            // "mp" | "pm" | "message-passive" => {
-            //     debug_log("m selected");
-
-            //     /////////////////
-            //     // Passive View
-            //     /////////////////
-            //     let mut this_team_message_path = app.current_path.clone();
-            //     this_team_message_path.push("message_posts_browser");
-
-            //     debug_log!("message_path {:?}", this_team_message_path);
-
-            //     // Check if directory exists
-            //     if !this_team_message_path.exists() {
-            //         println!("handle comand 'm', Message directory not found!");
-            //         return Ok(false);  // Changed to match expected return type
-            //     }
-
-            //     let message_path_str = this_team_message_path.to_string_lossy().into_owned();
-
-            //     #[cfg(target_os = "linux")]
-            //     {
-            //         if let Ok(uma_path) = env::current_exe() {
-            //             if let Some(uma_path_str) = uma_path.to_str() {
-            //                 StdCommand::new("gnome-terminal")
-            //                     .arg("--")
-            //                     .arg(uma_path_str)
-            //                     .arg("--passive_message_mode")
-            //                     .arg(&message_path_str)
-            //                     .spawn()?;
-            //             }
-            //         }
-            //     }
-
-
-            //     debug_log(&format!("handle command 'mp'/'message-passive' app.current_path {:?}", app.current_path));
-            // }
-
             "t" | "task" | "tasks" => {
                 debug_log("t selected: task browser launching");
 
-                // /////////////////
-                // // Passive View
-                // /////////////////
                 // let mut task_path = app.current_path.clone();
                 // task_path.push("task_browser");
 
@@ -27138,23 +27097,6 @@ fn handle_command_main_mode(
                 //     println!("Task directory not found!");
                 //     return Ok(false);
                 // }
-
-                // let task_path_str = task_path.to_string_lossy().into_owned();
-
-                // #[cfg(target_os = "linux")]
-                // {
-                //     if let Ok(uma_path) = env::current_exe() {
-                //         if let Some(uma_path_str) = uma_path.to_str() {
-                //             StdCommand::new("gnome-terminal")
-                //                 .arg("--")
-                //                 .arg(uma_path_str)
-                //                 .arg("--passive_task_mode")
-                //                 .arg(&task_path_str)
-                //                 .spawn()?;
-                //         }
-                //     }
-                // }
-
 
                 debug_log(&format!("app.current_path {:?}", app.current_path));
 
@@ -27489,7 +27431,6 @@ fn handle_command_main_mode(
                 debug_log!("tph: Command handler completed successfully");
             }
 
-
             "q" | "quit" | "exit" => {
                 debug_log("quit");
                 let _ = no_restart_set_hard_reset_flag_to_false();
@@ -27537,8 +27478,10 @@ fn task_mode_handle__commands(
     if let Some(command) = parts.first() {
         match command.to_lowercase().as_str() {
             "h" | "help" => {
-                debug_log("Help!");
+                // TODO task help
+                debug_log("TMHC Task Help!");
                 // Display help information
+                let _  = open_complete_help_in_editor();
             }
 
             "bigger" | "big" | "bg" => {
@@ -37706,13 +37649,13 @@ pub fn no_restart_set_hard_reset_flag_to_false() -> Result<(), io::Error> {
 /// Examples:
 /// ```bash
 /// # New terminal window
-/// uma --passive_message_mode /tmp/uma_team1/channel1/message_posts_browser
+/// uma --passive_message_mode /cat_team/fish_task/message_posts_browser
 ///
 /// # Tmux vertical split
-/// uma --passive_vsplit_message_mode /tmp/uma_team1/channel1/message_posts_browser
+/// uma --passive_vsplit_message_mode /uma_team1/channel1/message_posts_browser
 ///
 /// # Tmux horizontal split
-/// uma --passive_hsplit_message_mode /tmp/uma_team1/channel1/message_posts_browser
+/// uma --passive_hsplit_message_mode /uma_team1/channel1/message_posts_browser
 /// ```
 ///
 /// # Error Handling
@@ -37963,191 +37906,308 @@ fn main() {
 
 
 
-// /*
-//  * Help Section
-//  */
+/*
+Help Section
+*/
 
-// /// ANSI color codes for terminal formatting
-// ///
-// /// These constants provide color and style formatting for terminal output.
-// /// Using ANSI escape sequences for maximum compatibility.
-// mod ansi_colors {
-//     /// Reset all formatting to default
-//     pub const RESET: &str = "\x1b[0m";
 
-//     /// Bold text for headers
-//     pub const BOLD: &str = "\x1b[1m";
+/// Clear the terminal screen using ANSI escape codes
+///
+/// This function uses ANSI escape sequences to clear the terminal
+/// and reset the cursor to the top-left position.
+///
+/// # Returns
+/// * `Result<()>` - Ok on success, Err on I/O error
+fn clear_terminal_screen() -> Result<(), ThisProjectError> {
+    // ANSI escape codes: clear screen and move cursor to top-left
+    print!("\x1b[2J\x1b[1;1H");
+    io::stdout().flush().map_err(|e| format!("Error clear_terminal_screen {}", e))?;
+    Ok(())
+}
 
-//     /// Cyan color for commands
-//     pub const CYAN: &str = "\x1b[36m";
+/// Wait for user to press Enter key
+///
+/// Simple utility function to pause execution until the user
+/// presses the Enter key. Used between help sections.
+///
+/// # Returns
+/// * `Result<()>` - Ok when Enter pressed, Err on I/O error
+fn wait_for_enter_keypress() -> Result<(), ThisProjectError> {
+    let mut buffer = String::new();
+    io::stdin()
+        .read_line(&mut buffer)
+        .map_err(|e| format!("Error wait_for_enter_keypress {}", e))?;
 
-//     /// Green color for examples
-//     pub const GREEN: &str = "\x1b[32m";
+    Ok(())
+}
 
-//     /// Yellow color for warnings or important notes
-//     pub const YELLOW: &str = "\x1b[33m";
+/// Strip ANSI color codes from a string
+///
+/// Removes all ANSI escape sequences from text for clean display
+/// in external editors that don't support color codes.
+///
+/// # Arguments
+/// * `text` - Text potentially containing ANSI codes
+///
+/// # Returns
+/// * `String` - Text with all ANSI codes removed
+fn strip_ansi_codes(text: &str) -> String {
+    // Simple regex-like replacement without external dependencies
+    let mut result = String::new();
+    let mut chars = text.chars().peekable();
 
-//     /// Bright white for emphasis
-//     pub const BRIGHT_WHITE: &str = "\x1b[97m";
+    while let Some(ch) = chars.next() {
+        if ch == '\x1b' {
+            // Skip ANSI escape sequence
+            // Format: ESC [ ... m
+            if chars.peek() == Some(&'[') {
+                chars.next(); // Skip '['
+                // Skip until 'm'
+                while let Some(next_ch) = chars.next() {
+                    if next_ch == 'm' {
+                        break;
+                    }
+                }
+            }
+        } else {
+            result.push(ch);
+        }
+    }
 
-//     /// Magenta for section numbers
-//     pub const MAGENTA: &str = "\x1b[35m";
-// }
+    result
+}
 
-// /// Help section identifiers for menu navigation
-// ///
-// /// Each variant represents a distinct help section that can be displayed
-// /// independently to fit within 80x24 terminal constraints.
-// #[derive(Debug, Clone, Copy, PartialEq)]
-// enum HelpSection {
-//     QuickStartBlurb,
-//     TopbarLegend,
-//     Navigation,
-//     SortingFiltering,
-//     SearchOptions,
-//     FileOperations,
-//     TerminalManagement,
-//     GetSendModeBlurb,
-//     ModularViewModes,
-//     Configuration,
-// }
+/// Check if help flag is present in command line arguments
+///
+/// This function checks if the user has requested help via
+/// -h or --help command line flags.
+///
+/// # Arguments
+/// * `args` - Command line arguments iterator
+///
+/// # Returns
+/// * `bool` - true if help flag found, false otherwise
+pub fn check_for_help_flag_in_args(args: &[String]) -> bool {
+    // args.iter().any(|arg| arg == "-h" || arg == "--help")
+    args.iter()
+        // .skip(1)
+        .any(|arg| arg == "-h" || arg == "--help")
+}
 
-// /// Main help menu header text
-// ///
-// /// Displayed at the top of the help menu selection screen
-// const HELP_MENU_HEADER: &str = r#"
-//   ╔═══════════════════════════════════════════════════════════════════════════╗
-//   ║ ff is a minimal file manager. It's File Fantastic! ...it's a File Fantasy.║
-//   ╚═════════https://github.com/lineality/ff_file_manager_minimal_rust═════════╝
-//                          get source code -> ff --source
+// todo under construction
+/// Display quick usage information
+///
+/// Shows brief usage information when ff is called incorrectly
+/// or when minimal help is needed. This is separate from the
+/// full help system.
+///
+/// # Returns
+/// * `Result<()>` - Ok on successful display
+pub fn display_quick_usage_info() -> Result<(), ThisProjectError> {
+    println!(
+        "{}File Fantastic (ff) - File Manager{}",
+        ansi_colors::BOLD,
+        ansi_colors::RESET
+    );
+    println!();
+    println!(
+        "{}USAGE:{} ff [OPTIONS] [DIRECTORY]",
+        ansi_colors::CYAN,
+        ansi_colors::RESET
+    );
+    println!("{}OPTIONS:{}", ansi_colors::CYAN, ansi_colors::RESET);
+    println!("  -h, --help    Show complete help menu.");
+    println!("  -v, --version Show build version info.");
+    println!("  --source      Get ff source code.");
+    println!();
+    println!("{}EXAMPLES:{}", ansi_colors::GREEN, ansi_colors::RESET);
+    println!("  ff            Open in current directory.");
+    println!("  ff ~/Path     Open dir or open file. ");
+    println!("  ff ~/Path --line       Go to line of file.");
+    println!("  ff ~/Path --session    Use existing lines session. ");
+    println!();
+    println!("  '--help' and '--source' are commands inside ff too.");
 
-//   Goal: Best of both worlds between raw terminal and file manager:
-//         GUI features in a TUI. Switch easily between terminal and ff.
-//  "#;
+    Ok(())
+}
 
-// /// Quick start and examples help section content
-// const HELP_SECTION_QUICK_START: &str = r#"
-// ═══ QUICK START & EXAMPLES ═══     Press Enter to return to help menu
-//  USAGE in terminal:      ff [OPTIONS] [DIRECTORY]
-//  OPTIONS:
-//    -h, --help            Show this help menu
-//    --source              Get ff source code, Rust 'crate'
 
-//  EXAMPLES:
-//    ff                    Open ff in current directory
-//    ff /path/to/dir       Open ff in specific directory
-//    ff ~/Documents        Open ff in Documents folder
-//    ff -h                 View ff help menu
-//    ff --help             View ff help menu (Alternative)
-//    ff /path/to/file.txt --line 42    Open file (to line, optional)
-//    ff --session /path/to/session     User existing Lines-Session
+/// ANSI color codes for terminal formatting
+///
+/// These constants provide color and style formatting for terminal output.
+/// Using ANSI escape sequences for maximum compatibility.
+mod ansi_colors {
+    /// Reset all formatting to default
+    pub const RESET: &str = "\x1b[0m";
 
-//  BASIC WORKFLOW:
-//    1. Launch ff in/to any directory
-//    2. Navigate TO files/directories with selection numbers
-//    3. Navigate backwards to parent directory with 'b'
-//    4. Sort with 'n' (name), 's' (size), 'm' (modified)
-//    5. Filter with 'd' (dirs only), 'f' (files only)
-//    6. Search by typing a search term (and hitting enter)
-//    7. 'q' to quit"#;
+    /// Bold text for headers
+    pub const BOLD: &str = "\x1b[1m";
 
-// const HELP_SECTION_TOPBAR_LEGEND: &str = r#"
-// quit back|term|dir file|name size mod|get-send file v,y,p|str>search|enter>reset
+    /// Cyan color for commands
+    pub const CYAN: &str = "\x1b[36m";
 
-//  ═══ THE LEGEND OF TOP-BAR ═══
-//  quit back...........q for quite ff, b for go-back
+    /// Green color for examples
+    pub const GREEN: &str = "\x1b[32m";
 
-//  term................t for open a new terminal
-//                      vsplit for new tmux split vertical
-//                      hsplit for new tmux split horizontal
+    /// Yellow color for warnings or important notes
+    pub const YELLOW: &str = "\x1b[33m";
 
-//  dir file............d/f for view only directories/files
+    /// Bright white for emphasis
+    pub const BRIGHT_WHITE: &str = "\x1b[97m";
 
-//  name size mod.......n/s/m to sort name, size, time-modified
+    /// Magenta for section numbers
+    pub const MAGENTA: &str = "\x1b[35m";
+}
 
-//  get-send file v,y,p.....c,v,y,p,g for Enter Get-Send Mode
-//                          a is a shortcut to archive-menu
+/// Help section identifiers for menu navigation
+///
+/// Each variant represents a distinct help section that can be displayed
+/// independently to fit within 80x24 terminal constraints.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum HelpSection {
+    QuickStartBlurb,
+    TopbarLegend,
+    Navigation,
+    MessagePostsHelp,
+    TasksHelp,
+    // SortingFiltering,
+    // SearchOptions,
+    // FileOperations,
+    // TerminalManagement,
+    // GetSendModeBlurb,
+    // ModularViewModes,
+    // Configuration,
+}
 
-//  str>search..........enter string for fuzzy directory search
-//                      -r for recursive directory search
-//                      or --recursive
-//                      -g for to string search text files
-//                      or --grep
-//  enter>reset.........empty enter to reset view
-//     Press Enter to return to help menu..."#;
+/// Main help menu header text
+///
+/// Displayed at the top of the help menu selection screen
+const HELP_MENU_HEADER: &str = r#"
+  ╔═══════════════════════════════════════════════════════════════════════════╗
+  ║                  Uma Collaboration and Productivity Tools                 ║
+  ╚═════https://github.com/lineality/uma_productivity_collaboration_tool══════╝
+                         get source code -> uma --source
 
-// /// Navigation commands help section content
-// const HELP_SECTION_NAVIGATION: &str = r#"
-//  ═══ NAVIGATION COMMANDS ═══
+  Goal: Team members build a shared a project graph
+ "#;
 
-//  BASIC NAVIGATION:
-//    [number]              Enter item number to open file/directory
-//    b                     Go back to parent directory
-//    q                     Quit File Fantastic
-//    [Enter]               Reset view and refresh
+/// Quick start and examples help section content
+const HELP_SECTION_QUICK_START: &str = r#"
+═══ QUICK START & EXAMPLES ═══     Press Enter to return to help menu
+ USAGE in terminal:      uma
 
-//  PAGINATION:
-//    When viewing long lists:
-//    - Items are automatically paginated
-//    - Navigate pages with standard controls
-//        up/down = j/k, </>, w/x, +/- arrows keys, etc
-//    - Current page shown in status
+ OPTIONS:
+   -h, --help            Show this help menu
+   --source              Get uma source code, Rust 'crate'
+   --passive_message_mode [path]
+   --passive_task_mode [path]
 
-//  POCKET DIMENSIONS: saved locations in Get-Send Mode
-//    Often you want to navigate somewhere, but then come back!
-//    - Save current location as a "Pocket Dimension"
-//    - Jump between any saved 'pocket dimensions.'
-//    - Pocket Dimentions should retain all your filters & sorts.
+ EXAMPLES:
+   uma --help             View uma help menu (Alternative)
+   uma --passive_task_mode /wolf_team/cat_task/task_browser
+   uma --passive_message_mode /cat_team/fish_task/message_posts_browser
 
-//  Press Enter to return to help menu..."#;
+ BASIC WORKFLOW & NAVIGATION:
+   1. Launch Uma
+   2. invite -> set up your team & project
+   3. int -> Pick a team channel
+   4. int -> Pick a task/node
+   5. m   -> Message Posts
+   6. t   -> Task Board
+   7. add -> make a task/node
+   8. b   -> go back
+   9. q   -> quit"#;
 
-// /// Sorting and filtering help section content
-// const HELP_SECTION_SORTING_FILTERING: &str = r#"
-//  ═══ SORTING & FILTERING ═══    Press Enter to return to help menu...
+const HELP_SECTION_MAIN_TOPBAR_LEGEND: &str = r#"
+quit back|term|dir file|name size mod|get-send file v,y,p|str>search|enter>reset
 
-// One thing that makes raw terminal 'ls' tricky is when there are a
-// lot of items and you are looking for... the most recent, or want to
-// see only files. With ff you can have these file-manager features
-// in your native terminal. Getting a reverse 'modified' 'size' 'name'
-// sort is easy: toggle! (And use --count-rows to view/sort data-lines!)
+ ═══ THE LEGEND OF TOP-BAR ═══
+ quit back...........q for quite ff, b for go-back
 
-//  SORTING COMMANDS:       [row-count: (n)ame sort, (c)ount sort)]
-//    n                     Sort by name (toggle ascending/descending)
-//    s                     Sort by size (toggle ascending/descending)
-//    m                     Sort by last-modified date-time (toggle asc/desc)
+ term................t for open a new terminal
+                     vsplit for new tmux split vertical
+                     hsplit for new tmux split horizontal
 
-//  FILTERING COMMANDS:     [row-count: (h) to remove headers from counts]
-//    d                     Show only directories
-//    f                     Show only files
-//    [Enter]               Reset filter (show all items)
+ dir file............d/f for view only directories/files
 
-//  SORT ORDER (reverse the order):
-//    - First press: ascending order (A-Z, smallest-largest, oldest-newest)
-//    - Second press: descending order! Yay!"#;
+ name size mod.......n/s/m to sort name, size, time-modified
 
-// /// Search options help section content
-// const HELP_SECTION_SEARCH: &str = r#"
-//  ═══ SEARCH OPTIONS ═══
+ get-send file v,y,p.....c,v,y,p,g for Enter Get-Send Mode
+                         a is a shortcut to archive-menu
 
-//  BASIC SEARCH:
-//    [search term]        Fuzzy search for files/directories
-//                         Just start typing to search current directory
+ str>search..........enter string for fuzzy directory search
+                     -r for recursive directory search
+                     or --recursive
+                     -g for to string search text files
+                     or --grep
+ enter>reset.........empty enter to reset view
+    Press Enter to return to help menu..."#;
 
-//  ADVANCED SEARCH:       Tip, combine flags: goodstuff -r -g
-//    [term] -r            Recursive search in subdirectories
-//    [term] --recursive   Alternative recursive search syntax
-//    [term] -g            Grep: search INSIDE text file contents
-//    [term] --grep        Alternative grep syntax
-//    [term] -c            Case-sensitive string search
-//    [term] --case-sensitive
+/// Navigation commands help section content
+const HELP_SECTION_NAVIGATION: &str = r#"
+ ═══ NAVIGATION COMMANDS ═══
+ Press enter after you type.
 
-//  SEARCH BEHAVIOR:
-//    - Fuzzy matching: finds partial matches
-//    - Case-insensitive by default
-//    - Fuzzy Results shown with relevance scoring
-//         Distance = Levinshtein-Distance
+ BASIC NAVIGATION:
+    1. Launch Uma
+    2. invite -> set up your team & project
+    3. int -> Pick a team channel
+    4. int -> Pick a task/node
+    5. m   -> Message Posts
+    6. t   -> Task Board
+    7. add -> make a task/node
+    8. b   -> go back
+    9. q   -> quit
 
-//  Press Enter to return to help menu... "#;
+ Press Enter to return to help menu..."#;
+
+/// Sorting and filtering help section content
+const HELP_MESSAGE_POST_BROWSER: &str = r#"
+ ═══ MESSAGE_POSTS ═══    Press Enter to return to help menu...
+
+One thing that makes raw terminal 'ls' tricky is when there are a
+lot of items and you are looking for... the most recent, or want to
+see only files. With ff you can have these file-manager features
+in your native terminal. Getting a reverse 'modified' 'size' 'name'
+sort is easy: toggle! (And use --count-rows to view/sort data-lines!)
+
+ SORTING COMMANDS:       [row-count: (n)ame sort, (c)ount sort)]
+   n                     Sort by name (toggle ascending/descending)
+   s                     Sort by size (toggle ascending/descending)
+   m                     Sort by last-modified date-time (toggle asc/desc)
+
+ FILTERING COMMANDS:     [row-count: (h) to remove headers from counts]
+   d                     Show only directories
+   f                     Show only files
+   [Enter]               Reset filter (show all items)
+
+ SORT ORDER (reverse the order):
+   - First press: ascending order (A-Z, smallest-largest, oldest-newest)
+   - Second press: descending order! Yay!"#;
+
+/// Search options help section content
+const HELP_TASK_BROWSER: &str = r#"
+ ═══ TASK_BROWSER ═══
+
+ BASIC SEARCH:
+   [search term]        Fuzzy search for files/directories
+                        Just start typing to search current directory
+
+ ADVANCED SEARCH:       Tip, combine flags: goodstuff -r -g
+   [term] -r            Recursive search in subdirectories
+   [term] --recursive   Alternative recursive search syntax
+   [term] -g            Grep: search INSIDE text file contents
+   [term] --grep        Alternative grep syntax
+   [term] -c            Case-sensitive string search
+   [term] --case-sensitive
+
+ SEARCH BEHAVIOR:
+   - Fuzzy matching: finds partial matches
+   - Case-insensitive by default
+   - Fuzzy Results shown with relevance scoring
+        Distance = Levinshtein-Distance
+
+ Press Enter to return to help menu... "#;
 
 // /// File operations help section content
 // const HELP_SECTION_FILE_OPERATIONS: &str = r#"
@@ -38275,379 +38335,320 @@ fn main() {
 
 //  Press Enter to return to help menu... "#;
 
-// /// Display the main help menu and handle section selection
-// ///
-// /// This function presents the user with a numbered menu of help sections
-// /// and processes their selection. It returns to the caller when the user
-// /// chooses to quit.
-// ///
-// /// # Returns
-// /// * `Result<()>` - Ok on successful completion, Err on I/O or other errors
-// ///
-// /// # Errors
-// /// - I/O errors when reading user input
-// /// - Terminal display errors
-// pub fn display_help_menu_system() -> Result<()> {
-//     loop {
-//         // Clear screen for clean display
-//         clear_terminal_screen()?;
+/// Display the main help menu and handle section selection
+///
+/// This function presents the user with a numbered menu of help sections
+/// and processes their selection. It returns to the caller when the user
+/// chooses to quit.
+///
+/// # Returns
+/// * `Result<()>` - Ok on successful completion, Err on I/O or other errors
+///
+/// # Errors
+/// - I/O errors when reading user input
+/// - Terminal display errors
+pub fn display_help_menu_system() -> Result<(), ThisProjectError> {
+    loop {
+        // Clear screen for clean display
+        clear_terminal_screen()?;
 
-//         // Display header with colors
-//         print!("{}{}", ansi_colors::BOLD, ansi_colors::BRIGHT_WHITE);
-//         println!("{}", HELP_MENU_HEADER);
-//         print!("{}", ansi_colors::RESET);
+        // Display header with colors
+        print!("{}{}", ansi_colors::BOLD, ansi_colors::BRIGHT_WHITE);
+        println!("{}", HELP_MENU_HEADER);
+        print!("{}", ansi_colors::RESET);
 
-//         // Quit instructions (...learning from the vim nightmare...)
-//         println!(
-//             "  {}q.{} Type 'q' & hit Enter to quit help menu / File Fantastic",
-//             ansi_colors::YELLOW,
-//             ansi_colors::RESET
-//         );
-//         println!();
+        // Quit instructions (...learning from the vim nightmare...)
+        println!(
+            "  {}q.{} Type 'q' & hit Enter to quit help menu (sme with Uma)",
+            ansi_colors::YELLOW,
+            ansi_colors::RESET
+        );
+        println!();
 
-//         // Display menu options
-//         println!(
-//             "{} Select a help section:{}",
-//             ansi_colors::CYAN,
-//             ansi_colors::RESET
-//         );
+        // Display menu options
+        println!(
+            "{} Select a help section:{}",
+            ansi_colors::CYAN,
+            ansi_colors::RESET
+        );
 
-//         // Menu items with colored numbers
-//         println!(
-//             "  {}1.{} Quick Start & Examples",
-//             ansi_colors::MAGENTA,
-//             ansi_colors::RESET
-//         );
-//         println!(
-//             "  {}2.{} Top Bar Legend Tips",
-//             ansi_colors::MAGENTA,
-//             ansi_colors::RESET
-//         );
-//         println!(
-//             "  {}3.{} Navigation Commands",
-//             ansi_colors::MAGENTA,
-//             ansi_colors::RESET
-//         );
-//         println!(
-//             "  {}4.{} Sorting & Filtering",
-//             ansi_colors::MAGENTA,
-//             ansi_colors::RESET
-//         );
-//         println!(
-//             "  {}5.{} Search Options",
-//             ansi_colors::MAGENTA,
-//             ansi_colors::RESET
-//         );
-//         println!(
-//             "  {}6.{} Go To File: Opening / Processing a File",
-//             ansi_colors::MAGENTA,
-//             ansi_colors::RESET
-//         );
-//         println!(
-//             "  {}7.{} Get-Send Mode (Get/Send/Move files & directories)",
-//             ansi_colors::MAGENTA,
-//             ansi_colors::RESET
-//         );
-//         println!(
-//             "  {}8.{} See All Files' Row Counts in a Directory (Modular View Modes)",
-//             ansi_colors::MAGENTA,
-//             ansi_colors::RESET
-//         );
-//         println!(
-//             "  {}9.{} Terminal & Display Management",
-//             ansi_colors::MAGENTA,
-//             ansi_colors::RESET
-//         );
-//         println!(
-//             "  {}10.{} 'Partner Programs' Configuration",
-//             ansi_colors::MAGENTA,
-//             ansi_colors::RESET
-//         );
-//         println!(
-//             "  {}11.{} View help menu doc in editor (vi/nano)",
-//             ansi_colors::GREEN,
-//             ansi_colors::RESET
-//         );
-//         println!();
-//         print!(
-//             "{}Enter section number (1-10) or 'q' to quit: {}",
-//             ansi_colors::BOLD,
-//             ansi_colors::RESET
-//         );
+        // Menu items with colored numbers
+        println!(
+            "  {}1.{} Quick Start & Examples",
+            ansi_colors::MAGENTA,
+            ansi_colors::RESET
+        );
+        println!(
+            "  {}2.{} Top Bar Legend Tips",
+            ansi_colors::MAGENTA,
+            ansi_colors::RESET
+        );
+        println!(
+            "  {}3.{} Navigation Commands",
+            ansi_colors::MAGENTA,
+            ansi_colors::RESET
+        );
+        println!(
+            "  {}4.{} Message Posts",
+            ansi_colors::MAGENTA,
+            ansi_colors::RESET
+        );
+        println!(
+            "  {}5.{} Tasks",
+            ansi_colors::MAGENTA,
+            ansi_colors::RESET
+        );
+        // println!(
+        //     "  {}6.{} Go To File: Opening / Processing a File",
+        //     ansi_colors::MAGENTA,
+        //     ansi_colors::RESET
+        // );
+        // println!(
+        //     "  {}7.{} Get-Send Mode (Get/Send/Move files & directories)",
+        //     ansi_colors::MAGENTA,
+        //     ansi_colors::RESET
+        // );
+        // println!(
+        //     "  {}8.{} See All Files' Row Counts in a Directory (Modular View Modes)",
+        //     ansi_colors::MAGENTA,
+        //     ansi_colors::RESET
+        // );
+        // println!(
+        //     "  {}9.{} Terminal & Display Management",
+        //     ansi_colors::MAGENTA,
+        //     ansi_colors::RESET
+        // );
+        // println!(
+        //     "  {}10.{} 'Partner Programs' Configuration",
+        //     ansi_colors::MAGENTA,
+        //     ansi_colors::RESET
+        // );
+        // println!(
+        //     "  {}11.{} View help menu doc in editor (vi/nano)",
+        //     ansi_colors::GREEN,
+        //     ansi_colors::RESET
+        // );
+        println!();
+        print!(
+            "{}Enter section number (1-10) or 'q' to quit: {}",
+            ansi_colors::BOLD,
+            ansi_colors::RESET
+        );
 
-//         // Flush to ensure prompt appears
-//         io::stdout().flush().map_err(FileFantasticError::Io)?;
+        // Flush to ensure prompt appears
+        io::stdout().flush().map_err(|e| format!("Error {}", e))?;
 
-//         // Read user input
-//         let mut input = String::new();
-//         io::stdin()
-//             .read_line(&mut input)
-//             .map_err(FileFantasticError::Io)?;
-//         let input = input.trim().to_lowercase();
+        // Read user input
+        let mut input = String::new();
+        io::stdin()
+            .read_line(&mut input)
+            .map_err(|e| format!("Error {}", e))?;
+        let input = input.trim().to_lowercase();
 
-//         // Process user selection
-//         match input.as_str() {
-//             "1" => display_help_section_content(HelpSection::QuickStartBlurb)?,
-//             "2" => display_help_section_content(HelpSection::TopbarLegend)?,
-//             "3" => display_help_section_content(HelpSection::Navigation)?,
-//             "4" => display_help_section_content(HelpSection::SortingFiltering)?,
-//             "5" => display_help_section_content(HelpSection::SearchOptions)?,
-//             "6" => display_help_section_content(HelpSection::FileOperations)?,
-//             "7" => display_help_section_content(HelpSection::GetSendModeBlurb)?,
-//             "8" => display_help_section_content(HelpSection::ModularViewModes)?,
-//             "9" => display_help_section_content(HelpSection::TerminalManagement)?,
-//             "10" => display_help_section_content(HelpSection::Configuration)?,
-//             "11" => open_complete_help_in_editor()?,
-//             "q" | "quit" | "exit" => {
-//                 println!(
-//                     "{}Exiting help system...{}",
-//                     ansi_colors::GREEN,
-//                     ansi_colors::RESET
-//                 );
-//                 return Ok(());
-//             }
-//             _ => {
-//                 println!(
-//                     "{}Try again...Please enter 1-10 or 'q'.{}",
-//                     ansi_colors::YELLOW,
-//                     ansi_colors::RESET
-//                 );
-//                 wait_for_enter_keypress()?;
-//             }
-//         }
-//     }
-// }
+        // Process user selection
+        match input.as_str() {
+            "1" => display_help_section_content(HelpSection::QuickStartBlurb)?,
+            "2" => display_help_section_content(HelpSection::TopbarLegend)?,
+            "3" => display_help_section_content(HelpSection::Navigation)?,
+            "4" => display_help_section_content(HelpSection::MessagePostsHelp)?,
+            "5" => display_help_section_content(HelpSection::TasksHelp)?,
+            // "4" => display_help_section_content(HelpSection::SortingFiltering)?,
+            // "5" => display_help_section_content(HelpSection::SearchOptions)?,
+            // "6" => display_help_section_content(HelpSection::FileOperations)?,
+            // "7" => display_help_section_content(HelpSection::GetSendModeBlurb)?,
+            // "8" => display_help_section_content(HelpSection::ModularViewModes)?,
+            // "9" => display_help_section_content(HelpSection::TerminalManagement)?,
+            // "10" => display_help_section_content(HelpSection::Configuration)?,
+            // "11" => open_complete_help_in_editor()?,
+            "q" | "quit" | "exit" => {
+                println!(
+                    "{}Exiting help system...{}",
+                    ansi_colors::GREEN,
+                    ansi_colors::RESET
+                );
+                return Ok(());
+            }
+            _ => {
+                println!(
+                    "{}Try again...Please enter 1-10 or 'q'.{}",
+                    ansi_colors::YELLOW,
+                    ansi_colors::RESET
+                );
+                wait_for_enter_keypress()?;
+            }
+        }
+    }
+}
 
-// /// Display a specific help section with proper formatting
-// ///
-// /// This function clears the screen and displays the content for the
-// /// selected help section, waiting for user input before returning.
-// ///
-// /// # Arguments
-// /// * `section` - The help section to display
-// ///
-// /// # Returns
-// /// * `Result<()>` - Ok on successful display, Err on I/O errors
-// fn display_help_section_content(section: HelpSection) -> Result<()> {
-//     clear_terminal_screen()?;
+/// Display a specific help section with proper formatting
+///
+/// This function clears the screen and displays the content for the
+/// selected help section, waiting for user input before returning.
+///
+/// # Arguments
+/// * `section` - The help section to display
+///
+/// # Returns
+/// * `Result<()>` - Ok on successful display, Err on I/O errors
+fn display_help_section_content(section: HelpSection) -> Result<(), ThisProjectError> {
+    clear_terminal_screen()?;
 
-//     // Select and display appropriate section content
-//     let content = match section {
-//         HelpSection::QuickStartBlurb => HELP_SECTION_QUICK_START,
-//         HelpSection::TopbarLegend => HELP_SECTION_TOPBAR_LEGEND,
-//         HelpSection::Navigation => HELP_SECTION_NAVIGATION,
-//         HelpSection::SortingFiltering => HELP_SECTION_SORTING_FILTERING,
-//         HelpSection::SearchOptions => HELP_SECTION_SEARCH,
-//         HelpSection::FileOperations => HELP_SECTION_FILE_OPERATIONS,
-//         HelpSection::GetSendModeBlurb => HELP_SECTION_GET_SEND_MODE,
-//         HelpSection::ModularViewModes => HELP_SECTION_VIEW_MODES,
-//         HelpSection::TerminalManagement => HELP_SECTION_TERMINAL,
-//         HelpSection::Configuration => HELP_SECTION_CONFIGURATION,
-//     };
+    // Select and display appropriate section content
+    let content = match section {
+        HelpSection::QuickStartBlurb => HELP_SECTION_QUICK_START,
+        HelpSection::TopbarLegend => HELP_SECTION_MAIN_TOPBAR_LEGEND,
+        HelpSection::Navigation => HELP_SECTION_NAVIGATION,
+        HelpSection::MessagePostsHelp => HELP_MESSAGE_POST_BROWSER,
+        HelpSection::TasksHelp => HELP_TASK_BROWSER,
+        // HelpSection::FileOperations => HELP_SECTION_FILE_OPERATIONS,
+        // HelpSection::GetSendModeBlurb => HELP_SECTION_GET_SEND_MODE,
+        // HelpSection::ModularViewModes => HELP_SECTION_VIEW_MODES,
+        // HelpSection::TerminalManagement => HELP_SECTION_TERMINAL,
+        // HelpSection::Configuration => HELP_SECTION_CONFIGURATION,
+    };
 
-//     // Display with color formatting
-//     print!("{}{}", ansi_colors::BOLD, ansi_colors::CYAN);
-//     println!("{}", content);
-//     print!("{}", ansi_colors::RESET);
+    // Display with color formatting
+    print!("{}{}", ansi_colors::BOLD, ansi_colors::CYAN);
+    println!("{}", content);
+    print!("{}", ansi_colors::RESET);
 
-//     // Wait for user to read
-//     wait_for_enter_keypress()?;
+    // Wait for user to read
+    wait_for_enter_keypress()?;
 
-//     Ok(())
-// }
+    Ok(())
+}
 
-// /// Open complete help documentation in external editor
-// ///
-// /// This function compiles all help sections into a single document
-// /// and opens it in the user's preferred editor (vi or nano).
-// ///
-// /// # Returns
-// /// * `Result<()>` - Ok if editor opened successfully, Err otherwise
-// ///
-// /// # Errors
-// /// - Failed to create temp file
-// /// - Editor not found or failed to launch
-// fn open_complete_help_in_editor() -> Result<()> {
-//     // Create complete help content
-//     let mut complete_help = String::new();
+/// Open complete help documentation in external editor
+///
+/// This function compiles all help sections into a single document
+/// and opens it in the user's preferred editor (vi or nano).
+///
+/// # Returns
+/// * `Result<()>` - Ok if editor opened successfully, Err otherwise
+///
+/// # Errors
+/// - Failed to create temp file
+/// - Editor not found or failed to launch
+fn open_complete_help_in_editor() -> Result<(), ThisProjectError> {
+    use std::process::Command;
 
-//     // Add header
-//     complete_help.push_str("FILE FANTASTIC (ff) - COMPLETE HELP DOCUMENTATION\n");
-//     complete_help.push_str("=".repeat(78).as_str());
-//     complete_help.push_str("\n\n");
+    // Create complete help content
+    let mut complete_help = String::new();
 
-//     // Add all sections without ANSI codes for editor viewing
-//     complete_help.push_str("QUICK START & EXAMPLES\n");
-//     complete_help.push_str("-".repeat(78).as_str());
-//     complete_help.push_str("\n");
-//     complete_help.push_str(strip_ansi_codes(HELP_SECTION_QUICK_START).as_str());
-//     complete_help.push_str("\n\n");
+    // Add header
+    complete_help.push_str("FILE FANTASTIC (ff) - COMPLETE HELP DOCUMENTATION\n");
+    complete_help.push_str("=".repeat(78).as_str());
+    complete_help.push_str("\n\n");
 
-//     complete_help.push_str("NAVIGATION COMMANDS\n");
-//     complete_help.push_str("-".repeat(78).as_str());
-//     complete_help.push_str("\n");
-//     complete_help.push_str(strip_ansi_codes(HELP_SECTION_NAVIGATION).as_str());
-//     complete_help.push_str("\n\n");
+    // Add all sections without ANSI codes for editor viewing
+    complete_help.push_str("QUICK START & EXAMPLES\n");
+    complete_help.push_str("-".repeat(78).as_str());
+    complete_help.push_str("\n");
+    complete_help.push_str(strip_ansi_codes(HELP_SECTION_QUICK_START).as_str());
+    complete_help.push_str("\n\n");
 
-//     complete_help.push_str("SORTING & FILTERING\n");
-//     complete_help.push_str("-".repeat(78).as_str());
-//     complete_help.push_str("\n");
-//     complete_help.push_str(strip_ansi_codes(HELP_SECTION_SORTING_FILTERING).as_str());
-//     complete_help.push_str("\n\n");
+    complete_help.push_str("NAVIGATION COMMANDS\n");
+    complete_help.push_str("-".repeat(78).as_str());
+    complete_help.push_str("\n");
+    complete_help.push_str(strip_ansi_codes(HELP_SECTION_NAVIGATION).as_str());
+    complete_help.push_str("\n\n");
 
-//     complete_help.push_str("SEARCH OPTIONS\n");
-//     complete_help.push_str("-".repeat(78).as_str());
-//     complete_help.push_str("\n");
-//     complete_help.push_str(strip_ansi_codes(HELP_SECTION_SEARCH).as_str());
-//     complete_help.push_str("\n\n");
+    complete_help.push_str("MAIN TOPBAR LEGEND\n");
+    complete_help.push_str("-".repeat(78).as_str());
+    complete_help.push_str("\n");
+    complete_help.push_str(strip_ansi_codes(HELP_SECTION_MAIN_TOPBAR_LEGEND).as_str());
+    complete_help.push_str("\n\n");
 
-//     complete_help.push_str("FILE OPERATIONS (GET-SEND MODE)\n");
-//     complete_help.push_str("-".repeat(78).as_str());
-//     complete_help.push_str("\n");
-//     complete_help.push_str(strip_ansi_codes(HELP_SECTION_FILE_OPERATIONS).as_str());
-//     complete_help.push_str("\n\n");
+    complete_help.push_str("MESSAGE POSTS\n");
+    complete_help.push_str("-".repeat(78).as_str());
+    complete_help.push_str("\n");
+    complete_help.push_str(strip_ansi_codes(HELP_MESSAGE_POST_BROWSER).as_str());
+    complete_help.push_str("\n\n");
 
-//     complete_help.push_str("TERMINAL & DISPLAY MANAGEMENT\n");
-//     complete_help.push_str("-".repeat(78).as_str());
-//     complete_help.push_str("\n");
-//     complete_help.push_str(strip_ansi_codes(HELP_SECTION_TERMINAL).as_str());
-//     complete_help.push_str("\n\n");
-
-//     complete_help.push_str("PARTNER PROGRAMS CONFIGURATION\n");
-//     complete_help.push_str("-".repeat(78).as_str());
-//     complete_help.push_str("\n");
-//     complete_help.push_str(strip_ansi_codes(HELP_SECTION_CONFIGURATION).as_str());
-
-//     // Create temp file
-//     let temp_dir = env::temp_dir();
-//     let temp_file_path = temp_dir.join("ff_help_documentation.txt");
-
-//     // Write content to temp file
-//     fs::write(&temp_file_path, complete_help)?;
-
-//     // Try to open in vi first, then nano
-//     let editor_result = Command::new("vi").arg(&temp_file_path).status();
-
-//     match editor_result {
-//         Ok(status) if status.success() => {
-//             // Successfully opened in vi
-//             println!(
-//                 "{}Help documentation closed.{}",
-//                 ansi_colors::GREEN,
-//                 ansi_colors::RESET
-//             );
-//         }
-//         _ => {
-//             // Try nano as fallback
-//             let nano_result = Command::new("nano").arg(&temp_file_path).status();
-
-//             match nano_result {
-//                 Ok(status) if status.success() => {
-//                     println!(
-//                         "{}Help documentation closed.{}",
-//                         ansi_colors::GREEN,
-//                         ansi_colors::RESET
-//                     );
-//                 }
-//                 _ => {
-//                     // Neither editor worked
-//                     eprintln!(
-//                         "{}Error: Could not open help in vi or nano.{}",
-//                         ansi_colors::YELLOW,
-//                         ansi_colors::RESET
-//                     );
-//                     eprintln!("Help file saved to: {}", temp_file_path.display());
-//                     wait_for_enter_keypress()?;
-//                 }
-//             }
-//         }
-//     }
-
-//     // Note: We don't delete the temp file immediately in case user wants to reference it
-//     // OS will clean up temp directory eventually
-
-//     Ok(())
-// }
+    complete_help.push_str("TASK\n");
+    complete_help.push_str("-".repeat(78).as_str());
+    complete_help.push_str("\n");
+    complete_help.push_str(strip_ansi_codes(HELP_TASK_BROWSER).as_str());
+    complete_help.push_str("\n\n");
 
 
-// /// Clear the terminal screen using ANSI escape codes
-// ///
-// /// This function uses ANSI escape sequences to clear the terminal
-// /// and reset the cursor to the top-left position.
-// ///
-// /// # Returns
-// /// * `Result<()>` - Ok on success, Err on I/O error
-// fn clear_terminal_screen() -> Result<()> {
-//     // ANSI escape codes: clear screen and move cursor to top-left
-//     print!("\x1b[2J\x1b[1;1H");
-//     io::stdout().flush().map_err(FileFantasticError::Io)?;
-//     Ok(())
-// }
 
-// /// Wait for user to press Enter key
-// ///
-// /// Simple utility function to pause execution until the user
-// /// presses the Enter key. Used between help sections.
-// ///
-// /// # Returns
-// /// * `Result<()>` - Ok when Enter pressed, Err on I/O error
-// fn wait_for_enter_keypress() -> Result<()> {
-//     let mut buffer = String::new();
-//     io::stdin()
-//         .read_line(&mut buffer)
-//         .map_err(FileFantasticError::Io)?;
-//     Ok(())
-// }
+    // complete_help.push_str("SORTING & FILTERING\n");
+    // complete_help.push_str("-".repeat(78).as_str());
+    // complete_help.push_str("\n");
+    // complete_help.push_str(strip_ansi_codes(HELP_SECTION_SORTING_FILTERING).as_str());
+    // complete_help.push_str("\n\n");
 
-// /// Strip ANSI color codes from a string
-// ///
-// /// Removes all ANSI escape sequences from text for clean display
-// /// in external editors that don't support color codes.
-// ///
-// /// # Arguments
-// /// * `text` - Text potentially containing ANSI codes
-// ///
-// /// # Returns
-// /// * `String` - Text with all ANSI codes removed
-// fn strip_ansi_codes(text: &str) -> String {
-//     // Simple regex-like replacement without external dependencies
-//     let mut result = String::new();
-//     let mut chars = text.chars().peekable();
+    // complete_help.push_str("SEARCH OPTIONS\n");
+    // complete_help.push_str("-".repeat(78).as_str());
+    // complete_help.push_str("\n");
+    // complete_help.push_str(strip_ansi_codes(HELP_SECTION_SEARCH).as_str());
+    // complete_help.push_str("\n\n");
 
-//     while let Some(ch) = chars.next() {
-//         if ch == '\x1b' {
-//             // Skip ANSI escape sequence
-//             // Format: ESC [ ... m
-//             if chars.peek() == Some(&'[') {
-//                 chars.next(); // Skip '['
-//                 // Skip until 'm'
-//                 while let Some(next_ch) = chars.next() {
-//                     if next_ch == 'm' {
-//                         break;
-//                     }
-//                 }
-//             }
-//         } else {
-//             result.push(ch);
-//         }
-//     }
+    // complete_help.push_str("FILE OPERATIONS (GET-SEND MODE)\n");
+    // complete_help.push_str("-".repeat(78).as_str());
+    // complete_help.push_str("\n");
+    // complete_help.push_str(strip_ansi_codes(HELP_SECTION_FILE_OPERATIONS).as_str());
+    // complete_help.push_str("\n\n");
 
-//     result
-// }
+    // complete_help.push_str("TERMINAL & DISPLAY MANAGEMENT\n");
+    // complete_help.push_str("-".repeat(78).as_str());
+    // complete_help.push_str("\n");
+    // complete_help.push_str(strip_ansi_codes(HELP_SECTION_TERMINAL).as_str());
+    // complete_help.push_str("\n\n");
 
-// /// Check if help flag is present in command line arguments
-// ///
-// /// This function checks if the user has requested help via
-// /// -h or --help command line flags.
-// ///
-// /// # Arguments
-// /// * `args` - Command line arguments iterator
-// ///
-// /// # Returns
-// /// * `bool` - true if help flag found, false otherwise
-// pub fn check_for_help_flag_in_args(args: &[String]) -> bool {
-//     // args.iter().any(|arg| arg == "-h" || arg == "--help")
-//     args.iter()
-//         // .skip(1)
-//         .any(|arg| arg == "-h" || arg == "--help")
-// }
+    // complete_help.push_str("PARTNER PROGRAMS CONFIGURATION\n");
+    // complete_help.push_str("-".repeat(78).as_str());
+    // complete_help.push_str("\n");
+    // complete_help.push_str(strip_ansi_codes(HELP_SECTION_CONFIGURATION).as_str());
+
+    // Create temp file
+    let temp_dir = env::temp_dir();
+    let temp_file_path = temp_dir.join("ff_help_documentation.txt");
+
+    // Write content to temp file
+    fs::write(&temp_file_path, complete_help)?;
+
+    // Try to open in vi first, then nano
+    let editor_result = Command::new("vi").arg(&temp_file_path).status();
+
+    match editor_result {
+        Ok(status) if status.success() => {
+            // Successfully opened in vi
+            println!(
+                "{}Help documentation closed.{}",
+                ansi_colors::GREEN,
+                ansi_colors::RESET
+            );
+        }
+        _ => {
+            // Try nano as fallback
+            let nano_result = Command::new("nano").arg(&temp_file_path).status();
+
+            match nano_result {
+                Ok(status) if status.success() => {
+                    println!(
+                        "{}Help documentation closed.{}",
+                        ansi_colors::GREEN,
+                        ansi_colors::RESET
+                    );
+                }
+                _ => {
+                    // Neither editor worked
+                    eprintln!(
+                        "{}Error: Could not open help in vi or nano.{}",
+                        ansi_colors::YELLOW,
+                        ansi_colors::RESET
+                    );
+                    eprintln!("Help file saved to: {}", temp_file_path.display());
+                    wait_for_enter_keypress()?;
+                }
+            }
+        }
+    }
+
+    // Note: We don't delete the temp file immediately in case user wants to reference it
+    // OS will clean up temp directory eventually
+
+    Ok(())
+}
