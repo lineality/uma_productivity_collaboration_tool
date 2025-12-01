@@ -20034,6 +20034,12 @@ fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
         ));
     }
 
+    #[cfg(debug_assertions)]
+    {
+    eprintln!("PWPCTGTOTSB: padnet_directory_path {:?}", padnet_directory_path);
+    debug_log!("PWPCTGTOTSB: padnet_directory_path {:?}", padnet_directory_path);
+    }
+
     // Check that original file exists and is within size limits
     // This prevents wasting GPG processing time on invalid inputs
     let original_metadata = fs::metadata(original_target_file_path)
@@ -20067,6 +20073,8 @@ fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
     {
     eprintln!("PWPCTGTOTSB: Step 1 - Clearsigning file");
     debug_log!("PWPCTGTOTSB: Step 1 - Clearsigning file");
+    debug_log!("PWPCTGTOTSB: Step 1 - original_target_file_path {:?}", original_target_file_path);
+
     }
     let clearsigned_content = gpg_clearsign_file_to_sendbytes(original_target_file_path)
         .map_err(|e| {
@@ -20518,6 +20526,9 @@ fn read_file_to_bytes(
     use std::fs::{self, File};
     use std::io::Read;
 
+    debug_log("RFTB: read_file_to_bytes start");
+
+
     // Debug assertion: ensure we have an absolute path
     #[cfg(all(debug_assertions, not(test)))]
     debug_assert!(
@@ -20580,6 +20591,8 @@ fn read_file_to_bytes(
                 format!("RFTB: failed to read file contents: {}", e),
             ))
         })?;
+
+    debug_log("RFTB: End");
 
     // Success: return complete file contents
     Ok(buffer)
@@ -22115,10 +22128,10 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
     };
 
     let to_padnet_dir = get_writer_to_padnet_directory_path();
-    debug_log!("IUA: to_padnet -> {:?}", to_padnet_dir);
+    debug_log!("IUA: to_padnet -> {:?}/team-channel-name", to_padnet_dir);
 
     let from_padnet_dir = get_reader_from_padnet_directory_path();
-    debug_log!("IUA: from_padnet_dir -> {:?}", from_padnet_dir);
+    debug_log!("IUA: from_padnet_dir -> {:?}/team-channel-name", from_padnet_dir);
 
 
     // using path relative to exe-parent:
@@ -31971,8 +31984,13 @@ fn handle_local_owner_desk(
                     };
 
                     debug_log!(
-                        "HLOD 6.1 still_encrypted_file_blob -> {:?}",
+                        "HLOD 6.1 still_encrypted_file_blob (raw OTP or raw GPG)-> {:?}",
                         still_encrypted_file_blob
+                    );
+
+                    debug_log!(
+                        "HLOD 6.1.2 use_padnet_flag -> {:?}",
+                        use_padnet_flag
                     );
 
                     // let padnet_index_array = match &incoming_intray_file_struct.padnet_index_array {
@@ -31995,30 +32013,172 @@ fn handle_local_owner_desk(
                         5. read OTP file, make gpg file
                         6. get bytes from file
                         */
+                        debug_log("HLOD-Padnet: use_padnet_flag: 6.2: GPG decryption...");
 
-                        // 1. still OTP layer, get blob
+
+
+                        // =========================================================================
+                        // Setup: Initialize cleanup guard for this packet
+                        // =========================================================================
+                        let mut cleanup_guard = TempFileCleanupGuard::new();
+
+                        // 1. Extract OTP-encrypted blob
                         let still_otp_encrypted_file_blob = match &incoming_intray_file_struct.gpg_encrypted_intray_file {
-                            Some(data) => data,  // Extract the Vec<u8> if Some
+                            Some(data) => data,
                             None => {
-                                debug_log!("HLOD: if *use_padnet_flag:  6.1: gpg_encrypted_intray_file is None. Skipping.");
-                                continue; // Or handle the None case differently (e.g., return an error)
+                                debug_log!("HLOD-Padnet: gpg_encrypted_intray_file is None. Skipping.");
+                                continue;
                             }
                         };
 
-                        // 2. make paths; 1. to write OTP blob to, 2. to write gpg blob to
-                        let otp_blob_file_path = create_unique_temp_filepathbuf(
+                        // =========================================================================
+                        // 2. Write OTP blob to temp file
+                        // =========================================================================
+                        let otp_blob_file_path = write_bytes_to_unique_temp_file(
+                            still_otp_encrypted_file_blob,
                             &std::env::temp_dir(),
-                            "uma_xor_result",
+                            "uma_intray_otp",
                             TEMP_FILE_CREATION_RETRY_ATTEMPTS,
                             TEMP_FILE_RETRY_DELAY_MS,
                         ).map_err(|e| {
                             ThisProjectError::IoError(std::io::Error::new(
                                 e.kind(),
-                                format!("HLOD: if *use_padnet_flag: failed to create temp file #2: {}", e),
+                                format!("HLOD: failed to create OTP temp file: {}", e),
                             ))
                         })?;
 
-                        // let gpg_blob_file_path = create_unique_temp_filepathbuf(
+                        // ✅ Register for cleanup immediately
+                        cleanup_guard.add(otp_blob_file_path.clone());
+
+                        #[cfg(debug_assertions)]
+                        debug_log!("HLOD-Padnet: Created OTP temp file: {:?}", otp_blob_file_path);
+
+                        // =========================================================================
+                        // 3. Create empty file for XOR result (GPG-encrypted data)
+                        // =========================================================================
+                        let gpg_blob_file_path = create_unique_temp_filepathbuf(
+                            &std::env::temp_dir(),
+                            "uma_intray_gpg",
+                            TEMP_FILE_CREATION_RETRY_ATTEMPTS,
+                            TEMP_FILE_RETRY_DELAY_MS,
+                        ).map_err(|e| {
+                            ThisProjectError::IoError(std::io::Error::new(
+                                e.kind(),
+                                format!("HLOD-Padnet: failed to create GPG result temp file: {}", e),
+                            ))
+                        })?;
+
+                        // ✅ Register for cleanup immediately
+                        cleanup_guard.add(gpg_blob_file_path.clone());
+
+                        // #[cfg(debug_assertions)]
+                        debug_log!("HLOD-Padnet: Created GPG result temp file: {:?}", gpg_blob_file_path);
+
+                        // =========================================================================
+                        // 4. Get padnet directory path
+                        // =========================================================================
+                        let team_channel_name = match get_current_team_channel_name_from_nav_path() {
+                            Some(name) => name,
+                            None => {
+                                debug_log!("HLOD: Error: Could not get current channel name.");
+                                // cleanup_guard will auto-cleanup on return
+                                return Err(ThisProjectError::InvalidData(
+                                    "Could not get team channel name".into()
+                                ));
+                            },
+                        };
+
+                        let rc_key_id = &local_owner_desk_setup_data.remote_collaborator_gpg_publickey_id;
+                        let mut padnet_directory_path = get_reader_from_padnet_directory_path()?;
+                        padnet_directory_path.push(&team_channel_name);
+                        padnet_directory_path.push(rc_key_id);
+
+                        // =========================================================================
+                        // 5. XOR decrypt: OTP file → GPG file
+                        // =========================================================================
+                        let padnet_index_array = match &incoming_intray_file_struct.padnet_index_array {
+                            Some(data) => data,
+                            None => {
+                                debug_log!("HLOD-Padnet: padnet_index_array is None. Skipping.");
+                                // cleanup_guard will auto-cleanup on continue
+                                continue;
+                            }
+                        };
+
+                        let _bytes_processed = padnet_reader_xor_file(
+                            &otp_blob_file_path,        // Input: OTP-encrypted file
+                            &gpg_blob_file_path,         // Output: GPG-encrypted file
+                            &padnet_directory_path,      // Padset directory
+                            padnet_index_array,          // Pad index
+                        ).map_err(|e| {
+                            debug_log!("HLOD-Padnet: XOR decryption failed: {:?}", e);
+                            // cleanup_guard will auto-cleanup on error
+                            ThisProjectError::PadnetError(format!("XOR decryption failed: {:?}", e))
+                        })?;
+
+                        // #[cfg(debug_assertions)]
+                        debug_log!("HLOD-Padnet: XOR decryption complete");
+
+                        // =========================================================================
+                        // 6. Read GPG-encrypted bytes from result file
+                        // =========================================================================
+                        let gpg_encrypted_bytes = match read_file_to_bytes(&gpg_blob_file_path) {
+                            Ok(bytes) => {
+                                #[cfg(debug_assertions)]
+                                debug_log!("HLOD-Padnet: Read {} bytes from GPG file", bytes.len());
+                                bytes
+                            },
+                            Err(e) => {
+                                debug_log!("HLOD-Padnet: Failed to read GPG file: {}. Skipping.", e);
+                                // cleanup_guard will auto-cleanup on continue
+                                continue;
+                            }
+                        };
+
+
+                        debug_log!("HLOD-Padnet: gpg_encrypted_bytes {:?}", gpg_encrypted_bytes);
+
+                        // =========================================================================
+                        // 7. Cleanup temp files (explicit for logging, Drop handles it too)
+                        // =========================================================================
+                        if let Err(errors) = cleanup_guard.cleanup() {
+                            // Log warnings but don't fail (we got the data successfully)
+                            #[cfg(debug_assertions)]
+                            for error_msg in errors {
+                                debug_log!("HLOD-Padnet: cleanup warning: {}", error_msg);
+                            }
+                        }
+
+                        #[cfg(debug_assertions)]
+                        debug_log!("HLOD-Padnet: Padnet decryption complete, temp files cleaned up");
+
+
+                        // let decrypted_clearsignfile_data = match gpg_decrypt_from_bytes(
+                        match gpg_decrypt_from_bytes(
+                            &gpg_encrypted_bytes,
+                            &local_owner_desk_setup_data.local_user_gpg_publickey_id
+                        ) { // Pass the extracted data
+                            Ok(data) => data,
+                            Err(e) => {
+                                debug_log!("HLOD NOT*use_padnet_flag: 6.2: GPG decryption failed: {}. Skipping.", e);
+                                continue; // Skip to the next packet if decryption fails
+                            }
+                        }
+
+                        // Return GPG-encrypted bytes (still need GPG decryption below)
+                        // gpg_encrypted_bytes
+
+                        // // 1. still OTP layer, get blob
+                        // let still_otp_encrypted_file_blob = match &incoming_intray_file_struct.gpg_encrypted_intray_file {
+                        //     Some(data) => data,  // Extract the Vec<u8> if Some
+                        //     None => {
+                        //         debug_log!("HLOD: if *use_padnet_flag:  6.1: gpg_encrypted_intray_file is None. Skipping.");
+                        //         continue; // Or handle the None case differently (e.g., return an error)
+                        //     }
+                        // };
+
+                        // // 2. make paths; 1. to write OTP blob to, 2. to write gpg blob to
+                        // let otp_blob_file_path = create_unique_temp_filepathbuf(
                         //     &std::env::temp_dir(),
                         //     "uma_xor_result",
                         //     TEMP_FILE_CREATION_RETRY_ATTEMPTS,
@@ -32030,123 +32190,134 @@ fn handle_local_owner_desk(
                         //     ))
                         // })?;
 
-
-                        // 3. write OTP blob to file
-                        // set blob to blob_as_file_path;
-                        /*
-                        fn write_bytes_to_file_atomic(
-                            data: &[u8],
-                            file_path: &Path,
-                        ) -> Result<(), ThisProjectError> {
-                        */
-                        // // let _ = write_bytes_to_file_atomic(
-                        // //     still_otp_encrypted_file_blob, // data: &[u8],
-                        // //     &gpg_blob_file_path, // file_path: &Path,
-                        // // )?;
-                        // let wbtfaresult = write_bytes_to_file_atomic(
-                        //     still_otp_encrypted_file_blob,
-                        //     &gpg_blob_file_path,
-                        // )
-                        // .map_err(|e| {
-                        //     eprintln!("Failed to write encrypted blob to {:?}: {}", gpg_blob_file_path, e);
-                        //     e
-                        // })?;
-                        // debug_log!("wbtfaresult {:?}", wbtfaresult);
-
-                        let gpg_blob_file_path = write_bytes_to_unique_temp_file(
-                            &still_otp_encrypted_file_blob,
-                            &std::env::temp_dir(),
-                            "uma_xor_result",
-                            TEMP_FILE_CREATION_RETRY_ATTEMPTS,
-                            TEMP_FILE_RETRY_DELAY_MS,)
-                            .map_err(|e| {
-                                ThisProjectError::IoError(std::io::Error::new(
-                                    std::io::ErrorKind::Other,
-                                    format!("HLOD error : failed write_bytes_to_unique_temp_file: {}", e),
-                                ))
-                            })?;
-
-                        #[cfg(debug_assertions)]
-                        {eprintln!("HLOD: Created temp file: {:?}", gpg_blob_file_path);
-                            debug_log!("HLOD: Created temp file: {:?}", gpg_blob_file_path);}
+                        // // let gpg_blob_file_path = create_unique_temp_filepathbuf(
+                        // //     &std::env::temp_dir(),
+                        // //     "uma_xor_result",
+                        // //     TEMP_FILE_CREATION_RETRY_ATTEMPTS,
+                        // //     TEMP_FILE_RETRY_DELAY_MS,
+                        // // ).map_err(|e| {
+                        // //     ThisProjectError::IoError(std::io::Error::new(
+                        // //         e.kind(),
+                        // //         format!("HLOD: if *use_padnet_flag: failed to create temp file #2: {}", e),
+                        // //     ))
+                        // // })?;
 
 
-                        // 4. get padnet_directory_path, read-pad path (with id and channel name)
-                        let team_channel_name = match get_current_team_channel_name_from_nav_path() {
-                            Some(name) => name,
-                            None => {
-                                debug_log!("HLOD: if *use_padnet_flag: Error: Could not get current channel name. Skipping set_as_active.");
-                                return Err(ThisProjectError::InvalidData("Could not get team channel name".into()));
-                            },
-                        };
-                        let rc_key_id = &local_owner_desk_setup_data.remote_collaborator_gpg_publickey_id;
+                        // // 3. write OTP blob to file
+                        // // set blob to blob_as_file_path;
+                        // /*
+                        // fn write_bytes_to_file_atomic(
+                        //     data: &[u8],
+                        //     file_path: &Path,
+                        // ) -> Result<(), ThisProjectError> {
+                        // */
+                        // // // let _ = write_bytes_to_file_atomic(
+                        // // //     still_otp_encrypted_file_blob, // data: &[u8],
+                        // // //     &gpg_blob_file_path, // file_path: &Path,
+                        // // // )?;
+                        // // let wbtfaresult = write_bytes_to_file_atomic(
+                        // //     still_otp_encrypted_file_blob,
+                        // //     &gpg_blob_file_path,
+                        // // )
+                        // // .map_err(|e| {
+                        // //     eprintln!("Failed to write encrypted blob to {:?}: {}", gpg_blob_file_path, e);
+                        // //     e
+                        // // })?;
+                        // // debug_log!("wbtfaresult {:?}", wbtfaresult);
 
-                        // make name
-                        //  -- /padnet/to/{team_channel}/{RC key-id}
-                        let mut padnet_directory_path = get_reader_from_padnet_directory_path()?;
-                        padnet_directory_path.push(&team_channel_name);
-                        padnet_directory_path.push(rc_key_id);
+                        // let gpg_blob_file_path = write_bytes_to_unique_temp_file(
+                        //     &still_otp_encrypted_file_blob,
+                        //     &std::env::temp_dir(),
+                        //     "uma_xor_result",
+                        //     TEMP_FILE_CREATION_RETRY_ATTEMPTS,
+                        //     TEMP_FILE_RETRY_DELAY_MS,)
+                        //     .map_err(|e| {
+                        //         ThisProjectError::IoError(std::io::Error::new(
+                        //             std::io::ErrorKind::Other,
+                        //             format!("HLOD error : failed write_bytes_to_unique_temp_file: {}", e),
+                        //         ))
+                        //     })?;
 
-                        // 5. read OTP file, make gpg file
-                        /*
-
-                        /// # Arguments
-                        /// * `path_to_target_file` - Absolute path to file to XOR
-                        /// * `result_path` - Absolute path for output file
-                        /// * `path_to_padset` - Absolute path to padset root
-                        /// * `pad_index` - Starting line index for XOR operation
-                        ///
-                        /// # Returns
-                        /// * `Ok(usize)` - Number of bytes processed
-                        /// * `Err(PadnetError)` - Operation failed, no output created
-                        pub fn padnet_reader_xor_file(
-                            path_to_target_file: &Path, // `path_to_target_file` - Absolute path to file to XOR
-                            result_path: &Path,         // `result_path` - Absolute path for output file
-                            path_to_padset: &Path,      // `path_to_padset` - Absolute path to padset root
-                            pad_index: &PadIndex,       // `pad_index` - Starting line index for XOR operation
-                        ) -> Result<usize, PadnetError> {
-                        */
-
-                        let padnet_index_array = match &incoming_intray_file_struct.padnet_index_array {
-                            Some(data) => data,  // Extract the Vec<u8> if Some
-                            None => {
-                                debug_log!("HLOD: if *use_padnet_flag:  6.1: padnet_index_array is None. Skipping.");
-
-                                continue; // Or handle the None case differently (e.g., return an error)
-                            }
-                        };
+                        // #[cfg(debug_assertions)]
+                        // {eprintln!("HLOD: Created temp file: {:?}", gpg_blob_file_path);
+                        //     debug_log!("HLOD: Created temp file: {:?}", gpg_blob_file_path);}
 
 
-                        let _ = padnet_reader_xor_file(
-                            &otp_blob_file_path,  // path_to_target_file: &Path, // `path_to_target_file` - Absolute path to file to XOR
-                            &gpg_blob_file_path,         // `result_path` - Absolute path for output file
-                            &padnet_directory_path,      // `path_to_padset` - Absolute path to padset root
-                            padnet_index_array, // pad_index: &PadIndex,       // `pad_index` - Starting line index for XOR operation
-                        );
+                        // // 4. get padnet_directory_path, read-pad path (with id and channel name)
+                        // let team_channel_name = match get_current_team_channel_name_from_nav_path() {
+                        //     Some(name) => name,
+                        //     None => {
+                        //         debug_log!("HLOD: if *use_padnet_flag: Error: Could not get current channel name. Skipping set_as_active.");
+                        //         return Err(ThisProjectError::InvalidData("Could not get team channel name".into()));
+                        //     },
+                        // };
+                        // let rc_key_id = &local_owner_desk_setup_data.remote_collaborator_gpg_publickey_id;
 
-                        // 6. get bytes from file
-                        /*
-                        fn read_file_to_bytes(
-                            file_path: &Path,
-                        ) -> Result<Vec<u8>, ThisProjectError> {
-                        */
-                        // 6. get bytes from file
-                        match read_file_to_bytes(&gpg_blob_file_path) {
-                            Ok(bytes) => {
-                                #[cfg(debug_assertions)]
-                                println!("HLOD: if *use_padnet_flag:  6.6: Read {} bytes from GPG file", bytes.len());
+                        // // make name
+                        // //  -- /padnet/to/{team_channel}/{RC key-id}
+                        // let mut padnet_directory_path = get_reader_from_padnet_directory_path()?;
+                        // padnet_directory_path.push(&team_channel_name);
+                        // padnet_directory_path.push(rc_key_id);
 
-                                bytes  // ← Return the Vec<u8> (no semicolon!)
-                            },
-                            Err(e) => {
-                                debug_log!("HLOD: if *use_padnet_flag:  6.6: Read failed: {}. Skipping.", e);
-                                continue; // Skip to next packet
-                            }
-                        }
+                        // // 5. read OTP file, make gpg file
+                        // /*
+
+                        // /// # Arguments
+                        // /// * `path_to_target_file` - Absolute path to file to XOR
+                        // /// * `result_path` - Absolute path for output file
+                        // /// * `path_to_padset` - Absolute path to padset root
+                        // /// * `pad_index` - Starting line index for XOR operation
+                        // ///
+                        // /// # Returns
+                        // /// * `Ok(usize)` - Number of bytes processed
+                        // /// * `Err(PadnetError)` - Operation failed, no output created
+                        // pub fn padnet_reader_xor_file(
+                        //     path_to_target_file: &Path, // `path_to_target_file` - Absolute path to file to XOR
+                        //     result_path: &Path,         // `result_path` - Absolute path for output file
+                        //     path_to_padset: &Path,      // `path_to_padset` - Absolute path to padset root
+                        //     pad_index: &PadIndex,       // `pad_index` - Starting line index for XOR operation
+                        // ) -> Result<usize, PadnetError> {
+                        // */
+
+                        // let padnet_index_array = match &incoming_intray_file_struct.padnet_index_array {
+                        //     Some(data) => data,  // Extract the Vec<u8> if Some
+                        //     None => {
+                        //         debug_log!("HLOD: if *use_padnet_flag:  6.1: padnet_index_array is None. Skipping.");
+
+                        //         continue; // Or handle the None case differently (e.g., return an error)
+                        //     }
+                        // };
+
+
+                        // let _ = padnet_reader_xor_file(
+                        //     &otp_blob_file_path,  // path_to_target_file: &Path, // `path_to_target_file` - Absolute path to file to XOR
+                        //     &gpg_blob_file_path,         // `result_path` - Absolute path for output file
+                        //     &padnet_directory_path,      // `path_to_padset` - Absolute path to padset root
+                        //     padnet_index_array, // pad_index: &PadIndex,       // `pad_index` - Starting line index for XOR operation
+                        // );
+
+                        // // 6. get bytes from file
+                        // /*
+                        // fn read_file_to_bytes(
+                        //     file_path: &Path,
+                        // ) -> Result<Vec<u8>, ThisProjectError> {
+                        // */
+                        // // 6. get bytes from file
+                        // match read_file_to_bytes(&gpg_blob_file_path) {
+                        //     Ok(bytes) => {
+                        //         #[cfg(debug_assertions)]
+                        //         println!("HLOD: if *use_padnet_flag:  6.6: Read {} bytes from GPG file", bytes.len());
+
+                        //         bytes  // ← Return the Vec<u8> (no semicolon!)
+                        //     },
+                        //     Err(e) => {
+                        //         debug_log!("HLOD: if *use_padnet_flag:  6.6: Read failed: {}. Skipping.", e);
+                        //         continue; // Skip to next packet
+                        //     }
+                        // }
                     } else {
 
-
-
+                        debug_log("HLOD NOT*use_padnet_flag: 6.2: GPG decryption...");
                         // 6.2 *Now* decrypt the data
                         // let decrypted_clearsignfile_data = match gpg_decrypt_from_bytes(
                         match gpg_decrypt_from_bytes(
@@ -32185,61 +32356,74 @@ fn handle_local_owner_desk(
 
                     */
 
-                    let extracted_clearsigned_file_data = if *use_padnet_flag {
+                    // let extracted_clearsigned_file_data = if *use_padnet_flag {
 
-                        /*
-                        // 1. flag for padnet-mode where?
-                        // 2. get team-channel-name
-                        // 3. get RC key-id (state)
-                        // 4. get read-pad path (with id, team-channel)
-                        //  -- /padnet/to/{team_channel}/{RC key-id}
-                        */
+                    //     /*
+                    //     // 1. flag for padnet-mode where?
+                    //     // 2. get team-channel-name
+                    //     // 3. get RC key-id (state)
+                    //     // 4. get read-pad path (with id, team-channel)
+                    //     //  -- /padnet/to/{team_channel}/{RC key-id}
+                    //     */
 
-                        let team_channel_name = match get_current_team_channel_name_from_nav_path() {
-                            Some(name) => name,
-                            None => {
-                                debug_log!("Error: Could not get current channel name. Skipping set_as_active.");
-                                return Err(ThisProjectError::InvalidData("Could not get team channel name".into()));
-                            },
-                        };
-                        let rc_key_id = &local_owner_desk_setup_data.remote_collaborator_gpg_publickey_id;
+                    //     // let team_channel_name = match get_current_team_channel_name_from_nav_path() {
+                    //     //     Some(name) => name,
+                    //     //     None => {
+                    //     //         debug_log!("Error: Could not get current channel name. Skipping set_as_active.");
+                    //     //         return Err(ThisProjectError::InvalidData("Could not get team channel name".into()));
+                    //     //     },
+                    //     // };
+                    //     // let rc_key_id = &local_owner_desk_setup_data.remote_collaborator_gpg_publickey_id;
 
-                        ();
-                        // 3. get read-pad path (with id)
-                        //  -- /padnet/to/{team_channel}/{RC key-id}
-                        let mut padnet_directory_path = get_reader_from_padnet_directory_path()?;
-                        padnet_directory_path.push(&team_channel_name);
-                        padnet_directory_path.push(rc_key_id);
+                    //     // ();
+                    //     // // 3. get read-pad path (with id)
+                    //     // //  -- /padnet/to/{team_channel}/{RC key-id}
+                    //     // let mut padnet_directory_path = get_reader_from_padnet_directory_path()?;
+                    //     // padnet_directory_path.push(&team_channel_name);
+                    //     // padnet_directory_path.push(rc_key_id);
 
 
-                        // 6.3 Extract the clearsigned data
-                        match extract_clearsign_data(&decrypted_clearsignfile_data) {
-                            Ok(data) => data,
-                            Err(e) => {
-                                debug_log!("HLOD 6.3: Clearsign extraction failed: {}. Skipping.", e);
-                                continue;
-                            }
+                    //     // 6.3 Extract the clearsigned data
+                    //     match extract_clearsign_data(&decrypted_clearsignfile_data) {
+                    //         Ok(data) => data,
+                    //         Err(e) => {
+                    //             debug_log!("HLOD 6.3: Clearsign extraction failed: {}. Skipping.", e);
+                    //             continue;
+                    //         }
+                    //     }
+
+                    // } else {
+                    // // Normal Mode, No Padnet OTP Network Layer
+
+                    //     // 6.3 Extract the clearsigned data
+                    //     match extract_clearsign_data(&decrypted_clearsignfile_data) {
+                    //         Ok(data) => data,
+                    //         Err(e) => {
+                    //             debug_log!("HLOD 6.3: Clearsign extraction failed: {}. Skipping.", e);
+                    //             continue;
+                    //         }
+                    //     }
+
+
+                    // };
+
+                    // 6.3 Extract the clearsigned data
+                    let extracted_clearsigned_file_data = match extract_clearsign_data(&decrypted_clearsignfile_data) {
+                        Ok(data) => data,
+                        Err(e) => {
+                            debug_log!("HLOD 6.3: Clearsign extraction failed: {}. Skipping.", e);
+                            continue;
                         }
-
-                    } else {
-                    // Normal Mode, No Padnet OTP Network Layer
-
-                        // 6.3 Extract the clearsigned data
-                        match extract_clearsign_data(&decrypted_clearsignfile_data) {
-                            Ok(data) => data,
-                            Err(e) => {
-                                debug_log!("HLOD 6.3: Clearsign extraction failed: {}. Skipping.", e);
-                                continue;
-                            }
-                        }
-
-
                     };
-
                     debug_log!(
                         "HLOD 6.3 extracted_clearsigned_file_data -> {:?}",
                         extracted_clearsigned_file_data
                     );
+
+                    // debug_log!(
+                    //     "HLOD 6.3 extracted_clearsigned_file_data -> {:?}",
+                    //     extracted_clearsigned_file_data
+                    // );
 
                     // Section 6.4 - Extract flag - for clearsigned .toml / .gpgtoml
                     let file_str = std::str::from_utf8(&extracted_clearsigned_file_data)
@@ -32312,7 +32496,7 @@ fn handle_local_owner_desk(
                             &local_owner_desk_setup_data.remote_collaborator_name // local user name
                         );
 
-                        // NEW: Adjust extension based on flag
+                        // Adjust extension based on flag
                         if save_as_gpgtoml {
                             incoming_file_path.set_extension("gpgtoml");
                         }
@@ -32353,10 +32537,6 @@ fn handle_local_owner_desk(
                         };
 
                         // 3. Saving the File
-                        // if let Err(e) = fs::write(&incoming_file_path, data_to_save) {
-                        //     debug_log!("HLOD-InTray: Failed to write message file: {:?}", e);
-                        //     return Err(ThisProjectError::from(e));
-                        // }
 
                         // Create parent directories if they don't exist
                         if let Some(parent) = Path::new(&incoming_file_path).parent() {
@@ -32373,14 +32553,6 @@ fn handle_local_owner_desk(
                         }
 
                         debug_log!("7.3 HLOD-InTray: IM message file saved to: {:?}", incoming_file_path);
-                        // if let Err(e) = fs::write(&incoming_file_path, &extracted_clearsigned_file_data) {
-                        //     debug_log!("HLOD-InTray: Failed to write message file: {:?}", e);
-                        //     // Consider returning an error here instead of continuing the loop
-                        //     return Err(ThisProjectError::from(e));
-                        // }
-
-                        // debug_log!("7.3 HLOD-InTray: IM message file saved to: {:?}", incoming_file_path);
-
 
                     }
 
@@ -35236,19 +35408,32 @@ fn handle_remote_collaborator_meetingroom_desk(
                                         format!("HRCMD: {:?}", gpg_error)
                                     })?;
 
-                                let temp_filepath_padnet = create_unique_temp_filepathbuf(
-                                &base_uma_temp_directory_path,    // base_path: &Path,
-                                "padnet",    // prefix: &str,
-                                5,    // number_of_attempts: u32,
-                                16,    // retry_delay_ms: u64,
-                                )?;
+                                // let temp_filepath_padnet = create_unique_temp_filepathbuf(
+                                // &base_uma_temp_directory_path,    // base_path: &Path,
+                                // "padnet",    // prefix: &str,
+                                // 5,    // number_of_attempts: u32,
+                                // 16,    // retry_delay_ms: u64,
+                                // )?;
+                                /*
+                                fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
+                                    original_target_file_path: &Path,
+                                    recipient_public_key: &str,
+                                    padnet_directory_path: &Path,
+                                ) -> Result<(Vec<u8>, PadIndex), ThisProjectError> {
+                                */
 
                                 // calls padnet_writer_strict_cleanup_continuous_xor_file
                                 let (file_bytes2send, padnet_index_array) = padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
-                                    &temp_filepath_padnet, // padnes path?
-                                    &room_sync_input.remote_collaborator_public_gpg,
-                                    &padnet_directory_path, // path_to_padset
+                                    &path_sendfile_readcopy_path, // original_target_file_path: &Path,
+                                    &room_sync_input.remote_collaborator_public_gpg, // recipient_public_key: &str,
+                                    &padnet_directory_path, // padnet_directory_path: &Path,
                                 )?;
+
+
+                                debug_log!(
+                                    "HRCD 4.5 OTP XOred file_bytes2send {:?}",
+                                    file_bytes2send
+                                );
 
                                 // // 4.5. Calculate SendFile Struct Hashes (Using Collaborator's Salts)
                                 // 4.5 calculate hashes: HRCD
