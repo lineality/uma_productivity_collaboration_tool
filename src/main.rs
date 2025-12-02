@@ -17729,20 +17729,40 @@ Q&A Functions for 6pa, 6 Project Areas
 
 /// Gets user input for agenda process selection of create_core_node()
 fn q_and_a_get_pa1_process() -> Result<String, ThisProjectError> {
-    println!("Enter Process statement: Project Process: Workflow Type, STEM Integration, Values, Agenda, Methods, Coordinated Decisions, (Data/System)Ecology: Collapse & Productivity (default option: Agile, Kahneman-Tversky, Definition-Studies)
-:");
+    clear_screen();
+    println!("");
+    println!("Enter Process Statement: (Project Areas 1:6)");
+    println!("");
+    println!("Project Process: Workflow Type, STEM Integration, Values, Agenda, Methods,");
+    println!("Policies (including for predictable issues problems and collapse elements: scope-churn, panic-halting, planning-blackout),");
+    println!("Coordinated Decisions, (Data/System)Ecology: Collapse & Productivity ");
+    println!("(Data/System)Ecology: Collapse & Productivity");
+    println!("(default option: Agile, Kahneman-Tversky, Definition-Studies)");
+    println!("");
+    println!("Process/policy areas may be seen as preventable-predictable-collapse-areas; each is an area of preventable mistakes that are not automatically self-preventing and that must be deliberately prevented. ");
+    println!("Problems that are not automatically visible or understandable can repeat indefinitely. Using process and policy can significantly help prevent and navigate recurring problems that are not automatically visible.");
+    println!("");
+    press_enter_to_continue();
+    println!("");
+    println!("Not accounting for different workflows (e.g. frontend, backend, data-science, production machine-learning, R&D, test-reporting, etc.) will lead to delays and failures that should not have occurred. ");
+    println!("In the absence of communication and learning, these failures may be invisible and repeat indefinitely because they are not seen and understood.");
+    println!("");
+    println!("");
+    println!("Enter a Process Statement:");
     let mut input = String::new();
     io::stdout().flush()?;
     io::stdin().read_line(&mut input)?;
 
     let input = input.trim();
     if input.is_empty() {
-        let input: String = "Agile, Kahneman-Tversky, Definition-Studies".to_string();
+        let input: String = "Default: Agile, Kahneman-Tversky, Definition-Studies".to_string();
+        return Ok(input.to_string());
     }
 
 
     Ok(input.to_string())
 }
+
 
 /// Gets schedule information and converts to required format for create_core_node()
 ///
@@ -17773,8 +17793,25 @@ fn q_and_a_get_pa1_process() -> Result<String, ThisProjectError> {
 ///   Duration: 14 days (1209600 seconds)
 /// ```
 fn q_and_a_get_pa2_schedule() -> Result<Vec<u64>, ThisProjectError> {
+    clear_screen();
     debug_log("starting q_and_a_get_pa2_schedule()");
-
+    println!("");
+    println!("Enter Schedule Data: (Project Areas 2:6)");
+    println!("");
+    println!("Schedule: (Duration; Start date; Iteration Interval)");
+    println!("");
+    println!("Timelines that need to be short but are never articulated or planned for are unlikely to usually spontaneously match the needed short scale planning needs.");
+    press_enter_to_continue();
+    println!("");
+    println!("Timelines that need to be long but are never articulated or planned for are unlikely to usually spontaneously match the needed long scale planning needs.");
+    press_enter_to_continue();
+    println!("");
+    println!("Undiscussed timelines risk being indeterminate, fickle, and unpredictably changing for no apparent reason, raising the risk of endemic liabilities such as churn, panic, and repeatedly returning to square one.");
+    println!("");
+    println!("Picking initial MVP goals, milestones, indicators, and both allotting and using time and resources for feedback (where that feedback is also to be used) is one location where time and schedules are deeply interwoven with other project areas.");
+    press_enter_to_continue();
+    println!("");
+    println!("");
     // Get current year for validation once at the start
     let current_timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -18123,17 +18160,86 @@ fn q_and_a_get_pa2_schedule() -> Result<Vec<u64>, ThisProjectError> {
     Ok(result)
 }
 
+/// Clear the terminal screen using ANSI escape codes
+///
+/// This function uses ANSI escape sequences to clear the terminal
+/// and reset the cursor to the top-left position.
+///
+/// # Returns
+/// * `Result<()>` - Ok on success, Err on I/O error
+fn clear_screen() {
+    // ANSI escape codes: clear screen and move cursor to top-left
+    print!("\x1b[2J\x1b[1;1H");
+    let _ = io::stdout().flush();
+}
+
+/// press_enter_to_continue
+/// Pauses execution and waits for the user to press ENTER before continuing.
+///
+/// This function is useful for keeping a console application open until the user is ready,
+/// or for creating a simple pause between operations.
+///
+/// # Examples
+///
+/// ```
+/// press_enter_to_continue();
+/// println!("Resuming execution...");
+/// ```
+fn press_enter_to_continue() {
+    // Prompt the user to press ENTER
+    println!("\nPress ENTER to continue...");
+
+    // Read a line from stdin and ignore the result (including any errors)
+    let mut _dummy = String::new();
+    let _ = io::stdin().read_line(&mut _dummy);
+
+    clear_screen();
+}
 
 /// Gets user input for agenda process selection of create_core_node()
 fn q_and_a_get_pa3_users() -> Result<String, ThisProjectError> {
-    println!("Enter User Statement, Users: Stakeholders & Needs & Goals Evaluation (of users): Who are users? What are their needs?");
+    clear_screen();
+    println!("");
+    println!("");
+    println!("Users/Stakeholder (Project area 3:6)");
+    println!("");
+    println!("Enter A User Statement");
+    println!("Users: Stakeholders & Needs & Goals Evaluation (of users): Who are users? What are their needs?");
+    println!("");
+    println!("Not having and coordinating with users/stakeholders and their needs significantly raises the probability that the project will not improbably, spontaneously, meet unknown and possibly unarticulated needs of unknown people by accident.");
+    println!("");
+    println!("A user describing their difficulties is not the same as a user outlining an ideal solution, or even accepting a viable solution.");
+    press_enter_to_continue();
+    println!("");
+    println!("Not properly doing a needs and goals evaluation significantly raises the risk of goals being either incorrectly identified, or having goals indefinitely changing or rotating between amorphous unexamined but often entirely predictable areas.");
+    println!("See: https://github.com/lineality/needs_goals_assessment_disambiguation");
+    press_enter_to_continue();
+    println!("");
+    println!("User Needs and Goals Assessments: Disambiguation");
+    println!("");
+    println!("Over years of doing needs-goals-assessments and product-design I found a pattern in the apparent indeterminacy of the customer's responses to what I (from my perspective and context) thought was a single question: ");
+    println!("What do you need? What should you use that fits what you need? What will be useful to you that fits what you need? etc. ");
+    println!("But they would variably interpret the question in ~five ways. So I switched from trying to ask one question to asking separate questions and tracking answers to each over time.");
+    println!("This consistently results in both answers that stopped changing over time and in a user/stakeholder who was more confident in their descriptions.");
+    press_enter_to_continue();
+    println!("Disambiguated Needs & Goals evaluation questions:");
+    println!("");
+    println!("1. What do you do and use now?");
+    println!("2. What do you need now?");
+    println!("3. What will you need in the med-term (foreseeable) future?");
+    println!("4. What do you think you can/will be able to do? (Very often people think the possible is impossible and shut down, in terms of their own ability.)");
+    println!("5. What do you think can be delivered to help you? (Very often people think the possible is impossible and shut down, in terms of tools and workflow.)");
+    println!("");
+    println!("");
+    println!("Enter A User Statement:");
     let mut input = String::new();
     io::stdout().flush()?;
     io::stdin().read_line(&mut input)?;
 
     let input = input.trim();
     if input.is_empty() {
-        let input: String = "Pending: Users & Stakeholder Needs & Goals Evaluation".to_string();
+        let input: String = "Pending: Users & Stakeholder Needs & Goals Evaluation Statement".to_string();
+        return Ok(input.to_string());
     }
 
     Ok(input.to_string())
@@ -18141,7 +18247,27 @@ fn q_and_a_get_pa3_users() -> Result<String, ThisProjectError> {
 
 /// Gets user input for agenda process selection of create_core_node()
 fn q_and_a_get_pa4_features() -> Result<String, ThisProjectError> {
-    println!("Enter Feature Statement: Features: User-Features & Subfeatures/Under-The-Hood Features -> From a user-story standpoint, what is this project making? Under-the-hood, what is this projet making?");
+    clear_screen();
+    println!("");
+    println!("Enter Feature Statement (Project area 4:6)");
+    println!("");
+    println!("Features:");
+    println!("User-Features & Subfeatures/Under-The-Hood Features including design factors such as Categories of Types of Systems, Data-Types, Data-Structures, Structured Vs. Unstructured Data");
+    println!("(E.g. tech-stack and resources may be implicit for higher-level goals or explicit for resource-defined needs)");
+    println!("lexicon: clarify jargon vs. description; ");
+    // press_enter_to_continue();
+    println!("");
+    println!("From a user-story standpoint, what is this project making? ");
+    println!("From an Under-the-hood standpoint, what needs to be made and how for the project to be maintainable?");
+    println!("");
+    press_enter_to_continue();
+    println!("Are these known? Do these need to be researched?");
+    println!("If you do not have a clear articulation of what you are doing (for a user/stakeholder to meet their clarified need) then it is unlikely that the possibly unknown goal will be accomplished in a maintainable way meeting the need of the user/stakeholder.");
+    println!("");
+    println!("If you do not distinguish between and elucidate both user-story level features and sub-user-story level features (features/subfeatures) then quality, efficiency, and maintainability will be undermined.");
+    println!("");
+    println!("");
+    println!("Enter a Feature Statement:");
     let mut input = String::new();
     io::stdout().flush()?;
     io::stdin().read_line(&mut input)?;
@@ -18149,6 +18275,7 @@ fn q_and_a_get_pa4_features() -> Result<String, ThisProjectError> {
     let input = input.trim();
     if input.is_empty() {
         let input: String = "Pending: User-Features & Subfeatures/Under-The-Hood Features".to_string();
+        return Ok(input.to_string());
     }
 
     Ok(input.to_string())
@@ -18156,14 +18283,34 @@ fn q_and_a_get_pa4_features() -> Result<String, ThisProjectError> {
 
 /// Gets user input for agenda process selection of create_core_node()
 fn q_and_a_get_pa5_mvp() -> Result<String, ThisProjectError> {
-    println!("Enter MVP Statement: MVP: 'MVP's (Minimum Viable Products); Tools & 'Tool Stack / Tech Stack'");
+    clear_screen();
+    println!("");
+    println!("Enter an MVP Statement (Project area 5:6)");
+    println!("");
+    println!("MVP: 'MVP's (Minimum Viable Products (plural))");
+    println!("Deliverables Checklist; Tools, 'Tool Stack / Tech Stack'");
+    println!("");
+    println!("Each MVP must not be an invocation of a reification-hallucination.");
+    println!("teratively proceeding with transparency and feedback to align and fine-tune is appropriate and time-tested in many projects.");
+    println!("");
+    println!("Articulating incremental MVP (minimum-viable-product) goals and stepping stones is an important part of progressing and communicating incrementally and/or progressing maintainably and sustainably.");
+    press_enter_to_continue();
+    println!("Articulating incremental MVP (minimum-viable-product) goals and stepping stones is a skill in and of itself.");
+    println!("");
+    println!("Without timely iterative MVP deliverables, feedback from the user about features and usability will be significantly hindered.");
+    println!("");
+    println!("Without data and feedback about initial MVP outcomes, blindness will strangle the management of the project, coordination of people, and the management of resources.");
+    println!("");
+    println!("");
+    println!("Enter an MVP Statement:");
     let mut input = String::new();
     io::stdout().flush()?;
     io::stdin().read_line(&mut input)?;
 
     let input = input.trim();
     if input.is_empty() {
-        let input: String = "Pending: MVP & Techstack".to_string();
+        let input: String = "Pending: MVP & Techstack Statement".to_string();
+        return Ok(input.to_string());
     }
 
     Ok(input.to_string())
@@ -18171,14 +18318,35 @@ fn q_and_a_get_pa5_mvp() -> Result<String, ThisProjectError> {
 
 /// Gets user input for agenda process selection of create_core_node()
 fn q_and_a_get_pa6_feedback() -> Result<String, ThisProjectError> {
-    println!("Enter Feedback Statement: Feedback: Tests, Communication, Signals, Documentation & Iteration, Organizational, System, and 'Ecological' Effects, (~agile) -> Based on what signals will you define failure and orient to measure productivity.");
+    clear_screen();
+    println!("");
+    println!("Enter a Feedback-Learning Statement (Project area 6:6)");
+    println!("");
+    println!("Enter Feedback Statement: Feedback: Tests, Communication, Signals, Documentation & Iteration, Organizational, System, and 'Ecological' Effects, (~agile)");
+    println!("Documenting-teaching-learning(skills); present skills, future skills (learning)");
+    println!("");
+    println!("Based on what signals will you define failure and orient to measure productivity?");
+    println!("Whether formal or informal there must be effective ways of communicating what has been done within the project-team and between the project-team and the user/stakeholder.");
+    println!("Long term maintainability involves communication (including with 'future you').");
+    println!("");
+    press_enter_to_continue();
+    println!("");
+    println!("Failing to clearly map and communicate the differences between jargon terms and goal descriptions will result in mis-alignment between people and nonsense in planning.");
+    println!("");
+    println!("The default patterns and processes of drift will misalign the team and user-stakeholders on many levels, making even detection of the misalignment a challenge.");
+    println!("");
+    println!("Learning directly and indirectly related to the specific project is necessary. If you do not learn that a user/stakeholder's need is not being met then long term failure is highly probable. If you continually learn and develop useful skills then long term successes are more probable.");
+    println!("");
+    println!("");
+    println!("Enter a Feedback-Learning Statement");
     let mut input = String::new();
     io::stdout().flush()?;
     io::stdin().read_line(&mut input)?;
 
     let input = input.trim();
     if input.is_empty() {
-        let input: String = "Pending: MVP & Techstack".to_string();
+        let input: String = "Pending: MVP & Techstack statement".to_string();
+        return Ok(input.to_string());
     }
 
     Ok(input.to_string())
@@ -38029,7 +38197,10 @@ const FF_SOURCE_FILES: &[SourcedFile] = &[
         "sys_def_studies.txt",
         include_str!("../sys_def_studies.txt"),
     ),
-
+    SourcedFile::new(
+        "project_areas.txt",
+        include_str!("../project_areas.txt"),
+    ),
     SourcedFile::new(".gitignore", include_str!("../.gitignore")),
 ];
 
@@ -38202,6 +38373,8 @@ fn clear_terminal_screen() -> Result<(), ThisProjectError> {
     io::stdout().flush().map_err(|e| format!("Error clear_terminal_screen {}", e))?;
     Ok(())
 }
+
+
 
 /// Wait for user to press Enter key
 ///
