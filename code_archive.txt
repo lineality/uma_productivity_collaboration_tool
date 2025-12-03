@@ -11448,3 +11448,229 @@ fn remove_non_alphanumeric(s: &str) -> String {
 
             //     debug_log(&format!("handle command 'mp'/'message-passive' app.current_path {:?}", app.current_path));
             // }
+
+
+// // maybe deprected, resplaced with strict one time
+// /// Read one line file from padset (non-destructive, for reader mode)
+// ///
+// /// ## Project Context
+// /// Reader mode needs to read pad bytes without destroying them, allowing
+// /// re-processing of received files if needed. This function validates
+// /// the line file and returns its contents while preserving the file.
+// ///
+// /// ## Validation
+// /// Before loading a line, checks for hash files at page/pad level:
+// /// - If hash file exists: validates directory integrity
+// /// - If validation passes: deletes hash file (will be invalid after any deletions)
+// /// - If validation fails: returns error (caller handles)
+// ///
+// /// ## Safety
+// /// - Validates file size is within bounds
+// /// - Checks hash before reading (if hash file exists)
+// /// - Does NOT delete line file
+// ///
+// /// # Arguments
+// /// * `path_to_padset` - Absolute path to padset root
+// /// * `pad_index` - Index specifying which line to read
+// ///
+// /// # Returns
+// /// * `Ok(Vec<u8>)` - Line file contents
+// /// * `Err(PadnetError)` - File not found, validation failed, or read error
+// pub fn read_padset_one_byteline(
+//     path_to_padset: &Path,
+//     pad_index: &PadIndex,
+// ) -> Result<Vec<u8>, PadnetError> {
+//     // Validate inputs
+//     if !path_to_padset.is_absolute() {
+//         return Err(PadnetError::AssertionViolation(
+//             "RPOBL: path must be absolute".into(),
+//         ));
+//     }
+
+//     // Convert index to path
+//     let line_path = pad_index.to_path(path_to_padset);
+
+//     // Check if line file exists
+//     if !line_path.exists() {
+//         return Err(PadnetError::IoError("RPOBL: line not found".into()));
+//     }
+
+//     // Validate file size
+//     let metadata = fs::metadata(&line_path).map_err(|e| {
+//         #[cfg(debug_assertions)]
+//         {
+//             PadnetError::IoError(format!("RPOBL: get metadata failed: {}", e))
+//         }
+//         #[cfg(not(debug_assertions))]
+//         {
+//             let _ = e;
+//             PadnetError::IoError("RPOBL: get metadata failed".into())
+//         }
+//     })?;
+
+//     let file_size = metadata.len() as usize;
+
+//     if file_size > MAX_PADNET_PADLINE_FILE_SIZE_BYTES {
+//         return Err(PadnetError::AssertionViolation(
+//             "RPOBL: line file too large".into(),
+//         ));
+//     }
+
+//     // Check for page-level hash
+//     if let Some(page_dir) = line_path.parent() {
+//         if let Some(page_name) = page_dir.file_name() {
+//             if let Some(pad_dir) = page_dir.parent() {
+//                 let hash_file = pad_dir.join(format!("hash_{}", page_name.to_string_lossy()));
+//                 validate_and_remove_hash(page_dir, &hash_file)?;
+//             }
+//         }
+//     }
+
+//     // Check for pad-level hash
+//     if let Some(page_dir) = line_path.parent() {
+//         if let Some(pad_dir) = page_dir.parent() {
+//             if let Some(pad_name) = pad_dir.file_name() {
+//                 if let Some(nest_dir) = pad_dir.parent() {
+//                     let hash_file = nest_dir.join(format!("hash_{}", pad_name.to_string_lossy()));
+//                     validate_and_remove_hash(pad_dir, &hash_file)?;
+//                 }
+//             }
+//         }
+//     }
+
+//     // Read line file
+//     let contents = fs::read(&line_path).map_err(|e| {
+//         #[cfg(debug_assertions)]
+//         {
+//             PadnetError::IoError(format!("RPOBL: read file failed: {}", e))
+//         }
+//         #[cfg(not(debug_assertions))]
+//         {
+//             let _ = e;
+//             PadnetError::IoError("RPOBL: read failed".into())
+//         }
+//     })?;
+
+//     Ok(contents)
+// }
+
+
+
+// deprecated, replaced with strict one time
+// /// XOR a file with padset (reader mode - non-destructive, resumable)
+// ///
+// /// ## Project Context
+// /// Reader mode processes received OTP-encrypted files. The receiver has the
+// /// starting pad index from the sender and uses it to decrypt. Lines are
+// /// preserved (not deleted) allowing re-processing if needed.
+// ///
+// /// ## Operation
+// /// 1. Open target file (read)
+// /// 2. Create temp output file
+// /// 3. Load line from pad at specified index
+// /// 4. Read target byte-by-byte, XOR with pad bytes
+// /// 5. When pad line exhausted, increment index and load next
+// /// 6. Write XOR'd bytes to temp file
+// /// 7. Move temp to final result location (atomic)
+// ///
+// /// ## Error Handling
+// /// - On any error: delete temp file, return error
+// /// - Can retry from original index (lines preserved)
+// ///
+// /// # Arguments
+// /// * `path_to_target_file` - Absolute path to file to XOR
+// /// * `result_path` - Absolute path for output file
+// /// * `path_to_padset` - Absolute path to padset root
+// /// * `pad_index` - Starting line index for XOR operation
+// ///
+// /// # Returns
+// /// * `Ok(usize)` - Number of bytes processed
+// /// * `Err(PadnetError)` - Operation failed, no output created
+// pub fn padnet_reader_xor_file(
+//     path_to_target_file: &Path, // `path_to_target_file` - Absolute path to file to XOR
+//     result_path: &Path,         // `result_path` - Absolute path for output file
+//     path_to_padset: &Path,      // `path_to_padset` - Absolute path to padset root
+//     pad_index: &PadIndex,       // `pad_index` - Starting line index for XOR operation
+// ) -> Result<usize, PadnetError> {
+//     // Validate inputs
+//     if !path_to_target_file.is_absolute() {
+//         return Err(PadnetError::AssertionViolation(
+//             "PRXF: target path must be absolute".into(),
+//         ));
+//     }
+//     if !result_path.is_absolute() {
+//         return Err(PadnetError::AssertionViolation(
+//             "PRXF: result path must be absolute".into(),
+//         ));
+//     }
+//     if !path_to_padset.is_absolute() {
+//         return Err(PadnetError::AssertionViolation(
+//             "PRXF: padset path must be absolute".into(),
+//         ));
+//     }
+
+//     // Check target file exists
+//     if !path_to_target_file.exists() {
+//         return Err(PadnetError::IoError("PRXF: target not found".into()));
+//     }
+
+//     // Create temp directory if needed
+//     let temp_dir = result_path
+//         .parent()
+//         .ok_or_else(|| PadnetError::IoError("PRXF: invalid result path".into()))?
+//         .join("padnet_temp");
+
+//     fs::create_dir_all(&temp_dir).map_err(|e| {
+//         #[cfg(debug_assertions)]
+//         {
+//             PadnetError::IoError(format!("PRXF: temp dir creation failed: {}", e))
+//         }
+//         #[cfg(not(debug_assertions))]
+//         {
+//             let _ = e;
+//             PadnetError::IoError("PRXF: temp dir failed".into())
+//         }
+//     })?;
+
+//     // Create temp output file
+//     let temp_file_path = temp_dir.join(format!(
+//         "temp_xor_{}.tmp",
+//         std::time::SystemTime::now()
+//             .duration_since(std::time::UNIX_EPOCH)
+//             .unwrap_or_default()
+//             .as_secs()
+//     ));
+
+//     // Perform XOR operation (cleanup temp on error)
+//     let bytes_processed = match perform_pto_xor_get_bytecount_newpath(
+//         path_to_target_file,
+//         &temp_file_path,
+//         path_to_padset,
+//         pad_index,
+//         false, // non-destructive (reader mode)
+//     ) {
+//         Ok(n) => n,
+//         Err(e) => {
+//             // Clean up temp file
+//             let _ = fs::remove_file(&temp_file_path);
+//             return Err(e);
+//         }
+//     };
+
+//     // Move temp file to final location (atomic)
+//     fs::rename(&temp_file_path, result_path).map_err(|e| {
+//         // Clean up temp file on move failure
+//         let _ = fs::remove_file(&temp_file_path);
+//         #[cfg(debug_assertions)]
+//         {
+//             PadnetError::IoError(format!("PRXF: move to result failed: {}", e))
+//         }
+//         #[cfg(not(debug_assertions))]
+//         {
+//             let _ = e;
+//             PadnetError::IoError("PRXF: move failed".into())
+//         }
+//     })?;
+
+//     Ok(bytes_processed)
+// }

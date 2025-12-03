@@ -1992,110 +1992,6 @@ fn delete_files_before(parent_path: &Path, prefix: &str, before: u8) -> Result<(
     Ok(())
 }
 
-// // maybe deprected, resplaced with strict one time
-// /// Read one line file from padset (non-destructive, for reader mode)
-// ///
-// /// ## Project Context
-// /// Reader mode needs to read pad bytes without destroying them, allowing
-// /// re-processing of received files if needed. This function validates
-// /// the line file and returns its contents while preserving the file.
-// ///
-// /// ## Validation
-// /// Before loading a line, checks for hash files at page/pad level:
-// /// - If hash file exists: validates directory integrity
-// /// - If validation passes: deletes hash file (will be invalid after any deletions)
-// /// - If validation fails: returns error (caller handles)
-// ///
-// /// ## Safety
-// /// - Validates file size is within bounds
-// /// - Checks hash before reading (if hash file exists)
-// /// - Does NOT delete line file
-// ///
-// /// # Arguments
-// /// * `path_to_padset` - Absolute path to padset root
-// /// * `pad_index` - Index specifying which line to read
-// ///
-// /// # Returns
-// /// * `Ok(Vec<u8>)` - Line file contents
-// /// * `Err(PadnetError)` - File not found, validation failed, or read error
-// pub fn read_padset_one_byteline(
-//     path_to_padset: &Path,
-//     pad_index: &PadIndex,
-// ) -> Result<Vec<u8>, PadnetError> {
-//     // Validate inputs
-//     if !path_to_padset.is_absolute() {
-//         return Err(PadnetError::AssertionViolation(
-//             "RPOBL: path must be absolute".into(),
-//         ));
-//     }
-
-//     // Convert index to path
-//     let line_path = pad_index.to_path(path_to_padset);
-
-//     // Check if line file exists
-//     if !line_path.exists() {
-//         return Err(PadnetError::IoError("RPOBL: line not found".into()));
-//     }
-
-//     // Validate file size
-//     let metadata = fs::metadata(&line_path).map_err(|e| {
-//         #[cfg(debug_assertions)]
-//         {
-//             PadnetError::IoError(format!("RPOBL: get metadata failed: {}", e))
-//         }
-//         #[cfg(not(debug_assertions))]
-//         {
-//             let _ = e;
-//             PadnetError::IoError("RPOBL: get metadata failed".into())
-//         }
-//     })?;
-
-//     let file_size = metadata.len() as usize;
-
-//     if file_size > MAX_PADNET_PADLINE_FILE_SIZE_BYTES {
-//         return Err(PadnetError::AssertionViolation(
-//             "RPOBL: line file too large".into(),
-//         ));
-//     }
-
-//     // Check for page-level hash
-//     if let Some(page_dir) = line_path.parent() {
-//         if let Some(page_name) = page_dir.file_name() {
-//             if let Some(pad_dir) = page_dir.parent() {
-//                 let hash_file = pad_dir.join(format!("hash_{}", page_name.to_string_lossy()));
-//                 validate_and_remove_hash(page_dir, &hash_file)?;
-//             }
-//         }
-//     }
-
-//     // Check for pad-level hash
-//     if let Some(page_dir) = line_path.parent() {
-//         if let Some(pad_dir) = page_dir.parent() {
-//             if let Some(pad_name) = pad_dir.file_name() {
-//                 if let Some(nest_dir) = pad_dir.parent() {
-//                     let hash_file = nest_dir.join(format!("hash_{}", pad_name.to_string_lossy()));
-//                     validate_and_remove_hash(pad_dir, &hash_file)?;
-//                 }
-//             }
-//         }
-//     }
-
-//     // Read line file
-//     let contents = fs::read(&line_path).map_err(|e| {
-//         #[cfg(debug_assertions)]
-//         {
-//             PadnetError::IoError(format!("RPOBL: read file failed: {}", e))
-//         }
-//         #[cfg(not(debug_assertions))]
-//         {
-//             let _ = e;
-//             PadnetError::IoError("RPOBL: read failed".into())
-//         }
-//     })?;
-
-//     Ok(contents)
-// }
-
 /// Load and securely delete one line file from padset (destructive, for writer mode)
 ///
 /// ## Project Context
@@ -2241,9 +2137,7 @@ mod line_loading_tests {
     // }
 }
 
-// Add after the line loading functions
-
-/// XOR a file with padset (reader mode - syncs pad then processes)
+/// reader - XOR a file with padset (reader mode - syncs pad then processes)
 ///
 /// ## Project Context
 /// Reader mode (receiver/Bob) processes OTP-encrypted files received from
@@ -2251,11 +2145,13 @@ mod line_loading_tests {
 /// and must sync their pristine padset to match the sender's consumed state
 /// before decryption.
 ///
-/// ## Two-Step Operation
+/// ## 4-Step Operation
 /// 1. **Sync**: Delete all pad lines before start_index (not inclusive)
 ///    - This makes receiver's "first available" match sender's starting point
-/// 2. **XOR**: Process file using same function as writer
+/// 2. **Preflight Check**: check before XOR, correct line?
+/// 3. **XOR**: Process file using same function as writer
 ///    - Destructive: lines deleted as consumed (OTP one-time property)
+/// 4. **Sync Verification**: make sure correct line was read started-at
 ///
 /// ## Error Handling
 /// - On any error: operation fails cleanly, temp files cleaned up
@@ -2339,7 +2235,7 @@ mod line_loading_tests {
 ///
 /// # Returns
 /// * `Ok(())` - File successfully decrypted, written to result_path
-/// * `Err(PadnetError)` - Operation failed, no output file created
+/// * `Err(PadnetError)` - Operation failed, sync error, no output file created
 ///
 /// # Example
 /// ```rust,no_run
@@ -2418,8 +2314,37 @@ pub fn padnet_reader_xor_file(
     // - Both padsets now have identical "next available line"
     clean_until_start_line_not_inclusive(path_to_padset, pad_index)?;
 
+    // =============================================
+    // STEP 2: PRE-VERIFY SYNC SUCCEEDED (BEFORE XOR)
+    // ==============================================
+
+    // CRITICAL: Check that the required line exists BEFORE consuming it
+    // This prevents using wrong pad material and wasting lines
+    let index_size = pad_index.size_type();
+    let actual_first_line = find_first_available_line(path_to_padset, index_size)?
+        .ok_or_else(|| PadnetError::IoError("PRXF: padset exhausted".into()))?;
+
+    if actual_first_line != *pad_index {
+        // Sync failed - required pad material not available
+        // This could mean:
+        // - Pad material already consumed (reuse attempt)
+        // - Padsets out of sync between sender/receiver
+        // - Pad material missing or corrupted
+
+        #[cfg(debug_assertions)]
+        {
+            eprintln!("PRXF: Sync verification failed");
+            eprintln!("  Expected (from sender): {:?}", pad_index);
+            eprintln!("  Found (first available): {:?}", actual_first_line);
+        }
+
+        return Err(PadnetError::AssertionViolation(
+            "PRXF: pad index mismatch - required material not available".into(),
+        ));
+    }
+
     // ========================================
-    // STEP 2: XOR FILE (DECRYPT)
+    // STEP 3: XOR FILE (DECRYPT)
     // ========================================
 
     // Use same function Alice used to encrypt
@@ -2440,9 +2365,9 @@ pub fn padnet_reader_xor_file(
             path_to_padset,      // Bob's padset (now synced to Alice's state)
         )?;
 
-    // ========================================
-    // DEBUG VERIFICATION (DEBUG BUILDS ONLY)
-    // ========================================
+    // =========================================
+    // STEP 4: SYNC CHECK SAFETY - CORRECT LINE?
+    // =========================================
 
     // In debug builds: verify the index returned by the XOR function
     // matches the index Alice sent us
@@ -2461,8 +2386,20 @@ pub fn padnet_reader_xor_file(
         }
     }
 
+    // SAFETY
+    /*
+    To keep pads in sync, make sure you are only reading
+    the requested line.
+    */
+    // After XOR completes
+    if returned_starting_index != *pad_index {
+        return Err(PadnetError::AssertionViolation(
+            "PRXF: pad index mismatch - decryption used wrong material".into(),
+        ));
+    }
+
     // ========================================
-    // SUCCESS
+    // 5. IF SUCCESS
     // ========================================
 
     // Decryption complete:
@@ -2472,125 +2409,6 @@ pub fn padnet_reader_xor_file(
     Ok(())
 }
 
-// deprecated, replaced with strict one time
-// /// XOR a file with padset (reader mode - non-destructive, resumable)
-// ///
-// /// ## Project Context
-// /// Reader mode processes received OTP-encrypted files. The receiver has the
-// /// starting pad index from the sender and uses it to decrypt. Lines are
-// /// preserved (not deleted) allowing re-processing if needed.
-// ///
-// /// ## Operation
-// /// 1. Open target file (read)
-// /// 2. Create temp output file
-// /// 3. Load line from pad at specified index
-// /// 4. Read target byte-by-byte, XOR with pad bytes
-// /// 5. When pad line exhausted, increment index and load next
-// /// 6. Write XOR'd bytes to temp file
-// /// 7. Move temp to final result location (atomic)
-// ///
-// /// ## Error Handling
-// /// - On any error: delete temp file, return error
-// /// - Can retry from original index (lines preserved)
-// ///
-// /// # Arguments
-// /// * `path_to_target_file` - Absolute path to file to XOR
-// /// * `result_path` - Absolute path for output file
-// /// * `path_to_padset` - Absolute path to padset root
-// /// * `pad_index` - Starting line index for XOR operation
-// ///
-// /// # Returns
-// /// * `Ok(usize)` - Number of bytes processed
-// /// * `Err(PadnetError)` - Operation failed, no output created
-// pub fn padnet_reader_xor_file(
-//     path_to_target_file: &Path, // `path_to_target_file` - Absolute path to file to XOR
-//     result_path: &Path,         // `result_path` - Absolute path for output file
-//     path_to_padset: &Path,      // `path_to_padset` - Absolute path to padset root
-//     pad_index: &PadIndex,       // `pad_index` - Starting line index for XOR operation
-// ) -> Result<usize, PadnetError> {
-//     // Validate inputs
-//     if !path_to_target_file.is_absolute() {
-//         return Err(PadnetError::AssertionViolation(
-//             "PRXF: target path must be absolute".into(),
-//         ));
-//     }
-//     if !result_path.is_absolute() {
-//         return Err(PadnetError::AssertionViolation(
-//             "PRXF: result path must be absolute".into(),
-//         ));
-//     }
-//     if !path_to_padset.is_absolute() {
-//         return Err(PadnetError::AssertionViolation(
-//             "PRXF: padset path must be absolute".into(),
-//         ));
-//     }
-
-//     // Check target file exists
-//     if !path_to_target_file.exists() {
-//         return Err(PadnetError::IoError("PRXF: target not found".into()));
-//     }
-
-//     // Create temp directory if needed
-//     let temp_dir = result_path
-//         .parent()
-//         .ok_or_else(|| PadnetError::IoError("PRXF: invalid result path".into()))?
-//         .join("padnet_temp");
-
-//     fs::create_dir_all(&temp_dir).map_err(|e| {
-//         #[cfg(debug_assertions)]
-//         {
-//             PadnetError::IoError(format!("PRXF: temp dir creation failed: {}", e))
-//         }
-//         #[cfg(not(debug_assertions))]
-//         {
-//             let _ = e;
-//             PadnetError::IoError("PRXF: temp dir failed".into())
-//         }
-//     })?;
-
-//     // Create temp output file
-//     let temp_file_path = temp_dir.join(format!(
-//         "temp_xor_{}.tmp",
-//         std::time::SystemTime::now()
-//             .duration_since(std::time::UNIX_EPOCH)
-//             .unwrap_or_default()
-//             .as_secs()
-//     ));
-
-//     // Perform XOR operation (cleanup temp on error)
-//     let bytes_processed = match perform_pto_xor_get_bytecount_newpath(
-//         path_to_target_file,
-//         &temp_file_path,
-//         path_to_padset,
-//         pad_index,
-//         false, // non-destructive (reader mode)
-//     ) {
-//         Ok(n) => n,
-//         Err(e) => {
-//             // Clean up temp file
-//             let _ = fs::remove_file(&temp_file_path);
-//             return Err(e);
-//         }
-//     };
-
-//     // Move temp file to final location (atomic)
-//     fs::rename(&temp_file_path, result_path).map_err(|e| {
-//         // Clean up temp file on move failure
-//         let _ = fs::remove_file(&temp_file_path);
-//         #[cfg(debug_assertions)]
-//         {
-//             PadnetError::IoError(format!("PRXF: move to result failed: {}", e))
-//         }
-//         #[cfg(not(debug_assertions))]
-//         {
-//             let _ = e;
-//             PadnetError::IoError("PRXF: move failed".into())
-//         }
-//     })?;
-
-//     Ok(bytes_processed)
-// }
-
 /// XOR a file with padset (writer mode - destructive, strict, atomic)
 ///
 /// ## Project Context
@@ -2598,7 +2416,7 @@ pub fn padnet_reader_xor_file(
 /// "sender" operation. It automatically finds the first available line,
 /// consumes (deletes) pad lines as it proceeds, and returns the starting
 /// index so the receiver knows where to start decryption.
-///
+//
 /// ## Critical Properties
 /// - Strict: ANY error causes complete rollback
 /// - Atomic: Either complete success or complete failure (no partial output)
@@ -2616,7 +2434,7 @@ pub fn padnet_reader_xor_file(
 /// 8. Move temp to final result location (atomic)
 /// 9. Return starting index
 ///
-/// ## Error Handling
+/// ## Error Handlings
 /// - On ANY error: delete temp file, return error
 /// - Lines already deleted stay deleted (cannot retry from same position)
 /// - Caller must restart from new first-available line
@@ -3582,189 +3400,189 @@ fn bytes_to_hex_string(bytes: &[u8]) -> String {
     bytes.iter().map(|&byte| format!("{:02x}", byte)).collect()
 }
 
-/// Filters directory entries to include only regular files
-///
-/// Excludes: directories, symlinks, special files (devices, pipes, sockets)
-/// Includes: only regular files
-///
-/// # Project Context
-///
-/// Directory hashing should only include regular file contents, not
-/// subdirectories, symlinks, or metadata. This function filters the
-/// directory listing to meet that requirement.
-///
-/// # Arguments
-///
-/// * `entry` - Directory entry to check
-///
-/// # Returns
-///
-/// * `bool` - true if entry is a regular file, false otherwise
-///
-/// # Error Handling
-///
-/// If metadata cannot be read, returns false (skip entry safely)
-fn is_regular_file(entry: &fs::DirEntry) -> bool {
-    match entry.metadata() {
-        Ok(metadata) => metadata.is_file(),
-        Err(_) => false,
-    }
-}
+// /// Filters directory entries to include only regular files
+// ///
+// /// Excludes: directories, symlinks, special files (devices, pipes, sockets)
+// /// Includes: only regular files
+// ///
+// /// # Project Context
+// ///
+// /// Directory hashing should only include regular file contents, not
+// /// subdirectories, symlinks, or metadata. This function filters the
+// /// directory listing to meet that requirement.
+// ///
+// /// # Arguments
+// ///
+// /// * `entry` - Directory entry to check
+// ///
+// /// # Returns
+// ///
+// /// * `bool` - true if entry is a regular file, false otherwise
+// ///
+// /// # Error Handling
+// ///
+// /// If metadata cannot be read, returns false (skip entry safely)
+// fn is_regular_file(entry: &fs::DirEntry) -> bool {
+//     match entry.metadata() {
+//         Ok(metadata) => metadata.is_file(),
+//         Err(_) => false,
+//     }
+// }
 
 // =============================================================================
 // Main Directory Hash Function
 // =============================================================================
 
-/// FLAT Calculates a single Pearson hash representing all file contents in a directory
-///
-/// This is the main entry point for directory hashing. It processes all regular
-/// files in a directory (non-recursive), streaming each file and updating hash
-/// states incrementally to produce a single directory hash.
-///
-/// # Project Context
-///
-/// Purpose: Provide a single hash value that changes if any file content in the
-/// directory changes. This enables efficient change detection without tracking
-/// individual file hashes or timestamps.
-///
-/// Use cases:
-/// - Detect if directory contents changed since last check
-/// - Compare two directories for identical contents
-/// - Trigger actions when directory changes
-/// - Version control or backup systems
-///
-/// # Memory Efficiency
-///
-/// Uses constant memory regardless of directory size:
-/// - Hash states: 16 bytes
-/// - Chunk buffer: 8,192 bytes
-/// - Total: ~8.2 KB for any directory size
-///
-/// # Arguments
-///
-/// * `directory_path` - Absolute path to directory to hash
-///
-/// # Returns
-///
-/// * `Result<String, DirectoryHashError>` - 32-character hex string (128-bit hash)
-///
-/// # Algorithm
-///
-/// 1. Read directory entries
-/// 2. Filter to regular files only
-/// 3. Sort by filename for deterministic ordering
-/// 4. Initialize 16 hash states (one per salt) to 0
-/// 5. For each file (sorted order):
-///    - Stream file in 8KB chunks
-///    - Update all hash states with each byte
-///    - After file, update each hash state with its salt bytes
-/// 6. Convert final hash states to hex string
-///
-/// # Error Handling
-///
-/// - Directory not found/readable: Returns error
-/// - Empty directory or no regular files: Returns error
-/// - Individual file read error: Skips file, continues
-/// - File deleted between listing and hashing: Skips, continues
-///
-/// # Example
-///
-/// ```rust,no_run
-/// use std::path::Path;
-///
-/// let dir = Path::new("/absolute/path/to/directory");
-/// match calculate_flat_dir_directory_pearson_hash(dir) {
-///     Ok(hash) => println!("Directory hash: {}", hash),
-///     Err(e) => eprintln!("Error: {}", e),
-/// }
-/// ```
-pub fn calculate_flat_dir_directory_pearson_hash(
-    directory_path: &Path,
-) -> Result<String, DirectoryHashError> {
-    if directory_path.as_os_str().is_empty() {
-        return Err(DirectoryHashError::InvalidInput(
-            "CDPH: empty directory path".to_string(),
-        ));
-    }
+// /// FLAT Calculates a single Pearson hash representing all file contents in a directory
+// ///
+// /// This is the main entry point for directory hashing. It processes all regular
+// /// files in a directory (non-recursive), streaming each file and updating hash
+// /// states incrementally to produce a single directory hash.
+// ///
+// /// # Project Context
+// ///
+// /// Purpose: Provide a single hash value that changes if any file content in the
+// /// directory changes. This enables efficient change detection without tracking
+// /// individual file hashes or timestamps.
+// ///
+// /// Use cases:
+// /// - Detect if directory contents changed since last check
+// /// - Compare two directories for identical contents
+// /// - Trigger actions when directory changes
+// /// - Version control or backup systems
+// ///
+// /// # Memory Efficiency
+// ///
+// /// Uses constant memory regardless of directory size:
+// /// - Hash states: 16 bytes
+// /// - Chunk buffer: 8,192 bytes
+// /// - Total: ~8.2 KB for any directory size
+// ///
+// /// # Arguments
+// ///
+// /// * `directory_path` - Absolute path to directory to hash
+// ///
+// /// # Returns
+// ///
+// /// * `Result<String, DirectoryHashError>` - 32-character hex string (128-bit hash)
+// ///
+// /// # Algorithm
+// ///
+// /// 1. Read directory entries
+// /// 2. Filter to regular files only
+// /// 3. Sort by filename for deterministic ordering
+// /// 4. Initialize 16 hash states (one per salt) to 0
+// /// 5. For each file (sorted order):
+// ///    - Stream file in 8KB chunks
+// ///    - Update all hash states with each byte
+// ///    - After file, update each hash state with its salt bytes
+// /// 6. Convert final hash states to hex string
+// ///
+// /// # Error Handling
+// ///
+// /// - Directory not found/readable: Returns error
+// /// - Empty directory or no regular files: Returns error
+// /// - Individual file read error: Skips file, continues
+// /// - File deleted between listing and hashing: Skips, continues
+// ///
+// /// # Example
+// ///
+// /// ```rust,no_run
+// /// use std::path::Path;
+// ///
+// /// let dir = Path::new("/absolute/path/to/directory");
+// /// match calculate_flat_dir_directory_pearson_hash(dir) {
+// ///     Ok(hash) => println!("Directory hash: {}", hash),
+// ///     Err(e) => eprintln!("Error: {}", e),
+// /// }
+// /// ```
+// pub fn calculate_flat_dir_directory_pearson_hash(
+//     directory_path: &Path,
+// ) -> Result<String, DirectoryHashError> {
+//     if directory_path.as_os_str().is_empty() {
+//         return Err(DirectoryHashError::InvalidInput(
+//             "CDPH: empty directory path".to_string(),
+//         ));
+//     }
 
-    #[cfg(all(debug_assertions, not(test)))]
-    debug_assert!(
-        !directory_path.as_os_str().is_empty(),
-        "Directory path must be non-empty"
-    );
+//     #[cfg(all(debug_assertions, not(test)))]
+//     debug_assert!(
+//         !directory_path.as_os_str().is_empty(),
+//         "Directory path must be non-empty"
+//     );
 
-    let entries = fs::read_dir(directory_path).map_err(|_| {
-        DirectoryHashError::DirectoryAccess("CDPH: cannot read directory".to_string())
-    })?;
+//     let entries = fs::read_dir(directory_path).map_err(|_| {
+//         DirectoryHashError::DirectoryAccess("CDPH: cannot read directory".to_string())
+//     })?;
 
-    let mut file_paths: Vec<PathBuf> = Vec::new();
-    for entry_result in entries {
-        match entry_result {
-            Ok(entry) => {
-                if is_regular_file(&entry) {
-                    file_paths.push(entry.path());
-                }
-            }
-            Err(_) => {
-                continue;
-            }
-        }
-    }
+//     let mut file_paths: Vec<PathBuf> = Vec::new();
+//     for entry_result in entries {
+//         match entry_result {
+//             Ok(entry) => {
+//                 if is_regular_file(&entry) {
+//                     file_paths.push(entry.path());
+//                 }
+//             }
+//             Err(_) => {
+//                 continue;
+//             }
+//         }
+//     }
 
-    if file_paths.is_empty() {
-        return Err(DirectoryHashError::InvalidInput(
-            "CDPH: no regular files found".to_string(),
-        ));
-    }
+//     if file_paths.is_empty() {
+//         return Err(DirectoryHashError::InvalidInput(
+//             "CDPH: no regular files found".to_string(),
+//         ));
+//     }
 
-    file_paths.sort_by(|a, b| {
-        let name_a = a.file_name().unwrap_or_default();
-        let name_b = b.file_name().unwrap_or_default();
-        name_a.cmp(name_b)
-    });
+//     file_paths.sort_by(|a, b| {
+//         let name_a = a.file_name().unwrap_or_default();
+//         let name_b = b.file_name().unwrap_or_default();
+//         name_a.cmp(name_b)
+//     });
 
-    let mut hash_states = [0u8; 16];
-    let mut buffer = [0u8; CHUNK_SIZE];
+//     let mut hash_states = [0u8; 16];
+//     let mut buffer = [0u8; CHUNK_SIZE];
 
-    for file_path in &file_paths {
-        let mut file = match File::open(file_path) {
-            Ok(f) => f,
-            Err(_) => {
-                continue;
-            }
-        };
+//     for file_path in &file_paths {
+//         let mut file = match File::open(file_path) {
+//             Ok(f) => f,
+//             Err(_) => {
+//                 continue;
+//             }
+//         };
 
-        loop {
-            let bytes_read = match file.read(&mut buffer) {
-                Ok(n) => n,
-                Err(_) => {
-                    break;
-                }
-            };
+//         loop {
+//             let bytes_read = match file.read(&mut buffer) {
+//                 Ok(n) => n,
+//                 Err(_) => {
+//                     break;
+//                 }
+//             };
 
-            if bytes_read == 0 {
-                break;
-            }
+//             if bytes_read == 0 {
+//                 break;
+//             }
 
-            for hash_state in hash_states.iter_mut() {
-                for &byte in &buffer[..bytes_read] {
-                    *hash_state = PERMUTATION_TABLE[(*hash_state ^ byte) as usize];
-                }
-            }
-        }
+//             for hash_state in hash_states.iter_mut() {
+//                 for &byte in &buffer[..bytes_read] {
+//                     *hash_state = PERMUTATION_TABLE[(*hash_state ^ byte) as usize];
+//                 }
+//             }
+//         }
 
-        for (salt_index, hash_state) in hash_states.iter_mut().enumerate() {
-            let salt_bytes = DIRECTORY_HASH_SALT_LIST[salt_index].to_be_bytes();
-            for &byte in &salt_bytes {
-                *hash_state = PERMUTATION_TABLE[(*hash_state ^ byte) as usize];
-            }
-        }
-    }
+//         for (salt_index, hash_state) in hash_states.iter_mut().enumerate() {
+//             let salt_bytes = DIRECTORY_HASH_SALT_LIST[salt_index].to_be_bytes();
+//             for &byte in &salt_bytes {
+//                 *hash_state = PERMUTATION_TABLE[(*hash_state ^ byte) as usize];
+//             }
+//         }
+//     }
 
-    let hash_hex = bytes_to_hex_string(&hash_states);
+//     let hash_hex = bytes_to_hex_string(&hash_states);
 
-    Ok(hash_hex)
-}
+//     Ok(hash_hex)
+// }
 
 // ============================================================================
 // RECURSIVE DIRECTORY HASHING
@@ -4088,13 +3906,13 @@ mod dph_tests {
         fs::write(temp_dir.join("file1.txt"), b"content1").expect("Write file1");
         fs::write(temp_dir.join("file2.txt"), b"content2").expect("Write file2");
 
-        let result = calculate_flat_dir_directory_pearson_hash(&temp_dir);
+        let result = calculate_recursive_dir_directory_pearson_hash(&temp_dir);
         assert!(result.is_ok());
 
         let hash1 = result.unwrap();
         assert_eq!(hash1.len(), 32);
 
-        let hash2 = calculate_flat_dir_directory_pearson_hash(&temp_dir).unwrap();
+        let hash2 = calculate_recursive_dir_directory_pearson_hash(&temp_dir).unwrap();
         assert_eq!(hash1, hash2);
 
         fs::remove_dir_all(&temp_dir).expect("Clean up");
@@ -4107,10 +3925,10 @@ mod dph_tests {
         fs::create_dir(&temp_dir).expect("Create temp dir");
 
         fs::write(temp_dir.join("file.txt"), b"initial").expect("Write file");
-        let hash1 = calculate_flat_dir_directory_pearson_hash(&temp_dir).unwrap();
+        let hash1 = calculate_recursive_dir_directory_pearson_hash(&temp_dir).unwrap();
 
         fs::write(temp_dir.join("file.txt"), b"modified").expect("Write file");
-        let hash2 = calculate_flat_dir_directory_pearson_hash(&temp_dir).unwrap();
+        let hash2 = calculate_recursive_dir_directory_pearson_hash(&temp_dir).unwrap();
 
         assert_ne!(hash1, hash2);
 
@@ -4123,30 +3941,30 @@ mod dph_tests {
         let _ = fs::remove_dir_all(&temp_dir);
         fs::create_dir(&temp_dir).expect("Create temp dir");
 
-        let result = calculate_flat_dir_directory_pearson_hash(&temp_dir);
+        let result = calculate_recursive_dir_directory_pearson_hash(&temp_dir);
         assert!(result.is_err());
 
         fs::remove_dir_all(&temp_dir).expect("Clean up");
     }
 
-    #[test]
-    fn test_calculate_flat_dir_directory_pearson_hash_ignores_subdirs() {
-        let temp_dir = std::env::temp_dir().join("test_dir_hash_subdirs");
-        let _ = fs::remove_dir_all(&temp_dir);
-        fs::create_dir(&temp_dir).expect("Create temp dir");
+    // #[test]
+    // fn test_calculate_flat_dir_directory_pearson_hash_ignores_subdirs() {
+    //     let temp_dir = std::env::temp_dir().join("test_dir_hash_subdirs");
+    //     let _ = fs::remove_dir_all(&temp_dir);
+    //     fs::create_dir(&temp_dir).expect("Create temp dir");
 
-        fs::write(temp_dir.join("file.txt"), b"content").expect("Write file");
-        let hash1 = calculate_flat_dir_directory_pearson_hash(&temp_dir).unwrap();
+    //     fs::write(temp_dir.join("file.txt"), b"content").expect("Write file");
+    //     let hash1 = calculate_recursive_dir_directory_pearson_hash(&temp_dir).unwrap();
 
-        let subdir = temp_dir.join("subdir");
-        fs::create_dir(&subdir).expect("Create subdir");
-        fs::write(subdir.join("subfile.txt"), b"subcontent").expect("Write subfile");
+    //     let subdir = temp_dir.join("subdir");
+    //     fs::create_dir(&subdir).expect("Create subdir");
+    //     fs::write(subdir.join("subfile.txt"), b"subcontent").expect("Write subfile");
 
-        let hash2 = calculate_flat_dir_directory_pearson_hash(&temp_dir).unwrap();
-        assert_eq!(hash1, hash2);
+    //     let hash2 = calculate_recursive_dir_directory_pearson_hash(&temp_dir).unwrap();
+    //     assert_eq!(hash1, hash2);
 
-        fs::remove_dir_all(&temp_dir).expect("Clean up");
-    }
+    //     fs::remove_dir_all(&temp_dir).expect("Clean up");
+    // }
 
     #[test]
     fn test_hash_length_always_32_chars() {
@@ -4156,7 +3974,7 @@ mod dph_tests {
 
         fs::write(temp_dir.join("file.txt"), b"content").expect("Write file");
 
-        let hash = calculate_flat_dir_directory_pearson_hash(&temp_dir).unwrap();
+        let hash = calculate_recursive_dir_directory_pearson_hash(&temp_dir).unwrap();
         assert_eq!(hash.len(), 32);
         assert!(hash.chars().all(|c| c.is_ascii_hexdigit()));
 
@@ -4172,7 +3990,7 @@ mod dph_tests {
         fs::write(temp_dir.join("a.txt"), b"content").expect("Write a");
         fs::write(temp_dir.join("b.txt"), b"content").expect("Write b");
 
-        let hash1 = calculate_flat_dir_directory_pearson_hash(&temp_dir).unwrap();
+        let hash1 = calculate_recursive_dir_directory_pearson_hash(&temp_dir).unwrap();
 
         fs::remove_dir_all(&temp_dir).expect("Remove");
         fs::create_dir(&temp_dir).expect("Create temp dir");
@@ -4180,7 +3998,7 @@ mod dph_tests {
         fs::write(temp_dir.join("b.txt"), b"content").expect("Write b");
         fs::write(temp_dir.join("a.txt"), b"content").expect("Write a");
 
-        let hash2 = calculate_flat_dir_directory_pearson_hash(&temp_dir).unwrap();
+        let hash2 = calculate_recursive_dir_directory_pearson_hash(&temp_dir).unwrap();
 
         assert_eq!(hash1, hash2);
 
@@ -4194,10 +4012,10 @@ mod dph_tests {
         fs::create_dir(&temp_dir).expect("Create temp dir");
 
         fs::write(temp_dir.join("file.txt"), b"content").expect("Write file");
-        let hash1 = calculate_flat_dir_directory_pearson_hash(&temp_dir).unwrap();
+        let hash1 = calculate_recursive_dir_directory_pearson_hash(&temp_dir).unwrap();
 
         fs::write(temp_dir.join("file.txt"), b"Content").expect("Write file");
-        let hash2 = calculate_flat_dir_directory_pearson_hash(&temp_dir).unwrap();
+        let hash2 = calculate_recursive_dir_directory_pearson_hash(&temp_dir).unwrap();
 
         assert_ne!(hash1, hash2);
 
@@ -4213,7 +4031,7 @@ mod dph_tests {
         let large_content = vec![0x42u8; 20000];
         fs::write(temp_dir.join("large.txt"), &large_content).expect("Write large file");
 
-        let hash = calculate_flat_dir_directory_pearson_hash(&temp_dir);
+        let hash = calculate_recursive_dir_directory_pearson_hash(&temp_dir);
         assert!(hash.is_ok());
         assert_eq!(hash.unwrap().len(), 32);
 
@@ -4228,7 +4046,7 @@ mod dph_tests {
 
         fs::write(temp_dir.join("empty.txt"), b"").expect("Write empty file");
 
-        let hash = calculate_flat_dir_directory_pearson_hash(&temp_dir);
+        let hash = calculate_recursive_dir_directory_pearson_hash(&temp_dir);
         assert!(hash.is_ok());
 
         fs::remove_dir_all(&temp_dir).expect("Clean up");
@@ -4243,7 +4061,7 @@ mod dph_tests {
         let binary_data: Vec<u8> = (0..=255).collect();
         fs::write(temp_dir.join("binary.dat"), &binary_data).expect("Write binary file");
 
-        let hash = calculate_flat_dir_directory_pearson_hash(&temp_dir);
+        let hash = calculate_recursive_dir_directory_pearson_hash(&temp_dir);
         assert!(hash.is_ok());
 
         fs::remove_dir_all(&temp_dir).expect("Clean up");
@@ -4259,9 +4077,9 @@ mod dph_tests {
         fs::write(temp_dir.join("file2.txt"), b"content2").expect("Write file2");
         fs::write(temp_dir.join("file3.txt"), b"content3").expect("Write file3");
 
-        let hash1 = calculate_flat_dir_directory_pearson_hash(&temp_dir).unwrap();
-        let hash2 = calculate_flat_dir_directory_pearson_hash(&temp_dir).unwrap();
-        let hash3 = calculate_flat_dir_directory_pearson_hash(&temp_dir).unwrap();
+        let hash1 = calculate_recursive_dir_directory_pearson_hash(&temp_dir).unwrap();
+        let hash2 = calculate_recursive_dir_directory_pearson_hash(&temp_dir).unwrap();
+        let hash3 = calculate_recursive_dir_directory_pearson_hash(&temp_dir).unwrap();
 
         assert_eq!(hash1, hash2);
         assert_eq!(hash2, hash3);
@@ -4276,10 +4094,10 @@ mod dph_tests {
         fs::create_dir(&temp_dir).expect("Create temp dir");
 
         fs::write(temp_dir.join("file1.txt"), b"content1").expect("Write file1");
-        let hash1 = calculate_flat_dir_directory_pearson_hash(&temp_dir).unwrap();
+        let hash1 = calculate_recursive_dir_directory_pearson_hash(&temp_dir).unwrap();
 
         fs::write(temp_dir.join("file2.txt"), b"content2").expect("Write file2");
-        let hash2 = calculate_flat_dir_directory_pearson_hash(&temp_dir).unwrap();
+        let hash2 = calculate_recursive_dir_directory_pearson_hash(&temp_dir).unwrap();
 
         assert_ne!(hash1, hash2);
 
@@ -4294,10 +4112,10 @@ mod dph_tests {
 
         fs::write(temp_dir.join("file1.txt"), b"content1").expect("Write file1");
         fs::write(temp_dir.join("file2.txt"), b"content2").expect("Write file2");
-        let hash1 = calculate_flat_dir_directory_pearson_hash(&temp_dir).unwrap();
+        let hash1 = calculate_recursive_dir_directory_pearson_hash(&temp_dir).unwrap();
 
         fs::remove_file(temp_dir.join("file2.txt")).expect("Remove file");
-        let hash2 = calculate_flat_dir_directory_pearson_hash(&temp_dir).unwrap();
+        let hash2 = calculate_recursive_dir_directory_pearson_hash(&temp_dir).unwrap();
 
         assert_ne!(hash1, hash2);
 
@@ -4311,11 +4129,11 @@ mod dph_tests {
         fs::create_dir(&temp_dir).expect("Create temp dir");
 
         fs::write(temp_dir.join("old_name.txt"), b"content").expect("Write file");
-        let hash1 = calculate_flat_dir_directory_pearson_hash(&temp_dir).unwrap();
+        let hash1 = calculate_recursive_dir_directory_pearson_hash(&temp_dir).unwrap();
 
         fs::rename(temp_dir.join("old_name.txt"), temp_dir.join("new_name.txt"))
             .expect("Rename file");
-        let hash2 = calculate_flat_dir_directory_pearson_hash(&temp_dir).unwrap();
+        let hash2 = calculate_recursive_dir_directory_pearson_hash(&temp_dir).unwrap();
 
         assert_eq!(hash1, hash2);
 
@@ -4339,8 +4157,8 @@ mod dph_tests {
         fs::write(temp_dir2.join("a.txt"), b"content_a").expect("Write a");
         fs::write(temp_dir2.join("b.txt"), b"content_b").expect("Write b");
 
-        let hash1 = calculate_flat_dir_directory_pearson_hash(&temp_dir1).unwrap();
-        let hash2 = calculate_flat_dir_directory_pearson_hash(&temp_dir2).unwrap();
+        let hash1 = calculate_recursive_dir_directory_pearson_hash(&temp_dir1).unwrap();
+        let hash2 = calculate_recursive_dir_directory_pearson_hash(&temp_dir2).unwrap();
 
         assert_eq!(hash1, hash2);
 
@@ -4358,7 +4176,7 @@ mod dph_tests {
         fs::write(temp_dir.join("file_emoji_🚀.txt"), b"content2").expect("Write file");
         fs::write(temp_dir.join("file-dash.txt"), b"content3").expect("Write file");
 
-        let hash = calculate_flat_dir_directory_pearson_hash(&temp_dir);
+        let hash = calculate_recursive_dir_directory_pearson_hash(&temp_dir);
         assert!(hash.is_ok());
 
         fs::remove_dir_all(&temp_dir).expect("Clean up");
@@ -4371,7 +4189,7 @@ mod dph_tests {
         fs::create_dir(&temp_dir).expect("Create temp dir");
 
         fs::write(temp_dir.join("file.txt"), b"content").expect("Write file");
-        let hash = calculate_flat_dir_directory_pearson_hash(&temp_dir).unwrap();
+        let hash = calculate_recursive_dir_directory_pearson_hash(&temp_dir).unwrap();
 
         let output_path = write_directory_hash_file(&hash, &temp_dir, "test_write_hash")
             .expect("Write hash file");
@@ -4410,7 +4228,7 @@ mod dph_tests {
             fs::write(temp_dir.join(filename), content.as_bytes()).expect("Write file");
         }
 
-        let hash = calculate_flat_dir_directory_pearson_hash(&temp_dir);
+        let hash = calculate_recursive_dir_directory_pearson_hash(&temp_dir);
         assert!(hash.is_ok());
         assert_eq!(hash.unwrap().len(), 32);
 
@@ -4427,7 +4245,7 @@ mod dph_tests {
         fs::write(temp_dir.join("newlines.txt"), b"\n\n\n\n").expect("Write newlines");
         fs::write(temp_dir.join("tabs.txt"), b"\t\t\t").expect("Write tabs");
 
-        let hash = calculate_flat_dir_directory_pearson_hash(&temp_dir);
+        let hash = calculate_recursive_dir_directory_pearson_hash(&temp_dir);
         assert!(hash.is_ok());
 
         fs::remove_dir_all(&temp_dir).expect("Clean up");
@@ -4440,7 +4258,7 @@ mod padnet_otp_module;
 use padnet_otp_module::{
     PadIndex, PadIndexMaxSize, ValidationLevel, find_first_available_line,
     padnet_load_delete_read_one_byteline, padnet_make_one_pad_set, padnet_reader_xor_file,
-    padnet_writer_strict_cleanup_continuous_xor_file, read_padset_one_byteline,
+    padnet_writer_strict_cleanup_continuous_xor_file,
 };
 use std::env;
 use std::fs;
@@ -4548,7 +4366,7 @@ fn test_2_line_loading(base_path: &Path) {
 
     print_step("2.2", "Non-destructive read (reader mode)");
     let index_0 = PadIndex::new_standard([0, 0, 0, 0]);
-    match read_padset_one_byteline(&padset_path, &index_0) {
+    match padnet_load_delete_read_one_byteline(&padset_path, &index_0) {
         Ok(bytes) => {
             println!("  ✓ Read {} bytes from line_000", bytes.len());
             println!(
@@ -4567,7 +4385,7 @@ fn test_2_line_loading(base_path: &Path) {
     }
 
     print_step("2.3", "Read same line again (should work)");
-    match read_padset_one_byteline(&padset_path, &index_0) {
+    match padnet_load_delete_read_one_byteline(&padset_path, &index_0) {
         Ok(bytes) => println!("  ✓ Read {} bytes again (file preserved)", bytes.len()),
         Err(e) => println!("  ✗ Failed: {}", e),
     }
@@ -4589,7 +4407,7 @@ fn test_2_line_loading(base_path: &Path) {
     }
 
     print_step("2.5", "Try to read deleted line (should fail)");
-    match read_padset_one_byteline(&padset_path, &index_1) {
+    match padnet_load_delete_read_one_byteline(&padset_path, &index_1) {
         Ok(_) => println!("  ✗ Unexpectedly succeeded"),
         Err(e) => println!("  ✓ Correctly failed: {}", e),
     }
@@ -4699,7 +4517,7 @@ fn test_3_alice_bob_cycle(base_path: &Path) {
     let bytes_decrypted =
         match padnet_reader_xor_file(&encrypted, &decrypted, &bob_padset, &start_index) {
             Ok(bytes) => {
-                println!("  ✓ Decrypted {} bytes", bytes);
+                println!("  ✓ Decrypted {:?} bytes", bytes);
                 bytes
             }
             Err(e) => {
@@ -4715,7 +4533,7 @@ fn test_3_alice_bob_cycle(base_path: &Path) {
                 println!("  ✓✓✓ SUCCESS! Bob's message matches Alice's original! ✓✓✓");
                 println!("  Original:  {} bytes", message.len());
                 println!("  Encrypted: {} bytes", bytes_encrypted);
-                println!("  Decrypted: {} bytes", bytes_decrypted);
+                println!("  Decrypted: {:?} bytes", bytes_decrypted);
             } else {
                 println!("  ✗ FAILURE! Content mismatch");
             }
@@ -4723,14 +4541,97 @@ fn test_3_alice_bob_cycle(base_path: &Path) {
         Err(e) => println!("  ✗ Read failed: {}", e),
     }
 
-    print_step("3.9", "Test Bob's re-read capability");
+    // print_step("3.9", "Test Bob's re-read capability");
+    // let decrypted2 = base_path.join("test3_decrypted2.txt");
+    // match padnet_reader_xor_file(&encrypted, &decrypted2, &bob_padset, &start_index) {
+    //     Ok(bytes) => println!(
+    //         "  ✓ Re-decrypted {:?} bytes (reader mode preserved pad)",
+    //         bytes
+    //     ),
+    //     Err(e) => println!("  ✗ Re-decrypt failed: {}", e),
+    // }
+
+    // println!(
+    //     "\n  Compare: diff {} {}",
+    //     plaintext.display(),
+    //     decrypted.display()
+    // );
+    // println!(
+    //     "  Alice's pad: ls {}/padnest_0_000/pad_000/page_000/",
+    //     alice_padset.display()
+    // );
+    // println!(
+    //     "  Bob's pad:   ls {}/padnest_0_000/pad_000/page_000/",
+    //     bob_padset.display()
+    // );
+    // println!(
+    //     "  Cleanup: rm -rf {} {} {} {} {} {}",
+    //     alice_padset.display(),
+    //     bob_padset.display(),
+    //     plaintext.display(),
+    //     encrypted.display(),
+    //     decrypted.display(),
+    //     decrypted2.display()
+    // );
+
+    print_step("3.9", "Test pad exhaustion prevention (should fail)");
+    println!("  Note: Bob's padset already consumed lines 0-1 in step 3.7");
+    println!("  Attempting to decrypt same message again = OTP violation");
+
     let decrypted2 = base_path.join("test3_decrypted2.txt");
     match padnet_reader_xor_file(&encrypted, &decrypted2, &bob_padset, &start_index) {
-        Ok(bytes) => println!(
-            "  ✓ Re-decrypted {} bytes (reader mode preserved pad)",
-            bytes
-        ),
-        Err(e) => println!("  ✗ Re-decrypt failed: {}", e),
+        Ok(_) => {
+            println!("  ✗✗✗ SECURITY FAILURE! Re-used pad material (OTP violation)");
+            println!("  This should NEVER succeed - indicates broken pad consumption");
+        }
+        Err(e) => {
+            println!("  ✓ Correctly rejected re-use attempt");
+            println!("  Error: {}", e);
+
+            // Verify the specific failure mode
+            let error_msg = format!("{}", e);
+            if error_msg.contains("index mismatch") || error_msg.contains("line not found") {
+                println!("  ✓ Correct failure reason: pad material already consumed");
+            } else {
+                println!("  ⚠ Unexpected error type (expected index/line not found)");
+            }
+        }
+    }
+
+    print_step("3.10", "Verify Bob's pad consumption matches Alice's");
+    let alice_first = find_first_available_line(&alice_padset, PadIndexMaxSize::Standard4Byte);
+    let bob_first = find_first_available_line(&bob_padset, PadIndexMaxSize::Standard4Byte);
+
+    match (alice_first, bob_first) {
+        (Ok(Some(alice_idx)), Ok(Some(bob_idx))) => {
+            if alice_idx == bob_idx {
+                println!("  ✓ Both parties consumed identical pad material");
+                println!("    Alice next: {:?}", alice_idx);
+                println!("    Bob next:   {:?}", bob_idx);
+            } else {
+                println!("  ✗ Pad consumption mismatch!");
+                println!("    Alice next: {:?}", alice_idx);
+                println!("    Bob next:   {:?}", bob_idx);
+            }
+        }
+        (Ok(None), Ok(None)) => {
+            println!("  ✓ Both parties exhausted pad (unlikely with 11 lines)");
+        }
+        _ => {
+            println!("  ✗ Error checking pad states");
+        }
+    }
+
+    print_step("3.11", "Verify original decryption still valid");
+    match fs::read(&decrypted) {
+        Ok(content) => {
+            if content == message {
+                println!("  ✓ Original decryption file intact and correct");
+            } else {
+                println!("  ✗ Original decryption corrupted");
+            }
+        }
+        Err(e) => println!("  ✗ Cannot read original decryption: {}", e),
     }
 
     println!(
@@ -4746,14 +4647,14 @@ fn test_3_alice_bob_cycle(base_path: &Path) {
         "  Bob's pad:   ls {}/padnest_0_000/pad_000/page_000/",
         bob_padset.display()
     );
+    println!("  Expected: Both should be missing line_000 and line_001");
     println!(
-        "  Cleanup: rm -rf {} {} {} {} {} {}",
+        "  Cleanup: rm -rf {} {} {} {} {}",
         alice_padset.display(),
         bob_padset.display(),
         plaintext.display(),
         encrypted.display(),
-        decrypted.display(),
-        decrypted2.display()
+        decrypted.display()
     );
 }
 
@@ -4836,7 +4737,7 @@ fn test_4_hash_validation(base_path: &Path) {
     let decrypted = base_path.join("test4a_decrypted.txt");
     let idx = PadIndex::new_standard([0, 0, 0, 0]);
     match padnet_reader_xor_file(&encrypted, &decrypted, &bob_page, &idx) {
-        Ok(bytes) => println!("  ✓ Decryption succeeded: {} bytes", bytes),
+        Ok(bytes) => println!("  ✓ Decryption succeeded: {:?} bytes", bytes),
         Err(e) => println!("  ✗ Failed: {}", e),
     }
 
@@ -4981,284 +4882,4 @@ fn main() {
     println!("{}\n", "█".repeat(70));
 }
 
- */
-/*
-Helpers
-
-use std::fs::{self, File};
-use std::io::Read;
-use std::path::Path;
-
-/// Reads a file into a byte vector with defensive size checking.
-///
-/// # Project Context
-/// In the OTP encryption pipeline, we read the XOR-encrypted output file
-/// back into memory for transmission. This function ensures:
-/// - Files don't exceed memory safety limits
-/// - Clear errors for oversized files
-/// - Protection against malicious or accidental large file processing
-/// - Consistent byte reading (handles short reads)
-///
-/// # Security & Reliability Strategy
-/// 1. Check file size BEFORE reading (prevents memory exhaustion)
-/// 2. Reject files exceeding MAX_PROCESSABLE_FILE_SIZE_BYTES
-/// 3. Pre-allocate exact buffer size (efficient, no reallocation)
-/// 4. Read entire file in single operation
-/// 5. Verify bytes read matches file size (detect partial reads)
-///
-/// # Size Limit Rationale
-/// - Protects against memory exhaustion attacks
-/// - Prevents accidental processing of wrong files (logs, databases)
-/// - Ensures OTP pad material not wasted on invalid inputs
-/// - 1MB limit appropriate for TOML config files
-///
-/// # Arguments
-/// * `file_path` - Absolute path to file to read
-///
-/// # Returns
-/// * `Ok(Vec<u8>)` - Complete file contents as byte vector
-/// * `Err(ThisProjectError)` - Operation failed, see error for details
-///
-/// # Error Conditions
-/// - `FileTooLarge`: File exceeds MAX_PROCESSABLE_FILE_SIZE_BYTES
-/// - `IoError`: File not found
-/// - `IoError`: Permission denied (cannot read file)
-/// - `IoError`: Hardware error during read
-/// - `IoError`: Partial read (file changed during read)
-/// - `InvalidInput`: Path is not absolute
-///
-/// # Example
-/// ```rust,no_run
-/// use std::path::Path;
-///
-/// let temp_path = Path::new("/tmp/uma_xor_result.bin");
-///
-/// match read_file_to_bytes(temp_path) {
-///     Ok(bytes) => println!("Read {} bytes", bytes.len()),
-///     Err(e) => eprintln!("Read failed: {}", e),
-/// }
-/// ```
-///
-/// # Performance Considerations
-/// - Single metadata call to check size
-/// - Pre-allocated buffer (no reallocation)
-/// - Single read operation for files < 1MB (efficient)
-/// - Typical read time for 1MB file: < 5ms on SSD
-///
-/// # Edge Cases Handled
-/// - Empty files (0 bytes): Returns Ok(empty Vec)
-/// - Files exactly at limit (1,048,576 bytes): Accepted
-/// - Files over limit by 1 byte: Rejected
-/// - File deleted between size check and read: Returns IoError
-/// - File grows during read: Partial read detected and rejected
-fn read_file_to_bytes(file_path: &Path) -> Result<Vec<u8>, ThisProjectError> {
-    // Debug assertion: ensure we have an absolute path
-    #[cfg(all(debug_assertions, not(test)))]
-    debug_assert!(
-        file_path.is_absolute(),
-        "RFTB: file_path must be absolute, got: {:?}",
-        file_path
-    );
-
-    // Production safety check: verify path is absolute
-    if !file_path.is_absolute() {
-        return Err(ThisProjectError::InvalidInput(
-            "RFTB: file path must be absolute".to_string(),
-        ));
-    }
-
-    // Get file metadata to check size before reading
-    // This prevents loading huge files into memory
-    let metadata = fs::metadata(file_path).map_err(|e| {
-        ThisProjectError::IoError(std::io::Error::new(
-            e.kind(),
-            format!("RFTB: failed to get file metadata: {}", e),
-        ))
-    })?;
-
-    // Get file size as usize for comparison
-    // Note: On 32-bit systems, files > 4GB would overflow here
-    // This is acceptable since our max is 1MB
-    let file_size = metadata.len() as usize;
-
-    // Defensive size check: reject unexpectedly large files
-    // Protects against memory exhaustion and accidental wrong file processing
-    if file_size > MAX_PROCESSABLE_FILE_SIZE_BYTES {
-        return Err(ThisProjectError::FileTooLarge {
-            path: file_path.to_path_buf(),
-            size_bytes: file_size,
-            max_allowed: MAX_PROCESSABLE_FILE_SIZE_BYTES,
-        });
-    }
-
-    // Open file for reading
-    let mut file = File::open(file_path).map_err(|e| {
-        ThisProjectError::IoError(std::io::Error::new(
-            e.kind(),
-            format!("RFTB: failed to open file: {}", e),
-        ))
-    })?;
-
-    // Pre-allocate buffer with exact size
-    // This is efficient: allocates once, no reallocation needed
-    let mut buffer = vec![0u8; file_size];
-
-    // Read entire file into buffer
-    // read_exact ensures we read exactly file_size bytes or error
-    file.read_exact(&mut buffer).map_err(|e| {
-        ThisProjectError::IoError(std::io::Error::new(
-            e.kind(),
-            format!("RFTB: failed to read file contents: {}", e),
-        ))
-    })?;
-
-    // Success: return complete file contents
-    Ok(buffer)
-}
-
-use std::fs::{File, OpenOptions};
-use std::io::Write;
-use std::path::Path;
-
-/// Writes byte data to a file atomically with defensive error handling.
-///
-/// # Project Context
-/// In the OTP encryption pipeline, we need to write intermediate encrypted
-/// data to temporary files. This function ensures:
-/// - Complete write or complete failure (no partial files)
-/// - Defensive handling of disk full, permissions, hardware errors
-/// - Secure file permissions (readable/writable by owner only)
-/// - Clear error messages for debugging
-///
-/// # Operation Strategy
-/// 1. Create new file (fail if already exists - prevents race conditions)
-/// 2. Set restrictive permissions (0600 on Unix - owner only)
-/// 3. Write all bytes in single operation
-/// 4. Flush to ensure data written to disk
-/// 5. Explicit sync to guarantee durability
-///
-/// # Security Considerations
-/// - File permissions set to 0600 (Unix) - only file owner can read/write
-/// - Files contain sensitive encrypted data
-/// - No world-readable temp files
-/// - Fail-safe: if permissions can't be set, file is still created (OS defaults)
-///
-/// # Arguments
-/// * `data` - Byte slice containing data to write
-/// * `file_path` - Absolute path where file should be created
-///
-/// # Returns
-/// * `Ok(())` - File successfully written and synced to disk
-/// * `Err(ThisProjectError)` - Operation failed, see error for details
-///
-/// # Error Conditions
-/// - `IoError`: File already exists (race condition)
-/// - `IoError`: Permission denied (cannot create file in directory)
-/// - `IoError`: Disk full (no space available)
-/// - `IoError`: Hardware error (disk failure)
-/// - `IoError`: Parent directory doesn't exist
-///
-/// # Example
-/// ```rust,no_run
-/// use std::path::Path;
-///
-/// let data = b"encrypted content here";
-/// let temp_path = Path::new("/tmp/uma_temp_12345.bin");
-///
-/// match write_bytes_to_file_atomic(data, temp_path) {
-///     Ok(()) => println!("Data written successfully"),
-///     Err(e) => eprintln!("Write failed: {}", e),
-/// }
-/// ```
-///
-/// # Platform Notes
-/// - Unix: File permissions set to 0600 (owner read/write only)
-/// - Windows: Uses default file permissions (no chmod equivalent)
-/// - All platforms: Fail if file exists prevents race conditions
-///
-/// # Performance Considerations
-/// - Single write operation (efficient for small files)
-/// - Flush ensures OS buffer written to disk
-/// - Sync ensures disk cache written to physical media
-/// - For 1MB files: typically completes in < 10ms on SSD
-fn write_bytes_to_file_atomic(data: &[u8], file_path: &Path) -> Result<(), ThisProjectError> {
-    // Debug assertion: ensure we have an absolute path
-    // This is active in debug builds but not production
-    #[cfg(all(debug_assertions, not(test)))]
-    debug_assert!(
-        file_path.is_absolute(),
-        "WBTFA: file_path must be absolute, got: {:?}",
-        file_path
-    );
-
-    // Production safety check: verify path is absolute
-    if !file_path.is_absolute() {
-        return Err(ThisProjectError::InvalidInput(
-            "WBTFA: file path must be absolute".to_string(),
-        ));
-    }
-
-    // Create file with restrictive options
-    // - create_new(true): Fail if file exists (prevents race conditions)
-    // - write(true): Enable write operations
-    // - truncate(false): Not needed since create_new ensures empty file
-    let mut file = OpenOptions::new()
-        .create_new(true) // Atomic: fail if exists
-        .write(true)
-        .open(file_path)
-        .map_err(|e| {
-            // Enhance error with context
-            ThisProjectError::IoError(std::io::Error::new(
-                e.kind(),
-                format!("WBTFA: failed to create file: {}", e),
-            ))
-        })?;
-
-    // Set secure file permissions (Unix only)
-    // On Windows, this is a no-op (not supported)
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let permissions = std::fs::Permissions::from_mode(0o600); // Owner: rw-, Group: ---, Other: ---
-
-        // Try to set permissions, but don't fail if we can't
-        // File was created successfully, permissions are defense-in-depth
-        if let Err(e) = std::fs::set_permissions(file_path, permissions) {
-            // Log warning in debug builds
-            #[cfg(debug_assertions)]
-            eprintln!("WBTFA warning: could not set file permissions: {}", e);
-
-            // In production: continue (file created, just with default permissions)
-            // This is acceptable because temp directory should have restricted access
-        }
-    }
-
-    // Write all bytes in single operation
-    // This is efficient for small files (our use case: < 1MB)
-    file.write_all(data).map_err(|e| {
-        ThisProjectError::IoError(std::io::Error::new(
-            e.kind(),
-            format!("WBTFA: failed to write data: {}", e),
-        ))
-    })?;
-
-    // Flush OS buffer to ensure bytes reach OS kernel
-    file.flush().map_err(|e| {
-        ThisProjectError::IoError(std::io::Error::new(
-            e.kind(),
-            format!("WBTFA: failed to flush: {}", e),
-        ))
-    })?;
-
-    // Sync file to disk (ensures durability)
-    // This is important for encrypted data - must not be lost
-    file.sync_all().map_err(|e| {
-        ThisProjectError::IoError(std::io::Error::new(
-            e.kind(),
-            format!("WBTFA: failed to sync: {}", e),
-        ))
-    })?;
-
-    Ok(())
-}
 */
