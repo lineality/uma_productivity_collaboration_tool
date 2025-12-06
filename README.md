@@ -3,6 +3,7 @@
 4_|
 / \
 ```
+"Read the old books."
 
 ## cli tui messenger planner
 - Distributed Multi-point Conferencing Unit 
@@ -114,6 +115,23 @@ quit
 - Quit/Exit Uma: 'q'/'quit'
 - Uma's top legend, and bottom info-bar, will tell you what the commands and options are are.
 
+## Setup & Configuration 
+- See instructions on github: https://github.com/lineality/uma_productivity_collaboration_tool 
+- First Setup: There is a setup-wizard to guide you with Q&A to set up your address-book file and your first team-channel
+- Invite-Update Wizard: The 'invite' command will start a Q&A Wizard that will guide you through team-setup with team-mates and other configuration tasks. 
+####  Your Files on your system: 
+These helper-tools (which can no doubt can be further improved upon) are an optional convenience. Uma is a system of your files on your local computer system. There are no hidden mysterious files in hidden mysterious formats. There is no hidden mysterious program-state. There is no hidden mysterious software. Your project files are your files on your system. You can make or change those files with a text editor or any tool you want. You can re-sign them with the standard POSIX shell command:
+
+```bash
+gpg -r YOUR_KEY_ID --encrypt FILE_PATH
+```
+To manually view file:
+```bash
+gpg --decrypt FILE_PATH
+```
+If you don't want the additional security of gpg, then you choose during setup not to gpg-encrypt your own files.
+
+It is all your choices about your files.
 
 
 
@@ -140,6 +158,7 @@ Accessible: Students, startups, and anyone with limited resources should still b
 - Projects
 Uma is focused on this use-case specifically.
 Not all activities include these characteristics.
+
 
 # Best Practice
 ## Definition Behavior & System Collapse
@@ -179,8 +198,6 @@ Not all activities include these characteristics.
 - Collaboration Tools
 - Task/Project Management (kanban, Agile)
 
-
-
 ## Uma:
 - a Rust cli application
 - Supporting researchers, developers, management, administration, and STEM
@@ -189,3 +206,47 @@ Not all activities include these characteristics.
 - Supporting knowledge, education, learning, arts, speech, poetry, music, hygiene, language, and culture. ikezuki 池月: https://en.wikipedia.org/wiki/Ikezuki_(horse)
 - Supporting boy-scout values.
 - 馬さまたち、 頑張りましょう。
+
+
+## Security
+Different users will have different security needs and concerns, including how many steps they want or need to take to reduce their attack-surface. 
+
+
+
+# ~Install
+
+## Alias Method
+Put your executable-binary somewhere, and associate that path
+with a callable keyword for your command line interface (CLI)
+so that entering that keyword calls the executable (starts the program):
+
+1. Make or get the binary executable and put it somewhere: e.g.
+```path
+/home/YOURCOMPUTERNAME/uma_tools/uma
+```
+2. Open the bash shell configuration file in a text editor. The configuration file is usually located at ~/.bashrc or ~/.bash_profile. (use whatever editor: vim, nano, hx (helix), gedit, lapce, teehee, lapce, etc.)
+```bash
+hx ~/.bashrc
+```
+or in some systems it may be called 'bash_profile'
+
+3. Add an "alias" for your executable at the end of your bash file. Replace /path/to/your_executable with the path of your executable. And replace "your_keyword" with whatever you want to call File Fantastic by typing into your terminal. Add this line (with your details put in):
+```text
+alias your_keyword='/path/to/your_executable'
+```
+e.g. add:
+```text
+alias uma='/home/COMPUTERNAME/uma_tools/uma'
+```
+
+4. Save and close the text editor.
+- If you used nano, you can do this by pressing: Ctrl x s (control key, x key, s key)
+- If you use Helix(hx), Vim(vi), or Teehee: 'i' to type, then esc for normal mode, then :wq to write and quit
+
+5. Reload the bash-shell configuration file, and maybe open a new terminal, to apply and use the changes.
+```bash
+source ~/.bashrc
+```
+or bash_profile
+
+Now you should be able to launch Uma by typing 'uma' (or whatever name you choose) into a terminal.
