@@ -406,7 +406,7 @@ toml crates
 // For toml and clearsigntoml
 mod clearsign_toml_module;
 use crate::clearsign_toml_module::{
-    GpgError, cleanup_collaborator_temp_file, clearsign_and_encrypt_file_for_recipient, convert_toml_filewithkeyid_into_clearsigntoml_inplace, convert_tomlfile_without_keyid_using_gpgtomlkeyid_into_clearsigntoml_inplace, decrypt_gpgfile_to_output, extract_verify_store_gpg_encrypted_clearsign_toml, get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml, get_pathstring_to_temp_plaintoml_verified_extracted, get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml, gpg_make_input_path_name_abs_executabledirectoryrelative_nocheck, q_and_a_user_selects_gpg_key_full_fingerprint, read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyid, read_abstract_ports_from_clearsigntoml_without_publicgpgkey, read_bool_field_from_toml, read_bool_field_fromtoml_binary, read_bool_from_clearsigntoml_without_publicgpgkey, read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml, read_float_f32_field_from_toml, read_multiline_string_from_clearsigntoml, read_option_bool_from_clearsigntoml_without_publicgpgkey, read_option_i32_tuple_array_from_clearsigntoml_without_publicgpgkey, read_option_i64_from_clearsigntoml_without_publicgpgkey, read_option_usize_from_clearsigntoml_without_publicgpgkey, read_pathbuf_from_clearsigntoml_without_publicgpgkey, read_single_line_string_field_from_toml, read_singleline_string_from_clearsigntoml, read_singleline_string_from_clearsigntoml_without_publicgpgkey, read_str_array_field_clearsigntoml, read_string_array_field_from_toml, read_stringarray_from_clearsigntoml_without_publicgpgkey, read_teamchannel_collaborator_ports_clearsigntoml_without_keyid, read_u8_array_from_clearsigntoml_without_publicgpgkey, read_u8_field_from_toml, read_u64_array_from_clearsigntoml_without_publicgpgkey, read_u64_field_from_toml, read_u64_from_clearsigntoml_without_publicgpgkey, verify_clearsign, verify_clearsigned_file_and_extract_content_to_output
+    GpgError, cleanup_collaborator_temp_file, clearsign_and_encrypt_file_for_recipient, convert_toml_filewithkeyid_into_clearsigntoml_inplace, convert_tomlfile_without_keyid_using_gpgtomlkeyid_into_clearsigntoml_inplace, decrypt_gpgfile_to_output, extract_verify_store_gpg_encrypted_clearsign_toml, get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml, get_pathstring_to_temp_plaintoml_verified_extracted, get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml, gpg_make_input_path_name_abs_executabledirectoryrelative_nocheck, q_and_a_user_selects_gpg_key_full_fingerprint, read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyid, read_abstract_ports_from_clearsigntoml_without_publicgpgkey, read_bool_field_from_toml, read_bool_from_clearsigntoml_without_publicgpgkey, read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml, read_float_f32_field_from_toml, read_multiline_string_from_clearsigntoml, read_option_bool_from_clearsigntoml_without_publicgpgkey, read_option_i32_tuple_array_from_clearsigntoml_without_publicgpgkey, read_option_i64_from_clearsigntoml_without_publicgpgkey, read_option_usize_from_clearsigntoml_without_publicgpgkey, read_pathbuf_from_clearsigntoml_without_publicgpgkey, read_single_line_string_field_from_toml, read_singleline_string_from_clearsigntoml, read_singleline_string_from_clearsigntoml_without_publicgpgkey, read_str_array_field_clearsigntoml, read_string_array_field_from_toml, read_stringarray_from_clearsigntoml_without_publicgpgkey, read_teamchannel_collaborator_ports_clearsigntoml_without_keyid, read_u8_array_from_clearsigntoml_without_publicgpgkey, read_u8_field_from_toml, read_u64_array_from_clearsigntoml_without_publicgpgkey, read_u64_field_from_toml, read_u64_from_clearsigntoml_without_publicgpgkey, verify_clearsign, verify_clearsigned_file_and_extract_content_to_output
 };
 
 
@@ -1585,22 +1585,6 @@ fn load_local_ip_lists_to_ipvec(
 
     // Return the collected IP addresses
     Ok((ipv4_addresses, ipv6_addresses))
-}
-
-/// This converts between the u8 sent by uma over network and usize that Rust uses for array-indices.
-fn get_ip_by_index(
-    index: u8,
-    ipv4_list: &[Ipv4Addr],
-    ipv6_list: &[Ipv6Addr],
-) -> Option<(IpAddr, u8)> {
-    if index < ipv4_list.len() as u8 {
-        Some((IpAddr::V4(ipv4_list[index as usize]), index))
-    } else if index < (ipv4_list.len() + ipv6_list.len()) as u8 {
-        let ipv6_index = index - ipv4_list.len() as u8;
-        Some((IpAddr::V6(ipv6_list[ipv6_index as usize]), index))
-    } else {
-        None
-    }
 }
 
 /// Finds the the index in either along, not combined.
@@ -5454,93 +5438,93 @@ fn calculate_message_display_range(
     (effective_offset, end_index)
 }
 
-/// Extracts the abstract port assignments from a team channel's `node.toml` file.
-///
-/// This function reads the `node.toml` file, parses the TOML data, and extracts the
-/// `collaborator_port_assignments` table, returning it as a HashMap.
-///
-/// # Arguments
-///
-/// * `node_toml_path` - The path to the team channel's `node.toml` file.
-///
-/// # Returns
-///
-/// * `Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, String>` - A `Result` containing a HashMap of
-///   collaborator pair names to their port assignments on success, or a `String` describing the error on failure.
-fn get_abstract_port_assignments_from_node_toml(
-    node_toml_path: &Path
-) -> Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, String> {
-    debug_log!("GAPAFNT 5. starting get_abstract_port_assignments_from_node_toml(): 1. Entering function with path: {:?}", node_toml_path);
+// /// Extracts the abstract port assignments from a team channel's `node.toml` file.
+// ///
+// /// This function reads the `node.toml` file, parses the TOML data, and extracts the
+// /// `collaborator_port_assignments` table, returning it as a HashMap.
+// ///
+// /// # Arguments
+// ///
+// /// * `node_toml_path` - The path to the team channel's `node.toml` file.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, String>` - A `Result` containing a HashMap of
+// ///   collaborator pair names to their port assignments on success, or a `String` describing the error on failure.
+// fn get_abstract_port_assignments_from_node_toml(
+//     node_toml_path: &Path
+// ) -> Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, String> {
+//     debug_log!("GAPAFNT 5. starting get_abstract_port_assignments_from_node_toml(): 1. Entering function with path: {:?}", node_toml_path);
 
-    // 1. Read the node.toml file
-    let toml_string = match std::fs::read_to_string(node_toml_path) {
-        Ok(content) => {
-            debug_log!("GAPAFNT: 2. Successfully read node.toml file.");
-            content
-        },
-        Err(e) => {
-            let error_message = format!("GAPAFNT: Error reading node.toml file: {}", e);
-            debug_log!("{}", error_message);
-            return Err(error_message);
-        }
-    };
+//     // 1. Read the node.toml file
+//     let toml_string = match std::fs::read_to_string(node_toml_path) {
+//         Ok(content) => {
+//             debug_log!("GAPAFNT: 2. Successfully read node.toml file.");
+//             content
+//         },
+//         Err(e) => {
+//             let error_message = format!("GAPAFNT: Error reading node.toml file: {}", e);
+//             debug_log!("{}", error_message);
+//             return Err(error_message);
+//         }
+//     };
 
-    // 2. Parse the TOML data
-    // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
-    let toml_value: Value = match toml::from_str(&toml_string) {
-        Ok(value) => {
-            debug_log!("GAPAFNT: 3. Successfully parsed TOML data.");
-            value
-        },
-        Err(e) => {
-            let error_message = format!("GAPAFNT: Error parsing node.toml data: {}", e);
-            debug_log!("{}", error_message);
-            return Err(error_message);
-        }
-    };
+//     // 2. Parse the TOML data
+//     // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+//     let toml_value: Value = match toml::from_str(&toml_string) {
+//         Ok(value) => {
+//             debug_log!("GAPAFNT: 3. Successfully parsed TOML data.");
+//             value
+//         },
+//         Err(e) => {
+//             let error_message = format!("GAPAFNT: Error parsing node.toml data: {}", e);
+//             debug_log!("{}", error_message);
+//             return Err(error_message);
+//         }
+//     };
 
-    // 3. Extract the abstract_collaborator_port_assignments table
-    let mut abstract_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>> = HashMap::new();
-    debug_log!("GAPAFNT: 4. Looking for 'abstract_collaborator_port_assignments' table.");
-    if let Some(collaborator_assignments_table) = toml_value.get("abstract_collaborator_port_assignments").and_then(Value::as_table) {
-        debug_log!("GAPAFNT: 5. Found 'abstract_collaborator_port_assignments' table.");
-        for (pair_name, pair_data) in collaborator_assignments_table {
-            debug_log!("GAPAFNT: 6. Processing pair: {}", pair_name);
-            if let Some(ports_array) = pair_data.get("collaborator_ports").and_then(Value::as_array) {
-                debug_log!("GAPAFNT: 7. Found 'collaborator_ports' array for pair: {}", pair_name);
-                let mut ports_for_pair = Vec::new();
-                for port_data in ports_array {
-                    debug_log!("GAPAFNT: 8. Processing port data: {:?}", port_data);
-                    let port_data_str = toml::to_string(&port_data).unwrap();
+//     // 3. Extract the abstract_collaborator_port_assignments table
+//     let mut abstract_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>> = HashMap::new();
+//     debug_log!("GAPAFNT: 4. Looking for 'abstract_collaborator_port_assignments' table.");
+//     if let Some(collaborator_assignments_table) = toml_value.get("abstract_collaborator_port_assignments").and_then(Value::as_table) {
+//         debug_log!("GAPAFNT: 5. Found 'abstract_collaborator_port_assignments' table.");
+//         for (pair_name, pair_data) in collaborator_assignments_table {
+//             debug_log!("GAPAFNT: 6. Processing pair: {}", pair_name);
+//             if let Some(ports_array) = pair_data.get("collaborator_ports").and_then(Value::as_array) {
+//                 debug_log!("GAPAFNT: 7. Found 'collaborator_ports' array for pair: {}", pair_name);
+//                 let mut ports_for_pair = Vec::new();
+//                 for port_data in ports_array {
+//                     debug_log!("GAPAFNT: 8. Processing port data: {:?}", port_data);
+//                     let port_data_str = toml::to_string(&port_data).unwrap();
 
-                    // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
-                    // // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
-                    // // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
-                    // // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
-                    // // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
-                    // // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
-                    // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
-                    let collaborator_port: AbstractTeamchannelNodeTomlPortsData = toml::from_str(&port_data_str)
-                        .map_err(|e| format!("GAPAFNT: Error deserializing collaborator port: {}", e))?;
-                    debug_log!("GAPAFNT: 9. Deserialized port data: {:?}", collaborator_port);
-                    ports_for_pair.push(ReadTeamchannelCollaboratorPortsToml {
-                        collaborator_ports: vec![collaborator_port],
-                    });
-                }
-                debug_log!("GAPAFNT: 10. Inserting ports for pair: {} into HashMap.", pair_name);
-                abstract_port_assignments.insert(pair_name.to_string(), ports_for_pair);
-            } else {
-                debug_log!("GAPAFNT: 11. 'collaborator_ports' array not found for pair: {}", pair_name);
-            }
-        }
-    } else {
-        debug_log!("GAPAFNT: 12. 'abstract_collaborator_port_assignments' table not found.");
-    }
+//                     // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+//                     // // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+//                     // // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+//                     // // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+//                     // // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+//                     // // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+//                     // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+//                     let collaborator_port: AbstractTeamchannelNodeTomlPortsData = toml::from_str(&port_data_str)
+//                         .map_err(|e| format!("GAPAFNT: Error deserializing collaborator port: {}", e))?;
+//                     debug_log!("GAPAFNT: 9. Deserialized port data: {:?}", collaborator_port);
+//                     ports_for_pair.push(ReadTeamchannelCollaboratorPortsToml {
+//                         collaborator_ports: vec![collaborator_port],
+//                     });
+//                 }
+//                 debug_log!("GAPAFNT: 10. Inserting ports for pair: {} into HashMap.", pair_name);
+//                 abstract_port_assignments.insert(pair_name.to_string(), ports_for_pair);
+//             } else {
+//                 debug_log!("GAPAFNT: 11. 'collaborator_ports' array not found for pair: {}", pair_name);
+//             }
+//         }
+//     } else {
+//         debug_log!("GAPAFNT: 12. 'abstract_collaborator_port_assignments' table not found.");
+//     }
 
-    debug_log!("GAPAFNT: 13. Exiting function with port assignments: {:?}", abstract_port_assignments);
-    // 4. Return the abstract_port_assignments HashMap
-    Ok(abstract_port_assignments)
-}
+//     debug_log!("GAPAFNT: 13. Exiting function with port assignments: {:?}", abstract_port_assignments);
+//     // 4. Return the abstract_port_assignments HashMap
+//     Ok(abstract_port_assignments)
+// }
 
 // ALPHA VERSION
 // Function to read a simple string from a file
@@ -5674,16 +5658,6 @@ fn calculate_message_directory_hash(path: &Path) -> io::Result<u64> {
     }
 
     Ok(hasher.finish())
-}
-
-
-// Compression Algorithm Enum
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
-enum CompressionAlgorithm {
-    Deflate,
-    Brotli,
-    Zstd,
-    None,
 }
 
 /// Represents the different input modes of the UMA application's TUI.
@@ -6105,7 +6079,10 @@ impl App {
         let mut needs_display_refresh = true;
 
         // Initial render
-        self.render_message_browser_screen(&current_message_view_mode, &user_input_buffer, terminal_width, terminal_height)?;
+        self.render_message_browser_screen(
+            &current_message_view_mode,
+            terminal_height,
+        )?;
 
         // Process events until exit
         'browser_loop: loop {
@@ -6235,7 +6212,10 @@ impl App {
 
             // Refresh display if needed
             if needs_display_refresh {
-                self.render_message_browser_screen(&current_message_view_mode, &user_input_buffer, terminal_width, terminal_height)?;
+                self.render_message_browser_screen(
+                    &current_message_view_mode,
+                    terminal_height,
+                )?;
                 needs_display_refresh = false;
             }
 
@@ -6676,8 +6656,6 @@ impl App {
     fn render_message_browser_screen(
         &self,
         message_view_mode: &MessageViewMode,
-        input_buffer: &str,
-        terminal_width: u16,
         terminal_height: u16
     ) -> io::Result<()> {
         // Clear screen
@@ -7706,7 +7684,7 @@ fn write_red_hotkey(hotkey: &str, description: &str) -> io::Result<()> {
     )
 }
 
-const BOLD: &str = "\x1b[1m";
+// const BOLD: &str = "\x1b[1m";
 const GREEN: &str = "\x1b[32m";
 // const BLUE: &str = "\x1b[34m";
 // const BOLD: &str = "\x1b[1m";
@@ -7714,8 +7692,8 @@ const GREEN: &str = "\x1b[32m";
 // const UNDERLINE: &str = "\x1b[4m";
 const RED: &str = "\x1b[31m";
 const YELLOW: &str = "\x1b[33m";
-const BG_WHITE: &str = "\x1b[47m";
-const BG_CYAN: &str = "\x1b[46m";
+// const BG_WHITE: &str = "\x1b[47m";
+// const BG_CYAN: &str = "\x1b[46m";
 const RESET: &str = "\x1b[0m";
 mod buffy_format_write_module;
 use buffy_format_write_module::{BuffyFormatArg, buffy_print, buffy_println};
@@ -9306,11 +9284,6 @@ impl CoreNode {
                 convert_toml_filewithkeyid_into_clearsigntoml_inplace?
                 maybe new function with extra lookup step...
 
-        the new function will be:
-        fn convert_tomlfile_without_keyid_into_clearsigntoml_inplace(
-            path_to_toml_file: &Path,
-        ) -> Result<(), GpgError> {
-
         these may be the needed steps:
 
             // Read username from the configuration file, mapping any reading errors to our error type
@@ -9412,7 +9385,7 @@ impl CoreNode {
         Addressbook file: Already clearsigned → Remains unchanged (read-only operation)
 
         */
-        debug_log!("SNCTF: Starting convert_tomlfile_without_keyid_into_clearsigntoml_inplace()");
+        debug_log!("SNCTF: Starting convert_tomlfile_without_keyid_using_gpgtomlkeyid_into_clearsigntoml_inplace()");
 
         // Get armored public key, using key-id (full fingerprint in)
         let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
@@ -9425,7 +9398,7 @@ impl CoreNode {
             }
         };
 
-        convert_tomlfile_without_keyid_using_gpgtomlkeyid_into_clearsigntoml_inplace(
+        let _  = convert_tomlfile_without_keyid_using_gpgtomlkeyid_into_clearsigntoml_inplace(
             &file_path,
             COLLABORATOR_ADDRESSBOOK_PATH_STR,
             &gpg_full_fingerprint_key_id_string,
@@ -10832,7 +10805,7 @@ pub fn save_toml_to_file<T: Serialize>(data: &T, file_path: &Path) -> Result<(),
 // ====================
 // Message Post Section
 // ====================
-
+#[cfg(test)]
 /// Creates a tuple of (directory_path, final_filename) for message post files.
 ///
 /// # Purpose
@@ -19761,29 +19734,6 @@ fn extract_clearsign_data(clearsigned_data: &[u8]) -> Result<Vec<u8>, ThisProjec
     Ok(message_content.as_bytes().to_vec())
 }
 
-
-fn optional_padnetopt_to_gpg_bytes(
-    file_path: &Path,
-    recipient_public_key: &str,
-    remote_collaborator_gpg_publickey_id: &String,
-
-) -> Result<Vec<u8>, ThisProjectError> {
-
-    /*
-
-    */
-
-
-    let file_bytes2send = wrapper_path_to_clearsign_to_gpgencrypt_to_send_bytes(
-        &file_path,
-        &recipient_public_key,
-        // &room_sync_input.remote_collaborator_gpg_publickey_id,
-    )?;
-
-    Ok(file_bytes2send)
-}
-
-
 /// Prepares file contents for secure sending by clearsigning and encrypting them.
 ///
 /// This function reads the contents of the file at the given `file_path`,
@@ -21457,196 +21407,6 @@ mod write_unique_temp_tests {
             let _ = fs::remove_file(path);
         }
     }
-}
-
-/// Writes byte data to a file atomically with defensive error handling.
-///
-/// # Project Context
-/// In the OTP encryption pipeline, we need to write intermediate encrypted
-/// data to temporary files. This function ensures:
-/// - Complete write or complete failure (no partial files)
-/// - Defensive handling of disk full, permissions, hardware errors
-/// - Secure file permissions (readable/writable by owner only)
-/// - Clear error messages for debugging
-///
-/// # Operation Strategy
-/// 1. Create new file (fail if already exists - prevents race conditions)
-/// 2. Set restrictive permissions (0600 on Unix - owner only)
-/// 3. Write all bytes in single operation
-/// 4. Flush to ensure data written to disk
-/// 5. Explicit sync to guarantee durability
-///
-/// # Security Considerations
-/// - File permissions set to 0600 (Unix) - only file owner can read/write
-/// - Files contain sensitive encrypted data
-/// - No world-readable temp files
-/// - Fail-safe: if permissions can't be set, file is still created (OS defaults)
-///
-/// # Arguments
-/// * `data` - Byte slice containing data to write
-/// * `file_path` - Absolute path where file should be created
-///
-/// # Returns
-/// * `Ok(())` - File successfully written and synced to disk
-/// * `Err(ThisProjectError)` - Operation failed, see error for details
-///
-/// # Error Conditions
-/// - `IoError`: File already exists (race condition)
-/// - `IoError`: Permission denied (cannot create file in directory)
-/// - `IoError`: Disk full (no space available)
-/// - `IoError`: Hardware error (disk failure)
-/// - `IoError`: Parent directory doesn't exist
-///
-/// # Example
-/// ```rust,no_run
-/// use std::path::Path;
-///
-/// let data = b"encrypted content here";
-/// let temp_path = Path::new("/tmp/uma_temp_12345.bin");
-///
-/// match write_bytes_to_file_atomic(data, temp_path) {
-///     Ok(()) => println!("Data written successfully"),
-///     Err(e) => eprintln!("Write failed: {}", e),
-/// }
-/// ```
-///
-/// # Platform Notes
-/// - Unix: File permissions set to 0600 (owner read/write only)
-/// - Windows: Uses default file permissions (no chmod equivalent)
-/// - All platforms: Fail if file exists prevents race conditions
-///
-/// # Performance Considerations
-/// - Single write operation (efficient for small files)
-/// - Flush ensures OS buffer written to disk
-/// - Sync ensures disk cache written to physical media
-/// - For 1MB files: typically completes in < 10ms on SSD
-fn write_bytes_to_file_atomic(
-    data: &[u8],
-    file_path: &Path,
-) -> Result<(), ThisProjectError> {
-    use std::fs::{OpenOptions};
-    use std::io::Write;
-    debug_log("WBTFA: start write_bytes_to_file_atomic");
-
-    // Debug assertion: ensure we have an absolute path
-    // This is active in debug builds but not production
-    #[cfg(all(debug_assertions, not(test)))]
-    debug_assert!(
-        file_path.is_absolute(),
-        "WBTFA: file_path must be absolute, got: {:?}",
-        file_path
-    );
-
-    debug_log("WBTFA: file_path must be absolute 1");
-
-    // Production safety check: verify path is absolute
-    if !file_path.is_absolute() {
-        return Err(ThisProjectError::InvalidInput(
-            "WBTFA: file path must be absolute".to_string()
-        ));
-    }
-
-    debug_log("WBTFA: file_path must be absolute 2");
-
-    #[cfg(debug_assertions)]
-    eprintln!("WBTFA: about to call OpenOptions");
-
-    let mut file = OpenOptions::new()
-        .create_new(true)
-        .write(true)
-        .open(file_path)
-        .map_err(|e| {
-            #[cfg(debug_assertions)]
-            eprintln!("WBTFA: OpenOptions failed: {:?}", e);
-
-            ThisProjectError::IoError(std::io::Error::new(
-                e.kind(),
-                format!("WBTFA: failed to create file: {}", e),
-            ))
-        })?;
-
-    #[cfg(debug_assertions)]
-    eprintln!("WBTFA: OpenOptions succeeded");
-
-
-    // // Create file with restrictive options
-    // // - create_new(true): Fail if file exists (prevents race conditions)
-    // // - write(true): Enable write operations
-    // // - truncate(false): Not needed since create_new ensures empty file
-    // let mut file = OpenOptions::new()
-    //     .create_new(true)  // Atomic: fail if exists
-    //     .write(true)
-    //     .open(file_path)
-    //     .map_err(|e| {
-    //         // Enhance error with context
-    //         ThisProjectError::IoError(std::io::Error::new(
-    //             e.kind(),
-    //             format!("WBTFA: failed to create file: {}", e),
-    //         ))
-    //     })?;
-
-    debug_log("WBTFA: did  -let mut file = OpenOptions::new()");
-
-
-    // Set secure file permissions (Unix only)
-    // On Windows, this is a no-op (not supported)
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let permissions = std::fs::Permissions::from_mode(0o600); // Owner: rw-, Group: ---, Other: ---
-
-        // Try to set permissions, but don't fail if we can't
-        // File was created successfully, permissions are defense-in-depth
-        if let Err(e) = std::fs::set_permissions(file_path, permissions) {
-            // Log warning in debug builds
-            #[cfg(debug_assertions)]
-            eprintln!("WBTFA warning: could not set file permissions: {}", e);
-
-            // In production: continue (file created, just with default permissions)
-            // This is acceptable because temp directory should have restricted access
-        }
-    }
-
-    debug_log("WBTFA: Permissions set");
-
-
-    // Write all bytes in single operation
-    // This is efficient for small files (our use case: < 1MB)
-    file.write_all(data)
-        .map_err(|e| {
-            ThisProjectError::IoError(std::io::Error::new(
-                e.kind(),
-                format!("WBTFA: failed to write data: {}", e),
-            ))
-        })?;
-
-    debug_log("WBTFA: did file.write_all(data)");
-
-    // Flush OS buffer to ensure bytes reach OS kernel
-    file.flush()
-        .map_err(|e| {
-            ThisProjectError::IoError(std::io::Error::new(
-                e.kind(),
-                format!("WBTFA: failed to flush: {}", e),
-            ))
-        })?;
-
-    debug_log("WBTFA: did file.flush()");
-
-
-    // Sync file to disk (ensures durability)
-    // This is important for encrypted data - must not be lost
-    file.sync_all()
-        .map_err(|e| {
-            ThisProjectError::IoError(std::io::Error::new(
-                e.kind(),
-                format!("WBTFA: failed to sync: {}", e),
-            ))
-        })?;
-
-    debug_log("WBTFA: file.sync_all()");
-
-    Ok(())
 }
 
 // // TODO: this may be mostly right: directing to readcopy .toml?
@@ -27787,15 +27547,6 @@ fn get_addressbook_file_by_username(
     }
 }
 
-/// Used to make a random hex string
-/// to store the u128 salt for salted pearson hash
-/// in the toml file as hex-string
-fn generate_random_salt() -> String {
-    let mut rng = rand::rng();
-    let salt: u128 = rng.random(); // Generate a random u128
-    format!("0x{:X}", salt) // Convert to hexadecimal string with "0x" prefix
-}
-
 /// Moves a task (node) from one column to another in the task browser.
 /// Updates all relevant paths in node.toml files.
 ///
@@ -28965,32 +28716,6 @@ fn send_data_via_udp(data: &[u8], target_addr: SocketAddr, port: u16) -> Result<
     let socket = UdpSocket::bind(":::0")?; // Bind to any available port
     socket.send_to(data, SocketAddr::new(target_addr.ip(), port))?;
     debug_log!("Data sent to {}:{}", target_addr.ip(), port);
-    Ok(())
-}
-
-/// Sends a `SendFile` struct to a remote collaborator's intray.
-/// Now this function *only* handles sending; serialization is done elsewhere.
-///
-/// # Arguments
-///
-/// * `send_file`: The `SendFile` struct to send.
-/// * `target_addr`: The target IP address.
-/// * `port`: The target port.
-///
-/// # Returns
-///
-/// * `Result<(), ThisProjectError>`: `Ok(())` if the file was sent successfully, `Err(ThisProjectError)` otherwise.
-fn sendfile_UDP_to_intray(
-    send_file: &SendFile,
-    target_addr: SocketAddr,
-    port: u16,
-) -> Result<(), ThisProjectError> {
-    // 1. Serialize the SendFile struct.
-    let serialized_data = serialize_send_file_struct(send_file)?;
-
-    // 2. Send the serialized data using UDP.
-    send_data_via_udp(&serialized_data, target_addr, port)?;
-
     Ok(())
 }
 

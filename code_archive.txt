@@ -12451,3 +12451,266 @@ enum NodePriority {
     Medium,
     Low,
 }
+
+/// Used to make a random hex string
+/// to store the u128 salt for salted pearson hash
+/// in the toml file as hex-string
+fn generate_random_salt() -> String {
+    let mut rng = rand::rng();
+    let salt: u128 = rng.random(); // Generate a random u128
+    format!("0x{:X}", salt) // Convert to hexadecimal string with "0x" prefix
+}
+// // Compression Algorithm Enum
+// #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+// enum CompressionAlgorithm {
+//     Deflate,
+//     Brotli,
+//     Zstd,
+//     None,
+// }
+
+fn optional_padnetopt_to_gpg_bytes(
+    file_path: &Path,
+    recipient_public_key: &str,
+    remote_collaborator_gpg_publickey_id: &String,
+) -> Result<Vec<u8>, ThisProjectError> {
+    let file_bytes2send = wrapper_path_to_clearsign_to_gpgencrypt_to_send_bytes(
+        &file_path,
+        &recipient_public_key,
+        // &room_sync_input.remote_collaborator_gpg_publickey_id,
+    )?;
+
+    Ok(file_bytes2send)
+}
+/// This converts between the u8 sent by uma over network and usize that Rust uses for array-indices.
+fn get_ip_by_index(
+    index: u8,
+    ipv4_list: &[Ipv4Addr],
+    ipv6_list: &[Ipv6Addr],
+) -> Option<(IpAddr, u8)> {
+    if index < ipv4_list.len() as u8 {
+        Some((IpAddr::V4(ipv4_list[index as usize]), index))
+    } else if index < (ipv4_list.len() + ipv6_list.len()) as u8 {
+        let ipv6_index = index - ipv4_list.len() as u8;
+        Some((IpAddr::V6(ipv6_list[ipv6_index as usize]), index))
+    } else {
+        None
+    }
+}
+
+
+// /// Writes byte data to a file atomically with defensive error handling.
+// ///
+// /// # Project Context
+// /// In the OTP encryption pipeline, we need to write intermediate encrypted
+// /// data to temporary files. This function ensures:
+// /// - Complete write or complete failure (no partial files)
+// /// - Defensive handling of disk full, permissions, hardware errors
+// /// - Secure file permissions (readable/writable by owner only)
+// /// - Clear error messages for debugging
+// ///
+// /// # Operation Strategy
+// /// 1. Create new file (fail if already exists - prevents race conditions)
+// /// 2. Set restrictive permissions (0600 on Unix - owner only)
+// /// 3. Write all bytes in single operation
+// /// 4. Flush to ensure data written to disk
+// /// 5. Explicit sync to guarantee durability
+// ///
+// /// # Security Considerations
+// /// - File permissions set to 0600 (Unix) - only file owner can read/write
+// /// - Files contain sensitive encrypted data
+// /// - No world-readable temp files
+// /// - Fail-safe: if permissions can't be set, file is still created (OS defaults)
+// ///
+// /// # Arguments
+// /// * `data` - Byte slice containing data to write
+// /// * `file_path` - Absolute path where file should be created
+// ///
+// /// # Returns
+// /// * `Ok(())` - File successfully written and synced to disk
+// /// * `Err(ThisProjectError)` - Operation failed, see error for details
+// ///
+// /// # Error Conditions
+// /// - `IoError`: File already exists (race condition)
+// /// - `IoError`: Permission denied (cannot create file in directory)
+// /// - `IoError`: Disk full (no space available)
+// /// - `IoError`: Hardware error (disk failure)
+// /// - `IoError`: Parent directory doesn't exist
+// ///
+// /// # Example
+// /// ```rust,no_run
+// /// use std::path::Path;
+// ///
+// /// let data = b"encrypted content here";
+// /// let temp_path = Path::new("/tmp/uma_temp_12345.bin");
+// ///
+// /// match write_bytes_to_file_atomic(data, temp_path) {
+// ///     Ok(()) => println!("Data written successfully"),
+// ///     Err(e) => eprintln!("Write failed: {}", e),
+// /// }
+// /// ```
+// ///
+// /// # Platform Notes
+// /// - Unix: File permissions set to 0600 (owner read/write only)
+// /// - Windows: Uses default file permissions (no chmod equivalent)
+// /// - All platforms: Fail if file exists prevents race conditions
+// ///
+// /// # Performance Considerations
+// /// - Single write operation (efficient for small files)
+// /// - Flush ensures OS buffer written to disk
+// /// - Sync ensures disk cache written to physical media
+// /// - For 1MB files: typically completes in < 10ms on SSD
+// fn write_bytes_to_file_atomic(
+//     data: &[u8],
+//     file_path: &Path,
+// ) -> Result<(), ThisProjectError> {
+//     use std::fs::{OpenOptions};
+//     use std::io::Write;
+//     debug_log("WBTFA: start write_bytes_to_file_atomic");
+
+//     // Debug assertion: ensure we have an absolute path
+//     // This is active in debug builds but not production
+//     #[cfg(all(debug_assertions, not(test)))]
+//     debug_assert!(
+//         file_path.is_absolute(),
+//         "WBTFA: file_path must be absolute, got: {:?}",
+//         file_path
+//     );
+
+//     debug_log("WBTFA: file_path must be absolute 1");
+
+//     // Production safety check: verify path is absolute
+//     if !file_path.is_absolute() {
+//         return Err(ThisProjectError::InvalidInput(
+//             "WBTFA: file path must be absolute".to_string()
+//         ));
+//     }
+
+//     debug_log("WBTFA: file_path must be absolute 2");
+
+//     #[cfg(debug_assertions)]
+//     eprintln!("WBTFA: about to call OpenOptions");
+
+//     let mut file = OpenOptions::new()
+//         .create_new(true)
+//         .write(true)
+//         .open(file_path)
+//         .map_err(|e| {
+//             #[cfg(debug_assertions)]
+//             eprintln!("WBTFA: OpenOptions failed: {:?}", e);
+
+//             ThisProjectError::IoError(std::io::Error::new(
+//                 e.kind(),
+//                 format!("WBTFA: failed to create file: {}", e),
+//             ))
+//         })?;
+
+//     #[cfg(debug_assertions)]
+//     eprintln!("WBTFA: OpenOptions succeeded");
+
+
+//     // // Create file with restrictive options
+//     // // - create_new(true): Fail if file exists (prevents race conditions)
+//     // // - write(true): Enable write operations
+//     // // - truncate(false): Not needed since create_new ensures empty file
+//     // let mut file = OpenOptions::new()
+//     //     .create_new(true)  // Atomic: fail if exists
+//     //     .write(true)
+//     //     .open(file_path)
+//     //     .map_err(|e| {
+//     //         // Enhance error with context
+//     //         ThisProjectError::IoError(std::io::Error::new(
+//     //             e.kind(),
+//     //             format!("WBTFA: failed to create file: {}", e),
+//     //         ))
+//     //     })?;
+
+//     debug_log("WBTFA: did  -let mut file = OpenOptions::new()");
+
+
+//     // Set secure file permissions (Unix only)
+//     // On Windows, this is a no-op (not supported)
+//     #[cfg(unix)]
+//     {
+//         use std::os::unix::fs::PermissionsExt;
+//         let permissions = std::fs::Permissions::from_mode(0o600); // Owner: rw-, Group: ---, Other: ---
+
+//         // Try to set permissions, but don't fail if we can't
+//         // File was created successfully, permissions are defense-in-depth
+//         if let Err(e) = std::fs::set_permissions(file_path, permissions) {
+//             // Log warning in debug builds
+//             #[cfg(debug_assertions)]
+//             eprintln!("WBTFA warning: could not set file permissions: {}", e);
+
+//             // In production: continue (file created, just with default permissions)
+//             // This is acceptable because temp directory should have restricted access
+//         }
+//     }
+
+//     debug_log("WBTFA: Permissions set");
+
+
+//     // Write all bytes in single operation
+//     // This is efficient for small files (our use case: < 1MB)
+//     file.write_all(data)
+//         .map_err(|e| {
+//             ThisProjectError::IoError(std::io::Error::new(
+//                 e.kind(),
+//                 format!("WBTFA: failed to write data: {}", e),
+//             ))
+//         })?;
+
+//     debug_log("WBTFA: did file.write_all(data)");
+
+//     // Flush OS buffer to ensure bytes reach OS kernel
+//     file.flush()
+//         .map_err(|e| {
+//             ThisProjectError::IoError(std::io::Error::new(
+//                 e.kind(),
+//                 format!("WBTFA: failed to flush: {}", e),
+//             ))
+//         })?;
+
+//     debug_log("WBTFA: did file.flush()");
+
+
+//     // Sync file to disk (ensures durability)
+//     // This is important for encrypted data - must not be lost
+//     file.sync_all()
+//         .map_err(|e| {
+//             ThisProjectError::IoError(std::io::Error::new(
+//                 e.kind(),
+//                 format!("WBTFA: failed to sync: {}", e),
+//             ))
+//         })?;
+
+//     debug_log("WBTFA: file.sync_all()");
+
+//     Ok(())
+// }
+
+/// Sends a `SendFile` struct to a remote collaborator's intray.
+/// Now this function *only* handles sending; serialization is done elsewhere.
+///
+/// # Arguments
+///
+/// * `send_file`: The `SendFile` struct to send.
+/// * `target_addr`: The target IP address.
+/// * `port`: The target port.
+///
+/// # Returns
+///
+/// * `Result<(), ThisProjectError>`: `Ok(())` if the file was sent successfully, `Err(ThisProjectError)` otherwise.
+fn sendfile_UDP_to_intray(
+    send_file: &SendFile,
+    target_addr: SocketAddr,
+    port: u16,
+) -> Result<(), ThisProjectError> {
+    // 1. Serialize the SendFile struct.
+    let serialized_data = serialize_send_file_struct(send_file)?;
+
+    // 2. Send the serialized data using UDP.
+    send_data_via_udp(&serialized_data, target_addr, port)?;
+
+    Ok(())
+}

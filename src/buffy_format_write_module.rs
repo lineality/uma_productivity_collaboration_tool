@@ -153,7 +153,7 @@ pub enum BuffyFormatArg<'a> {
     // U16(u16),
     // U32(u32),
     // U64(u64),
-    Usize(usize),
+    // Usize(usize),
 
     // Signed integers
     // I8(i8),
@@ -173,8 +173,8 @@ pub enum BuffyFormatArg<'a> {
     // Path(&'a Path),
 
     // Styled variants (adds ANSI codes)
-    CharStyled(char, BuffyStyles),
-    StrStyled(&'a str, BuffyStyles),
+    // CharStyled(char, BuffyStyles),
+    // StrStyled(&'a str, BuffyStyles),
     // U8Styled(u8, BuffyStyles),
     // U64Styled(u64, BuffyStyles),
     // UsizeStyled(usize, BuffyStyles),
@@ -185,6 +185,7 @@ pub enum BuffyFormatArg<'a> {
 // INTERNAL HELPERS - Stack-based conversions
 // =============================================================================
 
+#[cfg(test)]
 /// Converts u64 to decimal string in provided stack buffer
 ///
 /// Memory: should be all stack, no heap
@@ -648,12 +649,12 @@ pub fn buffy_print(template: &str, args: &[BuffyFormatArg]) -> io::Result<()> {
                     //     })?;
                     //     (s, false, BuffyStyles::default())
                     // }
-                    BuffyFormatArg::Usize(n) => {
-                        let s = format_u64_to_buffer(*n as u64, &mut num_buf).ok_or_else(|| {
-                            io::Error::new(io::ErrorKind::Other, "Number conversion failed")
-                        })?;
-                        (s, false, BuffyStyles::default())
-                    }
+                    // BuffyFormatArg::Usize(n) => {
+                    //     let s = format_u64_to_buffer(*n as u64, &mut num_buf).ok_or_else(|| {
+                    //         io::Error::new(io::ErrorKind::Other, "Number conversion failed")
+                    //     })?;
+                    //     (s, false, BuffyStyles::default())
+                    // }
                     // // BuffyFormatArg::I8(n) => {
                     // //     let s = format_i64_to_buffer(*n as i64, &mut num_buf).ok_or_else(|| {
                     // //         io::Error::new(io::ErrorKind::Other, "Number conversion failed")
@@ -725,17 +726,17 @@ pub fn buffy_print(template: &str, args: &[BuffyFormatArg]) -> io::Result<()> {
                     // }
 
                     // Styled variants
-                    BuffyFormatArg::CharStyled(c, st) => {
-                        let mut char_buf = [0u8; 4];
-                        let char_str = c.encode_utf8(&mut char_buf);
-                        let len = char_str.len();
-                        num_buf[..len].copy_from_slice(char_str.as_bytes());
-                        let s = std::str::from_utf8(&num_buf[..len]).map_err(|_| {
-                            io::Error::new(io::ErrorKind::Other, "Char conversion failed")
-                        })?;
-                        (s, true, *st)
-                    }
-                    BuffyFormatArg::StrStyled(s, st) => (*s, true, *st),
+                    // BuffyFormatArg::CharStyled(c, st) => {
+                    //     let mut char_buf = [0u8; 4];
+                    //     let char_str = c.encode_utf8(&mut char_buf);
+                    //     let len = char_str.len();
+                    //     num_buf[..len].copy_from_slice(char_str.as_bytes());
+                    //     let s = std::str::from_utf8(&num_buf[..len]).map_err(|_| {
+                    //         io::Error::new(io::ErrorKind::Other, "Char conversion failed")
+                    //     })?;
+                    //     (s, true, *st)
+                    // }
+                    // BuffyFormatArg::StrStyled(s, st) => (*s, true, *st),
                     // BuffyFormatArg::U8Styled(n, st) => {
                     //     let s = format_u64_to_buffer(*n as u64, &mut num_buf).ok_or_else(|| {
                     //         io::Error::new(io::ErrorKind::Other, "Number conversion failed")

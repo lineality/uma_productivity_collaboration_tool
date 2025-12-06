@@ -815,15 +815,16 @@ pub enum PadIndex {
 }
 
 impl PadIndex {
+    #[cfg(test)]
     /// Create new Standard (4-byte) index from array
     pub fn new_standard(index: [u8; 4]) -> Self {
         PadIndex::Standard(index)
     }
 
-    /// Create new Extended (8-byte) index from array
-    pub fn new_extended(index: [u8; 8]) -> Self {
-        PadIndex::Extended(index)
-    }
+    // /// Create new Extended (8-byte) index from array
+    // pub fn new_extended(index: [u8; 8]) -> Self {
+    //     PadIndex::Extended(index)
+    // }
 
     /// Increment index by one line (rightmost/leaf position)
     ///
@@ -3022,166 +3023,166 @@ fn perform_pto_xor_get_bytecount_newpath(
     Ok(total_bytes_processed)
 }
 
-/// Core XOR operation implementation (used by both reader and writer)
-///
-/// ## Project Context
-/// This is the core byte-by-byte XOR loop shared by both reader and writer modes.
-/// The only difference is whether lines are deleted after loading (destructive)
-/// or preserved (non-destructive).
-///
-/// ## Algorithm
-/// 1. Open target file for reading
-/// 2. Create output file for writing
-/// 3. Load first pad line
-/// 4. Loop through target file byte-by-byte:
-///    - If pad line buffer empty: load next line, increment index
-///    - Read one byte from target
-///    - XOR with next byte from pad line buffer
-///    - Write XOR'd byte to output
-/// 5. Close files
-///
-/// ## Error Cases
-/// - Target file read error: abort
-/// - Pad line load error: abort
-/// - Pad exhausted (no more lines): abort
-/// - Output write error: abort
-/// - Index overflow: abort
-///
-/// # Arguments
-/// * `target_path` - File to XOR
-/// * `output_path` - Where to write XOR'd output
-/// * `padset_path` - Padset root
-/// * `start_index` - Starting pad line index
-/// * `destructive` - If true, delete lines after loading (writer mode)
-///
-/// # Returns
-/// * `Ok(usize)` - Number of bytes processed
-/// * `Err(PadnetError)` - Operation failed
-fn perform_pto_xor_get_newbytes_newpath(
-    target_path: &Path,
-    output_path: &Path,
-    padset_path: &Path,
-    start_index: &PadIndex,
-) -> Result<usize, PadnetError> {
-    // Open target file
-    let mut target_file = File::open(target_path).map_err(|e| {
-        #[cfg(debug_assertions)]
-        {
-            PadnetError::IoError(format!("PXO: open target failed: {}", e))
-        }
-        #[cfg(not(debug_assertions))]
-        {
-            let _ = e;
-            PadnetError::IoError("PXO: open target failed".into())
-        }
-    })?;
+// /// Core XOR operation implementation (used by both reader and writer)
+// ///
+// /// ## Project Context
+// /// This is the core byte-by-byte XOR loop shared by both reader and writer modes.
+// /// The only difference is whether lines are deleted after loading (destructive)
+// /// or preserved (non-destructive).
+// ///
+// /// ## Algorithm
+// /// 1. Open target file for reading
+// /// 2. Create output file for writing
+// /// 3. Load first pad line
+// /// 4. Loop through target file byte-by-byte:
+// ///    - If pad line buffer empty: load next line, increment index
+// ///    - Read one byte from target
+// ///    - XOR with next byte from pad line buffer
+// ///    - Write XOR'd byte to output
+// /// 5. Close files
+// ///
+// /// ## Error Cases
+// /// - Target file read error: abort
+// /// - Pad line load error: abort
+// /// - Pad exhausted (no more lines): abort
+// /// - Output write error: abort
+// /// - Index overflow: abort
+// ///
+// /// # Arguments
+// /// * `target_path` - File to XOR
+// /// * `output_path` - Where to write XOR'd output
+// /// * `padset_path` - Padset root
+// /// * `start_index` - Starting pad line index
+// /// * `destructive` - If true, delete lines after loading (writer mode)
+// ///
+// /// # Returns
+// /// * `Ok(usize)` - Number of bytes processed
+// /// * `Err(PadnetError)` - Operation failed
+// fn perform_pto_xor_get_newbytes_newpath(
+//     target_path: &Path,
+//     output_path: &Path,
+//     padset_path: &Path,
+//     start_index: &PadIndex,
+// ) -> Result<usize, PadnetError> {
+//     // Open target file
+//     let mut target_file = File::open(target_path).map_err(|e| {
+//         #[cfg(debug_assertions)]
+//         {
+//             PadnetError::IoError(format!("PXO: open target failed: {}", e))
+//         }
+//         #[cfg(not(debug_assertions))]
+//         {
+//             let _ = e;
+//             PadnetError::IoError("PXO: open target failed".into())
+//         }
+//     })?;
 
-    // Create output file
-    let mut output_file = File::create(output_path).map_err(|e| {
-        #[cfg(debug_assertions)]
-        {
-            PadnetError::IoError(format!("PXO: create output failed: {}", e))
-        }
-        #[cfg(not(debug_assertions))]
-        {
-            let _ = e;
-            PadnetError::IoError("PXO: create output failed".into())
-        }
-    })?;
+//     // Create output file
+//     let mut output_file = File::create(output_path).map_err(|e| {
+//         #[cfg(debug_assertions)]
+//         {
+//             PadnetError::IoError(format!("PXO: create output failed: {}", e))
+//         }
+//         #[cfg(not(debug_assertions))]
+//         {
+//             let _ = e;
+//             PadnetError::IoError("PXO: create output failed".into())
+//         }
+//     })?;
 
-    // Current index for pad line loading
-    let mut current_index = start_index.clone();
+//     // Current index for pad line loading
+//     let mut current_index = start_index.clone();
 
-    // Load first pad line
-    let mut pad_line_buffer = padnet_load_delete_read_one_byteline(padset_path, &current_index)?;
+//     // Load first pad line
+//     let mut pad_line_buffer = padnet_load_delete_read_one_byteline(padset_path, &current_index)?;
 
-    let mut pad_line_position = 0;
-    let mut total_bytes_processed = 0;
+//     let mut pad_line_position = 0;
+//     let mut total_bytes_processed = 0;
 
-    // Read target file one byte at a time
-    let mut target_buffer = [0u8; 1];
+//     // Read target file one byte at a time
+//     let mut target_buffer = [0u8; 1];
 
-    // max for loop
-    const MAX_XOR_ITERATIONS: usize = usize::MAX; // Or reasonable limit
-    let mut iteration_count = 0;
+//     // max for loop
+//     const MAX_XOR_ITERATIONS: usize = usize::MAX; // Or reasonable limit
+//     let mut iteration_count = 0;
 
-    loop {
-        iteration_count += 1;
-        if iteration_count > MAX_XOR_ITERATIONS {
-            return Err(PadnetError::IoError("PXO: iteration limit exceeded".into()));
-        }
-        // Check if we need to load next pad line
-        if pad_line_position >= pad_line_buffer.len() {
-            // Check if we're at max BEFORE incrementing
-            if current_index.is_max() {
-                return Err(PadnetError::IoError("PXO: pad exhausted".into()));
-            }
+//     loop {
+//         iteration_count += 1;
+//         if iteration_count > MAX_XOR_ITERATIONS {
+//             return Err(PadnetError::IoError("PXO: iteration limit exceeded".into()));
+//         }
+//         // Check if we need to load next pad line
+//         if pad_line_position >= pad_line_buffer.len() {
+//             // Check if we're at max BEFORE incrementing
+//             if current_index.is_max() {
+//                 return Err(PadnetError::IoError("PXO: pad exhausted".into()));
+//             }
 
-            // Current line exhausted, load next
-            current_index
-                .increment()
-                .ok_or_else(|| PadnetError::IoError("PXO: pad exhausted".into()))?;
+//             // Current line exhausted, load next
+//             current_index
+//                 .increment()
+//                 .ok_or_else(|| PadnetError::IoError("PXO: pad exhausted".into()))?;
 
-            pad_line_buffer = padnet_load_delete_read_one_byteline(padset_path, &current_index)?;
+//             pad_line_buffer = padnet_load_delete_read_one_byteline(padset_path, &current_index)?;
 
-            pad_line_position = 0;
-        }
+//             pad_line_position = 0;
+//         }
 
-        // Read one byte from target
-        let bytes_read = target_file.read(&mut target_buffer).map_err(|e| {
-            #[cfg(debug_assertions)]
-            {
-                PadnetError::IoError(format!("PXO: read target failed: {}", e))
-            }
-            #[cfg(not(debug_assertions))]
-            {
-                let _ = e;
-                PadnetError::IoError("PXO: read target failed".into())
-            }
-        })?;
+//         // Read one byte from target
+//         let bytes_read = target_file.read(&mut target_buffer).map_err(|e| {
+//             #[cfg(debug_assertions)]
+//             {
+//                 PadnetError::IoError(format!("PXO: read target failed: {}", e))
+//             }
+//             #[cfg(not(debug_assertions))]
+//             {
+//                 let _ = e;
+//                 PadnetError::IoError("PXO: read target failed".into())
+//             }
+//         })?;
 
-        // Check for end of file
-        if bytes_read == 0 {
-            break; // Done processing
-        }
+//         // Check for end of file
+//         if bytes_read == 0 {
+//             break; // Done processing
+//         }
 
-        // XOR byte with pad byte
-        let target_byte = target_buffer[0];
-        let pad_byte = pad_line_buffer[pad_line_position];
-        let xor_byte = target_byte ^ pad_byte;
+//         // XOR byte with pad byte
+//         let target_byte = target_buffer[0];
+//         let pad_byte = pad_line_buffer[pad_line_position];
+//         let xor_byte = target_byte ^ pad_byte;
 
-        // Write XOR'd byte to output
-        output_file.write_all(&[xor_byte]).map_err(|e| {
-            #[cfg(debug_assertions)]
-            {
-                PadnetError::IoError(format!("PXO: write output failed: {}", e))
-            }
-            #[cfg(not(debug_assertions))]
-            {
-                let _ = e;
-                PadnetError::IoError("PXO: write output failed".into())
-            }
-        })?;
+//         // Write XOR'd byte to output
+//         output_file.write_all(&[xor_byte]).map_err(|e| {
+//             #[cfg(debug_assertions)]
+//             {
+//                 PadnetError::IoError(format!("PXO: write output failed: {}", e))
+//             }
+//             #[cfg(not(debug_assertions))]
+//             {
+//                 let _ = e;
+//                 PadnetError::IoError("PXO: write output failed".into())
+//             }
+//         })?;
 
-        pad_line_position += 1;
-        total_bytes_processed += 1;
-    }
+//         pad_line_position += 1;
+//         total_bytes_processed += 1;
+//     }
 
-    // Sync output to disk
-    output_file.sync_all().map_err(|e| {
-        #[cfg(debug_assertions)]
-        {
-            PadnetError::IoError(format!("PXO: sync output failed: {}", e))
-        }
-        #[cfg(not(debug_assertions))]
-        {
-            let _ = e;
-            PadnetError::IoError("PXO: sync failed".into())
-        }
-    })?;
+//     // Sync output to disk
+//     output_file.sync_all().map_err(|e| {
+//         #[cfg(debug_assertions)]
+//         {
+//             PadnetError::IoError(format!("PXO: sync output failed: {}", e))
+//         }
+//         #[cfg(not(debug_assertions))]
+//         {
+//             let _ = e;
+//             PadnetError::IoError("PXO: sync failed".into())
+//         }
+//     })?;
 
-    Ok(total_bytes_processed)
-}
+//     Ok(total_bytes_processed)
+// }
 
 // ============================================================================
 // XOR TESTS

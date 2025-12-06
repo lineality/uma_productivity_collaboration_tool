@@ -437,156 +437,156 @@ use crate::AbstractTeamchannelNodeTomlPortsData;
 //     };
 // }
 
-/// The function reads a single line from a TOML file that starts with a specified field name
-/// and ends with a value. The function returns an empty string if the field is not found, and
-/// does not panic or unwrap in case of errors. The function uses only standard Rust libraries
-/// and does not introduce unnecessary dependencies.
-///
-/// design:
-/// 0. start with an empty string to return by default
-/// 1. get file at path
-/// 2. open as text
-/// 3. iterate through rows
-/// 4. look for filed name as start of string the " = "
-/// 5. grab that whole row of text
-/// 6. remove "fieldname = " from the beginning
-/// 7. remove '" ' and trailing spaces from the end
-/// 8. return that string, if any
-/// by default, return an empty string, if anything goes wrong,
-/// handle the error, and return an empty string
-///
-/// requires:
-/// use std::fs::File;
-/// use std::io::{self, BufRead};
-///
-/// example use:
-///     let value = read_field_from_toml("test.toml", "fieldname");
-///
-pub fn read_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str) -> String {
-    // Validate input parameters
-    if path.is_empty() || name_of_toml_field_key_to_read.is_empty() {
-        debug_log!("Error: Empty path or field name provided");
-        return String::new();
-    }
+// /// The function reads a single line from a TOML file that starts with a specified field name
+// /// and ends with a value. The function returns an empty string if the field is not found, and
+// /// does not panic or unwrap in case of errors. The function uses only standard Rust libraries
+// /// and does not introduce unnecessary dependencies.
+// ///
+// /// design:
+// /// 0. start with an empty string to return by default
+// /// 1. get file at path
+// /// 2. open as text
+// /// 3. iterate through rows
+// /// 4. look for filed name as start of string the " = "
+// /// 5. grab that whole row of text
+// /// 6. remove "fieldname = " from the beginning
+// /// 7. remove '" ' and trailing spaces from the end
+// /// 8. return that string, if any
+// /// by default, return an empty string, if anything goes wrong,
+// /// handle the error, and return an empty string
+// ///
+// /// requires:
+// /// use std::fs::File;
+// /// use std::io::{self, BufRead};
+// ///
+// /// example use:
+// ///     let value = read_field_from_toml("test.toml", "fieldname");
+// ///
+// pub fn read_field_from_toml(path: &str, name_of_toml_field_key_to_read: &str) -> String {
+//     // Validate input parameters
+//     if path.is_empty() || name_of_toml_field_key_to_read.is_empty() {
+//         debug_log!("Error: Empty path or field name provided");
+//         return String::new();
+//     }
 
-    // Verify file extension
-    if !path.to_lowercase().ends_with(".toml") {
-        debug_log!("Warning: File does not have .toml extension: {}", path);
-    }
+//     // Verify file extension
+//     if !path.to_lowercase().ends_with(".toml") {
+//         debug_log!("Warning: File does not have .toml extension: {}", path);
+//     }
 
-    // Debug print statement
-    debug_log!("Attempting to open file at path: {}", path);
+//     // Debug print statement
+//     debug_log!("Attempting to open file at path: {}", path);
 
-    // Open the file at the specified path
-    let file = match File::open(path) {
-        Ok(file) => file,
-        Err(e) => {
-            // More detailed error reporting
-            debug_log!(
-                "read_field_from_toml Failed to open file at path: {}. Error: {}",
-                path,
-                e
-            );
-            return String::new();
-        }
-    };
+//     // Open the file at the specified path
+//     let file = match File::open(path) {
+//         Ok(file) => file,
+//         Err(e) => {
+//             // More detailed error reporting
+//             debug_log!(
+//                 "read_field_from_toml Failed to open file at path: {}. Error: {}",
+//                 path,
+//                 e
+//             );
+//             return String::new();
+//         }
+//     };
 
-    // Debug print statement
-    debug_log!("Successfully opened file at path: {}", path);
+//     // Debug print statement
+//     debug_log!("Successfully opened file at path: {}", path);
 
-    // Create a buffered reader to read the file line by line
-    let reader = io::BufReader::new(file);
+//     // Create a buffered reader to read the file line by line
+//     let reader = io::BufReader::new(file);
 
-    // Keep track of line numbers for better error reporting
-    let mut line_number = 0;
+//     // Keep track of line numbers for better error reporting
+//     let mut line_number = 0;
 
-    // Iterate through each line in the file
-    for line_result in reader.lines() {
-        line_number += 1;
+//     // Iterate through each line in the file
+//     for line_result in reader.lines() {
+//         line_number += 1;
 
-        // Handle line reading errors
-        let line = match line_result {
-            Ok(line) => line,
-            Err(e) => {
-                debug_log!("Error reading line {}: {}", line_number, e);
-                continue;
-            }
-        };
+//         // Handle line reading errors
+//         let line = match line_result {
+//             Ok(line) => line,
+//             Err(e) => {
+//                 debug_log!("Error reading line {}: {}", line_number, e);
+//                 continue;
+//             }
+//         };
 
-        // Skip empty lines and comments
-        if line.trim().is_empty() || line.trim_start().starts_with('#') {
-            continue;
-        }
+//         // Skip empty lines and comments
+//         if line.trim().is_empty() || line.trim_start().starts_with('#') {
+//             continue;
+//         }
 
-        // Debug print statement
-        debug_log!("Processing line {}: {}", line_number, line);
+//         // Debug print statement
+//         debug_log!("Processing line {}: {}", line_number, line);
 
-        // Check if line starts with field name
-        if line
-            .trim_start()
-            .starts_with(name_of_toml_field_key_to_read)
-        {
-            // Debug print statement
-            debug_log!(
-                "Found field '{}' on line {}",
-                name_of_toml_field_key_to_read,
-                line_number
-            );
+//         // Check if line starts with field name
+//         if line
+//             .trim_start()
+//             .starts_with(name_of_toml_field_key_to_read)
+//         {
+//             // Debug print statement
+//             debug_log!(
+//                 "Found field '{}' on line {}",
+//                 name_of_toml_field_key_to_read,
+//                 line_number
+//             );
 
-            // Split the line by '=' and handle malformed lines
-            let parts: Vec<&str> = line.splitn(2, '=').collect();
-            if parts.len() != 2 {
-                debug_log!(
-                    "Malformed TOML line {} - missing '=': {}",
-                    line_number,
-                    line
-                );
-                continue;
-            }
+//             // Split the line by '=' and handle malformed lines
+//             let parts: Vec<&str> = line.splitn(2, '=').collect();
+//             if parts.len() != 2 {
+//                 debug_log!(
+//                     "Malformed TOML line {} - missing '=': {}",
+//                     line_number,
+//                     line
+//                 );
+//                 continue;
+//             }
 
-            let key = parts[0].trim();
-            let value = parts[1].trim();
+//             let key = parts[0].trim();
+//             let value = parts[1].trim();
 
-            // Verify exact field name match (avoiding partial matches)
-            if key != name_of_toml_field_key_to_read {
-                continue;
-            }
+//             // Verify exact field name match (avoiding partial matches)
+//             if key != name_of_toml_field_key_to_read {
+//                 continue;
+//             }
 
-            // Handle empty values
-            if value.is_empty() {
-                debug_log!(
-                    "Warning: Empty value found for field '{}'",
-                    name_of_toml_field_key_to_read
-                );
-                return String::new();
-            }
+//             // Handle empty values
+//             if value.is_empty() {
+//                 debug_log!(
+//                     "Warning: Empty value found for field '{}'",
+//                     name_of_toml_field_key_to_read
+//                 );
+//                 return String::new();
+//             }
 
-            // Debug print statement
-            debug_log!("Extracted value: {}", value);
+//             // Debug print statement
+//             debug_log!("Extracted value: {}", value);
 
-            // Clean up the value: remove quotes and trim spaces
-            let cleaned_value = value.trim().trim_matches('"').trim();
+//             // Clean up the value: remove quotes and trim spaces
+//             let cleaned_value = value.trim().trim_matches('"').trim();
 
-            // Verify the cleaned value isn't empty
-            if cleaned_value.is_empty() {
-                debug_log!(
-                    "Warning: Value became empty after cleaning for field '{}'",
-                    name_of_toml_field_key_to_read
-                );
-                return String::new();
-            }
+//             // Verify the cleaned value isn't empty
+//             if cleaned_value.is_empty() {
+//                 debug_log!(
+//                     "Warning: Value became empty after cleaning for field '{}'",
+//                     name_of_toml_field_key_to_read
+//                 );
+//                 return String::new();
+//             }
 
-            return cleaned_value.to_string();
-        }
-    }
+//             return cleaned_value.to_string();
+//         }
+//     }
 
-    // If we get here, the field wasn't found
-    debug_log!(
-        "Field '{}' not found in file",
-        name_of_toml_field_key_to_read
-    );
-    String::new()
-}
+//     // If we get here, the field wasn't found
+//     debug_log!(
+//         "Field '{}' not found in file",
+//         name_of_toml_field_key_to_read
+//     );
+//     String::new()
+// }
 
 #[cfg(test)]
 /// Reads all fields from a TOML file that share a common base name (prefix before underscore)
@@ -818,92 +818,92 @@ pub fn read_u64_field_from_toml(
     ))
 }
 
-/// Reads a u64 integer field from a clearsigned TOML file.
-///
-/// # Purpose
-/// This function provides secure reading of u64 values from clearsigned TOML files
-/// by first verifying the GPG signature before accessing the data. The GPG public
-/// key is expected to be embedded within the same file being read.
-///
-/// # Process Flow
-/// 1. Extracts the GPG public key from the clearsigned TOML file
-/// 2. Verifies the file's signature using the extracted key
-/// 3. If verification succeeds, reads and parses the requested u64 field
-/// 4. Returns the parsed value or an appropriate error
-///
-/// # Arguments
-/// - `path_to_clearsigntoml_with_gpgkey` - Path to the clearsigned TOML file containing both data and GPG key
-/// - `name_of_toml_field_key_to_read` - Name of the field containing the u64 value to read
-///
-/// # Returns
-/// - `Ok(u64)` - The parsed u64 value if verification succeeds and field exists
-/// - `Err(String)` - Detailed error message if any step fails
-///
-/// # Errors
-/// This function may return errors in several cases:
-/// - If the file cannot be opened or read
-/// - If the GPG key cannot be extracted from the file
-/// - If the GPG signature verification fails
-/// - If the specified field doesn't exist in the file
-/// - If the field value cannot be parsed as a valid u64
-///
-/// # Security
-/// This function ensures data integrity by verifying the GPG signature before
-/// reading any values. This prevents tampering with numeric configuration values
-/// that might affect system behavior.
-///
-/// # Example
-/// ```
-/// let config_path = "/etc/myapp/config.toml";
-///
-/// match read_u64_from_clearsigntoml(config_path, "max_connections") {
-///     Ok(value) => debug_log("Max connections: {}", value),
-///     Err(e) => eprintln!("Error reading max_connections: {}", e)
-/// }
-/// ```
-pub fn read_u64_from_clearsigntoml(
-    path_to_clearsigntoml_with_gpgkey: &str,
-    name_of_toml_field_key_to_read: &str,
-) -> Result<u64, String> {
-    // Step 1: Extract GPG key from the file
-    let key =
-        extract_gpg_key_from_clearsigntoml(path_to_clearsigntoml_with_gpgkey, "gpg_key_public")
-            .map_err(|e| {
-                format!(
-                    "Failed to extract GPG key from file '{}': {}",
-                    path_to_clearsigntoml_with_gpgkey, e
-                )
-            })?;
+// /// Reads a u64 integer field from a clearsigned TOML file.
+// ///
+// /// # Purpose
+// /// This function provides secure reading of u64 values from clearsigned TOML files
+// /// by first verifying the GPG signature before accessing the data. The GPG public
+// /// key is expected to be embedded within the same file being read.
+// ///
+// /// # Process Flow
+// /// 1. Extracts the GPG public key from the clearsigned TOML file
+// /// 2. Verifies the file's signature using the extracted key
+// /// 3. If verification succeeds, reads and parses the requested u64 field
+// /// 4. Returns the parsed value or an appropriate error
+// ///
+// /// # Arguments
+// /// - `path_to_clearsigntoml_with_gpgkey` - Path to the clearsigned TOML file containing both data and GPG key
+// /// - `name_of_toml_field_key_to_read` - Name of the field containing the u64 value to read
+// ///
+// /// # Returns
+// /// - `Ok(u64)` - The parsed u64 value if verification succeeds and field exists
+// /// - `Err(String)` - Detailed error message if any step fails
+// ///
+// /// # Errors
+// /// This function may return errors in several cases:
+// /// - If the file cannot be opened or read
+// /// - If the GPG key cannot be extracted from the file
+// /// - If the GPG signature verification fails
+// /// - If the specified field doesn't exist in the file
+// /// - If the field value cannot be parsed as a valid u64
+// ///
+// /// # Security
+// /// This function ensures data integrity by verifying the GPG signature before
+// /// reading any values. This prevents tampering with numeric configuration values
+// /// that might affect system behavior.
+// ///
+// /// # Example
+// /// ```
+// /// let config_path = "/etc/myapp/config.toml";
+// ///
+// /// match read_u64_from_clearsigntoml(config_path, "max_connections") {
+// ///     Ok(value) => debug_log("Max connections: {}", value),
+// ///     Err(e) => eprintln!("Error reading max_connections: {}", e)
+// /// }
+// /// ```
+// pub fn read_u64_from_clearsigntoml(
+//     path_to_clearsigntoml_with_gpgkey: &str,
+//     name_of_toml_field_key_to_read: &str,
+// ) -> Result<u64, String> {
+//     // Step 1: Extract GPG key from the file
+//     let key =
+//         extract_gpg_key_from_clearsigntoml(path_to_clearsigntoml_with_gpgkey, "gpg_key_public")
+//             .map_err(|e| {
+//                 format!(
+//                     "Failed to extract GPG key from file '{}': {}",
+//                     path_to_clearsigntoml_with_gpgkey, e
+//                 )
+//             })?;
 
-    // Step 2: Verify the file and only proceed if verification succeeds
-    let verification_result =
-        verify_clearsign(path_to_clearsigntoml_with_gpgkey, &key).map_err(|e| {
-            format!(
-                "Failed during verification process for file '{}': {}",
-                path_to_clearsigntoml_with_gpgkey, e
-            )
-        })?;
+//     // Step 2: Verify the file and only proceed if verification succeeds
+//     let verification_result =
+//         verify_clearsign(path_to_clearsigntoml_with_gpgkey, &key).map_err(|e| {
+//             format!(
+//                 "Failed during verification process for file '{}': {}",
+//                 path_to_clearsigntoml_with_gpgkey, e
+//             )
+//         })?;
 
-    // Step 3: Check if verification succeeded
-    if !verification_result {
-        return Err(format!(
-            "GPG verification failed for file: {}",
-            path_to_clearsigntoml_with_gpgkey
-        ));
-    }
+//     // Step 3: Check if verification succeeded
+//     if !verification_result {
+//         return Err(format!(
+//             "GPG verification failed for file: {}",
+//             path_to_clearsigntoml_with_gpgkey
+//         ));
+//     }
 
-    // Step 4: Only read the field if verification succeeded
-    read_u64_field_from_toml(
-        path_to_clearsigntoml_with_gpgkey,
-        name_of_toml_field_key_to_read,
-    )
-    .map_err(|e| {
-        format!(
-            "Failed to read u64 field '{}' from verified file '{}': {}",
-            name_of_toml_field_key_to_read, path_to_clearsigntoml_with_gpgkey, e
-        )
-    })
-}
+//     // Step 4: Only read the field if verification succeeded
+//     read_u64_field_from_toml(
+//         path_to_clearsigntoml_with_gpgkey,
+//         name_of_toml_field_key_to_read,
+//     )
+//     .map_err(|e| {
+//         format!(
+//             "Failed to read u64 field '{}' from verified file '{}': {}",
+//             name_of_toml_field_key_to_read, path_to_clearsigntoml_with_gpgkey, e
+//         )
+//     })
+// }
 
 /// Reads a u64 integer field from a clearsigned TOML file using a public GPG key from a separate config file.
 ///
@@ -1191,54 +1191,54 @@ pub fn read_u64_from_clearsigntoml_without_publicgpgkey(
 //                              name_of_toml_field_key_to_read, path, e))
 // }
 
-/// Reads a floating point (f64) value from a TOML file.
-///
-/// # Arguments
-/// - `path` - Path to the TOML file
-/// - `name_of_toml_field_key_to_read` - Name of the field to read
-///
-/// # Returns
-/// - `Result<f64, String>` - The parsed f64 value or an error message
-pub fn read_float_f64_field_from_toml(
-    path: &str,
-    name_of_toml_field_key_to_read: &str,
-) -> Result<f64, String> {
-    let file = File::open(path)
-        .map_err(|e| format!("read_float_f64_field_from_toml Failed to open file: {}", e))?;
+// /// Reads a floating point (f64) value from a TOML file.
+// ///
+// /// # Arguments
+// /// - `path` - Path to the TOML file
+// /// - `name_of_toml_field_key_to_read` - Name of the field to read
+// ///
+// /// # Returns
+// /// - `Result<f64, String>` - The parsed f64 value or an error message
+// pub fn read_float_f64_field_from_toml(
+//     path: &str,
+//     name_of_toml_field_key_to_read: &str,
+// ) -> Result<f64, String> {
+//     let file = File::open(path)
+//         .map_err(|e| format!("read_float_f64_field_from_toml Failed to open file: {}", e))?;
 
-    let reader = io::BufReader::new(file);
+//     let reader = io::BufReader::new(file);
 
-    for line in reader.lines() {
-        let line = line.map_err(|e| format!("Failed to read line: {}", e))?;
-        let trimmed = line.trim();
+//     for line in reader.lines() {
+//         let line = line.map_err(|e| format!("Failed to read line: {}", e))?;
+//         let trimmed = line.trim();
 
-        if trimmed.starts_with(&format!("{} = ", name_of_toml_field_key_to_read)) {
-            let value_str = trimmed
-                .splitn(2, '=')
-                .nth(1)
-                .ok_or_else(|| {
-                    format!(
-                        "Invalid format for field '{}'",
-                        name_of_toml_field_key_to_read
-                    )
-                })?
-                .trim();
+//         if trimmed.starts_with(&format!("{} = ", name_of_toml_field_key_to_read)) {
+//             let value_str = trimmed
+//                 .splitn(2, '=')
+//                 .nth(1)
+//                 .ok_or_else(|| {
+//                     format!(
+//                         "Invalid format for field '{}'",
+//                         name_of_toml_field_key_to_read
+//                     )
+//                 })?
+//                 .trim();
 
-            // Parse the value as f64
-            return value_str.parse::<f64>().map_err(|e| {
-                format!(
-                    "Failed to parse '{}' as floating point number: {}",
-                    value_str, e
-                )
-            });
-        }
-    }
+//             // Parse the value as f64
+//             return value_str.parse::<f64>().map_err(|e| {
+//                 format!(
+//                     "Failed to parse '{}' as floating point number: {}",
+//                     value_str, e
+//                 )
+//             });
+//         }
+//     }
 
-    Err(format!(
-        "Field '{}' not found",
-        name_of_toml_field_key_to_read
-    ))
-}
+//     Err(format!(
+//         "Field '{}' not found",
+//         name_of_toml_field_key_to_read
+//     ))
+// }
 
 /// Reads a floating point (f32) value from a TOML file.
 ///
@@ -1343,6 +1343,7 @@ pub fn read_multi_line_toml_string(
         .to_string())
 }
 
+#[cfg(test)]
 /// Reads an array of integers from a TOML file into a Vec<u64>.
 ///
 /// # Arguments
@@ -2809,96 +2810,96 @@ impl GpgError {
     }
 }
 
-/// Clearsigns a file with the user's private key and saves the output to a specified location.
-///
-/// # Arguments
-/// - `input_file_path` - Path to the file that needs to be clearsigned
-/// - `output_file_path` - Path where the clearsigned file will be saved
-/// - `signing_key_id` - GPG key ID to use for signing
-///
-/// # Returns
-/// - `Ok(())` if clearsigning succeeds
-/// - `Err(GpgError)` if any operation fails
-///
-/// # Example
-/// ```no_run
-/// let input = Path::new("document.txt");
-/// let output = Path::new("document.txt.asc");
-/// let key_id = "3AA5C34371567BD2";
-/// clearsign_filepath_to_path(input, output, key_id)?;
-/// ```
-pub fn clearsign_filepath_to_path(
-    input_file_path: &Path,
-    output_file_path: &Path,
-    signing_key_id: &str,
-) -> Result<(), GpgError> {
-    // Validate that the signing key exists and is available
-    if !validate_gpg_key(signing_key_id)? {
-        return Err(GpgError::GpgOperationError(format!(
-            "Signing key '{}' not found in keyring",
-            signing_key_id
-        )));
-    }
+// /// Clearsigns a file with the user's private key and saves the output to a specified location.
+// ///
+// /// # Arguments
+// /// - `input_file_path` - Path to the file that needs to be clearsigned
+// /// - `output_file_path` - Path where the clearsigned file will be saved
+// /// - `signing_key_id` - GPG key ID to use for signing
+// ///
+// /// # Returns
+// /// - `Ok(())` if clearsigning succeeds
+// /// - `Err(GpgError)` if any operation fails
+// ///
+// /// # Example
+// /// ```no_run
+// /// let input = Path::new("document.txt");
+// /// let output = Path::new("document.txt.asc");
+// /// let key_id = "3AA5C34371567BD2";
+// /// clearsign_filepath_to_path(input, output, key_id)?;
+// /// ```
+// pub fn clearsign_filepath_to_path(
+//     input_file_path: &Path,
+//     output_file_path: &Path,
+//     signing_key_id: &str,
+// ) -> Result<(), GpgError> {
+//     // Validate that the signing key exists and is available
+//     if !validate_gpg_key(signing_key_id)? {
+//         return Err(GpgError::GpgOperationError(format!(
+//             "Signing key '{}' not found in keyring",
+//             signing_key_id
+//         )));
+//     }
 
-    // Ensure the output directory exists
-    if let Some(parent) = output_file_path.parent() {
-        fs::create_dir_all(parent).map_err(|e| GpgError::FileSystemError(e))?;
-    }
+//     // Ensure the output directory exists
+//     if let Some(parent) = output_file_path.parent() {
+//         fs::create_dir_all(parent).map_err(|e| GpgError::FileSystemError(e))?;
+//     }
 
-    // Directly clearsign the file to the specified output path
-    let clearsign_output = Command::new("gpg")
-        .arg("--clearsign")
-        .arg("--default-key")
-        .arg(signing_key_id)
-        .arg("--output")
-        .arg(output_file_path)
-        .arg(input_file_path)
-        .output()
-        .map_err(|e| GpgError::GpgOperationError(e.to_string()))?;
+//     // Directly clearsign the file to the specified output path
+//     let clearsign_output = Command::new("gpg")
+//         .arg("--clearsign")
+//         .arg("--default-key")
+//         .arg(signing_key_id)
+//         .arg("--output")
+//         .arg(output_file_path)
+//         .arg(input_file_path)
+//         .output()
+//         .map_err(|e| GpgError::GpgOperationError(e.to_string()))?;
 
-    if !clearsign_output.status.success() {
-        let error_message = String::from_utf8_lossy(&clearsign_output.stderr);
-        return Err(GpgError::GpgOperationError(error_message.to_string()));
-    }
+//     if !clearsign_output.status.success() {
+//         let error_message = String::from_utf8_lossy(&clearsign_output.stderr);
+//         return Err(GpgError::GpgOperationError(error_message.to_string()));
+//     }
 
-    Ok(())
-}
+//     Ok(())
+// }
 
-/// Decrypts and validates a clearsigned, encrypted file
-///
-/// # Arguments
-/// - `encrypted_file_path` - Path to the encrypted .gpg file
-/// - `validator_key_id` - GPG key ID to validate the clearsign signature
-/// - `output_path` - Where to save the decrypted and verified file
-///
-/// # Returns
-/// - `Ok(())` if decryption and validation succeed
-/// - `Err(GpgError)` if any operation fails
-pub fn decrypt_and_validate_file(
-    encrypted_file_path: &Path,
-    validator_key_id: &str,
-    output_path: &Path,
-) -> Result<(), GpgError> {
-    // Create temporary paths for intermediate files
-    let decrypted_temp_path = create_temp_file_path("decrypted_temp")?;
+// /// Decrypts and validates a clearsigned, encrypted file
+// ///
+// /// # Arguments
+// /// - `encrypted_file_path` - Path to the encrypted .gpg file
+// /// - `validator_key_id` - GPG key ID to validate the clearsign signature
+// /// - `output_path` - Where to save the decrypted and verified file
+// ///
+// /// # Returns
+// /// - `Ok(())` if decryption and validation succeed
+// /// - `Err(GpgError)` if any operation fails
+// pub fn decrypt_and_validate_file(
+//     encrypted_file_path: &Path,
+//     validator_key_id: &str,
+//     output_path: &Path,
+// ) -> Result<(), GpgError> {
+//     // Create temporary paths for intermediate files
+//     let decrypted_temp_path = create_temp_file_path("decrypted_temp")?;
 
-    // First decrypt the file
-    decrypt_gpg_file(encrypted_file_path, &decrypted_temp_path)?;
+//     // First decrypt the file
+//     decrypt_gpg_file(encrypted_file_path, &decrypted_temp_path)?;
 
-    // Then verify the clearsign signature
-    verify_clearsign_signature(&decrypted_temp_path, validator_key_id)?;
+//     // Then verify the clearsign signature
+//     verify_clearsign_signature(&decrypted_temp_path, validator_key_id)?;
 
-    // If verification succeeded, extract the original content
-    extract_verified_content(&decrypted_temp_path, output_path)?;
+//     // If verification succeeded, extract the original content
+//     extract_verified_content(&decrypted_temp_path, output_path)?;
 
-    // Cleanup
-    if decrypted_temp_path.exists() {
-        fs::remove_file(&decrypted_temp_path)
-            .map_err(|e| GpgError::TempFileError(e.to_string()))?;
-    }
+//     // Cleanup
+//     if decrypted_temp_path.exists() {
+//         fs::remove_file(&decrypted_temp_path)
+//             .map_err(|e| GpgError::TempFileError(e.to_string()))?;
+//     }
 
-    Ok(())
-}
+//     Ok(())
+// }
 
 /// Decrypts a GPG encrypted file.
 ///
@@ -2930,49 +2931,49 @@ pub fn decrypt_gpg_file(encrypted_file_path: &Path, output_path: &Path) -> Resul
     Ok(())
 }
 
-/// Extracts the original content from a verified clearsigned file.
-///
-/// # Arguments
-/// - `clearsigned_file_path` - Path to the verified clearsigned file
-/// - `output_path` - Path where the extracted content will be saved
-///
-/// # Returns
-/// - `Ok(())` - If content extraction succeeds
-/// - `Err(GpgError)` - If any operation fails
-///
-/// # Notes
-/// This function parses the clearsigned file to extract only the content
-/// between the PGP header and signature sections
-fn extract_verified_content(
-    clearsigned_file_path: &Path,
-    output_path: &Path,
-) -> Result<(), GpgError> {
-    // Read the clearsigned file
-    let content =
-        fs::read_to_string(clearsigned_file_path).map_err(|e| GpgError::FileSystemError(e))?;
+// /// Extracts the original content from a verified clearsigned file.
+// ///
+// /// # Arguments
+// /// - `clearsigned_file_path` - Path to the verified clearsigned file
+// /// - `output_path` - Path where the extracted content will be saved
+// ///
+// /// # Returns
+// /// - `Ok(())` - If content extraction succeeds
+// /// - `Err(GpgError)` - If any operation fails
+// ///
+// /// # Notes
+// /// This function parses the clearsigned file to extract only the content
+// /// between the PGP header and signature sections
+// fn extract_verified_content(
+//     clearsigned_file_path: &Path,
+//     output_path: &Path,
+// ) -> Result<(), GpgError> {
+//     // Read the clearsigned file
+//     let content =
+//         fs::read_to_string(clearsigned_file_path).map_err(|e| GpgError::FileSystemError(e))?;
 
-    // Extract the content between the clearsign markers
-    let content_lines: Vec<&str> = content.lines().collect();
-    let mut extracted_content = Vec::new();
-    let mut in_content = false;
+//     // Extract the content between the clearsign markers
+//     let content_lines: Vec<&str> = content.lines().collect();
+//     let mut extracted_content = Vec::new();
+//     let mut in_content = false;
 
-    for line in content_lines {
-        if line.starts_with("-----BEGIN PGP SIGNED MESSAGE-----") {
-            in_content = true;
-            continue;
-        } else if line.starts_with("-----BEGIN PGP SIGNATURE-----") {
-            break;
-        } else if in_content && !line.starts_with("Hash: ") {
-            extracted_content.push(line);
-        }
-    }
+//     for line in content_lines {
+//         if line.starts_with("-----BEGIN PGP SIGNED MESSAGE-----") {
+//             in_content = true;
+//             continue;
+//         } else if line.starts_with("-----BEGIN PGP SIGNATURE-----") {
+//             break;
+//         } else if in_content && !line.starts_with("Hash: ") {
+//             extracted_content.push(line);
+//         }
+//     }
 
-    // Write the extracted content to the output file
-    fs::write(output_path, extracted_content.join("\n"))
-        .map_err(|e| GpgError::FileSystemError(e))?;
+//     // Write the extracted content to the output file
+//     fs::write(output_path, extracted_content.join("\n"))
+//         .map_err(|e| GpgError::FileSystemError(e))?;
 
-    Ok(())
-}
+//     Ok(())
+// }
 
 /// Validates that a GPG key ID exists in the keyring.
 ///
@@ -3730,60 +3731,61 @@ pub fn extract_verify_store_gpg_encrypted_clearsign_toml(
     Ok(())
 }
 
-pub fn manual_q_and_a_new_encrypted_clearsigntoml_verification() -> Result<(), String> {
-    println!("GPG Encrypted Clearsigned TOML File Processor");
-    println!("---------------------------------------------");
+// pub fn manual_q_and_a_new_encrypted_clearsigntoml_verification() -> Result<(), String> {
+//     println!("GPG Encrypted Clearsigned TOML File Processor");
+//     println!("---------------------------------------------");
 
-    // Get input file path from user
-    print!("Enter path to the GPG-encrypted file: ");
-    io::stdout().flush().map_err(|e| e.to_string())?;
-    let mut input_path = String::new();
-    io::stdin()
-        .read_line(&mut input_path)
-        .map_err(|e| e.to_string())?;
-    let input_path = Path::new(input_path.trim());
+//     // Get input file path from user
+//     print!("Enter path to the GPG-encrypted file: ");
+//     io::stdout().flush().map_err(|e| e.to_string())?;
+//     let mut input_path = String::new();
+//     io::stdin()
+//         .read_line(&mut input_path)
+//         .map_err(|e| e.to_string())?;
+//     let input_path = Path::new(input_path.trim());
 
-    // Verify the file exists
-    if !input_path.exists() {
-        return Err(format!("Error: File not found at {}", input_path.display()));
-    }
+//     // Verify the file exists
+//     if !input_path.exists() {
+//         return Err(format!("Error: File not found at {}", input_path.display()));
+//     }
 
-    // Get GPG key ID for verification
-    println!("\nTo find your GPG key ID, run: gpg --list-keys --keyid-format=long");
-    print!("Enter the GPG key ID to verify the signature: ");
-    io::stdout().flush().map_err(|e| e.to_string())?;
-    let mut key_id = String::new();
-    io::stdin()
-        .read_line(&mut key_id)
-        .map_err(|e| e.to_string())?;
-    let key_id = key_id.trim();
+//     // Get GPG key ID for verification
+//     println!("\nTo find your GPG key ID, run: gpg --list-keys --keyid-format=long");
+//     print!("Enter the GPG key ID to verify the signature: ");
+//     io::stdout().flush().map_err(|e| e.to_string())?;
+//     let mut key_id = String::new();
+//     io::stdin()
+//         .read_line(&mut key_id)
+//         .map_err(|e| e.to_string())?;
+//     let key_id = key_id.trim();
 
-    // Get output file path
-    print!("Enter path where to save the verified clearsigned file: ");
-    io::stdout().flush().map_err(|e| e.to_string())?;
-    let mut output_path = String::new();
-    io::stdin()
-        .read_line(&mut output_path)
-        .map_err(|e| e.to_string())?;
-    let output_path = Path::new(output_path.trim());
+//     // Get output file path
+//     print!("Enter path where to save the verified clearsigned file: ");
+//     io::stdout().flush().map_err(|e| e.to_string())?;
+//     let mut output_path = String::new();
+//     io::stdin()
+//         .read_line(&mut output_path)
+//         .map_err(|e| e.to_string())?;
+//     let output_path = Path::new(output_path.trim());
 
-    // Display the parameters
-    println!("\nProcessing with the following parameters:");
-    println!("Input encrypted file: {}", input_path.display());
-    println!("GPG key ID for verification: {}", key_id);
-    println!(
-        "Output path for verified clearsigned file: {}",
-        output_path.display()
-    );
-    println!("\nProcessing...");
+//     // Display the parameters
+//     println!("\nProcessing with the following parameters:");
+//     println!("Input encrypted file: {}", input_path.display());
+//     println!("GPG key ID for verification: {}", key_id);
+//     println!(
+//         "Output path for verified clearsigned file: {}",
+//         output_path.display()
+//     );
+//     println!("\nProcessing...");
 
-    // Call the function from the module
-    extract_verify_store_gpg_encrypted_clearsign_toml(input_path, key_id, output_path)
-        .map_err(|e| e.to_string())?;
+//     // Call the function from the module
+//     extract_verify_store_gpg_encrypted_clearsign_toml(input_path, key_id, output_path)
+//         .map_err(|e| e.to_string())?;
 
-    println!("Done! The verified clearsigned file has been saved.");
-    Ok(())
-}
+//     println!("Done! The verified clearsigned file has been saved.");
+//     Ok(())
+// }
+
 /// Decrypts a GPG-encrypted file to a specified output file
 ///
 /// This function performs decryption of a GPG-encrypted file using the user's private key
@@ -4400,121 +4402,121 @@ pub fn verify_clearsigned_file_and_extract_content_to_output(
     }
 }
 
-/// Lists available GPG key IDs and prompts the user to select one for signing operations.
-///
-/// # Purpose
-/// This function provides an interactive interface for users to select which GPG key ID
-/// to use for signing operations. It lists available key IDs with their associated user
-/// identities and allows selection via a numbered menu.
-///
-/// # Process Flow
-/// 1. Queries GPG for a list of available key IDs (metadata only)
-/// 2. Displays these key IDs in a numbered list with their associated user identities
-/// 3. Prompts the user to either:
-///    - Select a specific key ID by entering its number
-///    - Press Enter to use the default key ID (first in the list)
-/// 4. Returns the selected or default key ID
-///
-/// # Security Notes
-/// This function ONLY accesses and displays key ID metadata (never secret key material).
-/// The GPG command used (--list-secret-keys) shows identifying information about keys,
-/// not the actual cryptographic key material.
-///
-/// # Returns
-/// - `Ok(String)` - The selected GPG key ID
-/// - `Err(GpgError)` - If listing keys fails, no keys are available, or user input is invalid
-///
-/// # Example
-/// ```
-/// match select_gpg_signing_shortkey_id() {
-///     Ok(key_id) => debug_log!("Selected key ID: {}", key_id),
-///     Err(e) => eprintln!("Error selecting key ID: {}", e.to_string()),
-/// }
-/// ```
-pub fn select_gpg_signing_shortkey_id() -> Result<String, GpgError> {
-    // Execute GPG to list key IDs (NOT the keys themselves)
-    // Using --with-colons format for more reliable parsing
-    let gpg_output = Command::new("gpg")
-        .arg("--list-secret-keys")
-        .arg("--keyid-format=long")
-        .arg("--with-colons")
-        .output()
-        .map_err(|e| {
-            GpgError::GpgOperationError(format!("Failed to execute GPG to list key IDs: {}", e))
-        })?;
+// /// Lists available GPG key IDs and prompts the user to select one for signing operations.
+// ///
+// /// # Purpose
+// /// This function provides an interactive interface for users to select which GPG key ID
+// /// to use for signing operations. It lists available key IDs with their associated user
+// /// identities and allows selection via a numbered menu.
+// ///
+// /// # Process Flow
+// /// 1. Queries GPG for a list of available key IDs (metadata only)
+// /// 2. Displays these key IDs in a numbered list with their associated user identities
+// /// 3. Prompts the user to either:
+// ///    - Select a specific key ID by entering its number
+// ///    - Press Enter to use the default key ID (first in the list)
+// /// 4. Returns the selected or default key ID
+// ///
+// /// # Security Notes
+// /// This function ONLY accesses and displays key ID metadata (never secret key material).
+// /// The GPG command used (--list-secret-keys) shows identifying information about keys,
+// /// not the actual cryptographic key material.
+// ///
+// /// # Returns
+// /// - `Ok(String)` - The selected GPG key ID
+// /// - `Err(GpgError)` - If listing keys fails, no keys are available, or user input is invalid
+// ///
+// /// # Example
+// /// ```
+// /// match select_gpg_signing_shortkey_id() {
+// ///     Ok(key_id) => debug_log!("Selected key ID: {}", key_id),
+// ///     Err(e) => eprintln!("Error selecting key ID: {}", e.to_string()),
+// /// }
+// /// ```
+// pub fn select_gpg_signing_shortkey_id() -> Result<String, GpgError> {
+//     // Execute GPG to list key IDs (NOT the keys themselves)
+//     // Using --with-colons format for more reliable parsing
+//     let gpg_output = Command::new("gpg")
+//         .arg("--list-secret-keys")
+//         .arg("--keyid-format=long")
+//         .arg("--with-colons")
+//         .output()
+//         .map_err(|e| {
+//             GpgError::GpgOperationError(format!("Failed to execute GPG to list key IDs: {}", e))
+//         })?;
 
-    // Check if the command executed successfully
-    if !gpg_output.status.success() {
-        let error_message = String::from_utf8_lossy(&gpg_output.stderr);
-        return Err(GpgError::GpgOperationError(format!(
-            "GPG command failed while listing key IDs: {}",
-            error_message
-        )));
-    }
+//     // Check if the command executed successfully
+//     if !gpg_output.status.success() {
+//         let error_message = String::from_utf8_lossy(&gpg_output.stderr);
+//         return Err(GpgError::GpgOperationError(format!(
+//             "GPG command failed while listing key IDs: {}",
+//             error_message
+//         )));
+//     }
 
-    // Parse the output to extract key IDs and user identities
-    let output_text = String::from_utf8_lossy(&gpg_output.stdout);
-    let key_id_list = parse_gpg_key_id_listing(&output_text)?;
+//     // Parse the output to extract key IDs and user identities
+//     let output_text = String::from_utf8_lossy(&gpg_output.stdout);
+//     let key_id_list = parse_gpg_key_id_listing(&output_text)?;
 
-    // Verify we found at least one key ID
-    if key_id_list.is_empty() {
-        return Err(GpgError::GpgOperationError(
-            "No GPG key IDs found in your keyring. Please create or import a key pair.".to_string(),
-        ));
-    }
+//     // Verify we found at least one key ID
+//     if key_id_list.is_empty() {
+//         return Err(GpgError::GpgOperationError(
+//             "No GPG key IDs found in your keyring. Please create or import a key pair.".to_string(),
+//         ));
+//     }
 
-    // Display the available key IDs as a numbered list
-    println!("\nAvailable GPG key IDs for signing:");
-    for (index, (key_id, user_identity)) in key_id_list.iter().enumerate() {
-        println!("{}. {} ({})", index + 1, key_id, user_identity);
-    }
+//     // Display the available key IDs as a numbered list
+//     println!("\nAvailable GPG key IDs for signing:");
+//     for (index, (key_id, user_identity)) in key_id_list.iter().enumerate() {
+//         println!("{}. {} ({})", index + 1, key_id, user_identity);
+//     }
 
-    // Prompt the user for selection
-    print!("\nSelect a key ID number or press Enter to use the default key ID: ");
-    io::stdout()
-        .flush()
-        .map_err(|e| GpgError::GpgOperationError(format!("Failed to display prompt: {}", e)))?;
+//     // Prompt the user for selection
+//     print!("\nSelect a key ID number or press Enter to use the default key ID: ");
+//     io::stdout()
+//         .flush()
+//         .map_err(|e| GpgError::GpgOperationError(format!("Failed to display prompt: {}", e)))?;
 
-    // Read the user's selection
-    let mut user_input = String::new();
-    io::stdin()
-        .read_line(&mut user_input)
-        .map_err(|e| GpgError::GpgOperationError(format!("Failed to read user input: {}", e)))?;
+//     // Read the user's selection
+//     let mut user_input = String::new();
+//     io::stdin()
+//         .read_line(&mut user_input)
+//         .map_err(|e| GpgError::GpgOperationError(format!("Failed to read user input: {}", e)))?;
 
-    let trimmed_input = user_input.trim();
+//     let trimmed_input = user_input.trim();
 
-    // If user pressed Enter without a selection, use the default (first) key ID
-    if trimmed_input.is_empty() {
-        let default_key_id = &key_id_list[0].0;
-        println!(
-            "Using default key ID: {} ({})",
-            default_key_id, key_id_list[0].1
-        );
-        return Ok(default_key_id.clone());
-    }
+//     // If user pressed Enter without a selection, use the default (first) key ID
+//     if trimmed_input.is_empty() {
+//         let default_key_id = &key_id_list[0].0;
+//         println!(
+//             "Using default key ID: {} ({})",
+//             default_key_id, key_id_list[0].1
+//         );
+//         return Ok(default_key_id.clone());
+//     }
 
-    // Otherwise parse the user's numeric selection
-    match trimmed_input.parse::<usize>() {
-        Ok(selected_number) if selected_number > 0 && selected_number <= key_id_list.len() => {
-            // Valid selection - return the corresponding key ID
-            let selected_index = selected_number - 1;
-            let selected_key_id = &key_id_list[selected_index].0;
-            println!(
-                "Using key ID: {} ({})",
-                selected_key_id, key_id_list[selected_index].1
-            );
-            Ok(selected_key_id.clone())
-        }
-        _ => {
-            // Invalid selection
-            Err(GpgError::GpgOperationError(format!(
-                "Invalid selection: '{}'. Please enter a number between 1 and {}.",
-                trimmed_input,
-                key_id_list.len()
-            )))
-        }
-    }
-}
+//     // Otherwise parse the user's numeric selection
+//     match trimmed_input.parse::<usize>() {
+//         Ok(selected_number) if selected_number > 0 && selected_number <= key_id_list.len() => {
+//             // Valid selection - return the corresponding key ID
+//             let selected_index = selected_number - 1;
+//             let selected_key_id = &key_id_list[selected_index].0;
+//             println!(
+//                 "Using key ID: {} ({})",
+//                 selected_key_id, key_id_list[selected_index].1
+//             );
+//             Ok(selected_key_id.clone())
+//         }
+//         _ => {
+//             // Invalid selection
+//             Err(GpgError::GpgOperationError(format!(
+//                 "Invalid selection: '{}'. Please enter a number between 1 and {}.",
+//                 trimmed_input,
+//                 key_id_list.len()
+//             )))
+//         }
+//     }
+// }
 
 // use std::io::{self, Write};
 // use std::process::Command;
@@ -4943,53 +4945,53 @@ pub fn q_and_a_user_selects_gpg_key_full_fingerprint() -> Result<String, GpgErro
     }
 }
 
-/// Parses the colon-delimited output from GPG's list-secret-keys command.
-///
-/// # Purpose
-/// Extracts key ID and user identity information from GPG's machine-readable output.
-/// This function processes output from `gpg --list-secret-keys --with-colons` to
-/// extract only the metadata about keys, never the key material itself.
-///
-/// # Arguments
-/// - `gpg_colon_output` - String containing the colon-delimited output from GPG
-///
-/// # Returns
-/// - `Ok(Vec<(String, String)>)` - Vector of (key_id, user_identity) pairs
-/// - `Err(GpgError)` - If parsing fails
-///
-/// # Format Details
-/// This function expects GPG's colon-delimited format where:
-/// - Lines starting with "sec:" contain key ID information in field 4
-/// - Lines starting with "uid:" contain user identity information in field 9
-/// - A key ID may have multiple associated user identities
-fn parse_gpg_key_id_listing(gpg_colon_output: &str) -> Result<Vec<(String, String)>, GpgError> {
-    let mut key_id_pairs = Vec::new();
-    let mut current_key_id = None;
+// /// Parses the colon-delimited output from GPG's list-secret-keys command.
+// ///
+// /// # Purpose
+// /// Extracts key ID and user identity information from GPG's machine-readable output.
+// /// This function processes output from `gpg --list-secret-keys --with-colons` to
+// /// extract only the metadata about keys, never the key material itself.
+// ///
+// /// # Arguments
+// /// - `gpg_colon_output` - String containing the colon-delimited output from GPG
+// ///
+// /// # Returns
+// /// - `Ok(Vec<(String, String)>)` - Vector of (key_id, user_identity) pairs
+// /// - `Err(GpgError)` - If parsing fails
+// ///
+// /// # Format Details
+// /// This function expects GPG's colon-delimited format where:
+// /// - Lines starting with "sec:" contain key ID information in field 4
+// /// - Lines starting with "uid:" contain user identity information in field 9
+// /// - A key ID may have multiple associated user identities
+// fn parse_gpg_key_id_listing(gpg_colon_output: &str) -> Result<Vec<(String, String)>, GpgError> {
+//     let mut key_id_pairs = Vec::new();
+//     let mut current_key_id = None;
 
-    // Process each line of the GPG output
-    for line in gpg_colon_output.lines() {
-        // Split the line by colons to get fields
-        let fields: Vec<&str> = line.split(':').collect();
+//     // Process each line of the GPG output
+//     for line in gpg_colon_output.lines() {
+//         // Split the line by colons to get fields
+//         let fields: Vec<&str> = line.split(':').collect();
 
-        // Process secret key records (contain key IDs)
-        if fields.len() > 4 && fields[0] == "sec" {
-            // Field 4 contains the key ID
-            current_key_id = Some(fields[4].to_string());
-        }
-        // Process user ID records (contain user identities)
-        else if fields.len() > 9 && fields[0] == "uid" && current_key_id.is_some() {
-            // Field 9 contains the user identity
-            let user_identity = fields[9].to_string();
+//         // Process secret key records (contain key IDs)
+//         if fields.len() > 4 && fields[0] == "sec" {
+//             // Field 4 contains the key ID
+//             current_key_id = Some(fields[4].to_string());
+//         }
+//         // Process user ID records (contain user identities)
+//         else if fields.len() > 9 && fields[0] == "uid" && current_key_id.is_some() {
+//             // Field 9 contains the user identity
+//             let user_identity = fields[9].to_string();
 
-            // Store the key ID and user identity pair
-            if let Some(key_id) = current_key_id.clone() {
-                key_id_pairs.push((key_id, user_identity));
-            }
-        }
-    }
+//             // Store the key ID and user identity pair
+//             if let Some(key_id) = current_key_id.clone() {
+//                 key_id_pairs.push((key_id, user_identity));
+//             }
+//         }
+//     }
 
-    Ok(key_id_pairs)
-}
+//     Ok(key_id_pairs)
+// }
 
 // /// Interactive workflow for clearsigning files.
 // ///
@@ -5193,248 +5195,248 @@ fn parse_gpg_key_id_listing(gpg_colon_output: &str) -> Result<Vec<(String, Strin
 //     Ok(())
 // }
 
-/// Guides the user through an interactive workflow to clearsign a file with their selected GPG key.
-///
-/// # Purpose
-/// This function provides a step-by-step interactive command-line interface that:
-/// 1. Prompts the user for the input file path to clearsign
-/// 2. Prompts for an output file path (with default option if user presses Enter)
-/// 3. Presents available GPG key IDs for selection
-/// 4. Clearsigns the input file with the selected key
-/// 5. Reports the results to the user
-///
-/// # Process Flow
-/// 1. Collect input file path and validate its existence
-/// 2. Collect output file path or generate default path
-/// 3. Display available key IDs and prompt for selection
-/// 4. Clearsign the file using the selected key ID
-/// 5. Confirm successful completion with output file location
-///
-/// # Parameters
-/// None - All inputs are collected interactively
-///
-/// # Returns
-/// - `Ok(())` - If the clearsigning process completes successfully
-/// - `Err(GpgError)` - If any step fails, with specific error information:
-///   - `GpgError::FileSystemError` - If file operations fail (missing files, permissions)
-///   - `GpgError::GpgOperationError` - If GPG operations fail
-///   - `GpgError::PathError` - If path operations fail
-///
-/// # Error Handling
-/// - Validates input file existence before proceeding
-/// - Creates output directories if they don't exist
-/// - Validates GPG key selection
-/// - Reports specific errors for each potential failure point
-///
-/// # Example Usage
-/// ```no_run
-/// match clearsign_workflow() {
-///     Ok(()) => println!("Clearsigning completed successfully"),
-///     Err(e) => eprintln!("Error: {}", e.to_string()),
-/// }
-/// ```
-///
-/// # Related Functions
-/// - `select_gpg_signing_shortkey_id()` - Called to allow key ID selection
-/// - `clearsign_filepath_to_path()` - Called to perform the actual clearsigning
-fn clearsign_workflow() -> Result<(), GpgError> {
-    // Get input file path from user
-    print!("Enter the path to the file you want to clearsign: ");
-    io::stdout()
-        .flush()
-        .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
+// /// Guides the user through an interactive workflow to clearsign a file with their selected GPG key.
+// ///
+// /// # Purpose
+// /// This function provides a step-by-step interactive command-line interface that:
+// /// 1. Prompts the user for the input file path to clearsign
+// /// 2. Prompts for an output file path (with default option if user presses Enter)
+// /// 3. Presents available GPG key IDs for selection
+// /// 4. Clearsigns the input file with the selected key
+// /// 5. Reports the results to the user
+// ///
+// /// # Process Flow
+// /// 1. Collect input file path and validate its existence
+// /// 2. Collect output file path or generate default path
+// /// 3. Display available key IDs and prompt for selection
+// /// 4. Clearsign the file using the selected key ID
+// /// 5. Confirm successful completion with output file location
+// ///
+// /// # Parameters
+// /// None - All inputs are collected interactively
+// ///
+// /// # Returns
+// /// - `Ok(())` - If the clearsigning process completes successfully
+// /// - `Err(GpgError)` - If any step fails, with specific error information:
+// ///   - `GpgError::FileSystemError` - If file operations fail (missing files, permissions)
+// ///   - `GpgError::GpgOperationError` - If GPG operations fail
+// ///   - `GpgError::PathError` - If path operations fail
+// ///
+// /// # Error Handling
+// /// - Validates input file existence before proceeding
+// /// - Creates output directories if they don't exist
+// /// - Validates GPG key selection
+// /// - Reports specific errors for each potential failure point
+// ///
+// /// # Example Usage
+// /// ```no_run
+// /// match clearsign_workflow() {
+// ///     Ok(()) => println!("Clearsigning completed successfully"),
+// ///     Err(e) => eprintln!("Error: {}", e.to_string()),
+// /// }
+// /// ```
+// ///
+// /// # Related Functions
+// /// - `select_gpg_signing_shortkey_id()` - Called to allow key ID selection
+// /// - `clearsign_filepath_to_path()` - Called to perform the actual clearsigning
+// fn clearsign_workflow() -> Result<(), GpgError> {
+//     // Get input file path from user
+//     print!("Enter the path to the file you want to clearsign: ");
+//     io::stdout()
+//         .flush()
+//         .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
 
-    // Read the input file path
-    let mut input_file_path_str = String::new();
-    io::stdin()
-        .read_line(&mut input_file_path_str)
-        .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
-    let input_file_path = Path::new(input_file_path_str.trim());
+//     // Read the input file path
+//     let mut input_file_path_str = String::new();
+//     io::stdin()
+//         .read_line(&mut input_file_path_str)
+//         .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
+//     let input_file_path = Path::new(input_file_path_str.trim());
 
-    // Validate input file exists to provide early error feedback
-    if !input_file_path.exists() {
-        return Err(GpgError::FileSystemError(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "Input file not found",
-        )));
-    }
+//     // Validate input file exists to provide early error feedback
+//     if !input_file_path.exists() {
+//         return Err(GpgError::FileSystemError(std::io::Error::new(
+//             std::io::ErrorKind::NotFound,
+//             "Input file not found",
+//         )));
+//     }
 
-    // Get output file path (use default if empty)
-    print!("Enter the output file path (or press Enter for default): ");
-    io::stdout()
-        .flush()
-        .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
+//     // Get output file path (use default if empty)
+//     print!("Enter the output file path (or press Enter for default): ");
+//     io::stdout()
+//         .flush()
+//         .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
 
-    // Read the output file path
-    let mut output_file_path_str = String::new();
-    io::stdin()
-        .read_line(&mut output_file_path_str)
-        .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
+//     // Read the output file path
+//     let mut output_file_path_str = String::new();
+//     io::stdin()
+//         .read_line(&mut output_file_path_str)
+//         .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
 
-    // Process output path - use default or user-provided path
-    let output_file_path = if output_file_path_str.trim().is_empty() {
-        // Create default output file path with .asc extension
-        let input_filename = input_file_path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .ok_or_else(|| GpgError::PathError("Invalid input file name".to_string()))?;
+//     // Process output path - use default or user-provided path
+//     let output_file_path = if output_file_path_str.trim().is_empty() {
+//         // Create default output file path with .asc extension
+//         let input_filename = input_file_path
+//             .file_name()
+//             .and_then(|n| n.to_str())
+//             .ok_or_else(|| GpgError::PathError("Invalid input file name".to_string()))?;
 
-        // Create clearsigned directory if it doesn't exist
-        let mut output_path = PathBuf::from("clearsigned");
-        fs::create_dir_all(&output_path).map_err(|e| GpgError::FileSystemError(e))?;
+//         // Create clearsigned directory if it doesn't exist
+//         let mut output_path = PathBuf::from("clearsigned");
+//         fs::create_dir_all(&output_path).map_err(|e| GpgError::FileSystemError(e))?;
 
-        // Add filename with .asc extension
-        output_path.push(format!("{}.asc", input_filename));
-        output_path
-    } else {
-        PathBuf::from(output_file_path_str.trim())
-    };
+//         // Add filename with .asc extension
+//         output_path.push(format!("{}.asc", input_filename));
+//         output_path
+//     } else {
+//         PathBuf::from(output_file_path_str.trim())
+//     };
 
-    // Present GPG key ID selection menu and get user's choice
-    let signing_key_id = select_gpg_signing_shortkey_id()?;
+//     // Present GPG key ID selection menu and get user's choice
+//     let signing_key_id = select_gpg_signing_shortkey_id()?;
 
-    // Display the parameters that will be used to confirm with user
-    debug_log("\nProcessing with the following parameters:");
-    debug_log!("Input file path: {}", input_file_path.display());
-    debug_log!("Output file path: {}", output_file_path.display());
-    debug_log!("Signing key ID: {}", signing_key_id);
+//     // Display the parameters that will be used to confirm with user
+//     debug_log("\nProcessing with the following parameters:");
+//     debug_log!("Input file path: {}", input_file_path.display());
+//     debug_log!("Output file path: {}", output_file_path.display());
+//     debug_log!("Signing key ID: {}", signing_key_id);
 
-    // Perform the clearsigning operation
-    clearsign_filepath_to_path(input_file_path, &output_file_path, &signing_key_id)?;
+//     // Perform the clearsigning operation
+//     clearsign_filepath_to_path(input_file_path, &output_file_path, &signing_key_id)?;
 
-    // Confirm successful completion
-    debug_log!("\nSuccess: File has been clearsigned!");
-    debug_log!("Clearsigned file location: {}", output_file_path.display());
+//     // Confirm successful completion
+//     debug_log!("\nSuccess: File has been clearsigned!");
+//     debug_log!("Clearsigned file location: {}", output_file_path.display());
 
-    Ok(())
-}
+//     Ok(())
+// }
 
-/// Guides the user through an interactive workflow to clearsign and encrypt a file.
-///
-/// # Purpose
-/// This function provides a step-by-step interactive command-line interface that:
-/// 1. Prompts the user for the input file path to process
-/// 2. Displays available GPG key IDs and lets the user select one for signing
-/// 3. Prompts for the recipient's public key file path
-/// 4. Clearsigns the file with the selected key and encrypts it for the recipient
-/// 5. Reports the results to the user
-///
-/// # Process Flow
-/// 1. Collect input file path and validate its existence
-/// 2. Present available GPG key IDs and prompt for selection
-/// 3. Collect recipient's public key path and validate its existence
-/// 4. Perform clearsigning and encryption operations
-/// 5. Calculate and display the output file path
-/// 6. Confirm successful completion
-///
-/// # Parameters
-/// None - All inputs are collected interactively
-///
-/// # Returns
-/// - `Ok(())` - If the clearsigning and encryption process completes successfully
-/// - `Err(GpgError)` - If any step fails, with specific error information:
-///   - `GpgError::FileSystemError` - If file operations fail (missing files, permissions)
-///   - `GpgError::GpgOperationError` - If GPG operations fail
-///   - `GpgError::PathError` - If path operations fail
-///
-/// # Error Handling
-/// - Validates input file existence before proceeding
-/// - Validates recipient key existence
-/// - Validates GPG key selection
-/// - Reports specific errors for each potential failure point
-///
-/// # Example Usage
-/// ```no_run
-/// match clearsign_and_encrypt_workflow() {
-///     Ok(()) => println!("Clearsigning and encryption completed successfully"),
-///     Err(e) => eprintln!("Error: {}", e.to_string()),
-/// }
-/// ```
-///
-/// # Notes
-/// The output file is automatically saved to the invites_updates/outgoing/ directory
-/// with the original filename and a .gpg extension. This function will create the
-/// directory if it doesn't exist.
-///
-/// # Related Functions
-/// - `select_gpg_signing_shortkey_id()` - Called to allow key ID selection
-/// - `clearsign_and_encrypt_file_for_recipient()` - Called to perform the actual operations
-fn clearsign_and_encrypt_workflow() -> Result<(), GpgError> {
-    // Get input file path from user
-    print!("Enter the path to the file you want to clearsign and encrypt: ");
-    io::stdout()
-        .flush()
-        .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
+// /// Guides the user through an interactive workflow to clearsign and encrypt a file.
+// ///
+// /// # Purpose
+// /// This function provides a step-by-step interactive command-line interface that:
+// /// 1. Prompts the user for the input file path to process
+// /// 2. Displays available GPG key IDs and lets the user select one for signing
+// /// 3. Prompts for the recipient's public key file path
+// /// 4. Clearsigns the file with the selected key and encrypts it for the recipient
+// /// 5. Reports the results to the user
+// ///
+// /// # Process Flow
+// /// 1. Collect input file path and validate its existence
+// /// 2. Present available GPG key IDs and prompt for selection
+// /// 3. Collect recipient's public key path and validate its existence
+// /// 4. Perform clearsigning and encryption operations
+// /// 5. Calculate and display the output file path
+// /// 6. Confirm successful completion
+// ///
+// /// # Parameters
+// /// None - All inputs are collected interactively
+// ///
+// /// # Returns
+// /// - `Ok(())` - If the clearsigning and encryption process completes successfully
+// /// - `Err(GpgError)` - If any step fails, with specific error information:
+// ///   - `GpgError::FileSystemError` - If file operations fail (missing files, permissions)
+// ///   - `GpgError::GpgOperationError` - If GPG operations fail
+// ///   - `GpgError::PathError` - If path operations fail
+// ///
+// /// # Error Handling
+// /// - Validates input file existence before proceeding
+// /// - Validates recipient key existence
+// /// - Validates GPG key selection
+// /// - Reports specific errors for each potential failure point
+// ///
+// /// # Example Usage
+// /// ```no_run
+// /// match clearsign_and_encrypt_workflow() {
+// ///     Ok(()) => println!("Clearsigning and encryption completed successfully"),
+// ///     Err(e) => eprintln!("Error: {}", e.to_string()),
+// /// }
+// /// ```
+// ///
+// /// # Notes
+// /// The output file is automatically saved to the invites_updates/outgoing/ directory
+// /// with the original filename and a .gpg extension. This function will create the
+// /// directory if it doesn't exist.
+// ///
+// /// # Related Functions
+// /// - `select_gpg_signing_shortkey_id()` - Called to allow key ID selection
+// /// - `clearsign_and_encrypt_file_for_recipient()` - Called to perform the actual operations
+// fn clearsign_and_encrypt_workflow() -> Result<(), GpgError> {
+//     // Get input file path from user
+//     print!("Enter the path to the file you want to clearsign and encrypt: ");
+//     io::stdout()
+//         .flush()
+//         .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
 
-    // Read the input file path
-    let mut input_file_path_str = String::new();
-    io::stdin()
-        .read_line(&mut input_file_path_str)
-        .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
-    let input_file_path = Path::new(input_file_path_str.trim());
+//     // Read the input file path
+//     let mut input_file_path_str = String::new();
+//     io::stdin()
+//         .read_line(&mut input_file_path_str)
+//         .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
+//     let input_file_path = Path::new(input_file_path_str.trim());
 
-    // Validate input file exists to provide early error feedback
-    if !input_file_path.exists() {
-        return Err(GpgError::FileSystemError(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "Input file not found",
-        )));
-    }
+//     // Validate input file exists to provide early error feedback
+//     if !input_file_path.exists() {
+//         return Err(GpgError::FileSystemError(std::io::Error::new(
+//             std::io::ErrorKind::NotFound,
+//             "Input file not found",
+//         )));
+//     }
 
-    // Present GPG key ID selection menu and get user's choice
-    let signing_key_id = select_gpg_signing_shortkey_id()?;
+//     // Present GPG key ID selection menu and get user's choice
+//     let signing_key_id = select_gpg_signing_shortkey_id()?;
 
-    // Get recipient's public key path
-    print!("Enter path to recipient's public key file: ");
-    io::stdout()
-        .flush()
-        .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
+//     // Get recipient's public key path
+//     print!("Enter path to recipient's public key file: ");
+//     io::stdout()
+//         .flush()
+//         .map_err(|e| GpgError::GpgOperationError(format!("Failed to flush stdout: {}", e)))?;
 
-    // Read the recipient key path
-    let mut recipient_key_path_str = String::new();
-    io::stdin()
-        .read_line(&mut recipient_key_path_str)
-        .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
-    let recipient_key_path = Path::new(recipient_key_path_str.trim());
+//     // Read the recipient key path
+//     let mut recipient_key_path_str = String::new();
+//     io::stdin()
+//         .read_line(&mut recipient_key_path_str)
+//         .map_err(|e| GpgError::GpgOperationError(format!("Failed to read input: {}", e)))?;
+//     let recipient_key_path = Path::new(recipient_key_path_str.trim());
 
-    // Validate recipient key exists to provide early error feedback
-    if !recipient_key_path.exists() {
-        return Err(GpgError::FileSystemError(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "Recipient key file not found",
-        )));
-    }
+//     // Validate recipient key exists to provide early error feedback
+//     if !recipient_key_path.exists() {
+//         return Err(GpgError::FileSystemError(std::io::Error::new(
+//             std::io::ErrorKind::NotFound,
+//             "Recipient key file not found",
+//         )));
+//     }
 
-    // Display the parameters that will be used to confirm with user
-    println!("\nProcessing with the following parameters:");
-    println!("Input file path: {}", input_file_path.display());
-    println!("Signing key ID: {}", signing_key_id);
-    println!(
-        "Recipient public key path: {}",
-        recipient_key_path.display()
-    );
-    println!("Output will be saved to: invites_updates/outgoing/");
+//     // Display the parameters that will be used to confirm with user
+//     println!("\nProcessing with the following parameters:");
+//     println!("Input file path: {}", input_file_path.display());
+//     println!("Signing key ID: {}", signing_key_id);
+//     println!(
+//         "Recipient public key path: {}",
+//         recipient_key_path.display()
+//     );
+//     println!("Output will be saved to: invites_updates/outgoing/");
 
-    // Perform the clearsigning and encryption operations
-    clearsign_and_encrypt_file_for_recipient(input_file_path, &signing_key_id, recipient_key_path)?;
+//     // Perform the clearsigning and encryption operations
+//     clearsign_and_encrypt_file_for_recipient(input_file_path, &signing_key_id, recipient_key_path)?;
 
-    // Calculate the output path for display to user
-    let original_filename = input_file_path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .ok_or_else(|| GpgError::PathError("Invalid input file name".to_string()))?;
+//     // Calculate the output path for display to user
+//     let original_filename = input_file_path
+//         .file_name()
+//         .and_then(|n| n.to_str())
+//         .ok_or_else(|| GpgError::PathError("Invalid input file name".to_string()))?;
 
-    let output_path = PathBuf::from(format!(
-        "invites_updates/outgoing/{}.gpg",
-        original_filename
-    ));
+//     let output_path = PathBuf::from(format!(
+//         "invites_updates/outgoing/{}.gpg",
+//         original_filename
+//     ));
 
-    // Confirm successful completion
-    println!("\nSuccess: File has been clearsigned and encrypted!");
-    println!("Encrypted file location: {}", output_path.display());
+//     // Confirm successful completion
+//     println!("\nSuccess: File has been clearsigned and encrypted!");
+//     println!("Encrypted file location: {}", output_path.display());
 
-    Ok(())
-}
+//     Ok(())
+// }
 
 /// Converts a path to an absolute path based on the executable's directory location.
 /// Does NOT check if the path exists or attempt to create anything.
@@ -5569,475 +5571,475 @@ pub fn make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error<P: A
     })
 }
 
-/// Converts a TOML file into a clearsigned TOML file in-place, using owner-based GPG key lookup.
-///
-/// # Purpose
-/// This function is designed for signing TOML files where the GPG key ID is not stored within
-/// the file itself, but rather is determined by looking up the file owner's addressbook entry.
-/// This enforces a centralized key management system where:
-/// 1. Each file declares its owner via an `"owner"` field
-/// 2. Each owner has a registered addressbook file containing their GPG key ID
-/// 3. Files can only be signed by their declared owners
-///
-/// Like `convert_toml_filewithkeyid_into_clearsigntoml_inplace`, this function creates a
-/// clearsigned TOML file that recipients can verify for:
-/// 1. **Integrity**: That the file's content has not been altered since signing
-/// 2. **Authenticity**: That the file was signed by the declared owner
-///
-/// # Key Lookup Process
-/// Instead of reading the GPG key ID directly from the target TOML file, this function:
-/// 1. Reads the owner's username from the target file's `"owner"` field
-/// 2. Constructs the path to the owner's addressbook file: `{username}__collaborator.toml`
-/// 3. Reads the GPG key ID from the addressbook file's `"gpg_publickey_id"` field
-/// 4. Uses that key ID to sign the target file
-///
-/// # "In-Place" Operation
-/// The term "in-place" means the original TOML file at `path_to_toml_file` will be
-/// **overwritten** by its clearsigned counterpart. The content changes, but the
-/// filename and location remain the same. This is a destructive operation; ensure
-/// backups are considered if the original unsigned state is important.
-///
-/// # Input TOML File Requirements
-/// The target TOML file (provided via `path_to_toml_file`) **must** contain:
-/// - An `"owner"` field with the username of the file's owner
-/// - This owner must have a corresponding addressbook file in the collaborator directory
-///
-/// The target file **must not** contain a `"gpg_publickey_id"` field, as this function
-/// is specifically for files where the key ID is managed externally.
-///
-/// # Addressbook File Requirements
-/// The owner's addressbook file (`{owner}__collaborator.toml`) must:
-/// - Exist in the collaborator addressbook directory
-/// - Be a valid clearsigned TOML file
-/// - Contain a `"gpg_publickey_id"` field with the owner's GPG key ID
-///
-/// # GPG Private Key Requirement
-/// The GPG keyring on the system executing this function **must** contain the **private key**
-/// corresponding to the GPG key ID found in the owner's addressbook file. This private key
-/// must be available and usable by GPG for signing.
-///
-/// # Process Flow
-/// 1. **Input Validation**:
-///    - Checks if `path_to_toml_file` exists and is a file
-/// 2. **Owner Extraction**:
-///    - Reads the TOML file to find and extract the value of the `"owner"` field
-///    - If this field is missing, empty, or unreadable, returns an error
-/// 3. **Addressbook Path Construction**:
-///    - Builds the absolute path to the collaborator addressbook directory
-///    - Constructs the owner's addressbook filename: `{owner}__collaborator.toml`
-/// 4. **Key ID Lookup**:
-///    - Reads the owner's addressbook file (which is already clearsigned)
-///    - Extracts the `"gpg_publickey_id"` field value
-/// 5. **Signing Key Validation**:
-///    - Validates that the private key for the looked-up key ID exists locally
-/// 6. **Clearsign Operation**:
-///    - Creates a temporary file
-///    - Uses GPG to clearsign the original file with the looked-up key ID
-/// 7. **In-Place Replacement**:
-///    - Deletes the original file
-///    - Renames the temporary clearsigned file to the original filename
-/// 8. **Cleanup**:
-///    - Removes any remaining temporary files
-///
-/// # Arguments
-/// - `path_to_toml_file` - A reference to a `Path` object representing the TOML file
-///   to be converted in-place. Must contain an `"owner"` field.
-///
-/// # Returns
-/// - `Ok(())` - If the TOML file was successfully clearsigned and replaced in-place
-/// - `Err(GpgError)` - If any step in the process fails:
-///   - `PathError`: File not found, invalid path, or path encoding issues
-///   - `GpgOperationError`: Missing fields, GPG command failures, or key lookup failures
-///   - `FileSystemError`: I/O errors during file operations
-///
-/// # Prerequisites
-/// - GnuPG (GPG) must be installed and accessible via PATH
-/// - The collaborator addressbook directory must exist and be accessible
-/// - The owner specified in the file must have a valid addressbook file
-/// - The GPG private key from the addressbook must be in the local keyring
-///
-/// # Security Considerations
-/// - **Centralized Key Management**: Keys are managed via addressbook files, not individual files
-/// - **Owner Enforcement**: Files can only be signed by their declared owners
-/// - **Destructive Operation**: Overwrites the original file
-/// - **Trust Chain**: Security depends on the integrity of the addressbook files
-pub fn convert_tomlfile_without_keyid_into_clearsigntoml_inplace(
-    path_to_toml_file: &Path,
-    addressbook_files_directory_relative: &str, // pass in constant here
-) -> Result<(), GpgError> {
-    // --- Stage 1: Input Validation ---
-    debug_log!(
-        "Starting in-place clearsign conversion with owner-based key lookup for: {}",
-        path_to_toml_file.display()
-    );
+// /// Converts a TOML file into a clearsigned TOML file in-place, using owner-based GPG key lookup.
+// ///
+// /// # Purpose
+// /// This function is designed for signing TOML files where the GPG key ID is not stored within
+// /// the file itself, but rather is determined by looking up the file owner's addressbook entry.
+// /// This enforces a centralized key management system where:
+// /// 1. Each file declares its owner via an `"owner"` field
+// /// 2. Each owner has a registered addressbook file containing their GPG key ID
+// /// 3. Files can only be signed by their declared owners
+// ///
+// /// Like `convert_toml_filewithkeyid_into_clearsigntoml_inplace`, this function creates a
+// /// clearsigned TOML file that recipients can verify for:
+// /// 1. **Integrity**: That the file's content has not been altered since signing
+// /// 2. **Authenticity**: That the file was signed by the declared owner
+// ///
+// /// # Key Lookup Process
+// /// Instead of reading the GPG key ID directly from the target TOML file, this function:
+// /// 1. Reads the owner's username from the target file's `"owner"` field
+// /// 2. Constructs the path to the owner's addressbook file: `{username}__collaborator.toml`
+// /// 3. Reads the GPG key ID from the addressbook file's `"gpg_publickey_id"` field
+// /// 4. Uses that key ID to sign the target file
+// ///
+// /// # "In-Place" Operation
+// /// The term "in-place" means the original TOML file at `path_to_toml_file` will be
+// /// **overwritten** by its clearsigned counterpart. The content changes, but the
+// /// filename and location remain the same. This is a destructive operation; ensure
+// /// backups are considered if the original unsigned state is important.
+// ///
+// /// # Input TOML File Requirements
+// /// The target TOML file (provided via `path_to_toml_file`) **must** contain:
+// /// - An `"owner"` field with the username of the file's owner
+// /// - This owner must have a corresponding addressbook file in the collaborator directory
+// ///
+// /// The target file **must not** contain a `"gpg_publickey_id"` field, as this function
+// /// is specifically for files where the key ID is managed externally.
+// ///
+// /// # Addressbook File Requirements
+// /// The owner's addressbook file (`{owner}__collaborator.toml`) must:
+// /// - Exist in the collaborator addressbook directory
+// /// - Be a valid clearsigned TOML file
+// /// - Contain a `"gpg_publickey_id"` field with the owner's GPG key ID
+// ///
+// /// # GPG Private Key Requirement
+// /// The GPG keyring on the system executing this function **must** contain the **private key**
+// /// corresponding to the GPG key ID found in the owner's addressbook file. This private key
+// /// must be available and usable by GPG for signing.
+// ///
+// /// # Process Flow
+// /// 1. **Input Validation**:
+// ///    - Checks if `path_to_toml_file` exists and is a file
+// /// 2. **Owner Extraction**:
+// ///    - Reads the TOML file to find and extract the value of the `"owner"` field
+// ///    - If this field is missing, empty, or unreadable, returns an error
+// /// 3. **Addressbook Path Construction**:
+// ///    - Builds the absolute path to the collaborator addressbook directory
+// ///    - Constructs the owner's addressbook filename: `{owner}__collaborator.toml`
+// /// 4. **Key ID Lookup**:
+// ///    - Reads the owner's addressbook file (which is already clearsigned)
+// ///    - Extracts the `"gpg_publickey_id"` field value
+// /// 5. **Signing Key Validation**:
+// ///    - Validates that the private key for the looked-up key ID exists locally
+// /// 6. **Clearsign Operation**:
+// ///    - Creates a temporary file
+// ///    - Uses GPG to clearsign the original file with the looked-up key ID
+// /// 7. **In-Place Replacement**:
+// ///    - Deletes the original file
+// ///    - Renames the temporary clearsigned file to the original filename
+// /// 8. **Cleanup**:
+// ///    - Removes any remaining temporary files
+// ///
+// /// # Arguments
+// /// - `path_to_toml_file` - A reference to a `Path` object representing the TOML file
+// ///   to be converted in-place. Must contain an `"owner"` field.
+// ///
+// /// # Returns
+// /// - `Ok(())` - If the TOML file was successfully clearsigned and replaced in-place
+// /// - `Err(GpgError)` - If any step in the process fails:
+// ///   - `PathError`: File not found, invalid path, or path encoding issues
+// ///   - `GpgOperationError`: Missing fields, GPG command failures, or key lookup failures
+// ///   - `FileSystemError`: I/O errors during file operations
+// ///
+// /// # Prerequisites
+// /// - GnuPG (GPG) must be installed and accessible via PATH
+// /// - The collaborator addressbook directory must exist and be accessible
+// /// - The owner specified in the file must have a valid addressbook file
+// /// - The GPG private key from the addressbook must be in the local keyring
+// ///
+// /// # Security Considerations
+// /// - **Centralized Key Management**: Keys are managed via addressbook files, not individual files
+// /// - **Owner Enforcement**: Files can only be signed by their declared owners
+// /// - **Destructive Operation**: Overwrites the original file
+// /// - **Trust Chain**: Security depends on the integrity of the addressbook files
+// pub fn convert_tomlfile_without_keyid_into_clearsigntoml_inplace(
+//     path_to_toml_file: &Path,
+//     addressbook_files_directory_relative: &str, // pass in constant here
+// ) -> Result<(), GpgError> {
+//     // --- Stage 1: Input Validation ---
+//     debug_log!(
+//         "Starting in-place clearsign conversion with owner-based key lookup for: {}",
+//         path_to_toml_file.display()
+//     );
 
-    // Validate that the input path exists and is a file
-    if !path_to_toml_file.exists() {
-        return Err(GpgError::PathError(format!(
-            "Input TOML file not found: {}",
-            path_to_toml_file.display()
-        )));
-    }
-    if !path_to_toml_file.is_file() {
-        return Err(GpgError::PathError(format!(
-            "Input path is not a file: {}",
-            path_to_toml_file.display()
-        )));
-    }
+//     // Validate that the input path exists and is a file
+//     if !path_to_toml_file.exists() {
+//         return Err(GpgError::PathError(format!(
+//             "Input TOML file not found: {}",
+//             path_to_toml_file.display()
+//         )));
+//     }
+//     if !path_to_toml_file.is_file() {
+//         return Err(GpgError::PathError(format!(
+//             "Input path is not a file: {}",
+//             path_to_toml_file.display()
+//         )));
+//     }
 
-    // Convert path to string for TOML reading function
-    let path_str = match path_to_toml_file.to_str() {
-        Some(s) => s,
-        None => {
-            return Err(GpgError::PathError(format!(
-                "Invalid path encoding for: {}",
-                path_to_toml_file.display()
-            )));
-        }
-    };
+//     // Convert path to string for TOML reading function
+//     let path_str = match path_to_toml_file.to_str() {
+//         Some(s) => s,
+//         None => {
+//             return Err(GpgError::PathError(format!(
+//                 "Invalid path encoding for: {}",
+//                 path_to_toml_file.display()
+//             )));
+//         }
+//     };
 
-    // --- Stage 2: Extract Owner from Target TOML File ---
-    let owner_name_of_toml_field_key_to_read = "owner";
-    debug_log!(
-        "Reading file owner from field '{}' in file '{}'",
-        owner_name_of_toml_field_key_to_read,
-        path_str
-    );
+//     // --- Stage 2: Extract Owner from Target TOML File ---
+//     let owner_name_of_toml_field_key_to_read = "owner";
+//     debug_log!(
+//         "Reading file owner from field '{}' in file '{}'",
+//         owner_name_of_toml_field_key_to_read,
+//         path_str
+//     );
 
-    // Read the owner username from the plain TOML file
-    let file_owner_username = match read_single_line_string_field_from_toml(
-        path_str,
-        owner_name_of_toml_field_key_to_read,
-    ) {
-        Ok(username) => {
-            if username.is_empty() {
-                return Err(GpgError::GpgOperationError(format!(
-                    "Field '{}' is empty in TOML file: {}. File owner is required for key lookup.",
-                    owner_name_of_toml_field_key_to_read, path_str
-                )));
-            }
-            username
-        }
-        Err(e) => {
-            return Err(GpgError::GpgOperationError(format!(
-                "Failed to read file owner from field '{}' in TOML file '{}': {}",
-                owner_name_of_toml_field_key_to_read, path_str, e
-            )));
-        }
-    };
-    debug_log!("File owner username: '{}'", file_owner_username);
+//     // Read the owner username from the plain TOML file
+//     let file_owner_username = match read_single_line_string_field_from_toml(
+//         path_str,
+//         owner_name_of_toml_field_key_to_read,
+//     ) {
+//         Ok(username) => {
+//             if username.is_empty() {
+//                 return Err(GpgError::GpgOperationError(format!(
+//                     "Field '{}' is empty in TOML file: {}. File owner is required for key lookup.",
+//                     owner_name_of_toml_field_key_to_read, path_str
+//                 )));
+//             }
+//             username
+//         }
+//         Err(e) => {
+//             return Err(GpgError::GpgOperationError(format!(
+//                 "Failed to read file owner from field '{}' in TOML file '{}': {}",
+//                 owner_name_of_toml_field_key_to_read, path_str, e
+//             )));
+//         }
+//     };
+//     debug_log!("File owner username: '{}'", file_owner_username);
 
-    // --- Stage 3: Construct Addressbook File Path ---
-    debug_log!(
-        "Constructing path to owner's addressbook file for user: '{}'",
-        file_owner_username
-    );
+//     // --- Stage 3: Construct Addressbook File Path ---
+//     debug_log!(
+//         "Constructing path to owner's addressbook file for user: '{}'",
+//         file_owner_username
+//     );
 
-    // Get the relative path to the collaborator addressbook directory
-    // let addressbook_files_directory_relative = collaborator_addressbook_base_path;
+//     // Get the relative path to the collaborator addressbook directory
+//     // let addressbook_files_directory_relative = collaborator_addressbook_base_path;
 
-    // Convert to absolute path and verify the directory exists
-    let collaborator_files_directory_absolute =
-        match make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(
-            addressbook_files_directory_relative,
-        ) {
-            Ok(path) => path,
-            Err(io_error) => {
-                return Err(GpgError::FileSystemError(io_error));
-            }
-        };
+//     // Convert to absolute path and verify the directory exists
+//     let collaborator_files_directory_absolute =
+//         match make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(
+//             addressbook_files_directory_relative,
+//         ) {
+//             Ok(path) => path,
+//             Err(io_error) => {
+//                 return Err(GpgError::FileSystemError(io_error));
+//             }
+//         };
 
-    debug_log!(
-        "Collaborator addressbook directory: {}",
-        collaborator_files_directory_absolute.display()
-    );
+//     debug_log!(
+//         "Collaborator addressbook directory: {}",
+//         collaborator_files_directory_absolute.display()
+//     );
 
-    // Construct the filename for this owner's addressbook file
-    let collaborator_filename = format!("{}__collaborator.toml", file_owner_username);
-    let user_addressbook_path = collaborator_files_directory_absolute.join(&collaborator_filename);
+//     // Construct the filename for this owner's addressbook file
+//     let collaborator_filename = format!("{}__collaborator.toml", file_owner_username);
+//     let user_addressbook_path = collaborator_files_directory_absolute.join(&collaborator_filename);
 
-    debug_log!(
-        "Owner's addressbook file path: {}",
-        user_addressbook_path.display()
-    );
+//     debug_log!(
+//         "Owner's addressbook file path: {}",
+//         user_addressbook_path.display()
+//     );
 
-    // Verify the addressbook file exists
-    if !user_addressbook_path.exists() {
-        return Err(GpgError::PathError(format!(
-            "Addressbook file not found for owner '{}': {}",
-            file_owner_username,
-            user_addressbook_path.display()
-        )));
-    }
-    if !user_addressbook_path.is_file() {
-        return Err(GpgError::PathError(format!(
-            "Addressbook path is not a file for owner '{}': {}",
-            file_owner_username,
-            user_addressbook_path.display()
-        )));
-    }
+//     // Verify the addressbook file exists
+//     if !user_addressbook_path.exists() {
+//         return Err(GpgError::PathError(format!(
+//             "Addressbook file not found for owner '{}': {}",
+//             file_owner_username,
+//             user_addressbook_path.display()
+//         )));
+//     }
+//     if !user_addressbook_path.is_file() {
+//         return Err(GpgError::PathError(format!(
+//             "Addressbook path is not a file for owner '{}': {}",
+//             file_owner_username,
+//             user_addressbook_path.display()
+//         )));
+//     }
 
-    // Convert addressbook path to string for the clearsigned TOML reading function
-    let user_addressbook_path_str = match user_addressbook_path.to_str() {
-        Some(s) => s,
-        None => {
-            return Err(GpgError::PathError(format!(
-                "Invalid path encoding for addressbook file: {}",
-                user_addressbook_path.display()
-            )));
-        }
-    };
+//     // Convert addressbook path to string for the clearsigned TOML reading function
+//     let user_addressbook_path_str = match user_addressbook_path.to_str() {
+//         Some(s) => s,
+//         None => {
+//             return Err(GpgError::PathError(format!(
+//                 "Invalid path encoding for addressbook file: {}",
+//                 user_addressbook_path.display()
+//             )));
+//         }
+//     };
 
-    // --- Stage 4: Extract GPG Key ID from Addressbook File ---
-    let gpg_key_id_name_of_toml_field_key_to_read = "gpg_publickey_id";
-    debug_log!(
-        "Reading GPG key ID from clearsigned addressbook file field '{}' in '{}'",
-        gpg_key_id_name_of_toml_field_key_to_read,
-        user_addressbook_path_str
-    );
+//     // --- Stage 4: Extract GPG Key ID from Addressbook File ---
+//     let gpg_key_id_name_of_toml_field_key_to_read = "gpg_publickey_id";
+//     debug_log!(
+//         "Reading GPG key ID from clearsigned addressbook file field '{}' in '{}'",
+//         gpg_key_id_name_of_toml_field_key_to_read,
+//         user_addressbook_path_str
+//     );
 
-    // Read the GPG key ID from the clearsigned addressbook file
-    let signing_key_id = match read_singleline_string_from_clearsigntoml(
-        user_addressbook_path_str,
-        gpg_key_id_name_of_toml_field_key_to_read,
-    ) {
-        Ok(key_id) => {
-            if key_id.is_empty() {
-                return Err(GpgError::GpgOperationError(format!(
-                    "Field '{}' is empty in addressbook file for owner '{}': {}",
-                    gpg_key_id_name_of_toml_field_key_to_read,
-                    file_owner_username,
-                    user_addressbook_path_str
-                )));
-            }
-            key_id
-        }
-        Err(e) => {
-            return Err(GpgError::GpgOperationError(format!(
-                "Failed to read GPG key ID from field '{}' in clearsigned addressbook file '{}': {}",
-                gpg_key_id_name_of_toml_field_key_to_read, user_addressbook_path_str, e
-            )));
-        }
-    };
-    debug_log!(
-        "GPG signing key ID for owner '{}': '{}'",
-        file_owner_username,
-        signing_key_id
-    );
+//     // Read the GPG key ID from the clearsigned addressbook file
+//     let signing_key_id = match read_singleline_string_from_clearsigntoml(
+//         user_addressbook_path_str,
+//         gpg_key_id_name_of_toml_field_key_to_read,
+//     ) {
+//         Ok(key_id) => {
+//             if key_id.is_empty() {
+//                 return Err(GpgError::GpgOperationError(format!(
+//                     "Field '{}' is empty in addressbook file for owner '{}': {}",
+//                     gpg_key_id_name_of_toml_field_key_to_read,
+//                     file_owner_username,
+//                     user_addressbook_path_str
+//                 )));
+//             }
+//             key_id
+//         }
+//         Err(e) => {
+//             return Err(GpgError::GpgOperationError(format!(
+//                 "Failed to read GPG key ID from field '{}' in clearsigned addressbook file '{}': {}",
+//                 gpg_key_id_name_of_toml_field_key_to_read, user_addressbook_path_str, e
+//             )));
+//         }
+//     };
+//     debug_log!(
+//         "GPG signing key ID for owner '{}': '{}'",
+//         file_owner_username,
+//         signing_key_id
+//     );
 
-    // --- Stage 5: Validate GPG Secret Key Availability ---
-    debug_log!(
-        "Validating GPG secret key availability for key ID: '{}'",
-        signing_key_id
-    );
+//     // --- Stage 5: Validate GPG Secret Key Availability ---
+//     debug_log!(
+//         "Validating GPG secret key availability for key ID: '{}'",
+//         signing_key_id
+//     );
 
-    match validate_gpg_secret_key(&signing_key_id) {
-        Ok(true) => {
-            debug_log!(
-                "GPG secret key for ID '{}' (owner: '{}') is available for signing.",
-                signing_key_id,
-                file_owner_username
-            );
-        }
-        Ok(false) => {
-            return Err(GpgError::GpgOperationError(format!(
-                "GPG secret key for ID '{}' (from addressbook of owner '{}') not found in keyring or is not usable. Cannot sign file.",
-                signing_key_id, file_owner_username
-            )));
-        }
-        Err(e) => {
-            // Pass through the GpgError from validate_gpg_secret_key
-            return Err(e);
-        }
-    }
+//     match validate_gpg_secret_key(&signing_key_id) {
+//         Ok(true) => {
+//             debug_log!(
+//                 "GPG secret key for ID '{}' (owner: '{}') is available for signing.",
+//                 signing_key_id,
+//                 file_owner_username
+//             );
+//         }
+//         Ok(false) => {
+//             return Err(GpgError::GpgOperationError(format!(
+//                 "GPG secret key for ID '{}' (from addressbook of owner '{}') not found in keyring or is not usable. Cannot sign file.",
+//                 signing_key_id, file_owner_username
+//             )));
+//         }
+//         Err(e) => {
+//             // Pass through the GpgError from validate_gpg_secret_key
+//             return Err(e);
+//         }
+//     }
 
-    // --- Stage 6: Prepare Temporary File Path ---
-    // Create a temporary file path in the same directory for atomic rename
-    let original_file_name = match path_to_toml_file.file_name() {
-        Some(name) => name.to_string_lossy(),
-        None => {
-            return Err(GpgError::PathError(format!(
-                "Could not get filename from path: {}",
-                path_to_toml_file.display()
-            )));
-        }
-    };
+//     // --- Stage 6: Prepare Temporary File Path ---
+//     // Create a temporary file path in the same directory for atomic rename
+//     let original_file_name = match path_to_toml_file.file_name() {
+//         Some(name) => name.to_string_lossy(),
+//         None => {
+//             return Err(GpgError::PathError(format!(
+//                 "Could not get filename from path: {}",
+//                 path_to_toml_file.display()
+//             )));
+//         }
+//     };
 
-    let temp_file_name = format!(
-        "{}.tmp_clearsign_{}",
-        original_file_name,
-        generate_timestamp()
-    );
-    let temp_output_path = path_to_toml_file.with_file_name(temp_file_name);
+//     let temp_file_name = format!(
+//         "{}.tmp_clearsign_{}",
+//         original_file_name,
+//         generate_timestamp()
+//     );
+//     let temp_output_path = path_to_toml_file.with_file_name(temp_file_name);
 
-    debug_log!(
-        "Temporary file for clearsigned output: {}",
-        temp_output_path.display()
-    );
+//     debug_log!(
+//         "Temporary file for clearsigned output: {}",
+//         temp_output_path.display()
+//     );
 
-    // --- Stage 7: Perform GPG Clearsign Operation ---
-    debug_log!(
-        "Performing GPG clearsign operation on '{}' using key ID '{}' (owner: '{}')",
-        path_to_toml_file.display(),
-        signing_key_id,
-        file_owner_username
-    );
+//     // --- Stage 7: Perform GPG Clearsign Operation ---
+//     debug_log!(
+//         "Performing GPG clearsign operation on '{}' using key ID '{}' (owner: '{}')",
+//         path_to_toml_file.display(),
+//         signing_key_id,
+//         file_owner_username
+//     );
 
-    let clearsign_command_result = Command::new("gpg")
-        .arg("--clearsign") // Perform a clearsign operation
-        .arg("--batch") // Ensure no interactive prompts
-        .arg("--yes") // Assume "yes" to prompts
-        .arg("--default-key") // Specify the key to use
-        .arg(&signing_key_id) // The key ID from addressbook
-        .arg("--output") // Specify output file
-        .arg(&temp_output_path) // Temporary output path
-        .arg(path_to_toml_file) // Input file to clearsign
-        .output(); // Execute and get output
+//     let clearsign_command_result = Command::new("gpg")
+//         .arg("--clearsign") // Perform a clearsign operation
+//         .arg("--batch") // Ensure no interactive prompts
+//         .arg("--yes") // Assume "yes" to prompts
+//         .arg("--default-key") // Specify the key to use
+//         .arg(&signing_key_id) // The key ID from addressbook
+//         .arg("--output") // Specify output file
+//         .arg(&temp_output_path) // Temporary output path
+//         .arg(path_to_toml_file) // Input file to clearsign
+//         .output(); // Execute and get output
 
-    match clearsign_command_result {
-        Ok(output) => {
-            if output.status.success() {
-                debug_log!(
-                    "GPG clearsign operation successful. Output written to temporary file: {}",
-                    temp_output_path.display()
-                );
-            } else {
-                // GPG command executed but failed
-                let stderr_output = String::from_utf8_lossy(&output.stderr);
-                // Clean up temporary file if it exists
-                if temp_output_path.exists() {
-                    if let Err(e_remove) = fs::remove_file(&temp_output_path) {
-                        eprintln!(
-                            "Additionally, failed to remove temporary file '{}' after GPG error: {}",
-                            temp_output_path.display(),
-                            e_remove
-                        );
-                    }
-                }
-                return Err(GpgError::GpgOperationError(format!(
-                    "GPG clearsign command failed for file '{}' with exit code: {}. GPG stderr: {}",
-                    path_to_toml_file.display(),
-                    output.status,
-                    stderr_output.trim()
-                )));
-            }
-        }
-        Err(e) => {
-            // Failed to execute GPG command
-            if temp_output_path.exists() {
-                if let Err(e_remove) = fs::remove_file(&temp_output_path) {
-                    eprintln!(
-                        "Additionally, failed to remove temporary file '{}' after GPG execution error: {}",
-                        temp_output_path.display(),
-                        e_remove
-                    );
-                }
-            }
-            return Err(GpgError::GpgOperationError(format!(
-                "Failed to execute GPG clearsign command for file '{}': {}",
-                path_to_toml_file.display(),
-                e
-            )));
-        }
-    }
+//     match clearsign_command_result {
+//         Ok(output) => {
+//             if output.status.success() {
+//                 debug_log!(
+//                     "GPG clearsign operation successful. Output written to temporary file: {}",
+//                     temp_output_path.display()
+//                 );
+//             } else {
+//                 // GPG command executed but failed
+//                 let stderr_output = String::from_utf8_lossy(&output.stderr);
+//                 // Clean up temporary file if it exists
+//                 if temp_output_path.exists() {
+//                     if let Err(e_remove) = fs::remove_file(&temp_output_path) {
+//                         eprintln!(
+//                             "Additionally, failed to remove temporary file '{}' after GPG error: {}",
+//                             temp_output_path.display(),
+//                             e_remove
+//                         );
+//                     }
+//                 }
+//                 return Err(GpgError::GpgOperationError(format!(
+//                     "GPG clearsign command failed for file '{}' with exit code: {}. GPG stderr: {}",
+//                     path_to_toml_file.display(),
+//                     output.status,
+//                     stderr_output.trim()
+//                 )));
+//             }
+//         }
+//         Err(e) => {
+//             // Failed to execute GPG command
+//             if temp_output_path.exists() {
+//                 if let Err(e_remove) = fs::remove_file(&temp_output_path) {
+//                     eprintln!(
+//                         "Additionally, failed to remove temporary file '{}' after GPG execution error: {}",
+//                         temp_output_path.display(),
+//                         e_remove
+//                     );
+//                 }
+//             }
+//             return Err(GpgError::GpgOperationError(format!(
+//                 "Failed to execute GPG clearsign command for file '{}': {}",
+//                 path_to_toml_file.display(),
+//                 e
+//             )));
+//         }
+//     }
 
-    // --- Stage 8: In-Place Replacement ---
-    debug_log!(
-        "Replacing original file '{}' with its clearsigned version",
-        path_to_toml_file.display()
-    );
+//     // --- Stage 8: In-Place Replacement ---
+//     debug_log!(
+//         "Replacing original file '{}' with its clearsigned version",
+//         path_to_toml_file.display()
+//     );
 
-    // Read original content as backup in case of catastrophic failure
-    let original_content_backup = match fs::read_to_string(path_to_toml_file) {
-        Ok(content) => content,
-        Err(e) => {
-            return Err(GpgError::FileSystemError(std::io::Error::new(
-                e.kind(),
-                format!(
-                    "Failed to read original file for backup before deletion: {}. Error: {}",
-                    path_to_toml_file.display(),
-                    e
-                ),
-            )));
-        }
-    };
+//     // Read original content as backup in case of catastrophic failure
+//     let original_content_backup = match fs::read_to_string(path_to_toml_file) {
+//         Ok(content) => content,
+//         Err(e) => {
+//             return Err(GpgError::FileSystemError(std::io::Error::new(
+//                 e.kind(),
+//                 format!(
+//                     "Failed to read original file for backup before deletion: {}. Error: {}",
+//                     path_to_toml_file.display(),
+//                     e
+//                 ),
+//             )));
+//         }
+//     };
 
-    // Delete the original file
-    if let Err(e_remove_orig) = fs::remove_file(path_to_toml_file) {
-        // Critical error: couldn't delete original
-        return Err(GpgError::FileSystemError(std::io::Error::new(
-            e_remove_orig.kind(),
-            format!(
-                "Failed to delete original file '{}' before replacing with clearsigned version. Clearsigned data is in '{}'. Error: {}",
-                path_to_toml_file.display(),
-                temp_output_path.display(),
-                e_remove_orig
-            ),
-        )));
-    }
-    debug_log!("Original file '{}' deleted.", path_to_toml_file.display());
+//     // Delete the original file
+//     if let Err(e_remove_orig) = fs::remove_file(path_to_toml_file) {
+//         // Critical error: couldn't delete original
+//         return Err(GpgError::FileSystemError(std::io::Error::new(
+//             e_remove_orig.kind(),
+//             format!(
+//                 "Failed to delete original file '{}' before replacing with clearsigned version. Clearsigned data is in '{}'. Error: {}",
+//                 path_to_toml_file.display(),
+//                 temp_output_path.display(),
+//                 e_remove_orig
+//             ),
+//         )));
+//     }
+//     debug_log!("Original file '{}' deleted.", path_to_toml_file.display());
 
-    // Rename the temporary clearsigned file to the original filename
-    if let Err(e_rename) = fs::rename(&temp_output_path, path_to_toml_file) {
-        // Critical error: rename failed after deleting original
-        eprintln!(
-            "Critical: Failed to rename temporary file '{}' to original file path '{}'. Attempting to restore original content.",
-            temp_output_path.display(),
-            path_to_toml_file.display()
-        );
+//     // Rename the temporary clearsigned file to the original filename
+//     if let Err(e_rename) = fs::rename(&temp_output_path, path_to_toml_file) {
+//         // Critical error: rename failed after deleting original
+//         eprintln!(
+//             "Critical: Failed to rename temporary file '{}' to original file path '{}'. Attempting to restore original content.",
+//             temp_output_path.display(),
+//             path_to_toml_file.display()
+//         );
 
-        // Attempt to restore original content
-        if let Err(e_restore) = fs::write(path_to_toml_file, original_content_backup) {
-            eprintln!(
-                "Catastrophic failure: Could not restore original file '{}' after rename failure. Original content might be lost. Clearsigned data is in '{}'. Restore error: {}. Rename error: {}",
-                path_to_toml_file.display(),
-                temp_output_path.display(),
-                e_restore,
-                e_rename
-            );
-        } else {
-            eprintln!(
-                "Successfully restored original content to '{}'. Clearsigned data is in '{}'. Rename error: {}",
-                path_to_toml_file.display(),
-                temp_output_path.display(),
-                e_rename
-            );
-        }
+//         // Attempt to restore original content
+//         if let Err(e_restore) = fs::write(path_to_toml_file, original_content_backup) {
+//             eprintln!(
+//                 "Catastrophic failure: Could not restore original file '{}' after rename failure. Original content might be lost. Clearsigned data is in '{}'. Restore error: {}. Rename error: {}",
+//                 path_to_toml_file.display(),
+//                 temp_output_path.display(),
+//                 e_restore,
+//                 e_rename
+//             );
+//         } else {
+//             eprintln!(
+//                 "Successfully restored original content to '{}'. Clearsigned data is in '{}'. Rename error: {}",
+//                 path_to_toml_file.display(),
+//                 temp_output_path.display(),
+//                 e_rename
+//             );
+//         }
 
-        return Err(GpgError::FileSystemError(std::io::Error::new(
-            e_rename.kind(),
-            format!(
-                "Critical: Failed to rename temporary file '{}' to original file path '{}'. Original data was in memory and an attempt to restore was made. Please check file states. Rename Error: {}",
-                temp_output_path.display(),
-                path_to_toml_file.display(),
-                e_rename
-            ),
-        )));
-    }
+//         return Err(GpgError::FileSystemError(std::io::Error::new(
+//             e_rename.kind(),
+//             format!(
+//                 "Critical: Failed to rename temporary file '{}' to original file path '{}'. Original data was in memory and an attempt to restore was made. Please check file states. Rename Error: {}",
+//                 temp_output_path.display(),
+//                 path_to_toml_file.display(),
+//                 e_rename
+//             ),
+//         )));
+//     }
 
-    debug_log!(
-        "Successfully converted '{}' to clearsigned TOML in-place using owner '{}' key.",
-        path_to_toml_file.display(),
-        file_owner_username
-    );
+//     debug_log!(
+//         "Successfully converted '{}' to clearsigned TOML in-place using owner '{}' key.",
+//         path_to_toml_file.display(),
+//         file_owner_username
+//     );
 
-    // --- Stage 9: Cleanup ---
-    if temp_output_path.exists() {
-        debug_log!(
-            "Attempting to clean up residual temporary file: {}",
-            temp_output_path.display()
-        );
-        if let Err(e_remove_temp) = fs::remove_file(&temp_output_path) {
-            eprintln!(
-                "Warning: Failed to clean up residual temporary file '{}': {}",
-                temp_output_path.display(),
-                e_remove_temp
-            );
-        }
-    }
+//     // --- Stage 9: Cleanup ---
+//     if temp_output_path.exists() {
+//         debug_log!(
+//             "Attempting to clean up residual temporary file: {}",
+//             temp_output_path.display()
+//         );
+//         if let Err(e_remove_temp) = fs::remove_file(&temp_output_path) {
+//             eprintln!(
+//                 "Warning: Failed to clean up residual temporary file '{}': {}",
+//                 temp_output_path.display(),
+//                 e_remove_temp
+//             );
+//         }
+//     }
 
-    Ok(())
-}
+//     Ok(())
+// }
 
 /// Converts a TOML file into a clearsigned TOML file in-place, using owner-based GPG key lookup.
 ///
@@ -6571,215 +6573,215 @@ pub fn convert_tomlfile_without_keyid_using_gpgtomlkeyid_into_clearsigntoml_inpl
     Ok(())
 }
 
-/// Re-clearsigns an already clearsigned TOML file in-place, using owner-based GPG key lookup.
-///
-/// # Purpose
-/// This function is designed for scenarios where a clearsigned TOML file needs to be
-/// modified and re-signed. It handles the complete workflow of:
-/// 1. **Validating** the existing signature (ensuring integrity and authenticity)
-/// 2. Extracting the plain TOML content from the validated clearsigned file
-/// 3. Re-signing it using the owner-based key lookup system
-///
-/// # Security Model
-/// This function **always** validates the existing signature before extraction.
-/// This ensures:
-/// - The file hasn't been tampered with
-/// - The previous signature was valid
-/// - We maintain a chain of trust
-///
-/// This is especially important in educational environments where:
-/// - Students need to learn proper security practices
-/// - File integrity must be maintained
-/// - Trust chains should never be broken
-///
-/// # Process Flow
-/// 1. **Clearsign Validation** (MANDATORY):
-///    - Reads the clearsigned TOML file
-///    - Validates the existing signature using GPG
-///    - Only proceeds if validation succeeds
-///
-/// 2. **Content Extraction**:
-///    - Extracts the plain TOML content from the validated clearsigned file
-///    - This happens as part of the GPG validation process
-///
-/// 3. **Re-signing**:
-///    - Temporarily replaces the file with extracted plain content
-///    - Delegates to `convert_tomlfile_without_keyid_into_clearsigntoml_inplace()`
-///    - Uses owner-based lookup to determine the signing key
-///    - Creates a new clearsigned version of the file
-///
-/// # Security Considerations
-/// - **Always Validates**: The existing signature is always checked - no exceptions
-/// - **Maintains Trust Chain**: Only valid signed content can be re-signed
-/// - **Fail-Safe**: If validation fails, the operation is aborted
-/// - **Educational Value**: Teaches students that signature validation is non-negotiable
-pub fn re_clearsign_clearsigntoml_file_without_keyid_into_clearsigntoml_inplace(
-    path_to_clearsigned_toml_file: &Path,
-    addressbook_files_directory_relative: &str, // pass in constant here
-) -> Result<(), GpgError> {
-    // --- Stage 1: Input Validation ---
-    println!(
-        "Starting secure re-clearsign process for: {}",
-        path_to_clearsigned_toml_file.display()
-    );
-    println!("Note: Existing signature will be validated to ensure security.");
+// /// Re-clearsigns an already clearsigned TOML file in-place, using owner-based GPG key lookup.
+// ///
+// /// # Purpose
+// /// This function is designed for scenarios where a clearsigned TOML file needs to be
+// /// modified and re-signed. It handles the complete workflow of:
+// /// 1. **Validating** the existing signature (ensuring integrity and authenticity)
+// /// 2. Extracting the plain TOML content from the validated clearsigned file
+// /// 3. Re-signing it using the owner-based key lookup system
+// ///
+// /// # Security Model
+// /// This function **always** validates the existing signature before extraction.
+// /// This ensures:
+// /// - The file hasn't been tampered with
+// /// - The previous signature was valid
+// /// - We maintain a chain of trust
+// ///
+// /// This is especially important in educational environments where:
+// /// - Students need to learn proper security practices
+// /// - File integrity must be maintained
+// /// - Trust chains should never be broken
+// ///
+// /// # Process Flow
+// /// 1. **Clearsign Validation** (MANDATORY):
+// ///    - Reads the clearsigned TOML file
+// ///    - Validates the existing signature using GPG
+// ///    - Only proceeds if validation succeeds
+// ///
+// /// 2. **Content Extraction**:
+// ///    - Extracts the plain TOML content from the validated clearsigned file
+// ///    - This happens as part of the GPG validation process
+// ///
+// /// 3. **Re-signing**:
+// ///    - Temporarily replaces the file with extracted plain content
+// ///    - Delegates to `convert_tomlfile_without_keyid_into_clearsigntoml_inplace()`
+// ///    - Uses owner-based lookup to determine the signing key
+// ///    - Creates a new clearsigned version of the file
+// ///
+// /// # Security Considerations
+// /// - **Always Validates**: The existing signature is always checked - no exceptions
+// /// - **Maintains Trust Chain**: Only valid signed content can be re-signed
+// /// - **Fail-Safe**: If validation fails, the operation is aborted
+// /// - **Educational Value**: Teaches students that signature validation is non-negotiable
+// pub fn re_clearsign_clearsigntoml_file_without_keyid_into_clearsigntoml_inplace(
+//     path_to_clearsigned_toml_file: &Path,
+//     addressbook_files_directory_relative: &str, // pass in constant here
+// ) -> Result<(), GpgError> {
+//     // --- Stage 1: Input Validation ---
+//     println!(
+//         "Starting secure re-clearsign process for: {}",
+//         path_to_clearsigned_toml_file.display()
+//     );
+//     println!("Note: Existing signature will be validated to ensure security.");
 
-    // Validate that the input path exists and is a file
-    if !path_to_clearsigned_toml_file.exists() {
-        return Err(GpgError::PathError(format!(
-            "Clearsigned TOML file not found: {}",
-            path_to_clearsigned_toml_file.display()
-        )));
-    }
-    if !path_to_clearsigned_toml_file.is_file() {
-        return Err(GpgError::PathError(format!(
-            "Path is not a file: {}",
-            path_to_clearsigned_toml_file.display()
-        )));
-    }
+//     // Validate that the input path exists and is a file
+//     if !path_to_clearsigned_toml_file.exists() {
+//         return Err(GpgError::PathError(format!(
+//             "Clearsigned TOML file not found: {}",
+//             path_to_clearsigned_toml_file.display()
+//         )));
+//     }
+//     if !path_to_clearsigned_toml_file.is_file() {
+//         return Err(GpgError::PathError(format!(
+//             "Path is not a file: {}",
+//             path_to_clearsigned_toml_file.display()
+//         )));
+//     }
 
-    // --- Stage 2: Read Existing Clearsigned Content for Backup ---
-    println!("Reading existing clearsigned content for backup...");
+//     // --- Stage 2: Read Existing Clearsigned Content for Backup ---
+//     println!("Reading existing clearsigned content for backup...");
 
-    let original_clearsigned_backup =
-        fs::read_to_string(path_to_clearsigned_toml_file).map_err(|e| {
-            GpgError::FileSystemError(std::io::Error::new(
-                e.kind(),
-                format!(
-                    "Failed to read clearsigned file '{}': {}",
-                    path_to_clearsigned_toml_file.display(),
-                    e
-                ),
-            ))
-        })?;
+//     let original_clearsigned_backup =
+//         fs::read_to_string(path_to_clearsigned_toml_file).map_err(|e| {
+//             GpgError::FileSystemError(std::io::Error::new(
+//                 e.kind(),
+//                 format!(
+//                     "Failed to read clearsigned file '{}': {}",
+//                     path_to_clearsigned_toml_file.display(),
+//                     e
+//                 ),
+//             ))
+//         })?;
 
-    // --- Stage 3: Validate Signature and Extract Content ---
-    println!("Validating existing signature and extracting content...");
-    println!("This ensures the file hasn't been tampered with.");
+//     // --- Stage 3: Validate Signature and Extract Content ---
+//     println!("Validating existing signature and extracting content...");
+//     println!("This ensures the file hasn't been tampered with.");
 
-    // Create a temporary file for GPG verification output
-    let temp_verify_file = path_to_clearsigned_toml_file.with_extension("tmp_verify");
+//     // Create a temporary file for GPG verification output
+//     let temp_verify_file = path_to_clearsigned_toml_file.with_extension("tmp_verify");
 
-    // Run GPG verification and extraction
-    // Using --decrypt which both verifies and extracts
-    let verify_result = Command::new("gpg")
-        .arg("--decrypt") // Verify signature and output plain content
-        .arg("--batch") // Non-interactive mode
-        .arg("--yes") // Assume yes to questions
-        .arg("--status-fd") // Output status info
-        .arg("2") // Status to stderr
-        .arg("--output") // Output to file
-        .arg(&temp_verify_file) // Temporary output path
-        .arg(path_to_clearsigned_toml_file) // Input clearsigned file
-        .output();
+//     // Run GPG verification and extraction
+//     // Using --decrypt which both verifies and extracts
+//     let verify_result = Command::new("gpg")
+//         .arg("--decrypt") // Verify signature and output plain content
+//         .arg("--batch") // Non-interactive mode
+//         .arg("--yes") // Assume yes to questions
+//         .arg("--status-fd") // Output status info
+//         .arg("2") // Status to stderr
+//         .arg("--output") // Output to file
+//         .arg(&temp_verify_file) // Temporary output path
+//         .arg(path_to_clearsigned_toml_file) // Input clearsigned file
+//         .output();
 
-    let plain_toml_content = match verify_result {
-        Ok(output) => {
-            if output.status.success() {
-                println!("✓ Signature validation PASSED. File integrity confirmed.");
+//     let plain_toml_content = match verify_result {
+//         Ok(output) => {
+//             if output.status.success() {
+//                 println!("✓ Signature validation PASSED. File integrity confirmed.");
 
-                // Read the extracted content
-                let content = fs::read_to_string(&temp_verify_file).map_err(|e| {
-                    // Clean up temp file
-                    let _ = fs::remove_file(&temp_verify_file);
-                    GpgError::FileSystemError(std::io::Error::new(
-                        e.kind(),
-                        format!("Failed to read extracted content: {}", e),
-                    ))
-                })?;
+//                 // Read the extracted content
+//                 let content = fs::read_to_string(&temp_verify_file).map_err(|e| {
+//                     // Clean up temp file
+//                     let _ = fs::remove_file(&temp_verify_file);
+//                     GpgError::FileSystemError(std::io::Error::new(
+//                         e.kind(),
+//                         format!("Failed to read extracted content: {}", e),
+//                     ))
+//                 })?;
 
-                // Clean up temp file
-                if let Err(e) = fs::remove_file(&temp_verify_file) {
-                    eprintln!("Warning: Failed to remove temporary file: {}", e);
-                }
+//                 // Clean up temp file
+//                 if let Err(e) = fs::remove_file(&temp_verify_file) {
+//                     eprintln!("Warning: Failed to remove temporary file: {}", e);
+//                 }
 
-                content
-            } else {
-                // Clean up temp file if it exists
-                let _ = fs::remove_file(&temp_verify_file);
+//                 content
+//             } else {
+//                 // Clean up temp file if it exists
+//                 let _ = fs::remove_file(&temp_verify_file);
 
-                let stderr_output = String::from_utf8_lossy(&output.stderr);
-                return Err(GpgError::GpgOperationError(format!(
-                    "GPG signature validation FAILED for '{}'. \
-                     This file may have been tampered with or corrupted. \
-                     For security reasons, re-signing is not allowed. \
-                     GPG output: {}",
-                    path_to_clearsigned_toml_file.display(),
-                    stderr_output.trim()
-                )));
-            }
-        }
-        Err(e) => {
-            // Clean up temp file if it exists
-            let _ = fs::remove_file(&temp_verify_file);
+//                 let stderr_output = String::from_utf8_lossy(&output.stderr);
+//                 return Err(GpgError::GpgOperationError(format!(
+//                     "GPG signature validation FAILED for '{}'. \
+//                      This file may have been tampered with or corrupted. \
+//                      For security reasons, re-signing is not allowed. \
+//                      GPG output: {}",
+//                     path_to_clearsigned_toml_file.display(),
+//                     stderr_output.trim()
+//                 )));
+//             }
+//         }
+//         Err(e) => {
+//             // Clean up temp file if it exists
+//             let _ = fs::remove_file(&temp_verify_file);
 
-            return Err(GpgError::GpgOperationError(format!(
-                "Failed to execute GPG verify command: {}. \
-                 Ensure GPG is installed and accessible.",
-                e
-            )));
-        }
-    };
+//             return Err(GpgError::GpgOperationError(format!(
+//                 "Failed to execute GPG verify command: {}. \
+//                  Ensure GPG is installed and accessible.",
+//                 e
+//             )));
+//         }
+//     };
 
-    println!(
-        "Successfully extracted {} bytes of validated plain TOML content",
-        plain_toml_content.len()
-    );
+//     println!(
+//         "Successfully extracted {} bytes of validated plain TOML content",
+//         plain_toml_content.len()
+//     );
 
-    // --- Stage 4: Temporarily Replace File with Plain Content ---
-    println!("Preparing file for re-signing...");
+//     // --- Stage 4: Temporarily Replace File with Plain Content ---
+//     println!("Preparing file for re-signing...");
 
-    // Write the plain TOML content to the file
-    // This is necessary because the signing function expects plain TOML
-    if let Err(e) = fs::write(path_to_clearsigned_toml_file, &plain_toml_content) {
-        return Err(GpgError::FileSystemError(std::io::Error::new(
-            e.kind(),
-            format!(
-                "Failed to write plain content to file '{}': {}",
-                path_to_clearsigned_toml_file.display(),
-                e
-            ),
-        )));
-    }
+//     // Write the plain TOML content to the file
+//     // This is necessary because the signing function expects plain TOML
+//     if let Err(e) = fs::write(path_to_clearsigned_toml_file, &plain_toml_content) {
+//         return Err(GpgError::FileSystemError(std::io::Error::new(
+//             e.kind(),
+//             format!(
+//                 "Failed to write plain content to file '{}': {}",
+//                 path_to_clearsigned_toml_file.display(),
+//                 e
+//             ),
+//         )));
+//     }
 
-    // --- Stage 5: Re-sign the File Using Owner-based Lookup ---
-    println!("Re-signing file using owner-based key lookup...");
+//     // --- Stage 5: Re-sign the File Using Owner-based Lookup ---
+//     println!("Re-signing file using owner-based key lookup...");
 
-    // Call the existing function to sign the now-plain TOML file
-    match convert_tomlfile_without_keyid_into_clearsigntoml_inplace(
-        path_to_clearsigned_toml_file,
-        addressbook_files_directory_relative,
-    ) {
-        Ok(()) => {
-            println!(
-                "✓ Successfully re-signed file: {}",
-                path_to_clearsigned_toml_file.display()
-            );
-            println!("The file now has a fresh signature from the owner's current key.");
-            Ok(())
-        }
-        Err(e) => {
-            // If re-signing fails, attempt to restore the original clearsigned content
-            eprintln!("Re-signing failed. Attempting to restore original clearsigned content...");
+//     // Call the existing function to sign the now-plain TOML file
+//     match convert_tomlfile_without_keyid_into_clearsigntoml_inplace(
+//         path_to_clearsigned_toml_file,
+//         addressbook_files_directory_relative,
+//     ) {
+//         Ok(()) => {
+//             println!(
+//                 "✓ Successfully re-signed file: {}",
+//                 path_to_clearsigned_toml_file.display()
+//             );
+//             println!("The file now has a fresh signature from the owner's current key.");
+//             Ok(())
+//         }
+//         Err(e) => {
+//             // If re-signing fails, attempt to restore the original clearsigned content
+//             eprintln!("Re-signing failed. Attempting to restore original clearsigned content...");
 
-            if let Err(restore_err) =
-                fs::write(path_to_clearsigned_toml_file, &original_clearsigned_backup)
-            {
-                eprintln!(
-                    "CRITICAL: Failed to restore original clearsigned content: {}. \
-                     File may be in inconsistent state! \
-                     Manual intervention may be required.",
-                    restore_err
-                );
-            } else {
-                println!("✓ Original clearsigned content restored after signing failure.");
-            }
+//             if let Err(restore_err) =
+//                 fs::write(path_to_clearsigned_toml_file, &original_clearsigned_backup)
+//             {
+//                 eprintln!(
+//                     "CRITICAL: Failed to restore original clearsigned content: {}. \
+//                      File may be in inconsistent state! \
+//                      Manual intervention may be required.",
+//                     restore_err
+//                 );
+//             } else {
+//                 println!("✓ Original clearsigned content restored after signing failure.");
+//             }
 
-            // Return the original error
-            Err(e)
-        }
-    }
-}
+//             // Return the original error
+//             Err(e)
+//         }
+//     }
+// }
 
 /// Converts a TOML file into a clearsigned TOML file in-place, asserting authorship and integrity.
 ///
@@ -7383,390 +7385,390 @@ for uma team-channel node and similar struct fields
 //     pub gotit_port: u16,
 // }
 
-/// Reads port assignments for a specific collaborator pair from a clearsigned TOML file using owner-based GPG key lookup.
-///
-/// # Purpose
-/// This function extracts network port assignments for a specific pair of collaborators from a
-/// clearsigned team channel configuration file. It enforces security by requiring GPG signature
-/// validation before any data extraction occurs.
-///
-/// # Security Model
-/// This function implements a strict security-first approach:
-/// 1. **No data access without validation**: The clearsigned file MUST be validated before any content is read
-/// 2. **Owner-based key management**: The signing key is determined by the file's owner field
-/// 3. **Chain of trust**: Validation uses keys from the collaborator addressbook system
-///
-/// # Validation Process
-/// 1. Reads the `owner` field from the target clearsigned TOML file
-/// 2. Constructs the path to the owner's addressbook file: `{owner}__collaborator.toml`
-/// 3. Extracts the GPG key ID from the addressbook (which is itself clearsigned and validated)
-/// 4. Uses that key to verify the target file's signature
-/// 5. Only proceeds with data extraction if signature validation succeeds
-///
-/// # Data Structure
-/// The function expects the TOML file to contain a structure like:
-/// ```toml
-/// [abstract_collaborator_port_assignments.alice_bob]
-/// collaborator_ports = [
-///     { user_name = "alice", ready_port = 50001, intray_port = 50002, gotit_port = 50003 },
-///     { user_name = "bob", ready_port = 50004, intray_port = 50005, gotit_port = 50006 },
-/// ]
-/// ```
-///
-/// # Arguments
-/// - `path_to_clearsigned_toml` - Path to the clearsigned TOML file containing port assignments
-/// - `addressbook_files_directory_relative` - Relative path to the directory containing collaborator addressbook files
-/// - `pair_name` - The name of the collaborator pair (e.g., "alice_bob")
-///
-/// # Returns
-/// - `Ok(Vec<AbstractTeamchannelNodeTomlPortsData>)` - A vector of port assignments for the specified pair
-/// - `Err(GpgError)` - If any step fails:
-///   - `PathError`: File not found or invalid path
-///   - `GpgOperationError`: GPG validation failure or missing required fields
-///   - `FileSystemError`: I/O errors
-///
-/// # Example
-/// ```no_run
-/// let assignments = read_specific_pair_port_assignments_from_clearsigntoml(
-///     Path::new("team_channel_config.toml"),
-///     "collaborators",
-///     "alice_bob"
-/// )?;
-///
-/// for assignment in assignments {
-///     println!("{}: ready={}, intray={}, gotit={}",
-///              assignment.user_name,
-///              assignment.ready_port,
-///              assignment.intray_port,
-///              assignment.gotit_port);
-/// }
-/// ```
-pub fn read_specific_pair_port_assignments_from_clearsigntoml(
-    path_to_clearsigned_toml: &Path,
-    addressbook_files_directory_relative: &str, // pass in constant here
-    pair_name: &str,
-) -> Result<Vec<AbstractTeamchannelNodeTomlPortsData>, GpgError> {
-    // --- Stage 1: Input Validation ---
-    debug_log!(
-        "Starting secure port assignment extraction for pair '{}' from: {}",
-        pair_name,
-        path_to_clearsigned_toml.display()
-    );
+// /// Reads port assignments for a specific collaborator pair from a clearsigned TOML file using owner-based GPG key lookup.
+// ///
+// /// # Purpose
+// /// This function extracts network port assignments for a specific pair of collaborators from a
+// /// clearsigned team channel configuration file. It enforces security by requiring GPG signature
+// /// validation before any data extraction occurs.
+// ///
+// /// # Security Model
+// /// This function implements a strict security-first approach:
+// /// 1. **No data access without validation**: The clearsigned file MUST be validated before any content is read
+// /// 2. **Owner-based key management**: The signing key is determined by the file's owner field
+// /// 3. **Chain of trust**: Validation uses keys from the collaborator addressbook system
+// ///
+// /// # Validation Process
+// /// 1. Reads the `owner` field from the target clearsigned TOML file
+// /// 2. Constructs the path to the owner's addressbook file: `{owner}__collaborator.toml`
+// /// 3. Extracts the GPG key ID from the addressbook (which is itself clearsigned and validated)
+// /// 4. Uses that key to verify the target file's signature
+// /// 5. Only proceeds with data extraction if signature validation succeeds
+// ///
+// /// # Data Structure
+// /// The function expects the TOML file to contain a structure like:
+// /// ```toml
+// /// [abstract_collaborator_port_assignments.alice_bob]
+// /// collaborator_ports = [
+// ///     { user_name = "alice", ready_port = 50001, intray_port = 50002, gotit_port = 50003 },
+// ///     { user_name = "bob", ready_port = 50004, intray_port = 50005, gotit_port = 50006 },
+// /// ]
+// /// ```
+// ///
+// /// # Arguments
+// /// - `path_to_clearsigned_toml` - Path to the clearsigned TOML file containing port assignments
+// /// - `addressbook_files_directory_relative` - Relative path to the directory containing collaborator addressbook files
+// /// - `pair_name` - The name of the collaborator pair (e.g., "alice_bob")
+// ///
+// /// # Returns
+// /// - `Ok(Vec<AbstractTeamchannelNodeTomlPortsData>)` - A vector of port assignments for the specified pair
+// /// - `Err(GpgError)` - If any step fails:
+// ///   - `PathError`: File not found or invalid path
+// ///   - `GpgOperationError`: GPG validation failure or missing required fields
+// ///   - `FileSystemError`: I/O errors
+// ///
+// /// # Example
+// /// ```no_run
+// /// let assignments = read_specific_pair_port_assignments_from_clearsigntoml(
+// ///     Path::new("team_channel_config.toml"),
+// ///     "collaborators",
+// ///     "alice_bob"
+// /// )?;
+// ///
+// /// for assignment in assignments {
+// ///     println!("{}: ready={}, intray={}, gotit={}",
+// ///              assignment.user_name,
+// ///              assignment.ready_port,
+// ///              assignment.intray_port,
+// ///              assignment.gotit_port);
+// /// }
+// /// ```
+// pub fn read_specific_pair_port_assignments_from_clearsigntoml(
+//     path_to_clearsigned_toml: &Path,
+//     addressbook_files_directory_relative: &str, // pass in constant here
+//     pair_name: &str,
+// ) -> Result<Vec<AbstractTeamchannelNodeTomlPortsData>, GpgError> {
+//     // --- Stage 1: Input Validation ---
+//     debug_log!(
+//         "Starting secure port assignment extraction for pair '{}' from: {}",
+//         pair_name,
+//         path_to_clearsigned_toml.display()
+//     );
 
-    // Validate that the input path exists and is a file
-    if !path_to_clearsigned_toml.exists() {
-        return Err(GpgError::PathError(format!(
-            "Clearsigned TOML file not found: {}",
-            path_to_clearsigned_toml.display()
-        )));
-    }
-    if !path_to_clearsigned_toml.is_file() {
-        return Err(GpgError::PathError(format!(
-            "Path is not a file: {}",
-            path_to_clearsigned_toml.display()
-        )));
-    }
+//     // Validate that the input path exists and is a file
+//     if !path_to_clearsigned_toml.exists() {
+//         return Err(GpgError::PathError(format!(
+//             "Clearsigned TOML file not found: {}",
+//             path_to_clearsigned_toml.display()
+//         )));
+//     }
+//     if !path_to_clearsigned_toml.is_file() {
+//         return Err(GpgError::PathError(format!(
+//             "Path is not a file: {}",
+//             path_to_clearsigned_toml.display()
+//         )));
+//     }
 
-    // Convert path to string for reading functions
-    let path_str = match path_to_clearsigned_toml.to_str() {
-        Some(s) => s,
-        None => {
-            return Err(GpgError::PathError(format!(
-                "Invalid path encoding for: {}",
-                path_to_clearsigned_toml.display()
-            )));
-        }
-    };
+//     // Convert path to string for reading functions
+//     let path_str = match path_to_clearsigned_toml.to_str() {
+//         Some(s) => s,
+//         None => {
+//             return Err(GpgError::PathError(format!(
+//                 "Invalid path encoding for: {}",
+//                 path_to_clearsigned_toml.display()
+//             )));
+//         }
+//     };
 
-    // --- Stage 2: Extract Owner for Key Lookup ---
-    let owner_name_of_toml_field_key_to_read = "owner";
-    debug_log!(
-        "Reading file owner from field '{}' for security validation",
-        owner_name_of_toml_field_key_to_read
-    );
+//     // --- Stage 2: Extract Owner for Key Lookup ---
+//     let owner_name_of_toml_field_key_to_read = "owner";
+//     debug_log!(
+//         "Reading file owner from field '{}' for security validation",
+//         owner_name_of_toml_field_key_to_read
+//     );
 
-    // Note: We're reading from a clearsigned file, but we need the owner field first
-    // This is safe because we'll validate the entire file before using any other data
-    let file_owner_username = match read_single_line_string_field_from_toml(
-        path_str,
-        owner_name_of_toml_field_key_to_read,
-    ) {
-        Ok(username) => {
-            if username.is_empty() {
-                return Err(GpgError::GpgOperationError(format!(
-                    "Field '{}' is empty in TOML file. File owner is required for security validation.",
-                    owner_name_of_toml_field_key_to_read
-                )));
-            }
-            username
-        }
-        Err(e) => {
-            return Err(GpgError::GpgOperationError(format!(
-                "Failed to read file owner from field '{}': {}",
-                owner_name_of_toml_field_key_to_read, e
-            )));
-        }
-    };
-    debug_log!("File owner: '{}'", file_owner_username);
+//     // Note: We're reading from a clearsigned file, but we need the owner field first
+//     // This is safe because we'll validate the entire file before using any other data
+//     let file_owner_username = match read_single_line_string_field_from_toml(
+//         path_str,
+//         owner_name_of_toml_field_key_to_read,
+//     ) {
+//         Ok(username) => {
+//             if username.is_empty() {
+//                 return Err(GpgError::GpgOperationError(format!(
+//                     "Field '{}' is empty in TOML file. File owner is required for security validation.",
+//                     owner_name_of_toml_field_key_to_read
+//                 )));
+//             }
+//             username
+//         }
+//         Err(e) => {
+//             return Err(GpgError::GpgOperationError(format!(
+//                 "Failed to read file owner from field '{}': {}",
+//                 owner_name_of_toml_field_key_to_read, e
+//             )));
+//         }
+//     };
+//     debug_log!("File owner: '{}'", file_owner_username);
 
-    // --- Stage 3: Construct Addressbook Path and Extract GPG Key ---
-    debug_log!(
-        "Looking up GPG key for owner '{}' in addressbook",
-        file_owner_username
-    );
+//     // --- Stage 3: Construct Addressbook Path and Extract GPG Key ---
+//     debug_log!(
+//         "Looking up GPG key for owner '{}' in addressbook",
+//         file_owner_username
+//     );
 
-    // Convert collaborator directory to absolute path
-    let collaborator_files_directory_absolute =
-        match make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(
-            addressbook_files_directory_relative,
-        ) {
-            Ok(path) => path,
-            Err(io_error) => {
-                return Err(GpgError::FileSystemError(io_error));
-            }
-        };
+//     // Convert collaborator directory to absolute path
+//     let collaborator_files_directory_absolute =
+//         match make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(
+//             addressbook_files_directory_relative,
+//         ) {
+//             Ok(path) => path,
+//             Err(io_error) => {
+//                 return Err(GpgError::FileSystemError(io_error));
+//             }
+//         };
 
-    // Construct addressbook filename
-    let collaborator_filename = format!("{}__collaborator.toml", file_owner_username);
-    let user_addressbook_path = collaborator_files_directory_absolute.join(&collaborator_filename);
+//     // Construct addressbook filename
+//     let collaborator_filename = format!("{}__collaborator.toml", file_owner_username);
+//     let user_addressbook_path = collaborator_files_directory_absolute.join(&collaborator_filename);
 
-    debug_log!(
-        "Owner's addressbook path: {}",
-        user_addressbook_path.display()
-    );
+//     debug_log!(
+//         "Owner's addressbook path: {}",
+//         user_addressbook_path.display()
+//     );
 
-    // Verify addressbook exists
-    if !user_addressbook_path.exists() {
-        return Err(GpgError::PathError(format!(
-            "Addressbook file not found for owner '{}': {}",
-            file_owner_username,
-            user_addressbook_path.display()
-        )));
-    }
+//     // Verify addressbook exists
+//     if !user_addressbook_path.exists() {
+//         return Err(GpgError::PathError(format!(
+//             "Addressbook file not found for owner '{}': {}",
+//             file_owner_username,
+//             user_addressbook_path.display()
+//         )));
+//     }
 
-    // Convert addressbook path to string
-    let user_addressbook_path_str = match user_addressbook_path.to_str() {
-        Some(s) => s,
-        None => {
-            return Err(GpgError::PathError(format!(
-                "Invalid path encoding for addressbook file: {}",
-                user_addressbook_path.display()
-            )));
-        }
-    };
+//     // Convert addressbook path to string
+//     let user_addressbook_path_str = match user_addressbook_path.to_str() {
+//         Some(s) => s,
+//         None => {
+//             return Err(GpgError::PathError(format!(
+//                 "Invalid path encoding for addressbook file: {}",
+//                 user_addressbook_path.display()
+//             )));
+//         }
+//     };
 
-    // Extract GPG key ID from addressbook
-    let gpg_key_id_name_of_toml_field_key_to_read = "gpg_publickey_id";
-    let signing_key_id = match read_singleline_string_from_clearsigntoml(
-        user_addressbook_path_str,
-        gpg_key_id_name_of_toml_field_key_to_read,
-    ) {
-        Ok(key_id) => {
-            if key_id.is_empty() {
-                return Err(GpgError::GpgOperationError(format!(
-                    "GPG key ID is empty in addressbook for owner '{}'",
-                    file_owner_username
-                )));
-            }
-            key_id
-        }
-        Err(e) => {
-            return Err(GpgError::GpgOperationError(format!(
-                "Failed to read GPG key ID from addressbook: {}",
-                e
-            )));
-        }
-    };
-    debug_log!("Found GPG key ID for validation: '{}'", signing_key_id);
+//     // Extract GPG key ID from addressbook
+//     let gpg_key_id_name_of_toml_field_key_to_read = "gpg_publickey_id";
+//     let signing_key_id = match read_singleline_string_from_clearsigntoml(
+//         user_addressbook_path_str,
+//         gpg_key_id_name_of_toml_field_key_to_read,
+//     ) {
+//         Ok(key_id) => {
+//             if key_id.is_empty() {
+//                 return Err(GpgError::GpgOperationError(format!(
+//                     "GPG key ID is empty in addressbook for owner '{}'",
+//                     file_owner_username
+//                 )));
+//             }
+//             key_id
+//         }
+//         Err(e) => {
+//             return Err(GpgError::GpgOperationError(format!(
+//                 "Failed to read GPG key ID from addressbook: {}",
+//                 e
+//             )));
+//         }
+//     };
+//     debug_log!("Found GPG key ID for validation: '{}'", signing_key_id);
 
-    // --- Stage 4: Create Temporary File for Validation ---
-    let temp_validation_path = create_temp_file_path("validate_ports")?;
+//     // --- Stage 4: Create Temporary File for Validation ---
+//     let temp_validation_path = create_temp_file_path("validate_ports")?;
 
-    // --- Stage 5: Verify Signature and Extract Content ---
-    debug_log!("Validating clearsigned file signature...");
+//     // --- Stage 5: Verify Signature and Extract Content ---
+//     debug_log!("Validating clearsigned file signature...");
 
-    // Decrypt (which validates) the clearsigned file
-    let validation_result = Command::new("gpg")
-        .arg("--decrypt")
-        .arg("--batch")
-        .arg("--status-fd")
-        .arg("2")
-        .arg("--output")
-        .arg(&temp_validation_path)
-        .arg(path_to_clearsigned_toml)
-        .output();
+//     // Decrypt (which validates) the clearsigned file
+//     let validation_result = Command::new("gpg")
+//         .arg("--decrypt")
+//         .arg("--batch")
+//         .arg("--status-fd")
+//         .arg("2")
+//         .arg("--output")
+//         .arg(&temp_validation_path)
+//         .arg(path_to_clearsigned_toml)
+//         .output();
 
-    match validation_result {
-        Ok(output) => {
-            if !output.status.success() {
-                // Cleanup temp file
-                let _ = fs::remove_file(&temp_validation_path);
+//     match validation_result {
+//         Ok(output) => {
+//             if !output.status.success() {
+//                 // Cleanup temp file
+//                 let _ = fs::remove_file(&temp_validation_path);
 
-                let stderr_output = String::from_utf8_lossy(&output.stderr);
-                return Err(GpgError::GpgOperationError(format!(
-                    "GPG signature validation FAILED. File may be tampered. GPG output: {}",
-                    stderr_output.trim()
-                )));
-            }
-            debug_log!("✓ Signature validation PASSED. File integrity confirmed.");
-        }
-        Err(e) => {
-            // Cleanup temp file
-            let _ = fs::remove_file(&temp_validation_path);
+//                 let stderr_output = String::from_utf8_lossy(&output.stderr);
+//                 return Err(GpgError::GpgOperationError(format!(
+//                     "GPG signature validation FAILED. File may be tampered. GPG output: {}",
+//                     stderr_output.trim()
+//                 )));
+//             }
+//             debug_log!("✓ Signature validation PASSED. File integrity confirmed.");
+//         }
+//         Err(e) => {
+//             // Cleanup temp file
+//             let _ = fs::remove_file(&temp_validation_path);
 
-            return Err(GpgError::GpgOperationError(format!(
-                "Failed to execute GPG validation: {}",
-                e
-            )));
-        }
-    }
+//             return Err(GpgError::GpgOperationError(format!(
+//                 "Failed to execute GPG validation: {}",
+//                 e
+//             )));
+//         }
+//     }
 
-    // --- Stage 6: Parse Port Assignments from Validated Content ---
-    debug_log!("Extracting port assignments for pair '{}'", pair_name);
+//     // --- Stage 6: Parse Port Assignments from Validated Content ---
+//     debug_log!("Extracting port assignments for pair '{}'", pair_name);
 
-    // Now we can safely read from the validated content
-    let validated_content = match fs::read_to_string(&temp_validation_path) {
-        Ok(content) => content,
-        Err(e) => {
-            // Cleanup temp file
-            let _ = fs::remove_file(&temp_validation_path);
-            return Err(GpgError::FileSystemError(e));
-        }
-    };
+//     // Now we can safely read from the validated content
+//     let validated_content = match fs::read_to_string(&temp_validation_path) {
+//         Ok(content) => content,
+//         Err(e) => {
+//             // Cleanup temp file
+//             let _ = fs::remove_file(&temp_validation_path);
+//             return Err(GpgError::FileSystemError(e));
+//         }
+//     };
 
-    // Cleanup temp file
-    let _ = fs::remove_file(&temp_validation_path);
+//     // Cleanup temp file
+//     let _ = fs::remove_file(&temp_validation_path);
 
-    // Parse the specific table section we're looking for
-    let table_header = format!("[abstract_collaborator_port_assignments.{}]", pair_name);
-    let mut port_assignments = Vec::new();
-    let mut in_target_section = false;
-    let mut in_ports_array = false;
-    let mut current_port_entry: Option<PartialPortEntry> = None;
+//     // Parse the specific table section we're looking for
+//     let table_header = format!("[abstract_collaborator_port_assignments.{}]", pair_name);
+//     let mut port_assignments = Vec::new();
+//     let mut in_target_section = false;
+//     let mut in_ports_array = false;
+//     let mut current_port_entry: Option<PartialPortEntry> = None;
 
-    // Helper structure for parsing
-    #[derive(Default)]
-    struct PartialPortEntry {
-        user_name: Option<String>,
-        ready_port: Option<u16>,
-        intray_port: Option<u16>,
-        gotit_port: Option<u16>,
-    }
+//     // Helper structure for parsing
+//     #[derive(Default)]
+//     struct PartialPortEntry {
+//         user_name: Option<String>,
+//         ready_port: Option<u16>,
+//         intray_port: Option<u16>,
+//         gotit_port: Option<u16>,
+//     }
 
-    for line in validated_content.lines() {
-        let trimmed = line.trim();
+//     for line in validated_content.lines() {
+//         let trimmed = line.trim();
 
-        // Check if we're entering our target section
-        if trimmed == table_header {
-            in_target_section = true;
-            continue;
-        }
+//         // Check if we're entering our target section
+//         if trimmed == table_header {
+//             in_target_section = true;
+//             continue;
+//         }
 
-        // Check if we're leaving our section (new section starts)
-        if in_target_section && trimmed.starts_with('[') && trimmed != table_header {
-            break; // We've passed our section
-        }
+//         // Check if we're leaving our section (new section starts)
+//         if in_target_section && trimmed.starts_with('[') && trimmed != table_header {
+//             break; // We've passed our section
+//         }
 
-        // Skip if not in our section
-        if !in_target_section {
-            continue;
-        }
+//         // Skip if not in our section
+//         if !in_target_section {
+//             continue;
+//         }
 
-        // Check for collaborator_ports array start
-        if trimmed.starts_with("collaborator_ports = [") {
-            in_ports_array = true;
-            continue;
-        }
+//         // Check for collaborator_ports array start
+//         if trimmed.starts_with("collaborator_ports = [") {
+//             in_ports_array = true;
+//             continue;
+//         }
 
-        // Check for array end
-        if in_ports_array && trimmed == "]" {
-            break; // End of our data
-        }
+//         // Check for array end
+//         if in_ports_array && trimmed == "]" {
+//             break; // End of our data
+//         }
 
-        // Parse array entries
-        if in_ports_array {
-            // Handle start of a new port entry
-            if trimmed.starts_with('{') || trimmed.contains("{ user_name") {
-                current_port_entry = Some(PartialPortEntry::default());
-            }
+//         // Parse array entries
+//         if in_ports_array {
+//             // Handle start of a new port entry
+//             if trimmed.starts_with('{') || trimmed.contains("{ user_name") {
+//                 current_port_entry = Some(PartialPortEntry::default());
+//             }
 
-            // Parse fields within the entry
-            if let Some(ref mut entry) = current_port_entry {
-                // Parse user_name
-                if trimmed.contains("user_name = ") {
-                    if let Some(value) = extract_quoted_value(trimmed, "user_name") {
-                        entry.user_name = Some(value);
-                    }
-                }
+//             // Parse fields within the entry
+//             if let Some(ref mut entry) = current_port_entry {
+//                 // Parse user_name
+//                 if trimmed.contains("user_name = ") {
+//                     if let Some(value) = extract_quoted_value(trimmed, "user_name") {
+//                         entry.user_name = Some(value);
+//                     }
+//                 }
 
-                // Parse ready_port
-                if trimmed.contains("ready_port = ") {
-                    if let Some(value) = extract_port_value(trimmed, "ready_port") {
-                        entry.ready_port = Some(value);
-                    }
-                }
+//                 // Parse ready_port
+//                 if trimmed.contains("ready_port = ") {
+//                     if let Some(value) = extract_port_value(trimmed, "ready_port") {
+//                         entry.ready_port = Some(value);
+//                     }
+//                 }
 
-                // Parse intray_port
-                if trimmed.contains("intray_port = ") {
-                    if let Some(value) = extract_port_value(trimmed, "intray_port") {
-                        entry.intray_port = Some(value);
-                    }
-                }
+//                 // Parse intray_port
+//                 if trimmed.contains("intray_port = ") {
+//                     if let Some(value) = extract_port_value(trimmed, "intray_port") {
+//                         entry.intray_port = Some(value);
+//                     }
+//                 }
 
-                // Parse gotit_port
-                if trimmed.contains("gotit_port = ") {
-                    if let Some(value) = extract_port_value(trimmed, "gotit_port") {
-                        entry.gotit_port = Some(value);
-                    }
-                }
-            }
+//                 // Parse gotit_port
+//                 if trimmed.contains("gotit_port = ") {
+//                     if let Some(value) = extract_port_value(trimmed, "gotit_port") {
+//                         entry.gotit_port = Some(value);
+//                     }
+//                 }
+//             }
 
-            // Check for end of entry
-            if trimmed.ends_with("},") || trimmed.ends_with('}') {
-                if let Some(entry) = current_port_entry.take() {
-                    // Validate we have all required fields
-                    match (
-                        entry.user_name,
-                        entry.ready_port,
-                        entry.intray_port,
-                        entry.gotit_port,
-                    ) {
-                        (Some(user), Some(ready), Some(intray), Some(gotit)) => {
-                            port_assignments.push(AbstractTeamchannelNodeTomlPortsData {
-                                user_name: user,
-                                ready_port: ready,
-                                intray_port: intray,
-                                gotit_port: gotit,
-                            });
-                        }
-                        _ => {
-                            return Err(GpgError::GpgOperationError(format!(
-                                "Incomplete port assignment entry for pair '{}'. Missing required fields.",
-                                pair_name
-                            )));
-                        }
-                    }
-                }
-            }
-        }
-    }
+//             // Check for end of entry
+//             if trimmed.ends_with("},") || trimmed.ends_with('}') {
+//                 if let Some(entry) = current_port_entry.take() {
+//                     // Validate we have all required fields
+//                     match (
+//                         entry.user_name,
+//                         entry.ready_port,
+//                         entry.intray_port,
+//                         entry.gotit_port,
+//                     ) {
+//                         (Some(user), Some(ready), Some(intray), Some(gotit)) => {
+//                             port_assignments.push(AbstractTeamchannelNodeTomlPortsData {
+//                                 user_name: user,
+//                                 ready_port: ready,
+//                                 intray_port: intray,
+//                                 gotit_port: gotit,
+//                             });
+//                         }
+//                         _ => {
+//                             return Err(GpgError::GpgOperationError(format!(
+//                                 "Incomplete port assignment entry for pair '{}'. Missing required fields.",
+//                                 pair_name
+//                             )));
+//                         }
+//                     }
+//                 }
+//             }
+//         }
+//     }
 
-    // Check if we found the section
-    if !in_target_section {
-        return Err(GpgError::GpgOperationError(format!(
-            "Collaborator pair '{}' not found in abstract_collaborator_port_assignments",
-            pair_name
-        )));
-    }
+//     // Check if we found the section
+//     if !in_target_section {
+//         return Err(GpgError::GpgOperationError(format!(
+//             "Collaborator pair '{}' not found in abstract_collaborator_port_assignments",
+//             pair_name
+//         )));
+//     }
 
-    debug_log!(
-        "Successfully extracted {} port assignments for pair '{}'",
-        port_assignments.len(),
-        pair_name
-    );
+//     debug_log!(
+//         "Successfully extracted {} port assignments for pair '{}'",
+//         port_assignments.len(),
+//         pair_name
+//     );
 
-    Ok(port_assignments)
-}
+//     Ok(port_assignments)
+// }
 
 // /// Helper function to extract quoted string values from TOML lines
 // ///
@@ -8364,779 +8366,779 @@ pub fn read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyi
 //     }
 // }
 
-/// Reads all collaborator pair port assignments from a clearsigned TOML file using owner-based GPG key lookup.
-///
-/// # Purpose
-/// This function extracts network port assignments for ALL collaborator pairs from a
-/// clearsigned team channel configuration file. It enforces the same security model as
-/// `read_specific_pair_port_assignments_from_clearsigntoml`, requiring GPG signature
-/// validation before any data extraction.
-///
-/// # Security Model
-/// Identical to `read_specific_pair_port_assignments_from_clearsigntoml`:
-/// - Mandatory signature validation before data access
-/// - Owner-based key management via addressbook lookup
-/// - Complete chain of trust enforcement
-///
-/// # Implementation
-/// This function:
-/// 1. Validates the clearsigned file using owner-based key lookup
-/// 2. Identifies all collaborator pairs in the `abstract_collaborator_port_assignments` table
-/// 3. Calls `read_specific_pair_port_assignments_from_clearsigntoml` for each pair
-/// 4. Aggregates results into a HashMap
-///
-/// # Arguments
-/// - `path_to_clearsigned_toml` - Path to the clearsigned TOML file containing port assignments
-/// - `addressbook_files_directory_relative` - Relative path to the directory containing collaborator addressbook files
-///
-/// # Returns
-/// - `Ok(HashMap<String, Vec<AbstractTeamchannelNodeTomlPortsData>>)` - A map of pair names to their port assignments
-/// - `Err(GpgError)` - If validation fails or no assignments are found
-///
-/// # Example
-/// ```no_run
-/// let all_assignments = read_abstract_collaborator_port_assignments_from_clearsigntoml(
-///     Path::new("team_channel_config.toml"),
-///     "collaborators"
-/// )?;
-///
-/// for (pair_name, assignments) in all_assignments {
-///     debug_log!("Pair: {}", pair_name);
-///     for assignment in assignments {
-///         debug_log!("  {}: ports {}, {}, {}",
-///                  assignment.user_name,
-///                  assignment.ready_port,
-///                  assignment.intray_port,
-///                  assignment.gotit_port);
-///     }
-/// }
-/// ```
-pub fn read_abstract_collaborator_port_assignments_from_clearsigntoml(
-    path_to_clearsigned_toml: &Path,
-    addressbook_files_directory_relative: &str, // pass in constant here
-) -> Result<HashMap<String, Vec<AbstractTeamchannelNodeTomlPortsData>>, GpgError> {
-    debug_log!(
-        "Starting extraction of all collaborator port assignments from: {}",
-        path_to_clearsigned_toml.display()
-    );
-
-    // First, we need to validate the file and get the list of pairs
-    // We'll do this by reading the validated content once to find all pairs
-
-    // Perform the same validation steps as the specific function
-    // This code is duplicated for clarity and to ensure independent validation
-
-    // --- Stage 1: Input Validation ---
-    if !path_to_clearsigned_toml.exists() {
-        return Err(GpgError::PathError(format!(
-            "Clearsigned TOML file not found: {}",
-            path_to_clearsigned_toml.display()
-        )));
-    }
-    if !path_to_clearsigned_toml.is_file() {
-        return Err(GpgError::PathError(format!(
-            "Path is not a file: {}",
-            path_to_clearsigned_toml.display()
-        )));
-    }
-
-    let path_str = match path_to_clearsigned_toml.to_str() {
-        Some(s) => s,
-        None => {
-            return Err(GpgError::PathError(format!(
-                "Invalid path encoding for: {}",
-                path_to_clearsigned_toml.display()
-            )));
-        }
-    };
-
-    // --- Stage 2: Owner-based Validation (same as specific function) ---
-    let owner_name_of_toml_field_key_to_read = "owner";
-    let file_owner_username = match read_single_line_string_field_from_toml(
-        path_str,
-        owner_name_of_toml_field_key_to_read,
-    ) {
-        Ok(username) => {
-            if username.is_empty() {
-                return Err(GpgError::GpgOperationError(format!(
-                    "Field '{}' is empty. File owner is required for security validation.",
-                    owner_name_of_toml_field_key_to_read
-                )));
-            }
-            username
-        }
-        Err(e) => {
-            return Err(GpgError::GpgOperationError(format!(
-                "Failed to read file owner: {}",
-                e
-            )));
-        }
-    };
-
-    // Get collaborator directory and addressbook path
-    let collaborator_files_directory_absolute =
-        match make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(
-            addressbook_files_directory_relative,
-        ) {
-            Ok(path) => path,
-            Err(io_error) => return Err(GpgError::FileSystemError(io_error)),
-        };
-
-    let collaborator_filename = format!("{}__collaborator.toml", file_owner_username);
-    let user_addressbook_path = collaborator_files_directory_absolute.join(&collaborator_filename);
-    let user_addressbook_path_str = match user_addressbook_path.to_str() {
-        Some(s) => s,
-        None => {
-            return Err(GpgError::PathError(format!(
-                "Invalid path encoding for addressbook file"
-            )));
-        }
-    };
-
-    // Extract GPG key ID
-    let gpg_key_id_name_of_toml_field_key_to_read = "gpg_publickey_id";
-    let signing_key_id = match read_singleline_string_from_clearsigntoml(
-        user_addressbook_path_str,
-        gpg_key_id_name_of_toml_field_key_to_read,
-    ) {
-        Ok(key_id) => {
-            if key_id.is_empty() {
-                return Err(GpgError::GpgOperationError(
-                    "GPG key ID is empty in addressbook".to_string(),
-                ));
-            }
-            key_id
-        }
-        Err(e) => {
-            return Err(GpgError::GpgOperationError(format!(
-                "Failed to read GPG key ID: {}",
-                e
-            )));
-        }
-    };
-
-    // --- Stage 3: Validate and Extract Content Once ---
-    let temp_validation_path = create_temp_file_path("validate_all_ports")?;
-
-    let validation_result = Command::new("gpg")
-        .arg("--decrypt")
-        .arg("--batch")
-        .arg("--status-fd")
-        .arg("2")
-        .arg("--output")
-        .arg(&temp_validation_path)
-        .arg(path_to_clearsigned_toml)
-        .output();
-
-    match validation_result {
-        Ok(output) => {
-            if !output.status.success() {
-                let _ = fs::remove_file(&temp_validation_path);
-                return Err(GpgError::GpgOperationError(
-                    "GPG signature validation FAILED".to_string(),
-                ));
-            }
-        }
-        Err(e) => {
-            let _ = fs::remove_file(&temp_validation_path);
-            return Err(GpgError::GpgOperationError(format!(
-                "Failed to execute GPG validation: {}",
-                e
-            )));
-        }
-    }
-
-    // Read validated content to find all pairs
-    let validated_content = match fs::read_to_string(&temp_validation_path) {
-        Ok(content) => content,
-        Err(e) => {
-            let _ = fs::remove_file(&temp_validation_path);
-            return Err(GpgError::FileSystemError(e));
-        }
-    };
-
-    // Cleanup temp file
-    let _ = fs::remove_file(&temp_validation_path);
-
-    // --- Stage 4: Find All Collaborator Pairs ---
-    let mut pair_names = Vec::new();
-    let table_prefix = "[abstract_collaborator_port_assignments.";
-
-    for line in validated_content.lines() {
-        let trimmed = line.trim();
-        if trimmed.starts_with(table_prefix) && trimmed.ends_with(']') {
-            // Extract pair name from table header
-            let start = table_prefix.len();
-            let end = trimmed.len() - 1;
-            let pair_name = &trimmed[start..end];
-            pair_names.push(pair_name.to_string());
-        }
-    }
-
-    if pair_names.is_empty() {
-        return Err(GpgError::GpgOperationError(
-            "No collaborator pairs found in abstract_collaborator_port_assignments".to_string(),
-        ));
-    }
-
-    debug_log!("Found {} collaborator pairs to process", pair_names.len());
-
-    // --- Stage 5: Call Specific Function for Each Pair ---
-    let mut all_assignments = HashMap::new();
-
-    for pair_name in pair_names {
-        debug_log!("Processing pair: {}", pair_name);
-
-        match read_specific_pair_port_assignments_from_clearsigntoml(
-            path_to_clearsigned_toml,
-            addressbook_files_directory_relative,
-            &pair_name,
-        ) {
-            Ok(assignments) => {
-                all_assignments.insert(pair_name, assignments);
-            }
-            Err(e) => {
-                // Log the error but continue with other pairs
-                eprintln!(
-                    "Warning: Failed to read assignments for pair '{}': {}",
-                    pair_name,
-                    e.to_string()
-                );
-                // Optionally, you might want to fail fast instead:
-                // return Err(e);
-            }
-        }
-    }
-
-    if all_assignments.is_empty() {
-        return Err(GpgError::GpgOperationError(
-            "No port assignments could be extracted from any collaborator pairs".to_string(),
-        ));
-    }
-
-    debug_log!(
-        "Successfully extracted port assignments for {} pairs",
-        all_assignments.len()
-    );
-
-    Ok(all_assignments)
-}
-
-/// Reads all collaborator pair port assignments from a clearsigned TOML file using owner-based GPG key lookup (optimized version).
-///
-/// # Purpose
-/// This function extracts network port assignments for ALL collaborator pairs from a
-/// clearsigned team channel configuration file in a single pass. Unlike the previous version
-/// that calls the specific function multiple times, this version validates the file once
-/// and extracts all data efficiently.
-///
-/// # Security Model
-/// This function implements the same strict security-first approach:
-/// 1. **Mandatory validation**: The clearsigned file MUST be validated before ANY data extraction
-/// 2. **Owner-based key management**: Uses the file's owner field to look up the validation key
-/// 3. **Chain of trust**: Validation uses keys from the collaborator addressbook system
-/// 4. **Single validation pass**: Optimized to validate once and extract all data
-///
-/// # Validation Process
-/// 1. Reads the `owner` field from the target clearsigned TOML file
-/// 2. Constructs the path to the owner's addressbook file: `{owner}__collaborator.toml`
-/// 3. Extracts the GPG key ID from the addressbook (which is itself clearsigned and validated)
-/// 4. Uses that key to verify the target file's signature ONCE
-/// 5. Extracts all port assignments in a single pass through the validated content
-///
-/// # Data Structure Expected
-/// The function expects the TOML file to contain:
-/// ```toml
-/// [abstract_collaborator_port_assignments.alice_bob]
-/// collaborator_ports = [
-///     { user_name = "alice", ready_port = 50001, intray_port = 50002, gotit_port = 50003 },
-///     { user_name = "bob", ready_port = 50004, intray_port = 50005, gotit_port = 50006 },
-/// ]
-///
-/// [abstract_collaborator_port_assignments.alice_charlotte]
-/// collaborator_ports = [
-///     { user_name = "alice", ready_port = 50007, intray_port = 50008, gotit_port = 50009 },
-///     { user_name = "charlotte", ready_port = 50010, intray_port = 50011, gotit_port = 50012 },
-/// ]
-/// ```
-///
-/// # Arguments
-/// - `path_to_clearsigned_toml` - Path to the clearsigned TOML file containing port assignments
-/// - `addressbook_files_directory_relative` - Relative path to the directory containing collaborator addressbook files
-///
-/// # Returns
-/// - `Ok(HashMap<String, Vec<AbstractTeamchannelNodeTomlPortsData>>)` - A map where:
-///   - Keys are collaborator pair names (e.g., "alice_bob")
-///   - Values are vectors of port assignments for that pair
-/// - `Err(GpgError)` - If any step fails:
-///   - `PathError`: File not found, invalid path, or path encoding issues
-///   - `GpgOperationError`: GPG validation failure, missing required fields, or parsing errors
-///   - `FileSystemError`: I/O errors during file operations
-///
-/// # Performance
-/// This optimized version:
-/// - Performs GPG validation only ONCE (vs. once per pair in the previous version)
-/// - Reads the file content only ONCE
-/// - Parses all assignments in a single pass
-/// - Significantly faster for files with many collaborator pairs
-///
-/// # Example
-/// ```no_run
-/// let all_assignments = read_all_collaborator_port_assignments_clearsigntoml_optimized(
-///     Path::new("team_channel_config.toml"),
-///     "collaborators"
-/// )?;
-///
-/// // Display all assignments
-/// for (pair_name, assignments) in &all_assignments {
-///     debug_log!("Collaborator pair: {}", pair_name);
-///     for assignment in assignments {
-///         debug_log!("  {} -> ready: {}, intray: {}, gotit: {}",
-///                  assignment.user_name,
-///                  assignment.ready_port,
-///                  assignment.intray_port,
-///                  assignment.gotit_port);
-///     }
-/// }
-///
-/// // Access specific pair
-/// if let Some(alice_bob_ports) = all_assignments.get("alice_bob") {
-///     debug_log!("Alice-Bob communication ports: {:?}", alice_bob_ports);
-/// }
-/// ```
-pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
-    path_to_clearsigned_toml: &Path,
-    absolute_addressbook_directory_path: &Path,
-    gpg_full_fingerprint_key_id_string: &String,
-    base_uma_temp_directory_path: &PathBuf,
-) -> Result<HashMap<String, Vec<AbstractTeamchannelNodeTomlPortsData>>, GpgError> {
-    debug_log(
-        "starting RACPACO read_all_collaborator_port_assignments_clearsigntoml_optimized() Starting optimized extraction of all collaborator port assignments",
-    );
-
-    // --- Stage 1: Input Validation ---
-    debug_log!(
-        "RACPACO from path_to_clearsigned_toml: {}",
-        path_to_clearsigned_toml.display(),
-    );
-    debug_log!(
-        "RACPACO absolute_addressbook_directory_path -> {:?}",
-        absolute_addressbook_directory_path.display()
-    );
-    debug_log!("RACPACO This version validates once and extracts all data in a single pass.");
-
-    // Validate that the input path exists and is a file
-    if !path_to_clearsigned_toml.exists() {
-        return Err(GpgError::PathError(format!(
-            "RACPACO Clearsigned TOML file not found: {}",
-            path_to_clearsigned_toml.display()
-        )));
-    }
-    if !path_to_clearsigned_toml.is_file() {
-        return Err(GpgError::PathError(format!(
-            "RACPACO Path is not a file: {}",
-            path_to_clearsigned_toml.display()
-        )));
-    }
-
-    // Convert path to string for reading functions
-    let path_str = match path_to_clearsigned_toml.to_str() {
-        Some(s) => s,
-        None => {
-            return Err(GpgError::PathError(format!(
-                "RACPACO Invalid path encoding for: {}",
-                path_to_clearsigned_toml.display()
-            )));
-        }
-    };
-
-    // --- Stage 2: Extract Owner for Key Lookup ---
-    let owner_name_of_toml_field_key_to_read = "owner";
-    debug_log!(
-        "RACPACO Reading file owner from field '{}' for security validation",
-        owner_name_of_toml_field_key_to_read
-    );
-
-    // Read owner from the file (before validation, but we won't use other data until validated)
-    let file_owner_username = match read_single_line_string_field_from_toml(
-        path_str,
-        owner_name_of_toml_field_key_to_read,
-    ) {
-        Ok(username) => {
-            if username.is_empty() {
-                return Err(GpgError::GpgOperationError(format!(
-                    "RACPACO Field '{}' is empty in TOML file. File owner is required for security validation.",
-                    owner_name_of_toml_field_key_to_read
-                )));
-            }
-            username
-        }
-        Err(e) => {
-            return Err(GpgError::GpgOperationError(format!(
-                "RACPACO Failed to read file owner from field '{}': {}",
-                owner_name_of_toml_field_key_to_read, e
-            )));
-        }
-    };
-    debug_log!("RACPACO File owner: '{}'", file_owner_username);
-
-    // --- Stage 3: Construct Addressbook Path and Extract GPG Key ---
-    debug_log!(
-        "RACPACO Looking up GPG key for owner '{}' in addressbook",
-        file_owner_username
-    );
-
-    // Check for both file types
-    let toml_path = absolute_addressbook_directory_path
-        .join(format!("{}__collaborator.toml", file_owner_username));
-    let gpgtoml_path = absolute_addressbook_directory_path
-        .join(format!("{}__collaborator.gpgtoml", file_owner_username));
-
-    // Determine which file exists and use that path
-    let user_addressbook_path = if toml_path.exists() {
-        // Prefer plain .toml if both exist
-        toml_path
-    } else if gpgtoml_path.exists() {
-        gpgtoml_path
-    } else {
-        // Neither exists, skip this directory
-        #[cfg(debug_assertions)]
-        debug_log!(
-            "Skipping directory (no node.toml or node.gpgtoml): {:?}",
-            &absolute_addressbook_directory_path
-        );
-        return Err(GpgError::PathError(format!(
-            "RACPACO Err Invalid path encoding for addressbook file: {}",
-            absolute_addressbook_directory_path.display()
-        )));
-    };
-
-    #[cfg(debug_assertions)]
-    debug_log!(
-        "Found user_addressbook_path file: {:?}",
-        user_addressbook_path
-    );
-
-    // // Verify addressbook exists
-    // if !user_addressbook_path.exists() {
-    //     return Err(GpgError::PathError(format!(
-    //         "RACPACO Err Addressbook file not found for user_addressbook_path {}",
-    //         user_addressbook_path.display()
-    //     )));
-    // }
-
-    // // Get readable copy (pass the specific file path, not the directory entry)
-    // let addressbook_readcopy_path_string =
-    //     get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
-    //         &user_addressbook_path, // <-- Use the determined file path here
-    //         &gpg_full_fingerprint_key_id_string,
-    //         &base_uma_temp_directory_path,
-    //     )
-    //     .map_err(|e| format!("Failed to get temporary read copy of TOML file: {:?}", e))?;
-
-    // Get readable temp copy (handles both .toml and .gpgtoml)
-    let user_addressbook_path_str =
-        match get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
-            &user_addressbook_path, // <-- Use the determined file path here
-            &gpg_full_fingerprint_key_id_string,
-            &base_uma_temp_directory_path,
-        ) {
-            Ok(path) => {
-                debug_log!("LIM: Got temp read copy at: {}", path);
-                path
-            }
-            Err(e) => {
-                return Err(GpgError::PathError(format!(
-                    "RACPACO Err Invalid path encoding for addressbook file: {} {}",
-                    user_addressbook_path.display(),
-                    e
-                )));
-            }
-        };
-
-    // // Construct addressbook filename
-    // let collaborator_filename = format!("{}__collaborator.toml", file_owner_username);
-
-    // /*
-    // maybe skip to this part where adddressbook
-    // readcopy is passed in
-    // */
-    // let user_addressbook_path = collaborator_files_directory_absolute.join(&collaborator_filename);
-
-    // debug_log!(
-    //     "RACPACO Owner's addressbook path: {}",
-    //     user_addressbook_path.display()
-    // );
-
-    // // Convert addressbook path to string
-    // let user_addressbook_path_str = match user_addressbook_path.to_str() {
-    //     Some(s) => s,
-    //     None => {
-    //         return Err(GpgError::PathError(format!(
-    //             "RACPACO Err Invalid path encoding for addressbook file: {}",
-    //             user_addressbook_path.display()
-    //         )));
-    //     }
-    // };
-
-    debug_log!(
-        "RACPACO user_addressbook_path_str -> {}",
-        user_addressbook_path_str
-    );
-
-    // Extract GPG key ID from addressbook (which validates the addressbook's signature)
-    let gpg_key_id_name_of_toml_field_key_to_read = "gpg_publickey_id";
-    let signing_key_id = match read_singleline_string_from_clearsigntoml(
-        &user_addressbook_path_str,
-        gpg_key_id_name_of_toml_field_key_to_read,
-    ) {
-        Ok(key_id) => {
-            if key_id.is_empty() {
-                return Err(GpgError::GpgOperationError(format!(
-                    "RACPACO GPG key ID is empty in user_addressbook_path_str '{}'",
-                    user_addressbook_path_str,
-                )));
-            }
-            key_id
-        }
-        Err(e) => {
-            return Err(GpgError::GpgOperationError(format!(
-                "RACPACO Failed to read GPG key ID from addressbook: {}",
-                e
-            )));
-        }
-    };
-    debug_log!(
-        "RACPACO Found GPG key ID for validation: '{}'",
-        signing_key_id
-    );
-
-    // --- Stage 4: Create Temporary File for Validation ---
-    let temp_validation_path = create_temp_file_path("validate_all_ports_optimized")?;
-
-    // --- Stage 5: Verify Signature and Extract Content (ONCE) ---
-    debug_log!("RACPACO Validating clearsigned file signature...");
-
-    // Decrypt (which validates) the clearsigned file
-    let validation_result = Command::new("gpg")
-        .arg("--decrypt")
-        .arg("--batch")
-        .arg("--status-fd")
-        .arg("2")
-        .arg("--output")
-        .arg(&temp_validation_path)
-        .arg(path_to_clearsigned_toml)
-        .output();
-
-    match validation_result {
-        Ok(output) => {
-            if !output.status.success() {
-                // Cleanup temp file
-                let _ = fs::remove_file(&temp_validation_path);
-
-                let stderr_output = String::from_utf8_lossy(&output.stderr);
-                return Err(GpgError::GpgOperationError(format!(
-                    "RACPACO GPG signature validation FAILED. File may be tampered. GPG output: {}",
-                    stderr_output.trim()
-                )));
-            }
-            debug_log!("RACPACO ✓ Signature validation PASSED. File integrity confirmed.");
-            debug_log!("RACPACO Now extracting all port assignments in a single pass...");
-        }
-        Err(e) => {
-            // Cleanup temp file
-            let _ = fs::remove_file(&temp_validation_path);
-
-            return Err(GpgError::GpgOperationError(format!(
-                "RACPACO Failed to execute GPG validation: {}",
-                e
-            )));
-        }
-    }
-
-    // --- Stage 6: Parse ALL Port Assignments from Validated Content ---
-
-    // Read the validated content once
-    let validated_content = match fs::read_to_string(&temp_validation_path) {
-        Ok(content) => content,
-        Err(e) => {
-            // Cleanup temp file
-            let _ = fs::remove_file(&temp_validation_path);
-            return Err(GpgError::FileSystemError(e));
-        }
-    };
-
-    // Cleanup temp file immediately after reading
-    let _ = fs::remove_file(&temp_validation_path);
-
-    // Parse all collaborator pair sections in one pass
-    let mut all_assignments: HashMap<String, Vec<AbstractTeamchannelNodeTomlPortsData>> =
-        HashMap::new();
-    let table_prefix = "[abstract_collaborator_port_assignments.";
-
-    // State tracking for parsing
-    let mut current_pair_name: Option<String> = None;
-    let mut current_pair_assignments: Vec<AbstractTeamchannelNodeTomlPortsData> = Vec::new();
-    let mut in_ports_array = false;
-    let mut current_port_entry: Option<PartialPortEntry> = None;
-
-    // Helper structure for parsing (reused from the specific function)
-    #[derive(Default)]
-    struct PartialPortEntry {
-        user_name: Option<String>,
-        ready_port: Option<u16>,
-        intray_port: Option<u16>,
-        gotit_port: Option<u16>,
-    }
-
-    // Process each line of the validated content
-    for line in validated_content.lines() {
-        let trimmed = line.trim();
-
-        // Check if we're entering a new collaborator pair section
-        if trimmed.starts_with(table_prefix) && trimmed.ends_with(']') {
-            // Save previous pair's data if any
-            if let Some(pair_name) = current_pair_name.take() {
-                if !current_pair_assignments.is_empty() {
-                    all_assignments.insert(pair_name, current_pair_assignments.clone());
-                    current_pair_assignments.clear();
-                }
-            }
-
-            // Extract new pair name
-            let start = table_prefix.len();
-            let end = trimmed.len() - 1;
-            current_pair_name = Some(trimmed[start..end].to_string());
-            in_ports_array = false;
-            debug_log!("  Processing pair: {}", current_pair_name.as_ref().unwrap());
-            continue;
-        }
-
-        // Skip lines if we're not in a pair section
-        if current_pair_name.is_none() {
-            continue;
-        }
-
-        // Check for collaborator_ports array start
-        if trimmed.starts_with("collaborator_ports = [") {
-            in_ports_array = true;
-
-            // Check if it's a single-line array (for simple cases)
-            if trimmed.contains(']') {
-                // TODO: Handle single-line array parsing if needed
-                in_ports_array = false;
-            }
-            continue;
-        }
-
-        // Check for array end
-        if in_ports_array && trimmed == "]" {
-            in_ports_array = false;
-            continue;
-        }
-
-        // Parse array entries
-        if in_ports_array {
-            // Handle start of a new port entry
-            if trimmed.starts_with('{') || trimmed.contains("{ user_name") {
-                // If we had a previous incomplete entry, it's an error
-                if current_port_entry.is_some() {
-                    return Err(GpgError::GpgOperationError(format!(
-                        "RACPACO Malformed port entry in pair '{}'",
-                        current_pair_name.as_ref().unwrap()
-                    )));
-                }
-                current_port_entry = Some(PartialPortEntry::default());
-            }
-
-            // Parse fields within the entry
-            if let Some(ref mut entry) = current_port_entry {
-                // Parse all fields that might be on this line
-
-                // Parse user_name
-                if trimmed.contains("user_name = ") {
-                    if let Some(value) = extract_quoted_value(trimmed, "user_name") {
-                        entry.user_name = Some(value);
-                    }
-                }
-
-                // Parse ready_port
-                if trimmed.contains("ready_port = ") {
-                    if let Some(value) = extract_port_value(trimmed, "ready_port") {
-                        entry.ready_port = Some(value);
-                    }
-                }
-
-                // Parse intray_port
-                if trimmed.contains("intray_port = ") {
-                    if let Some(value) = extract_port_value(trimmed, "intray_port") {
-                        entry.intray_port = Some(value);
-                    }
-                }
-
-                // Parse gotit_port
-                if trimmed.contains("gotit_port = ") {
-                    if let Some(value) = extract_port_value(trimmed, "gotit_port") {
-                        entry.gotit_port = Some(value);
-                    }
-                }
-            }
-
-            // Check for end of entry
-            if trimmed.ends_with("},") || trimmed.ends_with('}') {
-                if let Some(entry) = current_port_entry.take() {
-                    // Validate we have all required fields
-                    match (
-                        entry.user_name,
-                        entry.ready_port,
-                        entry.intray_port,
-                        entry.gotit_port,
-                    ) {
-                        (Some(user), Some(ready), Some(intray), Some(gotit)) => {
-                            current_pair_assignments.push(AbstractTeamchannelNodeTomlPortsData {
-                                user_name: user,
-                                ready_port: ready,
-                                intray_port: intray,
-                                gotit_port: gotit,
-                            });
-                        }
-                        _ => {
-                            return Err(GpgError::GpgOperationError(format!(
-                                "RACPACO Incomplete port assignment entry for pair '{}'. Missing required fields.",
-                                current_pair_name.as_ref().unwrap()
-                            )));
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // Don't forget the last pair if the file doesn't end with another section
-    if let Some(pair_name) = current_pair_name.take() {
-        if !current_pair_assignments.is_empty() {
-            all_assignments.insert(pair_name, current_pair_assignments);
-        }
-    }
-
-    // --- Stage 7: Validate Results ---
-    if all_assignments.is_empty() {
-        return Err(GpgError::GpgOperationError(
-            "RACPACO No collaborator port assignments found in abstract_collaborator_port_assignments".to_string()
-        ));
-    }
-
-    // Log summary
-    debug_log!(
-        "RACPACO ✓ Successfully extracted port assignments for {} collaborator pairs:",
-        all_assignments.len()
-    );
-    for (pair_name, assignments) in &all_assignments {
-        debug_log!("  - {}: {} port assignments", pair_name, assignments.len());
-    }
-
-    Ok(all_assignments)
-}
+// /// Reads all collaborator pair port assignments from a clearsigned TOML file using owner-based GPG key lookup.
+// ///
+// /// # Purpose
+// /// This function extracts network port assignments for ALL collaborator pairs from a
+// /// clearsigned team channel configuration file. It enforces the same security model as
+// /// `read_specific_pair_port_assignments_from_clearsigntoml`, requiring GPG signature
+// /// validation before any data extraction.
+// ///
+// /// # Security Model
+// /// Identical to `read_specific_pair_port_assignments_from_clearsigntoml`:
+// /// - Mandatory signature validation before data access
+// /// - Owner-based key management via addressbook lookup
+// /// - Complete chain of trust enforcement
+// ///
+// /// # Implementation
+// /// This function:
+// /// 1. Validates the clearsigned file using owner-based key lookup
+// /// 2. Identifies all collaborator pairs in the `abstract_collaborator_port_assignments` table
+// /// 3. Calls `read_specific_pair_port_assignments_from_clearsigntoml` for each pair
+// /// 4. Aggregates results into a HashMap
+// ///
+// /// # Arguments
+// /// - `path_to_clearsigned_toml` - Path to the clearsigned TOML file containing port assignments
+// /// - `addressbook_files_directory_relative` - Relative path to the directory containing collaborator addressbook files
+// ///
+// /// # Returns
+// /// - `Ok(HashMap<String, Vec<AbstractTeamchannelNodeTomlPortsData>>)` - A map of pair names to their port assignments
+// /// - `Err(GpgError)` - If validation fails or no assignments are found
+// ///
+// /// # Example
+// /// ```no_run
+// /// let all_assignments = read_abstract_collaborator_port_assignments_from_clearsigntoml(
+// ///     Path::new("team_channel_config.toml"),
+// ///     "collaborators"
+// /// )?;
+// ///
+// /// for (pair_name, assignments) in all_assignments {
+// ///     debug_log!("Pair: {}", pair_name);
+// ///     for assignment in assignments {
+// ///         debug_log!("  {}: ports {}, {}, {}",
+// ///                  assignment.user_name,
+// ///                  assignment.ready_port,
+// ///                  assignment.intray_port,
+// ///                  assignment.gotit_port);
+// ///     }
+// /// }
+// /// ```
+// pub fn read_abstract_collaborator_port_assignments_from_clearsigntoml(
+//     path_to_clearsigned_toml: &Path,
+//     addressbook_files_directory_relative: &str, // pass in constant here
+// ) -> Result<HashMap<String, Vec<AbstractTeamchannelNodeTomlPortsData>>, GpgError> {
+//     debug_log!(
+//         "Starting extraction of all collaborator port assignments from: {}",
+//         path_to_clearsigned_toml.display()
+//     );
+
+//     // First, we need to validate the file and get the list of pairs
+//     // We'll do this by reading the validated content once to find all pairs
+
+//     // Perform the same validation steps as the specific function
+//     // This code is duplicated for clarity and to ensure independent validation
+
+//     // --- Stage 1: Input Validation ---
+//     if !path_to_clearsigned_toml.exists() {
+//         return Err(GpgError::PathError(format!(
+//             "Clearsigned TOML file not found: {}",
+//             path_to_clearsigned_toml.display()
+//         )));
+//     }
+//     if !path_to_clearsigned_toml.is_file() {
+//         return Err(GpgError::PathError(format!(
+//             "Path is not a file: {}",
+//             path_to_clearsigned_toml.display()
+//         )));
+//     }
+
+//     let path_str = match path_to_clearsigned_toml.to_str() {
+//         Some(s) => s,
+//         None => {
+//             return Err(GpgError::PathError(format!(
+//                 "Invalid path encoding for: {}",
+//                 path_to_clearsigned_toml.display()
+//             )));
+//         }
+//     };
+
+//     // --- Stage 2: Owner-based Validation (same as specific function) ---
+//     let owner_name_of_toml_field_key_to_read = "owner";
+//     let file_owner_username = match read_single_line_string_field_from_toml(
+//         path_str,
+//         owner_name_of_toml_field_key_to_read,
+//     ) {
+//         Ok(username) => {
+//             if username.is_empty() {
+//                 return Err(GpgError::GpgOperationError(format!(
+//                     "Field '{}' is empty. File owner is required for security validation.",
+//                     owner_name_of_toml_field_key_to_read
+//                 )));
+//             }
+//             username
+//         }
+//         Err(e) => {
+//             return Err(GpgError::GpgOperationError(format!(
+//                 "Failed to read file owner: {}",
+//                 e
+//             )));
+//         }
+//     };
+
+//     // Get collaborator directory and addressbook path
+//     let collaborator_files_directory_absolute =
+//         match make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(
+//             addressbook_files_directory_relative,
+//         ) {
+//             Ok(path) => path,
+//             Err(io_error) => return Err(GpgError::FileSystemError(io_error)),
+//         };
+
+//     let collaborator_filename = format!("{}__collaborator.toml", file_owner_username);
+//     let user_addressbook_path = collaborator_files_directory_absolute.join(&collaborator_filename);
+//     let user_addressbook_path_str = match user_addressbook_path.to_str() {
+//         Some(s) => s,
+//         None => {
+//             return Err(GpgError::PathError(format!(
+//                 "Invalid path encoding for addressbook file"
+//             )));
+//         }
+//     };
+
+//     // Extract GPG key ID
+//     let gpg_key_id_name_of_toml_field_key_to_read = "gpg_publickey_id";
+//     let signing_key_id = match read_singleline_string_from_clearsigntoml(
+//         user_addressbook_path_str,
+//         gpg_key_id_name_of_toml_field_key_to_read,
+//     ) {
+//         Ok(key_id) => {
+//             if key_id.is_empty() {
+//                 return Err(GpgError::GpgOperationError(
+//                     "GPG key ID is empty in addressbook".to_string(),
+//                 ));
+//             }
+//             key_id
+//         }
+//         Err(e) => {
+//             return Err(GpgError::GpgOperationError(format!(
+//                 "Failed to read GPG key ID: {}",
+//                 e
+//             )));
+//         }
+//     };
+
+//     // --- Stage 3: Validate and Extract Content Once ---
+//     let temp_validation_path = create_temp_file_path("validate_all_ports")?;
+
+//     let validation_result = Command::new("gpg")
+//         .arg("--decrypt")
+//         .arg("--batch")
+//         .arg("--status-fd")
+//         .arg("2")
+//         .arg("--output")
+//         .arg(&temp_validation_path)
+//         .arg(path_to_clearsigned_toml)
+//         .output();
+
+//     match validation_result {
+//         Ok(output) => {
+//             if !output.status.success() {
+//                 let _ = fs::remove_file(&temp_validation_path);
+//                 return Err(GpgError::GpgOperationError(
+//                     "GPG signature validation FAILED".to_string(),
+//                 ));
+//             }
+//         }
+//         Err(e) => {
+//             let _ = fs::remove_file(&temp_validation_path);
+//             return Err(GpgError::GpgOperationError(format!(
+//                 "Failed to execute GPG validation: {}",
+//                 e
+//             )));
+//         }
+//     }
+
+//     // Read validated content to find all pairs
+//     let validated_content = match fs::read_to_string(&temp_validation_path) {
+//         Ok(content) => content,
+//         Err(e) => {
+//             let _ = fs::remove_file(&temp_validation_path);
+//             return Err(GpgError::FileSystemError(e));
+//         }
+//     };
+
+//     // Cleanup temp file
+//     let _ = fs::remove_file(&temp_validation_path);
+
+//     // --- Stage 4: Find All Collaborator Pairs ---
+//     let mut pair_names = Vec::new();
+//     let table_prefix = "[abstract_collaborator_port_assignments.";
+
+//     for line in validated_content.lines() {
+//         let trimmed = line.trim();
+//         if trimmed.starts_with(table_prefix) && trimmed.ends_with(']') {
+//             // Extract pair name from table header
+//             let start = table_prefix.len();
+//             let end = trimmed.len() - 1;
+//             let pair_name = &trimmed[start..end];
+//             pair_names.push(pair_name.to_string());
+//         }
+//     }
+
+//     if pair_names.is_empty() {
+//         return Err(GpgError::GpgOperationError(
+//             "No collaborator pairs found in abstract_collaborator_port_assignments".to_string(),
+//         ));
+//     }
+
+//     debug_log!("Found {} collaborator pairs to process", pair_names.len());
+
+//     // --- Stage 5: Call Specific Function for Each Pair ---
+//     let mut all_assignments = HashMap::new();
+
+//     for pair_name in pair_names {
+//         debug_log!("Processing pair: {}", pair_name);
+
+//         match read_specific_pair_port_assignments_from_clearsigntoml(
+//             path_to_clearsigned_toml,
+//             addressbook_files_directory_relative,
+//             &pair_name,
+//         ) {
+//             Ok(assignments) => {
+//                 all_assignments.insert(pair_name, assignments);
+//             }
+//             Err(e) => {
+//                 // Log the error but continue with other pairs
+//                 eprintln!(
+//                     "Warning: Failed to read assignments for pair '{}': {}",
+//                     pair_name,
+//                     e.to_string()
+//                 );
+//                 // Optionally, you might want to fail fast instead:
+//                 // return Err(e);
+//             }
+//         }
+//     }
+
+//     if all_assignments.is_empty() {
+//         return Err(GpgError::GpgOperationError(
+//             "No port assignments could be extracted from any collaborator pairs".to_string(),
+//         ));
+//     }
+
+//     debug_log!(
+//         "Successfully extracted port assignments for {} pairs",
+//         all_assignments.len()
+//     );
+
+//     Ok(all_assignments)
+// }
+
+// /// Reads all collaborator pair port assignments from a clearsigned TOML file using owner-based GPG key lookup (optimized version).
+// ///
+// /// # Purpose
+// /// This function extracts network port assignments for ALL collaborator pairs from a
+// /// clearsigned team channel configuration file in a single pass. Unlike the previous version
+// /// that calls the specific function multiple times, this version validates the file once
+// /// and extracts all data efficiently.
+// ///
+// /// # Security Model
+// /// This function implements the same strict security-first approach:
+// /// 1. **Mandatory validation**: The clearsigned file MUST be validated before ANY data extraction
+// /// 2. **Owner-based key management**: Uses the file's owner field to look up the validation key
+// /// 3. **Chain of trust**: Validation uses keys from the collaborator addressbook system
+// /// 4. **Single validation pass**: Optimized to validate once and extract all data
+// ///
+// /// # Validation Process
+// /// 1. Reads the `owner` field from the target clearsigned TOML file
+// /// 2. Constructs the path to the owner's addressbook file: `{owner}__collaborator.toml`
+// /// 3. Extracts the GPG key ID from the addressbook (which is itself clearsigned and validated)
+// /// 4. Uses that key to verify the target file's signature ONCE
+// /// 5. Extracts all port assignments in a single pass through the validated content
+// ///
+// /// # Data Structure Expected
+// /// The function expects the TOML file to contain:
+// /// ```toml
+// /// [abstract_collaborator_port_assignments.alice_bob]
+// /// collaborator_ports = [
+// ///     { user_name = "alice", ready_port = 50001, intray_port = 50002, gotit_port = 50003 },
+// ///     { user_name = "bob", ready_port = 50004, intray_port = 50005, gotit_port = 50006 },
+// /// ]
+// ///
+// /// [abstract_collaborator_port_assignments.alice_charlotte]
+// /// collaborator_ports = [
+// ///     { user_name = "alice", ready_port = 50007, intray_port = 50008, gotit_port = 50009 },
+// ///     { user_name = "charlotte", ready_port = 50010, intray_port = 50011, gotit_port = 50012 },
+// /// ]
+// /// ```
+// ///
+// /// # Arguments
+// /// - `path_to_clearsigned_toml` - Path to the clearsigned TOML file containing port assignments
+// /// - `addressbook_files_directory_relative` - Relative path to the directory containing collaborator addressbook files
+// ///
+// /// # Returns
+// /// - `Ok(HashMap<String, Vec<AbstractTeamchannelNodeTomlPortsData>>)` - A map where:
+// ///   - Keys are collaborator pair names (e.g., "alice_bob")
+// ///   - Values are vectors of port assignments for that pair
+// /// - `Err(GpgError)` - If any step fails:
+// ///   - `PathError`: File not found, invalid path, or path encoding issues
+// ///   - `GpgOperationError`: GPG validation failure, missing required fields, or parsing errors
+// ///   - `FileSystemError`: I/O errors during file operations
+// ///
+// /// # Performance
+// /// This optimized version:
+// /// - Performs GPG validation only ONCE (vs. once per pair in the previous version)
+// /// - Reads the file content only ONCE
+// /// - Parses all assignments in a single pass
+// /// - Significantly faster for files with many collaborator pairs
+// ///
+// /// # Example
+// /// ```no_run
+// /// let all_assignments = read_all_collaborator_port_assignments_clearsigntoml_optimized(
+// ///     Path::new("team_channel_config.toml"),
+// ///     "collaborators"
+// /// )?;
+// ///
+// /// // Display all assignments
+// /// for (pair_name, assignments) in &all_assignments {
+// ///     debug_log!("Collaborator pair: {}", pair_name);
+// ///     for assignment in assignments {
+// ///         debug_log!("  {} -> ready: {}, intray: {}, gotit: {}",
+// ///                  assignment.user_name,
+// ///                  assignment.ready_port,
+// ///                  assignment.intray_port,
+// ///                  assignment.gotit_port);
+// ///     }
+// /// }
+// ///
+// /// // Access specific pair
+// /// if let Some(alice_bob_ports) = all_assignments.get("alice_bob") {
+// ///     debug_log!("Alice-Bob communication ports: {:?}", alice_bob_ports);
+// /// }
+// /// ```
+// pub fn read_all_collaborator_port_assignments_clearsigntoml_optimized(
+//     path_to_clearsigned_toml: &Path,
+//     absolute_addressbook_directory_path: &Path,
+//     gpg_full_fingerprint_key_id_string: &String,
+//     base_uma_temp_directory_path: &PathBuf,
+// ) -> Result<HashMap<String, Vec<AbstractTeamchannelNodeTomlPortsData>>, GpgError> {
+//     debug_log(
+//         "starting RACPACO read_all_collaborator_port_assignments_clearsigntoml_optimized() Starting optimized extraction of all collaborator port assignments",
+//     );
+
+//     // --- Stage 1: Input Validation ---
+//     debug_log!(
+//         "RACPACO from path_to_clearsigned_toml: {}",
+//         path_to_clearsigned_toml.display(),
+//     );
+//     debug_log!(
+//         "RACPACO absolute_addressbook_directory_path -> {:?}",
+//         absolute_addressbook_directory_path.display()
+//     );
+//     debug_log!("RACPACO This version validates once and extracts all data in a single pass.");
+
+//     // Validate that the input path exists and is a file
+//     if !path_to_clearsigned_toml.exists() {
+//         return Err(GpgError::PathError(format!(
+//             "RACPACO Clearsigned TOML file not found: {}",
+//             path_to_clearsigned_toml.display()
+//         )));
+//     }
+//     if !path_to_clearsigned_toml.is_file() {
+//         return Err(GpgError::PathError(format!(
+//             "RACPACO Path is not a file: {}",
+//             path_to_clearsigned_toml.display()
+//         )));
+//     }
+
+//     // Convert path to string for reading functions
+//     let path_str = match path_to_clearsigned_toml.to_str() {
+//         Some(s) => s,
+//         None => {
+//             return Err(GpgError::PathError(format!(
+//                 "RACPACO Invalid path encoding for: {}",
+//                 path_to_clearsigned_toml.display()
+//             )));
+//         }
+//     };
+
+//     // --- Stage 2: Extract Owner for Key Lookup ---
+//     let owner_name_of_toml_field_key_to_read = "owner";
+//     debug_log!(
+//         "RACPACO Reading file owner from field '{}' for security validation",
+//         owner_name_of_toml_field_key_to_read
+//     );
+
+//     // Read owner from the file (before validation, but we won't use other data until validated)
+//     let file_owner_username = match read_single_line_string_field_from_toml(
+//         path_str,
+//         owner_name_of_toml_field_key_to_read,
+//     ) {
+//         Ok(username) => {
+//             if username.is_empty() {
+//                 return Err(GpgError::GpgOperationError(format!(
+//                     "RACPACO Field '{}' is empty in TOML file. File owner is required for security validation.",
+//                     owner_name_of_toml_field_key_to_read
+//                 )));
+//             }
+//             username
+//         }
+//         Err(e) => {
+//             return Err(GpgError::GpgOperationError(format!(
+//                 "RACPACO Failed to read file owner from field '{}': {}",
+//                 owner_name_of_toml_field_key_to_read, e
+//             )));
+//         }
+//     };
+//     debug_log!("RACPACO File owner: '{}'", file_owner_username);
+
+//     // --- Stage 3: Construct Addressbook Path and Extract GPG Key ---
+//     debug_log!(
+//         "RACPACO Looking up GPG key for owner '{}' in addressbook",
+//         file_owner_username
+//     );
+
+//     // Check for both file types
+//     let toml_path = absolute_addressbook_directory_path
+//         .join(format!("{}__collaborator.toml", file_owner_username));
+//     let gpgtoml_path = absolute_addressbook_directory_path
+//         .join(format!("{}__collaborator.gpgtoml", file_owner_username));
+
+//     // Determine which file exists and use that path
+//     let user_addressbook_path = if toml_path.exists() {
+//         // Prefer plain .toml if both exist
+//         toml_path
+//     } else if gpgtoml_path.exists() {
+//         gpgtoml_path
+//     } else {
+//         // Neither exists, skip this directory
+//         #[cfg(debug_assertions)]
+//         debug_log!(
+//             "Skipping directory (no node.toml or node.gpgtoml): {:?}",
+//             &absolute_addressbook_directory_path
+//         );
+//         return Err(GpgError::PathError(format!(
+//             "RACPACO Err Invalid path encoding for addressbook file: {}",
+//             absolute_addressbook_directory_path.display()
+//         )));
+//     };
+
+//     #[cfg(debug_assertions)]
+//     debug_log!(
+//         "Found user_addressbook_path file: {:?}",
+//         user_addressbook_path
+//     );
+
+//     // // Verify addressbook exists
+//     // if !user_addressbook_path.exists() {
+//     //     return Err(GpgError::PathError(format!(
+//     //         "RACPACO Err Addressbook file not found for user_addressbook_path {}",
+//     //         user_addressbook_path.display()
+//     //     )));
+//     // }
+
+//     // // Get readable copy (pass the specific file path, not the directory entry)
+//     // let addressbook_readcopy_path_string =
+//     //     get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
+//     //         &user_addressbook_path, // <-- Use the determined file path here
+//     //         &gpg_full_fingerprint_key_id_string,
+//     //         &base_uma_temp_directory_path,
+//     //     )
+//     //     .map_err(|e| format!("Failed to get temporary read copy of TOML file: {:?}", e))?;
+
+//     // Get readable temp copy (handles both .toml and .gpgtoml)
+//     let user_addressbook_path_str =
+//         match get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
+//             &user_addressbook_path, // <-- Use the determined file path here
+//             &gpg_full_fingerprint_key_id_string,
+//             &base_uma_temp_directory_path,
+//         ) {
+//             Ok(path) => {
+//                 debug_log!("LIM: Got temp read copy at: {}", path);
+//                 path
+//             }
+//             Err(e) => {
+//                 return Err(GpgError::PathError(format!(
+//                     "RACPACO Err Invalid path encoding for addressbook file: {} {}",
+//                     user_addressbook_path.display(),
+//                     e
+//                 )));
+//             }
+//         };
+
+//     // // Construct addressbook filename
+//     // let collaborator_filename = format!("{}__collaborator.toml", file_owner_username);
+
+//     // /*
+//     // maybe skip to this part where adddressbook
+//     // readcopy is passed in
+//     // */
+//     // let user_addressbook_path = collaborator_files_directory_absolute.join(&collaborator_filename);
+
+//     // debug_log!(
+//     //     "RACPACO Owner's addressbook path: {}",
+//     //     user_addressbook_path.display()
+//     // );
+
+//     // // Convert addressbook path to string
+//     // let user_addressbook_path_str = match user_addressbook_path.to_str() {
+//     //     Some(s) => s,
+//     //     None => {
+//     //         return Err(GpgError::PathError(format!(
+//     //             "RACPACO Err Invalid path encoding for addressbook file: {}",
+//     //             user_addressbook_path.display()
+//     //         )));
+//     //     }
+//     // };
+
+//     debug_log!(
+//         "RACPACO user_addressbook_path_str -> {}",
+//         user_addressbook_path_str
+//     );
+
+//     // Extract GPG key ID from addressbook (which validates the addressbook's signature)
+//     let gpg_key_id_name_of_toml_field_key_to_read = "gpg_publickey_id";
+//     let signing_key_id = match read_singleline_string_from_clearsigntoml(
+//         &user_addressbook_path_str,
+//         gpg_key_id_name_of_toml_field_key_to_read,
+//     ) {
+//         Ok(key_id) => {
+//             if key_id.is_empty() {
+//                 return Err(GpgError::GpgOperationError(format!(
+//                     "RACPACO GPG key ID is empty in user_addressbook_path_str '{}'",
+//                     user_addressbook_path_str,
+//                 )));
+//             }
+//             key_id
+//         }
+//         Err(e) => {
+//             return Err(GpgError::GpgOperationError(format!(
+//                 "RACPACO Failed to read GPG key ID from addressbook: {}",
+//                 e
+//             )));
+//         }
+//     };
+//     debug_log!(
+//         "RACPACO Found GPG key ID for validation: '{}'",
+//         signing_key_id
+//     );
+
+//     // --- Stage 4: Create Temporary File for Validation ---
+//     let temp_validation_path = create_temp_file_path("validate_all_ports_optimized")?;
+
+//     // --- Stage 5: Verify Signature and Extract Content (ONCE) ---
+//     debug_log!("RACPACO Validating clearsigned file signature...");
+
+//     // Decrypt (which validates) the clearsigned file
+//     let validation_result = Command::new("gpg")
+//         .arg("--decrypt")
+//         .arg("--batch")
+//         .arg("--status-fd")
+//         .arg("2")
+//         .arg("--output")
+//         .arg(&temp_validation_path)
+//         .arg(path_to_clearsigned_toml)
+//         .output();
+
+//     match validation_result {
+//         Ok(output) => {
+//             if !output.status.success() {
+//                 // Cleanup temp file
+//                 let _ = fs::remove_file(&temp_validation_path);
+
+//                 let stderr_output = String::from_utf8_lossy(&output.stderr);
+//                 return Err(GpgError::GpgOperationError(format!(
+//                     "RACPACO GPG signature validation FAILED. File may be tampered. GPG output: {}",
+//                     stderr_output.trim()
+//                 )));
+//             }
+//             debug_log!("RACPACO ✓ Signature validation PASSED. File integrity confirmed.");
+//             debug_log!("RACPACO Now extracting all port assignments in a single pass...");
+//         }
+//         Err(e) => {
+//             // Cleanup temp file
+//             let _ = fs::remove_file(&temp_validation_path);
+
+//             return Err(GpgError::GpgOperationError(format!(
+//                 "RACPACO Failed to execute GPG validation: {}",
+//                 e
+//             )));
+//         }
+//     }
+
+//     // --- Stage 6: Parse ALL Port Assignments from Validated Content ---
+
+//     // Read the validated content once
+//     let validated_content = match fs::read_to_string(&temp_validation_path) {
+//         Ok(content) => content,
+//         Err(e) => {
+//             // Cleanup temp file
+//             let _ = fs::remove_file(&temp_validation_path);
+//             return Err(GpgError::FileSystemError(e));
+//         }
+//     };
+
+//     // Cleanup temp file immediately after reading
+//     let _ = fs::remove_file(&temp_validation_path);
+
+//     // Parse all collaborator pair sections in one pass
+//     let mut all_assignments: HashMap<String, Vec<AbstractTeamchannelNodeTomlPortsData>> =
+//         HashMap::new();
+//     let table_prefix = "[abstract_collaborator_port_assignments.";
+
+//     // State tracking for parsing
+//     let mut current_pair_name: Option<String> = None;
+//     let mut current_pair_assignments: Vec<AbstractTeamchannelNodeTomlPortsData> = Vec::new();
+//     let mut in_ports_array = false;
+//     let mut current_port_entry: Option<PartialPortEntry> = None;
+
+//     // Helper structure for parsing (reused from the specific function)
+//     #[derive(Default)]
+//     struct PartialPortEntry {
+//         user_name: Option<String>,
+//         ready_port: Option<u16>,
+//         intray_port: Option<u16>,
+//         gotit_port: Option<u16>,
+//     }
+
+//     // Process each line of the validated content
+//     for line in validated_content.lines() {
+//         let trimmed = line.trim();
+
+//         // Check if we're entering a new collaborator pair section
+//         if trimmed.starts_with(table_prefix) && trimmed.ends_with(']') {
+//             // Save previous pair's data if any
+//             if let Some(pair_name) = current_pair_name.take() {
+//                 if !current_pair_assignments.is_empty() {
+//                     all_assignments.insert(pair_name, current_pair_assignments.clone());
+//                     current_pair_assignments.clear();
+//                 }
+//             }
+
+//             // Extract new pair name
+//             let start = table_prefix.len();
+//             let end = trimmed.len() - 1;
+//             current_pair_name = Some(trimmed[start..end].to_string());
+//             in_ports_array = false;
+//             debug_log!("  Processing pair: {}", current_pair_name.as_ref().unwrap());
+//             continue;
+//         }
+
+//         // Skip lines if we're not in a pair section
+//         if current_pair_name.is_none() {
+//             continue;
+//         }
+
+//         // Check for collaborator_ports array start
+//         if trimmed.starts_with("collaborator_ports = [") {
+//             in_ports_array = true;
+
+//             // Check if it's a single-line array (for simple cases)
+//             if trimmed.contains(']') {
+//                 // TODO: Handle single-line array parsing if needed
+//                 in_ports_array = false;
+//             }
+//             continue;
+//         }
+
+//         // Check for array end
+//         if in_ports_array && trimmed == "]" {
+//             in_ports_array = false;
+//             continue;
+//         }
+
+//         // Parse array entries
+//         if in_ports_array {
+//             // Handle start of a new port entry
+//             if trimmed.starts_with('{') || trimmed.contains("{ user_name") {
+//                 // If we had a previous incomplete entry, it's an error
+//                 if current_port_entry.is_some() {
+//                     return Err(GpgError::GpgOperationError(format!(
+//                         "RACPACO Malformed port entry in pair '{}'",
+//                         current_pair_name.as_ref().unwrap()
+//                     )));
+//                 }
+//                 current_port_entry = Some(PartialPortEntry::default());
+//             }
+
+//             // Parse fields within the entry
+//             if let Some(ref mut entry) = current_port_entry {
+//                 // Parse all fields that might be on this line
+
+//                 // Parse user_name
+//                 if trimmed.contains("user_name = ") {
+//                     if let Some(value) = extract_quoted_value(trimmed, "user_name") {
+//                         entry.user_name = Some(value);
+//                     }
+//                 }
+
+//                 // Parse ready_port
+//                 if trimmed.contains("ready_port = ") {
+//                     if let Some(value) = extract_port_value(trimmed, "ready_port") {
+//                         entry.ready_port = Some(value);
+//                     }
+//                 }
+
+//                 // Parse intray_port
+//                 if trimmed.contains("intray_port = ") {
+//                     if let Some(value) = extract_port_value(trimmed, "intray_port") {
+//                         entry.intray_port = Some(value);
+//                     }
+//                 }
+
+//                 // Parse gotit_port
+//                 if trimmed.contains("gotit_port = ") {
+//                     if let Some(value) = extract_port_value(trimmed, "gotit_port") {
+//                         entry.gotit_port = Some(value);
+//                     }
+//                 }
+//             }
+
+//             // Check for end of entry
+//             if trimmed.ends_with("},") || trimmed.ends_with('}') {
+//                 if let Some(entry) = current_port_entry.take() {
+//                     // Validate we have all required fields
+//                     match (
+//                         entry.user_name,
+//                         entry.ready_port,
+//                         entry.intray_port,
+//                         entry.gotit_port,
+//                     ) {
+//                         (Some(user), Some(ready), Some(intray), Some(gotit)) => {
+//                             current_pair_assignments.push(AbstractTeamchannelNodeTomlPortsData {
+//                                 user_name: user,
+//                                 ready_port: ready,
+//                                 intray_port: intray,
+//                                 gotit_port: gotit,
+//                             });
+//                         }
+//                         _ => {
+//                             return Err(GpgError::GpgOperationError(format!(
+//                                 "RACPACO Incomplete port assignment entry for pair '{}'. Missing required fields.",
+//                                 current_pair_name.as_ref().unwrap()
+//                             )));
+//                         }
+//                     }
+//                 }
+//             }
+//         }
+//     }
+
+//     // Don't forget the last pair if the file doesn't end with another section
+//     if let Some(pair_name) = current_pair_name.take() {
+//         if !current_pair_assignments.is_empty() {
+//             all_assignments.insert(pair_name, current_pair_assignments);
+//         }
+//     }
+
+//     // --- Stage 7: Validate Results ---
+//     if all_assignments.is_empty() {
+//         return Err(GpgError::GpgOperationError(
+//             "RACPACO No collaborator port assignments found in abstract_collaborator_port_assignments".to_string()
+//         ));
+//     }
+
+//     // Log summary
+//     debug_log!(
+//         "RACPACO ✓ Successfully extracted port assignments for {} collaborator pairs:",
+//         all_assignments.len()
+//     );
+//     for (pair_name, assignments) in &all_assignments {
+//         debug_log!("  - {}: {} port assignments", pair_name, assignments.len());
+//     }
+
+//     Ok(all_assignments)
+// }
 
 /// Reads and validates team channel collaborator port assignments from a clearsigned TOML file.
 ///
@@ -9611,58 +9613,58 @@ fn extract_port_value(line: &str, key: &str) -> Option<u16> {
 //     }
 // }
 
-/// Validates that all collaborators mentioned in port assignments are listed in the access list.
-///
-/// # Purpose
-/// This helper function ensures consistency between the port assignments and the
-/// list of collaborators who have access to the team channel. It checks that every
-/// username appearing in port assignments is also listed in `teamchannel_collaborators_with_access`.
-///
-/// # Arguments
-/// - `port_assignments` - HashMap of pair names to their port assignments
-/// - `authorized_collaborators` - List of collaborators authorized for the team channel
-///
-/// # Returns
-/// - `Ok(())` - If all collaborators in port assignments are authorized
-/// - `Err(Vec<String>)` - List of unauthorized collaborators found in port assignments
-///
-/// # Example
-/// ```no_run
-/// let authorized = vec!["alice".to_string(), "bob".to_string()];
-/// let assignments = read_all_collaborator_port_assignments_clearsigntoml_optimized(...)?;
-///
-/// match validate_port_assignment_collaborators(&assignments, &authorized) {
-///     Ok(()) => debug_log!("All collaborators are authorized"),
-///     Err(unauthorized) => debug_log!("Unauthorized collaborators: {:?}", unauthorized),
-/// }
-/// ```
-pub fn validate_port_assignment_collaborators(
-    port_assignments: &HashMap<String, Vec<AbstractTeamchannelNodeTomlPortsData>>,
-    authorized_collaborators: &[String],
-) -> Result<(), Vec<String>> {
-    let mut unauthorized_users = Vec::new();
-    let authorized_set: std::collections::HashSet<&String> =
-        authorized_collaborators.iter().collect();
+// /// Validates that all collaborators mentioned in port assignments are listed in the access list.
+// ///
+// /// # Purpose
+// /// This helper function ensures consistency between the port assignments and the
+// /// list of collaborators who have access to the team channel. It checks that every
+// /// username appearing in port assignments is also listed in `teamchannel_collaborators_with_access`.
+// ///
+// /// # Arguments
+// /// - `port_assignments` - HashMap of pair names to their port assignments
+// /// - `authorized_collaborators` - List of collaborators authorized for the team channel
+// ///
+// /// # Returns
+// /// - `Ok(())` - If all collaborators in port assignments are authorized
+// /// - `Err(Vec<String>)` - List of unauthorized collaborators found in port assignments
+// ///
+// /// # Example
+// /// ```no_run
+// /// let authorized = vec!["alice".to_string(), "bob".to_string()];
+// /// let assignments = read_all_collaborator_port_assignments_clearsigntoml_optimized(...)?;
+// ///
+// /// match validate_port_assignment_collaborators(&assignments, &authorized) {
+// ///     Ok(()) => debug_log!("All collaborators are authorized"),
+// ///     Err(unauthorized) => debug_log!("Unauthorized collaborators: {:?}", unauthorized),
+// /// }
+// /// ```
+// pub fn validate_port_assignment_collaborators(
+//     port_assignments: &HashMap<String, Vec<AbstractTeamchannelNodeTomlPortsData>>,
+//     authorized_collaborators: &[String],
+// ) -> Result<(), Vec<String>> {
+//     let mut unauthorized_users = Vec::new();
+//     let authorized_set: std::collections::HashSet<&String> =
+//         authorized_collaborators.iter().collect();
 
-    // Check each port assignment
-    for (pair_name, assignments) in port_assignments {
-        for assignment in assignments {
-            if !authorized_set.contains(&assignment.user_name) {
-                unauthorized_users.push(assignment.user_name.clone());
-            }
-        }
-    }
+//     // Check each port assignment
+//     for (pair_name, assignments) in port_assignments {
+//         for assignment in assignments {
+//             if !authorized_set.contains(&assignment.user_name) {
+//                 unauthorized_users.push(assignment.user_name.clone());
+//             }
+//         }
+//     }
 
-    // Remove duplicates
-    unauthorized_users.sort();
-    unauthorized_users.dedup();
+//     // Remove duplicates
+//     unauthorized_users.sort();
+//     unauthorized_users.dedup();
 
-    if unauthorized_users.is_empty() {
-        Ok(())
-    } else {
-        Err(unauthorized_users)
-    }
-}
+//     if unauthorized_users.is_empty() {
+//         Ok(())
+//     } else {
+//         Err(unauthorized_users)
+//     }
+// }
 
 /// Reads an array of u8 bytes from a TOML file into a Vec<u8>.
 ///
@@ -9805,83 +9807,83 @@ pub fn read_u8_array_field_from_toml(
     ))
 }
 
-/// Reads an array of u8 bytes from a clearsigned TOML file into a Vec<u8>.
-///
-/// # Purpose
-/// This function securely reads a byte array from a clearsigned TOML file by:
-/// 1. Extracting the GPG public key from the file
-/// 2. Verifying the clearsign signature
-/// 3. If verification succeeds, reading the requested byte array
-///
-/// # Security
-/// This function ensures that the TOML file's content is cryptographically verified
-/// before any data is extracted, providing integrity protection for the configuration.
-/// No data is returned if signature validation fails.
-///
-/// # Arguments
-/// - `path` - Path to the clearsigned TOML file
-/// - `name_of_toml_field_key_to_read` - Name of the field to read (must be an array of bytes in the TOML file)
-///
-/// # Returns
-/// - `Result<Vec<u8>, String>` - A vector containing all bytes in the array if successful and verified,
-///   or an error message if verification fails or the field cannot be read
-///
-/// # Example
-/// For a clearsigned TOML file containing:
-/// ```toml
-/// node_unique_id = [160, 167, 195, 169]
-///
-/// gpg_key_public = """
-/// -----BEGIN PGP PUBLIC KEY BLOCK-----
-/// ...
-/// -----END PGP PUBLIC KEY BLOCK-----
-/// """
-/// ```
-///
-/// Usage:
-/// ```
-/// let node_id = read_u8_array_from_clearsigntoml("node_config.toml", "node_unique_id")?;
-/// // Returns: vec![160, 167, 195, 169] if signature verification succeeds
-/// ```
-///
-/// # Errors
-/// Returns an error if:
-/// - GPG key extraction fails
-/// - Signature verification fails
-/// - The field doesn't exist or isn't a valid byte array
-/// - Any value is outside the valid u8 range (0-255)
-pub fn read_u8_array_from_clearsigntoml(
-    path: &str,
-    name_of_toml_field_key_to_read: &str,
-) -> Result<Vec<u8>, String> {
-    // Step 1: Extract GPG key from the file
-    let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")
-        .map_err(|e| format!("Failed to extract GPG key from file '{}': {}", path, e))?;
+// /// Reads an array of u8 bytes from a clearsigned TOML file into a Vec<u8>.
+// ///
+// /// # Purpose
+// /// This function securely reads a byte array from a clearsigned TOML file by:
+// /// 1. Extracting the GPG public key from the file
+// /// 2. Verifying the clearsign signature
+// /// 3. If verification succeeds, reading the requested byte array
+// ///
+// /// # Security
+// /// This function ensures that the TOML file's content is cryptographically verified
+// /// before any data is extracted, providing integrity protection for the configuration.
+// /// No data is returned if signature validation fails.
+// ///
+// /// # Arguments
+// /// - `path` - Path to the clearsigned TOML file
+// /// - `name_of_toml_field_key_to_read` - Name of the field to read (must be an array of bytes in the TOML file)
+// ///
+// /// # Returns
+// /// - `Result<Vec<u8>, String>` - A vector containing all bytes in the array if successful and verified,
+// ///   or an error message if verification fails or the field cannot be read
+// ///
+// /// # Example
+// /// For a clearsigned TOML file containing:
+// /// ```toml
+// /// node_unique_id = [160, 167, 195, 169]
+// ///
+// /// gpg_key_public = """
+// /// -----BEGIN PGP PUBLIC KEY BLOCK-----
+// /// ...
+// /// -----END PGP PUBLIC KEY BLOCK-----
+// /// """
+// /// ```
+// ///
+// /// Usage:
+// /// ```
+// /// let node_id = read_u8_array_from_clearsigntoml("node_config.toml", "node_unique_id")?;
+// /// // Returns: vec![160, 167, 195, 169] if signature verification succeeds
+// /// ```
+// ///
+// /// # Errors
+// /// Returns an error if:
+// /// - GPG key extraction fails
+// /// - Signature verification fails
+// /// - The field doesn't exist or isn't a valid byte array
+// /// - Any value is outside the valid u8 range (0-255)
+// pub fn read_u8_array_from_clearsigntoml(
+//     path: &str,
+//     name_of_toml_field_key_to_read: &str,
+// ) -> Result<Vec<u8>, String> {
+//     // Step 1: Extract GPG key from the file
+//     let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")
+//         .map_err(|e| format!("Failed to extract GPG key from file '{}': {}", path, e))?;
 
-    // Step 2: Verify the file's clearsign signature
-    let verification_result = verify_clearsign(path, &key).map_err(|e| {
-        format!(
-            "Error during signature verification of file '{}': {}",
-            path, e
-        )
-    })?;
+//     // Step 2: Verify the file's clearsign signature
+//     let verification_result = verify_clearsign(path, &key).map_err(|e| {
+//         format!(
+//             "Error during signature verification of file '{}': {}",
+//             path, e
+//         )
+//     })?;
 
-    // Step 3: Check if verification was successful
-    if !verification_result {
-        return Err(format!(
-            "GPG signature verification failed for file: {}",
-            path
-        ));
-    }
+//     // Step 3: Check if verification was successful
+//     if !verification_result {
+//         return Err(format!(
+//             "GPG signature verification failed for file: {}",
+//             path
+//         ));
+//     }
 
-    // Step 4: If verification succeeded, read the requested byte array field
-    read_u8_array_field_from_toml(path, name_of_toml_field_key_to_read).map_err(|e| {
-        format!(
-            "Failed to read byte array '{}' from verified file '{}': {}",
-            name_of_toml_field_key_to_read, path, e
-        )
-    })
-}
+//     // Step 4: If verification succeeded, read the requested byte array field
+//     read_u8_array_field_from_toml(path, name_of_toml_field_key_to_read).map_err(|e| {
+//         format!(
+//             "Failed to read byte array '{}' from verified file '{}': {}",
+//             name_of_toml_field_key_to_read, path, e
+//         )
+//     })
+// }
 
 /// Reads an array of u8 bytes from a clearsigned TOML file using a GPG key from a separate config file.
 ///
@@ -10073,85 +10075,85 @@ malformed = [100, "text", 50]
     // would be similar to existing clearsign tests in the module
 }
 
-/// Reads an array of u64 values from a clearsigned TOML file into a Vec<u64>.
-///
-/// # Purpose
-/// This function securely reads a u64 array from a clearsigned TOML file by:
-/// 1. Extracting the GPG public key from the file
-/// 2. Verifying the clearsign signature
-/// 3. If verification succeeds, reading the requested u64 array
-///
-/// # Security
-/// This function ensures that the TOML file's content is cryptographically verified
-/// before any data is extracted, providing integrity protection for the configuration.
-/// No data is returned if signature validation fails.
-///
-/// # Arguments
-/// - `path` - Path to the clearsigned TOML file
-/// - `name_of_toml_field_key_to_read` - Name of the field to read (must be an array of u64 values in the TOML file)
-///
-/// # Returns
-/// - `Result<Vec<u64>, String>` - A vector containing all u64 values in the array if successful and verified,
-///   or an error message if verification fails or the field cannot be read
-///
-/// # Example
-/// For a clearsigned TOML file containing:
-/// ```toml
-/// node_timestamp_array = [1640995200000, 1640995260000, 1640995320000]
-/// large_id_array = [18446744073709551615, 9223372036854775807, 1000000000000000000]
-///
-/// gpg_key_public = """
-/// -----BEGIN PGP PUBLIC KEY BLOCK-----
-/// ...
-/// -----END PGP PUBLIC KEY BLOCK-----
-/// """
-/// ```
-///
-/// Usage:
-/// ```
-/// let timestamps = read_u64_array_from_clearsigntoml("node_config.toml", "node_timestamp_array")?;
-/// // Returns: vec![1640995200000, 1640995260000, 1640995320000] if signature verification succeeds
-/// ```
-///
-/// # Errors
-/// Returns an error if:
-/// - GPG key extraction fails
-/// - Signature verification fails
-/// - The field doesn't exist or isn't a valid u64 array
-/// - Any value is outside the valid u64 range (0 to 18,446,744,073,709,551,615)
-/// - Any value is negative or a floating point number
-pub fn read_u64_array_from_clearsigntoml(
-    path: &str,
-    name_of_toml_field_key_to_read: &str,
-) -> Result<Vec<u64>, String> {
-    // Step 1: Extract GPG key from the file
-    let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")
-        .map_err(|e| format!("Failed to extract GPG key from file '{}': {}", path, e))?;
+// /// Reads an array of u64 values from a clearsigned TOML file into a Vec<u64>.
+// ///
+// /// # Purpose
+// /// This function securely reads a u64 array from a clearsigned TOML file by:
+// /// 1. Extracting the GPG public key from the file
+// /// 2. Verifying the clearsign signature
+// /// 3. If verification succeeds, reading the requested u64 array
+// ///
+// /// # Security
+// /// This function ensures that the TOML file's content is cryptographically verified
+// /// before any data is extracted, providing integrity protection for the configuration.
+// /// No data is returned if signature validation fails.
+// ///
+// /// # Arguments
+// /// - `path` - Path to the clearsigned TOML file
+// /// - `name_of_toml_field_key_to_read` - Name of the field to read (must be an array of u64 values in the TOML file)
+// ///
+// /// # Returns
+// /// - `Result<Vec<u64>, String>` - A vector containing all u64 values in the array if successful and verified,
+// ///   or an error message if verification fails or the field cannot be read
+// ///
+// /// # Example
+// /// For a clearsigned TOML file containing:
+// /// ```toml
+// /// node_timestamp_array = [1640995200000, 1640995260000, 1640995320000]
+// /// large_id_array = [18446744073709551615, 9223372036854775807, 1000000000000000000]
+// ///
+// /// gpg_key_public = """
+// /// -----BEGIN PGP PUBLIC KEY BLOCK-----
+// /// ...
+// /// -----END PGP PUBLIC KEY BLOCK-----
+// /// """
+// /// ```
+// ///
+// /// Usage:
+// /// ```
+// /// let timestamps = read_u64_array_from_clearsigntoml("node_config.toml", "node_timestamp_array")?;
+// /// // Returns: vec![1640995200000, 1640995260000, 1640995320000] if signature verification succeeds
+// /// ```
+// ///
+// /// # Errors
+// /// Returns an error if:
+// /// - GPG key extraction fails
+// /// - Signature verification fails
+// /// - The field doesn't exist or isn't a valid u64 array
+// /// - Any value is outside the valid u64 range (0 to 18,446,744,073,709,551,615)
+// /// - Any value is negative or a floating point number
+// pub fn read_u64_array_from_clearsigntoml(
+//     path: &str,
+//     name_of_toml_field_key_to_read: &str,
+// ) -> Result<Vec<u64>, String> {
+//     // Step 1: Extract GPG key from the file
+//     let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")
+//         .map_err(|e| format!("Failed to extract GPG key from file '{}': {}", path, e))?;
 
-    // Step 2: Verify the file's clearsign signature
-    let verification_result = verify_clearsign(path, &key).map_err(|e| {
-        format!(
-            "Error during signature verification of file '{}': {}",
-            path, e
-        )
-    })?;
+//     // Step 2: Verify the file's clearsign signature
+//     let verification_result = verify_clearsign(path, &key).map_err(|e| {
+//         format!(
+//             "Error during signature verification of file '{}': {}",
+//             path, e
+//         )
+//     })?;
 
-    // Step 3: Check if verification was successful
-    if !verification_result {
-        return Err(format!(
-            "GPG signature verification failed for file: {}",
-            path
-        ));
-    }
+//     // Step 3: Check if verification was successful
+//     if !verification_result {
+//         return Err(format!(
+//             "GPG signature verification failed for file: {}",
+//             path
+//         ));
+//     }
 
-    // Step 4: If verification succeeded, read the requested u64 array field
-    read_u64_array_field_from_toml(path, name_of_toml_field_key_to_read).map_err(|e| {
-        format!(
-            "Failed to read u64 array '{}' from verified file '{}': {}",
-            name_of_toml_field_key_to_read, path, e
-        )
-    })
-}
+//     // Step 4: If verification succeeded, read the requested u64 array field
+//     read_u64_array_field_from_toml(path, name_of_toml_field_key_to_read).map_err(|e| {
+//         format!(
+//             "Failed to read u64 array '{}' from verified file '{}': {}",
+//             name_of_toml_field_key_to_read, path, e
+//         )
+//     })
+// }
 
 /// Reads an array of u64 values from a clearsigned TOML file using a GPG key from a separate config file.
 ///
@@ -10776,88 +10778,88 @@ pub fn read_pathbuf_field_from_toml(
     ))
 }
 
-/// Reads a path from a clearsigned TOML file and converts it to a PathBuf.
-///
-/// # Purpose
-/// This function securely reads a path from a clearsigned TOML file by:
-/// 1. Extracting the GPG public key from the file
-/// 2. Verifying the clearsign signature
-/// 3. If verification succeeds, reading the requested path field
-///
-/// # Security
-/// This function ensures that the TOML file's content is cryptographically verified
-/// before any data is extracted, providing integrity protection for path configurations.
-/// No data is returned if signature validation fails.
-///
-/// # Arguments
-/// - `path` - Path to the clearsigned TOML file
-/// - `name_of_toml_field_key_to_read` - Name of the field to read (must be a string path in the TOML file)
-///
-/// # Returns
-/// - `Result<PathBuf, String>` - A PathBuf if successful and verified,
-///   or an error message if verification fails or the field cannot be read
-///
-/// # Path Validation
-/// - The function does NOT check if the path exists
-/// - The function does NOT canonicalize the path
-/// - It returns the path exactly as specified in the TOML file
-///
-/// # Example
-/// For a clearsigned TOML file containing:
-/// ```toml
-/// directory_path = "/42/uma_productivity_collaboration_tool/target/debug/project_graph_data/team_channels/tofu"
-///
-/// gpg_key_public = """
-/// -----BEGIN PGP PUBLIC KEY BLOCK-----
-/// ...
-/// -----END PGP PUBLIC KEY BLOCK-----
-/// """
-/// ```
-///
-/// Usage:
-/// ```
-/// let dir_path = read_pathbuf_from_clearsigntoml("node_config.toml", "directory_path")?;
-/// // Returns: PathBuf if signature verification succeeds
-/// ```
-///
-/// # Errors
-/// Returns an error if:
-/// - GPG key extraction fails
-/// - Signature verification fails
-/// - The field doesn't exist
-/// - The field value is empty
-pub fn read_pathbuf_from_clearsigntoml(
-    path: &str,
-    name_of_toml_field_key_to_read: &str,
-) -> Result<PathBuf, String> {
-    // Step 1: Extract GPG key from the file
-    let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")
-        .map_err(|e| format!("Failed to extract GPG key from file '{}': {}", path, e))?;
+// /// Reads a path from a clearsigned TOML file and converts it to a PathBuf.
+// ///
+// /// # Purpose
+// /// This function securely reads a path from a clearsigned TOML file by:
+// /// 1. Extracting the GPG public key from the file
+// /// 2. Verifying the clearsign signature
+// /// 3. If verification succeeds, reading the requested path field
+// ///
+// /// # Security
+// /// This function ensures that the TOML file's content is cryptographically verified
+// /// before any data is extracted, providing integrity protection for path configurations.
+// /// No data is returned if signature validation fails.
+// ///
+// /// # Arguments
+// /// - `path` - Path to the clearsigned TOML file
+// /// - `name_of_toml_field_key_to_read` - Name of the field to read (must be a string path in the TOML file)
+// ///
+// /// # Returns
+// /// - `Result<PathBuf, String>` - A PathBuf if successful and verified,
+// ///   or an error message if verification fails or the field cannot be read
+// ///
+// /// # Path Validation
+// /// - The function does NOT check if the path exists
+// /// - The function does NOT canonicalize the path
+// /// - It returns the path exactly as specified in the TOML file
+// ///
+// /// # Example
+// /// For a clearsigned TOML file containing:
+// /// ```toml
+// /// directory_path = "/42/uma_productivity_collaboration_tool/target/debug/project_graph_data/team_channels/tofu"
+// ///
+// /// gpg_key_public = """
+// /// -----BEGIN PGP PUBLIC KEY BLOCK-----
+// /// ...
+// /// -----END PGP PUBLIC KEY BLOCK-----
+// /// """
+// /// ```
+// ///
+// /// Usage:
+// /// ```
+// /// let dir_path = read_pathbuf_from_clearsigntoml("node_config.toml", "directory_path")?;
+// /// // Returns: PathBuf if signature verification succeeds
+// /// ```
+// ///
+// /// # Errors
+// /// Returns an error if:
+// /// - GPG key extraction fails
+// /// - Signature verification fails
+// /// - The field doesn't exist
+// /// - The field value is empty
+// pub fn read_pathbuf_from_clearsigntoml(
+//     path: &str,
+//     name_of_toml_field_key_to_read: &str,
+// ) -> Result<PathBuf, String> {
+//     // Step 1: Extract GPG key from the file
+//     let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")
+//         .map_err(|e| format!("Failed to extract GPG key from file '{}': {}", path, e))?;
 
-    // Step 2: Verify the file's clearsign signature
-    let verification_result = verify_clearsign(path, &key).map_err(|e| {
-        format!(
-            "Error during signature verification of file '{}': {}",
-            path, e
-        )
-    })?;
+//     // Step 2: Verify the file's clearsign signature
+//     let verification_result = verify_clearsign(path, &key).map_err(|e| {
+//         format!(
+//             "Error during signature verification of file '{}': {}",
+//             path, e
+//         )
+//     })?;
 
-    // Step 3: Check if verification was successful
-    if !verification_result {
-        return Err(format!(
-            "GPG signature verification failed for file: {}",
-            path
-        ));
-    }
+//     // Step 3: Check if verification was successful
+//     if !verification_result {
+//         return Err(format!(
+//             "GPG signature verification failed for file: {}",
+//             path
+//         ));
+//     }
 
-    // Step 4: If verification succeeded, read the requested path field
-    read_pathbuf_field_from_toml(path, name_of_toml_field_key_to_read).map_err(|e| {
-        format!(
-            "Failed to read path '{}' from verified file '{}': {}",
-            name_of_toml_field_key_to_read, path, e
-        )
-    })
-}
+//     // Step 4: If verification succeeded, read the requested path field
+//     read_pathbuf_field_from_toml(path, name_of_toml_field_key_to_read).map_err(|e| {
+//         format!(
+//             "Failed to read path '{}' from verified file '{}': {}",
+//             name_of_toml_field_key_to_read, path, e
+//         )
+//     })
+// }
 
 /// Reads a path from a clearsigned TOML file using a GPG key from a separate config file.
 ///
@@ -11213,6 +11215,7 @@ pub fn read_option_bool_field_from_toml(
     Ok(None)
 }
 
+#[cfg(test)]
 /// Reads a boolean field from a TOML configuration file with fail-safe binary semantics.
 ///
 /// # Project Context & Purpose
@@ -11962,86 +11965,86 @@ pub fn read_bool_field_from_toml(
     Ok(false)
 }
 
-/// Reads an optional boolean field from a clearsigned TOML file into an Option<bool>.
-///
-/// # Purpose
-/// This function securely reads an optional boolean field from a clearsigned TOML file by:
-/// 1. Extracting the GPG public key from the file
-/// 2. Verifying the clearsign signature
-/// 3. If verification succeeds, reading the optional boolean field
-///
-/// # Security
-/// This function ensures that the TOML file's content is cryptographically verified
-/// before any data is extracted, providing integrity protection for configuration.
-/// No data is returned if signature validation fails.
-///
-/// # Arguments
-/// - `path` - Path to the clearsigned TOML file
-/// - `name_of_toml_field_key_to_read` - Name of the field to read (may or may not exist in the TOML file)
-///
-/// # Returns
-/// - `Ok(None)` - If verification succeeds and the field does not exist
-/// - `Ok(Some(bool))` - If verification succeeds and the field has a valid boolean value
-/// - `Err(String)` - If verification fails or the field has an invalid value
-///
-/// # Example
-/// For a clearsigned TOML file containing:
-/// ```toml
-/// message_post_is_public_bool = true
-///
-/// gpg_key_public = """
-/// -----BEGIN PGP PUBLIC KEY BLOCK-----
-/// ...
-/// -----END PGP PUBLIC KEY BLOCK-----
-/// """
-/// ```
-///
-/// Usage:
-/// ```
-/// let is_public = read_option_bool_from_clearsigntoml("config.toml", "message_post_is_public_bool")?;
-/// // Returns: Some(true) if signature verification succeeds
-///
-/// let missing = read_option_bool_from_clearsigntoml("config.toml", "field_not_present")?;
-/// // Returns: None if signature verification succeeds
-/// ```
-///
-/// # Errors
-/// Returns an error if:
-/// - GPG key extraction fails
-/// - Signature verification fails
-/// - The field exists but has an invalid boolean value
-pub fn read_option_bool_from_clearsigntoml(
-    path: &str,
-    name_of_toml_field_key_to_read: &str,
-) -> Result<Option<bool>, String> {
-    // Step 1: Extract GPG key from the file
-    let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")
-        .map_err(|e| format!("Failed to extract GPG key from file '{}': {}", path, e))?;
+// /// Reads an optional boolean field from a clearsigned TOML file into an Option<bool>.
+// ///
+// /// # Purpose
+// /// This function securely reads an optional boolean field from a clearsigned TOML file by:
+// /// 1. Extracting the GPG public key from the file
+// /// 2. Verifying the clearsign signature
+// /// 3. If verification succeeds, reading the optional boolean field
+// ///
+// /// # Security
+// /// This function ensures that the TOML file's content is cryptographically verified
+// /// before any data is extracted, providing integrity protection for configuration.
+// /// No data is returned if signature validation fails.
+// ///
+// /// # Arguments
+// /// - `path` - Path to the clearsigned TOML file
+// /// - `name_of_toml_field_key_to_read` - Name of the field to read (may or may not exist in the TOML file)
+// ///
+// /// # Returns
+// /// - `Ok(None)` - If verification succeeds and the field does not exist
+// /// - `Ok(Some(bool))` - If verification succeeds and the field has a valid boolean value
+// /// - `Err(String)` - If verification fails or the field has an invalid value
+// ///
+// /// # Example
+// /// For a clearsigned TOML file containing:
+// /// ```toml
+// /// message_post_is_public_bool = true
+// ///
+// /// gpg_key_public = """
+// /// -----BEGIN PGP PUBLIC KEY BLOCK-----
+// /// ...
+// /// -----END PGP PUBLIC KEY BLOCK-----
+// /// """
+// /// ```
+// ///
+// /// Usage:
+// /// ```
+// /// let is_public = read_option_bool_from_clearsigntoml("config.toml", "message_post_is_public_bool")?;
+// /// // Returns: Some(true) if signature verification succeeds
+// ///
+// /// let missing = read_option_bool_from_clearsigntoml("config.toml", "field_not_present")?;
+// /// // Returns: None if signature verification succeeds
+// /// ```
+// ///
+// /// # Errors
+// /// Returns an error if:
+// /// - GPG key extraction fails
+// /// - Signature verification fails
+// /// - The field exists but has an invalid boolean value
+// pub fn read_option_bool_from_clearsigntoml(
+//     path: &str,
+//     name_of_toml_field_key_to_read: &str,
+// ) -> Result<Option<bool>, String> {
+//     // Step 1: Extract GPG key from the file
+//     let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")
+//         .map_err(|e| format!("Failed to extract GPG key from file '{}': {}", path, e))?;
 
-    // Step 2: Verify the file's clearsign signature
-    let verification_result = verify_clearsign(path, &key).map_err(|e| {
-        format!(
-            "Error during signature verification of file '{}': {}",
-            path, e
-        )
-    })?;
+//     // Step 2: Verify the file's clearsign signature
+//     let verification_result = verify_clearsign(path, &key).map_err(|e| {
+//         format!(
+//             "Error during signature verification of file '{}': {}",
+//             path, e
+//         )
+//     })?;
 
-    // Step 3: Check if verification was successful
-    if !verification_result {
-        return Err(format!(
-            "GPG signature verification failed for file: {}",
-            path
-        ));
-    }
+//     // Step 3: Check if verification was successful
+//     if !verification_result {
+//         return Err(format!(
+//             "GPG signature verification failed for file: {}",
+//             path
+//         ));
+//     }
 
-    // Step 4: If verification succeeded, read the optional boolean field
-    read_option_bool_field_from_toml(path, name_of_toml_field_key_to_read).map_err(|e| {
-        format!(
-            "Failed to read optional boolean '{}' from verified file '{}': {}",
-            name_of_toml_field_key_to_read, path, e
-        )
-    })
-}
+//     // Step 4: If verification succeeded, read the optional boolean field
+//     read_option_bool_field_from_toml(path, name_of_toml_field_key_to_read).map_err(|e| {
+//         format!(
+//             "Failed to read optional boolean '{}' from verified file '{}': {}",
+//             name_of_toml_field_key_to_read, path, e
+//         )
+//     })
+// }
 
 /// Reads an optional boolean field from a clearsigned TOML file using a GPG key from a separate config file.
 ///
@@ -12448,87 +12451,87 @@ pub fn read_option_usize_field_from_toml(
     Ok(None)
 }
 
-/// Reads an optional usize field from a clearsigned TOML file into an Option<usize>.
-///
-/// # Purpose
-/// This function securely reads an optional usize field from a clearsigned TOML file by:
-/// 1. Extracting the GPG public key from the file
-/// 2. Verifying the clearsign signature
-/// 3. If verification succeeds, reading the optional usize field
-///
-/// # Security
-/// This function ensures that the TOML file's content is cryptographically verified
-/// before any data is extracted, providing integrity protection for size/length configurations.
-/// No data is returned if signature validation fails.
-///
-/// # Arguments
-/// - `path` - Path to the clearsigned TOML file
-/// - `name_of_toml_field_key_to_read` - Name of the field to read (may or may not exist in the TOML file)
-///
-/// # Returns
-/// - `Ok(None)` - If verification succeeds and the field does not exist
-/// - `Ok(Some(value))` - If verification succeeds and the field has a valid usize value
-/// - `Err(String)` - If verification fails or the field has an invalid value
-///
-/// # Example
-/// For a clearsigned TOML file containing:
-/// ```toml
-/// message_post_max_string_length_int = 256
-///
-/// gpg_key_public = """
-/// -----BEGIN PGP PUBLIC KEY BLOCK-----
-/// ...
-/// -----END PGP PUBLIC KEY BLOCK-----
-/// """
-/// ```
-///
-/// Usage:
-/// ```
-/// let max_len = read_option_usize_from_clearsigntoml("config.toml", "message_post_max_string_length_int")?;
-/// // Returns: Some(256) if signature verification succeeds
-///
-/// let missing = read_option_usize_from_clearsigntoml("config.toml", "field_not_present")?;
-/// // Returns: None if signature verification succeeds
-/// ```
-///
-/// # Errors
-/// Returns an error if:
-/// - GPG key extraction fails
-/// - Signature verification fails
-/// - The field exists but has an invalid numeric value
-/// - The field exists but has a negative value
-pub fn read_option_usize_from_clearsigntoml(
-    path: &str,
-    name_of_toml_field_key_to_read: &str,
-) -> Result<Option<usize>, String> {
-    // Step 1: Extract GPG key from the file
-    let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")
-        .map_err(|e| format!("Failed to extract GPG key from file '{}': {}", path, e))?;
+// /// Reads an optional usize field from a clearsigned TOML file into an Option<usize>.
+// ///
+// /// # Purpose
+// /// This function securely reads an optional usize field from a clearsigned TOML file by:
+// /// 1. Extracting the GPG public key from the file
+// /// 2. Verifying the clearsign signature
+// /// 3. If verification succeeds, reading the optional usize field
+// ///
+// /// # Security
+// /// This function ensures that the TOML file's content is cryptographically verified
+// /// before any data is extracted, providing integrity protection for size/length configurations.
+// /// No data is returned if signature validation fails.
+// ///
+// /// # Arguments
+// /// - `path` - Path to the clearsigned TOML file
+// /// - `name_of_toml_field_key_to_read` - Name of the field to read (may or may not exist in the TOML file)
+// ///
+// /// # Returns
+// /// - `Ok(None)` - If verification succeeds and the field does not exist
+// /// - `Ok(Some(value))` - If verification succeeds and the field has a valid usize value
+// /// - `Err(String)` - If verification fails or the field has an invalid value
+// ///
+// /// # Example
+// /// For a clearsigned TOML file containing:
+// /// ```toml
+// /// message_post_max_string_length_int = 256
+// ///
+// /// gpg_key_public = """
+// /// -----BEGIN PGP PUBLIC KEY BLOCK-----
+// /// ...
+// /// -----END PGP PUBLIC KEY BLOCK-----
+// /// """
+// /// ```
+// ///
+// /// Usage:
+// /// ```
+// /// let max_len = read_option_usize_from_clearsigntoml("config.toml", "message_post_max_string_length_int")?;
+// /// // Returns: Some(256) if signature verification succeeds
+// ///
+// /// let missing = read_option_usize_from_clearsigntoml("config.toml", "field_not_present")?;
+// /// // Returns: None if signature verification succeeds
+// /// ```
+// ///
+// /// # Errors
+// /// Returns an error if:
+// /// - GPG key extraction fails
+// /// - Signature verification fails
+// /// - The field exists but has an invalid numeric value
+// /// - The field exists but has a negative value
+// pub fn read_option_usize_from_clearsigntoml(
+//     path: &str,
+//     name_of_toml_field_key_to_read: &str,
+// ) -> Result<Option<usize>, String> {
+//     // Step 1: Extract GPG key from the file
+//     let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")
+//         .map_err(|e| format!("Failed to extract GPG key from file '{}': {}", path, e))?;
 
-    // Step 2: Verify the file's clearsign signature
-    let verification_result = verify_clearsign(path, &key).map_err(|e| {
-        format!(
-            "Error during signature verification of file '{}': {}",
-            path, e
-        )
-    })?;
+//     // Step 2: Verify the file's clearsign signature
+//     let verification_result = verify_clearsign(path, &key).map_err(|e| {
+//         format!(
+//             "Error during signature verification of file '{}': {}",
+//             path, e
+//         )
+//     })?;
 
-    // Step 3: Check if verification was successful
-    if !verification_result {
-        return Err(format!(
-            "GPG signature verification failed for file: {}",
-            path
-        ));
-    }
+//     // Step 3: Check if verification was successful
+//     if !verification_result {
+//         return Err(format!(
+//             "GPG signature verification failed for file: {}",
+//             path
+//         ));
+//     }
 
-    // Step 4: If verification succeeded, read the optional usize field
-    read_option_usize_field_from_toml(path, name_of_toml_field_key_to_read).map_err(|e| {
-        format!(
-            "Failed to read optional usize '{}' from verified file '{}': {}",
-            name_of_toml_field_key_to_read, path, e
-        )
-    })
-}
+//     // Step 4: If verification succeeded, read the optional usize field
+//     read_option_usize_field_from_toml(path, name_of_toml_field_key_to_read).map_err(|e| {
+//         format!(
+//             "Failed to read optional usize '{}' from verified file '{}': {}",
+//             name_of_toml_field_key_to_read, path, e
+//         )
+//     })
+// }
 
 /// Reads an optional usize field from a clearsigned TOML file using a GPG key from a separate config file.
 ///
