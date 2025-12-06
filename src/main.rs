@@ -310,7 +310,7 @@ let node_readcopy_path = get_pathstring_to_temp_plaintoml_verified_extracted(
 
 // Set debug flag (future: add time stamp with 24 check)
 const DEBUG_FLAG: bool = true;
-const MAX_NETWORK_TYPE_LENGTH: usize = 1024; // Example: 1KB limit
+// const MAX_NETWORK_TYPE_LENGTH: usize = 1024; // Example: 1KB limit
 
 const EMPTY_IPV_4: Ipv4Addr = Ipv4Addr::new(127, 0, 0, 1); // == = 127.0.0.1
 const EMPTY_IPV_6: Ipv6Addr = Ipv6Addr::UNSPECIFIED; // Correct way to represent an unspecified IPv6 address
@@ -1096,7 +1096,7 @@ fn get_local_ip_addresses() -> Result<Vec<IpAddr>, std::io::Error> {
 /// Returns:
 ///     (String, u8): A tuple containing the network type ("ipv6" or "ipv4") and the index of the valid IP address.
 ///     Returns ("none", 0) if no valid IP address is found.
-fn get_band__find_valid_network_index_and_type(
+fn get_band_find_valid_network_index_and_type(
     uma_local_owner_user: &str,
     full_fingerprint_key_id_string: &str,
 ) -> (
@@ -1307,6 +1307,7 @@ fn decrypt_gpgtoml_to_temp_file_secure(
         ));
     }
 
+    // slimmer way to make /uma_temp/file?, e.g. for bare metal binary?
     // Create the temporary file with restricted permissions
     #[cfg(unix)]
     {
@@ -1649,7 +1650,7 @@ fn get_index_byof_ip(
 /// to sync_data text files
 /// As this is done only once during startup, retry is likely not needed
 ///
-fn write_local_band__save_network_band__type_index(
+fn write_local_band_save_network_band_type_index(
     network_type: String,
     network_index: u8,
     this_ipv4: Ipv4Addr,
@@ -1758,45 +1759,22 @@ fn write_save_rc_bandnetwork_type_index(
 }
 
 // TODO: maybe use a parameter in team-channel instead of hard-coding ~10 sec
-/// hlod_udp_handshake__rc_network_type_rc_ip_addr(): returns (rc_network_type, rc_ip_addr) as (String, String) loop until satisfied:
+/// hlod_udp_handshake_rc_network_type_rc_ip_addr(): returns (rc_network_type, rc_ip_addr) as (String, String) loop until satisfied:
 /// every 10-60 sec: (lite-weight is the goal, not expensive-brute-force)
 /// 1. check for hault-uma (if not more often check somehow)
 /// 2. check for received ready-signal in /sync_data/ (if so, exit handshake) see below: with this you can get the rc_ip-data read_rc_bandnetwork_type_index()
 /// 3. if not the above options: send a ready signal (iterating) to each listed collaborator ip
 ///   ipv4 and ipv6 (until (step 2) there has been logged a ready-signal from one of them)
 ///
-fn hlod_udp_handshake__rc_network_type_rc_ip_addr(
+fn hlod_udp_handshake_rc_network_type_rc_ip_addr(
     local_owner_desk_setup_data: &ForLocalOwnerDeskThread,
     band_local_network_type: &str,
-    band_local_user_ipv4_address: &Ipv4Addr,
-    band_local_user_ipv6_address: &Ipv6Addr,
     band_local_network_index: u8,
 ) -> Result<(String, String), ThisProjectError> {
-    debug_log("inHLOD: Start hlod_udp_handshake__rc_network_type_rc_ip_addr()");
-
-    // --- 1. Extract Data from Setup Data ---
-    let local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip = local_owner_desk_setup_data.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip;
-
-
-    // --- Select IP Address and Create SocketAddr for Local Listening ---
-    let listen_ip_addr = match band_local_network_type {
-        "ipv6" => IpAddr::V6(*band_local_user_ipv6_address),
-        "ipv4" => IpAddr::V4(*band_local_user_ipv4_address),
-        _ => return Err(ThisProjectError::NetworkError(
-            "error Invalid network type in hlod_udp_handshake__rc_network_type_rc_ip_addr".into()
-            )
-        ),
-    };
-
-    // TODO
-    let local_listen_addr = SocketAddr::new(
-        listen_ip_addr,
-        local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
-    );
-
+    debug_log("inHLOD: Start hlod_udp_handshake_rc_network_type_rc_ip_addr()");
 
     let channel_dir_path_str = read_state_string("current_node_directory_path.txt")?; // read as string first
-    debug_log!("hlod_udp_handshake__rc_network_type_rc_ip_addr Channel directory path (from session state): {}", channel_dir_path_str);
+    debug_log!("hlod_udp_handshake_rc_network_type_rc_ip_addr Channel directory path (from session state): {}", channel_dir_path_str);
 
     // let team_channel_name = channel_dir_path_str;
     // was  get_latest_received_from_rc_in_teamchannel_file_timestamp_filecrawl
@@ -1816,7 +1794,7 @@ fn hlod_udp_handshake__rc_network_type_rc_ip_addr(
     ) {
         Ok(timestamp) => timestamp,
         Err(e) => {
-            debug_log!("error in hlod_udp_handshake__rc_network_type_rc_ip_addr(): Error getting timestamp: {}", e);
+            debug_log!("error in hlod_udp_handshake_rc_network_type_rc_ip_addr(): Error getting timestamp: {}", e);
             0
         }
     };
@@ -1843,8 +1821,8 @@ fn hlod_udp_handshake__rc_network_type_rc_ip_addr(
     got_signal_check_base_path.push("network_band");
     got_signal_check_base_path.push(&local_owner_desk_setup_data.remote_collaborator_name);
 
-    loop { // hlod_udp_handshake__rc_network_type_rc_ip_addr() Main loop starts here
-        debug_log("hlod_udp_handshake__rc_network_type_rc_ip_addr() main loop (re)starting from the top...");
+    loop { // hlod_udp_handshake_rc_network_type_rc_ip_addr() Main loop starts here
+        debug_log("hlod_udp_handshake_rc_network_type_rc_ip_addr() main loop (re)starting from the top...");
 
         // 1. Check for Halt Signal and Team Channel Name (as before)
         if should_halt_uma() { // 1. check for halt-uma
@@ -1852,7 +1830,7 @@ fn hlod_udp_handshake__rc_network_type_rc_ip_addr(
         }
 
         // --- 2. Check for Received Ready Signal ---
-        // hlod_udp_handshake__rc_network_type_rc_ip_addr() Main loop starts here
+        // hlod_udp_handshake_rc_network_type_rc_ip_addr() Main loop starts here
         if got_signal_check_base_path.exists() {
             // The path exists...
 
@@ -1862,7 +1840,7 @@ fn hlod_udp_handshake__rc_network_type_rc_ip_addr(
                 &team_channel_name, // Use correctly retrieved team channel name
             ) {
                 debug_log!(
-                    "hlod_udp_handshake__rc_network_type_rc_ip_addr(): Ready signal information found in sync_data for {}. rc_network_type: {}, rc_ip: {:?}",
+                    "hlod_udp_handshake_rc_network_type_rc_ip_addr(): Ready signal information found in sync_data for {}. rc_network_type: {}, rc_ip: {:?}",
                     local_owner_desk_setup_data.remote_collaborator_name,
                     rc_network_type,
                     rc_ip_addr_string,
@@ -1882,13 +1860,13 @@ fn hlod_udp_handshake__rc_network_type_rc_ip_addr(
         // ... [Iterate remote IP addresses *only* if no ReadySignal received]
 
         // Send to each IPv6 address in rc_ipv6_list
-        debug_log("hlod_udp_handshake__rc_network_type_rc_ip_addr() Sending Handshake ready signals!");
+        debug_log("hlod_udp_handshake_rc_network_type_rc_ip_addr() Sending Handshake ready signals!");
         for ipv6_addr_string in &local_owner_desk_setup_data.remote_collaborator_ipv6_addr_list {
             send_ready_signal(
                 &local_owner_desk_setup_data.local_user_salt_list,
                 "ipv6".to_string(),                            // Correct: Always "ipv6" here
                 ipv6_addr_string.to_string(),                  //Correct: Use remote IPv6 address
-                local_owner_desk_setup_data.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip,  // Use provided port
+                local_owner_desk_setup_data.local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip,  // Use provided port
                 timestamp_for_rt,                              // Use calculated timestamp
                 band_local_network_type,                       // band_local_network_type
                 band_local_network_index,                      // Use band index
@@ -1896,7 +1874,7 @@ fn hlod_udp_handshake__rc_network_type_rc_ip_addr(
             debug_log!(
                 "ReadySignal sent to IPv6: {}:{}",
                 ipv6_addr_string,
-                local_owner_desk_setup_data.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
+                local_owner_desk_setup_data.local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip
             );
         }
 
@@ -1906,7 +1884,7 @@ fn hlod_udp_handshake__rc_network_type_rc_ip_addr(
                 &local_owner_desk_setup_data.local_user_salt_list,
                 "ipv4".to_string(),                           // Correct: Always "ipv4" here
                 ipv4_addr_string.to_string(),                   // Correct: Use remote IPv4 address
-                local_owner_desk_setup_data.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip, // Use port number
+                local_owner_desk_setup_data.local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip, // Use port number
                 timestamp_for_rt,                           // Use calculated timestamp // Correct: Consistent order
                 band_local_network_type,
                 band_local_network_index,                           // Use consistent type for band index. // Correct: Consistent order
@@ -1914,12 +1892,12 @@ fn hlod_udp_handshake__rc_network_type_rc_ip_addr(
             debug_log!(
                 "ReadySignal sent to IPv4: {}:{}",
                 ipv4_addr_string,
-                local_owner_desk_setup_data.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
+                local_owner_desk_setup_data.local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip
             );
         }
 
         // 1.1 Wait (and check for exit Uma)  this waits and checks N times: for i in 0..N {
-        for i in 0..5 {
+        for _i in 0..5 {
             // break for loop ?
             if should_halt_uma() {
                 debug_log!("hold_udp_handshake: should_halt_uma(), exiting Uma in handle_local_owner_desk()");
@@ -2030,7 +2008,7 @@ fn read_rc_bandnetwork_type_index(
 ///
 /// Returns:
 ///     Result<(String, u8, Ipv4Addr, Ipv6Addr), ThisProjectError>: A tuple containing the network type, index, IPv4 address, and IPv6 address on success, or a ThisProjectError on failure.
-fn read_band__network_config_type_index_specs() -> Result<(String, u8, Ipv4Addr, Ipv6Addr), ThisProjectError> {
+fn read_band_network_config_type_index_specs() -> Result<(String, u8, Ipv4Addr, Ipv6Addr), ThisProjectError> {
     // 1. Construct Absolute Paths (get current absolute working directory)
     let base_path = make_input_path_name_abs_executabledirectoryrelative_nocheck(
         "sync_data"
@@ -2196,30 +2174,6 @@ fn serialize_ip_addresses<T: std::fmt::Display>(
     Ok(()) // Return Ok(()) if the addresses field is None
 }
 
-// Function to write a TOML string to a file
-// Function to write a TOML string to a file
-fn write_toml_to_file(file_path: &str, toml_string: &str) -> Result<(), ThisProjectError> {
-    /* ?
-    Wait random time in A to B range, N times
-    FILE_READWRITE_N_RETRIES
-    FILE_READWRITE_RETRY_SEC_PAUSE_MIN
-    FILE_READWRITE_RETRY_SEC_PAUSE_max
-    */
-
-    // Attempt to create the file.
-    let mut file = match File::create(file_path) {
-        Ok(file) => file,
-        Err(e) => return Err(ThisProjectError::IoError(e)),
-    };
-
-    // Attempt to write to the file.
-    if let Err(e) = file.write_all(toml_string.as_bytes()) {
-        return Err(ThisProjectError::IoError(e));
-    }
-
-    // Everything successful!
-    Ok(())
-}
 /*
 Seri_Deseri Serialize To TOml File End
 */
@@ -3080,24 +3034,6 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
                 debug_log!(
                     "CAPITCCV error Failed to get temp directory path for {:?}: {} (skipping)",
                     entry.path(),
-                    e
-                );
-                continue; // Skip this directory, continue with next
-            }
-        };
-
-        // Get readable copy
-        let node_readcopy_path_string = match get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
-            &node_file_path,
-            &gpg_full_fingerprint_key_id_string,
-            &base_uma_temp_directory_path,
-        ) {
-            Ok(path) => path,
-            Err(e) => {
-                #[cfg(debug_assertions)]
-                debug_log!(
-                    "CAPITCCV error Failed to get read copy for {:?}: {:?} (skipping)",
-                    node_file_path,
                     e
                 );
                 continue; // Skip this directory, continue with next
@@ -5155,19 +5091,6 @@ macro_rules! debug_log {
     };
 }
 
-// maybe deprecated
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-struct RemoteCollaboratorPortsData {
-    remote_collaborator_name: String,
-    remote_ipv6_address: Ipv6Addr,
-    remote_collaborator_gpg_publickey_id: String,
-    remote_public_gpg: String,
-    remote_sync_interval: u64, // depricated? controlled by team-channel?
-    remote_ready_port__their_desk_you_listen: u16, // locally: 'you' listen to their port on 'their' desk
-    remote_intray_port__their_desk_you_send: u16, // locally: 'you' add files to their port on 'their' desk
-    remote_gotit_port__their_desk_you_listen: u16, // locally: 'you' listen to their port on 'their' desk
-}
-
 /// struct for reading/extracting raw abstract port assignments
 /// from the team_channels/NAME/node.toml
 #[derive(Debug, Deserialize, Serialize, Clone, Hash, PartialEq, Eq)] // Add
@@ -5211,9 +5134,9 @@ struct MeetingRoomSyncDataset {
     local_user_gpg_publickey_id: String,
     local_user_public_gpg: String,
     local_user_sync_interval: u64,
-    local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip: u16, // locally: 'you' send a signal through your port on your desk
-    localuser_intray_port__yourdesk_youlisten__bind_yourlocal_ip: u16, // locally: 'you' listen for files sent by the other collaborator
-    local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip: u16, // locally: 'you' send a signal through your port on your desk
+    local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip: u16, // locally: 'you' send a signal through your port on your desk
+    localuser_intray_port_yourdesk_youlisten_bind_yourlocal_ip: u16, // locally: 'you' listen for files sent by the other collaborator
+    local_user_gotit_port_yourdesk_yousend_aimat_their_rmtclb_ip: u16, // locally: 'you' send a signal through your port on your desk
 
     remote_collaborator_name: String,
     remote_collaborator_salt_list: Vec<u128>,
@@ -5222,9 +5145,9 @@ struct MeetingRoomSyncDataset {
     remote_collaborator_gpg_publickey_id: String,
     remote_collaborator_public_gpg: String,
     remote_collaborator_sync_interval: u64,
-    remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip: u16, // locally: 'you' listen to their port on 'their' desk
-    remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip: u16, // locally: 'you' add files to their port on 'their' desk
-    remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip: u16, // locally: 'you' listen to their port on 'their' desk
+    remote_collab_ready_port_theirdesk_youlisten_bind_yourlocal_ip: u16, // locally: 'you' listen to their port on 'their' desk
+    remote_collab_intray_port_theirdesk_yousend_aimat_their_rmtclb_ip: u16, // locally: 'you' add files to their port on 'their' desk
+    remote_collab_gotit_port_theirdesk_youlisten_bind_yourlocal_ip: u16, // locally: 'you' listen to their port on 'their' desk
     // team_channel_name: String,
     use_padnet: bool,
 }
@@ -5245,9 +5168,9 @@ struct ForLocalOwnerDeskThread {
     remote_collaborator_gpg_publickey_id: String,
     local_user_public_gpg: String,
     local_user_sync_interval: u64,
-    local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip: u16, // locally: 'you' send a signal through your port on your desk
-    localuser_intray_port__yourdesk_youlisten__bind_yourlocal_ip: u16, // locally: 'you' listen for files sent by the other collaborator
-    local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip: u16, // locally: 'you' send a signal through your port on your desk
+    local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip: u16, // locally: 'you' send a signal through your port on your desk
+    localuser_intray_port_yourdesk_youlisten_bind_yourlocal_ip: u16, // locally: 'you' listen for files sent by the other collaborator
+    local_user_gotit_port_yourdesk_yousend_aimat_their_rmtclb_ip: u16, // locally: 'you' send a signal through your port on your desk
     use_padnet: bool,
 }
 
@@ -5266,9 +5189,9 @@ struct ForRemoteCollaboratorDeskThread {
     remote_collaborator_gpg_publickey_id: String,
     remote_collaborator_public_gpg: String,
     remote_collaborator_sync_interval: u64,
-    remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip: u16, // locally: 'you' listen to their port on 'their' desk
-    remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip: u16, // locally: 'you' add files to their port on 'their' desk
-    remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip: u16, // locally: 'you' listen to their port on 'their' desk
+    remote_collab_ready_port_theirdesk_youlisten_bind_yourlocal_ip: u16, // locally: 'you' listen to their port on 'their' desk
+    remote_collab_intray_port_theirdesk_yousend_aimat_their_rmtclb_ip: u16, // locally: 'you' add files to their port on 'their' desk
+    remote_collab_gotit_port_theirdesk_youlisten_bind_yourlocal_ip: u16, // locally: 'you' listen to their port on 'their' desk
     use_padnet: bool,
 }
 
@@ -5276,12 +5199,12 @@ struct ForRemoteCollaboratorDeskThread {
 /// Get Needed, When Needed
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 struct RoleBasedLocalPortSet {
-    local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip: u16, // locally: 'you' send a signal through your port on your desk
-    localuser_intray_port__yourdesk_youlisten__bind_yourlocal_ip: u16, // locally: 'you' listen for files sent by the other collaborator
-    local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip: u16, // locally: 'you' send a signal through your port on your desk
-    remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip: u16, // locally: 'you' listen to their port on 'their' desk
-    remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip: u16, // locally: 'you' add files to their port on 'their' desk
-    remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip: u16, // locally: 'you' listen to their port on 'their' desk
+    local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip: u16, // locally: 'you' send a signal through your port on your desk
+    localuser_intray_port_yourdesk_youlisten_bind_yourlocal_ip: u16, // locally: 'you' listen for files sent by the other collaborator
+    local_user_gotit_port_yourdesk_yousend_aimat_their_rmtclb_ip: u16, // locally: 'you' send a signal through your port on your desk
+    remote_collab_ready_port_theirdesk_youlisten_bind_yourlocal_ip: u16, // locally: 'you' listen to their port on 'their' desk
+    remote_collab_intray_port_theirdesk_yousend_aimat_their_rmtclb_ip: u16, // locally: 'you' add files to their port on 'their' desk
+    remote_collab_gotit_port_theirdesk_youlisten_bind_yourlocal_ip: u16, // locally: 'you' listen to their port on 'their' desk
 }
 
 fn translate_port_assignments(
@@ -5331,12 +5254,12 @@ fn translate_port_assignments(
 
     // 5. Construct and return the RoleBasedLocalPortSet
     Ok(RoleBasedLocalPortSet {
-        local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip: local_ports.ready_port,
-        localuser_intray_port__yourdesk_youlisten__bind_yourlocal_ip: local_ports.intray_port,
-        local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip: local_ports.gotit_port,
-        remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip: remote_ports.ready_port,
-        remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip: remote_ports.intray_port,
-        remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip: remote_ports.gotit_port,
+        local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip: local_ports.ready_port,
+        localuser_intray_port_yourdesk_youlisten_bind_yourlocal_ip: local_ports.intray_port,
+        local_user_gotit_port_yourdesk_yousend_aimat_their_rmtclb_ip: local_ports.gotit_port,
+        remote_collab_ready_port_theirdesk_youlisten_bind_yourlocal_ip: remote_ports.ready_port,
+        remote_collab_intray_port_theirdesk_yousend_aimat_their_rmtclb_ip: remote_ports.intray_port,
+        remote_collab_gotit_port_theirdesk_youlisten_bind_yourlocal_ip: remote_ports.gotit_port,
     })
 }
 
@@ -5781,7 +5704,7 @@ enum InputMode {
 struct App {
     tui_directory_list: Vec<String>, // For directories in the current path
     tui_file_list: Vec<String>,       // For files in the current path
-    tui_focus: usize,                  // Index of the highlighted item in the TUI list
+    // tui_focus: usize,                  // Index of the highlighted item in the TUI list
     tui_textmessage_list: Vec<String>, // Content of messages in the current IM conversation
     messagepost_display_offset: usize,    //
 
@@ -5790,9 +5713,9 @@ struct App {
 
     current_path: PathBuf,              // Current directory being used
     input_mode: InputMode,
-    command_input_integer:  Option<usize>,
-    current_command_input: Option<String>,
-    current_text_input: Option<String>,
+    // command_input_integer:  Option<usize>,
+    // current_command_input: Option<String>,
+    // current_text_input: Option<String>,
     graph_navigation_instance_state: GraphNavigationInstanceState,
 
     // For Task Display
@@ -5839,7 +5762,7 @@ impl App {
 
         // Create and return the App instance
         Ok(App {
-            tui_focus: 0,
+            // tui_focus: 0,
             current_path: current_exe_dir_relative_abs_path_canonicalized,
             input_mode: InputMode::MainCommand,
             tui_file_list: Vec::new(), // Initialize files
@@ -5848,9 +5771,9 @@ impl App {
             messagepost_display_offset: 0,
             tui_width: 80, // default posix terminal size
             tui_height: 18, // default posix terminal size
-            command_input_integer: None,
-            current_command_input: None,
-            current_text_input: None,
+            // command_input_integer: None,
+            // current_command_input: None,
+            // current_text_input: None,
             graph_navigation_instance_state, // Initialize the field
 
             next_path_lookup_table: HashMap::new(),
@@ -7340,23 +7263,6 @@ impl App {
                 &self.graph_navigation_instance_state.pa6_feedback,
             );
         }
-    }
-
-    // What is wrong with the brain of the person who invented this function?
-    fn is_in_team_channel_list(&self) -> bool {
-        let is_in_team_channel_list_dir = make_input_path_name_abs_executabledirectoryrelative_nocheck(
-            "project_graph_data/team_channels"
-        ).ok();
-        match is_in_team_channel_list_dir {
-            Some(dir) => self.current_path == dir,
-            None => false,
-        }
-        // let is_in_team_channel_list_dir = make_input_path_name_abs_executabledirectoryrelative_nocheck(
-        //     "project_graph_data/team_channels"
-        // )?;
-
-        // self.current_path == is_in_team_channel_list_dir
-        // PathBuf::from("project_graph_data/team_channels")
     }
 
     fn is_in_message_posts_browser_directory(&self) -> bool {
@@ -15085,6 +14991,11 @@ impl NodeMessagePostBrowserMetadata {
         message_post_end_date_utc_posix: Option<i64>,
 
     ) -> NodeMessagePostBrowserMetadata {
+
+        // pause, make sure timestamp does not conflict
+        let pause_duration = Duration::from_millis(2000); // 1000 ms = 1 second
+        thread::sleep(pause_duration);
+
         NodeMessagePostBrowserMetadata {
             node_name: node_name.to_string(),
             path_in_node: "/message_posts_browser".to_string(), // TODO
@@ -15919,41 +15830,6 @@ fn create_new_team_channel(
 
     debug_log!("CTC: create_new_team_channel(): Port assignments complete. Collaborators: {:?}", teamchannel_collaborators_with_access);
 
-    // 2. Create and Save 0.toml Metadata (with error handling)
-    let metadata_path = instant_msg_path.join("0.toml");
-    let metadata = NodeMessagePostBrowserMetadata::new(
-        &team_channel_name,
-        owner.clone(),
-        teamchannel_collaborators_with_access.clone(),
-        99999, // default message expiry in minutes, 99_999 ~ 2-months
-
-        // Special configurations (not for team channel)
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-    );
-
-    match save_clearsigned_messagepost_config_0toml(&metadata, &metadata_path) {
-        Ok(_) => debug_log!("CTC: Saved clearsigned metadata to 0.toml"),
-        Err(e) => {
-            debug_log!("CTC: Error saving metadata: {}", e);
-            return Err(ThisProjectError::IoError(e));
-        }
-    }
-
-    // match save_toml_to_file(&metadata, &metadata_path) {
-    //     Ok(_) => debug_log!("CTC: Saved metadata to 0.toml"),
-    //     Err(e) => {
-    //         debug_log!("CTC: Error saving metadata: {}", e);
-    //         return Err(ThisProjectError::IoError(e));
-    //     }
-    // }
-
     // Log the results
     debug_log!("CTC: create_new_team_channel(): Collaborators with access: {:?}", teamchannel_collaborators_with_access);
     for (pair_name, assignments) in &abstract_collaborator_port_assignments {
@@ -16032,10 +15908,10 @@ fn create_new_team_channel(
     let new_node_result = CoreNode::new(
         team_channel_name.clone(),
         corenode_gpgtoml,
-        team_channel_name,
+        team_channel_name.clone(),
         new_channel_path,
-        owner,
-        teamchannel_collaborators_with_access,
+        owner.clone(),
+        teamchannel_collaborators_with_access.clone(),
         abstract_collaborator_port_assignments,
         // Project Areas
         pa1_process,
@@ -16110,6 +15986,39 @@ fn create_new_team_channel(
             true
         }
     };
+
+
+
+    // timestamp must be make after node.toml
+    // 2. Create and Save 0.toml Metadata (with error handling)
+    let zerotoml_metadata_path = instant_msg_path.join("0.toml");
+    let zerotoml_metadata = NodeMessagePostBrowserMetadata::new(
+        &team_channel_name,
+        owner,
+        teamchannel_collaborators_with_access,
+        99999, // default message expiry in minutes, 99_999 ~ 2-months
+
+        // Special configurations (not for team channel)
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+
+    match save_clearsigned_messagepost_config_0toml(&zerotoml_metadata, &zerotoml_metadata_path) {
+        Ok(_) => debug_log!("CTC: Saved clearsigned metadata to 0.toml"),
+        Err(e) => {
+            debug_log!("CTC: Error saving metadata: {}", e);
+            return Err(ThisProjectError::IoError(e));
+        }
+    }
+
+
+
 
     // Handle the CoreNode creation result with chosen save method
     match new_node_result {
@@ -16845,24 +16754,9 @@ fn create_core_node(
         // TODO maybe custom shallow node with no tasks option needed...
     }
 
-    // Create and Save metadata
-    let metadata_path = message_dir.join("0.toml");
-    let metadata = NodeMessagePostBrowserMetadata::new(
-        &node_name,
-        owner.clone(),
-        teamchannel_collaborators_with_access.clone(),
-        messageposts_expire_after_n_min,
-        // Special configurations
-        message_post_gpgtoml_required,
-        message_post_integer_ranges.clone(),
-        message_post_int_string_ranges.clone(),
-        message_post_max_string_length,
-        message_post_is_public,
-        message_post_user_confirms,
-        message_post_start_date,
-        message_post_end_date,
-    );
-    save_toml_to_file(&metadata, &metadata_path)?;
+
+
+
 
     // Create CoreNode instance
     let new_node_result = CoreNode::new(
@@ -16870,8 +16764,8 @@ fn create_core_node(
         corenode_gpgtoml,
         description,                       // description_for_tui
         node_specific_path.clone(),        // directory_path
-        owner,                             // owner
-        teamchannel_collaborators_with_access,
+        owner.clone(),                             // owner
+        teamchannel_collaborators_with_access.clone(),
         HashMap::new(),                    // for ports
 
         // Project Areas TODO TODO
@@ -16884,8 +16778,8 @@ fn create_core_node(
 
         // Message Post Configuration
         message_post_gpgtoml_required,
-        message_post_integer_ranges,
-        message_post_int_string_ranges,
+        message_post_integer_ranges.clone(),
+        message_post_int_string_ranges.clone(),
         message_post_max_string_length,
         message_post_is_public,
         message_post_user_confirms,
@@ -16895,6 +16789,27 @@ fn create_core_node(
         // Padnet
         use_padnet,
     );
+
+    // note: timestamp must be after node.toml's
+    // Create and Save metadata
+    let metadata_path = message_dir.join("0.toml");
+    let metadata = NodeMessagePostBrowserMetadata::new(
+        &node_name,
+        owner,
+        teamchannel_collaborators_with_access,
+        messageposts_expire_after_n_min,
+        // Special configurations
+        message_post_gpgtoml_required,
+        message_post_integer_ranges,
+        message_post_int_string_ranges,
+        message_post_max_string_length,
+        message_post_is_public,
+        message_post_user_confirms,
+        message_post_start_date,
+        message_post_end_date,
+    );
+    save_toml_to_file(&metadata, &metadata_path)?;
+
 
     match new_node_result {
         Ok(new_node) => {
@@ -18743,6 +18658,8 @@ fn q_and_a_get_message_post_start_date() -> Result<Option<i64>, ThisProjectError
 /// # Returns
 /// * `Result<Option<bool>, ThisProjectError>` - Whether user confirmation is required or None
 fn q_and_a_get_use_padnet() -> Result<Option<bool>, ThisProjectError> {
+    // TODO Buffy formatting no heap
+    println!("");
     println!("Team Channel uses One-Time-Pad Network-Layer?  (requires make/share 'pad') -> (y)es / (n)o / Press-Enter to skip):");
 
     let mut input = String::new();
@@ -19862,7 +19779,7 @@ fn optional_padnetopt_to_gpg_bytes(
     */
 
 
-    let file_bytes2send = wrapper__path_to_clearsign_to_gpgencrypt_to_send_bytes(
+    let file_bytes2send = wrapper_path_to_clearsign_to_gpgencrypt_to_send_bytes(
         &file_path,
         &recipient_public_key,
         // &room_sync_input.remote_collaborator_gpg_publickey_id,
@@ -19888,7 +19805,7 @@ fn optional_padnetopt_to_gpg_bytes(
 ///
 /// * `Ok(Vec<u8>)`: A vector of bytes containing the encrypted, clearsigned file content on success.
 /// * `Err(ThisProjectError)`: An error if file reading, clearsigning, or encryption fails.
-fn wrapper__path_to_clearsign_to_gpgencrypt_to_send_bytes(
+fn wrapper_path_to_clearsign_to_gpgencrypt_to_send_bytes(
     file_path: &Path,
     recipient_public_key: &str
 ) -> Result<Vec<u8>, ThisProjectError> {
@@ -19900,7 +19817,7 @@ fn wrapper__path_to_clearsign_to_gpgencrypt_to_send_bytes(
     let encrypted_content = gpg_encrypt_to_bytes(&clearsigned_content, recipient_public_key)?;
 
     debug_log!(
-        "(in HRCD) wrapper__path_to_clearsign_to_gpgencrypt_to_send_bytes  encrypted_content {:?}",
+        "(in HRCD) wrapper_path_to_clearsign_to_gpgencrypt_to_send_bytes  encrypted_content {:?}",
         &encrypted_content
     );
 
@@ -21785,7 +21702,7 @@ fn write_bytes_to_file_atomic(
 //     };
 
 //     debug_log!(
-//         "(in HRCD) wrapper__path_to_clearsign_to_gpgencrypt_to_send_bytes  encrypted_content {:?}",
+//         "(in HRCD) wrapper_path_to_clearsign_to_gpgencrypt_to_send_bytes  encrypted_content {:?}",
 //         &encrypted_content
 //     );
 
@@ -22890,20 +22807,20 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         }
     };
 
-    // Call get_band__find_valid_network_index_and_type to retrieve band info and online status
+    // Call get_band_find_valid_network_index_and_type to retrieve band info and online status
     let (
         network_found_ok,
         network_type,
         network_index,
         this_ipv4,
         this_ipv6,
-    ) = get_band__find_valid_network_index_and_type(
+    ) = get_band_find_valid_network_index_and_type(
         &uma_local_owner_user,
         &full_fingerprint_key_id_string,
         );
 
 
-    println!("IUA next: get_band__find_valid_network_index_and_type");
+    println!("IUA next: get_band_find_valid_network_index_and_type");
     println!(
         "IUA: network_found_ok -> {:?}",
         network_found_ok
@@ -22923,7 +22840,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
 
 
     // set network data state-file(s) in sync_data/ directory:
-    if let Err(e) = write_local_band__save_network_band__type_index( // Check if writing to sync data state files fails
+    if let Err(e) = write_local_band_save_network_band_type_index( // Check if writing to sync data state files fails
         network_type, // network type, as String
         network_index, // network index, as u8
         this_ipv4,  //ipv4, as std::net::Ipv4Addr
@@ -27662,76 +27579,6 @@ fn handle_command_main_mode(
     return Ok(false); // Don't exit by default
 }
 
-
-fn task_mode_handle__commands(
-    input: &str,
-    app: &mut App,
-    graph_navigation_instance_state: &GraphNavigationInstanceState
-) -> Result<bool, io::Error> {
-    /*
-    For input command mode
-    quit
-    command-list/legend
-    */
-
-    debug_log(&format!("fn task_mode_handle__commands(), input->{:?}", input));
-
-    let parts: Vec<&str> = input.trim().split_whitespace().collect();
-    if let Some(command) = parts.first() {
-        match command.to_lowercase().as_str() {
-            "h" | "help" => {
-                // TODO task help
-                debug_log("TMHC Task Help!");
-                // Display help information
-                let _  = open_complete_help_in_editor();
-            }
-
-            "bigger" | "big" | "bg" => {
-                app.tui_height = (app.tui_height + 1).max(1);  // Height cannot be less than 1
-                app.tui_width = (app.tui_width + 1).max(1);  // Width cannot be less than 1
-                // ... re-render
-            }
-
-            "smaller" | "small" | "sm" => {
-                app.tui_height = (app.tui_height - 1).max(1);
-                app.tui_width = (app.tui_width - 1).max(1);
-                // ... re-render
-            }
-
-            "home" => {
-                /*
-                For a clean reset, 'home' quits and restarts,
-                ensuring all processes are clean.
-                */
-                debug_log("Home command received.");
-                let _ = quit_set_continue_uma_to_false();
-            }
-
-            "q" | "quit" | "exit" => {
-                debug_log("quit");
-                let _ = no_restart_set_hard_reset_flag_to_false();
-                let _ = quit_set_continue_uma_to_false();
-
-                return Ok(true); // Signal to exit the loop
-            }
-            _ => {
-                // Display error message (e.g., "Invalid command")
-                debug_log(" 'other' commend? _ => {...");
-
-            }
-            // ... (handle other commands)
-
-        }
-    }
-    debug_log("end fn task_mode_handle__commands()");
-    return Ok(false); // Don't exit by default
-}
-
-
-fn extract_last_path_section(current_path: &PathBuf) -> Option<String> {
-    current_path.file_name().and_then(|os_str| os_str.to_str().map(|s| s.to_string()))
-}
-
 /// Determines the next available message file path.
 ///
 /// Finds the highest existing message number in the given directory,
@@ -28011,220 +27858,6 @@ fn get_user_input_number() -> Result<usize, ThisProjectError> {
     )
 }
 
-// /*
-// This may be garbage:
-// For Task Mode:
-// 1. Link to tasks: view node 2nd layer deep using links in graph nav struct
-
-// 2. Move task(node) to new directory
-// Maybe use the lookup-number directory to get the path of the item to move.
-
-// - command "move"
-// - a Q&A interface:
-// Q: Move what task?
-// A: int
-// (maybe get path from next-path lookup dict)
-
-// Q: move to what column?
-// A: int
-// (this can also be from the lookup path dict)
-
-
-// Moving a task involves:
-// 1. move_from_path = (from next path lookup table)
-// 2. move_to_directory_path = (from next path lookup table)
-// 3. in move_from_path directory, change "directory_path" node.toml field to be move_to_directory_path
-// 4. recursively move the whole directory to the new location...
-// (note: internal nodes? local path? full path?)
-// 5. resetting the file paths of all nested nodes (unless those are relative...)
-// - iterate through new directory path recursively
-// - look for node.toml files
-// - set node_path to that absolute path
-
-// why is this reading the file BEFORE the move?
-
-// Why is the using path recorded IN the file,
-// instead of the literal path to that file?
-
-// Why is there no doc-string?
-// */
-// /// Moves a node directory and updates all internal paths
-// fn move_node_directory(
-//     source_path: PathBuf,
-//     dest_path: PathBuf
-// ) -> Result<(), ThisProjectError> {
-//     debug_log("Starting move_node_directory()");
-
-//     debug_log!("Moving node from {:?} to {:?}", source_path, dest_path);
-
-//     // 1. Read the source node.toml
-//     let node_toml_path = source_path.join("node.toml");
-//     let mut node = load_core_node_from_toml_file(&node_toml_path)
-//         .map_err(|e| ThisProjectError::InvalidData(e))?;
-
-//     // 2. Update the node's directory path
-//     node.directory_path = dest_path.clone();
-
-//     // 3. Create the new directory
-//     let new_node_path = dest_path.join(source_path.file_name().unwrap());
-//     fs::create_dir_all(&new_node_path)?;
-
-//     // 4. Move the directory contents
-//     move_directory_contents(&source_path, &new_node_path)?;
-
-//     // 5. Update paths in all nested node.toml files
-//     update_nested_node_paths(&new_node_path)?;
-
-//     // 6. Remove the old directory
-//     fs::remove_dir_all(source_path)?;
-
-//     Ok(())
-// }
-
-// /// Updates paths in all nested node.toml files
-// fn update_nested_node_paths(
-//     dir_path: &Path
-// ) -> Result<(), ThisProjectError> {
-//     debug_log("starting update_nested_node_paths()");
-//     for entry in fs::read_dir(dir_path)? {
-//         let entry = entry?;
-//         let path = entry.path();
-
-//         if path.is_dir() {
-//             update_nested_node_paths(&path)?;
-//         } else if path.file_name().unwrap() == "node.toml" {
-//             let mut node = load_core_node_from_toml_file(&path)
-//                 .map_err(|e| ThisProjectError::InvalidData(e))?;
-//             node.directory_path = path.parent().unwrap().to_path_buf();
-//             save_toml_to_file(&node, &path)?;
-//         }
-//     }
-//     Ok(())
-// }
-
-// /// Recursively moves directory contents
-// fn move_directory_contents(
-//     from: &Path,
-//     to: &Path
-// ) -> Result<(), ThisProjectError> {
-//     debug_log("starting move_directory_contents()");
-//     for entry in fs::read_dir(from)? {
-//         let entry = entry?;
-//         let path = entry.path();
-//         let destination = to.join(path.file_name().unwrap());
-
-//         if path.is_dir() {
-//             fs::create_dir_all(&destination)?;
-//             move_directory_contents(&path, &destination)?;
-//         } else {
-//             fs::copy(&path, &destination)?;
-//         }
-//     }
-//     Ok(())
-// }
-
-// /// Moves a node directory and updates its metadata.
-// ///
-// /// This function moves a node's directory from the `source_path` to the `dest_path`.
-// /// It updates the `directory_path` field in the node's `node.toml` file to reflect
-// /// the new location. The function uses the `source_path`, not path within the struct.
-// /// It handles directory creation, moving, and file updates efficiently.
-// ///
-// /// # Arguments
-// ///
-// /// * `source_path`: The current path to the node's directory.
-// /// * `dest_path`: The intended path for the moved node's directory.
-// ///
-// /// # Returns
-// ///
-// /// * `Result<(), ThisProjectError>`: `Ok(())` if the move is successful; otherwise, a `ThisProjectError` is returned.
-// fn move_node_directory(
-//     source_path: PathBuf,
-//     dest_path: PathBuf,
-// ) -> Result<(), ThisProjectError> {
-//     debug_log!("Starting move_node_directory()");
-//     debug_log!("Moving node from {:?} to {:?}", source_path, dest_path);
-
-//     // 1. Construct the new node path (where the moved node will be located).
-//     let new_node_path = dest_path.join(source_path.file_name().unwrap());
-//     debug_log!("move_node_directory: new_node_path is: {:?}", new_node_path);
-
-//     // 2. Create the new directory, including all parents.
-//     fs::create_dir_all(&new_node_path)?;
-//     debug_log!("move_node_directory: created new_node_path: {:?}", new_node_path);
-
-//     // 3. Recursively move the source directory's contents to the new directory.
-//     move_directory_contents(&source_path, &new_node_path)?;
-//     debug_log!("move_node_directory: contents moved to: {:?}", new_node_path);
-
-//     // 4. Update node.toml (use full path)
-//     // (The old path is already deleted by move_directory_contents)
-//     update_node_path_in_toml(&new_node_path)?;
-//     debug_log!("move_node_directory: updated node.toml paths");
-
-//     // 5. Remove the old directory.
-//     fs::remove_dir_all(source_path.clone())?;
-//     // fs::remove_dir_all(source_path)?;
-//     debug_log!("move_node_directory: removed source_path at : {:?}", source_path);
-
-//     Ok(())
-// }
-
-
-// /// Updates the directory_path in node.toml
-// /// Does NOT attempt to move anything
-// fn update_node_path_in_toml(new_node_path: &Path) -> Result<(), ThisProjectError> {
-//     debug_log!("starting update_node_path_in_toml(), for path: {:?}", new_node_path);
-
-//     let node_toml_path = new_node_path.join("node.toml");
-
-//     // 1. Read node.toml file:
-//     let mut node = load_core_node_from_toml_file(&node_toml_path)
-//         .map_err(|e| ThisProjectError::InvalidData(e))?;
-
-//     // 2. Check if directory path is already the new path:
-//     if node.directory_path == new_node_path {
-//         debug_log!(
-//             "skipping: update_node_path_in_toml(): node_toml.directory_path is already = {:?}, so no change required",
-//             node.directory_path
-//         );
-//         return Ok(());
-//     }
-
-//     debug_log!("update_node_path_in_toml: old-node.directory_path: {:?}", node.directory_path);
-
-//     // 3. Set new node.directory_path:
-//     node.directory_path = new_node_path.to_path_buf();
-//     debug_log!("update_node_path_in_toml: new-node.directory_path: {:?}", node.directory_path);
-
-//     // 4. Write node.toml file:
-//     save_toml_to_file(&node, &node_toml_path)?; // No need to use new_node_path again
-
-//     debug_log!("Successfully updated node.toml directory path.");
-//     Ok(())
-// }
-
-// /// Recursively moves directory contents
-// fn move_directory_contents(
-//     from: &Path,
-//     to: &Path
-// ) -> Result<(), ThisProjectError> {
-//     debug_log("starting move_directory_contents()");
-//     for entry in fs::read_dir(from)? {
-//         let entry = entry?;
-//         let path = entry.path();
-//         let destination = to.join(path.file_name().unwrap());
-
-//         if path.is_dir() {
-//             fs::create_dir_all(&destination)?;
-//             move_directory_contents(&path, &destination)?;
-//         } else {
-//             fs::copy(&path, &destination)?;
-//         }
-//     }
-//     Ok(())
-// }
-
 /// Moves a node directory and updates its metadata.
 ///
 /// This function moves a node's directory from the `source_path` to the `dest_path`.
@@ -28294,40 +27927,6 @@ fn move_node_directory(
     fs::remove_dir_all(source_path.clone())?;
     debug_log!("move_node_directory: removed source_path at : {:?}", source_path);
 
-    Ok(())
-}
-
-/// TODO update for clearsign...just load_core_node_from_toml_file?
-/// Updates the directory_path in node.toml
-/// Does NOT attempt to move anything
-fn update_node_path_in_toml(new_node_path: &Path) -> Result<(), ThisProjectError> {
-    debug_log!("starting update_node_path_in_toml(), for path: {:?}", new_node_path);
-
-    let node_toml_path = new_node_path.join("node.toml");
-
-    // 1. Read node.toml file:
-    let mut node = load_core_node_from_toml_file(&node_toml_path)
-        .map_err(|e| ThisProjectError::InvalidData(e))?;
-
-    // 2. Check if directory path is already the new path:
-    if node.directory_path == new_node_path {
-        debug_log!(
-            "skipping: update_node_path_in_toml(): node_toml.directory_path is already = {:?}, so no change required",
-            node.directory_path
-        );
-        return Ok(());
-    }
-
-    debug_log!("update_node_path_in_toml: old-node.directory_path: {:?}", node.directory_path);
-
-    // 3. Set new node.directory_path:
-    node.directory_path = new_node_path.to_path_buf();
-    debug_log!("update_node_path_in_toml: new-node.directory_path: {:?}", node.directory_path);
-
-    // 4. Write node.toml file:
-    save_toml_to_file(&node, &node_toml_path)?; // No need to use new_node_path again
-
-    debug_log!("Successfully updated node.toml directory path.");
     Ok(())
 }
 
@@ -29049,9 +28648,9 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
             local_user_public_gpg: these_collaboratorfiles_toml_data.gpg_key_public.clone(),
             local_user_sync_interval: these_collaboratorfiles_toml_data.sync_interval,
 
-            local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip: role_based_ports.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip,
-            localuser_intray_port__yourdesk_youlisten__bind_yourlocal_ip: role_based_ports.localuser_intray_port__yourdesk_youlisten__bind_yourlocal_ip,
-            local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip: role_based_ports.local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip,
+            local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip: role_based_ports.local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip,
+            localuser_intray_port_yourdesk_youlisten_bind_yourlocal_ip: role_based_ports.localuser_intray_port_yourdesk_youlisten_bind_yourlocal_ip,
+            local_user_gotit_port_yourdesk_yousend_aimat_their_rmtclb_ip: role_based_ports.local_user_gotit_port_yourdesk_yousend_aimat_their_rmtclb_ip,
 
             remote_collaborator_name: collaborator_name.clone(), // TODO source?
             remote_collaborator_salt_list: remote_collaborator_salt_list,
@@ -29063,9 +28662,9 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
             remote_collaborator_public_gpg: these_collaboratorfiles_toml_data.gpg_key_public,
             remote_collaborator_sync_interval: these_collaboratorfiles_toml_data.sync_interval,
 
-            remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip: role_based_ports.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip,
-            remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip: role_based_ports.remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip,
-            remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip: role_based_ports.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip,
+            remote_collab_ready_port_theirdesk_youlisten_bind_yourlocal_ip: role_based_ports.remote_collab_ready_port_theirdesk_youlisten_bind_yourlocal_ip,
+            remote_collab_intray_port_theirdesk_yousend_aimat_their_rmtclb_ip: role_based_ports.remote_collab_intray_port_theirdesk_yousend_aimat_their_rmtclb_ip,
+            remote_collab_gotit_port_theirdesk_youlisten_bind_yourlocal_ip: role_based_ports.remote_collab_gotit_port_theirdesk_youlisten_bind_yourlocal_ip,
             use_padnet: use_padnet,
         };
 
@@ -29156,99 +28755,6 @@ pub fn pearson_hash_base(input: &[u8]) -> Result<u8, std::io::Error> {
     Ok(hash)
 }
 
-/// Converts a Pearson hash (Vec<u8>) to a hexadecimal string.
-///
-/// # Arguments
-///
-/// * `hash`: The Pearson hash as a `Vec<u8>`.
-///
-/// # Returns
-///
-/// * `String`: The hexadecimal representation of the hash.
-fn pearson_hash_to_hex_string(hash: &[u8]) -> String {
-    hash.iter()
-        .map(|&byte| format!("{:02x}", byte)) // Format each byte as two hex digits
-        .collect()
-}
-
-/// Converts a hexadecimal string to a Pearson hash (Vec<u8>).
-///
-/// Returns an error if the input string is not a valid hexadecimal representation.
-///
-/// # Arguments
-///
-/// * `hex_string`: The hexadecimal string.
-///
-/// # Returns
-///
-/// * `Result<Vec<u8>, String>`: The Pearson hash as a `Vec<u8>`, or an error message.
-fn hex_string_to_pearson_hash(hex_string: &str) -> Result<Vec<u8>, String> {
-    debug_log("starting hex_string_to_pearson_hash()");
-
-    if hex_string.len() % 2 != 0 {
-        return Err("Invalid hex string: Length must be even".to_string());
-    }
-
-    let mut hash = Vec::with_capacity(hex_string.len() / 2);
-    for i in (0..hex_string.len()).step_by(2) {
-        let hex_byte = &hex_string[i..i + 2];
-        match u8::from_str_radix(hex_byte, 16) {
-            Ok(byte) => hash.push(byte),
-            Err(_) => return Err(format!("Invalid hex string: Invalid byte: {}", hex_byte)),
-        }
-    }
-    debug_log("end of hex_string_to_pearson_hash");
-    Ok(hash)
-}
-
-/// Retrieves the salt list for a collaborator from their TOML configuration file.
-///
-/// This function reads the collaborator's TOML file located at
-/// `project_graph_data/collaborator_files_address_book/{collaborator_name}__collaborator.toml`,
-/// parses the TOML data, and extracts the `user_salt_list`.  It handles potential errors during file
-/// reading, TOML parsing, and data extraction.
-///
-/// # Arguments
-///
-/// * `collaborator_name`: The name of the collaborator.
-///
-/// # Returns
-///
-/// * `Result<Vec<u128>, ThisProjectError>`:  A `Result` containing the collaborator's salt list (`Vec<u128>`) on success, or a `ThisProjectError` if any error occurs.
-///
-/// use with:let remote_collaborator_salt_list = get_saltlist_for_collaborator(NAME)?;
-///
-fn get_saltlist_for_collaborator(collaborator_name: &str) -> Result<Vec<u128>, ThisProjectError> {
-    // 1. Construct File Path (using PathBuf)
-    let file_path = Path::new(COLLABORATOR_ADDRESSBOOK_PATH_STR)
-        .join(format!("{}__collaborator.toml", collaborator_name));
-
-    // 2. Read File (handling potential errors)
-    let toml_string = std::fs::read_to_string(&file_path)?;
-
-    // 3. Parse TOML
-    // // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
-    let toml_value: Value = toml::from_str(&toml_string)?;
-
-    // 4. Extract Salt List (handling missing/invalid data)
-    let salt_list_result: Result<Vec<u128>, ThisProjectError> = match toml_value.get("user_salt_list") {
-        Some(Value::Array(arr)) => {
-            arr.iter()
-                .map(|val| { // Iterate each item in the array
-                    if let Value::String(hex_string) = val {
-                        u128::from_str_radix(hex_string.trim_start_matches("0x"), 16)
-                            .map_err(|_| ThisProjectError::InvalidData(format!("Invalid salt format in file for: {}", collaborator_name))) // clearer error message
-                    } else {
-                        Err(ThisProjectError::InvalidData(format!("Invalid salt format in file for: {}", collaborator_name))) // clearer error message
-                    }
-                }).collect() // Collect results
-        },
-        _ => Err(ThisProjectError::InvalidData(format!("Missing or invalid 'user_salt_list' in collaborator file for: {}", collaborator_name))), // Handle missing field or type mismatch
-    };
-    salt_list_result // Return the salt list Result
-}
-
-// TODO useful sometime, if not now
 /// Calculates a list of Pearson hashes for a given input string using a provided salt list.
 ///
 /// This function takes an input string, converts it to bytes, and calculates a Pearson hash for the
@@ -30571,6 +30077,8 @@ fn read_rc_latest_received_from_rc_filetimestamp_plaintextstatefile(
         }
 
         retries -= 1;
+
+        //
         thread::sleep(pause_duration);  // Pause before retrying
     }
 }
@@ -31352,7 +30860,7 @@ fn decompress_banddata_byte(band_byte: u8) -> Result<(String, u8), Decompression
 
 /// Sends a ReadySignal to the specified target address, selecting the IP address based on the network type.
 /// goes to: their_rmtclb_ip
-///     i.e. local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
+///     i.e. local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip
 ///
 /// Handles hash calculation, serialization, and sending the signal via UDP.
 ///
@@ -31371,7 +30879,7 @@ fn send_ready_signal(
     local_user_salt_list: &[u128], // to make hash
     rc_network_type_string: String, // Remote collaborator's network type (ipv4, ipv6, etc.)
     rc_ip_addr_string: String, // Remote collaborator's IP string
-    target_port: u16, // local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip
+    target_port: u16, // local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip
     last_received_timestamp: u64, // last_received_timestamp
     local_user_network_type: &str, // LOU needed for .b section
     local_user_network_index: u8,  // LOU needed for .b section
@@ -31448,7 +30956,7 @@ fn send_gotit_signal(
     local_user_ipv4_address: &Ipv4Addr,
     local_user_ipv6_address: &Ipv6Addr,
     network_type: &str,  // Add network type
-    local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip: u16,
+    local_user_gotit_port_yourdesk_yousend_aimat_their_rmtclb_ip: u16,
     received_file_updatedat_timestamp: u64,
 ) -> Result<(), ThisProjectError> {
     /*
@@ -31493,14 +31001,14 @@ fn send_gotit_signal(
 
     let target_addr = SocketAddr::new(
         detected_lou_ip_addr,
-        local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip,
+        local_user_gotit_port_yourdesk_yousend_aimat_their_rmtclb_ip,
     );
 
     // Log before sending
     debug_log!(
         "inHLOD send_gotit_signal() Attempting to send ReadySignal to {}: {:?}",
         target_addr,
-        local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip
+        local_user_gotit_port_yourdesk_yousend_aimat_their_rmtclb_ip
     );
 
     // // If sending to the first address succeeds, no need to iterate further
@@ -31534,7 +31042,7 @@ fn send_gotit_signal(
 ///     3. set sync_event_id to be unique thread id
 ///     4. Creates a ReadySignal instance to be the ready signal
 ///     5. Serialize the ReadySignal
-///     6. Send the signal @ local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip (exact ip choice pending...)
+///     6. Send the signal @ local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip (exact ip choice pending...)
 fn handle_local_owner_desk(
     local_owner_desk_setup_data: ForLocalOwnerDeskThread,
 ) -> Result<(), ThisProjectError> {
@@ -31558,7 +31066,7 @@ fn handle_local_owner_desk(
 
     debug_log("HLOD Starting the handle_local_owner_desk()");
 
-    let localowner_gotit_port = local_owner_desk_setup_data.local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip.clone();
+    let localowner_gotit_port = local_owner_desk_setup_data.local_user_gotit_port_yourdesk_yousend_aimat_their_rmtclb_ip.clone();
 
     let remote_collaborator_name = local_owner_desk_setup_data.remote_collaborator_name.clone();
 
@@ -31583,7 +31091,7 @@ fn handle_local_owner_desk(
         band_local_network_index,
         band_local_user_ipv4_address,
         band_local_user_ipv6_address,
-    ) = match read_band__network_config_type_index_specs() {
+    ) = match read_band_network_config_type_index_specs() {
         Ok(data) => data,
         Err(e) => {
             // Handle the error (e.g., log and return or use default values)
@@ -31591,34 +31099,31 @@ fn handle_local_owner_desk(
             return Err(e); // Or handle differently
         }
     };
-    debug_log("HLOD setup: read_band__network_config_type_index_specs() run");
+    debug_log("HLOD setup: read_band_network_config_type_index_specs() run");
 
     /////////////
     // Bootstrap
     /////////////
     /*
     HLOD needs is the (ip string, type string) to use with two actions:
-        their_rmtclb_ip -> local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip: local_ports.ready_port,
-                           localuser_intray_port__yourdesk_youlisten__bind_yourlocal_ip: local_ports.intray_port,
-        their_rmtclb_ip -> local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip: local_ports.gotit_port,
+        their_rmtclb_ip -> local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip: local_ports.ready_port,
+                           localuser_intray_port_yourdesk_youlisten_bind_yourlocal_ip: local_ports.intray_port,
+        their_rmtclb_ip -> local_user_gotit_port_yourdesk_yousend_aimat_their_rmtclb_ip: local_ports.gotit_port,
 
     ready and gotit are aimed at the RC ip.
     */
-    let Ok((rc_network_type_string, rc_ip_addr_string)) = hlod_udp_handshake__rc_network_type_rc_ip_addr(
+    let Ok((rc_network_type_string, rc_ip_addr_string)) = hlod_udp_handshake_rc_network_type_rc_ip_addr(
         &local_owner_desk_setup_data, //: &ForLocalOwnerDeskThread,
         &band_local_network_type, //: &str,
-        &band_local_user_ipv4_address, //: &Ipv4Addr,
-        &band_local_user_ipv6_address, //: &Ipv6Addr,
         band_local_network_index, //: u8,
     ) else {
         // TODO, handled another way?
         return Err(ThisProjectError::NetworkError("Handshake failed".into()));
         };
-    debug_log("HLOD setup: hlod_udp_handshake__rc_network_type_rc_ip_addr() run");
+    debug_log("HLOD setup: hlod_udp_handshake_rc_network_type_rc_ip_addr() run");
 
     loop { // 1. start overall loop to (re)start whole desk
         debug_log("HLOD 1. start overall loop to (re)start whole desk");
-
 
         // 1. Create lookup table:
         let channel_dir_path_str = read_state_string("current_node_directory_path.txt")?; // read as string first
@@ -31630,7 +31135,6 @@ fn handle_local_owner_desk(
 
         let remote_collaborator_name_for_thread_1 = remote_collaborator_name.clone();
         let remote_collaborator_name_for_thread_2 = remote_collaborator_name.clone();
-        // let salt_list_1_drone_clone = salt_list_1.clone();
 
         // 1.1 check for halt/quit uma signal
         if should_halt_uma() {
@@ -31760,7 +31264,7 @@ fn handle_local_owner_desk(
                     &salty_the_clone_list, // local_user_salt_list: &[u128],
                     rc_network_type_string_1.clone(), // local_user_ipv4_address: &Ipv4Addr,
                     rc_ip_addr_string_1.clone(), // local_user_ipv6_address: &Ipv6Addr,
-                    local_owner_desk_setup_data.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip,
+                    local_owner_desk_setup_data.local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip,
                     latest_received_from_rc_file_timestamp, // last_received_timestamp: u64, // for rst
                     &band_local_network_type_clone, // network_type: String, // for nt
                     band_local_network_index, //network_index: u8, // for ni
@@ -31806,7 +31310,7 @@ fn handle_local_owner_desk(
                 &band_local_network_type,
                 &band_local_user_ipv4_address,
                 &band_local_user_ipv6_address,
-                local_owner_desk_setup_data.localuser_intray_port__yourdesk_youlisten__bind_yourlocal_ip,
+                local_owner_desk_setup_data.localuser_intray_port_yourdesk_youlisten_bind_yourlocal_ip,
             )?;
             debug_log!("HLOD: Intray socket created.");
 
@@ -33030,7 +32534,7 @@ fn handle_local_owner_desk(
                         &local_owner_desk_setup_data.local_user_salt_list, // local_user_salt_list: &[u128],
                         rc_network_type_string_2, // Remote collaborator's network type (ipv4, ipv6
                         rc_ip_addr_string_2,  // Remote collaborator's IP string
-                        local_owner_desk_setup_data.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip,
+                        local_owner_desk_setup_data.local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip,
                         received_file_updatedat_timestamp, // last_received_timestamp: u64, // for rst
                         &band_local_network_type, // network_type: String, // for nt
                         band_local_network_index, //network_index: u8, // for ni
@@ -33847,6 +33351,11 @@ fn check_file_qualifications(
     remote_collaborator_name: &str,
     timestamp_threshold: u64,
 ) -> Result<bool, String> {
+
+    #[cfg(all(debug_assertions, not(test)))]
+    debug_log("CFQ starting check_file_qualifications()");
+
+
     // Convert PathBuf to &str for TOML reading functions
     let toml_path_str = readable_toml_path
         .to_str()
@@ -33860,6 +33369,7 @@ fn check_file_qualifications(
         .map_err(|e| format!("CFQUAL: Failed to read owner field: {}", e))?;
 
     if owner != localowneruser_name {
+        debug_log("CFQ Not owned by local user - doesn't qualify");
         // Not owned by local user - doesn't qualify (not an error)
         return Ok(false);
     }
@@ -33875,6 +33385,8 @@ fn check_file_qualifications(
     .map_err(|e| format!("CFQUAL: Failed to read collaborators field: {}", e))?;
 
     if !collaborators.contains(&remote_collaborator_name.to_string()) {
+        debug_log("CFQ Collaborator not in access list - doesn't qualify");
+
         // Collaborator not in access list - doesn't qualify (not an error)
         return Ok(false);
     }
@@ -33887,6 +33399,10 @@ fn check_file_qualifications(
         .map_err(|e| format!("CFQUAL: Failed to read timestamp field: {}", e))?;
 
     if timestamp <= timestamp_threshold {
+        debug_log("CFQ File is not newer than threshold - doesn't qualify");
+        debug_log!(" timestamp_threshold {}", timestamp_threshold);
+        debug_log!(" timestamp {}", timestamp);
+
         // File is not newer than threshold - doesn't qualify (not an error)
         return Ok(false);
     }
@@ -34546,7 +34062,7 @@ fn get_rc_band_ready_gotit_socketaddrses_hrcd(
         _, // local_network_index is not used here
         local_ipv4,
         local_ipv6,
-    ) = read_band__network_config_type_index_specs()?;
+    ) = read_band_network_config_type_index_specs()?;
 
 
     // --- 2. Determine Local IP Address (as before) ---
@@ -34562,7 +34078,7 @@ fn get_rc_band_ready_gotit_socketaddrses_hrcd(
     debug_log("get_rc_band...HRCD: 3. SocketAddr for Listening");
     let ready_socket_addr = SocketAddr::new(
         local_ip,
-        room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip,
+        room_sync_input.remote_collab_ready_port_theirdesk_youlisten_bind_yourlocal_ip,
     );
 
 
@@ -34632,7 +34148,7 @@ fn get_rc_band_ready_gotit_socketaddrses_hrcd(
                         continue; // Continue listening for valid signal
                     }
                 };
-                let gotit_socket_addr = SocketAddr::new(rc_ip, room_sync_input.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip);  // Correct port from room_sync_input
+                let gotit_socket_addr = SocketAddr::new(rc_ip, room_sync_input.remote_collab_gotit_port_theirdesk_youlisten_bind_yourlocal_ip);  // Correct port from room_sync_input
 
                 // --- Write/Save Received Band Data ---
                 let team_channel_name = match get_current_team_channel_name_from_nav_path() {
@@ -35508,7 +35024,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                                 // 4.2.2 Read File Contents
                                 // 4.3.1 GPG Clearsign the File (with your private key)
                                 // 4.3.2 GPG Encrypt File (with their public key)
-                                let file_bytes2send = wrapper__path_to_clearsign_to_gpgencrypt_to_send_bytes(
+                                let file_bytes2send = wrapper_path_to_clearsign_to_gpgencrypt_to_send_bytes(
                                     &path_sendfile_readcopy_path,
                                     &room_sync_input.remote_collaborator_public_gpg,
                                 )?;
@@ -35561,7 +35077,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                             // 4.2.2 Read File Contents
                             // 4.3.1 GPG Clearsign the File (with your private key)
                             // 4.3.2 GPG Encrypt File (with their public key)
-                            let file_bytes2send = wrapper__path_to_clearsign_to_gpgencrypt_to_send_bytes(
+                            let file_bytes2send = wrapper_path_to_clearsign_to_gpgencrypt_to_send_bytes(
                                 &path_sendfile_readcopy_path,
                                 &room_sync_input.remote_collaborator_public_gpg,
                             )?;
@@ -35623,7 +35139,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                             // // 4.2.2 Read File Contents
                             // // 4.3.1 GPG Clearsign the File (with your private key)
                             // // 4.3.2 GPG Encrypt File (with their public key)
-                            // let file_bytes2send = wrapper__path_to_clearsign_to_gpgencrypt_to_send_bytes(
+                            // let file_bytes2send = wrapper_path_to_clearsign_to_gpgencrypt_to_send_bytes(
                             //     &path_sendfile_readcopy_path,
                             //     &room_sync_input.remote_collaborator_public_gpg,
                             // )?;
@@ -35710,7 +35226,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                                         match send_data_via_udp(
                                             &extracted_serialized_data,
                                             src,
-                                            room_sync_input.remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip,
+                                            room_sync_input.remote_collab_intray_port_theirdesk_yousend_aimat_their_rmtclb_ip,
                                             ) {
                                             Ok(_) => {
                                                 debug_log!("HRCD 4.7 File sent successfully");
@@ -35753,7 +35269,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                                         match send_data_via_udp(
                                             &extracted_serialized_data,
                                             src,
-                                            room_sync_input.remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip,
+                                            room_sync_input.remote_collab_intray_port_theirdesk_yousend_aimat_their_rmtclb_ip,
                                             ) {
                                             Ok(_) => {
                                                 debug_log!("HRCD 4.7 File sent successfully");
@@ -35804,7 +35320,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                     // if last_debug_log_time.elapsed() >= Duration::from_secs(5) {
                     //     debug_log!("HRCD 3.6 {}: Listening for ReadySignal on port {}",
                     //                room_sync_input.remote_collaborator_name,
-                    //                room_sync_input.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip);
+                    //                room_sync_input.remote_collab_ready_port_theirdesk_youlisten_bind_yourlocal_ip);
                     //     last_debug_log_time = Instant::now();
                     // }
                     debug_log!("HRCD Err(e) if e.kind() == ErrorKind::WouldBlock =>");
@@ -36117,11 +35633,11 @@ fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
             local_user_public_gpg: this_meetingroom_iter.local_user_public_gpg.clone(),
             local_user_sync_interval: this_meetingroom_iter.local_user_sync_interval,
             // ready! (local)
-            local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip: this_meetingroom_iter.local_user_ready_port__yourdesk_yousend__aimat_their_rmtclb_ip,
+            local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip: this_meetingroom_iter.local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip,
             // in-tray (local)
-            localuser_intray_port__yourdesk_youlisten__bind_yourlocal_ip: this_meetingroom_iter.localuser_intray_port__yourdesk_youlisten__bind_yourlocal_ip,
+            localuser_intray_port_yourdesk_youlisten_bind_yourlocal_ip: this_meetingroom_iter.localuser_intray_port_yourdesk_youlisten_bind_yourlocal_ip,
             // got-it! (local)
-            local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip: this_meetingroom_iter.local_user_gotit_port__yourdesk_yousend__aimat_their_rmtclb_ip,
+            local_user_gotit_port_yourdesk_yousend_aimat_their_rmtclb_ip: this_meetingroom_iter.local_user_gotit_port_yourdesk_yousend_aimat_their_rmtclb_ip,
             use_padnet: this_meetingroom_iter.use_padnet.clone(),
         };
         let data_baggy_for_collaborator_desk = ForRemoteCollaboratorDeskThread {
@@ -36137,11 +35653,11 @@ fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
             remote_collaborator_public_gpg: this_meetingroom_iter.remote_collaborator_public_gpg.clone(),
             remote_collaborator_sync_interval: this_meetingroom_iter.remote_collaborator_sync_interval,
             // ready! (remote)
-            remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip: this_meetingroom_iter.remote_collab_ready_port__theirdesk_youlisten__bind_yourlocal_ip,
+            remote_collab_ready_port_theirdesk_youlisten_bind_yourlocal_ip: this_meetingroom_iter.remote_collab_ready_port_theirdesk_youlisten_bind_yourlocal_ip,
             // in-tray (remote)
-            remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip: this_meetingroom_iter.remote_collab_intray_port__theirdesk_yousend__aimat_their_rmtclb_ip,
+            remote_collab_intray_port_theirdesk_yousend_aimat_their_rmtclb_ip: this_meetingroom_iter.remote_collab_intray_port_theirdesk_yousend_aimat_their_rmtclb_ip,
             // got-it! (remote)
-            remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip: this_meetingroom_iter.remote_collab_gotit_port__theirdesk_youlisten__bind_yourlocal_ip,
+            remote_collab_gotit_port_theirdesk_youlisten_bind_yourlocal_ip: this_meetingroom_iter.remote_collab_gotit_port_theirdesk_youlisten_bind_yourlocal_ip,
             use_padnet: this_meetingroom_iter.use_padnet.clone(),
         };
 

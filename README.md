@@ -216,6 +216,8 @@ Different users will have different security needs and concerns, including how m
 # ~Install
 
 ## Alias Method
+The alias method is nice because you can keep your files wherever you want and still call 'Uma' from a terminal with whatever call-name you want. (It is also not exposed to being called as an installed program by other installed programs, which reduces attack-surface.)
+
 Put your executable-binary somewhere, and associate that path
 with a callable keyword for your command line interface (CLI)
 so that entering that keyword calls the executable (starts the program):
