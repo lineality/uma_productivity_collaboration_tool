@@ -8920,12 +8920,7 @@ fn truncate_string(s: &str, max_len: usize) -> String {
 // // Load active_team_channel:
 // self.active_team_channel = fs::read_to_string(session_items_path.join("active_team_channel.txt"))?;
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
-enum NodePriority {
-    High,
-    Medium,
-    Low,
-}
+
 
 /*
 the .toml files and the overall Uma~browser must be able to know their location in the overall project_graph_data/file-system
@@ -28953,124 +28948,7 @@ fn sync_flag_ok_or_wait(wait_this_many_seconds: u64) {
     }
 }
 
-/// ### four byte array nearly 30 year timestamp v1
-/// ## posix time scale notes
-/// ```
-/// (u1 to 1; u2 to 2; u4 to 8)
-/// 1  1 			= 1 sec
-/// 2  10			= 10 sec
-/// (u8 to 256)
-/// 3  100		= 1.67 min
-/// (u16 to 65,536; 256^2)
-/// 4  1000		= 16.7 minutes
-/// 5  10000		= 2.7 hours
-/// (u32 to 16,777,216; 256^3)
-/// 6  100000		= 1.157 days / 0.165 weeks
-/// 7  1000000 	= 0.381 months / 1.65 Weeks
-/// 8  10000000	= 3.81 months / .317 years
-/// (u64 to 4,294,967,296; 245^4)
-/// 9  100000000	= 3.17 years
-/// 10 1000000000	= 31.7 years
-/// 11 10000000000	= 317 years
-/// 12 100000000000	= 3171 years
-/// ```
-/// ## Compressed nonce-like timestamp freshness proxy
-/// Use a four u8 byte array to get a nearly 31 year nonce timestamp
-///
-/// You need 8 digits: (skip the seconds digit)
-/// ```
-/// 10 (10sec) ->  100000000 (3.17 years)
-/// +
-/// some information about the 10th digit
-/// ```
-///
-/// byte 1:
-/// - digit 2 		(in the ones place)
-/// - digit 3 		(in the tens place)
-/// - fragment-1	(in the hundreds' place), not mod !%2
-///
-/// byte 2:
-/// - digit 4 		(in the ones place)
-/// - digit 5 		(in the tens place)
-/// - fragment-2	(in the hundreds' place), not mod !%3
-///
-/// byte 3:
-/// - digit 6 		(in the ones place)
-/// - digit 7 		(in the tens place)
-/// - fragment-3	(in the hundreds' place), not 0 or 4
-///
-/// byte 4:
-/// - digit 8 		(in the ones place)
-/// - digit 9 		(in the tens place)
-/// - fragment-4	(in the hundreds' place), is prime
-///
-/// 10th digit fragments:
-/// 1. not mod !%2
-/// 2. not mod !%3
-/// 3. not 0 or 4
-/// 4. is prime
-///
-/// ## One Collision Case
-/// The "5" value and "7" value from the compressed 10th-digit(31 year scale) collide, but at least most information from the 10th-digit could be expressed.
-/// - The largest u32 number is: 16,777,216
-/// - The largest u64 number is: 4,294,967,296 (Feb 7, year:2106)
-/// - With the exception of 5 vs 7 in the last place, this system can mostly reflect posix time up to 9,999,999,999, (or Saturday, November 20, year:2286 5:46:39 PM) which is more than u64 can.
-///
-/// ### Without Bit Manipulation
-/// This works without bitwise operations (fun though those are).
-/// There are four u8 (unsigned 8-bit) values,
-/// each of which can hold (in decimal terms)
-/// up to 0-255
-/// including 199
-/// The hundres's place can safely be 1 or 0 (though it can be 2 also if we know the whole value is less than 255).
-///
-/// ## future research
-/// For specified time ranges a smaller system should be possible.
-/// e.g. if only months and not minutes are needed
-fn generate_terse_timestamp_freshness_proxy_v4(posix_timestamp: u64) -> [u8; 4] {
-
-    // 1. Extract relevant digits
-    let digit_2 = ((posix_timestamp / 10) % 10) as u8;
-    let digit_3 = ((posix_timestamp / 100) % 10) as u8;
-    let digit_4 = ((posix_timestamp / 1000) % 10) as u8;
-    let digit_5 = ((posix_timestamp / 10000) % 10) as u8;
-    let digit_6 = ((posix_timestamp / 100000) % 10) as u8;
-    let digit_7 = ((posix_timestamp / 1000000) % 10) as u8;
-    let digit_8 = ((posix_timestamp / 10000000) % 10) as u8;
-    let digit_9 = ((posix_timestamp / 100000000) % 10) as u8;
-    let digit_10 = ((posix_timestamp / 1000000000) % 10) as u8;
-
-    // 2. Determine 10th digit fragments
-    let fragment_1 = (digit_10 % 2 != 0) as u8;
-    let fragment_2 = (digit_10 % 3 != 0) as u8;
-    let fragment_3 = (digit_10 != 0 && digit_10 != 4) as u8;
-    let fragment_4 = (is_prime(digit_10)) as u8;
-
-    // 3. Pack into u8 array (4 bytes, fragment in hundreds place)
-    //let packed_timestamp = [
-    //    (fragment_1 * 100) + (digit_2 * 10) + digit_3,
-    //    (fragment_2 * 100) + (digit_4 * 10) + digit_5,
-    //    (fragment_3 * 100) + (digit_6 * 10) + digit_7,
-    //    (fragment_4 * 100) + (digit_8 * 10) + digit_9,
-    //];
-
-    // For readability, left to right
-    let packed_timestamp = [
-        (fragment_1 * 100) + (digit_9 * 10) + digit_8,
-        (fragment_2 * 100) + (digit_7 * 10) + digit_6,
-        (fragment_3 * 100) + (digit_5 * 10) + digit_4,
-        (fragment_4 * 100) + (digit_3 * 10) + digit_2,
-    ];
-
-    packed_timestamp
-}
-
-fn is_prime(n: u8) -> bool {
-    match n {
-        2 | 3 | 5 | 7 => true,
-        _ => false,
-    }
-}
+// note: terse timestamps  https://github.com/lineality/timestamp_compression_experiments
 
 /// Sends a byte slice over UDP to the specified address and port.
 ///
@@ -29355,7 +29233,6 @@ fn process_incoming_gotit_signal_bytes(bytes: &[u8]) -> Result<GotItSignal, Stri
     validate_and_convert_gotit_signal(proto_signal)
 }
 
-
 #[derive(Debug, Clone)] // Add other necessary derives later
 struct SendQueue {
     back_of_queue_timestamp: u64,
@@ -29372,103 +29249,6 @@ impl SendQueue {
         self.items.insert(0, path);
     }
 }
-
-// TODO
-/// unpack new node
-/// saves new node.toml file, ensuring path and feature directories
-/// Unpacks and saves a new node from received data.
-///
-/// This function takes the raw bytes of a clearsigned and decrypted `node.toml` file
-/// and saves it to the specified path. It also creates the standard UMA node
-/// subdirectories: "message_posts_browser" and "task_browser".
-///
-/// This function is used during file synchronization to create or update nodes
-/// on the local file system based on data received from a remote collaborator.
-/// It assumes the `extracted_clearsigned_file_data` contains valid TOML data
-/// for a `CoreNode` struct.
-///
-/// # Arguments
-///
-/// * `extracted_clearsigned_file_data`: The raw bytes of the decrypted and
-///   clearsigned `node.toml` file.
-/// * `new_full_abs_node_directory_path`: The *full absolute path* to the
-///   directory where the node should be saved. This path should *include* the
-///   node directory name itself (e.g.,
-///   `"project_graph_data/team_channels/my_team/my_node"`).
-///
-/// # Returns
-///
-/// * `Result<(), ThisProjectError>`: `Ok(())` on success, or a
-///   `ThisProjectError` if an error occurs during file or directory creation.
-///
-/// # Example
-///
-/// ```
-/// // ... (assuming you have extracted_clearsigned_file_data and new_full_abs_node_directory_path)
-///
-/// match unpack_new_node_save_toml_and_create_dir(&extracted_clearsigned_file_data, &new_full_abs_node_directory_path) {
-///     Ok(_) => println!("Node unpacked and saved successfully."),
-///     Err(e) => eprintln!("Error unpacking node: {}", e),
-/// }
-/// ```
-fn unpack_new_node_save_toml_and_create_dir(
-    extracted_clearsigned_file_data: &Vec<u8>,
-    new_full_abs_node_directory_path: &Path,
-) -> Result<(), ThisProjectError> {
-
-    // 1. Make full file path
-    let new_node_toml_file_path = new_full_abs_node_directory_path.join("node.toml"); // Path to the new node.toml
-
-    // 2. Create directory if it doesn't exist
-    fs::create_dir_all(new_full_abs_node_directory_path)?;
-
-    // 3. write file from GPG clearsign extracted data as node.toml
-    if let Err(e) = fs::write(
-        &new_node_toml_file_path,
-        &extracted_clearsigned_file_data
-    ) {
-        debug_log!("HLOD-InTray: Unpack Node: Failed to write message file: {:?}", e);
-        // Consider returning an error here instead of continuing the loop
-        return Err(ThisProjectError::from(e));
-    }
-
-    // 4. Add IM-Browser directory
-    let im_browser_path = new_full_abs_node_directory_path.join("message_posts_browser");  // Construct path correctly
-    create_dir_all(&im_browser_path)?;
-
-    // 5. Add Task-Browser directory
-    let task_browser_path = new_full_abs_node_directory_path.join("task_browser");  // Construct path correctly
-    create_dir_all(&task_browser_path)?;
-
-    Ok(())
-}
-
-// /// unpack new node
-// /// saves new node.toml file, ensuring path and IM directory
-// fn unpack_new_node_save_toml_and_create_dir(
-//     toml_string: &str,
-//     path: &Path,
-//     dir_name: &str,  // Now this is the general name
-// ) -> Result<(), std::io::Error> {
-//     // 1. Create parent directories.
-//     create_dir_all(path)?;
-
-//     // 2. Create and write to node.toml.
-//     let toml_path = path.join("node.toml");
-//     let mut toml_file = File::create(&toml_path)?;
-//     toml_file.write_all(toml_string.as_bytes())?;
-
-//     // 3. Create associated directory.  (This is the only change)
-//     let dir_path = path.join(dir_name); // No longer specifically "message_posts_browser"
-//     create_dir_all(&dir_path)?;
-
-
-//     // Add this to create "message_posts_browser/" next to node.toml:
-//     let im_browser_path = path.join("message_posts_browser");
-//     create_dir_all(&im_browser_path)?;
-
-//     Ok(())
-// }
 
 /// Retrieves the paths of all send queue update flags for a given collaborator in a team channel.
 ///
@@ -29552,33 +29332,33 @@ fn get_sendq_update_flag_paths(
     Ok(path_list)
 }
 
-/// Converts a vector of u8 hash values into a hexadecimal string representation.
-///
-/// This function takes a slice of `u8` values (typically a hash) and converts it into a hexadecimal string,
-/// with each byte represented by two hexadecimal characters.  The resulting string is suitable for use as a filename or identifier.
-///
-/// # Arguments
-///
-/// * `hash_array`: A slice of `u8` values representing the hash.
-///
-/// # Returns
-///
-/// * `String`: The hexadecimal string representation of the hash.
-///
-/// # Example
-///
-/// ```
-/// let hash_array = [0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0];
-/// let hex_string = hash_array_to_hex_string(&hash_array);
-/// assert_eq!(hex_string, "123456789abcdef0");
-/// ```
-/// TODO Does this need error handling?
-fn docid_hash_array_to_hex_string(hash_array: &[u8]) -> String {
-    hash_array
-        .iter()
-        .map(|&h| format!("{:02x}", h))
-        .collect::<String>()
-}
+// /// Converts a vector of u8 hash values into a hexadecimal string representation.
+// ///
+// /// This function takes a slice of `u8` values (typically a hash) and converts it into a hexadecimal string,
+// /// with each byte represented by two hexadecimal characters.  The resulting string is suitable for use as a filename or identifier.
+// ///
+// /// # Arguments
+// ///
+// /// * `hash_array`: A slice of `u8` values representing the hash.
+// ///
+// /// # Returns
+// ///
+// /// * `String`: The hexadecimal string representation of the hash.
+// ///
+// /// # Example
+// ///
+// /// ```
+// /// let hash_array = [0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0];
+// /// let hex_string = hash_array_to_hex_string(&hash_array);
+// /// assert_eq!(hex_string, "123456789abcdef0");
+// /// ```
+// /// TODO Does this need error handling?
+// fn docid_hash_array_to_hex_string(hash_array: &[u8]) -> String {
+//     hash_array
+//         .iter()
+//         .map(|&h| format!("{:02x}", h))
+//         .collect::<String>()
+// }
 
 fn hash_sendfile_struct_fields(
     salt_list: &[u128],
@@ -29822,7 +29602,7 @@ fn get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(
 /// # Returns
 ///
 /// * `Result<(), ThisProjectError>`: `Ok(())` on success, or a `ThisProjectError`.
-fn set_prefail_flag_rt_timestamp__for_sendfile(
+fn set_prefail_flag_rt_timestamp_for_sendfile(
     file_updated_at_time: u64,
     mut rt_timestamp: u64,
     remote_collaborator_name: &str,
@@ -29865,57 +29645,57 @@ fn set_prefail_flag_rt_timestamp__for_sendfile(
     Ok(())
 }
 
-/// Removes all pre-fail flag files for a remote collaborator.
-///
-/// This function removes all files within the fail_retry_flags directory for the
-/// given team channel and remote collaborator. The directory structure is as
-/// follows:  `sync_data/{team_channel_name}/fail_retry_flags/{remote_collaborator_name}/`.
-///
-/// # Arguments
-///
-/// * `remote_collaborator_name`: The name of the remote collaborator.
-///
-/// # Returns
-///
-/// * `Result<(), ThisProjectError>`: `Ok(())` if all files were removed
-///   successfully (or if the directory doesn't exist), or a
-///   `ThisProjectError` if an error occurs during directory access or file
-///   removal.
-fn remove_prefail_flags__for_sendfile(
-    remote_collaborator_name: &str,
-) -> Result<(), ThisProjectError> {
-    let team_channel_name = get_current_team_channel_name_from_nav_path()
-        .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
+// /// Removes all pre-fail flag files for a remote collaborator.
+// ///
+// /// This function removes all files within the fail_retry_flags directory for the
+// /// given team channel and remote collaborator. The directory structure is as
+// /// follows:  `sync_data/{team_channel_name}/fail_retry_flags/{remote_collaborator_name}/`.
+// ///
+// /// # Arguments
+// ///
+// /// * `remote_collaborator_name`: The name of the remote collaborator.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<(), ThisProjectError>`: `Ok(())` if all files were removed
+// ///   successfully (or if the directory doesn't exist), or a
+// ///   `ThisProjectError` if an error occurs during directory access or file
+// ///   removal.
+// fn remove_prefail_flags__for_sendfile(
+//     remote_collaborator_name: &str,
+// ) -> Result<(), ThisProjectError> {
+//     let team_channel_name = get_current_team_channel_name_from_nav_path()
+//         .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
 
-    let directory_base = make_input_path_name_abs_executabledirectoryrelative_nocheck(
-        "sync_data"
-    )?;
+//     let directory_base = make_input_path_name_abs_executabledirectoryrelative_nocheck(
+//         "sync_data"
+//     )?;
 
-    let directory_path = directory_base
-        .join(&team_channel_name)
-        .join("fail_retry_flags")
-        .join(remote_collaborator_name);
+//     let directory_path = directory_base
+//         .join(&team_channel_name)
+//         .join("fail_retry_flags")
+//         .join(remote_collaborator_name);
 
-    if !directory_path.exists() { // Check for existance
-        return Ok(()); // Or log a message: debug_log!("Directory_path not found: {:?}", directory_path);
-    }
+//     if !directory_path.exists() { // Check for existance
+//         return Ok(()); // Or log a message: debug_log!("Directory_path not found: {:?}", directory_path);
+//     }
 
-    for entry in fs::read_dir(&directory_path)? {  // Iterate through directory_path contents
-        let entry = entry?;
-        let path = entry.path();
-        if path.is_file() { // Only remove files
-            match fs::remove_file(&path) { // Use remove_file, not remove_dir_all
-                Ok(_) => debug_log!("Removed flag file: {:?}", path),
-                Err(e) => {
-                    debug_log!("Error removing flag file: {:?} - {}", path, e);
-                    // Either continue or return the error if you want to stop on the first error.
-                    return Err(ThisProjectError::IoError(e));
-                }
-            }
-        }
-    }
-    Ok(())
-}
+//     for entry in fs::read_dir(&directory_path)? {  // Iterate through directory_path contents
+//         let entry = entry?;
+//         let path = entry.path();
+//         if path.is_file() { // Only remove files
+//             match fs::remove_file(&path) { // Use remove_file, not remove_dir_all
+//                 Ok(_) => debug_log!("Removed flag file: {:?}", path),
+//                 Err(e) => {
+//                     debug_log!("Error removing flag file: {:?} - {}", path, e);
+//                     // Either continue or return the error if you want to stop on the first error.
+//                     return Err(ThisProjectError::IoError(e));
+//                 }
+//             }
+//         }
+//     }
+//     Ok(())
+// }
 
 /// Removes a specific pre-fail flag file based on its ID (timestamp).
 /// currently gotit sign di (doc id) is the updated-at time of the file
@@ -29937,7 +29717,7 @@ fn remove_prefail_flags__for_sendfile(
 ///
 /// * `Result<(), ThisProjectError>`: `Ok(())` on successful removal or if the
 /// file doesn't exist, or a `ThisProjectError` on other file operation errors.
-fn remove_one_prefail_flag__for_sendfile(
+fn remove_one_prefail_flag_for_sendfile(
     di_flag_id: u64,         // Use u64 directly, as the flag ID comes from a u64 timestamp.
     remote_collaborator_name: &str, // Use &str for efficiency
     team_channel_name: &str,   // Use &str for efficiency
@@ -29961,17 +29741,17 @@ fn remove_one_prefail_flag__for_sendfile(
     match remove_file(flag_file_path) {
         Ok(_) => {
             debug_log!(
-                "remove_one_prefail_flag__for_sendfile(): Successfully removed flag with id: {}",
+                "remove_one_prefail_flag_for_sendfile(): Successfully removed flag with id: {}",
                 di_flag_id
             );
             Ok(())
         }
         Err(e) if e.kind() == ErrorKind::NotFound => {
-            debug_log!("remove_one_prefail_flag__for_sendfile(): Flag file not found: {}", di_flag_id);
+            debug_log!("remove_one_prefail_flag_for_sendfile(): Flag file not found: {}", di_flag_id);
             Ok(()) // Not an error if the file isn't found.
         }
         Err(e) => {
-            debug_log!("remove_one_prefail_flag__for_sendfile(): Error removing flag file: {}", e);
+            debug_log!("remove_one_prefail_flag_for_sendfile(): Error removing flag file: {}", e);
             Err(ThisProjectError::IoError(e))  // Return other errors
         }
     }
@@ -31182,7 +30962,7 @@ fn handle_local_owner_desk(
         */
 
         // initialization
-        let mut latest_received_from_rc_file_timestamp = match get_latest_received_from_rc_file_timestamp(
+        let latest_received_from_rc_file_timestamp = match get_latest_received_from_rc_file_timestamp(
             &team_channel_name, // Correct argument order.
             &remote_collaborator_name_for_thread_1,
         ) {
@@ -31244,7 +31024,7 @@ fn handle_local_owner_desk(
                 sync_data/{team_channel}/latest_receivedfile_timestamps/bob/latest_receivedfromme_file_timestamp
                 */
 
-                latest_received_from_rc_file_timestamp = match read_rc_latest_received_from_rc_filetimestamp_plaintextstatefile(
+                let latest_received_from_rc_file_timestamp = match read_rc_latest_received_from_rc_filetimestamp_plaintextstatefile(
                     &team_channel_name,
                     &remote_collaborator_name_for_thread_2,
                 ) {
@@ -33060,7 +32840,7 @@ fn padnet_deserialize_intray_sendfile_struct(
 mod padnet_sds_tests {
     use super::*;
 
-    #[cfg(test)]
+    #[test]
     fn test_basic_file_creation() {
         use std::fs::OpenOptions;
         use std::io::Write;
@@ -34505,7 +34285,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                         ```
                         */
 
-                        let _ = remove_one_prefail_flag__for_sendfile(
+                        let _ = remove_one_prefail_flag_for_sendfile(
                             document_id, // di_flag_id: String,
                             &remote_collaborator_name_clone, // remote_collaborator_name: String,
                             &team_channel_name, // team_channel_name: String,
@@ -35189,15 +34969,15 @@ fn handle_remote_collaborator_meetingroom_desk(
                                 sendfile_struct
                             );
 
-                            debug_log!("HRCD 4.7.2 ready_signal.rt for set_prefail_flag_rt_timestamp__for_sendfile {:?}", ready_signal.rt);
+                            debug_log!("HRCD 4.7.2 ready_signal.rt for set_prefail_flag_rt_timestamp_for_sendfile {:?}", ready_signal.rt);
 
 
                             // get updatedat value of .toml
                             let file_last_updatedat_time: u64 = get_updated_at_timestamp_from_toml_file(&path_sendfile_readcopy_path)?;
 
 
-                            // 4.7.2 HRCD set_prefail_flag_rt_timestamp__for_sendfile
-                            if let Err(e) = set_prefail_flag_rt_timestamp__for_sendfile(
+                            // 4.7.2 HRCD set_prefail_flag_rt_timestamp_for_sendfile
+                            if let Err(e) = set_prefail_flag_rt_timestamp_for_sendfile(
                                 file_last_updatedat_time, // for fail flag file name
                                 ready_signal.rt, // for fail flag file value
                                 &room_sync_input.remote_collaborator_name,
@@ -35390,12 +35170,6 @@ fn create_local_udp_socket(
     UdpSocket::bind(socket_addr).map_err(|e| {
         ThisProjectError::NetworkError(format!("Failed to bind to {} address: {}", band_local_network_type, e))
     })
-}
-
-// Result enum for the sync operation, allowing communication between threads
-enum SyncResult {
-    Success(u64), // Contains the new timestamp after successful sync
-    Failure(ThisProjectError), // Contains an error if sync failed
 }
 
 // TODO likely need to be updated to abs-exe-parent-relative paths
