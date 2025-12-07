@@ -1543,7 +1543,7 @@ fn parse_abstract_port_assignments(
     );
 
     // Open the file for line-by-line reading
-    let file = File::open(path).map_err(|e| format!("PAPA: err open file"))?;
+    let file = File::open(path).map_err(|e| format!("PAPA: err open file {}", e))?;
 
     let reader = io::BufReader::new(file);
 
@@ -1562,7 +1562,7 @@ fn parse_abstract_port_assignments(
 
     // Process each line
     for line_result in reader.lines() {
-        let line = line_result.map_err(|e| format!("PAPA: err read line"))?;
+        let line = line_result.map_err(|e| format!("PAPA: err read line {}", e))?;
 
         let trimmed = line.trim();
 

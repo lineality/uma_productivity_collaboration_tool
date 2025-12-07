@@ -346,7 +346,6 @@ use std::path::{
 use std::time::{
     SystemTime,
     UNIX_EPOCH,
-    // Instant,
 };
 
 use std::fs;
@@ -354,12 +353,9 @@ use std::fs::{
     File,
     remove_file,
     create_dir_all,
-    OpenOptions,
     read_to_string,
-    // write,
     remove_dir_all,
     read_dir,
-    // DirEntry,
 };
 use toml;
 use toml::Value;
@@ -372,12 +368,9 @@ use serde::{
 use std::ffi::OsStr;
 use std::collections::HashMap;
 use std::collections::HashSet;
-// use std::process::Command;
 
 // For Sync
 use rand::prelude::{
-    // SliceRandom,
-    // IteratorRandom,
     Rng,
 };
 use std::thread;
@@ -387,8 +380,6 @@ use std::net::{
     IpAddr,
     Ipv4Addr,
     Ipv6Addr,
-    // TcpListener,
-    // TcpStream,
     SocketAddr,
     UdpSocket,
 };
@@ -933,7 +924,7 @@ impl std::fmt::Display for ThisProjectError {
             ThisProjectError::NetworkError(ref msg) => write!(f, "Network Error: {}", msg),
             ThisProjectError::WalkDirError(ref err) => write!(f, "WalkDir Error: {}", err),
             ThisProjectError::ParseIntError(ref err) => write!(f, "ParseInt Error: {}", err),
-            ThisProjectError::ParseIntError(ref err) => write!(f, "ParseInt Error: {}", err),
+            // ThisProjectError::ParseIntError(ref err) => write!(f, "ParseInt Error: {}", err),
             ThisProjectError::GpgError(ref err) => write!(f, "GPG Error: {}", err),
             ThisProjectError::ParseError(ref err) => write!(f, "Parse Error: {}", err),
             ThisProjectError::StringError(ref msg) => write!(f, "Error: {}", msg),
@@ -12095,7 +12086,7 @@ mod tests_gpgtoml_v2 {
         let test_dir = create_test_temp_dir().expect("Failed to create test directory");
         let base_file = test_dir.join("test_message");
 
-        let result = save_message_as_gpgtoml(
+        let _result = save_message_as_gpgtoml(
             &base_file,
             "owner = \"test\"\ntext = \"message\"",
         );
@@ -12196,7 +12187,7 @@ timestamp = 1234567890"#;
         let base_file = test_dir.join("test_message");
         let toml_content = "owner = \"testuser\"\ntext = \"Test message\"";
 
-        let result = save_message_as_gpgtoml(
+        let _result = save_message_as_gpgtoml(
             &base_file,
             toml_content,
         );
@@ -25906,7 +25897,7 @@ pub fn invite_wizard() -> Result<(), GpgError> {
             return Err(GpgError::GpgOperationError("Invalid choice".to_string()));
         }
 
-        _ => println!("Invalid choice."),
+        // _ => println!("Invalid choice."),
     }
     Ok(())
 }
@@ -28165,6 +28156,8 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
     ) {
         Ok(names) => names,
         Err(e) => {
+            // Clean up temporary files before returning error
+            cleanup_closure();
             debug_log!("MSMD Error 5. getting abstract_collaborator_port_assignments: {}", e);
             return Err(MyCustomError::from(io::Error::new(io::ErrorKind::Other, e)));
         }
@@ -28248,6 +28241,8 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
     let full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
         Ok(fingerprint) => fingerprint,
         Err(e) => {
+            // Clean up temporary files before returning error
+            cleanup_closure();
             eprintln!("MSMD Failed to read GPG fingerprint from uma.toml: {}", e);
             debug_log!("MSMD Failed to read GPG fingerprint from uma.toml: {}", e);
             return Err(MyCustomError::from(format!(
@@ -28263,6 +28258,8 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
         ) {
         Ok(data) => data.user_salt_list,
         Err(e) => {
+            // Clean up temporary files before returning error
+            cleanup_closure();
             debug_log!("MSMD Error loading local user's salt list: {}", e);
             // return Err(e);
             return Err(e.into()); // Convert ThisProjectError to MyCustomError
@@ -28285,6 +28282,8 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
             ) {
             Ok(these_collaboratorfiles_toml_data) => these_collaboratorfiles_toml_data,
             Err(e) => {
+                // Clean up temporary files before returning error
+                cleanup_closure();
                 // This is where you'll most likely get the "No such file or directory" error
                 debug_log!("MSMD Error 8. loading collaborator {}. File might be missing. Error: {}", collaborator_name, e);
                 return Err(e.into()); // Convert ThisProjectError to MyCustomError
@@ -28373,6 +28372,8 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
             ) {
             Ok(data) => data.user_salt_list,
             Err(e) => {
+                // Clean up temporary files before returning error
+                cleanup_closure();
                 debug_log!("MSMD Error loading remote_collaborator_salt_list user's salt list: {}", e);
                 // return Err(e);
                 return Err(e.into()); // Convert ThisProjectError to MyCustomError
@@ -31964,7 +31965,7 @@ fn handle_local_owner_desk(
                                     // }
                                 }
                             }
-                            Err(e) => {
+                            Err(_) => {
                                 // Handle error
                                 continue;
                             }
@@ -34288,18 +34289,18 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                     // 4. while: Send File: Send One File from Queue
                     // if let ref mut queue = session_send_queue {
-                    if let ref mut queue = session_send_queue {
+                    // if let ref mut queue = session_send_queue {
 
                         debug_log!(
                             "HRCD 4 before le pop, queue.items -> {:?}",
-                            queue.items
+                            session_send_queue.items
                         );
 
-                        while let Some(file_path) = queue.items.pop() {
+                        while let Some(file_path) = session_send_queue.items.pop() {
 
                             debug_log!(
                                 "HRCD 4 after le pop, queue.items -> {:?}",
-                                queue.items
+                                session_send_queue.items
                             );
 
                             debug_log!(
@@ -34772,7 +34773,7 @@ fn handle_remote_collaborator_meetingroom_desk(
 
 
                         } // end of while
-                    } // end of 4.4: if let Some(ref mut queue) = session_send_queue {
+                    // } // end of 4.4: if let Some(ref mut queue) = session_send_queue {
                     debug_log!("\nHRCD: end of inner match.\n");
                 }, // end of the Ok inside the match: Ok((amt, src)) => {
                 Err(e) if e.kind() == ErrorKind::WouldBlock => {
@@ -36107,7 +36108,9 @@ pub fn create_unique_temp_filepathbuf(
 #[cfg(test)]
 mod tempname_tests {
     use super::*;
-    use std::fs;
+    // use std::fs;
+    // OpenOptions
+    use std::fs::{self, OpenOptions};
 
     /// Test basic functionality: can we create a temp file with standard parameters?
     #[test]
@@ -37494,7 +37497,7 @@ enum HelpSection {
     Navigation,
     MessagePostsHelp,
     TasksHelp,
-    PartnerPrograms,
+    // PartnerPrograms,
     CustomMessagePost,
     // SearchOptions,
     // FileOperations,
@@ -37972,11 +37975,7 @@ fn display_help_section_content(section: HelpSection) -> Result<(), ThisProjectE
         HelpSection::Navigation => HELP_SECTION_NAVIGATION,
         HelpSection::MessagePostsHelp => HELP_MESSAGE_POST_BROWSER,
         HelpSection::TasksHelp => HELP_TASK_BROWSER,
-        HelpSection::PartnerPrograms => HELP_PARTNER_PROGRAMS,
         HelpSection::CustomMessagePost => HELP_CUSTOM_MESSAGE_POST,
-        // HelpSection::ModularViewModes => HELP_SECTION_VIEW_MODES,
-        // HelpSection::TerminalManagement => HELP_SECTION_TERMINAL,
-        // HelpSection::Configuration => HELP_SECTION_CONFIGURATION,
     };
 
     // Display with color formatting

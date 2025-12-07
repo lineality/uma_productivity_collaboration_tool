@@ -4,19 +4,16 @@ pub mod tiny_tui {
     use crate::{
         // Import from the main module
         DEBUG_FLAG,
-        MessagePostFile,
-        OpenOptions,
         Write,
         debug_log,
         write_formatted_navigation_legend_to_tui,
         write_formatted_taskbored_legend_to_tui,
     };
-    use std::fs;
+
     use std::fs::read_dir;
     use std::io;
     use std::path::Path;
     use std::time::{Duration, UNIX_EPOCH};
-    use walkdir::WalkDir;
 
     pub fn render_list(
         list: &Vec<String>,

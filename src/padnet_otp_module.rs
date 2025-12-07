@@ -53,16 +53,14 @@ pub enum PadIndexMaxSize {
 /// Determines if/when dir hashes are created during pad generation
 #[derive(Debug, Clone, Copy)]
 pub enum ValidationLevel {
-    /// Hash entire pad directories (pad_XXX level)
-    /// Creates hash_pad_XXX files as siblings to pad directories
-    PadLevel,
-
+    // /// Hash entire pad directories (pad_XXX level)
+    // /// Creates hash_pad_XXX files as siblings to pad directories
+    // PadLevel,
     /// Hash each page directory (page_XXX level)
     /// Creates hash_page_XXX files as siblings to page directories
     PageLevel,
-
-    /// No validation - trust filesystem integrity
-    None,
+    // /// No validation - trust filesystem integrity
+    // None,
 }
 
 /// Error types for padnet operations
@@ -472,33 +470,33 @@ fn create_4byte_padset_bounded(
                 }
             }
 
-            // Create pad-level hash if requested
-            if matches!(validation, ValidationLevel::PadLevel) {
-                let hash = generate_directory_hash(&pad_path)?;
-                let hash_file_path = nest0_path.join(format!("hash_pad_{:03}", pad));
-                let mut hash_file = File::create(&hash_file_path).map_err(|e| {
-                    #[cfg(debug_assertions)]
-                    {
-                        PadnetError::IoError(format!("C4BP: pad hash file creation failed: {}", e))
-                    }
-                    #[cfg(not(debug_assertions))]
-                    {
-                        let _ = e;
-                        PadnetError::IoError("C4BP: pad hash file creation failed".into())
-                    }
-                })?;
-                hash_file.write_all(hash.as_bytes()).map_err(|e| {
-                    #[cfg(debug_assertions)]
-                    {
-                        PadnetError::IoError(format!("C4BP: pad hash write failed: {}", e))
-                    }
-                    #[cfg(not(debug_assertions))]
-                    {
-                        let _ = e;
-                        PadnetError::IoError("C4BP: pad hash write failed".into())
-                    }
-                })?;
-            }
+            // // Create pad-level hash if requested
+            // if matches!(validation, ValidationLevel::PadLevel) {
+            //     let hash = generate_directory_hash(&pad_path)?;
+            //     let hash_file_path = nest0_path.join(format!("hash_pad_{:03}", pad));
+            //     let mut hash_file = File::create(&hash_file_path).map_err(|e| {
+            //         #[cfg(debug_assertions)]
+            //         {
+            //             PadnetError::IoError(format!("C4BP: pad hash file creation failed: {}", e))
+            //         }
+            //         #[cfg(not(debug_assertions))]
+            //         {
+            //             let _ = e;
+            //             PadnetError::IoError("C4BP: pad hash file creation failed".into())
+            //         }
+            //     })?;
+            //     hash_file.write_all(hash.as_bytes()).map_err(|e| {
+            //         #[cfg(debug_assertions)]
+            //         {
+            //             PadnetError::IoError(format!("C4BP: pad hash write failed: {}", e))
+            //         }
+            //         #[cfg(not(debug_assertions))]
+            //         {
+            //             let _ = e;
+            //             PadnetError::IoError("C4BP: pad hash write failed".into())
+            //         }
+            //     })?;
+            // }
         }
     }
 
@@ -706,42 +704,42 @@ fn create_8byte_padset_bounded(
                                 }
                             }
 
-                            // Create pad-level hash if requested
-                            if matches!(validation, ValidationLevel::PadLevel) {
-                                let hash = generate_directory_hash(&pad_path)?;
-                                let hash_file_path =
-                                    nest0_path.join(format!("hash_pad_{:03}", pad));
-                                let mut hash_file = File::create(&hash_file_path).map_err(|e| {
-                                    #[cfg(debug_assertions)]
-                                    {
-                                        PadnetError::IoError(format!(
-                                            "C8BP: pad hash file creation failed: {}",
-                                            e
-                                        ))
-                                    }
-                                    #[cfg(not(debug_assertions))]
-                                    {
-                                        let _ = e;
-                                        PadnetError::IoError(
-                                            "C8BP: pad hash file creation failed".into(),
-                                        )
-                                    }
-                                })?;
-                                hash_file.write_all(hash.as_bytes()).map_err(|e| {
-                                    #[cfg(debug_assertions)]
-                                    {
-                                        PadnetError::IoError(format!(
-                                            "C8BP: pad hash write failed: {}",
-                                            e
-                                        ))
-                                    }
-                                    #[cfg(not(debug_assertions))]
-                                    {
-                                        let _ = e;
-                                        PadnetError::IoError("C8BP: pad hash write failed".into())
-                                    }
-                                })?;
-                            }
+                            // // Create pad-level hash if requested
+                            // if matches!(validation, ValidationLevel::PadLevel) {
+                            //     let hash = generate_directory_hash(&pad_path)?;
+                            //     let hash_file_path =
+                            //         nest0_path.join(format!("hash_pad_{:03}", pad));
+                            //     let mut hash_file = File::create(&hash_file_path).map_err(|e| {
+                            //         #[cfg(debug_assertions)]
+                            //         {
+                            //             PadnetError::IoError(format!(
+                            //                 "C8BP: pad hash file creation failed: {}",
+                            //                 e
+                            //             ))
+                            //         }
+                            //         #[cfg(not(debug_assertions))]
+                            //         {
+                            //             let _ = e;
+                            //             PadnetError::IoError(
+                            //                 "C8BP: pad hash file creation failed".into(),
+                            //             )
+                            //         }
+                            //     })?;
+                            //     hash_file.write_all(hash.as_bytes()).map_err(|e| {
+                            //         #[cfg(debug_assertions)]
+                            //         {
+                            //             PadnetError::IoError(format!(
+                            //                 "C8BP: pad hash write failed: {}",
+                            //                 e
+                            //             ))
+                            //         }
+                            //         #[cfg(not(debug_assertions))]
+                            //         {
+                            //             let _ = e;
+                            //             PadnetError::IoError("C8BP: pad hash write failed".into())
+                            //         }
+                            //     })?;
+                            // }
                         }
                     }
                 }
@@ -894,6 +892,7 @@ impl PadIndex {
         }
     }
 
+    #[cfg(test)]
     /// Check if index is at maximum value (all positions are 255)
     ///
     /// ## Project Context
@@ -1916,9 +1915,9 @@ fn delete_directories_before(
             // Verify it's a directory before deleting
             if path.is_dir() {
                 // Delete entire directory tree
-                if let Err(e) = fs::remove_dir_all(&path) {
+                if let Err(_e) = fs::remove_dir_all(&path) {
                     #[cfg(debug_assertions)]
-                    eprintln!("DDB: failed to delete {:?}: {}", path, e);
+                    eprintln!("DDB: failed to delete {:?}: {}", path, _e);
                     // Continue despite error - best effort cleanup
                 }
             }
@@ -1981,9 +1980,9 @@ fn delete_files_before(parent_path: &Path, prefix: &str, before: u8) -> Result<(
             // Verify it's a file before deleting
             if path.is_file() {
                 // Securely delete file
-                if let Err(e) = secure_delete_file(&path) {
+                if let Err(_e) = secure_delete_file(&path) {
                     #[cfg(debug_assertions)]
-                    eprintln!("DFB: failed to delete {:?}: {}", path, e);
+                    eprintln!("DFB: failed to delete {:?}: {}", path, _e);
                     // Continue despite error - best effort cleanup
                 }
             }
