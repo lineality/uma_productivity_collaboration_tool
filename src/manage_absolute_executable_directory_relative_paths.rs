@@ -1,15 +1,14 @@
 // src/manage_absolute_executable_directory_relative_paths.rs
 /// # manage_absolute_executable_directory_relative_paths - Executable-relative path resolution in Rust
 /// use -> cargo build --profile release-performance
-/// or, use -> cargo build --profile release-small 
+/// or, use -> cargo build --profile release-small
 /// see: https://github.com/lineality/rust_compile_optimizations_cheatsheet
 ///
-/// This module provides functions for working with file paths relative to the 
+/// This module provides functions for working with file paths relative to the
 /// executable's directory location rather than the current working directory (CWD).
 ///
-/// The main function `make_input_path_name_abs_executabledirectoryrelative_nocheck` converts a path 
+/// The main function `make_input_path_name_abs_executabledirectoryrelative_nocheck` converts a path
 /// to an absolute path that's resolved relative to the executable's location.
-
 /* Docs:
 # Executable-Directory-Relative Path Resolution
 
@@ -49,10 +48,8 @@ Never unsafe code.
 Never use unwrap.
 ```
 */
-
-use std::fs;
-use std::path::{Path, PathBuf};
 use std::io;
+use std::path::{Path, PathBuf};
 
 /// Gets the directory where the current executable is located.
 ///
@@ -68,7 +65,7 @@ pub fn get_absolute_path_to_executable_parentdirectory() -> Result<PathBuf, io::
             format!("Failed to determine current executable path: {}", e),
         )
     })?;
-    
+
     // Get the directory containing the executable
     let executable_directory = executable_path.parent().ok_or_else(|| {
         io::Error::new(
@@ -76,7 +73,7 @@ pub fn get_absolute_path_to_executable_parentdirectory() -> Result<PathBuf, io::
             "Failed to determine parent directory of executable",
         )
     })?;
-    
+
     Ok(executable_directory.to_path_buf())
 }
 
@@ -85,7 +82,7 @@ pub fn get_absolute_path_to_executable_parentdirectory() -> Result<PathBuf, io::
 ///
 /// # Arguments
 ///
-/// * `path_to_make_absolute` - A path to convert to an absolute path relative to 
+/// * `path_to_make_absolute` - A path to convert to an absolute path relative to
 ///   the executable's directory location.
 ///
 /// # Returns
@@ -102,13 +99,15 @@ pub fn get_absolute_path_to_executable_parentdirectory() -> Result<PathBuf, io::
 /// let abs_path = make_input_path_name_abs_executabledirectoryrelative_nocheck("data/config.json").unwrap();
 /// println!("Absolute path: {}", abs_path.display());
 /// ```
-pub fn make_input_path_name_abs_executabledirectoryrelative_nocheck<P: AsRef<Path>>(path_to_make_absolute: P) -> Result<PathBuf, io::Error> {
+pub fn make_input_path_name_abs_executabledirectoryrelative_nocheck<P: AsRef<Path>>(
+    path_to_make_absolute: P,
+) -> Result<PathBuf, io::Error> {
     // Get the directory where the executable is located
     let executable_directory = get_absolute_path_to_executable_parentdirectory()?;
-    
+
     // Create a path by joining the executable directory with the provided path
     let target_path = executable_directory.join(path_to_make_absolute);
-    
+
     // If the path doesn't exist, we still return the absolute path without trying to canonicalize
     if !abs_executable_directory_relative_exists(&target_path)? {
         // Ensure the path is absolute (it should be since we joined with executable_directory)
@@ -121,7 +120,7 @@ pub fn make_input_path_name_abs_executabledirectoryrelative_nocheck<P: AsRef<Pat
             ));
         }
     }
-    
+
     // Path exists, so we can canonicalize it to resolve any ".." or "." segments
     target_path.canonicalize().map_err(|e| {
         io::Error::new(
@@ -140,7 +139,9 @@ pub fn make_input_path_name_abs_executabledirectoryrelative_nocheck<P: AsRef<Pat
 /// # Returns
 ///
 /// * `Result<bool, io::Error>` - Whether the path exists or an error
-pub fn abs_executable_directory_relative_exists<P: AsRef<Path>>(path_to_check: P) -> Result<bool, io::Error> {
+pub fn abs_executable_directory_relative_exists<P: AsRef<Path>>(
+    path_to_check: P,
+) -> Result<bool, io::Error> {
     let path = path_to_check.as_ref();
     Ok(path.exists())
 }
@@ -150,15 +151,17 @@ pub fn abs_executable_directory_relative_exists<P: AsRef<Path>>(path_to_check: P
 ///
 /// # Arguments
 ///
-/// * `dir_path` - A directory path to convert to an absolute path relative to 
+/// * `dir_path` - A directory path to convert to an absolute path relative to
 ///   the executable's directory location.
 ///
 /// # Returns
 ///
 /// * `Result<PathBuf, io::Error>` - The absolute directory path or an error
-pub fn make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error<P: AsRef<Path>>(dir_path: P) -> Result<PathBuf, io::Error> {
+pub fn make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error<P: AsRef<Path>>(
+    dir_path: P,
+) -> Result<PathBuf, io::Error> {
     let path = make_input_path_name_abs_executabledirectoryrelative_nocheck(dir_path)?;
-    
+
     // Check if the path exists and is a directory
     if !abs_executable_directory_relative_exists(&path)? {
         return Err(io::Error::new(
@@ -171,7 +174,7 @@ pub fn make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error<P: A
             "Path exists but is not a directory",
         ));
     }
-    
+
     // Canonicalize the path (should succeed because we've verified it exists)
     path.canonicalize().map_err(|e| {
         io::Error::new(
@@ -191,10 +194,12 @@ pub fn make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error<P: A
 /// # Returns
 ///
 /// * `Result<PathBuf, io::Error>` - The absolute, canonicalized path to the newly created directory
-pub fn mkdir_new_abs_executabledirectoryrelative_canonicalized<P: AsRef<Path>>(dir_path: P) -> Result<PathBuf, io::Error> {
+pub fn mkdir_new_abs_executabledirectoryrelative_canonicalized<P: AsRef<Path>>(
+    dir_path: P,
+) -> Result<PathBuf, io::Error> {
     // Get the absolute path without checking existence
     let abs_path = make_input_path_name_abs_executabledirectoryrelative_nocheck(dir_path)?;
-    
+
     // Check if the directory already exists
     if abs_executable_directory_relative_exists(&abs_path)? {
         return Err(io::Error::new(
@@ -202,7 +207,7 @@ pub fn mkdir_new_abs_executabledirectoryrelative_canonicalized<P: AsRef<Path>>(d
             "Directory already exists",
         ));
     }
-    
+
     // Create the directory and all parent directories
     std::fs::create_dir_all(&abs_path).map_err(|e| {
         io::Error::new(
@@ -210,7 +215,7 @@ pub fn mkdir_new_abs_executabledirectoryrelative_canonicalized<P: AsRef<Path>>(d
             format!("Failed to create directory: {}", e),
         )
     })?;
-    
+
     // Canonicalize the path (should succeed because we just created it)
     abs_path.canonicalize().map_err(|e| {
         io::Error::new(
@@ -258,108 +263,114 @@ pub fn mkdir_new_abs_executabledirectoryrelative_canonicalized<P: AsRef<Path>>(d
 /// };
 ///
 pub fn make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path(
-    dir_path_string: &str
+    dir_path_string: &str,
 ) -> Result<PathBuf, std::io::Error> {
     // Step 1: Convert the provided directory path to an absolute path relative to the executable
-    let absolute_dir_path = make_input_path_name_abs_executabledirectoryrelative_nocheck(dir_path_string)?;
-    
+    let absolute_dir_path =
+        make_input_path_name_abs_executabledirectoryrelative_nocheck(dir_path_string)?;
+
     // Step 2: Check if the directory exists at the calculated absolute path
     let directory_exists = abs_executable_directory_relative_exists(&absolute_dir_path)?;
-    
+
     if !directory_exists {
         // Step 3: Directory doesn't exist, create it and all parent directories
         // Note: mkdir_new_abs_executabledirectoryrelative_canonicalized will also canonicalize the path
         mkdir_new_abs_executabledirectoryrelative_canonicalized(dir_path_string)
     } else {
         // Step 4: Directory already exists, canonicalize the path to resolve any symlinks
-        absolute_dir_path.canonicalize().map_err(|canonicalization_error| {
-            std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to canonicalize existing directory path: {}", canonicalization_error)
-            )
-        })
+        absolute_dir_path
+            .canonicalize()
+            .map_err(|canonicalization_error| {
+                std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!(
+                        "Failed to canonicalize existing directory path: {}",
+                        canonicalization_error
+                    ),
+                )
+            })
     }
 }
 
-/// Counts the number of subdirectories in the specified directory using executable-relative paths.
-///
-/// This function verifies the target directory exists, converts the path to be relative to the
-/// executable's location, counts only subdirectories (not files), and handles errors gracefully.
-/// If any errors occur at any step, the function returns 0 without panicking.
-///
-/// # Arguments
-///
-/// * `dir_path` - A path to the directory whose subdirectories should be counted.
-///                Can be absolute or relative to the executable's directory.
-///
-/// # Returns
-///
-/// * `usize` - The number of subdirectories found, or 0 if any errors occur
-///   (directory doesn't exist, not a directory, permission errors, etc.)
-///
-/// # Examples
-///
-/// ```
-/// // Count subdirectories in "data/team_channels" relative to executable location
-/// let channel_count = count_subdirectories_executabledirectoryrelative_default_zero("data/team_channels");
-/// println!("Found {} team channels", channel_count);
-/// ```
-pub fn count_subdirectories_executabledirectoryrelative_default_zero<P: AsRef<Path>>(dir_path: P) -> usize {
-    // First verify the path exists and is a directory
-    let abs_path = match make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(dir_path) {
-        Ok(path) => {
-            println!("Found valid directory at: {:?}", path);
-            path
-        },
-        Err(e) => {
-            // This covers cases where the directory doesn't exist or isn't a directory
-            println!("Error: directory validation failed: {}", e);
-            return 0;
-        }
-    };
+// /// Counts the number of subdirectories in the specified directory using executable-relative paths.
+// ///
+// /// This function verifies the target directory exists, converts the path to be relative to the
+// /// executable's location, counts only subdirectories (not files), and handles errors gracefully.
+// /// If any errors occur at any step, the function returns 0 without panicking.
+// ///
+// /// # Arguments
+// ///
+// /// * `dir_path` - A path to the directory whose subdirectories should be counted.
+// ///                Can be absolute or relative to the executable's directory.
+// ///
+// /// # Returns
+// ///
+// /// * `usize` - The number of subdirectories found, or 0 if any errors occur
+// ///   (directory doesn't exist, not a directory, permission errors, etc.)
+// ///
+// /// # Examples
+// ///
+// /// ```
+// /// // Count subdirectories in "data/team_channels" relative to executable location
+// /// let channel_count = count_subdirectories_executabledirectoryrelative_default_zero("data/team_channels");
+// /// println!("Found {} team channels", channel_count);
+// /// ```
+// pub fn count_subdirectories_executabledirectoryrelative_default_zero<P: AsRef<Path>>(dir_path: P) -> usize {
+//     // First verify the path exists and is a directory
+//     let abs_path = match make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(dir_path) {
+//         Ok(path) => {
+//             println!("Found valid directory at: {:?}", path);
+//             path
+//         },
+//         Err(e) => {
+//             // This covers cases where the directory doesn't exist or isn't a directory
+//             println!("Error: directory validation failed: {}", e);
+//             return 0;
+//         }
+//     };
 
-    // Attempt to read directory entries
-    match fs::read_dir(&abs_path) {
-        Ok(entries) => {
-            // Count only directories
-            let count = entries
-                .filter_map(|entry_result| {
-                    match entry_result {
-                        Ok(entry) => {
-                            match entry.file_type() {
-                                Ok(file_type) if file_type.is_dir() => Some(()),
-                                Ok(_) => None, // Not a directory
-                                Err(e) => {
-                                    println!("Error determining file type for {:?}: {}", 
-                                              entry.path(), e);
-                                    None
-                                }
-                            }
-                        },
-                        Err(e) => {
-                            println!("Error reading directory entry: {}", e);
-                            None
-                        }
-                    }
-                })
-                .count();
-            
-            println!("Found {} subdirectories in {:?}", count, abs_path);
-            count
-        },
-        Err(e) => {
-            println!("Error reading directory contents of {:?}: {}", abs_path, e);
-            0 // Return 0 on error
-        }
-    }
-}
+//     // Attempt to read directory entries
+//     match fs::read_dir(&abs_path) {
+//         Ok(entries) => {
+//             // Count only directories
+//             let count = entries
+//                 .filter_map(|entry_result| {
+//                     match entry_result {
+//                         Ok(entry) => {
+//                             match entry.file_type() {
+//                                 Ok(file_type) if file_type.is_dir() => Some(()),
+//                                 Ok(_) => None, // Not a directory
+//                                 Err(e) => {
+//                                     println!("Error determining file type for {:?}: {}",
+//                                               entry.path(), e);
+//                                     None
+//                                 }
+//                             }
+//                         },
+//                         Err(e) => {
+//                             println!("Error reading directory entry: {}", e);
+//                             None
+//                         }
+//                     }
+//                 })
+//                 .count();
+
+//             println!("Found {} subdirectories in {:?}", count, abs_path);
+//             count
+//         },
+//         Err(e) => {
+//             println!("Error reading directory contents of {:?}: {}", abs_path, e);
+//             0 // Return 0 on error
+//         }
+//     }
+// }
 
 /// Gets an absolute path for an existing file relative to the executable's directory.
 /// Returns an error if the file doesn't exist or isn't a file.
 ///
 /// # Arguments
 ///
-/// * `file_path` - A file path to convert to an absolute path relative to 
+/// * `file_path` - A file path to convert to an absolute path relative to
 ///   the executable's directory location.
 ///
 /// # Returns
@@ -392,9 +403,11 @@ pub fn count_subdirectories_executabledirectoryrelative_default_zero<P: AsRef<Pa
 ///     }
 /// };
 ///
-pub fn make_file_path_abs_executabledirectoryrelative_canonicalized_or_error<P: AsRef<Path>>(file_path: P) -> Result<PathBuf, io::Error> {
+pub fn make_file_path_abs_executabledirectoryrelative_canonicalized_or_error<P: AsRef<Path>>(
+    file_path: P,
+) -> Result<PathBuf, io::Error> {
     let path = make_input_path_name_abs_executabledirectoryrelative_nocheck(file_path)?;
-    
+
     // Check if the path exists and is a file
     if !abs_executable_directory_relative_exists(&path)? {
         return Err(io::Error::new(
@@ -407,7 +420,7 @@ pub fn make_file_path_abs_executabledirectoryrelative_canonicalized_or_error<P: 
             "Path exists but is a directory, not a file",
         ));
     }
-    
+
     // Canonicalize the path (should succeed because we've verified it exists)
     path.canonicalize().map_err(|e| {
         io::Error::new(
@@ -427,9 +440,11 @@ pub fn make_file_path_abs_executabledirectoryrelative_canonicalized_or_error<P: 
 /// # Returns
 ///
 /// * `Result<PathBuf, io::Error>` - The absolute path to the (non-existent) file with parent directories prepared
-pub fn prepare_file_parent_directories_abs_executabledirectoryrelative<P: AsRef<Path>>(file_path: P) -> Result<PathBuf, io::Error> {
+pub fn prepare_file_parent_directories_abs_executabledirectoryrelative<P: AsRef<Path>>(
+    file_path: P,
+) -> Result<PathBuf, io::Error> {
     let path = make_input_path_name_abs_executabledirectoryrelative_nocheck(file_path)?;
-    
+
     // If the path exists and is a directory, that's an error
     if abs_executable_directory_relative_exists(&path)? && path.is_dir() {
         return Err(io::Error::new(
@@ -437,7 +452,7 @@ pub fn prepare_file_parent_directories_abs_executabledirectoryrelative<P: AsRef<
             "Path exists but is a directory, not a file",
         ));
     }
-    
+
     // Ensure the parent directory exists
     if let Some(parent) = path.parent() {
         if !abs_executable_directory_relative_exists(parent)? {
@@ -449,7 +464,7 @@ pub fn prepare_file_parent_directories_abs_executabledirectoryrelative<P: AsRef<
             })?;
         }
     }
-    
+
     Ok(path)
 }
 
@@ -457,35 +472,34 @@ pub fn prepare_file_parent_directories_abs_executabledirectoryrelative<P: AsRef<
 mod tests {
     use super::*;
     use std::env;
-    use std::fs;
     use std::path::Path;
 
     // Test get_absolute_path_to_executable_parentdirectory
     #[test]
     fn test_get_executable_parentdirectory() {
         let result = get_absolute_path_to_executable_parentdirectory();
-        
+
         // Should succeed and return a valid path
         assert!(result.is_ok());
-        
+
         let dir = result.unwrap();
-        
+
         // Should be absolute
         assert!(dir.is_absolute());
-        
+
         // Should exist
         assert!(dir.exists());
-        
+
         // Should be a directory
         assert!(dir.is_dir());
-        
+
         // Should match parent of current_exe
         let expected = std::env::current_exe()
             .expect("Failed to get current executable path")
             .parent()
             .expect("Failed to get parent directory")
             .to_path_buf();
-        
+
         assert_eq!(dir, expected);
     }
 
@@ -495,32 +509,33 @@ mod tests {
         // Test with a simple relative path
         let result = make_input_path_name_abs_executabledirectoryrelative_nocheck("some/path.txt");
         assert!(result.is_ok());
-        
+
         let path = result.unwrap();
         assert!(path.is_absolute());
-        
+
         // Path should be executable_dir + relative_path
         let exec_dir = get_absolute_path_to_executable_parentdirectory().unwrap();
         assert_eq!(path, exec_dir.join("some/path.txt"));
-        
+
         // Test with a path containing ..
-        let result = make_input_path_name_abs_executabledirectoryrelative_nocheck("some/../other/path.txt");
+        let result =
+            make_input_path_name_abs_executabledirectoryrelative_nocheck("some/../other/path.txt");
         assert!(result.is_ok());
-        
+
         // Test with an empty path
         let result = make_input_path_name_abs_executabledirectoryrelative_nocheck("");
         assert!(result.is_ok());
-        
+
         // Test with just a dot
         let result = make_input_path_name_abs_executabledirectoryrelative_nocheck(".");
         assert!(result.is_ok());
-        
+
         // Test with an absolute path (platform-specific)
         #[cfg(windows)]
         let abs_path = "C:\\absolute\\path.txt";
         #[cfg(not(windows))]
         let abs_path = "/absolute/path.txt";
-        
+
         let result = make_input_path_name_abs_executabledirectoryrelative_nocheck(abs_path);
         assert!(result.is_ok());
     }
@@ -533,19 +548,19 @@ mod tests {
         let result = abs_executable_directory_relative_exists(&current_dir);
         assert!(result.is_ok());
         assert!(result.unwrap());
-        
+
         // Test with the executable directory (which definitely exists)
         let exec_dir = get_absolute_path_to_executable_parentdirectory().unwrap();
         let result = abs_executable_directory_relative_exists(&exec_dir);
         assert!(result.is_ok());
         assert!(result.unwrap());
-        
+
         // Test with the executable file itself (which definitely exists)
         let exec_file = std::env::current_exe().unwrap();
         let result = abs_executable_directory_relative_exists(&exec_file);
         assert!(result.is_ok());
         assert!(result.unwrap());
-        
+
         // Test with a path that shouldn't exist
         let nonexistent = Path::new("/this/path/definitely/does/not/exist/12345abcde");
         let result = abs_executable_directory_relative_exists(nonexistent);
@@ -560,7 +575,7 @@ mod tests {
         // This is difficult to do in a cross-platform way without actually creating files,
         // but we can at least check that we don't panic
         let result = make_input_path_name_abs_executabledirectoryrelative_nocheck("\0invalid");
-        
+
         // On most platforms, this should fail (but we're just making sure it doesn't panic)
         if result.is_err() {
             let err = result.err().unwrap();
@@ -573,18 +588,22 @@ mod tests {
     fn test_path_normalization() {
         // Get executable directory
         let exec_dir = get_absolute_path_to_executable_parentdirectory().unwrap();
-        
+
         // Create paths with different representations
-        let path1 = make_input_path_name_abs_executabledirectoryrelative_nocheck("dir/file.txt").unwrap();
-        let path2 = make_input_path_name_abs_executabledirectoryrelative_nocheck("dir/./file.txt").unwrap();
-        let path3 = make_input_path_name_abs_executabledirectoryrelative_nocheck("dir/../dir/file.txt").unwrap();
-        
+        let path1 =
+            make_input_path_name_abs_executabledirectoryrelative_nocheck("dir/file.txt").unwrap();
+        let path2 =
+            make_input_path_name_abs_executabledirectoryrelative_nocheck("dir/./file.txt").unwrap();
+        let path3 =
+            make_input_path_name_abs_executabledirectoryrelative_nocheck("dir/../dir/file.txt")
+                .unwrap();
+
         // Before canonicalization, these might not be equal
         // Check they all have the correct base directory though
         assert!(path1.starts_with(&exec_dir));
         assert!(path2.starts_with(&exec_dir));
         assert!(path3.starts_with(&exec_dir));
-        
+
         // Path1 and path2 should resolve to the same path if they were canonicalized
         // We can't actually canonicalize without the paths existing, but we can check
         // that our function handles them correctly
@@ -595,18 +614,19 @@ mod tests {
     fn test_real_file_access() {
         // Get the executable file itself, which definitely exists
         let exec_file = std::env::current_exe().unwrap();
-        
+
         // Check that it exists using our function
         let result = abs_executable_directory_relative_exists(&exec_file);
         assert!(result.is_ok());
         assert!(result.unwrap());
-        
+
         // Get its filename
         let filename = exec_file.file_name().unwrap();
-        
+
         // Now try using our path function to resolve the same file
-        let resolved_path = make_input_path_name_abs_executabledirectoryrelative_nocheck(filename).unwrap();
-        
+        let resolved_path =
+            make_input_path_name_abs_executabledirectoryrelative_nocheck(filename).unwrap();
+
         // The resolved path should exist and be a file
         assert!(resolved_path.exists());
         assert!(resolved_path.is_file());
@@ -618,25 +638,25 @@ mod tests {
         // Empty path
         let result = make_input_path_name_abs_executabledirectoryrelative_nocheck("");
         assert!(result.is_ok());
-        
+
         // Just a dot
         let result = make_input_path_name_abs_executabledirectoryrelative_nocheck(".");
         assert!(result.is_ok());
-        
+
         // Just dot-dot (parent dir)
         let result = make_input_path_name_abs_executabledirectoryrelative_nocheck("..");
         assert!(result.is_ok());
-        
+
         // Long path with many segments
         let long_path = "a/b/c/d/e/f/g/h/i/j/k/l/m/n/o/p/q/r/s/t/u/v/w/x/y/z/file.txt";
         let result = make_input_path_name_abs_executabledirectoryrelative_nocheck(long_path);
         assert!(result.is_ok());
-        
+
         // Path with unicode characters
         let unicode_path = "🦀/😊/🔥/file.txt";
         let result = make_input_path_name_abs_executabledirectoryrelative_nocheck(unicode_path);
         assert!(result.is_ok());
-        
+
         // Path with spaces
         let path_with_spaces = "folder with spaces/file with spaces.txt";
         let result = make_input_path_name_abs_executabledirectoryrelative_nocheck(path_with_spaces);
@@ -648,29 +668,29 @@ mod tests {
     fn test_directory_functions() {
         // Create an absolute path to a directory that doesn't exist
         let nonexistent_dir = Path::new("/nonexistent/directory/path");
-        
+
         // If path doesn't exist, our function should return an error
         // We're not actually calling it here because it would fail, but we're making
         // sure our logic is correct for checking existence
         assert!(!nonexistent_dir.exists());
-        
+
         // Get a directory that definitely exists (the executable parent directory)
         let existing_dir = get_absolute_path_to_executable_parentdirectory().unwrap();
         assert!(existing_dir.exists());
         assert!(existing_dir.is_dir());
     }
-    
+
     // Test behavior of file-specific functions with simulated paths
     #[test]
     fn test_file_functions() {
         // Create an absolute path to a file that doesn't exist
         let nonexistent_file = Path::new("/nonexistent/file/path.txt");
-        
+
         // If path doesn't exist, our function should return an error
         // We're not actually calling it here because it would fail, but we're making
         // sure our logic is correct for checking existence
         assert!(!nonexistent_file.exists());
-        
+
         // Get a file that definitely exists (the executable itself)
         let existing_file = std::env::current_exe().unwrap();
         assert!(existing_file.exists());

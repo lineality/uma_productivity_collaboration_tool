@@ -584,7 +584,7 @@ pub fn buffy_print(template: &str, args: &[BuffyFormatArg]) -> io::Result<()> {
     let mut pos = 0;
 
     // Stack buffers for conversions
-    let mut num_buf = [0u8; 20];
+    // let mut num_buf = [0u8; 20];
     let mut style_buf = [0u8; 64];
     let mut align_buf = [0u8; 128];
 

@@ -12714,3 +12714,46 @@ fn sendfile_UDP_to_intray(
 
     Ok(())
 }
+
+/// TODO: What on earth is this thing???
+///
+/// Gets the latest `updated_at_timestamp` from the current team channel's files.
+///
+/// This function crawls through the current team channel's directory and retrieves
+/// the most recent `updated_at_timestamp` from the TOML files it finds.
+///
+/// # Returns
+///
+/// `Result<u64, ThisProjectError>`:  The latest timestamp, or an error if the directory read fails, a TOML file cannot be parsed, or the updated_at_timestamp is invalid.
+fn get_latest_timestamp_from_team_channel_dir() -> Result<u64, ThisProjectError> {
+    let mut latest_timestamp = 0u64; // Initialize to zero
+
+    let channel_dir_path_str = match read_state_string("current_node_directory_path.txt") {
+        Ok(s) => s,
+        Err(e) => {
+            debug_log!("Error reading channel directory path: {}", e);
+            return Err(e.into()); // Or handle error differently
+        }
+    };
+
+    //  Crawl through the team channel directory
+    for entry in WalkDir::new(channel_dir_path_str) {
+        let entry = entry?; // Check for WalkDir errors
+        let path = entry.path();
+        if path.is_file() && path.extension() == Some(OsStr::new("toml")) {
+            match get_toml_file_updated_at_timestamp(path) {
+                Ok(timestamp) => {
+                    if timestamp > latest_timestamp {
+                        latest_timestamp = timestamp;
+                    }
+                },
+                Err(e) => {
+                    debug_log!("Error reading or parsing TOML file: {:?} - {}", path, e);
+                    // Handle the error as you see fit. Perhaps continue or return the error.
+                    continue; // Skip to the next file
+                },
+            };
+        }
+    }
+    Ok(latest_timestamp)
+}

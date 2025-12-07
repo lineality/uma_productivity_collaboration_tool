@@ -3821,6 +3821,7 @@ pub fn calculate_recursive_dir_directory_pearson_hash(
     Ok(hash_hex)
 }
 
+#[cfg(test)]
 /// Helper function to write directory hash to standard output file
 ///
 /// Creates file `pearson_hash_{directory_basename}` in the specified location

@@ -2982,47 +2982,47 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
         B. make a read-copy and use that path
         */
 
-        // Check the both! Check for both file types
-        let node_toml_path = entry.path().join("node.toml");
-        let node_gpgtoml_path = entry.path().join("node.gpgtoml");
+        // // Check the both! Check for both file types
+        // let node_toml_path = entry.path().join("node.toml");
+        // let node_gpgtoml_path = entry.path().join("node.gpgtoml");
 
-        // Determine which file exists and use that path
-        let node_file_path = if node_toml_path.exists() {
-            node_toml_path
-        } else if node_gpgtoml_path.exists() {
-            node_gpgtoml_path
-        } else {
-            // Neither exists, skip this directory
-            continue;
-        };
+        // // Determine which file exists and use that path
+        // let node_file_path = if node_toml_path.exists() {
+        //     node_toml_path
+        // } else if node_gpgtoml_path.exists() {
+        //     node_gpgtoml_path
+        // } else {
+        //     // Neither exists, skip this directory
+        //     continue;
+        // };
 
-        // Get GPG fingerprint (could move this outside the loop if same for all)
-        let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
-            Ok(fingerprint) => fingerprint,
-            Err(e) => {
-                #[cfg(debug_assertions)]
-                debug_log!(
-                    "CAPITCCV error Failed to read GPG fingerprint for {:?}: {} (skipping)",
-                    entry.path(),
-                    e
-                );
-                continue; // Skip this directory, continue with next
-            }
-        };
+        // // Get GPG fingerprint (could move this outside the loop if same for all)
+        // let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+        //     Ok(fingerprint) => fingerprint,
+        //     Err(e) => {
+        //         #[cfg(debug_assertions)]
+        //         debug_log!(
+        //             "CAPITCCV error Failed to read GPG fingerprint for {:?}: {} (skipping)",
+        //             entry.path(),
+        //             e
+        //         );
+        //         continue; // Skip this directory, continue with next
+        //     }
+        // };
 
-        // Get temp directory path (could move this outside the loop if same for all)
-        let base_uma_temp_directory_path = match get_base_uma_temp_directory_path() {
-            Ok(path) => path,
-            Err(e) => {
-                #[cfg(debug_assertions)]
-                debug_log!(
-                    "CAPITCCV error Failed to get temp directory path for {:?}: {} (skipping)",
-                    entry.path(),
-                    e
-                );
-                continue; // Skip this directory, continue with next
-            }
-        };
+        // // Get temp directory path (could move this outside the loop if same for all)
+        // let base_uma_temp_directory_path = match get_base_uma_temp_directory_path() {
+        //     Ok(path) => path,
+        //     Err(e) => {
+        //         #[cfg(debug_assertions)]
+        //         debug_log!(
+        //             "CAPITCCV error Failed to get temp directory path for {:?}: {} (skipping)",
+        //             entry.path(),
+        //             e
+        //         );
+        //         continue; // Skip this directory, continue with next
+        //     }
+        // };
 
         // Extract channel name from directory path
         let channel_name = entry.path()
@@ -3691,7 +3691,7 @@ pub fn global_ports_exclusion_list_generator() -> Result<HashSet<u16>, ThisProje
     };
 
     // Set the collaborator files directory path
-    let collaborator_files_dir_relative = COLLABORATOR_ADDRESSBOOK_PATH_STR;
+    // let collaborator_files_dir_relative = COLLABORATOR_ADDRESSBOOK_PATH_STR;
 
     // Statistics tracking
     let mut channels_processed = 0;
@@ -6056,7 +6056,7 @@ impl App {
         // Initialize the modal message browser state
         let mut current_message_view_mode = MessageViewMode::Refresh;
         let mut user_input_buffer = String::new();
-        let terminal_width = self.graph_navigation_instance_state.tui_width as u16;
+        // let terminal_width = self.graph_navigation_instance_state.tui_width as u16;
         let terminal_height = self.graph_navigation_instance_state.tui_height as u16;
 
         // Set up channel for thread communication
@@ -7618,8 +7618,9 @@ fn encrypt_clearsigned_toml_with_public_key_content(
 
     // Ensure cleanup happens regardless of success or failure
     let cleanup_result = (|| -> Result<(), std::io::Error> {
-        // Read the clearsigned content
-        let clearsigned_content = fs::read_to_string(clearsigned_toml_path)?;
+
+        // inspection: Read the clearsigned content
+        // let clearsigned_content = fs::read_to_string(clearsigned_toml_path)?;
 
         // Use GPG to encrypt with the public key directly (no keyring operations)
         let output = Command::new("gpg")
@@ -8160,17 +8161,17 @@ pub fn make_new_collaborator_addressbook_toml_file(
             if use_clearsign_only { "toml" } else { "toml" } // Always start with .toml
         );
 
-        // TODO is it correct that this is not used??
-        // Convert the relative path to an absolute path based on the executable's directory
-        let file_path = match make_input_path_name_abs_executabledirectoryrelative_nocheck(
-            &relative_path
-        ) {
-            Ok(path) => path,
-            Err(e) => {
-                eprintln!("Error creating absolute path: {}. Trying again...", e);
-                continue; // Try again
-            }
-        };
+        // // TODO is it correct that this is not used??
+        // // Convert the relative path to an absolute path based on the executable's directory
+        // let file_path = match make_input_path_name_abs_executabledirectoryrelative_nocheck(
+        //     &relative_path
+        // ) {
+        //     Ok(path) => path,
+        //     Err(e) => {
+        //         eprintln!("Error creating absolute path: {}. Trying again...", e);
+        //         continue; // Try again
+        //     }
+        // };
 
         // Ensure parent directories exist
         let prepared_path = match prepare_file_parent_directories_abs_executabledirectoryrelative(
@@ -24843,18 +24844,18 @@ pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
     // STEP 7: Extract team channel owner from decrypted (but not yet verified) content
     debug_log!("PIET Step 7: Extracting team channel owner from decrypted content");
 
-    // Convert temporary file path to string for TOML reading
-    let temp_decrypted_path_str = temp_decrypted_path
-        .to_str()
-        .ok_or_else(|| {
-            let error_msg = "PIET Unable to convert temp file path to string".to_string();
-            println!("Error: {}", error_msg);
+    // // Convert temporary file path to string for TOML reading
+    // let temp_decrypted_path_str = temp_decrypted_path
+    //     .to_str()
+    //     .ok_or_else(|| {
+    //         let error_msg = "PIET Unable to convert temp file path to string".to_string();
+    //         println!("Error: {}", error_msg);
 
-            // Clean up temp directory before returning
-            let _ = fs::remove_dir_all(&temp_dir);
+    //         // Clean up temp directory before returning
+    //         let _ = fs::remove_dir_all(&temp_dir);
 
-            GpgError::PathError(error_msg)
-        })?;
+    //         GpgError::PathError(error_msg)
+    //     })?;
 
     // Read the team channel owner from the decrypted content
     // Note: Reading from unverified content, but we need it to find the right public key for verification
@@ -30520,7 +30521,7 @@ fn send_gotit_signal(
 
     if send_data(&serialized_gotitsignal_data, target_addr).is_ok() {
         debug_log("inHLOD send_gotit_signal() 6. Successfully sent GotIt to {} (first address)");
-        return Ok(()); // Exit the thread
+        // Exit the thread below
     } else {
         debug_log("inHLOD send_gotit_signal() err 6. Failed to send GotIt to {} (first address)");
         return Err(ThisProjectError::NetworkError("Failed to send ReadySignal".to_string())); // Return an error
@@ -32079,27 +32080,27 @@ fn handle_local_owner_desk(
     }
 }
 
-/// Calculates Pearson hashes for a vector of byte slices.
-///
-/// This function iterates through the input `data_sets` and calculates the Pearson hash for each slice,
-/// returning a vector of the calculated hashes.
-///
-/// # Arguments
-///
-/// * `data_sets`: A vector of byte slices to hash.
-///
-/// # Returns
-///
-/// * `Result<Vec<u8>, ThisProjectError>`: A `Result` containing a vector of the calculated Pearson hashes,
-///   or a `ThisProjectError` if an error occurs during hash calculation.
-fn calculate_pearson_hashes(data_sets: &[&[u8]]) -> Result<Vec<u8>, ThisProjectError> {
-    let mut hashes = Vec::new();
-    for data in data_sets {
-        let hash = pearson_hash_base(data)?;
-        hashes.push(hash);
-    }
-    Ok(hashes)
-}
+// /// Calculates Pearson hashes for a vector of byte slices.
+// ///
+// /// This function iterates through the input `data_sets` and calculates the Pearson hash for each slice,
+// /// returning a vector of the calculated hashes.
+// ///
+// /// # Arguments
+// ///
+// /// * `data_sets`: A vector of byte slices to hash.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<Vec<u8>, ThisProjectError>`: A `Result` containing a vector of the calculated Pearson hashes,
+// ///   or a `ThisProjectError` if an error occurs during hash calculation.
+// fn calculate_pearson_hashes(data_sets: &[&[u8]]) -> Result<Vec<u8>, ThisProjectError> {
+//     let mut hashes = Vec::new();
+//     for data in data_sets {
+//         let hash = pearson_hash_base(data)?;
+//         hashes.push(hash);
+//     }
+//     Ok(hashes)
+// }
 
 /// Vanilla Deserilize json signal
 /// The idea of the salt-hash or salt-checksum
@@ -33781,49 +33782,6 @@ fn receive_ready_signal_with_timeout( // Hash and timestamp checks moved HERE!
             Err(ThisProjectError::NetworkError(e.to_string()))
         },
     }
-}
-
-/// TODO: What on earth is this thing???
-///
-/// Gets the latest `updated_at_timestamp` from the current team channel's files.
-///
-/// This function crawls through the current team channel's directory and retrieves
-/// the most recent `updated_at_timestamp` from the TOML files it finds.
-///
-/// # Returns
-///
-/// `Result<u64, ThisProjectError>`:  The latest timestamp, or an error if the directory read fails, a TOML file cannot be parsed, or the updated_at_timestamp is invalid.
-fn get_latest_timestamp_from_team_channel_dir() -> Result<u64, ThisProjectError> {
-    let mut latest_timestamp = 0u64; // Initialize to zero
-
-    let channel_dir_path_str = match read_state_string("current_node_directory_path.txt") {
-        Ok(s) => s,
-        Err(e) => {
-            debug_log!("Error reading channel directory path: {}", e);
-            return Err(e.into()); // Or handle error differently
-        }
-    };
-
-    //  Crawl through the team channel directory
-    for entry in WalkDir::new(channel_dir_path_str) {
-        let entry = entry?; // Check for WalkDir errors
-        let path = entry.path();
-        if path.is_file() && path.extension() == Some(OsStr::new("toml")) {
-            match get_toml_file_updated_at_timestamp(path) {
-                Ok(timestamp) => {
-                    if timestamp > latest_timestamp {
-                        latest_timestamp = timestamp;
-                    }
-                },
-                Err(e) => {
-                    debug_log!("Error reading or parsing TOML file: {:?} - {}", path, e);
-                    // Handle the error as you see fit. Perhaps continue or return the error.
-                    continue; // Skip to the next file
-                },
-            };
-        }
-    }
-    Ok(latest_timestamp)
 }
 
 /// handle_remote_collaborator_meetingroom_desk (send files here)

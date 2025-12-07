@@ -7157,7 +7157,7 @@ pub fn convert_toml_filewithkeyid_into_clearsigntoml_inplace(
 #[cfg(test)]
 mod tests_inplace_conversion {
     use super::*;
-    use std::fs::{self, File, write};
+    use std::fs::{self, File};
     use std::io::Read;
 
     // Helper to create a dummy TOML file for testing.
