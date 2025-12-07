@@ -3064,15 +3064,15 @@ pub fn validate_gpg_secret_key(key_id: &str) -> Result<bool, GpgError> {
                 Ok(false)
             }
         }
-        Err(io_error) => {
+        Err(_io_error) => {
             // Failed to execute the GPG command itself (e.g., GPG not in PATH).
             eprintln!(
                 "Failed to execute GPG command for secret key validation (ID: '{}'): {}",
-                key_id, io_error
+                key_id, _io_error
             );
             Err(GpgError::GpgOperationError(format!(
                 "Failed to execute GPG command while validating secret key ID '{}': {}",
-                key_id, io_error
+                key_id, _io_error
             )))
         }
     }
@@ -4828,11 +4828,11 @@ pub fn q_and_a_user_selects_gpg_key_full_fingerprint() -> Result<String, GpgErro
 
     let gpg_command_output = match gpg_command_output_result {
         Ok(output) => output,
-        Err(io_error) => {
+        Err(_io_error) => {
             return Err(GpgError::GpgOperationError(format!(
                 "Failed to execute GPG command to list public key fingerprints: {}. \
                 Ensure GPG is installed and accessible in your system's PATH.",
-                io_error
+                _io_error
             )));
         }
     };
@@ -6215,8 +6215,8 @@ pub fn convert_tomlfile_without_keyid_using_gpgtomlkeyid_into_clearsigntoml_inpl
             addressbook_files_directory_relative,
         ) {
             Ok(path) => path,
-            Err(io_error) => {
-                return Err(GpgError::FileSystemError(io_error));
+            Err(_io_error) => {
+                return Err(GpgError::FileSystemError(_io_error));
             }
         };
 
@@ -11431,14 +11431,14 @@ pub fn read_bool_field_fromtoml_binary(absolute_file_path: &str, field_name: &st
     // return false (feature disabled by default)
     let file = match File::open(absolute_file_path) {
         Ok(opened_file) => opened_file,
-        Err(io_error) => {
+        Err(_io_error) => {
             // In debug builds, log why we failed to open the file
             // In production builds, silently return false (fail-safe)
             #[cfg(debug_assertions)]
             eprintln!(
                 "[DEBUG] read_bool_field_from_toml: cannot open file, \
                  path='{}', field='{}', error='{}', returning false",
-                absolute_file_path, field_name, io_error
+                absolute_file_path, field_name, _io_error
             );
             return false;
         }
@@ -11465,13 +11465,13 @@ pub fn read_bool_field_fromtoml_binary(absolute_file_path: &str, field_name: &st
         // skip this line and continue to the next line
         let line = match line_result {
             Ok(line_string) => line_string,
-            Err(io_error) => {
+            Err(_io_error) => {
                 // Debug log the error but continue processing other lines
                 #[cfg(debug_assertions)]
                 eprintln!(
                     "[DEBUG] read_bool_field_from_toml: cannot read line, \
                      path='{}', field='{}', error='{}', skipping line",
-                    absolute_file_path, field_name, io_error
+                    absolute_file_path, field_name, _io_error
                 );
                 // Skip this corrupted line and continue to next line
                 // This allows partial file corruption to not break the entire config

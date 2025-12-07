@@ -3093,12 +3093,12 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
         // Get GPG fingerprint (could move this outside the loop if same for all)
         let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
             Ok(fingerprint) => fingerprint,
-            Err(e) => {
+            Err(_e) => {
                 #[cfg(debug_assertions)]
                 debug_log!(
                     "CAPITCCV Failed to read GPG fingerprint for {:?}: {} (skipping)",
                     entry.path(),
-                    e
+                    _e
                 );
                 continue; // Skip this directory, continue with next
             }
@@ -3107,12 +3107,12 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
         // Get temp directory path (could move this outside the loop if same for all)
         let base_uma_temp_directory_path = match get_base_uma_temp_directory_path() {
             Ok(path) => path,
-            Err(e) => {
+            Err(_e) => {
                 #[cfg(debug_assertions)]
                 debug_log!(
                     "CAPITCCV Failed to get temp directory path for {:?}: {} (skipping)",
                     entry.path(),
-                    e
+                    _e
                 );
                 continue; // Skip this directory, continue with next
             }
@@ -3125,12 +3125,12 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
             &base_uma_temp_directory_path,
         ) {
             Ok(path) => path,
-            Err(e) => {
+            Err(_e) => {
                 #[cfg(debug_assertions)]
                 debug_log!(
                     "CAPITCCV Failed to get read copy for {:?}: {:?} (skipping)",
                     node_file_path,
-                    e
+                    _e
                 );
                 continue; // Skip this directory, continue with next
             }
@@ -3200,12 +3200,12 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
             &base_uma_temp_directory_path,
         ) {
             Ok(path) => path,
-            Err(e) => {
+            Err(_e) => {
                 #[cfg(debug_assertions)]
                 debug_log!(
                     "CAPITCCV Failed to get read copy for {:?}: {:?} (skipping)",
                     node_file_path,
-                    e
+                    _e
                 );
                 continue; // Skip this directory, continue with next
             }
@@ -10868,6 +10868,7 @@ fn create_messagepost_file_namepath_extension_tuple(
     // Debug-Assert: Path must have a filename component
     // ONLY runs in debug builds, NOT in tests or release
     // #[cfg(not(test))]
+    // #[cfg(debug_assertions)]
     #[cfg(all(debug_assertions, not(test)))]
     debug_assert!(
         incoming_path.file_name().is_some(),
@@ -20197,11 +20198,11 @@ fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
     debug_log!("PWPCTGTOTSB: Step 7 - Cleaning up temporary files");
 
     // Explicit cleanup (Drop will handle it too, but we want logging)
-    if let Err(errors) = cleanup_guard.cleanup() {
+    if let Err(_errors) = cleanup_guard.cleanup() {
         // Log warnings but don't fail the operation
         // The encryption succeeded, cleanup failures are non-critical
         #[cfg(debug_assertions)]
-        for error_msg in errors {
+        for error_msg in _errors {
             eprintln!("PWPCTGTOTSB error  cleanup warning: {}", error_msg);
             debug_log!("PWPCTGTOTSB error  cleanup warning: {}", error_msg);
         }
@@ -20395,9 +20396,9 @@ impl Drop for TempFileCleanupGuard {
         if let Err(errors) = self.cleanup() {
             // Log errors but do not panic in Drop
             // In production, route to proper logging system
-            for error_msg in errors {
+            for _error_msg in errors {
                 #[cfg(debug_assertions)]
-                eprintln!("Warning: {}", error_msg);
+                eprintln!("Warning: {}", _error_msg);
 
                 // In production: consider silent failure or structured logging
                 // eprintln! in production could leak sensitive info
@@ -22720,11 +22721,11 @@ pub fn export_public_gpg_key_converts_to_abs_path(
     // Get GPG fingerprint (could move this outside the loop if same for all)
     let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
         Ok(fingerprint) => fingerprint,
-        Err(e) => {
+        Err(_e) => {
             #[cfg(debug_assertions)]
             debug_log!(
                 "EPGKCTAP error Failed to read GPG fingerprint for: {} (skipping)",
-                e
+                _e
             );
             // continue; // Skip this directory, continue with next
             return Err(ThisProjectError::GpgError(
@@ -22735,11 +22736,11 @@ pub fn export_public_gpg_key_converts_to_abs_path(
     // Get temp directory path (could move this outside the loop if same for all)
     let base_uma_temp_directory_path = match get_base_uma_temp_directory_path() {
         Ok(path) => path,
-        Err(e) => {
+        Err(_e) => {
             #[cfg(debug_assertions)]
             debug_log!(
                 "SLABIK error Failed to get temp directory path: {} (skipping)",
-                e
+                _e
             );
             return Err(ThisProjectError::GpgError(
                 "EPGKCTAP error get_base_uma_temp_directory_path".to_string()));
@@ -22753,12 +22754,12 @@ pub fn export_public_gpg_key_converts_to_abs_path(
         &base_uma_temp_directory_path,
     ) {
         Ok(path) => path,
-        Err(e) => {
+        Err(_e) => {
             #[cfg(debug_assertions)]
             debug_log!(
                 "EPGKCTAP Failed to get read copy for {:?}: {:?} (skipping)",
                 raw_addressbook_path,
-                e
+                _e
             );
             return Err(ThisProjectError::GpgError(
                 "EPGKCTAP error get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml".to_string()));
@@ -23785,11 +23786,11 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
     // Get GPG fingerprint (could move this outside the loop if same for all)
     let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
         Ok(fingerprint) => fingerprint,
-        Err(e) => {
+        Err(_e) => {
             #[cfg(debug_assertions)]
             debug_log!(
                 "SLABIK error Failed to read GPG fingerprint for: {} (skipping)",
-                e
+                _e
             );
             // continue; // Skip this directory, continue with next
             return Err(GpgError::PathError(
@@ -23800,11 +23801,11 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
     // Get temp directory path (could move this outside the loop if same for all)
     let base_uma_temp_directory_path = match get_base_uma_temp_directory_path() {
         Ok(path) => path,
-        Err(e) => {
+        Err(_e) => {
             #[cfg(debug_assertions)]
             debug_log!(
                 "SLABIK error Failed to get temp directory path: {} (skipping)",
-                e
+                _e
             );
             return Err(GpgError::PathError(
                 "SLABIK error get_base_uma_temp_directory_path".to_string()));
@@ -23818,12 +23819,12 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
         &base_uma_temp_directory_path,
     ) {
         Ok(path) => path,
-        Err(e) => {
+        Err(_e) => {
             #[cfg(debug_assertions)]
             debug_log!(
                 "CAPITCCV Failed to get read copy for {:?}: {:?} (skipping)",
                 raw_addressbook_path,
-                e
+                _e
             );
             return Err(GpgError::PathError(
                 "SLABIK error get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml".to_string()));
@@ -24320,11 +24321,11 @@ fn share_lou_addressbook_with_incomingkey() -> Result<(), GpgError> {
     // Get GPG fingerprint (could move this outside the loop if same for all)
     let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
         Ok(fingerprint) => fingerprint,
-        Err(e) => {
+        Err(_e) => {
             #[cfg(debug_assertions)]
             debug_log!(
                 "SLABIK error Failed to read GPG fingerprint for: {} (skipping)",
-                e
+                _e
             );
             // continue; // Skip this directory, continue with next
             return Err(GpgError::PathError(
@@ -24335,11 +24336,11 @@ fn share_lou_addressbook_with_incomingkey() -> Result<(), GpgError> {
     // Get temp directory path (could move this outside the loop if same for all)
     let base_uma_temp_directory_path = match get_base_uma_temp_directory_path() {
         Ok(path) => path,
-        Err(e) => {
+        Err(_e) => {
             #[cfg(debug_assertions)]
             debug_log!(
                 "SLABIK error Failed to get temp directory path: {} (skipping)",
-                e
+                _e
             );
             return Err(GpgError::PathError(
                 "SLABIK error get_base_uma_temp_directory_path".to_string()));
@@ -24353,12 +24354,12 @@ fn share_lou_addressbook_with_incomingkey() -> Result<(), GpgError> {
         &base_uma_temp_directory_path,
     ) {
         Ok(path) => path,
-        Err(e) => {
+        Err(_e) => {
             #[cfg(debug_assertions)]
             debug_log!(
                 "CAPITCCV Failed to get read copy for {:?}: {:?} (skipping)",
                 raw_addressbook_path,
-                e
+                _e
             );
             return Err(GpgError::PathError(
                 "SLABIK error get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml".to_string()));
@@ -25985,10 +25986,10 @@ fn handle_command_main_mode(
 
 
                 // bootstrap: now you are in a channel, start sync
-                let set_sync_result = set_sync_start_ok_flag_to_true();
+                let _set_sync_result = set_sync_start_ok_flag_to_true();
 
                 #[cfg(debug_assertions)]
-                debug_log!("HCMM set_sync_result->{:?}", set_sync_result);
+                debug_log!("HCMM set_sync_result->{:?}", _set_sync_result);
 
             } else {
 
@@ -29019,8 +29020,9 @@ fn get_sendq_update_flag_paths(
                             // Read the file path from the queue file and delete.
                             let queue_file_path_str = match std::fs::read_to_string(&path) {
                                 Ok(s) => s,
-                                Err(e) => {
-                                    debug_log!("Error reading queue file: {}", e);
+                                Err(_e) => {
+                                    #[cfg(debug_assertions)]
+                                    debug_log!("Error reading queue file: {}", _e);
                                     // Handle error appropriately, e.g., continue to the next file or return an error
                                     continue; // Skip this file and continue
                                 }
@@ -29039,10 +29041,11 @@ fn get_sendq_update_flag_paths(
 
                         }
                     },
-                    Err(e) => {
-                        debug_log!("Error reading directory entry: {}", e);
+                    Err(_e) => {
+                        #[cfg(debug_assertions)]
+                        debug_log!("Error reading directory entry: {}", _e);
                         // Handle error as you see fit
-                        return Err(ThisProjectError::IoError(e));
+                        return Err(ThisProjectError::IoError(_e));
                     }
                 }
             }
@@ -29102,7 +29105,9 @@ fn hash_sendfile_struct_fields(
         match pearson_hash_base(&salted_data) {
             Ok(hash) => calculated_hashes.push(hash),
             Err(e) => {
+                #[cfg(all(debug_assertions, not(test)))]
                 debug_log!("hash_sendfile_struct_fields(): Error calculating Pearson hash: {}", e);
+
                 return Err(ThisProjectError::IoError(e));
             }
         }
@@ -29172,7 +29177,10 @@ fn get_updated_at_timestamp_from_toml_file(file_path: &Path) -> Result<u64, This
     let toml_string = match std::fs::read_to_string(file_path) {
         Ok(content) => content,
         Err(e) => {
+
+            #[cfg(all(debug_assertions, not(test)))]
             debug_log!("Error reading TOML file {:?}: {}", file_path, e);
+
             return Err(ThisProjectError::from(e));
         }
     };
@@ -29184,7 +29192,10 @@ fn get_updated_at_timestamp_from_toml_file(file_path: &Path) -> Result<u64, This
     let toml_value: Value = match toml::from_str(&toml_string) {
         Ok(value) => value,
         Err(e) => {
+
+            #[cfg(all(debug_assertions, not(test)))]
             debug_log!("GUATFTF Error parsing TOML string: {}", e);
+
             return Err(ThisProjectError::from(e)); // Or handle error differently
         }
     };
@@ -29294,19 +29305,25 @@ fn get_oldest_sendfile_prefailflag_rt_timestamp_or_0_w_cleanup(
                 debug_log!("GOSPrtT: get_oldest prefail: Oldest .rt timestamp found: {}", oldest_timestamp);
             },
             Err(e) => {
-                // #[cfg(debug_assertions)]
+                #[cfg(debug_assertions)]
+                {
                 debug_log!("GOSPrtT error: get_oldest prefail: Error reading .rt timestamp from file {:?}: {}", path, e);
+                }
+
                 return Err(ThisProjectError::from(e));
             }
         }
 
         // 3. Delete oldest flag - CORRECTED
         if let Err(e) = fs::remove_file(&path) {
-            // #[cfg(debug_assertions)]
+
+            #[cfg(debug_assertions)]
             debug_log!(
                 "GOSPrtT error: get_oldest prefail: Error removing oldest_file_path flag file {:?}: {}",
                 path,
-                e);
+                e,
+            );
+
             return Err(ThisProjectError::from(e));
         }
     }
@@ -29477,9 +29494,9 @@ fn remove_one_prefail_flag_for_sendfile(
             debug_log!("remove_one_prefail_flag_for_sendfile(): Flag file not found: {}", di_flag_id);
             Ok(()) // Not an error if the file isn't found.
         }
-        Err(e) => {
-            debug_log!("remove_one_prefail_flag_for_sendfile(): Error removing flag file: {}", e);
-            Err(ThisProjectError::IoError(e))  // Return other errors
+        Err(_e) => {
+            debug_log!("remove_one_prefail_flag_for_sendfile(): Error removing flag file: {}", _e);
+            Err(ThisProjectError::IoError(_e))  // Return other errors
         }
     }
 }
@@ -29555,8 +29572,9 @@ fn read_rc_latest_received_from_rc_filetimestamp_plaintextstatefile(
             Ok(timestamp_str) => {
                 match timestamp_str.trim().parse::<u64>() {
                     Ok(timestamp) => return Ok(timestamp), // Success!
-                    Err(e) => {
-                        debug_log!("Error parsing timestamp from file: {}. Retrying...", e);
+                    Err(_e) => {
+                        #[cfg(all(debug_assertions, not(test)))]
+                        debug_log!("Error parsing timestamp from file: {}. Retrying...", _e);
                     }
                 }
             }
@@ -29573,8 +29591,9 @@ fn read_rc_latest_received_from_rc_filetimestamp_plaintextstatefile(
                     debug_log!("File not found. Retrying...");
                 }
             }
-            Err(e) => {
-                debug_log!("IO error reading timestamp file: {}. Retrying...", e);
+            Err(_e) => {
+                #[cfg(all(debug_assertions, not(test)))]
+                debug_log!("IO error reading timestamp file: {}. Retrying...", _e);
             }
         }
 
@@ -29837,34 +29856,34 @@ fn get_latest_received_from_rc_file_timestamp(
 
     // Get absolute team channel path
     let team_channel_path = get_absolute_team_channel_path(team_channel_name)
-        .map_err(|e| {
+        .map_err(|_e| {
             #[cfg(debug_assertions)]
             debug_log!(
                 "GLRFRCFT: Failed to get team channel path for '{}': {}",
                 team_channel_name,
-                e
+                _e
             );
             ThisProjectError::from(format!("GLRFRCFT: path err"))
         })?;
 
     // Get GPG fingerprint for decrypting .gpgtoml files
     let gpg_full_fingerprint_key_id_string = LocalUserUma::read_gpg_fingerprint_from_file()
-        .map_err(|e| {
+        .map_err(|_e| {
             #[cfg(debug_assertions)]
             debug_log!(
                 "GLRFRCFT: Failed to read GPG fingerprint: {}",
-                e
+                _e
             );
             ThisProjectError::from(format!("GLRFRCFT: gpg key err"))
         })?;
 
     // Get temporary directory for decrypted files
     let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
-        .map_err(|e| {
+        .map_err(|_e| {
             #[cfg(debug_assertions)]
             debug_log!(
                 "GLRFRCFT: Failed to get temp directory: {}",
-                e
+                _e
             );
             ThisProjectError::from(format!("GLRFRCFT: temp dir err"))
         })?;
@@ -29881,28 +29900,28 @@ fn get_latest_received_from_rc_file_timestamp(
     // =================================================
 
     let mut latest_timestamp: u64 = 0;
-    let mut files_encountered: usize = 0;
-    let mut files_skipped: usize = 0;
-    let mut files_processed: usize = 0; // Successfully read owner and matched
-    let mut timestamps_found: usize = 0; // Successfully extracted timestamp
+    let mut _files_encountered: usize = 0;
+    let mut _files_skipped: usize = 0;
+    let mut _files_processed: usize = 0; // Successfully read owner and matched
+    let mut _timestamps_found: usize = 0; // Successfully extracted timestamp
 
     // =================================================
     // Walk directory and process each file
     // =================================================
 
     for entry in WalkDir::new(&team_channel_path) {
-        files_encountered += 1;
+        _files_encountered += 1;
 
         // Get directory entry, skip on any error
         let entry = match entry {
             Ok(e) => e,
-            Err(e) => {
+            Err(_e) => {
                 #[cfg(debug_assertions)]
                 debug_log!(
                     "GLRFRCFT: WalkDir entry error (skipping): {}",
-                    e
+                    _e
                 );
-                files_skipped += 1;
+                _files_skipped += 1;
                 continue;
             }
         };
@@ -29936,14 +29955,14 @@ fn get_latest_received_from_rc_file_timestamp(
             &base_uma_temp_directory_path,
         ) {
             Ok(p) => p,
-            Err(e) => {
+            Err(_e) => {
                 #[cfg(debug_assertions)]
                 debug_log!(
                     "GLRFRCFT: Failed to prepare readable path for {:?}: {} (skipping)",
                     entry.path(),
-                    e
+                    _e
                 );
-                files_skipped += 1;
+                _files_skipped += 1;
                 continue;
             }
         };
@@ -29957,7 +29976,7 @@ fn get_latest_received_from_rc_file_timestamp(
                     "GLRFRCFT: Path conversion failed for {:?} (skipping)",
                     readable_path
                 );
-                files_skipped += 1;
+                _files_skipped += 1;
                 continue;
             }
         };
@@ -29968,14 +29987,14 @@ fn get_latest_received_from_rc_file_timestamp(
 
         let owner = match read_single_line_string_field_from_toml(toml_path_str, "owner") {
             Ok(o) => o,
-            Err(e) => {
+            Err(_e) => {
                 #[cfg(debug_assertions)]
                 debug_log!(
                     "GLRFRCFT: Failed to read owner field from {:?}: {} (skipping)",
                     entry.path(),
-                    e
+                    _e
                 );
-                files_skipped += 1;
+                _files_skipped += 1;
                 continue;
             }
         };
@@ -29993,7 +30012,7 @@ fn get_latest_received_from_rc_file_timestamp(
         }
 
         // Owner matches - this file is relevant
-        files_processed += 1;
+        _files_processed += 1;
 
         #[cfg(debug_assertions)]
         debug_log!(
@@ -30007,7 +30026,7 @@ fn get_latest_received_from_rc_file_timestamp(
 
         match read_u64_field_from_toml(toml_path_str, "updated_at_timestamp") {
             Ok(timestamp) => {
-                timestamps_found += 1;
+                _timestamps_found += 1;
 
                 #[cfg(debug_assertions)]
                 debug_log!(
@@ -30027,14 +30046,14 @@ fn get_latest_received_from_rc_file_timestamp(
                     );
                 }
             }
-            Err(e) => {
+            Err(_e) => {
                 #[cfg(debug_assertions)]
                 debug_log!(
                     "GLRFRCFT: Failed to read timestamp from {:?}: {} (skipping)",
                     entry.path(),
-                    e
+                    _e
                 );
-                files_skipped += 1;
+                _files_skipped += 1;
             }
         }
     }
@@ -30046,10 +30065,10 @@ fn get_latest_received_from_rc_file_timestamp(
     #[cfg(debug_assertions)]
     debug_log!(
         "GLRFRCFT: Scan complete - encountered: {}, skipped: {}, processed: {}, timestamps: {}, result: {}",
-        files_encountered,
-        files_skipped,
-        files_processed,
-        timestamps_found,
+        _files_encountered,
+        _files_skipped,
+        _files_processed,
+        _timestamps_found,
         latest_timestamp
     );
 
@@ -31180,10 +31199,13 @@ fn handle_local_owner_desk(
                             Ok(bytes) => {
                                 #[cfg(debug_assertions)]
                                 debug_log!("HLOD-Padnet: Read {} bytes from GPG file", bytes.len());
+
                                 bytes
                             },
-                            Err(e) => {
-                                debug_log!("HLOD-Padnet: Failed to read GPG file: {}. Skipping.", e);
+                            Err(_e) => {
+                                #[cfg(debug_assertions)]
+                                debug_log!("HLOD-Padnet: Failed to read GPG file: {}. Skipping.", _e);
+
                                 // cleanup_guard will auto-cleanup on continue
                                 continue;
                             }
@@ -31195,10 +31217,10 @@ fn handle_local_owner_desk(
                         // =========================================================================
                         // 7. Cleanup temp files (explicit for logging, Drop handles it too)
                         // =========================================================================
-                        if let Err(errors) = cleanup_guard.cleanup() {
+                        if let Err(_errors) = cleanup_guard.cleanup() {
                             // Log warnings but don't fail (we got the data successfully)
                             #[cfg(debug_assertions)]
-                            for error_msg in errors {
+                            for error_msg in _errors {
                                 debug_log!("HLOD-Padnet: cleanup warning: {}", error_msg);
                             }
                         }
@@ -33349,24 +33371,26 @@ fn get_or_create_send_queue(
         debug_log!("inHRCD->get_or_create_send_queue 5: Starting crawl of directory: {:?}", team_channel_path);
 
         // Operational metrics
-        let mut files_encountered: usize = 0;
-        let mut files_skipped: usize = 0;
-        let mut files_added_to_queue: usize = 0;
+        let mut _files_encountered: usize = 0;
+        let mut _files_skipped: usize = 0;
+        let mut _files_added_to_queue: usize = 0;
 
         // Walk directory and process each file
         for entry in WalkDir::new(&team_channel_path) {
-            files_encountered += 1;
+            _files_encountered += 1;
 
             // Get directory entry, skip on any error
             let entry = match entry {
                 Ok(e) => e,
-                Err(e) => {
+                Err(_e) => {
                     #[cfg(debug_assertions)]
-                    debug_log!(
-                        "inHRCD->get_or_create_send_queue: WalkDir entry error (skipping): {}",
-                        e
-                    );
-                    files_skipped += 1;
+                    {
+                        debug_log!(
+                            "inHRCD->get_or_create_send_queue: WalkDir entry error (skipping): {}",
+                            _e
+                        );
+                    }
+                    _files_skipped += 1;
                     continue;
                 }
             };
@@ -33400,14 +33424,14 @@ fn get_or_create_send_queue(
                 &base_uma_temp_directory_path,
             ) {
                 Ok(p) => p,
-                Err(e) => {
+                Err(_e) => {
                     #[cfg(debug_assertions)]
                     debug_log!(
                         "inHRCD->get_or_create_send_queue: Failed to prepare readable path for {:?}: {} (skipping)",
                         entry.path(),
-                        e
+                        _e
                     );
-                    files_skipped += 1;
+                    _files_skipped += 1;
                     continue;
                 }
             };
@@ -33422,7 +33446,7 @@ fn get_or_create_send_queue(
                 Ok(true) => {
                     // File qualifies - add ORIGINAL path to queue
                     session_send_queue.items.push(entry.path().to_path_buf());
-                    files_added_to_queue += 1;
+                    _files_added_to_queue += 1;
 
                     #[cfg(debug_assertions)]
                     debug_log!(
@@ -33438,15 +33462,15 @@ fn get_or_create_send_queue(
                         entry.path()
                     );
                 }
-                Err(e) => {
+                Err(_e) => {
                     // File is malformed or unreadable
                     #[cfg(debug_assertions)]
                     debug_log!(
                         "inHRCD->get_or_create_send_queue: File read/parse error for {:?}: {} (skipping)",
                         entry.path(),
-                        e
+                        _e
                     );
-                    files_skipped += 1;
+                    _files_skipped += 1;
                 }
             }
         }
@@ -33455,9 +33479,9 @@ fn get_or_create_send_queue(
         #[cfg(debug_assertions)]
         debug_log!(
             "inHRCD->get_or_create_send_queue: Crawl complete - encountered: {}, skipped: {}, added: {}",
-            files_encountered,
-            files_skipped,
-            files_added_to_queue
+            _files_encountered,
+            _files_skipped,
+            _files_added_to_queue
         );
     }
 
@@ -33469,9 +33493,12 @@ fn get_or_create_send_queue(
         localowneruser_name, // Correct collaborator name
     ) {
         Ok(paths) => paths,
-        Err(e) => {
-            debug_log!("inHRCD->get_or_create_send_queue 2: Error getting update flag paths: {}", e);
-            return Err(e); // Or handle as needed
+
+        Err(_e) => {
+            #[cfg(debug_assertions)]
+            debug_log!("inHRCD->get_or_create_send_queue 2: Error getting update flag paths: {}", _e);
+
+            return Err(_e); // Or handle as needed
         }
     };
 
