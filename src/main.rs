@@ -37186,12 +37186,10 @@ const FF_SOURCE_FILES: &[SourcedFile] = &[
         "src/tiny_tui_module/mod.rs",
         include_str!("tiny_tui_module/mod.rs"),
     ),
-
     SourcedFile::new(
         "src/manage_absolute_executable_directory_relative_paths.rs",
         include_str!("manage_absolute_executable_directory_relative_paths.rs"),
     ),
-
     SourcedFile::new(
         "coordinated_decisions.txt",
         include_str!("../coordinated_decisions.txt"),
@@ -37203,6 +37201,10 @@ const FF_SOURCE_FILES: &[SourcedFile] = &[
     SourcedFile::new(
         "project_areas.txt",
         include_str!("../project_areas.txt"),
+    ),
+    SourcedFile::new(
+        "t_is_for_task.txt",
+        include_str!("../t_is_for_task.txt"),
     ),
     SourcedFile::new(".gitignore", include_str!("../.gitignore")),
 ];
