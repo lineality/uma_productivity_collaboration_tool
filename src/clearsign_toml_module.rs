@@ -6139,10 +6139,19 @@ pub fn convert_tomlfile_without_keyid_using_gpgtomlkeyid_into_clearsigntoml_inpl
     gpg_full_fingerprint_key_id_string: &str,
 ) -> Result<(), GpgError> {
     // --- Stage 1: Input Validation ---
-    debug_log!(
-        "ctwKUGci Starting in-place clearsign conversion with owner-based key lookup for: {}",
-        path_to_toml_file.display()
-    );
+    debug_log!("ctwKUGci Starting in-place clearsign conversion with owner-based key");
+
+    #[cfg(debug_assertions)]
+    {
+        debug_log!(
+            "ctwKUGci path_to_toml_file->{}",
+            path_to_toml_file.display()
+        );
+        debug_log!(
+            "ctwKUGci addressbook_files_directory_relative->{:?}",
+            addressbook_files_directory_relative
+        );
+    }
 
     // Validate that the input path exists and is a file
     if !path_to_toml_file.exists() {
@@ -10703,6 +10712,7 @@ pub fn read_pathbuf_field_from_toml(
     path: &str,
     name_of_toml_field_key_to_read: &str,
 ) -> Result<PathBuf, String> {
+    debug_log("RPFFT read_pathbuf_field_from_toml");
     // Open the file
     let file = File::open(path).map_err(|e| {
         format!(
@@ -10762,7 +10772,7 @@ pub fn read_pathbuf_field_from_toml(
 
             // Log what we found for debugging
             debug_log!(
-                "Read path field '{}': '{}'",
+                "RPFFT Read path field name_of_toml_field_key_to_read->{}; path_buf.display()->{}",
                 name_of_toml_field_key_to_read,
                 path_buf.display()
             );
@@ -17203,7 +17213,7 @@ pub fn get_pathstring_to_temp_plaintoml_verified_extracted(
     base_uma_temp_directory_path: &Path,
 ) -> Result<String, GpgError> {
     debug_log(
-        "starting gpttpve() -> get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml",
+        "starting gpttpve() 1 -> get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml",
     );
 
     // Validate input parameters before proceeding
@@ -17270,11 +17280,11 @@ pub fn get_pathstring_to_temp_plaintoml_verified_extracted(
         let temp_file_path = base_uma_temp_directory_path.join(&temp_filename);
 
         debug_log!(
-            "gpttpve() : Creating temporary file for TOML content: {:?}",
+            "gpttpve() 2 : Creating temporary file for TOML content: {:?}",
             temp_file_path
         );
         debug_log!(
-            "gpttpve() : Source file: {:?} (type: .{})",
+            "gpttpve() 3 : Source file: {:?} (type: .{})",
             input_toml_absolute_path,
             extension
         );
@@ -17283,10 +17293,10 @@ pub fn get_pathstring_to_temp_plaintoml_verified_extracted(
         if extension == "toml" {
             // Case 1: Plain .toml file - create a temporary copy
             debug_log!(
-                "gpttpve() : Processing plain .toml file: {:?}",
+                "gpttpve() 4 : Processing plain .toml file: {:?}",
                 input_toml_absolute_path
             );
-            debug_log!("gpttpve() : Creating temporary copy to ensure original file safety");
+            debug_log!("gpttpve() 5: Creating temporary copy to ensure original file safety");
 
             // Read the original file content with retry mechanism
             // We'll try up to 2 times with a 300ms delay between attempts
@@ -17297,7 +17307,7 @@ pub fn get_pathstring_to_temp_plaintoml_verified_extracted(
 
             for attempt in 1..=max_retry_attempts {
                 debug_log!(
-                    "gpttpve() : Attempting to read original file (attempt {} of {})",
+                    "gpttpve() 6: Attempting to read original file (attempt {} of {})",
                     attempt,
                     max_retry_attempts
                 );
@@ -17307,7 +17317,7 @@ pub fn get_pathstring_to_temp_plaintoml_verified_extracted(
                         // Successfully read the file
                         original_content = content;
                         debug_log!(
-                            "gpttpve() : Successfully read original file on attempt {}",
+                            "gpttpve() 7: Successfully read original file on attempt {}",
                             attempt
                         );
                         break;
@@ -17364,7 +17374,7 @@ pub fn get_pathstring_to_temp_plaintoml_verified_extracted(
 
                 for attempt in 1..=max_retry_attempts {
                     debug_log!(
-                        "gpttpve() : Attempting to write to temporary file (attempt {} of {})",
+                        "gpttpve() 8: Attempting to write to temporary file (attempt {} of {})",
                         attempt,
                         max_retry_attempts
                     );
@@ -17398,7 +17408,7 @@ pub fn get_pathstring_to_temp_plaintoml_verified_extracted(
                             // Successfully wrote the file
                             write_success = true;
                             debug_log!(
-                                "gpttpve() : Successfully wrote temporary file on attempt {}",
+                                "gpttpve() 9: Successfully wrote temporary file on attempt {}",
                                 attempt
                             );
                             break;
@@ -17508,11 +17518,11 @@ pub fn get_pathstring_to_temp_plaintoml_verified_extracted(
                 }
             }
 
-            debug_log!("gpttpve() : Successfully created temporary copy of .toml file");
+            debug_log!("gpttpve() 11: Successfully created temporary copy of .toml file");
         } else {
             // Case 2: Encrypted .gpgtoml file - decrypt to temporary file
             debug_log!(
-                "gpttpve() : Processing encrypted .gpgtoml file: {:?}",
+                "gpttpve() 12: Processing encrypted .gpgtoml file: {:?}",
                 input_toml_absolute_path
             );
 
@@ -17555,7 +17565,7 @@ pub fn get_pathstring_to_temp_plaintoml_verified_extracted(
             // Execute GPG to decrypt the .gpgtoml file into our temporary file
             // Note: GPG operations are not retried as they typically either work or fail definitively
             debug_log!(
-                "gpttpve() : Executing GPG to decrypt {} to temporary file {}",
+                "gpttpve() 13: Executing GPG to decrypt {} to temporary file {}",
                 input_toml_absolute_path.display(),
                 temp_file_path.display()
             );
@@ -17603,7 +17613,7 @@ pub fn get_pathstring_to_temp_plaintoml_verified_extracted(
         // ================================================
         // Extract plain content from clearsigned temp file
         // ================================================
-        debug_log!("gpttpve() : Extracting clearsigned content to plain TOML");
+        debug_log!("gpttpve() 14: Extracting clearsigned content to plain TOML");
 
         // Create second temporary file for extracted plain content
         let final_temp_filename =
@@ -17622,7 +17632,7 @@ pub fn get_pathstring_to_temp_plaintoml_verified_extracted(
                 .open(&final_temp_file_path)
                 .map_err(|e| {
                     GpgError::TempFileError(format!(
-                        "gpttrofodg() failed to create extracted temp file: {}",
+                        "gpttpve() failed to create extracted temp file: {}",
                         e
                     ))
                 })?;
@@ -17632,7 +17642,7 @@ pub fn get_pathstring_to_temp_plaintoml_verified_extracted(
         {
             std::fs::File::create(&final_temp_file_path).map_err(|e| {
                 GpgError::TempFileError(format!(
-                    "gpttrofodg() failed to create extracted temp file: {}",
+                    "gpttpve() failed to create extracted temp file: {}",
                     e
                 ))
             })?;
@@ -17649,9 +17659,10 @@ pub fn get_pathstring_to_temp_plaintoml_verified_extracted(
             .arg(&temp_file_path)
             .output()
             .map_err(|e| {
-                let error_msg = format!("gpttrofodg() Failed to execute GPG extract: {}", e);
+                let error_msg = format!("gpttpve() error  Failed to execute GPG extract: let extract_output = std::process::Command::new {}", e);
                 eprintln!("\nERROR: {}", error_msg);
-                eprintln!("Press Enter to continue...");
+                debug_log!("\nERROR: {}", error_msg);
+                eprintln!("error Press Enter to continue...(gpttpve) let extract_output = std::process::Command::new");
                 let _ = std::io::stdin().read_line(&mut String::new());
                 GpgError::GpgOperationError(error_msg)
             })?;
@@ -17659,16 +17670,28 @@ pub fn get_pathstring_to_temp_plaintoml_verified_extracted(
         if !extract_output.status.success() {
             let stderr_text = String::from_utf8_lossy(&extract_output.stderr);
             let error_msg = format!(
-                "gpttrofodg() GPG clearsign extraction failed: {}",
+                "error  gpttpve() GPG clearsign extraction failed !extract_output.status.success(): {}",
                 stderr_text
             );
-            eprintln!("\nERROR: {}", error_msg);
-            eprintln!("Press Enter to continue...");
+            debug_log!(
+                "gpttpve ERROR !extract_output.status.success(): {}",
+                error_msg
+            );
+            debug_log!(
+                "gpttpve ERROR temp_file_path {:?} ...Press Enter to continue... (gpttpve)",
+                temp_file_path
+            );
+
+            eprintln!(
+                "\n gpttpve ERROR !extract_output.status.success(): {}",
+                error_msg
+            );
+            eprintln!("Press Enter to continue... (gpttpve)");
             let _ = std::io::stdin().read_line(&mut String::new());
             return Err(GpgError::GpgOperationError(error_msg));
         }
 
-        debug_log!("gpttpve() : Successfully extracted plain TOML from clearsigned content");
+        debug_log!("gpttpve() 16: Successfully extracted plain TOML from clearsigned content");
 
         // Clean up intermediate clearsigned temp file
         let _ = std::fs::remove_file(&temp_file_path);

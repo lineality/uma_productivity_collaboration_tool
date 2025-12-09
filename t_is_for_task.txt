@@ -1,8 +1,7 @@
-﻿# T is for Task: Uma Collaboration Tool
+﻿## T is for Task: Uma Collaboration Tool
 g.g.ashbrook 2024.09.12-20, 2025.11-12
 
 
-<simple treasure map, x-goals are: alignment; meeting needs of user>
 
 
 1. Why do projects fail?
@@ -13,9 +12,7 @@ g.g.ashbrook 2024.09.12-20, 2025.11-12
 
 
 ### Contents
-
-
-1. Questions
+1. Three Questions on Collaboration Tools
 
 
 2. Introduction to Project-Tasks & 'Task-Boards'
@@ -24,7 +21,7 @@ g.g.ashbrook 2024.09.12-20, 2025.11-12
 3. Scope: Messages, Tasks. A basic outline of features
 
 
-4. Simple Tutorial: Uma
+4. Tutorial: Uma
 - 't': tasks 
 - 'm': message (modal, toggle view/insert with empty enter)
 - 'move': Task on Board: 1. 'move' 2. What, 3. where, (done)
@@ -32,35 +29,25 @@ g.g.ashbrook 2024.09.12-20, 2025.11-12
 
 
 ### Appendices:
-
-
-5. Process Design: 'moving parts and details'
-- project/product management and coordination more broadly
-
-
-6. Software Design: 'moving parts and details'
-- future-proofing and planning for the future
-
-
+5. Process Design: project/product management and coordination more broadly
+6. Software Design: moving parts and details
 7. Prof. Skip Ellis and Project Neem
-
-
-8. appendices:
-- partner project links
-- links
-- references
-
-
-? more details...
+8. Future-Proofing: Long-Term Data Management & Long-Term Software Management
+9. Defining Project Data
+10. More Details on a 1960s Uma
+11. Utility Case study: ex/vi/vim
+12. Links
 
 
 
 
-## Three Questions on Collaboration Tools:
+
+
+# 1. Three Questions on Collaboration Tools:
 
 
 1. Features: 
-- What User-Features/Functionalities are needed for a project to use best-practice satisfying the standards of (if not using all methods of) Agile and Kahneman-Tversky-Decisions for project / product management?
+- What User-Features/Functionalities are needed for a project to use best-practice satisfying the standards of (if not using all methods of) Agile and Kahneman-Tversky-Decisions for all main areas project / product management?
 
 
 2. Tools: 
@@ -68,101 +55,130 @@ g.g.ashbrook 2024.09.12-20, 2025.11-12
 
 
 3. Timeline: 
-- Could Agile and Kahneman-Tversky-Decisions for project / product management have been built in the 1960's?
+- Could tools for Agile and Kahneman-Tversky-Decisions for project / product management have been built in the 1960's?
 
 
 
 
 
 
-## Introduction: Tasks & 'Task-Boards'
+# 2 Introduction: Tasks & 'Task-Boards'
 
 
 Let's look at an example. 
 
 
-Imagine you are working with a team, where you are all in the same workshop. And imagine, that where you have meetings, you are using an old-school-cool 1940's Toyota task-status-board. This means that you are using a physical board to share and see updates about people are working on, and how far along they are with what they are working on. You use the columns of the board to share basic 'current-status' information such as 'this task is still being planned' or 'this task is now in progress,'or  'Done: this task has been completed.' On this task 'board,' you physically move something that you just finished from 'planning' to 'in progress,' or from 'in progress' to 'done,' so that everyone else can see what the status is. (For example, this could be moving a post-it note, or a magnet, or a cork-pinned slip of paper). And you also have, in your workshop, where you all work, blackboard or whiteboard note-=boards for messages, notes, tallying votes, asking questions, etc. 
+Imagine you are working with a team, where you are all in the same workshop. And imagine, that where you have meetings, you are using an old-school-cool 1940's Toyota task-status-board. This means that you are using a physical board to share and see updates about what tasks people are working on, and how far along those tasks have gotten. You use the vertical columns of the board to share basic 'current-status' information such as 'this task is still being planned' or 'this task is now in progress,'or  'Done: this task has been completed.' On this 'task board,' you physically move something you are starting from 'Planning' to 'Started,' or something that you just finished from 'Started' to 'Done,' so that everyone else (including 'future-you') can see what the status is. For example, this could be moving a post-it note, or a magnet, or a cork-pinned slip of paper. And you also have, in your workshop, where you all work, blackboard or whiteboard note-boards for messages, notes, scribbles, tallying votes, asking questions, etc. 
 
 
-With these physical Task-Boards and Message-Boards, you and your teammates can plan out your project, coordinate about the overall parts of the project, and the specifics of what is being done on tasks, and incorporate feedback from inside and outside the team to ('stay aligned') make sure that everyone knows what the project is and what they are doing enough to follow through with completing the project. 
+With these physical Task-Boards and Message-Boards, you and your teammates plan out your project, coordinate about the overall parts of the project, and the specifics of what is being done on tasks, and incorporate feedback from inside and outside the team to 'stay aligned' and make sure that everyone knows what the project is and what they are doing enough to follow through with completing the project. 
 
 
-This is (an example of) the specific scope of features and functionality that Uma aims to cover.
+This is the specific user-story scope of features and functionality that Uma aims to cover.
 
 
-At a high-level that is, or seems, simple. But easy things can be hard. There are many moving parts and details that usually make project-management non-trivial to follow-through on successfully. 
+At a high-level this is, or seems, simple. But easy things can be hard. There are many moving parts and details that usually make project-management non-trivial to follow-through on successfully. 
+
+
+Hopefully adequate solutions for doing this already exist for some users (hopefully). The more detailed sections in the appendices below will look at use-cases and groups of users who likely are not currently being covered by available solutions (as of 2025), and which use-cases and users Uma may be able to support. 
 
 
 
 
-Some might quickly claim that adequate solutions for doing this must surely already exist. Hopefully, in at least some cases, this is true enough (hopefully). As we outline in a bit more detail what Uma aims to do, we will look at use-cases that likely are not currently being covered by available solutions (as of 2025). 
-
-
-(If we presume, assume, and believe that something that looks simple should also be easy and quick to accomplish, we can trap ourselves in an  unhelpful feedback loop where we are blind to our misalignment and do not see that we do not see.)
-
-
-So next, let's go into some of the details of what the challenges are and how Uma aims to work.
+Before doing a final feature-overview and tutorial, let's look in a bit more detail at what is involved in task-definition and messages.
 
 
 
 
 
 
-## Tasks: What is it to do a task? 
+### Task-Board Actions:
 
 
-## Task as Action:
-How might we frame a very simple model of what the task-board is in terms of human actions? Simplified 'task-board-action-steps' might look something like this for both setting up the board and using the board: 
+We should have a concrete example of task =-board use, so let's say that you and your friends are going to bake pizzas for a fundraiser and maybe as a summer business (if that works out). Because you are a botany major, you are in charge of growing the fresh basil. You have scrambled up a plan, and scrabbled up the pots, soil, and seeds, and you are now ready to start. So, to let the team know, you pop open the task board and move the 'Basil' task from 'Planning' to 'Started.' Sounds simple so far.
 
 
-1. Communicate.
-2. Make a plan.
-3. Align with folks as you carry the plan out: Update Where you are in the plan
+Let's look at this in terms of the actions a person takes. A simplified 'task-board-actions' list might look something like this: 
+
+
+1. Orient: Make/Update your plan. Where are you now?
+2. Communicate: Share your update using the Task-Board.
+3. Align: Everyone else can see and sync with your update.
 (Loop)
 
 
-
-
-## Task as Process/Policy
-How might we frame a very simple model of task-boards a bit more abstractly in terms of: 
-1. Communicate
-3. Feedback
-2. Externalize/Articulate
-4. Learn and solve problems.
-5. Do not repeat mistakes.
-6. Iterate(Repeat/Loop)
+That still looks pretty simple. We should try to leverage that simplicity to keep the interface minimal: a well-focused and uncluttered task-board can be more practical. 
 
 
 
 
+### Task-Boards as Process & Policy
 
 
-## Task Workflow with Policy/Values:
-1. Communicate (Give and get Feedback): What are you and others working on overall now? 
-2. Externalize/Articulate: Make an updated plan: What are the tasks? Who is doing which task? 
-3. Stay aligned (Learn and solve problems; do not repeat mistakes) as you carry the plan out: 
-- Where are you? (Where are each of you?) What 'column' is your task in? 
-- Where are you going? (And by when?) What is your task, and where should your task status go by when? 
-(Iterate(Repeat/Loop))
+Even where a set of actions is very simple (we can even use the more extremely minimal classic example of moving a bottle of water from one place to another), task-boards are doing some important things that happen less visibly.
 
 
-Each iteration, and each step, contributes to updating several items:
-- your plan, 
-- the tasks on the board, 
-- your understanding of your and other's task and how they relate
-- the schedule
-- your own communications
-- your skills and abilities: learning
-- your understanding of aspects and implications of the project 
+One of the most important of these easy-to-overlook areas is perception, especially non-automatic perception: where we need to work-at and learn how to see something and actively maintain our ability to see it, or it disappears from our 'world' as with an extremely young child who loses all awareness of the existence of an object that they can no longer directly see. And 'object permanence' may be more than just an analogy here. 
+
+
+Definition Behavior Studies is a more in-depth model and methodology that I strongly recommend for supporting this type of priority. The 'we can' statements outline a perhaps surprisingly large number of 'common sense' aspects of a project that sometimes we assume must be somehow happening in the background and take for granted that everyone agrees. But at other times, when the areas slip 'out of sight, out of mind,' projects go off the rails, perception fails, and discussion of (and alignment on) what failed becomes impossible. Invisible problems do not solve themselves or become visible automatically.
+See: https://github.com/lineality/definition_behavior_studies 
+
+
+A simplified set of policies and valued-processes for task-board use might look like this: 
+1. Learning and Maintaining Non-Automatic Perception
+2. Maintaining Sound Definitions and Agendas (Prevent System Collapse)
+2. Not Repeating Past Mistakes
+3. Learning
+4. Communication
+5. Feedback
+6. Externalization / Articulation
+7. Problem Solving
+8. Iteration (Progressively-Incrementing Using Feedback/Repeating/Looping)
 
 
 
 
+
+
+### Task Workflow with Policy/Values:
+
+
+What the task-board is doing now looks not quite as simple as our minimal 'task-board-action-list' above. 
+
+
+
+
+Updating and aligning happens in many areas. With each iteration, and during each step, many areas of updating, perception adjustment, strategy and prediction adjustment may be happening:
+- Your perceptions and skills to perceive,
+- Your plan, 
+- The tasks on the board, 
+- Your understanding of your and other's task and how they relate,
+- The schedule,
+- Your own communications,
+- Your skills and abilities: learning,
+- Your understanding of aspects and implications of the project, 
+
+
+
+
+(Not to mention all of the long-term, and soft-skills, and 'classroom management', parts of a team project space. Spaces can be growth filled, discovery-filled, exciting, productive, synergistic, positive environments, but they can also become (as the internet sometimes puts on display) fraudulent, toxic, bad-actor filled, disinformation-filled, nihilistic, hostile, zero-sum regressive, and dysfunctional.)
 
 
 
 
 # 3. Scope: Let's do tasks. Let's post messages. 
+
+
+At a high level, here are some of the main parts of Uma:
+
+
+1. Tasks and Task-boards
+2. Message-Posts
+3. Modular Nodes, (like Lego-blocks)
+4. Project-Areas
+
+
 
 
 ### T is for Task
@@ -195,30 +211,92 @@ With a modular framework, you can 'Lego-Build' a large variety of message-post-f
  2. Micro-blogging
  3. Surveys
  4. Questionnaires
- 6. Instructions
- 7. Elections/votes/polls
- 8. Suggestions
- 9. Decision coordination
-10. Help channel (open or anonymous)
-11. Feedback (open or anonymous)
-12. 'Ticket' Request Systems
-13. Standardized forms (as in filling in a form by entering data)
-14. Quiz or test
-15. Multiple choice
-16. Write-in option
-17. Mixed choice or write-in
-18. Posts 'to the attention of' (ping-ing) a collaborator
+ 5. Instructions
+ 6. Elections/votes/polls
+ 7. Suggestions
+ 8. Decision coordination
+ 9. Help channel (open or anonymous)
+10. Feedback (open or anonymous)
+11. 'Ticket' Request Systems
+12. Standardized forms (as in filling in a form by entering data)
+13. Quiz or test
+14. Multiple choice
+15. Write-in option
+16. Mixed choice or write-in
+17. Posts 'to the attention of' (ping-ing) a collaborator
 etc.
 
 
-Using the basic module-units in uma (described here "task-nodes," but you can call them whatever you want) it is easy to create and organize main and sub 'channels' or 'rooms' (or however you want to describe them), and to configure them for the functionality you need them to have: open, private, everyone, some people, ephemeral, encrypted, structured as questionnaires or votes/polls, etc.
+### Modular Task-Nodes
 
 
+Uma is designed to be as modular as possible, designed so that most things are made of the same standard unit (like a lego-block) that can be place in or on or next to other building blocks.
+
+
+
+
+Not to get bogged down in the details, apologies, the term 'node' comes from the fact that Uma's teammate-shared-database is a particular type of database called (confusingly) a 'graph' database. Here 'graph' does not mean a chart or figure, as the term nearly always does, but (for some reason) a type of data-structure made out of interconnected "nodes."
 
 
 Each node has message-post functionality.
 
 
+Using the basic module-units in uma (described here as "task-nodes," but you can call them whatever you want) it is easy to create and organize main and sub 'channels' or 'rooms' (or however you want to describe them), and to configure them for the functionality you need them to have: open, private, everyone, some people, ephemeral, encrypted, structured as questionnaires or votes/polls, etc.
+
+
+
+
+### Project-Areas
+
+
+There are six main areas where projects most often fall apart and fail, and where projects fail repeatedly for the same reasons that are effectively invisible. So even though Uma aims to be minimal, these six Project Areas are a core part of tasks and nodes. When you make a new task-node, you are Q&A guided through each Project Area to add a definition to that task-node.
+
+
+
+
+
+
+
+
+## Is vs. Is-Not
+
+
+Uma aims to be a do-one-thing-well tool that should be able to:
+- be set up
+- run on devices
+- have descent security standards
+- allow teams to form
+- allow teams to send messages
+- allow teams to set up shared task-boards
+- help teams to define and align on goals and project areas
+- distribured/decentralized: no central server
+- no subscription service
+
+
+#### Is Not
+There are a number of related functionalities that task management and messaging should be confused with. Uma specifically is not designed to scope-creap into these features:
+- not git
+- not online file storage
+- not cloud file sharing
+- not general file sync tool/protocol
+- not project-documentation and reporting
+- not an office-suite
+- not full project research planning, needs and goals analysis, post-production analysis, etc.
+
+
+#### Is
+Uma aims to be a do-one-thing-well distributed-multipoint-conferencing-unit (d-MCU) for task and message structures (not general data transfer) in the form of a distributed graph-database for project/product planning and management, alignment, and coordinated decisions.
+
+
+
+
+
+
+
+
+
+
+ 
 
 
 
@@ -350,13 +428,16 @@ quit
 
 
 
-### Appendices
 
 
-# Design
 
 
-### Some Details: How & What
+
+
+## Appendices
+
+
+# Design: How & What
 
 
 Let's move our workplace example ahead in time beyond the 1940's. 
@@ -370,7 +451,7 @@ But before we get too carried away, let's look a bit more closely at some of the
 
 
 
-As with flute-making, a 'simple' physical analogue process (a physical tube or a physical task-board) does not always have a known simple mathematical description (which does not mean people will not claim and believe the opposite). 
+As with flute-making, a 'simple' physical analogue process (a physical tube or a physical task-board) does not always have a known simple mathematical description. 
 
 
 1. What are the areas where people need to manage projects and manage alignment between team members and other parties? (What are 'Project Areas'?), 
@@ -437,7 +518,7 @@ B. Panic-Halt: Because the goal was deliberately halted in sudden panic, in a re
 Why did the interpretations of the goals by the team members drift further apart over time until they were no longer doing work that was either compatible with what other people were doing or that had anything to do with what the user needed? Because the scope-alignment was deliberately not done, in a recurring act of short-sightedness.
 
 
-This is the level of mundane project area skills, the lack of which causes the same recurring issues across small, medium to large international public and private sector institutions. And for probably ultimately biological reasons, because they are so strongly universal and consistent over time, people are somehow indefinately completely oblivious to the fact that these same problems are happening over and over and over again. There is no innate, automatic project-level 'object permanence' in the human mind. At the same time, their skills can be very easily learned (much easier than learning a written language) by virtually all people. 
+This is the level of mundane project area skills, the lack of which causes the same recurring issues across small, medium to large international public and private sector institutions, compounded by pride, institutional 'politics' (an unfortunate pejorative form of the term not representative of political philosophy overall), pecking-orders, habitual traditions, and a lack of leadership and ethics. And for probably ultimately biological reasons, because these patterns are so strongly universal and consistent over time and space, people are somehow indefinately oblivious to the fact that these same problems are happening over and over and over again. There is no innate, automatic project-level 'object permanence' in the human mind. At the same time, these literacies and skills can be very easily learned (much more easily than learning a new written language) by effectively all people. 
 
 
 More abstractly, categories of processes may look like this:
@@ -454,7 +535,7 @@ While the focus of Uma aims to be deliberately constrained to a few highly struc
 
 
 
-Where "project areas" refers to these ~Agile focused areas:
+The term "project areas" here refers to these specific ~Agile-project-management focused areas:
 
 
 #### Project Areas:
@@ -468,54 +549,6 @@ Where "project areas" refers to these ~Agile focused areas:
 
 
 
-4. Coordinate Decisions
-- https://github.com/lineality/Networked_Voting_and_Decisions_Including_One_Time_Pads  
-
-
-
-
-5. definition behavior studies 
-- https://github.com/lineality/definition_behavior_studies 
-
-
-- A framework for modeling 'systems' such as teams, institutions, and projects, with a focus on temporal change in definitions.
-
-
-- A framework for analyzing system-collapse (including project failures, planning failures, decision failures, and decision-coordination failures)
-
-
-Filling out a Systems & Definitions Profile for your team and a given project is an example of something that Uma overtly refers to in the project areas that it nudges the users to at least comment on, but there is no (and perhaps in the scope of uma should not be) a formal software system for documenting system and definition details. Uma is not a full project documentation publishing and file storage system: the focus is task-status and message posts for reference during alignment during a 'sprint' or time-block of project tasks.
-
-
-The above link is an essay-walk-through-narative of a step-frame-work-process that can be followed to model a given system, such as a project, team, stakeholder, user-story, etc.
-
-
-
-
-6 input output measures 
-- https://github.com/lineality/input_output_measures 
-
-
-
-
-7 needs and goals evaluations
-- https://github.com/lineality/needs_goals_assessment_disambiguation 
-- An equivalent of the questions at this link are recommended to disambiguate needs and goals analysis questions, which notoriously produce unhelpfully indeterminate answers. 
-
-
-8. project-object databases 
-- https://github.com/lineality/object_relationship_spaces_ai_ml 
-- For further depth if desired into topics such as externalization of project data and modeling project-spaces and system architectures designed to operate on project-object databases statefully, see Object Relationship Spaces, various sections of which are also available as separate Medium/Blog articles and github repositories.
-
-
-
-
-This is just a starting set of examples. There are other clearly relevant areas that are still too young to have clear conclusive models of, such as network design decisions where the "designs" of parts of the internet have been clearly shown to be lacking or problematic, but often there is not clear consensus (or even any serious suggestion) about what would have been sufficient (if not ideal). 
-
-
-Hopefully in the future there will be something more coherent that what we have today for:
-- 'socially non-destructive networks' and
-- identity-authentication in networks
 
 
 ### Balancing Deeper Details
@@ -548,6 +581,58 @@ For reference:
 
 4. Definition Behavior Studies 
 - https://github.com/lineality/definition_behavior_studies 
+(yet more details on project areas are here)
+
+
+- A framework for modeling 'systems' such as teams, institutions, and projects, with a focus on temporal change in definitions.
+
+
+- A framework for analyzing system-collapse (including project failures, planning failures, decision failures, and decision-coordination failures)
+
+
+Filling out a Systems & Definitions Profile for your team and a given project is an example of something that Uma overtly refers to in the project areas that it nudges the users to at least comment on, but there is no (and perhaps in the scope of uma should not be) a formal software system for documenting system and definition details. Uma is not a full project documentation publishing and file storage system: the focus is task-status and message posts for reference during alignment during a 'sprint' or time-block of project tasks.
+
+
+The above link is an essay-walk-through-narative of a step-frame-work-process that can be followed to model a given system, such as a project, team, stakeholder, user-story, etc.
+
+
+
+
+5. Coordinated Decisions, Process, & Networks
+- https://github.com/lineality/Networked_Voting_and_Decisions_Including_One_Time_Pads (more details on project areas are here as well)
+
+
+
+
+6. input-output measures (externalization/articulation)
+- https://github.com/lineality/input_output_measures 
+
+
+
+
+7 Needs and Goals Evaluations
+- https://github.com/lineality/needs_goals_assessment_disambiguation 
+- An equivalent of the questions at this link are recommended to disambiguate needs and goals analysis questions, which notoriously produce unhelpfully indeterminate answers. 
+
+
+
+
+8. Project-Object Databases 
+- https://github.com/lineality/object_relationship_spaces_ai_ml 
+- For further depth if desired into topics such as externalization of project data and modeling project-spaces and system architectures designed to operate on project-object databases statefully, see Object Relationship Spaces, various sections of which are also available as separate Medium/Blog articles and github repositories.
+
+
+
+
+This is just a starting set of examples. There are other clearly relevant areas that are still too young to have clear conclusive models of, such as network design decisions where the "designs" of parts of the internet have been clearly shown to be lacking or problematic, but often there is not clear consensus (or even any serious suggestion) about what would have been sufficient (if not ideal). 
+
+
+Hopefully in the future there will be something more coherent that what we have today for:
+- 'socially non-destructive networks' and
+- identity-authentication in networks
+
+
+Striking a balance between task/message high level coordination vs. project planning in more detail (which is arguably, in most cases, separate), Uma tries to focus on a scope that is as narrow, modular, and definable as possible.
 
 
 
@@ -580,6 +665,9 @@ Let's continue with our example of the team using 1940's technology and concepts
 #### Selecting A Tech-Stack
 
 
+For Uma's design: The only software, and data, is what is on each team-member's computers. The only databases are the synced-project-graph databases used by the team-members, which are readable files in directories on the users' computers. These files are to be used or converted in format however the user needs to.
+
+
 For large organizations with large budgets, long timeframes, and many deployable employees, there are various existing services and service-providers. But not all common use-cases are covered by web-subscription model services, or cloud-server infrastructure based services. 
 
 
@@ -594,40 +682,6 @@ Part of the design process here is defining the process and policies, trying to 
 For example:
 - current "standards and norms" of software design may be inadequate or incompatible with some user/stakeholder needs
 - some groups of users and stakeholders may fall outside of key commercial markets that are able to fund an ecosystem of software
-
-
-
-
-For Uma's design: The only software, and data, is what is on each team-member's computers. The only databases are the synced-project-graph databases used by the team-members, which are readable files in directories on the users' computers. These files are to be used or converted in format however the user needs to.
-
-
-
-
-There are many aspects of post-internet, post-DOS, software that are so common (in 2025) as to be assumed and presumed, but which are not necessary and in many cases may contribute to the lack of accessibility, the lack of maintainability, and the spiraling of costs and technical debt that IT projects usually exhibit.
-
-
-Going to school on these design mistakes, Uma is designed to avoid and exclude the common costs and snags: Uma is to have:
-- no subscriptions or service fees (you run the software and compute)
-- no third party information sharing
-- no separate servers (uma runs on the device you are using)
-- no load balancing backend or kubernetes devops
-- no signing-certificate renewal
-- no dns configuration
-- no web-hosting/domain-configuration,etc. (uma is not website/server-bloatware)
-- no service-hosting third-party companies
-- no required api configurations
-- no web security liabilities (not a web application: no web)
-- no account-setup with a third party information-harvester
-- no liability of the service suddenly being turned off
-- no middle-man barriers to accessing your own data
-- no middle-man barriers to searching your own data
-- no separate database setup (e.g. no "SQL" costs, dependencies, security problems)
-- no loss of access to source code
-
-
-
-
-- I have routinely seen it a month+ to get a new employee added to a team's slack channel or jira account, with indefinately intermittent access interruptions that go on indefinately as webs of offices and departments gradually coordinate to fix issues. There is a kind of endemic learned-helplessness and external locus of control that dysfunctional software solutions are 'teaching' users. Too many students learn (and too many employees expect) that controls over and success of basic software is buried in Kafka-esk layers of bureaucracy that takes weeks, months, or years to churn and where 'competence' and 'status' means that you have a gang-post in a gate-keeper role in this tragedy of dysfunction, that security breaches are expected, that you will lose all your data, and that all of this will be ever more expensive and require ever more powerful hardware to do the same things (perhaps a "red-queen effect"). This is not how software tools are supposed to be. This is not how STEM ecosystems are supposed to operate. If it takes 6 months to make and show someone (somewhere in the same building) a single heatmap plot, people react with cynical complacency and embrace the inertia of a shake-down world when nothing works and no one can get anything done and no one should speak it about it or the nail that sticks up gets hammered down (as the Japanese saying sadly goes). This is not right. This is not where the timeline of STEM should be leading institutions. 
 
 
 - Task-Managers should have native support for messages, questions, discussions etc., but usually they are completely separate.
@@ -650,35 +704,62 @@ Going to school on these design mistakes, Uma is designed to avoid and exclude t
 
 
 
-What about users who do not fit into the 'company who wants to pay another company for a cloud-service model'? This is not meant to be a rhetorical question or a position against software companies or companies who want to pay for software. I am not anti-company, anti-intellectual property, anti-patent, anti-copyright, anti-regulation, anti-private-ownership, anti-investment, anti-market, anti-business, or anything along those lines. Just as there is no 'single software package' for everything every company will ever need to do on any hardware, there need to be a variety of solutions covering as many users and use-cases as possible. Students, researchers, libraries, municipalities, on-site healthcare and first responders, journalists, and others, are not a 'market' of users for subscription services designed specifically for large corporations who use a particular tech stack for particular operations and staffing. 
+There are many aspects of post-internet, post-DOS, software that are so common (in 2025) as to be assumed and presumed, but which are not necessary and in many cases may contribute to the lack of accessibility, the lack of maintainability, and the spiraling of costs and technical debt that IT projects usually exhibit.
 
 
-As of 2025, the current trend is to raise a firewall around students and minors to make it impossible for companies to interact with or store the information of students. How then are students going to train on and learn how to use project-management tools? A. They have no money. B. There is the 'regime uncertainty' risk that it could suddenly become illegal for companies to deal with that set of users, or that there would be an onerous and incoherent set of regulations as with GDPR data storage and permission requirements. Education and other areas often become a tragedy of the commons. A few children of wealthy well-connected parents will have rule-bending access to technology (remember Bill Gates?) and everyone else will have learned helplessness: that is not an education plan. From another approach, if companies do not want to (or would even be legally allowed to) voluntarily pay higher than necessary taxes so that municipalities can pay for expensive software subscriptions, then there should be some open-source options out there.
+Going to school on these design mistakes (or attempting to), Uma is designed to avoid and exclude the common costs and snags.
+
+
+#### Uma is to have:
+- no subscriptions or service fees (you run the software and compute)
+- no third party information sharing
+- no separate servers (uma runs on the device you are using)
+- no load balancing backend or kubernetes devops
+- no signing-certificate renewal
+- no dns configuration
+- no web-hosting/domain-configuration,etc. (uma is not website/server-bloatware)
+- no service-hosting third-party companies
+- no required api configurations
+- no web security liabilities (not a web application: no web)
+- no account-setup with a third party information-harvester
+- no liability of the service suddenly being turned off
+- no middle-man barriers to accessing your own data
+- no middle-man barriers to searching your own data
+- no separate database setup (e.g. no "SQL" costs, dependencies, security problems)
+- no loss of access to source code
+
+
+
+
+I have routinely seen it a month+ to get a new employee added to a team's slack channel or jira account, with indefinately intermittent access interruptions that go on indefinately as webs of offices and departments gradually coordinate to fix issues. There is a kind of endemic learned-helplessness and external locus of control that dysfunctional software solutions are 'teaching' users. Too many students learn (and too many employees expect) that controls over and success of basic software is buried in Kafka-esk layers of bureaucracy that takes weeks, months, or years to churn and where 'competence' and 'status' means that you have a gang-post in a gate-keeper role in this tragedy of dysfunction, that security breaches are expected, that you will lose all your data, and that all of this will be ever more expensive and require ever more powerful hardware to do the same things (perhaps a "red-queen effect"). This is not how software tools are supposed to be. This is not how STEM ecosystems are supposed to operate. If it takes 6 months to make and show someone (somewhere in the same building) a single heatmap plot, people react with cynical complacency and embrace the inertia of a shake-down world when nothing works and no one can get anything done and no one should speak it about it or the nail that sticks up gets hammered down (as the Japanese saying sadly goes). This is not right. This is not where the timeline of STEM should be leading institutions. 
+
+
+
+
+
+
+
+
+# Diversity of User Cases
+The stance here is meant to observe and account for a diversity of situations in a diverse world, certainly not to suggest a one-size-fits-all solution, and not to demean various areas and situations. While there are contextual criticisms and questions here related to commercial products, this is not meant to be a rhetorical position against software companies, software markets, or companies who want to pay for software. I am not anti-company, anti-intellectual property, anti-patent, anti-copyright, anti-regulation, anti-private-ownership, anti-investment, anti-market, anti-business, or anything along those lines. Just as there is no 'single software package' for everything every company will ever need to do on any hardware, there should be a variety of solutions covering as many users and use-cases as possible. Students, researchers, libraries, municipalities, on-site healthcare and first responders, journalists, and others, may not always fit into a market of users for subscription services, be they consumer directed services or designed specifically for large corporations who use a particular tech stack for particular operations and staffing. 
+
+
+As of 2025, the current trend is to raise a firewall around students and minors to make it impossible for companies to interact with or store the information of students. How then are students going to train on and learn how to use project-management tools? A. They have no money. B. There is the 'regime uncertainty' risk that it could suddenly become illegal for companies to deal with that set of users, or that there would be an onerous and incoherent set of regulations as with GDPR data storage and permission requirements. Education and other areas often become a tragedy of the commons. A few children of wealthy well-connected parents will have rule-bending access to technology (as in the case of Bill Gates) and everyone else will have learned helplessness: that is not an education plan. 
+
+
+From another approach, if companies do not want to (or would even be legally allowed to) voluntarily pay higher than necessary taxes so that municipalities can then re-route that tax revenue to pay for expensive software subscriptions, then there should be some open-source utilities out there.
 
 
 As another example: 'Service Now' is a wonderful set of tools for managing many processes, if you are, or have the budget and staffing of, an international corporation or a state government, and can employ yet further consultants and engineers to help you to set up and use those services. If you are a third grader, or a single mother, or a forest ranger, or a researcher in Antarctica, or a student, or a small startup, or a normal public library, or a small-town doctor,  this is a complete mismatch:
 - the cost is way out of range,
 - the depth of the service is way beyond what you need,
-If the European Union wanted to track every book-lending event in the entire EU over decades, and could dedicate a department with millions of Euros to spend to do this, then Service Now would be great for helping that to happen and run smoothly. For the users/stakeholders are the focus here, the best highest-quality Service Now software does them no good at all for their treehouse construction, or lemonade stand, or garage startup, or school maker-hackathon workshop, or local project getting the tires out of Mrs. Weatherdale's pond, or a small town hospital with a total staff of three trying to plan with an ambulance driver and a fireman across the valley. 
+If the European Union wanted to track every book-lending event in the entire EU over decades, and could dedicate a department with millions of Euros to spend to do this, then Service Now could be great for helping that to happen and run smoothly (and those data might in turn help the rest of the world and local library systems handedly). For the users/stakeholders are the focus here, the best highest-quality Service Now software does them no good at all for their treehouse construction, or lemonade stand, or garage startup, or school maker-hackathon workshop, or local project getting the tires out of Mrs. Weatherdale's pond, or a small town hospital with a total staff of three trying to plan with an ambulance driver and a fireman across the valley. 
 
 
 
 
-Striking a balance between task/message high level coordination vs. project planning in more detail (which is arguably, in most cases, separate), Uma tries to focus on a scope that is as narrow, modular, and definable as possible.
 
 
-
-
-Uma aims to be a do-one-thing-well tool that should be able to:
-- be set up
-- run on devices
-- have descent security standards
-- allow teams to form
-- allow teams to send messages
-- allow teams to set up shared task-boards
-- help teams to define and align on goals and project areas
-- distribured/decentralized: no central server
-- no subscription service
 
 
 
@@ -694,10 +775,6 @@ Some processes have more or less translated sufficiently (if not so easily) into
 
 
 Turning a paper notepad into a .txt file has worked very well (overall). And in some cases a .csv file and a spreadsheet can go a long way (though there is a bigger story there too). But it has been significantly more difficult to convert the physical process of moving a post-it-note on a shared whiteboard (or pinned note on a workshop cork board) so people can update the progress they are making and see how other team members are doing as well. 
-
-
-
-
 
 
 
@@ -772,6 +849,12 @@ We want to keep the system as simple and modular as possible, but the design nee
 
 
 
+
+
+
+
+
+
 ### Functionality & features
 
 
@@ -817,8 +900,6 @@ We want to keep the system as simple and modular as possible, but the design nee
 - headless OS compatible
 
 
-
-
 ## network-flexible
 - low-bandwidth compatible
 - intermittent bandwidth compatible
@@ -841,42 +922,24 @@ We want to keep the system as simple and modular as possible, but the design nee
 - 'ower is sender' validation/verification
 - replay attack defense
  
+### Memory-Safety & Hidden Bugs
+A lesson that arguably has not been fully learned is that it is not simple to write safe production code, in part because we often fail to see future factors for how code is used, but, aside from that, 
 
 
-Posix CLI software is, if not the only surviving software, among the oldest and the most resilient across platforms and operating systems. 
+Memory-management (often leading to security issues) has been especially challenging. Memory related security issues may be the most commonly discussed unintended side effect of memory management decisions but there are other such as, as described by Martin Kleppmann in "Designing Data-Intensive Applications", garbage-collection itself is a standard interference and network-level-error introducing aspect of networked software.
 
 
-Software not only needs to have a compiler or interpreter for a given hardware/os, but there may be additional dependencies and assumptions.
+See: https://www.amazon.com/Designing-Data-Intensive-Applications-Reliable-Maintainable/dp/1449373321 
 
 
-A lesson that arguably has not been learned is that it is not simple to write safe production code, in part because we often fail to see future factors for how code is used, but, aside from that, basic memory-management (leading to security issues) is not conventionally manageable. 
-
-
-
-
-## Is vs. Is-Not
-
-
-#### Is Not
-There are a number of related functionalities that task management and messaging should be confused with. Uma specifically is not designed to scope-creap into these features:
-- not git
-- not online file storage
-- not cloud file sharing
-- not general file sync tool/protocol
-- not project-documentation and reporting
-- not an office-suite
-- not full project research planning, needs and goals analysis, post-production analysis, etc.
-
-
-#### Is
-Uma aims to be a do-one-thing-well distributed-multipoint-conferencing-unit (d-MCU) for task and message structures (not general data transfer) in the form of a distributed graph-database for project/product planning and management, alignment, and coordinated decisions.
+As much as possible we should try to anticipate future user choices and conditions such as future compilers and the lifespan/lifecycle of libraries and software dependencies. 
 
 
 
 
 
 
-Uma is an experiment. It's not clear if it will work. It's not clear if it is the right modularity. It's not clear how the the strict-ower model will work. It's not clear how user-friendly the interface can be made to be (though there is a lot of flexibility with a browser-api-wrapper). But we should try. Having only one project manager available to students is paltry and inadequate, but it is better than nothing.
+Uma is an experiment. It's not clear if it will work. It's not clear if it is the right modularity. It's not clear how the strict-ower and choice-strict model will work (socially, for productivity, for logistics). It's not clear how user-friendly the interface can be made to be (though there is a lot of flexibility with a browser-api-wrapper). But we should try. Having only one project manager available to students is paltry and inadequate, but it is better than nothing.
 
 
 This has not been extensively tested yet, hopefully it will be. For the local tests that I have been able to do as one person incrementing on the weekends, Uma is working. But surely in various real world situations there will be edge cases and needed-optimizations not yet covered by this early-alpha version.
@@ -920,27 +983,38 @@ Uma is also strictly 'ownership' based, which is something of an experimental de
 #### Neem & Uma
 
 
-Part of my start in Data-Science, AI, and software development was under professor 'Skip' Ellis at CU-Boulder. Professor Ellis was from Xerox Park and had a 'can-do' 'we should try' approach. In the late 1990's and early 2000's he led the 'Neem' research project, which aimed to be a feature-rich team-collaboration assisting tool. The roots of Uma date directly to those 'Neem' years, down to the details of me precociously drilling him with questions about giving Neem a distributed MCU (instead of the default centralized conferencing unit). Neem was an 'AI-Agent' project back during an AI-Winter where the term 'AI' was taboo. Neem was dreamed of being an Agent-Based tool that could help teams with everything from logistics to cultural misunderstandings. In 2025, this probably sounds entirely feasible. In 2000, this was a far-out dream. But while Professor Ellis wanted fancy features such as real-time-video (something that Uma does not aim for) he also stressed the practicality and vast potential of elegant and simple technologies such as ELIZA-type interfaces. And since that time I have also seen many software models, services, and ecosystems turn into vapor-wear or become unusable over time. Some technologies are assets that last a long time, but others that are cheered as immortal sport favorites can suddenly become liabilities.
+Part of my start in Data-Science, AI, and software development was under Professor Clarence 'Skip' Ellis at CU-Boulder. Professor Ellis was from Xerox Park and had a 'can-do' 'we should try' perspective. In the late 1990's and early 2000's he led the 'Neem' research project, which aimed to be a feature-rich team-collaboration assisting tool. The roots of Uma date directly to those 'Neem' years, down to the details of me precociously drilling him with questions about giving Neem a distributed MCU (instead of the default centralized conferencing unit). (Neem was an AI 'Agent' project back during an AI-Winter where the term 'AI' was taboo, so the term 'Agent' was the jargon of the day.) Neem was dreamt of as being an Agent-Based tool that could help teams with everything from project-logistics to cultural misunderstandings. In 2025, this probably sounds entirely feasible. In 2000, this was a far-out dream. But while Professor Ellis wanted fancy features such as real-time-video (something that Uma does not aim for) he also stressed the practicality and vast potential of elegant and simple technologies such as ELIZA-type interfaces. And since that time I have also seen many software models, services, and ecosystems turn into vapor-wear or become unusable over time. Some technologies are assets that last a long time, but others that are cheered as immortal sport favorites can suddenly become liabilities.
 
 
-Uma is, or appears, in some ways minimal and old-fashioned, but that may be a trick of the light. Uma is designed to be robustly maintainable in such a way that it can make use of newer technologies, such as embedding and generative foundation models. For example: To a consumer who only sees the hype-fueled advertisements, a Super-Skip-Dream big-business audio-video-ai-meeting-agent probably sounds easy for a big company to make. But the road map for that is very unclear and implementation would be costly, fragile, and most likely is simply impossible to produce in a rapid and high quality way: in 2035-2045, expensive versions for big companies will probably be (maybe) available. On the other hand, connecting UMA to a local foundation model is much more manageable. On a basic level, directing project data to a locally run model with a new or preset prompt/functionality is very simple (this is a working application that I use
-https://github.com/lineality/query_gguf_cli_rust_llamacpp). The details of making a 'very good' system for specific Agile and task-schedule type analysis is sometimes less simple, but it is a question of how to best use concrete tools that work now, not betting of undefined future technology that might never happen. Version-2 of Uma will aim to have structured-data analysis of task schedule data as a built-in-feature (no gen-ai hallucinations needed): as Prof. Ellis emphasized: existing sound simple technology often works well: Use it. With the super-multi-media-cloud-system above, it is unclear if or how you could start with many what-if hypotheticals. For Uma, you can make working prototypes in minutes (Uma, Query-GGUF, llama-cpp all exist and run: you have everything you need working now) and compare various approaches in a weekend, for effectively no cost all on your project-computer. 
+Uma is, or appears, in various ways to be minimal and old-fashioned, but that may be a trick of the light. Uma is designed to be robustly maintainable in such a way that it can make use of newer technologies, such as vector-embeddings, hybrid-databased (especially structure/unstructured databases) and generative foundation models. 
 
 
+For example: To a consumer who only sees the hype-fueled advertisements, a Super-Skip-Dream big-business audio-video-ai-multi-platoform-meeting-agent that spans across zoom, slack, MS-teams, jira, outlook, sharepoint, google-drive, etc., probably sounds easy for a big company to make. But the road map for that is very unclear and implementation would be costly, fragile, and most likely is simply impossible to produce in a rapid and high quality way (e.g. by the end of 2025). In 2035-2045, expensive and more limited and narrow versions for big companies in a particular ecosystem will probably be (maybe) generally available. On the other hand, connecting UMA to a local foundation model, a vector database, and a structured database, is shovel-ready. On a basic level, pointing a locally run model to query your project-database directory for a team-channel in Uma, including setting up prompts about project data, is already set up and very simple (this is a working application that I made and use: query-gguf
+https://github.com/lineality/query_gguf_cli_rust_llamacpp 
 
 
-Skip had a way, either in a lecture or in the workshop, of saying things very calmly and succinctly that distilled large amounts of analysis and observation.
+Version-2 of Uma aims to have structured-data analysis of task schedule data as a built-in-feature. As Prof. Ellis emphasized: existing sound simple technology often works well; consider using it. 
 
 
-For example, he noted, that people will underestimate the work and resources needed to complete a crucial part of their software project, resulting in the project, not being able to be built. (This was particularly about Multipoint Conferencing Units. So as gradually built up to trying to build new-neem Uma's decentralized (likely even more challenging) MCU, I had no presumption that it would be easy or even possible).
+(note: Georgi Gerganov's excellent llama.cpp api frequently changes so updates to any integration code will be needed: https://github.com/ggml-org/llama.cpp ). 
 
 
+Something that people seem to have great difficulty with, both understandably at the margins and in other stranger ways, is separating known 'in hand' working technologies from 'possible future promise' software. Very often people 'want to believe' and assume a future technology will exist and be reliable. The vast majority of the time the future does not arrive.
+
+
+With the super-multi-media-cloud-AI-system described above, it is unclear if or how you could start with many what-if hypotheticals. With Uma, you can make working prototypes in minutes and compare various approaches in a weekend, for effectively no cost and all on your project-computer. 
+
+
+#### Future Skills
+
+
+Skip had a way, either in a lecture or in the workshop, of saying things very calmly and succinctly that distilled large amounts of analysis and observation. For example, he noted, that people will underestimate the work and resources needed to complete a crucial part of their software project, resulting in the project not being able to be built. (This was particularly about Multipoint Conferencing Units. So as I gradually built up to trying to build, new-neem, Uma's decentralized MCU, I had no presumption that it would be easy or even possible).
 
 
 This he said not with exasperation and not with resigned cynicism, but with the interested and caring recommendation of a parent or grandparent. He saw that it was a fascinating problem that he saw that it was up to the next generation to solve it if they would survive by doing so. All parts of which, the insight, the calmness, the caring clarity, the way of communicating emphasis, are deeply rare and mysterious.
 
 
-This was not just as I first interpreted it, though it was that too (a pattern in  thesis projects). This was the observation of a Xerox Park veteran diagnosing a critical yet invisible challenge for an industry, a republic, a planet of biology, a dusting of planets and stars.
+His observation was not only as I had first interpreted it, though it was that too (a pattern in designing and implementing thesis projects). This was the observation of a Xerox Park veteran diagnosing a critical yet invisible challenge for an industry, a republic, a planet of biology, a dusting of planets and stars.
 
 
 The Dartmouth Internet did not survive, which was a serious loss of infrastructure investment and learning. The Multics world failed at the beginning and never got off the ground, yet the shadow of network planning did not end there. The vast ecosystem of the DOS empire that reigned from ~1974 to ~2014, went from 'the only option for serious people' to a gone-forever still-proprietary enigma of the past. Even chip-makers and firmware have to fake continuity to keep running.
@@ -948,7 +1022,7 @@ The Dartmouth Internet did not survive, which was a serious loss of infrastructu
 - https://en.wikipedia.org/wiki/FreeDOS (see commercial use)
 
 
-The DOS ecosystem both was not fit to be a network and did not survive. This was a significant loss of investment in learning and infrastructure.
+The DOS ecosystem both was not-fit to be a network and did not survive. This was a significant loss of investment in learning and infrastructure.
 
 
 From the long smoldering ashes of Multix, an amazing community built POSIX, shells, and c, the non-proprietary utilities of this software design pattern ecosystem has much better stood the test of time.
@@ -969,12 +1043,43 @@ We should make use of the note of the fact that even preschool children can and 
 
 
 
-### Future-Proofing: Long-Term Data Management & Long-Term Software Management
-It is great to see more project-board solutions, services, and options becoming available (from 'Monday' to 'Tasks' in google drive). Each project is different, and many projects can probably benefit from these services: and that is the goal, better availability and use of project, product, productivity, and coordination tools across society in private sector, public sector, and other areas. 
+## 8. Future-Proofing: Long-Term Data Management & Long-Term 
+Software Management
 
 
-(specific use-cases)
-How many of those will be around in 4,8,16,32,64,+ years? Uma is focused both on the use-cases of students and researchers (including in remote locations) and on the long-term-maintainability needs and extreme resource-constraints of municipalities, schools, libraries, etc. 
+When evaluating the use-case and context of a given software solution, two somewhat intersecting questions are 
+1. Should it be available in 4,8,16,32,64,+ years?
+2. Will it be available in 4,8,16,32,64,+ years? 
+
+
+In many cases software is only needed for one single use (non-production software) or for one short project, in which case it would be superfluous to consider multi-decade maintainability. In other cases it is unthinkable that they could ever not be available. 
+
+
+For example standard POSIX epoch time values must be functional indefinately, so people have been working hard to head-off the 2038-rollover problem of a (bizarrely) signed 32bit integer timestamp designed to crash in 2038. This, even though the problem is more than ten years in the future (which is an almost miraculous rare example of people thinking and planning beyond a disposable short term horizon).
+
+
+See: https://en.wikipedia.org/wiki/Year_2038_problem 
+
+
+Of all the software services offered today, how many are expected or desired to be operating in 2038? (The grey area here would make for an interesting documentary.)
+
+
+With an eye to the future, it is great to see more project-management type solutions, services, and options becoming available (from 'Monday' to 'Tasks' in google drive). Each project is different, and many projects can probably benefit from these services: and that is the goal, better availability and more use of project, product, productivity, and coordination tools across society in the private sector, public sector, and other areas. 
+
+
+How many of these will be around in 4,8,16,32,64,+ years? How many should be? Uma is focused both on the use-cases of students and researchers (including in remote locations) and on the long-term-maintainability needs and extreme resource-constraints of municipalities, schools, libraries, etc. 
+
+
+Potentially, both the most exciting and nervewracking of these tools is task/project management in google-drive. Google could probably provide more-democratically available basic and reliable tools to a very significant number of yet un-served users. And at the same time Google is profoundly fickle about supporting or maintaining their services. There is an entire wiki-pedia category (which is nested) on discontinued google services: https://en.wikipedia.org/wiki/Category:Discontinued_Google_services 
+
+
+That this would both 1. most-likely enable billions of people around the world transforming lives and industries and then 2. disappear entirely and without warning and without any easy replacement within a decade is nervewracking. As long as Google provides the service it makes no sense for competitors to make a destined-to-be-worse and more expensive alternative. And even after Google abandons it, the fact that the service could suddenly come back to life is a Sword of Damocles over any company that is thinking about investing in project management solutions (as tempting as the now unserved and expectant potential customer base may appear).
+
+
+Again, I am not anti-Google in any way. I sincerely weigh that they are a good-faith company and have been very responsible and helpful to society (not all companies are so). I do not think Google should (or coherently could) be either compelled to support or to not support any given tool or platform (even though not being fickle about their own wearable platform does seem like common sense for their own self-interest). 
+
+
+My aim here is to point out how this type of basic utility (task/project/product management) is a perhaps especially sticky-wicket trickly-pickle for software-design (it is not as obviously low level and universal as a posix-shell or a c-89 compiler, and not as obviously high-level-proprietary as industry-specific corporate finance software). It is as popular a root-canal, yet may be as important as public-santitation. There is no short-term win, and the long term necessity is sufficiently outside the popular attention-span as to make any advocate a popularly scapegoated pariah. 
 
 
 
@@ -1025,14 +1130,8 @@ Administration and productivity tools Agile Agile-Kahneman-Tversky-Decision best
 
 
 
-
-
-
-
-
-
 ## Early Development
-Uma is, as of 2025, still in early-development. The ideals for how it should be built are more exemplified by FF (its file fantastic!) and the Lines Editor which use modules and new technologies developed in-house after Uma was started, and those modules and better designs are then used for Uma. 
+Uma is, as of 2025, still in early-development. The ideals for how it should be built are more exemplified by FF (it's file fantastic!) and the Lines Editor which use modules and new technologies developed in-house after Uma was started, and those modules and better designs are then used for Uma. 
 
 
 So far Uma has been largely an experiment to see what is possible. 
@@ -1049,38 +1148,26 @@ Hopefully this release of Uma is a viable, usable, MVP, and not merely an abstra
 
 
 
-
-
-## Defining Project-Data
-
-
-While the terms "Symbolic" and "Subsymbolic" sound confusing and esoteric, the question of what kinds of project data we should create and use and how is a very concrete basic design question. In the problem space of projects and definitions, what types of analysis should we try to undertake?
-
-
-The 'mechanism' of subsymbolic learning is, arguably, very simple. See: a simple single 'perceptron.'
-
-
-But the overall systems around this quickly become much less simple, and extend beyond our understanding, while still at their core being simple.
-
-
-The 'simple' insights such those of: 
-- George Bool (binary logic)
-- A.M.Turing (turing completeness)
-- Walter Pits ('sub-symbolic' 'artificial' 'neural' network nodes)
-
-
-Are trivial to understand in their simplest form as a module:
-- 0 or 1
-- a linear ribbon of 0 or 1
-- input: signal, a 0-1 (fire or not output) activation-function
-
-
-But the world of functionality that these simple models open up is not possible to fully imagine or easy to engineer correctly.
+#### Suite:
+The overall goal is for Uma to be one of a set of inter-operable cli-compatible tules, and modules.
+- Uma
+- File-Manager/Explorer: FF
+- Lines Editor: text/hex editor
+- rows and columns/ csv-DB: dashboarding, reporting
+- un-named: distributed data-science and IoT work
+- un-named: raw-signal UDP
+- GET-TUI: cli-compatible TUI web-pages
+- etc.
 
 
 
 
-## Neem II:
+## 9. Defining Project-Data
+
+
+
+
+### Neem II:
 
 
 How should data science connect with project management? 
@@ -1106,22 +1193,10 @@ While this is probably at least indirectly outside of the scope of Uma, how coul
 - iteratively using feedback in all areas to fine tune or overhaul the next plan before moving ahead
 
 
-
-
 But it is likely that even long time users will need to be nudged into basic processes such as getting feedback from users/stakeholders.
 
 
-
-
 The design of the system sets up how accessible and how structured these data are for the users of the system to then put to their own analysis and uses. 
-
-
-Parts of Uma:
-1. This intro
-2. The Code
-3. Documentation (not edited for easy reading...yet)
-
-
 
 
 For more high-level simple-language walkthrough of how the distributed sync network works, see:
@@ -1132,39 +1207,15 @@ For more high-level simple-language walkthrough of how the distributed sync netw
 
 
 
-## More Details on a 1960s Uma & Agile Timeline
+## 10. More Details on a 1960s Uma & Agile Timeline
 
 
-Could we have had basic collaboration and productivity tools developed since the 1960s or 1970's? That is a fascinatingly not-simple question. Technologically, I think we could have and should have at least tried. But the 'soft' concepts of agile project management, network security, and production software standards, that we presume today (and are still evolving today) were not mature in the 1960's. But how about a 1940's Toyota Board? Hmm... It is difficult to say no. 
-
-
-See: A people's history of computing, about the pre-internet of the 'Dartmouth Timesharing' System. 
-https://en.wikipedia.org/wiki/Dartmouth_Time-Sharing_System
-https://timereshared.com/ctss-dot-shell-email-chat/ 
-https://timereshared.com/ctss/ 
-
-
-In the 1960's there were at least MIT's timesharing, Dartmouth's timesharing which was a kind of early-internet in various ways, and GE may have had an internal timesharing with, we may speculate, some project management systems.
-
-
-Many industries and areas went into a tailspin from 1971. Maybe there were precursor systems that existed that did not make it through the tumultuous years of changing software and hardware.
-
-
-
-
-Project Management, Coordinated Decisions, and Systema and definition behavior studies have not been enormously popular. And Daniel Kanaman himself reports, communication and coordination (his own work on decision making being more or less persecuted throughout the 70's, 80's, 90's until he won a nobel prize for it) was the antithesis du jour of computer science in the 1970's, and Tomoyako's report in 1990 shows that a lack of communication, coordination, project teamwork and project/product management skills were a/the critical bottleneck and missing skill-set in computer science professionally and in computer science education. . 
-Aside from being astonishingly bare, the wikipedia page on Agile project management has no cited references before 2020; mentioning 2001 as the agile manifest publication date https://en.wikipedia.org/wiki/Agile_management . Needless to say this is after the 60's 70's 80's and 90's, and is consistent with project management continuing to be not-prominant into the 2020's. Atlassian (founded (in Australia) in 2002) did not (according to wikipedia) branch into agile support until 2012). 
-
-
-Considering the extremely rapid evolution of software from ~1950-1970, the evolution from 1970-2020 is strikingly meandering, retrograde, and plodding. 
-
-
-
-
+Question: When should or could we have had basic collaboration and productivity tools developed, for example since the 1960s? 
 
 
 ### Question: Was such a tool available in the 1960s? (Could such a tool have been?)
-Not that I know of, but there are a number of interesting nuances in this question. 
+
+
 We need to make sure we do not put time-travel into this question.
 
 
@@ -1191,37 +1242,42 @@ We need to make sure we do not put time-travel into this question.
 
 
 
-We cannot expect overt-time travel. We cannot expect that people in the past used
+That is a fascinatingly not-simple question. Technologically, I think we could have and should have at least tried. But the 'soft' concepts of agile project management, network security, and production software standards, that we presume today (and are still evolving today) were not mature in the 1960's. But how about a 1940's Toyota Board? Hmm... It is difficult to say no. 
+
+
+In the 1960's there were (I think) several timesharing 'mini-internet' networks (where a mainframe would be accessed by many terminals). MIT's timesharing, Dartmouth's timesharing which was a kind of early-internet in various ways, and GE may have had an internal timesharing with, we may speculate, some project management systems.
+
+
+We cannot expect overt-time travel where people in the past used
 processes, standards, or technical specifications that did not exist at the time.
 
 
-But we can ask if there was a well known planning-coordination utility for operating systems at the time, and for project management at the time, such as there were utilities for (forms of) "email" and "instant messaging". As far as I know the answer is no, but some of the 'early/pre' internet 'time sharing' systems existed in private companies such as General Electric (GE), who may have had their own internal tool not widely publicly known. 
+But we can ask if there was a well known planning-coordination utility for operating systems at the time, and for project management at the time, such as there were utilities for (forms of) "email" and "instant messaging". As far as I know the answer is no, but some of the 'early/pre' internet 'time sharing' systems existed in private companies such as General Electric (GE), who may have had their own internal tool not widely publicly known. One would think GE likely had some kind of project administration tools, and with Kanband boards being decades old at the time, it is difficult not to push our present-day concepts back in time to force a "steam-engine-time" imperative onto them.
 
 
+"A People's History of Computing in the United States" by Joy Lisi Rankin is an excellent book about this often unmentioned chapter in the history of both computer science and internet-type networks: 
+- https://www.amazon.com/Peoples-History-Computing-United-States/dp/B07HHDFVHM/ 
+- https://en.wikipedia.org/wiki/Dartmouth_Time-Sharing_System
+- https://timereshared.com/ctss-dot-shell-email-chat/ 
+- https://timereshared.com/ctss/ 
 
 
+Many industries and areas went into a tailspin from 1971. Maybe there were precursor systems that existed that did not make it through the tumultuous years of changing software and hardware.
 
 
-### Question: Was such a tool available in the early 2020's?
-Answer: Not that I know of.
-- no cli Instant messenger
-- no cli kanban-board
-- no project-areas planning collaboration software
-- no distributed-MCU platform
-- no OTP-network layer, 
-etc.
+While it is almost hard to believe that there was not some kind of kanban-board-chat utility in the 1960s, one reason why it might have been unlikely that a project-management, project-coordination, decision-making, software-engineer-collaboration tool would have been created and used in the 1960s is that these were notably unpopular topics at the time, where, as I understand the timeline, long persistence by researchers and advocates has very slowly over the decades built up our current day still somewhat non-mainstream appreciation for the importance of these. 
 
 
-It is understandable, if disappointing, that team-coordination was not a priority in the 1960s. 
+(System and definition behavior studies, and Coordinated Decisions in Network Processes, are my own research areas, so those were not available in the 1960's.) 
 
 
-What is more frustrating is how slow progress has been (and how few of the lessons that (self-referencially) should have been used to project-plan the 1990's World Wide Web were not heeded). 
+Daniel Kanaman himself (in "Thinking Fast and Slow") recounts that in the 1970's communication and coordination was strongly considered to not be part of software project management (catastrophically). And his own work on decision making in general was more or less persecuted throughout the 70's, 80's, 90's until he won a nobel prize for it. Tomoyako's report in 1991 shows that a lack of communication, coordination, project teamwork and project/product management skills were the critical bottleneck and missing skill-set in computer science professionally and in computer science education (perhaps this helped to set a foundation for Agile). Aside from being astonishingly bare, the wikipedia page on Agile project management has no cited references before 2020; mentioning 2001 as the agile manifest publication date https://en.wikipedia.org/wiki/Agile_management . Needless to say this is after the 60's 70's 80's and 90's, and is consistent with project management continuing to be not-prominant into the 2020's. Atlassian (founded (in Australia) in 2002) did not (according to wikipedia) branch into agile support until 2012). 
 
 
-The overall trend is that it is taking time for society to develop concepts of general STEM and of project and product management, coordinated decisions etc. 
+Considering the extremely rapid evolution of software from ~1950-1970, it is a puzzle how the evolution from 1970-2020 is so strikingly meandering, retrograde, and plodding. 
 
 
-As a note, while it can be difficult to remember past times that are different from today: in 2025 most tech workers were very family with Jira-Agile and Deep Learning AI (machine learning), but both ~launched into public awareness about a decade before, around 2012 (Deep Learning, though long in R&D, with Image-Net, and for Agile (also long in R&D gestation) Atlasian-Agile-Jira emerged in 2012 (before that Jira was a bug-ticketing system, since 2002). On a Geologic time scale this probably is not so slow, 
+The overall trend is that it is taking time for society to develop concepts of general STEM and of project and product management, coordinated decisions etc. It is understandable, if disappointing, that team-coordination was not a priority in the 1960s. What is more frustrating is how slow progress has been (and how few of the lessons that (self-referencially) should have been used to project-plan the 1990's World Wide Web were not heeded). 
 
 
 
@@ -1240,7 +1296,7 @@ We tend to be slow and resistant to becoming literate in new practices, however 
 
 
 
-## Utility Case study: vi/vim
+## 11. Utility Case study: ex/vi/vim
 
 
 As another kind of case-study vi/vim is a long-lasting application (sort of).
@@ -1260,7 +1316,7 @@ A. Use-Availability and basic maintainability are probably central, these appear
 B. 'Open Source'/Available Source took many decades, and it is still not clear if the original source code was lost. There are a few old websites claiming to have download links...which is sketchy.
 
 
-C. Security: For me, one of the primary parts of the story of vim/vi/ex that has me most puzzled is something that I consider to be pertinent to long term software maintainability. I use Fedora linux. As software updates come in, including security updates, including redhat, CVE, and other known security vulnerability patches, I look over what the updates are. I have been puzzled over the seemingly endless procession of (reported and fixed, so not including unreported or unfixed) security vulnerabilities in Vim including "Vim-Minimal" which has supposedly been feature-frozen since 1976 (Note: first dates for ex-vi vary between 1976 and 1978). How are there continually so many security problems with an extremely minimal utility that had has top-people working on it for generations, for long than I have been alive?
+C. Security: For me, one of the primary parts of the story of vim/vi/ex that has me most puzzled is something that I consider to be pertinent to long term software maintainability. As I monitor new software updates that come in, including security updates including redhat, CVE, and other known security and vulnerability patches, I have for years been puzzled over the seemingly endless procession of (reported and fixed, so not including unreported or unfixed) security vulnerabilities in Vim including "Vim-Minimal" which has supposedly been feature-frozen since 1978 (Note: first dates for ex-vi vary between 1976 and 1978). How are there continually so many security problems with an extremely minimal utility that has had top-people working on it for generations, for longer than I have been alive?
 
 
 https://www.cve.org/CVERecord/SearchResults?query=vim
@@ -1269,7 +1325,7 @@ e.g. https://linuxsecurity.com/news/security-vulnerabilities/vim-code-execution-
 
 
 
-One of the recent security issues, including vim-minimal, was with 'Wayland-Integration.' Why does a 1976 terminal application have a GUI-Wayland (for graphics, not terminal-text) integration security vulnerability? 
+One of the recent security issues, including vim-minimal, was with 'Wayland-Integration.' Why does a 1978 terminal application have a GUI-Wayland (for graphics, not terminal-text) integration security vulnerability? 
 
 
 This raises many topics about how a core utility should be available and maintained.
@@ -1299,10 +1355,10 @@ https://openhub.net/p/vi
 
 
 
-## Timeline:
+## Uma Timeline:
 - Definition Behavior Studies Started 1997
 - Distributed Contracts Started 1999
-- Neem Meeting-Team-Support Started 2001
+- Neem Meeting-Team-Support 2002
 - Needs & Goals Evaluation System 2008
 - Categories of Types of Systems 2010
 - Disaster Relief Radio Networks 2011.3 (Dai-shinsai)
@@ -1313,7 +1369,7 @@ https://openhub.net/p/vi
 - CSV-DB 2020
 - MAST - Stateless API Frameworks 2022
 - Coordinated Decisions 2023
-- POC-Uma: first proof of concept for Uma, d-MCU 2024
+- POC-Uma: first proof of concept for Uma with distributed sync, 9-12 2024
 - Clearsigned & .gpgtoml 2025
 - File Fantastic (in-house TUI file explorer) 2025
 - Query-GGUF 2025
@@ -1322,26 +1378,19 @@ https://openhub.net/p/vi
 - 'Power of Ten' Updated for System Programming 2025
 - Source-It 2025
 - Padnet-Uma 2025
+- Alpha Version 1, Uma 12.2025
 
 
 
 
-
-
-
-
-## Other Links
+## 12. Other Links & Notes
 
 
 - https://web.eecs.umich.edu/~imarkov/10rules.pdf: NASA: Rules for Developing Safety-Critical Code", Gerard J. Holzmann
-
-
 - https://djaa.com/kanban-board-examples/ 
 - https://github.com/Cube9999/vi 
 - https://openhub.net/p/vi 
 - https://pikuma.com/blog/origins-of-vim-text-editor
-
-
 - https://openresearch.okstate.edu/server/api/core/bitstreams/9297c881-b145-4100-b574-b058a470464e/content 
 - https://ex-vi.sourceforge.net/ 
 - https://www.gnu.org/software/ed/manual/ed_manual.html 
@@ -1355,9 +1404,6 @@ https://openhub.net/p/vi
 
 
 
-#### Note:
+### Notes 
 - According to the wikipedia on Rust, Rust creator Graydon Hoare '...described the language as "technology from the past come to save the future..."' 
-
-
-#### Note:
-- Uma, うま, is horse.
+- Uma, うま, is the horse. 44444

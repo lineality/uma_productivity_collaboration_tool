@@ -2348,7 +2348,7 @@ fn read_one_collaborator_addressbook_toml(
             .map_err(|e| {
                 let error_msg = format!("Failed to execute GPG decrypt for collaborator '{}': {}", collaborator_name, e);
                 eprintln!("\nERROR: {}", error_msg);
-                eprintln!("Press Enter to continue...");
+                eprintln!("...Press Enter to continue...");
                 let _ = std::io::stdin().read_line(&mut String::new());
                 ThisProjectError::GpgError(error_msg)
             })?;
@@ -2357,7 +2357,7 @@ fn read_one_collaborator_addressbook_toml(
             let stderr = String::from_utf8_lossy(&output.stderr);
             let error_msg = format!("GPG decryption failed for collaborator '{}': {}", collaborator_name, stderr);
             eprintln!("\nERROR: {}", error_msg);
-            eprintln!("Press Enter to continue...");
+            eprintln!("...Press Enter to continue...");
             let _ = std::io::stdin().read_line(&mut String::new());
             return Err(ThisProjectError::GpgError(error_msg));
         }
@@ -3184,7 +3184,7 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
             // Neither exists, skip this directory
             #[cfg(debug_assertions)]
             debug_log!(
-                "Skipping directory (no node.toml or node.gpgtoml): {:?}",
+                "CAPITCCV Skipping directory (no node.toml or node.gpgtoml): {:?}",
                 &absolute_addressbook_directory_pathbuf
             );
             return Err(ThisProjectError::from(format!(
@@ -5666,6 +5666,437 @@ enum InputMode {
     TaskCommand,
 }
 
+/// Extracts the relative path portion that follows the known prefix segments
+/// "/project_graph_data/team_channels/" from a Path input.
+///
+/// # Project Context
+/// This function is designed to isolate the dynamic/variable portion of paths
+/// in the project graph system, separating the fixed infrastructure path prefix
+/// from the actual content path. This enables path normalization across different
+/// deployment environments while maintaining consistent relative references within
+/// the team channels structure.
+///
+/// # Arguments
+/// * `full_input_path` - The complete path that may contain the known prefix segments
+///
+/// # Returns
+/// * `Ok(PathBuf)` - The relative path portion after the known segments
+/// * `Err(&'static str)` - Error message if prefix not found or path invalid
+///
+/// # Example
+/// Input: Path("/home/user/project_graph_data/team_channels/engineering/docs/file.txt")
+/// Output: Ok("engineering/docs/file.txt")
+///
+/// # Error Handling
+/// Returns a descriptive error string rather than panicking. Caller must handle
+/// the error appropriately based on context (e.g., log and continue, use default,
+/// or propagate to higher level handler).
+pub fn extract_relative_node_path_after_known_segments(full_input_path: &Path) -> Result<PathBuf, &'static str> {
+    /*
+    e.g.
+    use std::path::PathBuf;
+
+    fn process_team_channel_file(absolute_file_path: &Path) {
+        // Using reference to Path
+        match extract_path_after_known_segments(absolute_file_path) {
+            Ok(team_relative_path) => {
+                // Use the relative path for further processing
+                // Log success or continue with operation
+            }
+            Err(extraction_error) => {
+                // Handle error gracefully - log and continue
+                // Don't halt the program
+            }
+        }
+    }
+
+    fn process_owned_pathbuf(owned_file_path: PathBuf) {
+        // Using owned PathBuf
+        match extract_path_after_known_segments_owned(owned_file_path) {
+            Ok(team_relative_path) => {
+                // Process the relative path
+            }
+            Err(extraction_error) => {
+                // Handle error gracefully
+            }
+        }
+    }
+    */
+    // Production catch: empty or invalid input
+    // Path can be empty via Path::new("")
+    if full_input_path.as_os_str().is_empty() {
+        return Err("EPAKS error: empty path input");
+    }
+
+    // Debug assertion: verify non-empty during development
+    #[cfg(all(debug_assertions, not(test)))]
+    {
+        if full_input_path.as_os_str().is_empty() {
+            eprintln!("DEBUG: empty path passed to extract_relative_node_path_after_known_segments");
+        }
+    }
+
+    // Define the known prefix segments we're searching for
+    // These represent the fixed infrastructure path in the project
+    const SEGMENT_1: &str = "project_graph_data";
+    const SEGMENT_2: &str = "team_channels";
+
+    // Extract all path components for analysis
+    let all_path_components: Vec<_> = full_input_path.components().collect();
+
+    // Production catch: path too short to contain both segments
+    if all_path_components.len() < 2 {
+        return Err("EPAKS error: path too short");
+    }
+
+    // Search for the position where both segments appear consecutively
+    // We iterate through components looking for the sequential pattern
+    let mut found_segment_end_position: Option<usize> = None;
+
+    // Upper bound: avoid checking positions where segment_2 would be out of bounds
+    let maximum_check_index = if all_path_components.len() > 0 {
+        all_path_components.len() - 1
+    } else {
+        0
+    };
+
+    // Iterate with explicit upper bound for safety
+    for current_index in 0..maximum_check_index {
+        // Safely check if we have room for both segments
+        if current_index + 1 >= all_path_components.len() {
+            break;
+        }
+
+        // Extract component as OsStr and attempt conversion to &str
+        // We use to_str() which returns Option<&str>
+        let first_component_osstr = all_path_components[current_index].as_os_str();
+        let second_component_osstr = all_path_components[current_index + 1].as_os_str();
+
+        // Handle potential non-UTF8 paths gracefully
+        // In production, invalid UTF-8 in paths should not halt processing
+        let first_component_str = match first_component_osstr.to_str() {
+            Some(s) => s,
+            None => continue, // Skip this position if not valid UTF-8
+        };
+
+        let second_component_str = match second_component_osstr.to_str() {
+            Some(s) => s,
+            None => continue, // Skip this position if not valid UTF-8
+        };
+
+        // Check if both segments match our target pattern
+        if first_component_str == SEGMENT_1 && second_component_str == SEGMENT_2 {
+            found_segment_end_position = Some(current_index + 2); // Position after both segments
+            break;
+        }
+    }
+
+    // Production catch: segments not found in path
+    let remainder_start_position = match found_segment_end_position {
+        Some(pos) => pos,
+        None => return Err("EPAKS error: prefix segments not found"),
+    };
+
+    // Production catch: no path remains after the prefix
+    if remainder_start_position >= all_path_components.len() {
+        return Err("EPAKS error: no path after prefix");
+    }
+
+    // Build the relative path from remaining components
+    // Pre-allocate with reasonable capacity to avoid reallocation
+    let mut extracted_relative_path = PathBuf::with_capacity(256);
+
+    // Upper bounded iteration over remaining components
+    let remaining_component_count = all_path_components.len() - remainder_start_position;
+    for offset_index in 0..remaining_component_count {
+        let absolute_index = remainder_start_position + offset_index;
+
+        // Safety check: ensure we don't exceed bounds
+        if absolute_index >= all_path_components.len() {
+            break;
+        }
+
+        extracted_relative_path.push(all_path_components[absolute_index]);
+    }
+
+    // Production catch: resulting path is empty (shouldn't happen but defensive)
+    if extracted_relative_path.as_os_str().is_empty() {
+        return Err("EPAKS error: result path empty");
+    }
+
+    Ok(extracted_relative_path)
+}
+
+/// Alternative implementation that returns the prefix path
+/// (everything up to and including the known segments)
+///
+/// # Project Context
+/// Extracts the base/root portion of paths in the project graph system.
+/// Useful for reconstructing full paths from relative references or
+/// validating path structure consistency.
+///
+/// # Arguments
+/// * `full_input_path` - The complete path that may contain the known prefix segments
+///
+/// # Returns
+/// * `Ok(PathBuf)` - The prefix path up to and including the known segments
+/// * `Err(&'static str)` - Error message if prefix not found or path invalid
+pub fn extract_prefix_including_known_segments(full_input_path: &Path) -> Result<PathBuf, &'static str> {
+    // Production catch: empty input
+    if full_input_path.as_os_str().is_empty() {
+        return Err("EPIKS error: empty path input");
+    }
+
+    const SEGMENT_1: &str = "project_graph_data";
+    const SEGMENT_2: &str = "team_channels";
+
+    // Extract all path components for analysis
+    let all_path_components: Vec<_> = full_input_path.components().collect();
+
+    // Production catch: insufficient components
+    if all_path_components.len() < 2 {
+        return Err("EPIKS error: path too short");
+    }
+
+    let mut found_prefix_end_position: Option<usize> = None;
+    let maximum_check_index = if all_path_components.len() > 0 {
+        all_path_components.len() - 1
+    } else {
+        0
+    };
+
+    // Find the end position (inclusive of segment_2)
+    for current_index in 0..maximum_check_index {
+        if current_index + 1 >= all_path_components.len() {
+            break;
+        }
+
+        let first_component_str = match all_path_components[current_index].as_os_str().to_str() {
+            Some(s) => s,
+            None => continue,
+        };
+
+        let second_component_str = match all_path_components[current_index + 1].as_os_str().to_str() {
+            Some(s) => s,
+            None => continue,
+        };
+
+        if first_component_str == SEGMENT_1 && second_component_str == SEGMENT_2 {
+            found_prefix_end_position = Some(current_index + 2); // Include both segments
+            break;
+        }
+    }
+
+    let prefix_end_position = match found_prefix_end_position {
+        Some(pos) => pos,
+        None => return Err("EPIKS error: prefix segments not found"),
+    };
+
+    // Build prefix path
+    let mut extracted_prefix_path = PathBuf::with_capacity(256);
+
+    // Upper bounded iteration
+    for component_index in 0..prefix_end_position {
+        if component_index >= all_path_components.len() {
+            break;
+        }
+        extracted_prefix_path.push(all_path_components[component_index]);
+    }
+
+    // Production catch: empty result
+    if extracted_prefix_path.as_os_str().is_empty() {
+        return Err("EPIKS error: result prefix empty");
+    }
+
+    Ok(extracted_prefix_path)
+}
+
+/// Convenience wrapper that accepts PathBuf by value
+/// and delegates to the main implementation
+///
+/// # Project Context
+/// Provides ergonomic API when caller owns a PathBuf.
+/// This avoids forcing caller to borrow explicitly.
+///
+/// # Arguments
+/// * `owned_path` - The complete PathBuf that may contain the known prefix segments
+///
+/// # Returns
+/// * `Ok(PathBuf)` - The relative path portion after the known segments
+/// * `Err(&'static str)` - Error message if prefix not found or path invalid
+pub fn extract_path_after_known_segments_owned(owned_path: PathBuf) -> Result<PathBuf, &'static str> {
+    extract_relative_node_path_after_known_segments(&owned_path)
+}
+
+/// Convenience wrapper for extracting prefix from owned PathBuf
+///
+/// # Project Context
+/// Provides ergonomic API when caller owns a PathBuf.
+///
+/// # Arguments
+/// * `owned_path` - The complete PathBuf that may contain the known prefix segments
+///
+/// # Returns
+/// * `Ok(PathBuf)` - The prefix path up to and including the known segments
+/// * `Err(&'static str)` - Error message if prefix not found or path invalid
+pub fn extract_prefix_including_known_segments_owned(owned_path: PathBuf) -> Result<PathBuf, &'static str> {
+    extract_prefix_including_known_segments(&owned_path)
+}
+
+#[cfg(test)]
+mod nodebase_tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_path_after_segments_unix_style() {
+        let input_test_path = PathBuf::from("/home/user/project_graph_data/team_channels/engineering/docs/file.txt");
+        let extraction_result = extract_relative_node_path_after_known_segments(&input_test_path);
+
+        assert!(extraction_result.is_ok(), "Should successfully extract path");
+
+        let extracted_relative = extraction_result.unwrap();
+        let expected_relative = PathBuf::from("engineering/docs/file.txt");
+
+        assert_eq!(extracted_relative, expected_relative);
+    }
+
+    // ?
+    // #[test]
+    // fn test_extract_path_after_segments_windows_style() {
+    //     let input_test_path = PathBuf::from("C:\\Users\\project_graph_data\\team_channels\\marketing\\report.doc");
+    //     let extraction_result = extract_relative_node_path_after_known_segments(&input_test_path);
+
+    //     assert!(extraction_result.is_ok(), "Should successfully extract path");
+
+    //     let extracted_relative = extraction_result.unwrap();
+    //     // PathBuf will normalize to platform conventions
+    //     let expected_relative = PathBuf::from("marketing/report.doc");
+
+    //     assert_eq!(extracted_relative, expected_relative);
+    // }
+
+    #[test]
+    fn test_extract_path_segments_not_found() {
+        let input_test_path = PathBuf::from("/home/user/other_folder/file.txt");
+        let extraction_result = extract_relative_node_path_after_known_segments(&input_test_path);
+
+        assert!(extraction_result.is_err(), "Should return error when segments not found");
+
+        let error_message = extraction_result.unwrap_err();
+        assert_eq!(error_message, "EPAKS error: prefix segments not found");
+    }
+
+    #[test]
+    fn test_extract_path_empty_input() {
+        let input_test_path = PathBuf::from("");
+        let extraction_result = extract_relative_node_path_after_known_segments(&input_test_path);
+
+        assert!(extraction_result.is_err(), "Should return error for empty input");
+
+        let error_message = extraction_result.unwrap_err();
+        assert_eq!(error_message, "EPAKS error: empty path input");
+    }
+
+    #[test]
+    fn test_extract_path_no_remaining_path() {
+        let input_test_path = PathBuf::from("/home/project_graph_data/team_channels");
+        let extraction_result = extract_relative_node_path_after_known_segments(&input_test_path);
+
+        assert!(extraction_result.is_err(), "Should return error when no path after prefix");
+
+        let error_message = extraction_result.unwrap_err();
+        assert_eq!(error_message, "EPAKS error: no path after prefix");
+    }
+
+    #[test]
+    fn test_extract_path_single_segment_after() {
+        let input_test_path = PathBuf::from("/project_graph_data/team_channels/single");
+        let extraction_result = extract_relative_node_path_after_known_segments(&input_test_path);
+
+        assert!(extraction_result.is_ok(), "Should handle single segment after prefix");
+
+        let extracted_relative = extraction_result.unwrap();
+        let expected_relative = PathBuf::from("single");
+
+        assert_eq!(extracted_relative, expected_relative);
+    }
+
+    #[test]
+    fn test_extract_prefix_including_segments() {
+        let input_test_path = PathBuf::from("/home/user/project_graph_data/team_channels/engineering/docs/file.txt");
+        let extraction_result = extract_prefix_including_known_segments(&input_test_path);
+
+        assert!(extraction_result.is_ok(), "Should successfully extract prefix");
+
+        let extracted_prefix = extraction_result.unwrap();
+        let expected_prefix = PathBuf::from("/home/user/project_graph_data/team_channels");
+
+        assert_eq!(extracted_prefix, expected_prefix);
+    }
+
+    #[test]
+    fn test_roundtrip_split_and_join() {
+        let input_test_path = PathBuf::from("/var/data/project_graph_data/team_channels/reports/2025/q1.pdf");
+
+        let prefix_extraction_result = extract_prefix_including_known_segments(&input_test_path);
+        let suffix_extraction_result = extract_relative_node_path_after_known_segments(&input_test_path);
+
+        assert!(prefix_extraction_result.is_ok() && suffix_extraction_result.is_ok(),
+                "Both extractions should succeed");
+
+        let mut reconstructed_full_path = prefix_extraction_result.unwrap();
+        reconstructed_full_path.push(suffix_extraction_result.unwrap());
+
+        assert_eq!(reconstructed_full_path, input_test_path,
+                   "Reconstructed path should match original");
+    }
+
+    #[test]
+    fn test_owned_pathbuf_wrapper() {
+        let owned_test_path = PathBuf::from("/home/project_graph_data/team_channels/test.txt");
+        let extraction_result = extract_path_after_known_segments_owned(owned_test_path);
+
+        assert!(extraction_result.is_ok(), "Owned wrapper should work");
+
+        let extracted_relative = extraction_result.unwrap();
+        let expected_relative = PathBuf::from("test.txt");
+
+        assert_eq!(extracted_relative, expected_relative);
+    }
+
+    #[test]
+    fn test_deep_nested_path() {
+        let input_test_path = PathBuf::from(
+            "/root/project_graph_data/team_channels/dept/subdept/team/project/year/month/file.dat"
+        );
+        let extraction_result = extract_relative_node_path_after_known_segments(&input_test_path);
+
+        assert!(extraction_result.is_ok(), "Should handle deeply nested paths");
+
+        let extracted_relative = extraction_result.unwrap();
+        let expected_relative = PathBuf::from("dept/subdept/team/project/year/month/file.dat");
+
+        assert_eq!(extracted_relative, expected_relative);
+    }
+
+    #[test]
+    fn test_multiple_occurrences_uses_first() {
+        // Edge case: known segments appear twice in path
+        let input_test_path = PathBuf::from(
+            "/project_graph_data/team_channels/backup/project_graph_data/team_channels/file.txt"
+        );
+        let extraction_result = extract_relative_node_path_after_known_segments(&input_test_path);
+
+        assert!(extraction_result.is_ok(), "Should handle multiple occurrences");
+
+        let extracted_relative = extraction_result.unwrap();
+        // Should use first occurrence
+        let expected_relative = PathBuf::from("backup/project_graph_data/team_channels/file.txt");
+
+        assert_eq!(extracted_relative, expected_relative);
+    }
+}
+
 struct App {
     tui_directory_list: Vec<String>, // For directories in the current path
     tui_file_list: Vec<String>,       // For files in the current path
@@ -6521,7 +6952,7 @@ impl App {
         }
 
         // Pause before returning to browser
-        println!("\nPress ENTER to continue...");
+        println!("\n...Press ENTER to continue...");
         let mut _dummy = String::new();
         io::stdin().read_line(&mut _dummy)?;
 
@@ -7768,10 +8199,10 @@ fn write_red_green_hotkey(hotkey_1: &str, hotkey_2: &str, description: &str) -> 
 /// ```
 fn write_formatted_messagepost_legend_to_tui() -> Result<(),Error> {
     // File operations group
-        write_red_hotkey("Q", "uit ")?;
+        write_red_hotkey("q", "uit ")?;
 
     // // Mode operations group
-    write_red_hotkey("B", "ack|" )?;
+    write_red_hotkey("b", "ack|" )?;
     // write_red_hotkey("T", "ask ")?;
     // // Three Colour
     // write_red_green_hotkey("s", "a", "v ")?;
@@ -9105,8 +9536,8 @@ impl CoreNode {
         use_padnet: Option<bool>,
     ) -> Result<CoreNode, ThisProjectError> {
 
-        debug_log!("Starting CoreNode:new");
-        debug_log!("implCoreNode-new: Directory path received: {:?}", directory_path);
+        debug_log!("Starting impl CoreNode:new");
+        debug_log!("impl CoreNode-new: Directory path received: {:?}", directory_path);
         debug_log!("implCoreNode-new: Checking if directory exists: {}", directory_path.exists());
         debug_log!("implCoreNode-new: Absolute path: {:?}", directory_path.canonicalize().unwrap_or(directory_path.clone()));
 
@@ -9193,7 +9624,7 @@ impl CoreNode {
             message_post_end_date_utc_posix,
             use_padnet,
         };
-        debug_log!("Successfully created CoreNode instance");
+        debug_log!("implCoreNode Successfully created CoreNode instance");
 
         Ok(node)
     }
@@ -9210,25 +9641,46 @@ impl CoreNode {
     ///  - TOML serialization
     ///  - Directory creation
     ///  - File writing
-    fn save_node_to_clearsigned_file(&self) -> Result<(), io::Error> {
+    fn save_node_to_clearsigned_file(
+        &self,
+        node_specific_path: &PathBuf, //  needs full path
+    ) -> Result<(), io::Error> {
         // Debug logging for initial state
         debug_log!("in imple CoreNode: SNCTF -> Starting save_node_to_clearsigned_file!");
         debug_log!("SNCTF: Current working directory: {:?}", std::env::current_dir()?);
-        debug_log!("SNCTF: Target directory path: {:?}", self.directory_path);
+        // debug_log!("SNCTF: Target directory path: {:?}", self.directory_path);
+
+        // // 1. Verify and create directory structure
+        // if !self.directory_path.exists() {
+        //     debug_log!("SNCTF: Directory doesn't exist, creating it");
+        //     fs::create_dir_all(&self.directory_path)?;
+        // }
+        // debug_log!("SNCTF: Directory now exists: {}", self.directory_path.exists());
+
+        // // 2. Verify directory is actually a directory
+        // if !self.directory_path.is_dir() {
+        //     debug_log!("SNCTF: Path exists but is not a directory!");
+        //     return Err(io::Error::new(
+        //         io::ErrorKind::Other,
+        //         "SNCTF: Path exists but is not a directory"
+        //     ));
+        // }
+
+        debug_log!("SNCTF: Target directory path node_specific_path: {:?}", node_specific_path);
 
         // 1. Verify and create directory structure
-        if !self.directory_path.exists() {
-            debug_log!("SNCTF: Directory doesn't exist, creating it");
-            fs::create_dir_all(&self.directory_path)?;
+        if !node_specific_path.exists() {
+            debug_log!("SNCTF: warning node_specific_path Directory doesn't exist, creating it");
+            fs::create_dir_all(&node_specific_path)?;
         }
-        debug_log!("SNCTF: Directory now exists: {}", self.directory_path.exists());
+        debug_log!("SNCTF: Directory now exists node_specific_path: {}", node_specific_path.exists());
 
         // 2. Verify directory is actually a directory
-        if !self.directory_path.is_dir() {
-            debug_log!("SNCTF: Path exists but is not a directory!");
+        if !node_specific_path.is_dir() {
+            debug_log!("SNCTF: node_specific_path error Path exists but is not a directory!");
             return Err(io::Error::new(
                 io::ErrorKind::Other,
-                "SNCTF: Path exists but is not a directory"
+                "SNCTF: error Path exists but is not a directory"
             ));
         }
 
@@ -9242,12 +9694,17 @@ impl CoreNode {
         })?;
         debug_log!("SNCTF: Successfully serialized CoreNode to TOML");
 
-        // 4. Construct and verify the file path
-        let file_path = self.directory_path.join("node.toml");
+        // // 4. Construct and verify the file path
+        // let file_path = self.directory_path.join("node.toml");
+        // debug_log!("SNCTF: Full file path for node.toml: {:?}", file_path);
+
+
+        // // 4. Construct and verify the file path
+        let file_path = node_specific_path.join("node.toml");
         debug_log!("SNCTF: Full file path for node.toml: {:?}", file_path);
 
         // 5. Verify parent directory one more time
-        if let Some(parent) = file_path.parent() {
+        if let Some(parent) = node_specific_path.parent() {
             if !parent.exists() {
                 debug_log!("SNCTF: Parent directory missing, creating: {:?}", parent);
                 fs::create_dir_all(parent)?;
@@ -9385,7 +9842,7 @@ impl CoreNode {
             Err(e) => {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
-                    format!("implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}", e)
+                    format!(" implCoreNode SNCTF save node to file: Failed to read GPG fingerprint from uma.toml: {}", e)
                 ));
             }
         };
@@ -9399,9 +9856,12 @@ impl CoreNode {
             // Convert GpgError to std::io::Error
             std::io::Error::new(
                 std::io::ErrorKind::Other,
-                format!("SNCTF: GPG into_clearsign operation failed: {:?}", gpg_err),
+                format!("error SNCTF: GPG into_clearsign operation failed: {:?}", gpg_err),
             )
         })?;
+
+        debug_log!("SNCTF: done");
+
 
         Ok(())
     }
@@ -9436,27 +9896,50 @@ impl CoreNode {
     ///  - File writing
     ///  - GPG operations (clearsigning and encryption)
     ///  - Temp file cleanup (ensures no files left in production)
-    fn save_node_as_gpgtoml(&self) -> Result<(), io::Error> {
+    fn save_node_as_gpgtoml(
+        &self,
+        node_specific_path: &PathBuf, //  needs full path
+    ) -> Result<(), io::Error> {
         // Debug logging for initial state
-        debug_log!("in impl CoreNode: SNAGTF -> Starting save_node_as_gpgtoml!");
+        debug_log!("SNAGTF in impl CoreNode: SNAGTF -> Starting save_node_as_gpgtoml!");
         debug_log!("SNAGTF: Current working directory: {:?}", std::env::current_dir()?);
-        debug_log!("SNAGTF: Target directory path: {:?}", self.directory_path);
+        // debug_log!("SNAGTF: Target directory path: {:?}", self.directory_path);
 
-        // 1. Verify and create target directory structure
-        if !self.directory_path.exists() {
-            debug_log!("SNAGTF: Directory doesn't exist, creating it");
-            fs::create_dir_all(&self.directory_path)?;
+
+        debug_log!("SNCTF: Target directory path node_specific_path: {:?}", node_specific_path);
+
+        // 1. Verify and create directory structure
+        if !node_specific_path.exists() {
+            debug_log!("SNCTF: warning node_specific_path Directory doesn't exist, creating it");
+            fs::create_dir_all(&node_specific_path)?;
         }
-        debug_log!("SNAGTF: Directory now exists: {}", self.directory_path.exists());
+        debug_log!("SNCTF: Directory now exists node_specific_path: {}", node_specific_path.exists());
 
         // 2. Verify directory is actually a directory
-        if !self.directory_path.is_dir() {
-            debug_log!("SNAGTF: Path exists but is not a directory!");
+        if !node_specific_path.is_dir() {
+            debug_log!("SNCTF: node_specific_path error Path exists but is not a directory!");
             return Err(io::Error::new(
                 io::ErrorKind::Other,
-                "SNAGTF: Path exists but is not a directory"
+                "SNCTF: error Path exists but is not a directory"
             ));
         }
+
+
+        // // 1. Verify and create target directory structure
+        // if !self.directory_path.exists() {
+        //     debug_log!("SNAGTF: Directory doesn't exist, creating it");
+        //     fs::create_dir_all(&self.directory_path)?;
+        // }
+        // debug_log!("SNAGTF: Directory now exists: {}", self.directory_path.exists());
+
+        // // 2. Verify directory is actually a directory
+        // if !self.directory_path.is_dir() {
+        //     debug_log!("SNAGTF: Path exists but is not a directory!");
+        //     return Err(io::Error::new(
+        //         io::ErrorKind::Other,
+        //         "SNAGTF: Path exists but is not a directory"
+        //     ));
+        // }
 
         // 3. Serialize the CoreNode struct to a TOML string
         let toml_string = toml::to_string(&self).map_err(|e| {
@@ -9466,7 +9949,12 @@ impl CoreNode {
                 format!("SNAGTF: TOML serialization error: {}", e),
             )
         })?;
-        debug_log!("SNAGTF: Successfully serialized CoreNode to TOML");
+
+        #[cfg(debug_assertions)]
+        {
+            debug_log!("SNAGTF: Successfully serialized CoreNode to TOML");
+            debug_log!("SNAGTF: toml_string {:?}", toml_string);
+        }
 
         // 4. Get temp directory and create unique temp file path
         let temp_dir = get_base_uma_temp_directory_path()?;
@@ -9502,7 +9990,10 @@ impl CoreNode {
                 let _ = fs::remove_file(&temp_file_path);
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
-                    format!("impl CoreNode save_node_as_gpgtoml: Failed to read GPG fingerprint from uma.toml: {}", e)
+                    format!(
+                        "impl CoreNode save_node_as_gpgtoml: Failed to read GPG fingerprint from uma.toml: {}",
+                        e
+                    )
                 ));
             }
         };
@@ -9528,7 +10019,10 @@ impl CoreNode {
         }
 
         // 8. Extract public key from GPG keyring using fingerprint
-        debug_log!("SNAGTF: Extracting public key from GPG for fingerprint: {}", gpg_full_fingerprint_key_id_string);
+        debug_log!(
+            "SNAGTF: Extracting public key from GPG for fingerprint: {}",
+            gpg_full_fingerprint_key_id_string
+        );
         let public_key_output = std::process::Command::new("gpg")
             .arg("--armor")
             .arg("--export")
@@ -9576,9 +10070,14 @@ impl CoreNode {
         }
         debug_log!("SNAGTF: Successfully extracted public key from GPG");
 
-        // 9. Construct final output path for encrypted file
-        let final_file_path = self.directory_path.join("node.gpgtoml");
-        debug_log!("SNAGTF: Final encrypted file path: {:?}", final_file_path);
+        // // 9. Construct final output path for encrypted file
+        // let final_file_path = self.directory_path.join("node.gpgtoml");
+        // debug_log!("SNAGTF: Final encrypted file path: {:?}", final_file_path);
+
+        // // 4. Construct and verify the file path
+        let final_file_path = node_specific_path.join("node.toml");
+        debug_log!("SNCTF: Full file path for node.toml: {:?}", final_file_path);
+
 
         // 10. Encrypt the clearsigned temp file with the public key
         debug_log!("SNAGTF: Starting encryption of clearsigned file");
@@ -14572,6 +15071,7 @@ fn add_new_messagepost_message(
 
     debug_log!("ANMPM: Serializing message to TOML");
 
+    // TODO
     let toml_data = match serialize_messagepost_toml(&message) {
         Ok(toml_string) => {
             debug_log!("ANMPM: TOML serialization successful, {} bytes", toml_string.len());
@@ -14687,8 +15187,13 @@ fn save_clearsigned_messagepost_config_0toml(
 ) -> Result<(), io::Error> {
 
     debug_log!("SCMC0: Starting save_clearsigned_messagepost_config_0toml");
-    debug_log!("SCMC0: Target file path: {:?}", file_path);
 
+    // Debug-Assert: Owner must not be empty
+    #[cfg(all(debug_assertions, not(test)))]
+    {
+        debug_log!("SCMC0: metadata: {:?}", metadata);
+        debug_log!("SCMC0: Target file path: {:?}", file_path);
+    }
     // =================================================
     // Debug-Assert, Test-Assert, Production-Catch
     // =================================================
@@ -14938,6 +15443,7 @@ struct NodeMessagePostBrowserMetadata {
 impl NodeMessagePostBrowserMetadata {
     fn new(
         node_name: &str,
+        _nodepath_for_path_in_node: &PathBuf, // path handling system ongoing
         owner: String,
         teamchannel_collaborators_with_access: Vec<String>,
         messageposts_expire_after_n_min: u64,
@@ -14953,13 +15459,16 @@ impl NodeMessagePostBrowserMetadata {
 
     ) -> NodeMessagePostBrowserMetadata {
 
+        // let message_dir: String = nodepath_for_path_in_node.join("message_posts_browser").to_string_lossy().into_owned();
+        let message_dir: String = "message_posts_browser".to_string();
+
         // pause, make sure timestamp does not conflict
         let pause_duration = Duration::from_millis(2000); // 1000 ms = 1 second
         thread::sleep(pause_duration);
 
         NodeMessagePostBrowserMetadata {
             node_name: node_name.to_string(),
-            path_in_node: "/message_posts_browser".to_string(), // TODO
+            path_in_node: message_dir, // TODO
             max_message_size_char: 4096, // Default: 4096 characters...too big?
             total_max_size_mb: 512, // Default: 1024 MB
             updated_at_timestamp: get_current_unix_timestamp(),
@@ -15708,6 +16217,10 @@ fn create_new_team_channel(
     let new_channel_path = team_channels_dir_path.join(&team_channel_name);
     debug_log!("CTC: New channel path: {:?}", new_channel_path);
 
+
+    // let relative_newpath_to_team_channel
+
+
     // 1. Create Directory Structure (with error handling)
     // Create message_posts_browser directory
     let instant_msg_path = new_channel_path.join("message_posts_browser");
@@ -15865,12 +16378,15 @@ fn create_new_team_channel(
     // 3. Create and Save CoreNode
     debug_log!("CTC: Creating CoreNode...");
 
+    let relative_newchannel_pathbuf = extract_relative_node_path_after_known_segments(&new_channel_path)?;
+
+
     // option to save as .gpgtoml
     let new_node_result = CoreNode::new(
         team_channel_name.clone(),
         corenode_gpgtoml,
         team_channel_name.clone(),
-        new_channel_path,
+        relative_newchannel_pathbuf, //new_channel_path.clone(),//
         owner.clone(),
         teamchannel_collaborators_with_access.clone(),
         abstract_collaborator_port_assignments,
@@ -15948,13 +16464,14 @@ fn create_new_team_channel(
         }
     };
 
-
+    let relative_messagepost_channel_pathbuf = extract_relative_node_path_after_known_segments(&new_channel_path)?;
 
     // timestamp must be make after node.toml
     // 2. Create and Save 0.toml Metadata (with error handling)
     let zerotoml_metadata_path = instant_msg_path.join("0.toml");
     let zerotoml_metadata = NodeMessagePostBrowserMetadata::new(
         &team_channel_name,
+        &relative_messagepost_channel_pathbuf, // nodepath_for_path_in_node
         owner,
         teamchannel_collaborators_with_access,
         99999, // default message expiry in minutes, 99_999 ~ 2-months
@@ -15978,20 +16495,21 @@ fn create_new_team_channel(
         }
     }
 
-
-
-
     // Handle the CoreNode creation result with chosen save method
     match new_node_result {
         Ok(new_node) => {
             if use_encrypted {
                 // Save as GPG encrypted clearsigned file (node.gpgtoml)
                 debug_log!("CoreNode created successfully, saving as encrypted file... -> new_node.save_node_as_gpgtoml()");
-                match new_node.save_node_as_gpgtoml() {
+                match new_node.save_node_as_gpgtoml(
+                    &new_channel_path.clone()
+                ) {
                     Ok(_) => {
                         debug_log!("save_node_as_gpgtoml: CoreNode saved successfully as node.gpgtoml");
-                        println!("\n✓ Node successfully saved as encrypted file: {}/node.gpgtoml",
-                                new_node.directory_path.display());
+                        println!("\n✓ Node successfully saved as encrypted file: {}/node.gpgtoml; new_channel_path,{:?}",
+                                new_node.directory_path.display(),
+                                new_channel_path
+                        );
                         Ok(())
                     },
                     Err(e) => {
@@ -16003,11 +16521,16 @@ fn create_new_team_channel(
             } else {
                 // Save as clearsigned only file (node.toml)
                 debug_log!("CoreNode created successfully, saving as clearsigned file... -> new_node.save_node_to_clearsigned_file()");
-                match new_node.save_node_to_clearsigned_file() {
+                match new_node.save_node_to_clearsigned_file(
+                    &new_channel_path.clone()
+                ) {
                     Ok(_) => {
                         debug_log!("save_node_to_clearsigned_file: CoreNode saved successfully as node.toml");
-                        println!("\n✓ Node successfully saved as clearsigned file: {}/node.toml",
-                                new_node.directory_path.display());
+                        println!("\n✓ Node successfully saved as clearsigned file: {}/node.toml, new_channel_path {:?}",
+                                new_node.directory_path.display(),
+                                new_channel_path
+                        );
+
                         Ok(())
                     },
                     Err(e) => {
@@ -16593,7 +17116,9 @@ fn update_core_node(
 
     if use_encrypted {
         // Save as GPG encrypted clearsigned file (node.gpgtoml)
-        match existing_node.save_node_as_gpgtoml() {
+        match existing_node.save_node_as_gpgtoml(
+            &node_path
+        ) {
             Ok(_) => {
                 debug_log!("UCN: CoreNode successfully saved as encrypted file to {:?}", node_path);
                 println!("✓ CoreNode updated and saved successfully as node.gpgtoml!");
@@ -16606,8 +17131,19 @@ fn update_core_node(
             }
         }
     } else {
+
+        // 5. Verify parent directory one more time
+        // let Some(nodepath_parent) = node_path.parent();
+
+        let nodepath_parent = match node_path.parent() {
+            Some(p) => p.to_path_buf(),
+            None => PathBuf::from("."), // or any sensible default
+        };
+
         // Save as clearsigned only file (node.toml)
-        match existing_node.save_node_to_clearsigned_file() {
+        match existing_node.save_node_to_clearsigned_file(
+            &nodepath_parent
+        ) {
             Ok(_) => {
                 debug_log!("UCN: CoreNode successfully saved as clearsigned file to {:?}", node_path);
                 println!("✓ CoreNode updated and saved successfully as node.toml!");
@@ -16639,7 +17175,7 @@ fn create_core_node(
     teamchannel_collaborators_with_access: Vec<String>,
     use_padnet: Option<bool>,
 ) -> Result<(), ThisProjectError> {
-    debug_log!("start create_core_node(), node_path -> {:?}", node_path);
+    debug_log!("CCN: start create_core_node(), node_path -> {:?}", node_path);
 
     // Get user input for node name
     println!("Enter node name:");
@@ -16650,7 +17186,7 @@ fn create_core_node(
     let corenode_gpgtoml = match q_and_a_get_corenode_gpgtoml() {
         Ok(data) => data,
         Err(e) => {
-            debug_log!("CTC: Error getting PA1 Process: {}", e);
+            debug_log!("CCN: Error getting PA1 Process: {}", e);
             return Err(e);
         }
     };
@@ -16663,7 +17199,7 @@ fn create_core_node(
 
     // Create the specific node directory path
     let node_specific_path = node_path.join(&node_name);
-    debug_log!("Creating node at specific path: {:?}", node_specific_path);
+    debug_log!("CCN: Creating node at specific path: {:?}", node_specific_path);
 
     // Create the main node directory
     fs::create_dir_all(&node_specific_path)?;
@@ -16715,8 +17251,10 @@ fn create_core_node(
         // TODO maybe custom shallow node with no tasks option needed...
     }
 
+    // for node
+    let node_relative_channel_pathbuf = extract_relative_node_path_after_known_segments(&node_specific_path.clone())?;
 
-
+    debug_log!("CCN: node_relative_channel_pathbuf {:?}", node_relative_channel_pathbuf);
 
 
     // Create CoreNode instance
@@ -16724,7 +17262,7 @@ fn create_core_node(
         node_name.clone(),                 // node_name
         corenode_gpgtoml,
         description,                       // description_for_tui
-        node_specific_path.clone(),        // directory_path
+        node_relative_channel_pathbuf,  // node_specific_path.clone()      // directory_path
         owner.clone(),                             // owner
         teamchannel_collaborators_with_access.clone(),
         HashMap::new(),                    // for ports
@@ -16751,11 +17289,18 @@ fn create_core_node(
         use_padnet,
     );
 
+
+    debug_log!("CCN: Creating node at specific path: {:?}", node_specific_path);
+
+    // maybe not for messages?
+    let relative_channel_pathbuf = extract_relative_node_path_after_known_segments(&node_specific_path.clone())?;
+
     // note: timestamp must be after node.toml's
     // Create and Save metadata
     let metadata_path = message_dir.join("0.toml");
     let metadata = NodeMessagePostBrowserMetadata::new(
         &node_name,
+        &relative_channel_pathbuf, //&node_specific_path.clone()
         owner,
         teamchannel_collaborators_with_access,
         messageposts_expire_after_n_min,
@@ -16769,18 +17314,30 @@ fn create_core_node(
         message_post_start_date,
         message_post_end_date,
     );
-    save_toml_to_file(&metadata, &metadata_path)?;
+
+
+    // save_toml_to_file(&metadata, &metadata_path)?;
+
+    match save_clearsigned_messagepost_config_0toml(&metadata, &metadata_path) {
+        Ok(_) => debug_log!("CCN: Saved clearsigned metadata to 0.toml"),
+        Err(e) => {
+            debug_log!("CCN: Error saving metadata: {}", e);
+            return Err(ThisProjectError::IoError(e));
+        }
+    }
 
 
     match new_node_result {
         Ok(new_node) => {
             // Save node.toml in the specific node directory
-            new_node.save_node_to_clearsigned_file()?;
-            debug_log!("Successfully created node: {:?}", node_specific_path);
+            new_node.save_node_to_clearsigned_file(
+                &node_specific_path.clone(),
+            )?;
+            debug_log!("CCN:Successfully created node:");
             Ok(())
         }
         Err(e) => {
-            debug_log!("Error creating CoreNode: {}", e);
+            debug_log!("CCN:Error creating CoreNode: {}", e);
             Err(e)
         }
     }
@@ -17699,7 +18256,7 @@ fn q_and_a_get_pa2_schedule() -> Result<Vec<u64>, ThisProjectError> {
 
     // Ask if user wants to use current time as start with retry loop
     let use_now = loop {
-        println!("\n'Now'? -> Use current UTC time as project's start time? (y)es / (n)o");
+        println!("\n'Now'? -> Use current UTC time as project's start time? (y)es / (n)o (default: yes)");
         print!("> ");
 
         // Ensure prompt is displayed before reading input
@@ -17713,8 +18270,8 @@ fn q_and_a_get_pa2_schedule() -> Result<Vec<u64>, ThisProjectError> {
             "n" | "no" => break false,
             "" => {
                 // Treat empty input as "no" for convenience
-                println!("  (Treating empty input as 'no')");
-                break false;
+                println!("  (Treating empty input as 'yes')");
+                break true;
             },
             _ => {
                 // Invalid input - inform user and loop to retry
@@ -18063,7 +18620,7 @@ fn clear_screen() {
 /// ```
 fn press_enter_to_continue() {
     // Prompt the user to press ENTER
-    println!("\nPress ENTER to continue...");
+    println!("\n...Press ENTER to continue...");
 
     // Read a line from stdin and ignore the result (including any errors)
     let mut _dummy = String::new();
@@ -18107,7 +18664,7 @@ fn q_and_a_get_pa3_users() -> Result<String, ThisProjectError> {
     println!("5. What do you think can be delivered to help you? (Very often people think the possible is impossible and shut down, in terms of tools and workflow.)");
     println!("");
     println!("");
-    println!("Enter A User Statement:");
+    print!("Enter A User Statement:\n > ");
     let mut input = String::new();
     io::stdout().flush()?;
     io::stdin().read_line(&mut input)?;
@@ -18178,7 +18735,7 @@ fn q_and_a_get_pa5_mvp() -> Result<String, ThisProjectError> {
     println!("Without data and feedback about initial MVP outcomes, blindness will strangle the management of the project, coordination of people, and the management of resources.");
     println!("");
     println!("");
-    println!("Enter an MVP Statement:");
+    print!("Enter an MVP Statement: \n > ");
     let mut input = String::new();
     io::stdout().flush()?;
     io::stdin().read_line(&mut input)?;
@@ -18621,7 +19178,7 @@ fn q_and_a_get_message_post_start_date() -> Result<Option<i64>, ThisProjectError
 fn q_and_a_get_use_padnet() -> Result<Option<bool>, ThisProjectError> {
     // TODO Buffy formatting no heap
     println!("");
-    println!("Team Channel uses One-Time-Pad Network-Layer?  (requires make/share 'pad') -> (y)es / (n)o / Press-Enter to skip):");
+    println!("Team Channel uses One-Time-Pad Network-Layer?  \n(requires make/share 'pad') -> (y)es / (n)o / Press-Enter to skip): \n(default is no)\n > ");
 
     let mut input = String::new();
     io::stdout().flush()?;
@@ -21592,30 +22149,132 @@ if let Some(existing_path) = node_id_to_path.get(&node_unique_id_str) {
 fn create_node_id_to_path_lookup(
     team_channel_path: &Path,
 ) -> Result<HashMap<String, PathBuf>, ThisProjectError> {
+
+    debug_log("CNITPL: startng create_node_id_to_path_lookup");
+    debug_log!("CNITPL team_channel_path {:?}", team_channel_path);
+
     let mut node_lookup: HashMap<String, PathBuf> = HashMap::new();
+
+
+    // Get GPG fingerprint for decryption/verification
+    debug_log!("LIM: Getting GPG fingerprint from uma.toml");
+    let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+        Ok(fingerprint) => {
+            debug_log!("LIM: GPG fingerprint retrieved: {}", fingerprint);
+            fingerprint
+        }
+        Err(e) => {
+            debug_log!("LIM: Failed to read GPG fingerprint from uma.toml: {}", e);
+            println!("Error: Cannot load messages without GPG fingerprint");
+            return Err(ThisProjectError::from(e));
+        }
+    };
+
+    // Get temp directory for read copies
+    let base_uma_temp_directory_path = match get_base_uma_temp_directory_path() {
+        Ok(path) => path,
+        Err(e) => {
+            debug_log!("LIM: Failed to get temp directory path: {}", e);
+            println!("Error: Cannot create temp directory for message reading");
+            return Err(ThisProjectError::from(e));
+        }
+    };
+
 
     for entry in WalkDir::new(team_channel_path) {
         let entry = entry?;
         let path = entry.path();
 
         if path.is_dir() { // A. Nodes only (directories)
-            let node_toml_path = path.join("node.toml");
-            if node_toml_path.exists() {
-                // Found a node directory
-                let toml_string = std::fs::read_to_string(&node_toml_path)?;
 
-                // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
-                let toml_value: Value = toml::from_str(&toml_string)?;
+            // let node_toml_path = path.join("node.toml");
 
-                // B. Extract node unique ID
-                // let node_unique_id = toml_value.get("node_unique_id").and_then(Value::as_integer).unwrap_or(0) as u64;
 
-                // Updated to get unique_id as hex_string:
-                let node_unique_id_str = toml_value.get("node_unique_id").and_then(Value::as_str).map(|s| s.to_owned()).unwrap_or_default();
-                if node_unique_id_str.is_empty() {
-                    continue; // Skip this node if no valid ID
+            // Construct path to node.toml or node.gpgtoml
+            // Find the configuration file (could be either node.toml OR node.gpgtoml)
+            let node_toml_path = match find_node_toml_or_gpgtoml_file(
+                &path,
+                ) {
+                Ok(Some(found_path)) => {
+                    // This is the path to whichever file was found (node.toml OR node.gpgtoml)
+                    #[cfg(debug_assertions)]
+                    debug_log!("CNITPL found configuration file at: {:?}", found_path);
+                    found_path  // <-- This could be either file
+                },
+                Ok(None) => {
+                    // No file found - handle the error properly
+                    debug_log("CNITPL Neither node.toml nor node.gpgtoml found");
+                    continue;
+                },
+                Err(_e) => {
+                    // Error occurred - handle it properly
+                    #[cfg(debug_assertions)]
+                    debug_log!("CNITPL Neither node.toml nor node.gpgtoml found >> {}", _e);
+                    continue;
                 }
+            };
 
+
+            if node_toml_path.exists() {
+
+                // Get readable temp copy (handles both .toml and .gpgtoml)
+                let mnode_toml_readcopy_path = match get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
+                    &node_toml_path,
+                    &gpg_full_fingerprint_key_id_string,
+                    &base_uma_temp_directory_path,
+                ) {
+                    Ok(path) => {
+                        debug_log!("CNITPL: Got temp read copy at: {}", path);
+                        path
+                    }
+                    Err(_e) => {
+                        #[cfg(debug_assertions)]
+                        debug_log!("CNITPL: Failed to get readable copy {:?}", _e);
+
+                        continue;
+                    }
+                };
+
+
+
+
+                // // Found a node directory
+                // let toml_string = std::fs::read_to_string(&node_toml_path)?;
+
+                // // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+                // let toml_value: Value = toml::from_str(&toml_string)?;
+
+                // // B. Extract node unique ID
+                // // let node_unique_id = toml_value.get("node_unique_id").and_then(Value::as_integer).unwrap_or(0) as u64;
+
+                // // Updated to get unique_id as hex_string:
+                // let node_unique_id_str = toml_value.get("node_unique_id").and_then(Value::as_str).map(|s| s.to_owned()).unwrap_or_default();
+
+
+                // if node_unique_id_str.is_empty() {
+                //     continue; // Skip this node if no valid ID
+                // }
+
+                let node_unique_id_str = match read_single_line_string_field_from_toml(
+                    &mnode_toml_readcopy_path,  //  string
+                    "node_unique_id",
+                ) {
+                    Ok(username) => {
+                        if username.is_empty() {
+                            // Convert to String error instead of GpgError
+                            continue;
+                        }
+                        username
+                    }
+                    Err(_e) => {
+
+                        #[cfg(debug_assertions)]
+                        debug_log!("CNITPL: Failed to get readable copy {:?}", _e);
+
+                        // Convert to String error instead of GpgError
+                        continue;
+                    }
+                };
 
                 // C. Get full file path
                 let full_path = path.to_path_buf();
@@ -21626,8 +22285,112 @@ fn create_node_id_to_path_lookup(
         }
     }
 
+    debug_log("CNITPL: to end of end");
+
     Ok(node_lookup)
 }
+
+// /// Creates a lookup table of node unique IDs to their full file paths.
+// ///
+// /// This function iterates through the team channel directory, identifies node directories (those containing a `node.toml` file),
+// /// extracts the node's unique ID from the `node.toml`, and stores the ID and full file path in a HashMap.
+// ///
+// /// # Arguments
+// ///
+// /// * `team_channel_path`: The path to the team channel directory.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<HashMap<String, PathBuf>, ThisProjectError>`:  A HashMap mapping node unique IDs to their paths, or a `ThisProjectError` if an error occurs.
+// fn create_node_id_to_path_lookup(
+//     team_channel_path: &Path,
+// ) -> Result<HashMap<String, PathBuf>, ThisProjectError> {
+
+//     debug_log("CNITPL: startng create_node_id_to_path_lookup");
+//     debug_log!("CNITPL team_channel_path {:?}", team_channel_path);
+
+//     let mut node_lookup: HashMap<String, PathBuf> = HashMap::new();
+
+//     for entry in WalkDir::new(team_channel_path) {
+//         let entry = entry?;
+//         let path = entry.path();
+
+//         if path.is_dir() { // A. Nodes only (directories)
+
+//             let node_toml_path = path.join("node.toml");
+
+
+//             // // Construct path to node.toml or node.gpgtoml
+//             // // Find the configuration file (could be either node.toml OR node.gpgtoml)
+//             // let node_toml_path = match find_node_toml_or_gpgtoml_file(
+//             //     &self.current_full_file_path,
+//             //     ) {
+//             //     Ok(Some(path)) => {
+//             //         // This is the path to whichever file was found (node.toml OR node.gpgtoml)
+//             //         debug_log!("CNITPL ound configuration file at: {:?}", path);
+//             //         path  // <-- This could be either file
+//             //     },
+//             //     Ok(None) => {
+//             //         // No file found - handle the error properly
+//             //         debug_log("CNITPL Neither node.toml nor node.gpgtoml found");
+//             //         continue;
+//             //     },
+//             //     Err(e) => {
+//             //         // Error occurred - handle it properly
+//             //         debug_log!("CNITPL Neither node.toml nor node.gpgtoml found >> {}", e);
+//             //         continue;
+//             //     }
+//             // };
+
+
+//             if node_toml_path.exists() {
+
+//                 // Found a node directory
+//                 let toml_string = std::fs::read_to_string(&node_toml_path)?;
+
+//                 // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+//                 let toml_value: Value = toml::from_str(&toml_string)?;
+
+//                 // B. Extract node unique ID
+//                 // let node_unique_id = toml_value.get("node_unique_id").and_then(Value::as_integer).unwrap_or(0) as u64;
+
+//                 // Updated to get unique_id as hex_string:
+//                 let node_unique_id_str = toml_value.get("node_unique_id").and_then(Value::as_str).map(|s| s.to_owned()).unwrap_or_default();
+
+
+//                 if node_unique_id_str.is_empty() {
+//                     continue; // Skip this node if no valid ID
+//                 }
+
+//                 // let file_owner_username = match read_single_line_string_field_from_toml(
+//                 //     &node_unique_id_str,  //  string
+//                 //     "node_unique_id",
+//                 // ) {
+//                 //     Ok(username) => {
+//                 //         if username.is_empty() {
+//                 //             // Convert to String error instead of GpgError
+//                 //             continue;
+//                 //         }
+//                 //         username
+//                 //     }
+//                 //     Err(e) => {
+//                 //         // Convert to String error instead of GpgError
+//                 //         continue;
+//                 //     }
+//                 // };
+
+//                 // C. Get full file path
+//                 let full_path = path.to_path_buf();
+
+//                 // Add to lookup table:
+//                 node_lookup.insert(node_unique_id_str, full_path);
+//             }
+//         }
+//     }
+
+//     Ok(node_lookup)
+// }
+
 
 /// Retrieves the local owner username from the uma.toml configuration file.
 ///
@@ -23253,6 +24016,14 @@ fn share_team_channel_with_existing_collaborator_converts_to_abs(
 
     let path_absoluteteam_channel_node_toml_path = Path::new(&absolute_team_channel_node_toml_path);
 
+    /*
+    pub fn clearsign_and_encrypt_file_for_recipient(
+        input_file_path: &Path,
+        your_signing_key_id: &str,
+        recipient_public_key_path: &Path,
+    )
+    */
+
     // Clearsign and encrypt the team channel node.toml file
     clearsign_and_encrypt_file_for_recipient(
         &path_absoluteteam_channel_node_toml_path,
@@ -23260,13 +24031,15 @@ fn share_team_channel_with_existing_collaborator_converts_to_abs(
         &temporary_remote_collaborator_public_key_file_path
     )?;
 
+
+
     debug_log!("TCS: Successfully clearsigned and encrypted team channel file");
 
-    // Generate the expected output file path for user information
-    let expected_encrypted_output_filename = format!("{}__team_channel__{}.gpgtoml",
-                                                  team_channel_name,
-                                                  remote_collaborator_username);
-    let expected_encrypted_output_file_path = absolute_output_directory_path.join(&expected_encrypted_output_filename);
+    // // Generate the expected output file path for user information
+    // let expected_encrypted_output_filename = format!("{}__team_channel__{}.gpgtoml",
+    //                                               team_channel_name,
+    //                                               remote_collaborator_username);
+    // let expected_encrypted_output_file_path = absolute_output_directory_path.join(&expected_encrypted_output_filename);
 
     // ======== STEP 9: Clean up temporary files ========
     debug_log!("TCS: STEP 9 - Cleaning up temporary files");
@@ -23283,20 +24056,20 @@ fn share_team_channel_with_existing_collaborator_converts_to_abs(
     // ======== STEP 10: Confirm successful completion ========
     debug_log!("TCS: STEP 10 - Confirming successful completion");
 
-    // Verify output file exists (extra safety check)
-    if !expected_encrypted_output_file_path.exists() {
-        debug_log!("TCS: WARNING - Cannot find expected output file at: {}",
-                   expected_encrypted_output_file_path.display());
-        println!("\nProcessing completed, but cannot verify output file location.");
-        println!("Please check the invites_updates/outgoing directory for the encrypted file.");
-    } else {
-        debug_log!("TCS: Successfully verified output file exists at: {}",
-                   expected_encrypted_output_file_path.display());
-        println!("\nTeam channel '{}' has been successfully shared with '{}'!",
-                 team_channel_name, remote_collaborator_username);
-        println!("The encrypted team channel file is saved to:");
-        println!("{}", expected_encrypted_output_file_path.display());
-    }
+    // // Verify output file exists (extra safety check)
+    // if !expected_encrypted_output_file_path.exists() {
+    //     debug_log!("TCS: WARNING - Cannot find expected output file at: {}",
+    //                expected_encrypted_output_file_path.display());
+    //     println!("\nProcessing completed, but cannot verify output file location.");
+    //     println!("Please check the invites_updates/outgoing directory for the encrypted file.");
+    // } else {
+    //     debug_log!("TCS: Successfully verified output file exists at: {}",
+    //                expected_encrypted_output_file_path.display());
+    //     println!("\nTeam channel '{}' has been successfully shared with '{}'!",
+    //              team_channel_name, remote_collaborator_username);
+    //     println!("The encrypted team channel file is saved to:");
+    //     println!("{}", expected_encrypted_output_file_path.display());
+    // }
 
     debug_log!("TCS: Team channel sharing completed successfully");
 
@@ -23532,7 +24305,7 @@ fn share_lou_address_book_with_existingcollaborator(recipient_name: &str) -> Res
     println!("The encrypted LOCAL OWNER USER'S address book file is saved to:");
     println!("{}", absolute_output_dir.join(format!("{}__collaborator.gpgtoml", local_owner_user_name)).display());
 
-    println!("Press Enter to continue...");
+    println!("...Press Enter to continue...");
 
     // this does nothing, press enter to proceed.
     let mut input = String::new();
@@ -23688,7 +24461,7 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
     let absolute_uma_toml_path = make_file_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_uma_toml_path)
         .map_err(|e| {
             let error_msg = format!("PIECA Failed to locate uma.toml configuration file: {}", e);
-            println!("Error: {}", error_msg);
+            println!("Error: {} PIECA", error_msg);
             GpgError::PathError(error_msg)
         })?;
 
@@ -23746,11 +24519,11 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
         // Neither exists, skip this directory
         #[cfg(debug_assertions)]
         debug_log!(
-            "Skipping directory (no node.toml or node.gpgtoml): {:?}",
+            "PIECA Skipping directory (no node.toml or node.gpgtoml): {:?}",
             &absolute_addressbook_directory_pathbuf
         );
         return Err(GpgError::PathError(format!(
-            "CAPITCCV Err Invalid path encoding for addressbook file: {}",
+            "PIECA Err Invalid path encoding for addressbook file: {}",
             absolute_addressbook_directory_pathbuf.display()
         )));
     };
@@ -24173,7 +24946,7 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
     debug_log!("PIECA Successfully processed addressbook from collaborator: {}", remote_collaborator_username);
     println!("Successfully processed addressbook from collaborator: {}", remote_collaborator_username);
 
-    println!("Press Enter to continue...");
+    println!("...Press Enter to continue...");
 
     // this does nothing, press enter to proceed.
     let mut input = String::new();
@@ -24286,7 +25059,7 @@ fn share_lou_addressbook_with_incomingkey() -> Result<(), GpgError> {
     let absolute_addressbook_directory_pathbuf = match get_addressbook_directory_path() {
         Ok(path) => path,
         Err(e) => {
-            debug_log!("CAPITCCV Failed to get absolute path: {}", e);
+            debug_log!("SLABIK Failed to get absolute path: {}", e);
 
             return Err(GpgError::PathError(
                 "SLABIK absolute_addressbook_directory_pathbuf not found".to_string()));
@@ -24309,11 +25082,11 @@ fn share_lou_addressbook_with_incomingkey() -> Result<(), GpgError> {
         // Neither exists, skip this directory
         #[cfg(debug_assertions)]
         debug_log!(
-            "Skipping directory (no node.toml or node.gpgtoml): {:?}",
+            "SLABIK Skipping directory (no node.toml or node.gpgtoml): {:?}",
             &absolute_addressbook_directory_pathbuf
         );
         return Err(GpgError::PathError(format!(
-            "CAPITCCV Err Invalid path encoding for addressbook file: {}",
+            "SLABIK Err Invalid path encoding for addressbook file: {}",
             absolute_addressbook_directory_pathbuf.display()
         )));
     };
@@ -24426,7 +25199,7 @@ fn share_lou_addressbook_with_incomingkey() -> Result<(), GpgError> {
     println!("\nImportant: After sending this file to the recipient, you may want to add them");
     println!("to your address book using their public key from: {}", absolute_recipient_public_key_path.display());
 
-    println!("Press Enter to continue...");
+    println!("...Press Enter to continue...");
     // this does nothing, press enter to proceed.
     let mut input = String::new();
     let _ = io::stdin()
@@ -25269,7 +26042,7 @@ pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
     debug_log!("PIET Successfully completed team channel import process");
 
     // Wait for user acknowledgment
-    println!("\nPress Enter to continue...");
+    println!("\n...Press Enter to continue...");
     let mut input = String::new();
     let _ = io::stdin().read_line(&mut input);
 
@@ -25831,7 +26604,7 @@ pub fn invite_wizard() -> Result<(), GpgError> {
             println!("put their pad here -> {:?}", from_padnet_dir);
 
 
-            println!("Press Enter to continue...");
+            println!("...Press Enter to continue...");
 
             // this does nothing, press enter to proceed.
             let mut input = String::new();
@@ -30649,27 +31422,33 @@ fn handle_local_owner_desk(
     debug_log("HLOD setup: hlod_udp_handshake_rc_network_type_rc_ip_addr() run");
 
     loop { // 1. start overall loop to (re)start whole desk
-        debug_log("HLOD 1. start overall loop to (re)start whole desk");
+        debug_log("HLOD loop-1.0 start overall loop to (re)start whole desk");
 
         // 1. Create lookup table:
         let channel_dir_path_str = read_state_string("current_node_directory_path.txt")?; // read as string first
-        debug_log!("HLOD 1. Channel directory path (from session state): {}", channel_dir_path_str);
+        debug_log!("HLOD loop-1.1 Channel directory path (from session state): {}", channel_dir_path_str);
 
         // use absolute file path
         let team_channel_path = PathBuf::from(channel_dir_path_str);
+        #[cfg(all(debug_assertions, not(test)))]
+        debug_log!("HLOD loop 1.1.1 paths: team_channel_path {:?}", team_channel_path);
+
         let hashtable_node_id_to_path = create_node_id_to_path_lookup(&team_channel_path)?;
 
         let remote_collaborator_name_for_thread_1 = remote_collaborator_name.clone();
         let remote_collaborator_name_for_thread_2 = remote_collaborator_name.clone();
 
+        #[cfg(all(debug_assertions, not(test)))]
+        debug_log!("HLOD loop 1.2 paths: hashtable_node_id_to_path {:?}", hashtable_node_id_to_path);
+
         // 1.1 check for halt/quit uma signal
         if should_halt_uma() {
-            debug_log!("should_halt_uma(), exiting Uma in handle_local_owner_desk()");
+            debug_log!("HLOD loop should_halt_uma(), exiting Uma in handle_local_owner_desk()");
             break Ok(());
 
         }
 
-        debug_log("HLOD calling get_current_team_channel_name_from_nav_path");
+        debug_log("HLOD loop 1.3 calling get_current_team_channel_name_from_nav_path");
         // --- Get team channel name ---
         let team_channel_name = match get_current_team_channel_name_from_nav_path() {
             Some(name) => name,
@@ -31530,6 +32309,7 @@ fn handle_local_owner_desk(
                     })?;
 
 
+                    // TODO
                     debug_log!(
                         "HLOD 7.1 found message file, file_str -> {:?}",
                         file_str
@@ -31540,12 +32320,12 @@ fn handle_local_owner_desk(
 
                     let team_channel_name = get_current_team_channel_name_from_nav_path()
                         .ok_or(ThisProjectError::InvalidData(
-                            "Unable to get team channel name".into())
+                            "HLOD error Unable to get team channel name, get_current_team_channel_name_from_nav_path()".into())
                         )?;
 
-                    // ======================
+                    // =====================================
                     // File Type Processing 1. message Posts
-                    // ======================
+                    // =====================================
 
                     // TODO handling:
                     // 1. message Posts <-
@@ -31592,7 +32372,7 @@ fn handle_local_owner_desk(
                         let received_file_hash = match received_file_hash_result {
                             Ok(hash) => hash,
                             Err(e) => {
-                                debug_log!("Error calculating hash for received file: {}", e);
+                                debug_log!("HLOD-InTray Error calculating hash for received file: {}", e);
                                 continue; // Skip to next file if hashing fails
                             }
                         };
@@ -31617,7 +32397,7 @@ fn handle_local_owner_desk(
                         // Create parent directories if they don't exist
                         if let Some(parent) = Path::new(&incoming_file_path).parent() {
                             if let Err(e) = fs::create_dir_all(parent) {
-                                debug_log!("HLOD-InTray: Failed to create directories: {:?}", e);
+                                debug_log!("HLOD-InTray error: Failed to create directories: {:?}", e);
                                 return Err(ThisProjectError::from(e));
                             }
                         }
@@ -31633,9 +32413,9 @@ fn handle_local_owner_desk(
                     }
 
 
-                    // ======================
+                    // ======================================================
                     // File Type Processing 2: 0toml config for message posts
-                    // ======================
+                    // ======================================================
 
                     // TODO handling:
                     // 1. message Posts
@@ -31738,9 +32518,9 @@ fn handle_local_owner_desk(
 
                     // }
 
-                    // ======================
+                    // ==================================
                     // File Type Processing 3. Node files
-                    // ======================
+                    // ==================================
 
                     // For now only handling:
                     // 1. message-post files
@@ -31749,7 +32529,7 @@ fn handle_local_owner_desk(
                     // Future:
                     // 4. Uma Data
                     // TODO, don't load whole file...
-                    if file_str.contains("node_unique_id = \"") {
+                    if file_str.contains("node_unique_id = [") {
                         debug_log!("HLOD-InTray: an Ode file. (Grecian Urn...you know.)");
 
                         // 7.2
@@ -31768,6 +32548,9 @@ fn handle_local_owner_desk(
                                 }
                             });
 
+                        // #[cfg(debug_assertions)]
+                        debug_log!("HLOD nodes: new_node_directory_path_result {:?}", new_node_directory_path_result);
+
                         let node_file_path = match new_node_directory_path_result {
                             Some(path) => path,
                             None => {
@@ -31776,8 +32559,26 @@ fn handle_local_owner_desk(
                             }
                         };
 
+                        // #[cfg(debug_assertions)]
+                        debug_log!("HLOD nodes: node_file_path {:?}", node_file_path);
+
+                        /*
+                        Make a new path that is
+                        incoming relative end-path
+                        +
+                        local base absolute path
+
+                        */
+                        // get absolute exe-raltive base, local
+                        let local_abs_teamchannelsbase_pathbuf = get_team_channels_homebase_directory_path()?;
+
+                        // combines local base + new path tail from the struct-recieved
+                        let new_full_abs_node_directory_path = local_abs_teamchannelsbase_pathbuf.join(node_file_path);
+
                         // get absolute path
-                        let new_full_abs_node_directory_path = PathBuf::from(node_file_path);
+                        // let new_full_abs_node_directory_path = PathBuf::from(node_file_path);
+                        // let new_full_abs_node_directory_path = PathBuf::from(exe_abs_node_file_path);
+                        debug_log!("HLOD nodes: new_full_abs_node_directory_path {:?}", new_full_abs_node_directory_path);
 
                         // make sure path exists
                         fs::create_dir_all(&new_full_abs_node_directory_path)?;
@@ -31785,13 +32586,6 @@ fn handle_local_owner_desk(
                         debug_log!(
                             "HLOD 7.2 got-made new_full_abs_node_directory_path -> {:?}",
                             &new_full_abs_node_directory_path
-                        );
-
-                        let new_node_toml_file_path = new_full_abs_node_directory_path.join("node.toml"); // Path to the new node.toml
-
-                        debug_log!(
-                            "HLOD 7.2 got-made new_node_toml_file_path -> {:?}",
-                            &new_node_toml_file_path
                         );
 
                         // check: see if this same file was already saved
@@ -31804,14 +32598,14 @@ fn handle_local_owner_desk(
                         let received_file_hash = match received_file_hash_result {
                             Ok(hash) => hash,
                             Err(e) => {
-                                debug_log!("Error calculating hash for received file: {}", e);
+                                debug_log!("HLOD 7.2.1 Error calculating hash for received file: {}", e);
                                 continue; // Skip to next file if hashing fails
                             }
                         };
 
                         // 2. Check for duplicates and insert the hash (as before)
                         if file_hash_set_session_nonce.contains(&received_file_hash) {
-                            debug_log!("Duplicate file received (hash match). Discarding.");
+                            debug_log!("HLOD 7.2.2 Duplicate file received (hash match). Discarding.");
                             continue; // Discard the duplicate file
                         }
                         file_hash_set_session_nonce.insert(received_file_hash); // Insert BEFORE saving
@@ -31838,6 +32632,7 @@ fn handle_local_owner_desk(
 
                         match node_unique_id_str_result {
                             Ok(node_unique_id_str) => { // Node exists, handle move/replace:
+                                // TODO! check this, test it
                                 /*
                                 Establish Variables
                                 1. new node directory path (get) - Done Above
@@ -31931,6 +32726,8 @@ fn handle_local_owner_desk(
                                 } else {
                                     // 3. saving node as clearsigned .toml or .gpgtoml
 
+
+
                                     // Determine filename based on flag
                                     let node_filename = if save_as_gpgtoml {
                                         "node.gpgtoml"
@@ -31939,6 +32736,13 @@ fn handle_local_owner_desk(
                                     };
 
                                     let new_node_file_path = new_full_abs_node_directory_path.join(node_filename);
+
+                                    // let new_node_toml_file_path = new_full_abs_node_directory_path.join("node.toml"); // Path to the new node.toml
+
+                                    debug_log!(
+                                        "HLOD 7.2 got-made new_node_toml_file_path -> {:?}",
+                                        &new_node_file_path
+                                    );
 
                                     // Choose what to save
                                     let data_to_save = if save_as_gpgtoml {
