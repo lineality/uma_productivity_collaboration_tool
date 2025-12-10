@@ -8010,9 +8010,9 @@ fn prompt_user_for_collaborator_file_format() -> bool {
 /// # Returns
 /// * `Result<(), std::io::Error>` - Ok(()) on success, or an error
 fn encrypt_clearsigned_toml_with_public_key_content(
-    clearsigned_toml_path: &Path,
-    gpg_key_public: &str,
-    output_gpgtoml_path: &Path,
+    clearsigned_toml_path: &Path, // * `clearsigned_toml_path` - Path to the clearsigned TOML file to encrypt
+    gpg_key_public: &str, // * `gpg_key_public` - The GPG public key content to use for encryption
+    output_gpgtoml_path: &Path, // * `output_gpgtoml_path` - Path where the encrypted file should be saved
 ) -> Result<(), std::io::Error> {
     use std::fs;
     use std::process::Command;
@@ -9998,8 +9998,18 @@ impl CoreNode {
             }
         };
 
+        #[cfg(debug_assertions)]
+        {
+            debug_log("SNAGTF: afore convert_tomlfile_without_keyid_using_gpgtomlkeyid_into_clearsigntoml_inplace");
+            let clearsigned_content = fs::read_to_string(&temp_file_path)?;
+            debug_log!("SNAGTF: inspect clearsigned_content {:?}", clearsigned_content);
+            debug_log!("SNAGTF: inspect temp_file_path {:?}", temp_file_path);
+        }
+
         // 7. Clearsign the temp file in-place
+        #[cfg(debug_assertions)]
         debug_log!("SNAGTF: Starting clearsign operation on temp file");
+
         match convert_tomlfile_without_keyid_using_gpgtomlkeyid_into_clearsigntoml_inplace(
             &temp_file_path,
             COLLABORATOR_ADDRESSBOOK_PATH_STR,
@@ -10068,6 +10078,7 @@ impl CoreNode {
                 "SNAGTF: GPG export returned empty public key"
             ));
         }
+        #[cfg(debug_assertions)]
         debug_log!("SNAGTF: Successfully extracted public key from GPG");
 
         // // 9. Construct final output path for encrypted file
@@ -10075,18 +10086,36 @@ impl CoreNode {
         // debug_log!("SNAGTF: Final encrypted file path: {:?}", final_file_path);
 
         // // 4. Construct and verify the file path
-        let final_file_path = node_specific_path.join("node.toml");
-        debug_log!("SNCTF: Full file path for node.toml: {:?}", final_file_path);
+        let final_file_path = node_specific_path.join("node.gpgtoml");
 
+        #[cfg(debug_assertions)]
+        debug_log!("SNAGTF: Full Final encrypted file path: {:?}", final_file_path);
+
+        /*
+        fn encrypt_clearsigned_toml_with_public_key_content(
+            clearsigned_toml_path: &Path,
+            gpg_key_public: &str,
+            output_gpgtoml_path: &Path,
+        )
+        */
+
+        #[cfg(debug_assertions)]
+        {
+            debug_log("SNAGTF: afore encrypt_clearsigned_toml_with_public_key_content");
+            let clearsigned_content = fs::read_to_string(&temp_file_path)?;
+            debug_log!("SNAGTF: inspect temp_file_path {:?}", temp_file_path);
+            debug_log!("SNAGTF: inspect clearsigned_content: {:?}", clearsigned_content);
+        }
 
         // 10. Encrypt the clearsigned temp file with the public key
         debug_log!("SNAGTF: Starting encryption of clearsigned file");
         match encrypt_clearsigned_toml_with_public_key_content(
-            &temp_file_path,
-            &public_key_string,
-            &final_file_path
+            &temp_file_path, // Path to the clearsigned TOML file to encrypt
+            &public_key_string,  // gpg_key_public` - The GPG public key content
+            &final_file_path // output_gpgtoml_path
         ) {
             Ok(()) => {
+                #[cfg(debug_assertions)]
                 debug_log!("SNAGTF: Successfully created encrypted file at: {:?}", final_file_path);
             },
             Err(e) => {
@@ -12440,6 +12469,14 @@ fn save_message_as_gpgtoml(
 
     // 8. Encrypt the clearsigned temp file with the public key
     debug_log!("SMAGF: Starting encryption of clearsigned file");
+
+    /*
+    fn encrypt_clearsigned_toml_with_public_key_content(
+        clearsigned_toml_path: &Path,
+        gpg_key_public: &str,
+        output_gpgtoml_path: &Path,
+    )
+    */
 
     match encrypt_clearsigned_toml_with_public_key_content(
         &temp_file_path,
@@ -16426,7 +16463,8 @@ fn create_new_team_channel(
     println!("   - Contents readable by anyone");
     println!("   - Suitable for public/shared nodes");
     println!();
-    print!("Enter your choice [gpgtoml/clearsign] (press Enter for default 'gpgtoml'): ");
+    println!("Enter your choice [gpgtoml/clearsign] (press Enter for default 'gpgtoml'): ");
+    print!("> ");
 
     // Flush stdout to ensure the prompt appears
     std::io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
@@ -17073,7 +17111,8 @@ fn update_core_node(
     println!("   - Contents readable by anyone");
     println!("   - Suitable for public/shared nodes");
     println!();
-    print!("Enter your choice [gpgtoml/clearsign] (press Enter for default 'gpgtoml'): ");
+    println!("Enter your choice [gpgtoml/clearsign] (press Enter for default 'gpgtoml'): ");
+    print!("> ");
 
     // Flush stdout to ensure the prompt appears
     std::io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
@@ -17175,10 +17214,14 @@ fn create_core_node(
     teamchannel_collaborators_with_access: Vec<String>,
     use_padnet: Option<bool>,
 ) -> Result<(), ThisProjectError> {
+    #[cfg(debug_assertions)]
     debug_log!("CCN: start create_core_node(), node_path -> {:?}", node_path);
 
     // Get user input for node name
     println!("Enter node name:");
+    print!("> ");
+    std::io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+
     let mut node_name = String::new();
     io::stdin().read_line(&mut node_name)?;
     let node_name = node_name.trim().to_string();
@@ -17186,19 +17229,29 @@ fn create_core_node(
     let corenode_gpgtoml = match q_and_a_get_corenode_gpgtoml() {
         Ok(data) => data,
         Err(e) => {
+
+            #[cfg(debug_assertions)]
             debug_log!("CCN: Error getting PA1 Process: {}", e);
+
             return Err(e);
         }
     };
 
     // Get user input for description
+    let _ = clear_terminal_screen();
+    println!("");
     println!("Enter project description:");
+    print!("> ");
+    std::io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+
     let mut description = String::new();
     io::stdin().read_line(&mut description)?;
     let description = description.trim().to_string();
 
     // Create the specific node directory path
     let node_specific_path = node_path.join(&node_name);
+
+    #[cfg(debug_assertions)]
     debug_log!("CCN: Creating node at specific path: {:?}", node_specific_path);
 
     // Create the main node directory
@@ -17254,8 +17307,8 @@ fn create_core_node(
     // for node
     let node_relative_channel_pathbuf = extract_relative_node_path_after_known_segments(&node_specific_path.clone())?;
 
+    #[cfg(debug_assertions)]
     debug_log!("CCN: node_relative_channel_pathbuf {:?}", node_relative_channel_pathbuf);
-
 
     // Create CoreNode instance
     let new_node_result = CoreNode::new(
@@ -17289,13 +17342,15 @@ fn create_core_node(
         use_padnet,
     );
 
-
-    debug_log!("CCN: Creating node at specific path: {:?}", node_specific_path);
+    #[cfg(debug_assertions)] {
+        debug_log!("CCN: Creating node at specific path: {:?}", node_specific_path);
+        debug_log!("CCN: new_node_result {:?}", new_node_result);
+    }
 
     // maybe not for messages?
     let relative_channel_pathbuf = extract_relative_node_path_after_known_segments(&node_specific_path.clone())?;
 
-    // note: timestamp must be after node.toml's
+    // note: MessagePost timestamp must be after node.toml's timestamp
     // Create and Save metadata
     let metadata_path = message_dir.join("0.toml");
     let metadata = NodeMessagePostBrowserMetadata::new(
@@ -17315,9 +17370,7 @@ fn create_core_node(
         message_post_end_date,
     );
 
-
     // save_toml_to_file(&metadata, &metadata_path)?;
-
     match save_clearsigned_messagepost_config_0toml(&metadata, &metadata_path) {
         Ok(_) => debug_log!("CCN: Saved clearsigned metadata to 0.toml"),
         Err(e) => {
@@ -17326,21 +17379,150 @@ fn create_core_node(
         }
     }
 
+    // // returns CoreNode struct
+    // match new_node_result {
+    //     Ok(new_node) => {
+    //         // Save node.toml in the specific node directory
+    //         new_node.save_node_to_clearsigned_file(
+    //             &node_specific_path.clone(),
+    //         )?;
+    //         debug_log!("CCN:Successfully created node:");
+    //         Ok(())
+    //     }
+    //     Err(e) => {
+    //         debug_log!("CCN:Error creating CoreNode: {}", e);
+    //         Err(e)
+    //     }
+    // }
 
+
+    debug_log!("CTC: CoreNode creation complete, saving...");
+
+    // User Q&A: Ask user to choose file format for node
+    println!("\n=== Node File Format Selection ===");
+    println!("Choose the format for saving the node file:");
+    println!();
+    println!("1. 'gpgtoml' - GPG encrypted clearsigned file (node.gpgtoml) [DEFAULT - RECOMMENDED]");
+    println!("   - Maximum security: encrypted AND signed");
+    println!("   - Only you can decrypt with your private key");
+    println!("   - Integrity verified through clearsigning");
+    println!();
+    println!("2. 'clearsign' - Clearsigned only file (node.toml)");
+    println!("   - Signed for integrity verification");
+    println!("   - Contents readable by anyone");
+    println!("   - Suitable for public/shared nodes");
+    println!();
+    println!("Enter your choice [gpgtoml/clearsign] (press Enter for default 'gpgtoml'): ");
+    print!("> ");
+
+    // Flush stdout to ensure the prompt appears
+    std::io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
+
+    // Read user input
+    let mut user_input = String::new();
+    std::io::stdin().read_line(&mut user_input)
+        .map_err(|e| {
+            debug_log!("Error reading user input: {}", e);
+            ThisProjectError::IoError(e)
+        })?;
+
+    // Trim and convert to lowercase for case-insensitive comparison
+    let choice = user_input.trim().to_lowercase();
+
+    // Determine which save method to use based on user input
+    let use_encrypted = match choice.as_str() {
+        "" => {
+            // Empty input = use default (encrypted)
+            println!("Using default: GPG encrypted clearsigned format (node.gpgtoml)");
+            true
+        },
+        "gpgtoml" | "gpg" | "encrypted" | "secure" => {
+            println!("Selected: GPG encrypted clearsigned format (node.gpgtoml)");
+            true
+        },
+        "clearsign" | "clear" | "signed" | "toml" => {
+            println!("Selected: Clearsigned only format (node.toml)");
+            false
+        },
+        _ => {
+            // Invalid input = use default with warning
+            #[cfg(debug_assertions)] {
+                debug_log!("Invalid input '{}'. Using default: GPG encrypted clearsigned format (node.gpgtoml)", choice);
+                println!("Invalid input '{}'. Using default: GPG encrypted clearsigned format (node.gpgtoml)", choice);
+            }
+            println!("Invalid input. Using default: GPG encrypted clearsigned format (node.gpgtoml)");
+            true
+        }
+    };
+
+
+    // Handle the CoreNode creation result with chosen save method
     match new_node_result {
         Ok(new_node) => {
-            // Save node.toml in the specific node directory
-            new_node.save_node_to_clearsigned_file(
-                &node_specific_path.clone(),
-            )?;
-            debug_log!("CCN:Successfully created node:");
-            Ok(())
-        }
+            if use_encrypted {
+                // Save as GPG encrypted clearsigned file (node.gpgtoml)
+                debug_log!("CoreNode created successfully, saving as encrypted file... -> new_node.save_node_as_gpgtoml()");
+                match new_node.save_node_as_gpgtoml(
+                    &node_specific_path.clone()
+                ) {
+                    Ok(_) => {
+                        #[cfg(debug_assertions)] {
+                            debug_log!("save_node_as_gpgtoml: CoreNode saved successfully as node.gpgtoml");
+                            debug_log!("\n✓ Node successfully saved as encrypted file: {}/node.gpgtoml; new_channel_path,{:?}",
+                                    new_node.directory_path.display(),
+                                    node_specific_path
+                            );
+                        }
+
+                        debug_log!("\n✓ Node successfully saved as encrypted file");
+
+                        Ok(())
+                    },
+                    Err(e) => {
+                        #[cfg(debug_assertions)] {
+                            debug_log!("save_node_as_gpgtoml: Error saving CoreNode: {}", e);
+                            eprintln!("\n✗ Error saving node as encrypted file: {}", e);
+                        }
+                        Err(ThisProjectError::IoError(e))
+                    }
+                }
+            } else {
+                // Save as clearsigned only file (node.toml)
+                match new_node.save_node_to_clearsigned_file(
+                    &node_specific_path.clone()
+                ) {
+                    Ok(_) => {
+                        #[cfg(debug_assertions)] {
+                            debug_log!("save_node_to_clearsigned_file: CoreNode saved successfully as node.toml");
+                            println!("\n✓ Node successfully saved as clearsigned file: {}/node.toml, new_channel_path {:?}",
+                                    new_node.directory_path.display(),
+                                    node_specific_path
+                            );
+                        }
+                        println!("\n✓ Node successfully saved as clearsigned file: .../node.toml");
+                        debug_log!("CoreNode created successfully, saving as clearsigned file... -> new_node.save_node_to_clearsigned_file()");
+
+                        Ok(())
+                    },
+                    Err(e) => {
+                        #[cfg(debug_assertions)] {
+                            debug_log!("save_node_to_clearsigned_file: Error saving CoreNode: {}", e);
+                            eprintln!("\n✗ Error saving node as clearsigned file: {}", e);
+                        }
+                        // Safe print, no data leakage
+                        eprintln!("\n✗ Error saving node as clearsigned file");
+                        Err(ThisProjectError::IoError(e))
+                    }
+                }
+            }
+        },
         Err(e) => {
-            debug_log!("CCN:Error creating CoreNode: {}", e);
+            debug_log!("Error creating CoreNode: {}", e);
+            eprintln!("\n✗ Error creating CoreNode: {}", e);
             Err(e)
         }
     }
+
 }
 
 
@@ -18180,8 +18362,8 @@ fn q_and_a_get_pa1_process() -> Result<String, ThisProjectError> {
     println!("Not accounting for different workflows (e.g. frontend, backend, data-science, production machine-learning, R&D, test-reporting, etc.) will lead to delays and failures that should not have occurred. ");
     println!("In the absence of communication and learning, these failures may be invisible and repeat indefinitely because they are not seen and understood.");
     println!("");
-    println!("");
-    println!("Enter a Process Statement:");
+    println!("./");
+    print!("Enter a Process Statement:\n > ");
     let mut input = String::new();
     io::stdout().flush()?;
     io::stdin().read_line(&mut input)?;
@@ -18256,8 +18438,8 @@ fn q_and_a_get_pa2_schedule() -> Result<Vec<u64>, ThisProjectError> {
 
     // Ask if user wants to use current time as start with retry loop
     let use_now = loop {
-        println!("\n'Now'? -> Use current UTC time as project's start time? (y)es / (n)o (default: yes)");
-        print!("> ");
+        println!("'Now'? -> Use current UTC time as project's start time? (y)es / (n)o (default: yes)");
+        print!("\n> ");
 
         // Ensure prompt is displayed before reading input
         io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
@@ -18633,7 +18815,6 @@ fn press_enter_to_continue() {
 fn q_and_a_get_pa3_users() -> Result<String, ThisProjectError> {
     clear_screen();
     println!("");
-    println!("");
     println!("Users/Stakeholder (Project area 3:6)");
     println!("");
     println!("Enter A User Statement");
@@ -18655,6 +18836,8 @@ fn q_and_a_get_pa3_users() -> Result<String, ThisProjectError> {
     println!("But they would variably interpret the question in ~five ways. So I switched from trying to ask one question to asking separate questions and tracking answers to each over time.");
     println!("This consistently results in both answers that stopped changing over time and in a user/stakeholder who was more confident in their descriptions.");
     press_enter_to_continue();
+    println!("USERS");
+    println!("");
     println!("Disambiguated Needs & Goals evaluation questions:");
     println!("");
     println!("1. What do you do and use now?");
@@ -18664,6 +18847,7 @@ fn q_and_a_get_pa3_users() -> Result<String, ThisProjectError> {
     println!("5. What do you think can be delivered to help you? (Very often people think the possible is impossible and shut down, in terms of tools and workflow.)");
     println!("");
     println!("");
+    println!("./");
     print!("Enter A User Statement:\n > ");
     let mut input = String::new();
     io::stdout().flush()?;
@@ -18694,13 +18878,16 @@ fn q_and_a_get_pa4_features() -> Result<String, ThisProjectError> {
     println!("From an Under-the-hood standpoint, what needs to be made and how for the project to be maintainable?");
     println!("");
     press_enter_to_continue();
+    println!("FEATURES");
+    println!("");
     println!("Are these known? Do these need to be researched?");
     println!("If you do not have a clear articulation of what you are doing (for a user/stakeholder to meet their clarified need) then it is unlikely that the possibly unknown goal will be accomplished in a maintainable way meeting the need of the user/stakeholder.");
     println!("");
     println!("If you do not distinguish between and elucidate both user-story level features and sub-user-story level features (features/subfeatures) then quality, efficiency, and maintainability will be undermined.");
     println!("");
     println!("");
-    println!("Enter a Feature Statement:");
+    println!("./");
+    print!("Enter a Feature Statement:\n > ");
     let mut input = String::new();
     io::stdout().flush()?;
     io::stdin().read_line(&mut input)?;
@@ -18717,7 +18904,6 @@ fn q_and_a_get_pa4_features() -> Result<String, ThisProjectError> {
 /// Gets user input for agenda process selection of create_core_node()
 fn q_and_a_get_pa5_mvp() -> Result<String, ThisProjectError> {
     clear_screen();
-    println!("");
     println!("Enter an MVP Statement (Project area 5:6)");
     println!("");
     println!("MVP: 'MVP's (Minimum Viable Products (plural))");
@@ -18728,6 +18914,8 @@ fn q_and_a_get_pa5_mvp() -> Result<String, ThisProjectError> {
     println!("");
     println!("Articulating incremental MVP (minimum-viable-product) goals and stepping stones is an important part of progressing and communicating incrementally and/or progressing maintainably and sustainably.");
     press_enter_to_continue();
+    println!("MVP");
+    println!("");
     println!("Articulating incremental MVP (minimum-viable-product) goals and stepping stones is a skill in and of itself.");
     println!("");
     println!("Without timely iterative MVP deliverables, feedback from the user about features and usability will be significantly hindered.");
@@ -18763,6 +18951,7 @@ fn q_and_a_get_pa6_feedback() -> Result<String, ThisProjectError> {
     println!("Long term maintainability involves communication (including with 'future you').");
     println!("");
     press_enter_to_continue();
+    println!("FEEDBACK-LEARNING");
     println!("");
     println!("Failing to clearly map and communicate the differences between jargon terms and goal descriptions will result in mis-alignment between people and nonsense in planning.");
     println!("");
@@ -18771,7 +18960,7 @@ fn q_and_a_get_pa6_feedback() -> Result<String, ThisProjectError> {
     println!("Learning directly and indirectly related to the specific project is necessary. If you do not learn that a user/stakeholder's need is not being met then long term failure is highly probable. If you continually learn and develop useful skills then long term successes are more probable.");
     println!("");
     println!("");
-    println!("Enter a Feedback-Learning Statement");
+    print!("Enter a Feedback-Learning Statement\n > ");
     let mut input = String::new();
     io::stdout().flush()?;
     io::stdin().read_line(&mut input)?;
@@ -18794,7 +18983,8 @@ Message-Post Q&A functions
 /// # Returns
 /// * `Result<Option<Vec<(i32, i32)>>, ThisProjectError>` - Vector of integer range tuples or None
 fn q_and_a_get_message_post_integer_ranges() -> Result<Option<Vec<(i32, i32)>>, ThisProjectError> {
-
+    let _ = clear_terminal_screen();
+    println!("");
     // Section Blurb
     println!("\n\nMessage-Posts: optional modular customization of the Message-Post section of this node.");
     println!("for example, using this message post for: elections/votes/poles, surveys, questionnaires, data-collection for analysis, etc.\n");
@@ -18861,14 +19051,17 @@ fn q_and_a_get_message_post_integer_ranges() -> Result<Option<Vec<(i32, i32)>>, 
 /// * `ThisProjectError::InvalidInput` - If the input format is invalid
 /// * `ThisProjectError::IoError` - If there's an I/O error reading input
 fn q_and_a_get_message_post_int_string_ranges() -> Result<Option<Vec<(i32, i32)>>, ThisProjectError> {
-
+    let _ = clear_terminal_screen();
+    println!("");
     println!("Integer:Write-In choices, if applicable:");
+    println!("");
     println!("For write-in answers/choices for Message-Posts, such as the third part of this form: 1. mustard-yellow  2. pink 3. write in your choice of colour");
     println!("Or the third AND fourth parts of this form: 1. blue  2. yellow  3. write in: your choice of colour  4. write in: exceptional reason to avoid colour");
     println!("Here the user enters BOTH an integer AND (after a colon) their write-in character-string -> integer:string -> 3:lilac");
     println!("As with integer-only above, these can be single, continuous ranges, or (lists) discontinuous options (ranges or singles)");
     println!("If applicable, enter integer ranges for integer-string pair options (format: min-max,min-max,... or single values like 5 or press Enter to skip):");
     println!("Example: 2,5-10,12");
+    print!("> ");
 
     let mut input = String::new();
     io::stdout().flush()?;
@@ -18938,8 +19131,14 @@ fn q_and_a_get_message_post_int_string_ranges() -> Result<Option<Vec<(i32, i32)>
 /// # Returns
 /// * `Result<Option<usize>, ThisProjectError>` - Maximum string length or None
 fn q_and_a_get_message_messageposts_expire_after_n_min() -> Result<u64, ThisProjectError> {
+    let _ = clear_terminal_screen();
+    println!("TIME -> Message-Posts -> Lifetime of");
+    println!("");
     println!("Enter default-lifetime of post in minutes (or press Enter for 9999999):");
     println!("Example: 42 (Massages respire after 42 minutes.");
+    println!("");
+    println!("(integer)");
+    print!("> ");
 
     let mut input = String::new();
     io::stdout().flush()?;
@@ -18962,8 +19161,13 @@ fn q_and_a_get_message_messageposts_expire_after_n_min() -> Result<u64, ThisProj
 /// # Returns
 /// * `Result<Option<usize>, ThisProjectError>` - Maximum string length or None
 fn q_and_a_get_message_post_max_string_length() -> Result<Option<usize>, ThisProjectError> {
+    let _ = clear_terminal_screen();
+    println!("MEMORY-MANAGEMENT -> Message-Posts -> size");
+    println!("");
     println!("Enter maximum string length (max number of write-in characters) for integer-string pairs (or press Enter to skip):");
     println!("Example: 42");
+    println!("");
+    print!("> ");
 
     let mut input = String::new();
     io::stdout().flush()?;
@@ -18986,7 +19190,12 @@ fn q_and_a_get_message_post_max_string_length() -> Result<Option<usize>, ThisPro
 /// # Returns
 /// * `Result<Option<bool>, ThisProjectError>` - Whether posts are public or None
 fn q_and_a_get_message_post_is_public() -> Result<Option<bool>, ThisProjectError> {
-    println!("Should message posts be public? -> (y)es / (n)o / Press-Enter to skip):");
+    let _ = clear_terminal_screen();
+    println!("Message-Posts");
+    println!("");
+    print!("Should message posts be public? -> (y)es / (n)o\n(Press-Enter to skip):");
+    println!("");
+    print!("> ");
 
     let mut input = String::new();
     io::stdout().flush()?;
@@ -19009,7 +19218,12 @@ fn q_and_a_get_message_post_is_public() -> Result<Option<bool>, ThisProjectError
 /// # Returns
 /// * `Result<Option<bool>, ThisProjectError>` - Whether user confirmation is required or None
 fn q_and_a_get_message_post_user_confirms() -> Result<Option<bool>, ThisProjectError> {
-    println!("Require user confirmation before posting messages?  -> (y)es / (n)o / Press-Enter to skip):");
+    let _ = clear_terminal_screen();
+    println!("Message-Posts -> input -> Data Rigor");
+    println!("");
+    println!("Require user confirmation before posting messages?  -> (y)es / (n)o\n(Press-Enter to skip):");
+    println!("");
+    print!("> ");
 
     let mut input = String::new();
     io::stdout().flush()?;
@@ -19033,8 +19247,13 @@ fn q_and_a_get_message_post_user_confirms() -> Result<Option<bool>, ThisProjectE
 /// # Returns
 /// * `Result<Option<bool>, ThisProjectError>` - Whether user confirmation is required or None
 fn q_and_a_get_message_post_gpgtoml_required() -> Result<Option<bool>, ThisProjectError> {
-    println!("Require all message post are gpgtoml encrypted?  -> (y)es / (n)o / Press-Enter to skip):");
-
+    let _ = clear_terminal_screen();
+    println!("Message-Posts -> security -> .gpgtoml");
+    println!("");
+    println!("Require all message post are gpgtoml encrypted?  -> (y)es / (n)o\n(Press-Enter to skip):");
+    println!("");
+    println!("(y/n)");
+    print!("> ");
     let mut input = String::new();
     io::stdout().flush()?;
     io::stdin().read_line(&mut input)?;
@@ -19056,8 +19275,13 @@ fn q_and_a_get_message_post_gpgtoml_required() -> Result<Option<bool>, ThisProje
 /// # Returns
 /// * `Result<bool, ThisProjectError>` - Whether user confirmation is required (defaults to true)
 fn q_and_a_get_corenode_gpgtoml() -> Result<bool, ThisProjectError> {
-    println!("This Node is gpgtoml encrypted? -> (y)es / (n)o / Press-Enter for default [yes]:");
-
+    let _ = clear_terminal_screen();
+    println!("Task-Node -> security -> .gpgtoml");
+    println!("");
+    println!("This Node is node.gpgtoml encrypted (by policy for those you share with)? -> (y)es / (n)o / Press-Enter for default [yes]:");
+    println!("");
+    println!("(y/n)");
+    print!("> ");
     let mut input = String::new();
 
     // If flushing or reading fails, default to true
@@ -19127,6 +19351,9 @@ fn q_and_a_get_corenode_gpgtoml() -> Result<bool, ThisProjectError> {
 /// Timestamp: 1705329045
 /// ```
 fn q_and_a_get_message_post_start_date() -> Result<Option<i64>, ThisProjectError> {
+    let _ = clear_terminal_screen();
+    println!("Message-Posts -> schedules -> start date");
+    println!("");
     // Log function entry
     debug_log("Starting q_and_a_get_message_post_start_date()");
 
@@ -19176,9 +19403,12 @@ fn q_and_a_get_message_post_start_date() -> Result<Option<i64>, ThisProjectError
 /// # Returns
 /// * `Result<Option<bool>, ThisProjectError>` - Whether user confirmation is required or None
 fn q_and_a_get_use_padnet() -> Result<Option<bool>, ThisProjectError> {
+    let _ = clear_terminal_screen();
+    println!("Team-Channel -> Security -> One Time Pad");
+    println!("");
     // TODO Buffy formatting no heap
     println!("");
-    println!("Team Channel uses One-Time-Pad Network-Layer?  \n(requires make/share 'pad') -> (y)es / (n)o / Press-Enter to skip): \n(default is no)\n > ");
+    print!("Team Channel uses One-Time-Pad Network-Layer?  \n(requires make/share 'pad') -> (y)es / (n)o\n(Press-Enter to skip):\n(default is no)\n > ");
 
     let mut input = String::new();
     io::stdout().flush()?;
@@ -22536,7 +22766,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         then Q&A user into sets that owner-name.
 
         either way, 'owner' needs to be available
-        if a new chanel needs to be created (as the owner)
+        if a new channel needs to be created (as the owner)
         */
         // Prompt for owner and create uma.toml
         println!("Welcome to the Uma Collaboration Tools.");
