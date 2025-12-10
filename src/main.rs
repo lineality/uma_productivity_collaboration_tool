@@ -551,7 +551,7 @@ pub fn get_sessionstateitems_path() -> io::Result<PathBuf> {
     )
 }
 
-pub fn get_current_node_path() -> io::Result<PathBuf> {
+pub fn get_session_state_current_node_record_path() -> io::Result<PathBuf> {
     make_input_path_name_abs_executabledirectoryrelative_nocheck(
         UMA_CURRENT_NODE_PATH_STR
     )
@@ -1746,10 +1746,17 @@ fn hlod_udp_handshake_rc_network_type_rc_ip_addr(
     band_local_network_type: &str,
     band_local_network_index: u8,
 ) -> Result<(String, String), ThisProjectError> {
+
+    #[cfg(debug_assertions)]
     debug_log("inHLOD: Start hlod_udp_handshake_rc_network_type_rc_ip_addr()");
 
-    let channel_dir_path_str = read_state_string("current_node_directory_path.txt")?; // read as string first
-    debug_log!("hlod_udp_handshake_rc_network_type_rc_ip_addr Channel directory path (from session state): {}", channel_dir_path_str);
+    // let channel_dir_path_str = read_state_string("current_node_directory_path.txt")?; // read as string first
+
+    // let channel_dir_path_str = get_session_state_current_node_record_path()?; // read as string first
+
+
+    // #[cfg(debug_assertions)]
+    // debug_log!("hlod_udp_handshake_rc_network_type_rc_ip_addr Channel directory path (from session state): {}", channel_dir_path_str);
 
     // let team_channel_name = channel_dir_path_str;
     // was  get_latest_received_from_rc_in_teamchannel_file_timestamp_filecrawl
@@ -1757,10 +1764,16 @@ fn hlod_udp_handshake_rc_network_type_rc_ip_addr(
     let team_channel_name = match get_current_team_channel_name_from_nav_path() {
         Some(name) => name,
         None => {
-            debug_log!("Error: Could not get current channel name in get_current_team_channel_name_from_nav_path. Skipping.");
+            #[cfg(debug_assertions)]
+            debug_log!("Error 1 [match get_current_team_channel_name_from_nav_path()]: Could not get current channel name in get_current_team_channel_name_from_nav_path. Skipping.");
+
             return Err(ThisProjectError::InvalidData("Could not get team channel name".into()));
         },
     };
+
+    #[cfg(debug_assertions)]
+    debug_log!("hlod_udp_handshake_rc_network_type_rc_ip_addr team_channel_name {}", team_channel_name);
+
 
     // --- Prepare ReadySignal ---
     let timestamp_for_rt = match get_latest_received_from_rc_file_timestamp(
@@ -1769,10 +1782,14 @@ fn hlod_udp_handshake_rc_network_type_rc_ip_addr(
     ) {
         Ok(timestamp) => timestamp,
         Err(e) => {
+            #[cfg(debug_assertions)]
             debug_log!("error in hlod_udp_handshake_rc_network_type_rc_ip_addr(): Error getting timestamp: {}", e);
+
             0
         }
     };
+
+    #[cfg(debug_assertions)]
     debug_log!(
         "hlod_udp_handshake: .rt, timestamp_for_rt, from get_latest_received_from_rc_in_teamchannel_file_timestamp_filecrawl -> {:?}",
         timestamp_for_rt,
@@ -1782,7 +1799,9 @@ fn hlod_udp_handshake_rc_network_type_rc_ip_addr(
     let team_channel_name = match get_current_team_channel_name_from_nav_path() {
         Some(name) => name,
         None => {
-            debug_log!("Error: Could not get current channel name in get_current_team_channel_name_from_nav_path. Skipping.");
+            #[cfg(debug_assertions)]
+            debug_log!("error 2 none [ match get_current_team_channel_name_from_nav_path()] hlod_udp_handshake_rc_network_type_rc_ip_addr Error: Could not get current channel name in get_current_team_channel_name_from_nav_path. Skipping.");
+
             return Err(ThisProjectError::InvalidData("Could not get team channel name".into()));
         },
     };
@@ -1797,6 +1816,7 @@ fn hlod_udp_handshake_rc_network_type_rc_ip_addr(
     got_signal_check_base_path.push(&local_owner_desk_setup_data.remote_collaborator_name);
 
     loop { // hlod_udp_handshake_rc_network_type_rc_ip_addr() Main loop starts here
+        #[cfg(debug_assertions)]
         debug_log("hlod_udp_handshake_rc_network_type_rc_ip_addr() main loop (re)starting from the top...");
 
         // 1. Check for Halt Signal and Team Channel Name (as before)
@@ -1835,7 +1855,7 @@ fn hlod_udp_handshake_rc_network_type_rc_ip_addr(
         // ... [Iterate remote IP addresses *only* if no ReadySignal received]
 
         // Send to each IPv6 address in rc_ipv6_list
-        debug_log("hlod_udp_handshake_rc_network_type_rc_ip_addr() Sending Handshake ready signals!");
+        debug_log("hlod_udp_handshake_rc_network_type_rc_ip_addr() \nSending Handshake ready signals!\n");
         for ipv6_addr_string in &local_owner_desk_setup_data.remote_collaborator_ipv6_addr_list {
             send_ready_signal(
                 &local_owner_desk_setup_data.local_user_salt_list,
@@ -9198,7 +9218,35 @@ impl GraphNavigationInstanceState {
             self.current_node_name = this_node.node_name.clone();
             self.current_node_owner = this_node.owner.clone();
             self.current_node_description_for_tui = this_node.description_for_tui.clone();
-            self.current_node_directory_path = this_node.directory_path.clone();
+
+
+            /*
+            Idea:
+            set current_node_directory_path to the full
+            absolute canonicalied path
+
+            */
+
+            let base_teamchannel_path = match get_team_channels_homebase_directory_path() {
+                Ok(path) => path,
+                Err(_e) => {
+
+                    #[cfg(debug_assertions)]
+                    debug_log!("NGLRNT get_team_channels_homebase_directory_path Failed to get absolute path: {}", _e);
+
+                    // use this as default, won't work
+                    this_node.directory_path.clone()
+                }
+            };
+            #[cfg(debug_assertions)]
+
+            debug_log!("NGLRNT base_teamchannel_path {:?}", base_teamchannel_path);
+
+            // let base_teamchannel_path = get_team_channels_homebase_directory_path()?;
+            let full_node_path = base_teamchannel_path.join(this_node.directory_path.clone());
+
+            // self.current_node_directory_path = this_node.directory_path.clone();
+            self.current_node_directory_path = full_node_path;
             self.current_node_unique_id = this_node.node_unique_id;
             self.home_square_one = false;
 
@@ -9220,7 +9268,33 @@ impl GraphNavigationInstanceState {
             self.message_post_start_date_utc_posix = None;
             self.message_post_end_date_utc_posix = None;
 
+            // create team channel...path state
+
+            // set file-state team-channel's current_node_directory_path
+            if let Ok(session_path) = get_sessionstateitems_path() {
+                let file_path = session_path.join("current_node_directory_path.txt");
+                if let Some(path_str) = self.current_node_directory_path.to_str() {
+
+                    #[cfg(debug_assertions)]
+                    {
+                        debug_log!("NGLRNT [self.current_node_directory_path.to_str()] path_str {}", path_str);
+                    }
+
+
+                    if let Err(_e) = fs::write(file_path, path_str) {
+                        #[cfg(debug_assertions)]
+                        debug_log!("NGLRNT Failed to write file: {}", _e);
+                        // Optionally log the error or handle it in another way
+                    }
+                }
+            } else {
+                debug_log!("NGLRNT Failed to get session state items path");
+                // Optionally log the error or handle it in another way
+            }
+
         } else {
+            // NOT a team-channel
+
             debug_log!("nav_graph_look_read_node_toml(), not a team channel node");
             /*
             this should be loading... node items...
@@ -9278,20 +9352,7 @@ impl GraphNavigationInstanceState {
         //     fs::write(file_path, path_str)?;
         // }
 
-        // create team channel...path state
-        // set file-state team-channel's current_node_directory_path
-        if let Ok(session_path) = get_sessionstateitems_path() {
-            let file_path = session_path.join("current_node_directory_path.txt");
-            if let Some(path_str) = self.current_node_directory_path.to_str() {
-                if let Err(e) = fs::write(file_path, path_str) {
-                    debug_log!("NGLRNT Failed to write file: {}", e);
-                    // Optionally log the error or handle it in another way
-                }
-            }
-        } else {
-            debug_log!("NGLRNT Failed to get session state items path");
-            // Optionally log the error or handle it in another way
-        }
+
 
         debug_log!("NGLRNT Done: ending: nav_graph_look_read_node_toml()");
     }
@@ -28924,11 +28985,21 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
         }
     };
 
+    #[cfg(debug_assertions)]
+    debug_log!("MSMD 1. Channel directory path (from session state): {:?}", channel_dir_path_str);
 
+    /*
+    Hybrid Local-absolute to abstract-relative-tail
+    combine abstract path tail from struct
+    with local absolute (exe-relative) path
+    */
+    let channel_dir_path = get_absolute_team_channel_path(&channel_dir_path_str)?;
+
+    #[cfg(debug_assertions)]
     debug_log!("MSMD 1. Channel directory path (from session state): {:?}", channel_dir_path_str);
 
     // use absolute file path
-    let channel_dir_path = PathBuf::from(channel_dir_path_str);
+    // let channel_dir_path = PathBuf::from(channel_dir_path_str);
 
     // A. Print the absolute path of the channel directory
     match channel_dir_path.canonicalize() {
@@ -35943,6 +36014,7 @@ fn create_local_udp_socket(
 ///     },
 /// };
 fn get_current_team_channel_name_from_nav_path() -> Option<String> {
+    #[cfg(debug_assertions)]
     debug_log!("\nGCTCNFNP Starting: get_current_team_channel_name_from_nav_path()");
 
     // // Get absolute path from current directory
@@ -35956,12 +36028,14 @@ fn get_current_team_channel_name_from_nav_path() -> Option<String> {
 
     let absolute_path_string = match read_state_string("current_node_directory_path.txt") {
         Ok(path) => path,
-        Err(e) => {
-            debug_log!("GCTCNFNP Failed to get absolute path: {}", e);
+        Err(_e) => {
+            #[cfg(debug_assertions)]
+            debug_log!("GCTCNFNP Failed to get absolute path: {}", _e);
             return None;
         }
     };
 
+    #[cfg(debug_assertions)]
     debug_log!("GCTCNFNP Absolute path: {}", absolute_path_string);
 
     // Convert path to string
