@@ -9221,7 +9221,6 @@ impl GraphNavigationInstanceState {
 
 
             /*
-            Idea:
             set current_node_directory_path to the full
             absolute canonicalied path
 
@@ -9268,30 +9267,6 @@ impl GraphNavigationInstanceState {
             self.message_post_start_date_utc_posix = None;
             self.message_post_end_date_utc_posix = None;
 
-            // create team channel...path state
-
-            // set file-state team-channel's current_node_directory_path
-            if let Ok(session_path) = get_sessionstateitems_path() {
-                let file_path = session_path.join("current_node_directory_path.txt");
-                if let Some(path_str) = self.current_node_directory_path.to_str() {
-
-                    #[cfg(debug_assertions)]
-                    {
-                        debug_log!("NGLRNT [self.current_node_directory_path.to_str()] path_str {}", path_str);
-                    }
-
-
-                    if let Err(_e) = fs::write(file_path, path_str) {
-                        #[cfg(debug_assertions)]
-                        debug_log!("NGLRNT Failed to write file: {}", _e);
-                        // Optionally log the error or handle it in another way
-                    }
-                }
-            } else {
-                debug_log!("NGLRNT Failed to get session state items path");
-                // Optionally log the error or handle it in another way
-            }
-
         } else {
             // NOT a team-channel
 
@@ -9334,23 +9309,30 @@ impl GraphNavigationInstanceState {
 
 
         }
-            // },
-            // Err(e) => {
-            //     // the error would be an error in reading node.toml
-            //     // it is not an error to not need to try to read
-            //     // a file that is not there.
-            //     debug_log!("NGLRNT Error reading file: {}", e);
-            //     debug_log!("NGLRNTThis directory is not a node. nav_graph_look_read_node_toml() node.toml not found at {:?}. ", node_toml_path);
-            //     return;
-            // }
-        // }
 
-        // // create team channel...path state
-        // // set file-state team-channel's current_node_directory_path
-        // let file_path = get_sessionstateitems_path()?.join("current_node_directory_path.txt");
-        // if let Some(path_str) = self.current_node_directory_path.to_str() {
-        //     fs::write(file_path, path_str)?;
-        // }
+
+        // either way: set each node path
+        // set file-state team-channel's current_node_directory_path
+        if let Ok(session_path) = get_sessionstateitems_path() {
+            let file_path = session_path.join("current_node_directory_path.txt");
+            if let Some(path_str) = self.current_node_directory_path.to_str() {
+
+                #[cfg(debug_assertions)]
+                {
+                    debug_log!("NGLRNT [self.current_node_directory_path.to_str()] path_str {}", path_str);
+                }
+
+
+                if let Err(_e) = fs::write(file_path, path_str) {
+                    #[cfg(debug_assertions)]
+                    debug_log!("NGLRNT Failed to write file: {}", _e);
+                    // Optionally log the error or handle it in another way
+                }
+            }
+        } else {
+            debug_log!("NGLRNT Failed to get session state items path");
+            // Optionally log the error or handle it in another way
+        }
 
 
 
@@ -32634,7 +32616,9 @@ fn handle_local_owner_desk(
                     // 3. Nodes
                     // future
                     // 4. Uma Data
-                    if file_str.contains("filepath_in_node = \"/message_posts_browser\"") {
+                    // if file_str.contains("filepath_in_node = \"/message_posts_browser\"") {
+                    if file_str.contains("filepath_in_node = \"message_posts_browser\"") {
+
                         debug_log!("HLOD-InTray: an instant message file.");
 
                         // 7.2
@@ -32717,6 +32701,31 @@ fn handle_local_owner_desk(
                     // ======================================================
                     // File Type Processing 2: 0toml config for message posts
                     // ======================================================
+                    /*
+                    The 'path' for message files are more relative
+                    than for node files,
+                    so that moving a node can more simply
+                    directly move all messages...(I think)
+
+                    use get team channel from node path
+
+                    add team_channel_name
+                    get node-name from message file
+
+                    maybe new function for read single
+                    value from file string...
+
+                    e.g.
+                    node_name = "alicetown"
+
+                    from get_current...
+
+                    search for path to nodename
+
+
+
+
+                    */
 
                     // TODO handling:
                     // 1. message Posts
