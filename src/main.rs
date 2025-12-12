@@ -4102,7 +4102,9 @@ pub fn collect_and_validate_collaborators(
 
     loop {
         // Prompt for input
-        print!("Enter the user-names of collaborators you wish to invite separated by commas: ");
+        println!("Enter the user-names of collaborators");
+        println!("whom you wish to invite, separated by commas: ");
+        println!(" > ");
         io::stdout().flush().map_err(|e| {
             ThisProjectError::from(format!("Failed to flush stdout: {}", e))
         })?;
@@ -7656,7 +7658,7 @@ impl App {
     /// and list it under the header "plan"
     /// results sent to display_table() as function or as method
     fn load_tasks(&mut self) {
-        debug_log!("task-mode: starting: tasks app: load_tasks");
+        debug_log!("task-mode: starting: tasks app: load_tasks fun");
         self.tui_directory_list.clear(); // Clear directories
         self.tui_file_list.clear();  // Clear files
 
@@ -7686,11 +7688,11 @@ impl App {
                     }
                 },
                 Err(e) => {
-                    debug_log(&format!("Error updating task display: {}", e));
+                    debug_log(&format!("Error in load_tasks updating task display: {}", e));
                     // Show error message in table format
                     tiny_tui::render_tasks_table(
                         &["Error".to_string()],
-                        &vec![vec![format!("Failed to load tasks: {}", e)]],
+                        &vec![vec![format!("in load_tasks Failed to load tasks: {}", e)]],
                         &self.current_path
                     );
                 }
@@ -7708,7 +7710,7 @@ impl App {
                     }
                 }
             } else {
-                // ... handle errors
+                println!("Error, problem in load_tasks( )");
             }
 
             // Render the list using the correct parameters:
@@ -9453,7 +9455,8 @@ impl GraphNavigationInstanceState {
             // Optionally log the error or handle it in another way
         }
 
-
+        #[cfg(debug_assertions)]
+        debug_log!("NGLRNT struct {:?}", self);
 
         debug_log!("NGLRNT Done: ending: nav_graph_look_read_node_toml()");
     }
@@ -29660,6 +29663,7 @@ fn get_user_input_number() -> Result<usize, ThisProjectError> {
     )
 }
 
+/// TODO: this...needs to be updated
 /// Moves a node directory and updates its metadata.
 ///
 /// This function moves a node's directory from the `source_path` to the `dest_path`.
@@ -29679,16 +29683,16 @@ fn move_node_directory(
     source_path: PathBuf,
     dest_path: PathBuf,
 ) -> Result<(), ThisProjectError> {
-    debug_log!("Starting move_node_directory()");
+    debug_log!("MND Starting move_node_directory()");
     debug_log!("Moving node from {:?} to {:?}", source_path, dest_path);
 
     // 1. Construct the new node path (where the moved node will be located).
     let new_node_path = dest_path.join(source_path.file_name().unwrap());
-    debug_log!("move_node_directory: new_node_path is: {:?}", new_node_path);
+    debug_log!("MND: new_node_path is: {:?}", new_node_path);
 
     // 2. Create the new directory, including all parents.
     fs::create_dir_all(&new_node_path)?;
-    debug_log!("move_node_directory: created new_node_path: {:?}", new_node_path);
+    debug_log!("MND: created new_node_path: {:?}", new_node_path);
 
 
     // let original_node_toml_path = new_node_path.push("node.toml");
@@ -29703,13 +29707,13 @@ fn move_node_directory(
         "next: match safe_update_toml_field(\n{:?},\n{:?},\n{:?},\n)",
         &original_node_toml_path,   // path to .toml
         &new_node_path_string, // new value
-        "directory_path",      // name of field
+        "path_in_parentnode",      // name of field
     );
 
     match safe_update_toml_field(
         &original_node_toml_path,        // path to .toml
         &new_node_path_string, // new value
-        "directory_path",     // name of field
+        "path_in_parentnode",     // name of field
     ) {
         Ok(_) => println!("Successfully updated TOML file"),
         Err(e) => eprintln!("Error: {}", e)
@@ -29718,16 +29722,16 @@ fn move_node_directory(
 
     // 4. Recursively move the source directory's contents to the new directory.
     move_directory_contents(&source_path, &new_node_path)?;
-    debug_log!("move_node_directory: contents moved to: {:?}", new_node_path);
+    debug_log!("MND: contents moved to: {:?}", new_node_path);
 
 
 
 
-    debug_log!("move_node_directory: updated node.toml paths");
+    debug_log!("MND: updated node.toml paths");
 
     // 5. Remove the old directory.
     fs::remove_dir_all(source_path.clone())?;
-    debug_log!("move_node_directory: removed source_path at : {:?}", source_path);
+    debug_log!("MND: removed source_path at : {:?}", source_path);
 
     Ok(())
 }
@@ -33936,14 +33940,15 @@ fn handle_local_owner_desk(
                         // 2. Generating File Path
                         // attach to absolute path: TODO
 
-                        // Extract directory_path:
+                        // Extract path_in_parentnode:
                         let new_node_directory_path_result = file_str
                             .lines()  // Iterate over lines
                             .find_map(|line| { // Use find_map to extract and parse in one step
-                                if line.starts_with("directory_path = \"") && line.ends_with("\"") {
-                                    let path_str = &line["directory_path = \"".len()..line.len() - 1];
+                                if line.starts_with("path_in_parentnode = \"") && line.ends_with("\"") {
+                                    let path_str = &line["path_in_parentnode = \"".len()..line.len() - 1];
                                     Some(PathBuf::from(path_str))
                                 } else {
+                                    debug_log!("HLOD Extract path_in_parentnode failed, warning.error?");
                                     None
                                 }
                             });
