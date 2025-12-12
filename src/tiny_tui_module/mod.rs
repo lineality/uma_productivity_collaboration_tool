@@ -69,7 +69,7 @@ pub mod tiny_tui {
                 start_date, end_date, duration_days
             );
         } else {
-            println!("Schedule: (no schedule)");
+            println!("Schedule: (no schedule... Oh No! Update this!)");
         }
 
         println!("Users: {}", pa3_users);

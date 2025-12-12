@@ -397,7 +397,46 @@ toml crates
 // For toml and clearsigntoml
 mod clearsign_toml_module;
 use crate::clearsign_toml_module::{
-    GpgError, cleanup_collaborator_temp_file, clearsign_and_encrypt_file_for_recipient, convert_toml_filewithkeyid_into_clearsigntoml_inplace, convert_tomlfile_without_keyid_using_gpgtomlkeyid_into_clearsigntoml_inplace, decrypt_gpgfile_to_output, extract_verify_store_gpg_encrypted_clearsign_toml, get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml, get_pathstring_to_temp_plaintoml_verified_extracted, get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml, gpg_make_input_path_name_abs_executabledirectoryrelative_nocheck, q_and_a_user_selects_gpg_key_full_fingerprint, read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyid, read_abstract_ports_from_clearsigntoml_without_publicgpgkey, read_bool_field_from_toml, read_bool_from_clearsigntoml_without_publicgpgkey, read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml, read_float_f32_field_from_toml, read_multiline_string_from_clearsigntoml, read_option_bool_from_clearsigntoml_without_publicgpgkey, read_option_i32_tuple_array_from_clearsigntoml_without_publicgpgkey, read_option_i64_from_clearsigntoml_without_publicgpgkey, read_option_usize_from_clearsigntoml_without_publicgpgkey, read_pathbuf_from_clearsigntoml_without_publicgpgkey, read_single_line_string_field_from_toml, read_singleline_string_from_clearsigntoml, read_singleline_string_from_clearsigntoml_without_publicgpgkey, read_str_array_field_clearsigntoml, read_string_array_field_from_toml, read_stringarray_from_clearsigntoml_without_publicgpgkey, read_teamchannel_collaborator_ports_clearsigntoml_without_keyid, read_u8_array_from_clearsigntoml_without_publicgpgkey, read_u8_field_from_toml, read_u64_array_from_clearsigntoml_without_publicgpgkey, read_u64_field_from_toml, read_u64_from_clearsigntoml_without_publicgpgkey, verify_clearsign, verify_clearsigned_file_and_extract_content_to_output
+    read_u8_array_field_from_toml,
+    read_u8_array_field_from_string,
+    GpgError,
+    cleanup_collaborator_temp_file,
+    clearsign_and_encrypt_file_for_recipient,
+    convert_toml_filewithkeyid_into_clearsigntoml_inplace,
+    convert_tomlfile_without_keyid_using_gpgtomlkeyid_into_clearsigntoml_inplace,
+    decrypt_gpgfile_to_output,
+    extract_verify_store_gpg_encrypted_clearsign_toml,
+    get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml,
+    get_pathstring_to_temp_plaintoml_verified_extracted,
+    get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml,
+    gpg_make_input_path_name_abs_executabledirectoryrelative_nocheck,
+    q_and_a_user_selects_gpg_key_full_fingerprint,
+    read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyid,
+    read_abstract_ports_from_clearsigntoml_without_publicgpgkey,
+    read_bool_field_from_toml,
+    read_bool_from_clearsigntoml_without_publicgpgkey,
+    read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml,
+    read_float_f32_field_from_toml,
+    read_multiline_string_from_clearsigntoml,
+    read_option_bool_from_clearsigntoml_without_publicgpgkey,
+    read_option_i32_tuple_array_from_clearsigntoml_without_publicgpgkey,
+    read_option_i64_from_clearsigntoml_without_publicgpgkey,
+    read_option_usize_from_clearsigntoml_without_publicgpgkey,
+    read_pathbuf_from_clearsigntoml_without_publicgpgkey,
+    read_single_line_string_field_from_toml,
+    read_singleline_string_from_clearsigntoml,
+    read_singleline_string_from_clearsigntoml_without_publicgpgkey,
+    read_str_array_field_clearsigntoml,
+    read_string_array_field_from_toml,
+    read_stringarray_from_clearsigntoml_without_publicgpgkey,
+    read_teamchannel_collaborator_ports_clearsigntoml_without_keyid,
+    read_u8_array_from_clearsigntoml_without_publicgpgkey,
+    read_u8_field_from_toml,
+    read_u64_array_from_clearsigntoml_without_publicgpgkey,
+    read_u64_field_from_toml,
+    read_u64_from_clearsigntoml_without_publicgpgkey,
+    verify_clearsign,
+    verify_clearsigned_file_and_extract_content_to_output,
 };
 
 
@@ -1781,9 +1820,9 @@ fn hlod_udp_handshake_rc_network_type_rc_ip_addr(
         &local_owner_desk_setup_data.remote_collaborator_name,
     ) {
         Ok(timestamp) => timestamp,
-        Err(e) => {
+        Err(_e) => {
             #[cfg(debug_assertions)]
-            debug_log!("error in hlod_udp_handshake_rc_network_type_rc_ip_addr(): Error getting timestamp: {}", e);
+            debug_log!("error in hlod_udp_handshake_rc_network_type_rc_ip_addr(): Error getting timestamp: {}", _e);
 
             0
         }
@@ -3715,7 +3754,7 @@ pub fn global_ports_exclusion_list_generator() -> Result<HashSet<u16>, ThisProje
 
     // code from load_core_node...()
     debug_log!(
-        "Starting: load_core_node_from_toml_file(), team_channels_dir -> {:?}",
+        "Starting: deseri_get_core_node_struct_from_toml_file(), team_channels_dir -> {:?}",
         &team_channels_dir,
     );
 
@@ -7040,6 +7079,7 @@ impl App {
             // &self.graph_navigation_instance_state,
             &self.graph_navigation_instance_state.local_owner_user,
             &node_name,
+            self.graph_navigation_instance_state.current_node_unique_id.clone(),
             &path_in_node,
             &text_message,
             if recipients.is_empty() {
@@ -8884,6 +8924,7 @@ struct GraphNavigationInstanceState {
     current_node_description_for_tui: String,
     current_node_directory_path: PathBuf,
     current_node_unique_id: Vec<u8>,
+    parent_node_uniqueid: Vec<u8>,
     current_node_members: Vec<String>,
     home_square_one: bool,
     // from task fields:
@@ -8949,7 +8990,7 @@ struct GraphNavigationInstanceState {
 
 impl GraphNavigationInstanceState {
 
-    /// To read a node toml: See if you want to use load_core_node_from_toml_file() instead.
+    /// To read a node toml: See if you want to use deseri_get_core_node_struct_from_toml_file() instead.
     ///
     /// This is the routine check to see, as you navigate around
     /// if you are not entering a new node (do nothing becuase
@@ -9084,7 +9125,7 @@ impl GraphNavigationInstanceState {
         //     }
         // }
 
-        debug_log("NGLRNT In nav_graph_look_read_node_toml(), next calling: load_core_node_from_toml_file(file_path: &Path) -> Result<CoreNode");
+        debug_log("NGLRNT In nav_graph_look_read_node_toml(), next calling: deseri_get_core_node_struct_from_toml_file(file_path: &Path) -> Result<CoreNode");
         // Try to open and read the file
         // match fs::read_to_string(&node_toml_path) {
         //     Ok(contents) => {
@@ -9167,10 +9208,10 @@ impl GraphNavigationInstanceState {
         // );
 
         // Load and parse the node.toml file
-        let this_node = match load_core_node_from_toml_file(&node_toml_path) {
+        let this_node = match deseri_get_core_node_struct_from_toml_file(&node_toml_path) {
             Ok(node) => node,
             Err(e) => {
-                debug_log!("NGLRNT ERROR: nav_graph_look_read_node_toml(), load_core_node_from_toml_file(), Failed to load node.toml: {}", e);
+                debug_log!("NGLRNT ERROR: nav_graph_look_read_node_toml(), deseri_get_core_node_struct_from_toml_file(), Failed to load node.toml: {}", e);
                 return;
             }
         };
@@ -9233,8 +9274,8 @@ impl GraphNavigationInstanceState {
                     #[cfg(debug_assertions)]
                     debug_log!("NGLRNT get_team_channels_homebase_directory_path Failed to get absolute path: {}", _e);
 
-                    // use this as default, won't work
-                    this_node.directory_path.clone()
+                    // use this as default, won't work, proxy error
+                    this_node.path_in_parentnode.clone()
                 }
             };
             #[cfg(debug_assertions)]
@@ -9242,10 +9283,14 @@ impl GraphNavigationInstanceState {
             debug_log!("NGLRNT base_teamchannel_path {:?}", base_teamchannel_path);
 
             // let base_teamchannel_path = get_team_channels_homebase_directory_path()?;
-            let full_node_path = base_teamchannel_path.join(this_node.directory_path.clone());
+            let full_node_path = base_teamchannel_path.join(this_node.path_in_parentnode.clone());
 
             // self.current_node_directory_path = this_node.directory_path.clone();
             self.current_node_directory_path = full_node_path;
+
+            //team channel is its won base parent
+            self.parent_node_uniqueid = this_node.node_unique_id.clone();
+
             self.current_node_unique_id = this_node.node_unique_id;
             self.home_square_one = false;
 
@@ -9270,10 +9315,79 @@ impl GraphNavigationInstanceState {
         } else {
             // NOT a team-channel
 
+
             debug_log!("nav_graph_look_read_node_toml(), not a team channel node");
             /*
-            this should be loading... node items...
+            current_node_directory_path
+            this should be parent path + path_in_parentnode
+
             */
+
+
+            /*
+            current_node_directory_path should be:
+
+            - parent_unique_node_id
+            - path_to_parent comes from lookup-table...
+            - path_in_parent (including parent name)
+
+            path to parent node...(by name? by id?)
+            +
+            path from parent node...
+
+            */
+            // // 1. Create lookup table:
+            // let channel_dir_path_str = match read_state_string("current_node_directory_path.txt") {
+            //     Ok(path) => path,
+            //     Err(_e) => {
+            //         #[cfg(debug_assertions)]
+            //         debug_log!("HLOD Failed to get absolute path: {}", _e);
+            //         "".to_string()
+            //     }
+            // };
+            // #[cfg(all(debug_assertions, not(test)))]
+            // debug_log!("HLOD loop-1.1 Channel directory path (from session state): {}", channel_dir_path_str);
+
+            // // use absolute file path
+            // let team_channel_path = PathBuf::from(channel_dir_path_str);
+            // #[cfg(all(debug_assertions, not(test)))]
+            // debug_log!("HLOD loop 1.1.1 paths: team_channel_path {:?}", team_channel_path);
+
+            // // let mut hashtable_node_id_to_path = create_node_id_to_path_lookup(&team_channel_path)?;
+            // let mut hashtable_node_id_to_path = match create_node_id_to_path_lookup(&team_channel_path) {
+            //     Ok(path) => path,
+            //     Err(_e) => {
+            //         #[cfg(debug_assertions)]
+            //         debug_log!("HLOD Failed to get absolute path: {}", _e);
+            //         HashMap::new() // Return an empty HashMap<Vec<u8>, PathBuf>
+            //     }
+            // };
+
+            // // Get local_abs_path_to_parent
+            // // let Some(local_abs_path_to_parent) = hashtable_node_id_to_path.get(&node_unique_id_vec)...
+
+            // let mut current_node_directory_path: PathBuf;
+
+            // // Get old node.toml file path (if exists)
+            // if let Some(node_directory_path) = hashtable_node_id_to_path.get(&node_unique_id_vec) {
+
+            //     // make old directory path
+            //     current_node_directory_path = PathBuf::from(node_directory_path);
+
+
+
+            //     debug_log!(
+            //         "NGLRNT 7.2 current_node_directory_path -> {:?}",
+            //         &current_node_directory_path
+            //     );
+            // }
+
+            // // for node
+            // let node_relative_channel_pathbuf = extract_relative_node_path_after_known_segments(&this_node.parent_node_uniqueid.clone())?;
+
+            // #[cfg(debug_assertions)]
+            // debug_log!("CCN: node_relative_channel_pathbuf {:?}", node_relative_channel_pathbuf);
+
 
             // Update state for non-team-channel nodes
             // These fields should be updated for ANY node type
@@ -9281,8 +9395,13 @@ impl GraphNavigationInstanceState {
             self.current_node_name = this_node.node_name.clone();
             self.current_node_owner = this_node.owner.clone();
             self.current_node_description_for_tui = this_node.description_for_tui.clone();
-            self.current_node_directory_path = this_node.directory_path.clone();
             self.current_node_unique_id = this_node.node_unique_id;
+            self.parent_node_uniqueid = this_node.parent_node_uniqueid;
+
+            // current path?
+            self.current_node_directory_path = self.current_full_file_path.clone();
+            // self.current_node_directory_path = this_node.parent_node_uniqueid.clone();
+
             // self.current_node_members = this_node.members.clone();
             self.home_square_one = false;
 
@@ -9429,8 +9548,19 @@ struct CoreNode {
     description_for_tui: String,
     /// A unique identifier for the node, generated using pearson hashes of the other fields
     node_unique_id: Vec<u8>,
+    /// maybe this should be more fields:
+    /// - parent_node_id?
+    /// - path_in_parentnode
+    /// - where team-channel may be parent node
+    /// so that node-id based path lookup tables
+    /// can be used to seat and move
+    /// nodes in parent nodes
+    /// maybe refactored to path_in_parentnode
     /// The path to the directory on the file system where the node's data is stored.
-    directory_path: PathBuf,
+    // directory_path: PathBuf,
+    path_in_parentnode: PathBuf,
+    /// parent_node_uniqueid: Vec<u8>,
+    parent_node_uniqueid: Vec<u8>,
     /// The username of the owner of the node.
     owner: String,
     /// The Unix timestamp representing when the node was last updated.
@@ -9554,9 +9684,11 @@ struct CoreNode {
 impl CoreNode {
     fn new(
         node_name: String,
+        node_unique_id: Vec<u8>,
         corenode_gpgtoml: bool,
         description_for_tui: String,
-        directory_path: PathBuf,
+        path_in_parentnode: PathBuf,
+        parent_node_uniqueid: Vec<u8>,
         owner: String,
         teamchannel_collaborators_with_access: Vec<String>,
         abstract_collaborator_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>,
@@ -9579,63 +9711,70 @@ impl CoreNode {
         use_padnet: Option<bool>,
     ) -> Result<CoreNode, ThisProjectError> {
 
-        debug_log!("Starting impl CoreNode:new");
-        debug_log!("impl CoreNode-new: Directory path received: {:?}", directory_path);
-        debug_log!("implCoreNode-new: Checking if directory exists: {}", directory_path.exists());
-        debug_log!("implCoreNode-new: Absolute path: {:?}", directory_path.canonicalize().unwrap_or(directory_path.clone()));
+        #[cfg(debug_assertions)] {
+            debug_log!("Starting impl CoreNode:new");
+            debug_log!("impl CoreNode-new: Directory path received: {:?}", path_in_parentnode);
+            debug_log!("implCoreNode-new: Checking if directory exists: {}", path_in_parentnode.exists());
+            debug_log!("implCoreNode-new: Absolute path: {:?}", path_in_parentnode.canonicalize().unwrap_or(path_in_parentnode.clone()));
 
-        debug_log!("implCoreNode-new: About to get current timestamp");
+            debug_log!("implCoreNode-new: About to get current timestamp");
+        }
         let expires_at = get_current_unix_timestamp() + 11111111111;
         let updated_at_timestamp = get_current_unix_timestamp();
+
+        #[cfg(debug_assertions)]
         debug_log!("implCoreNode-new: Got timestamps");
 
-        // Get armored public key, using key-id (full fingerprint in)
-        let full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
-            Ok(fingerprint) => fingerprint,
-            Err(e) => {
-                eprintln!("implCoreNode-new: Failed to read GPG fingerprint from uma.toml: {}", e);
-                return Err(ThisProjectError::from(format!(
-                    "implCoreNode-new: Failed to read GPG fingerprint from uma.toml: {}", e
-                )));
-            }
-        };
+        // // Get armored public key, using key-id (full fingerprint in)
+        // let full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+        //     Ok(fingerprint) => fingerprint,
+        //     Err(e) => {
+        //         eprintln!("implCoreNode-new: Failed to read GPG fingerprint from uma.toml: {}", e);
+        //         return Err(ThisProjectError::from(format!(
+        //             "implCoreNode-new: Failed to read GPG fingerprint from uma.toml: {}", e
+        //         )));
+        //     }
+        // };
 
-        // 1. Get the salt list using the correct function
-        debug_log!("implCoreNode-new: About to get address book data for owner: {}", owner);
-        let owner_data = match get_addressbook_file_by_username(
-            &owner,
-            &full_fingerprint_key_id_string,
-            ) {
-            Ok(data) => {
-                debug_log!("implCoreNode-new: Successfully got address book data");
-                data
-            },
-            Err(e) => {
-                debug_log!("implCoreNode-new: impl corenode new() Error getting address book data: {:?}", e);
-                return Err(e);
-            }
-        };
-        let salt_list = owner_data.user_salt_list;
+        // // 1. Get the salt list using the correct function
+        // debug_log!("implCoreNode-new: About to get address book data for owner: {}", owner);
+        // let owner_data = match get_addressbook_file_by_username(
+        //     &owner,
+        //     &full_fingerprint_key_id_string,
+        //     ) {
+        //     Ok(data) => {
+        //         debug_log!("implCoreNode-new: Successfully got address book data");
+        //         data
+        //     },
+        //     Err(e) => {
+        //         debug_log!("implCoreNode-new: impl corenode new() Error getting address book data: {:?}", e);
+        //         return Err(e);
+        //     }
+        // };
+        // let salt_list = owner_data.user_salt_list;
 
+        #[cfg(debug_assertions)]
         debug_log!("implCoreNode-new: About to calculate node_unique_id");
-        // 2. Calculate the hash
-        // TODO add new fields to hash
-        let node_unique_id = match calculate_corenode_hashes(
-            &node_name,
-            &description_for_tui,
-            updated_at_timestamp,
-            &salt_list,
-        ) {
-            Ok(id) => {
-                debug_log!("implCoreNode-new: Successfully calculated node_unique_id");
-                id
-            },
-            Err(e) => {
-                debug_log!("implCoreNode-new: Error calculating node_unique_id: {:?}", e);
-                return Err(e);
-            }
-        };
 
+        // // 2. Calculate the hash
+        // // TODO add new fields to hash
+        // let node_unique_id = match calculate_corenode_hashes(
+        //     &node_name,
+        //     &description_for_tui,
+        //     updated_at_timestamp,
+        //     &salt_list,
+        // ) {
+        //     Ok(id) => {
+        //         debug_log!("implCoreNode-new: Successfully calculated node_unique_id");
+        //         id
+        //     },
+        //     Err(e) => {
+        //         debug_log!("implCoreNode-new: Error calculating node_unique_id: {:?}", e);
+        //         return Err(e);
+        //     }
+        // };
+
+        #[cfg(debug_assertions)]
         debug_log!("implCoreNode-new: About to create CoreNode instance");
         // 3. Create the CoreNode instance
         let node = CoreNode {
@@ -9643,7 +9782,8 @@ impl CoreNode {
             corenode_gpgtoml,
             description_for_tui,
             node_unique_id,
-            directory_path,
+            path_in_parentnode,
+            parent_node_uniqueid,
             owner,
             updated_at_timestamp,
             expires_at,
@@ -9667,6 +9807,7 @@ impl CoreNode {
             message_post_end_date_utc_posix,
             use_padnet,
         };
+        #[cfg(debug_assertions)]
         debug_log!("implCoreNode Successfully created CoreNode instance");
 
         Ok(node)
@@ -10241,40 +10382,40 @@ match node_unique_id_str_result {
     }
 }
 */
-/// Extracts a string value associated with a given key from a TOML-formatted byte slice.
-///
-/// This function manually parses the byte slice, looking for a line that matches the
-/// format `key = "value"`.  It handles cases where the key is not found or the value is
-/// not enclosed in double quotes. It does NOT handle TOML arrays or tables.
-/// It does NOT depend on the serde or toml crate.
-///
-/// # Arguments
-///
-/// * `toml_bytes`: The TOML data as a byte slice.
-/// * `key`: The key to search for.
-///
-/// # Returns
-///
-/// * `Result<String, ThisProjectError>`: The extracted value or an error.
-fn extract_string_from_toml_bytes(toml_bytes: &[u8], key: &str) -> Result<String, ThisProjectError> {
-    let toml_str = std::str::from_utf8(toml_bytes).map_err(|_| ThisProjectError::InvalidData("Invalid UTF-8".into()))?;
+// /// Extracts a string value associated with a given key from a TOML-formatted byte slice.
+// ///
+// /// This function manually parses the byte slice, looking for a line that matches the
+// /// format `key = "value"`.  It handles cases where the key is not found or the value is
+// /// not enclosed in double quotes. It does NOT handle TOML arrays or tables.
+// /// It does NOT depend on the serde or toml crate.
+// ///
+// /// # Arguments
+// ///
+// /// * `toml_bytes`: The TOML data as a byte slice.
+// /// * `key`: The key to search for.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<String, ThisProjectError>`: The extracted value or an error.
+// fn extract_string_from_toml_bytes(toml_bytes: &[u8], key: &str) -> Result<String, ThisProjectError> {
+//     let toml_str = std::str::from_utf8(toml_bytes).map_err(|_| ThisProjectError::InvalidData("Invalid UTF-8".into()))?;
 
-    for line in toml_str.lines() {
-        let line = line.trim();
-        if line.starts_with(key) && line.contains('=') {
-            let parts: Vec<&str> = line.split('=').map(|s| s.trim()).collect();
-            if parts.len() == 2 {
-                let value = parts[1];
-                if value.starts_with('"') && value.ends_with('"') {
-                    return Ok(value[1..value.len() - 1].to_string());
-                } else {
-                    return Err(ThisProjectError::InvalidData("Value not in quotes".into()));
-                }
-            }
-        }
-    }
-    Err(ThisProjectError::InvalidData(format!("Key '{}' not found", key).into()))
-}
+//     for line in toml_str.lines() {
+//         let line = line.trim();
+//         if line.starts_with(key) && line.contains('=') {
+//             let parts: Vec<&str> = line.split('=').map(|s| s.trim()).collect();
+//             if parts.len() == 2 {
+//                 let value = parts[1];
+//                 if value.starts_with('"') && value.ends_with('"') {
+//                     return Ok(value[1..value.len() - 1].to_string());
+//                 } else {
+//                     return Err(ThisProjectError::InvalidData("Value not in quotes".into()));
+//                 }
+//             }
+//         }
+//     }
+//     Err(ThisProjectError::InvalidData(format!("Key '{}' not found", key).into()))
+// }
 
 /*
 Under Construction!
@@ -10309,7 +10450,7 @@ use functions from clearsign module
 
 # Workflow for reading Nodes (CoreNodes) including team-channels
 
-load_core_node_from_toml_file(
+deseri_get_core_node_struct_from_toml_file(
         path,
     )
 
@@ -10539,7 +10680,7 @@ return the struct (after deleting the read-files), or an error (after deleting t
 ///    `Err(String)` containing an error message if an error occurs.
 ///
 ///
-fn load_core_node_from_toml_file(
+fn deseri_get_core_node_struct_from_toml_file(
     file_path: &Path,
 ) -> Result<CoreNode, String> {
 
@@ -10555,7 +10696,7 @@ fn load_core_node_from_toml_file(
 
 
     1. updating Nodes: Plan A
-    -> fn load_core_node_from_toml_file
+    ->  deseri_get_core_node_struct_from_toml_file()
 
     - add feature to look first for and optionally read .gpgtoml for addressbook files
     - add identification of local owner user addressbook file
@@ -10599,7 +10740,7 @@ fn load_core_node_from_toml_file(
 
 
     debug_log!(
-        "LCNFTF: Starting: load_core_node_from_toml_file(), file_path -> {:?}",
+        "DGCNSFTF: Starting: deseri_get_core_node_struct_from_toml_file(), file_path -> {:?}",
         file_path,
     );
 
@@ -10609,7 +10750,7 @@ fn load_core_node_from_toml_file(
         Err(e) => {
             // Since the function returns Result<CoreNode, String>, we need to return a String error
             return Err(format!(
-                "LCNFTF: implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}",
+                "DGCNSFTF: implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}",
                 e
             ));
         }
@@ -10621,10 +10762,10 @@ fn load_core_node_from_toml_file(
     let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
         .map_err(|io_err| {
             let gpg_error = GpgError::ValidationError(
-                format!("LCNFTF: Failed to get UME temp directory path: {}", io_err)
+                format!("DGCNSFTF: Failed to get UME temp directory path: {}", io_err)
             );
             // Convert GpgError to String for the function's return type
-            format!("LCNFTF: {:?}", gpg_error)
+            format!("DGCNSFTF: {:?}", gpg_error)
         })?;
 
     // Using Debug trait for more detailed error information
@@ -10632,7 +10773,7 @@ fn load_core_node_from_toml_file(
         &file_path,
         &gpg_full_fingerprint_key_id_string,
         &base_uma_temp_directory_path,
-    ).map_err(|e| format!("LCNFTF: Failed to get temporary read copy of TOML file: {:?}", e))?;
+    ).map_err(|e| format!("DGCNSFTF: Failed to get temporary read copy of TOML file: {:?}", e))?;
 
     // //    // simple read string to get owner name
     // //    // not for extraction and return, just part of validation
@@ -10643,7 +10784,7 @@ fn load_core_node_from_toml_file(
     ////////////////////////////////
     let owner_name_of_toml_field_key_to_read = "owner";
     debug_log!(
-        "LCNFTF: Reading file owner from field '{}' for security validation",
+        "DGCNSFTF: Reading file owner from field '{}' for security validation",
         owner_name_of_toml_field_key_to_read
     );
 
@@ -10657,7 +10798,7 @@ fn load_core_node_from_toml_file(
             if username.is_empty() {
                 // Convert to String error instead of GpgError
                 return Err(format!(
-                    "LCNFTF: Field '{}' is empty in TOML file. File owner is required for security validation.",
+                    "DGCNSFTF: Field '{}' is empty in TOML file. File owner is required for security validation.",
                     owner_name_of_toml_field_key_to_read
                 ));
             }
@@ -10666,13 +10807,13 @@ fn load_core_node_from_toml_file(
         Err(e) => {
             // Convert to String error instead of GpgError
             return Err(format!(
-                "LCNFTF: Failed to read file owner from field '{}': {}",
+                "DGCNSFTF: Failed to read file owner from field '{}': {}",
                 owner_name_of_toml_field_key_to_read, e
             ));
         }
     };
-    // println!("LCNFTF: File owner: '{}'", file_owner_username);
-    debug_log!("LCNFTF: File owner: '{}'", file_owner_username);
+    // println!("DGCNSFTF: File owner: '{}'", file_owner_username);
+    debug_log!("DGCNSFTF: File owner: '{}'", file_owner_username);
 
     // TODO returns full response not just string
     // because the filepath needs to be constructed
@@ -10686,7 +10827,7 @@ fn load_core_node_from_toml_file(
     // Get the UME temp directory path with error handling
     let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
         .map_err(|io_err| format!(
-            "LCNFTF: Failed to get UME temp directory path: {:?}",
+            "DGCNSFTF: Failed to get UME temp directory path: {:?}",
             io_err
         ))?;
 
@@ -10697,7 +10838,7 @@ fn load_core_node_from_toml_file(
         &gpg_full_fingerprint_key_id_string,
         &base_uma_temp_directory_path,
     ).map_err(|e| format!(
-        "LCNFTF: Failed to get addressbook path for user '{}': {:?}",
+        "DGCNSFTF: Failed to get addressbook path for user '{}': {:?}",
         file_owner_username,
         e
     ))?;
@@ -10722,7 +10863,7 @@ fn load_core_node_from_toml_file(
     let node_owners_public_gpg_key = read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml(
         &addressbook_readcopy_path_string,
     ).map_err(|e| format!(
-        "LCNFTF: Failed to get addressbook path for user '{}': {:?}",
+        "DGCNSFTF: Failed to get addressbook path for user '{}': {:?}",
         file_owner_username,
         e
     ))?;
@@ -10738,7 +10879,7 @@ fn load_core_node_from_toml_file(
             // Clean up temporary files before returning error
             cleanup_closure();
             return Err(format!(
-                "LCNFTF: Failed to verify addressbook clearsign signature for user '{}': {:?}",
+                "DGCNSFTF: Failed to verify addressbook clearsign signature for user '{}': {:?}",
                 file_owner_username,
                 e
             ));
@@ -10770,7 +10911,7 @@ fn load_core_node_from_toml_file(
     // If either verification failed, clean up and return error
     if !verify_addressbook_file_result || !verify_node_file_result {
 
-        debug_log("LCNFTF: Whoops, something faileded...");
+        debug_log("DGCNSFTF: Whoops, something faileded...");
 
         // Clean up temporary files
         cleanup_closure();
@@ -10778,14 +10919,14 @@ fn load_core_node_from_toml_file(
         // Provide detailed error message about which verification failed
         let mut error_details = Vec::new();
         if !verify_addressbook_file_result {
-            error_details.push("LCNFTF: addressbook file signature verification failed");
+            error_details.push("DGCNSFTF: addressbook file signature verification failed");
         }
         if !verify_node_file_result {
-            error_details.push("LCNFTF: node file signature verification failed");
+            error_details.push("DGCNSFTF: node file signature verification failed");
         }
 
         return Err(format!(
-            "LCNFTF: Clearsign validation failed for user '{}': {}",
+            "DGCNSFTF: Clearsign validation failed for user '{}': {}",
             file_owner_username,
             error_details.join(" and ")
         ));
@@ -10985,16 +11126,24 @@ fn load_core_node_from_toml_file(
     })?;
 
     // Example: Read _ from the clearsigned TOML file
-    let directory_path = read_pathbuf_from_clearsigntoml_without_publicgpgkey(
+    let path_in_parentnode = read_pathbuf_from_clearsigntoml_without_publicgpgkey(
         &addressbook_readcopy_path_string,  // Config file containing GPG key
         &node_readcopy_path,           // Target clearsigned file
-        "directory_path"                // Field to read
+        "path_in_parentnode"                // Field to read
     ).map_err(|e| {
         cleanup_closure(); // Run cleanup on error
-        format!("LCNFTF: directory_path Failed to read directory_pathe_id: {}", e)
+        format!("LCNFTF: path_in_parentnode Failed to read directory_path: {}", e)
     })?;
 
-
+    // Example: Read _ from the clearsigned TOML file
+    let parent_node_uniqueid = read_u8_array_from_clearsigntoml_without_publicgpgkey(
+        &addressbook_readcopy_path_string,  // Config file containing GPG key
+        &node_readcopy_path,           // Target clearsigned file
+        "parent_node_uniqueid"                // Field to read
+    ).map_err(|e| {
+        cleanup_closure(); // Run cleanup on error
+        format!("LCNFTF: parent_node_uniqueid Failed to read parent_node_uniqueid: {}", e)
+    })?;
 
     // Example: Read _ from the clearsigned TOML file
     let owner = read_singleline_string_from_clearsigntoml_without_publicgpgkey(
@@ -11274,7 +11423,8 @@ fn load_core_node_from_toml_file(
         corenode_gpgtoml: corenode_gpgtoml,
         description_for_tui: description_for_tui,
         node_unique_id: node_unique_id,
-        directory_path: directory_path,
+        path_in_parentnode: path_in_parentnode,
+        parent_node_uniqueid: parent_node_uniqueid,
         owner: owner,
         updated_at_timestamp: updated_at_timestamp,
         expires_at: expires_at,
@@ -11347,7 +11497,7 @@ fn load_core_node_from_toml_file(
     // // 7. Return Node Struct (CoreNode)
     debug_log!("LCNFTF: core_node {:?}", core_node);
 
-    debug_log("LCNFTF DONE: Ending load_core_node_from_toml_file");
+    debug_log("LCNFTF DONE: Ending deseri_get_core_node_struct_from_toml_file");
     Ok(core_node)
 }
 
@@ -15129,6 +15279,7 @@ fn add_new_messagepost_message(
     let mut message = MessagePostFile::new(
         owner,
         &node_name,
+        graph_navigation_instance_state.current_node_unique_id.clone(),
         &filepath_in_node,
         &final_text_truncated,
         recipients_list.clone(),
@@ -15419,6 +15570,7 @@ mod scmc0_tests {
     fn test_scmc0_empty_owner_fails() {
         let metadata = NodeMessagePostBrowserMetadata {
             owner: String::new(), // Empty owner
+            node_id: vec![0x01, 0x02, 0x03, 0x04],
             teamchannel_collaborators_with_access: vec!["alice".to_string()],
             updated_at_timestamp: 1234567890,
             messageposts_expire_after_n_min: 99999,
@@ -15449,6 +15601,7 @@ mod scmc0_tests {
         // Test that empty collaborators vec is valid
         let metadata = NodeMessagePostBrowserMetadata {
             owner: "alice".to_string(),
+            node_id: vec![0x01, 0x02, 0x03, 0x04], // dummy test input
             teamchannel_collaborators_with_access: vec![], // Empty is OK
             updated_at_timestamp: 1234567890,
             messageposts_expire_after_n_min: 99999,
@@ -15488,6 +15641,7 @@ struct NodeMessagePostBrowserMetadata {
     messageposts_expire_after_n_min: u64, // utc posix timestamp
 
     node_name: String,
+    node_id: Vec<u8>, // Unique Id of node
     path_in_node: String,
     max_message_size_char: u64,
     total_max_size_mb: u64,
@@ -15523,6 +15677,7 @@ struct NodeMessagePostBrowserMetadata {
 impl NodeMessagePostBrowserMetadata {
     fn new(
         node_name: &str,
+        node_id: Vec<u8>, // unique node id
         _nodepath_for_path_in_node: &PathBuf, // path handling system ongoing
         owner: String,
         teamchannel_collaborators_with_access: Vec<String>,
@@ -15548,6 +15703,7 @@ impl NodeMessagePostBrowserMetadata {
 
         NodeMessagePostBrowserMetadata {
             node_name: node_name.to_string(),
+            node_id: node_id, // unique node id
             path_in_node: message_dir, // TODO
             max_message_size_char: 4096, // Default: 4096 characters...too big?
             total_max_size_mb: 512, // Default: 1024 MB
@@ -15929,6 +16085,7 @@ struct MessagePostFile {
     // every .toml has these four
     owner: String, // owner of this item
     node_name: String, // Name of the node this message belongs to
+    node_id: Vec<u8>, // Unique Id of node
     filepath_in_node: String, // Relative path within the node's directory
     text_message: String, // content-body
 
@@ -15947,6 +16104,7 @@ impl MessagePostFile {
         // graph_navigation_instance_state: &GraphNavigationInstanceState,
         owner: &str, // owner
         node_name: &str, // node_name
+        node_id: Vec<u8>, // unique node id
         filepath_in_node: &str, //filepath_in_node
         text_message: &str, // text_message
         recipients_list: Vec<String>, // teamchannel_collaborators_with_access
@@ -15981,6 +16139,7 @@ impl MessagePostFile {
         MessagePostFile {
             owner: owner.to_string(),
             node_name: node_name.to_string(),
+            node_id: node_id,
             filepath_in_node: filepath_in_node.to_string(),
             text_message: text_message.to_string(),
             teamchannel_collaborators_with_access: recipients_list,
@@ -15993,6 +16152,209 @@ impl MessagePostFile {
 
 }
 
+// /// Serialize MessagePostFile struct to TOML format string
+// ///
+// /// This function manually constructs a TOML-formatted string from a `MessagePostFile`
+// /// struct without using the `serde` or `toml` crates. This approach provides direct
+// /// control over the serialization process and avoids third-party dependencies.
+// ///
+// /// # Project Context
+// ///
+// /// This function is part of the instant messaging file persistence system. It converts
+// /// a message post data structure into TOML format for storage in the node's file system.
+// /// The TOML file represents a single message post with metadata including ownership,
+// /// recipients, timestamps, and encryption settings.
+// ///
+// /// The function is used when writing message posts to disk, replacing the deprecated
+// /// `toml::to_string()` approach with a manual serialization that gives full control
+// /// over the output format and error handling.
+// ///
+// /// # TOML Format
+// ///
+// /// The generated TOML has the following structure:
+// ///
+// /// ```toml
+// /// owner = "username"
+// /// node_name = "nodename"
+// /// filepath_in_node = "/path/to/file"
+// /// text_message = """message content"""
+// /// teamchannel_collaborators_with_access = [
+// ///     "user1",
+// ///     "user2",
+// /// ]
+// /// updated_at_timestamp = 1234567890
+// /// messagepost_gpgtoml = false
+// /// expires_at = 18446744073709551615
+// /// ```
+// ///
+// /// # String Handling
+// ///
+// /// - Simple string fields (owner, node_name, filepath_in_node) use basic TOML strings with escaping
+// /// - The text_message field uses multi-line string format (triple quotes) to safely handle
+// ///   message content that may contain newlines, quotes, and other special characters
+// /// - Array elements are individually escaped and formatted
+// ///
+// /// # Parameters
+// ///
+// /// - `message`: Reference to the `MessagePostFile` struct to serialize
+// ///
+// /// # Returns
+// ///
+// /// - `Ok(String)`: TOML-formatted string representation of the message post
+// /// - `Err(ThisProjectError)`: If serialization encounters an error
+// ///
+// /// # Error Handling
+// ///
+// /// Returns errors via Result type for consistency and future extensibility.
+// /// The function is designed to handle all valid `MessagePostFile` instances without
+// /// panicking.
+// ///
+// /// # Usage Example
+// ///
+// /// ```rust
+// /// let message = MessagePostFile::new(/*...*/);
+// /// match serialize_messagepost_config_0toml(&message) {
+// ///     Ok(toml_string) => {
+// ///         // Write to file or transmit
+// ///         write_to_file(&toml_string)?;
+// ///     }
+// ///     Err(e) => {
+// ///         // Handle serialization error with project-appropriate recovery
+// ///         log_error("SMPC0T: serialization failed");
+// ///         return Err(e);
+// ///     }
+// /// }
+// /// ```
+// fn serialize_messagepost_toml(message: &MessagePostFile) -> Result<String, ThisProjectError> {
+//     let mut toml_string = String::new();
+
+//     // Serialize owner field - identifies who created this message post
+//     toml_string.push_str(&format!("owner = \"{}\"\n", escape_toml_basic_string(&message.owner)));
+
+//     // Serialize node_name field - identifies which node this message belongs to
+//     toml_string.push_str(&format!("node_name = \"{}\"\n", escape_toml_basic_string(&message.node_name)));
+
+//     // Serialize filepath_in_node field - relative path within node directory structure
+//     toml_string.push_str(&format!("filepath_in_node = \"{}\"\n", escape_toml_basic_string(&message.filepath_in_node)));
+
+//     // Serialize text_message using multi-line string format
+//     // This is appropriate for message content which may be multi-line
+//     toml_string.push_str(&format!("text_message = \"{}\"\n", message.text_message));
+
+//     // Serialize the recipients list as a TOML array
+//     // This contains all users who have access to view this message post
+//     serialize_string_array_to_toml(&mut toml_string, "teamchannel_collaborators_with_access", &message.teamchannel_collaborators_with_access)?;
+//     serialize_string_array_to_toml(&mut toml_string, "ping", &message.ping)?;
+
+//     // Serialize updated_at_timestamp - POSIX UTC timestamp of last update
+//     toml_string.push_str(&format!("updated_at_timestamp = {}\n", message.updated_at_timestamp));
+
+//     // Serialize messagepost_gpgtoml - boolean indicating if file is GPG encrypted
+//     // TOML booleans are lowercase: true or false
+//     toml_string.push_str(&format!("messagepost_gpgtoml = {}\n", message.messagepost_gpgtoml));
+
+//     // Serialize expires_at - POSIX UTC timestamp when message expires (u64::MAX means no expiration)
+//     toml_string.push_str(&format!("expires_at = {}\n", message.expires_at));
+
+//     Ok(toml_string)
+// }
+
+/// Serialize a byte array (Vec<u8>) to TOML array format
+///
+/// This function appends a TOML array field containing unsigned 8-bit integers
+/// to the provided string buffer. It's used to serialize byte vectors such as
+/// unique identifiers in a compact single-line integer array format.
+///
+/// # Project Context
+///
+/// This function is part of the instant messaging file persistence system's manual
+/// TOML serialization. It handles the serialization of byte-based identifiers like
+/// `node_id` which uniquely identify nodes in the distributed messaging system.
+///
+/// The compact integer array format `[u8, u8, u8]` is used for consistency with
+/// other TOML files in the project (e.g., parallel configuration files that use
+/// `node_unique_id = [151, 47, 173, 74]` format). This creates a uniform
+/// representation across all project TOML files.
+///
+/// # TOML Format
+///
+/// Output format for a field named "node_id" with bytes [72, 101, 108]:
+/// ```toml
+/// node_id = [72, 101, 108]
+/// ```
+///
+/// Empty byte vectors are serialized as:
+/// ```toml
+/// node_id = []
+/// ```
+///
+/// # Design Rationale
+///
+/// - **Integer Array Format**: Uses native TOML integer arrays rather than
+///   base64 or hex encoding. This matches existing project patterns and requires
+///   no encoding/decoding logic.
+/// - **Human Readable**: Byte values are directly visible and inspectable in
+///   the TOML file, which aids debugging and manual file inspection.
+/// - **Compact Single-Line Format**: All bytes on one line matches the existing
+///   project style for byte arrays (e.g., node_unique_id format).
+/// - **No Dependencies**: Pure Rust implementation requires no third-party
+///   encoding libraries.
+///
+/// # Parameters
+///
+/// - `toml_string`: Mutable reference to the string buffer being constructed
+/// - `field_name`: Name of the TOML field (e.g., "node_id")
+/// - `byte_array`: Slice of bytes to serialize
+///
+/// # Returns
+///
+/// - `Ok(())`: Successfully appended the field to the TOML string
+/// - `Err(ThisProjectError)`: If serialization encounters an error (reserved
+///   for future extensibility, current implementation handles all valid inputs)
+///
+/// # Error Handling
+///
+/// Returns Result for consistency with other serialization functions and to
+/// allow future error conditions without breaking the API. Current implementation
+/// handles all valid byte arrays including empty vectors.
+///
+/// # Usage Example
+///
+/// ```rust
+/// let mut toml = String::new();
+/// let node_id = vec![151, 47, 173, 74];
+/// serialize_byte_array_to_toml(&mut toml, "node_id", &node_id)?;
+/// // toml now contains: "node_id = [151, 47, 173, 74]\n"
+/// ```
+fn serialize_byte_array_to_toml(
+    toml_string: &mut String,
+    field_name: &str,
+    byte_array: &[u8],
+) -> Result<(), ThisProjectError> {
+    // Start the TOML array field with opening bracket
+    toml_string.push_str(&format!("{} = [", field_name));
+
+    // Serialize each byte as an integer in a compact comma-separated format
+    // This single-line format matches the project's existing byte array style
+    // (e.g., node_unique_id = [151, 47, 173, 74])
+    for (index, byte_value) in byte_array.iter().enumerate() {
+        // Add the byte value as an integer (0-255)
+        toml_string.push_str(&format!("{}", byte_value));
+
+        // Add comma and space after each element except the last
+        // This creates the format: [1, 2, 3] not [1, 2, 3,]
+        if index < byte_array.len() - 1 {
+            toml_string.push_str(", ");
+        }
+    }
+
+    // Close the array and add newline
+    toml_string.push_str("]\n");
+
+    Ok(())
+}
+
+
 /// Serialize MessagePostFile struct to TOML format string
 ///
 /// This function manually constructs a TOML-formatted string from a `MessagePostFile`
@@ -16004,11 +16366,19 @@ impl MessagePostFile {
 /// This function is part of the instant messaging file persistence system. It converts
 /// a message post data structure into TOML format for storage in the node's file system.
 /// The TOML file represents a single message post with metadata including ownership,
-/// recipients, timestamps, and encryption settings.
+/// node identification, recipients, timestamps, and encryption settings.
 ///
 /// The function is used when writing message posts to disk, replacing the deprecated
 /// `toml::to_string()` approach with a manual serialization that gives full control
 /// over the output format and error handling.
+///
+/// # Core Fields
+///
+/// Every MessagePostFile TOML contains four essential identification fields:
+/// 1. `owner` - Username of the message creator
+/// 2. `node_name` - Human-readable name of the node
+/// 3. `node_id` - Unique byte-based identifier for the node
+/// 4. `filepath_in_node` - Relative path within node directory structure
 ///
 /// # TOML Format
 ///
@@ -16017,22 +16387,39 @@ impl MessagePostFile {
 /// ```toml
 /// owner = "username"
 /// node_name = "nodename"
+/// node_id = [151, 47, 173, 74]
 /// filepath_in_node = "/path/to/file"
-/// text_message = """message content"""
+/// text_message = "message content"
 /// teamchannel_collaborators_with_access = [
 ///     "user1",
 ///     "user2",
+/// ]
+/// ping = [
+///     "user3",
 /// ]
 /// updated_at_timestamp = 1234567890
 /// messagepost_gpgtoml = false
 /// expires_at = 18446744073709551615
 /// ```
 ///
+/// # Field Details
+///
+/// - **owner**: String field identifying message creator (with TOML escaping)
+/// - **node_name**: String field identifying the node (with TOML escaping)
+/// - **node_id**: Byte array field containing unique node identifier as compact integer array
+/// - **filepath_in_node**: String field for relative path (with TOML escaping)
+/// - **text_message**: String field for message content (with TOML escaping)
+/// - **teamchannel_collaborators_with_access**: String array of users with access
+/// - **ping**: String array of users being notified ("to the attention of")
+/// - **updated_at_timestamp**: u64 POSIX UTC timestamp
+/// - **messagepost_gpgtoml**: Boolean indicating GPG encryption status
+/// - **expires_at**: u64 POSIX UTC timestamp (u64::MAX means no expiration)
+///
 /// # String Handling
 ///
-/// - Simple string fields (owner, node_name, filepath_in_node) use basic TOML strings with escaping
-/// - The text_message field uses multi-line string format (triple quotes) to safely handle
-///   message content that may contain newlines, quotes, and other special characters
+/// - Simple string fields (owner, node_name, filepath_in_node) use basic TOML
+///   strings with escaping via `escape_toml_basic_string()`
+/// - The text_message field uses TOML string format with appropriate escaping
 /// - Array elements are individually escaped and formatted
 ///
 /// # Parameters
@@ -16048,20 +16435,21 @@ impl MessagePostFile {
 ///
 /// Returns errors via Result type for consistency and future extensibility.
 /// The function is designed to handle all valid `MessagePostFile` instances without
-/// panicking.
+/// panicking. Errors may propagate from helper functions like `serialize_byte_array_to_toml()`
+/// or `serialize_string_array_to_toml()`.
 ///
 /// # Usage Example
 ///
 /// ```rust
 /// let message = MessagePostFile::new(/*...*/);
-/// match serialize_messagepost_config_0toml(&message) {
+/// match serialize_messagepost_toml(&message) {
 ///     Ok(toml_string) => {
 ///         // Write to file or transmit
 ///         write_to_file(&toml_string)?;
 ///     }
 ///     Err(e) => {
 ///         // Handle serialization error with project-appropriate recovery
-///         log_error("SMPC0T: serialization failed");
+///         log_error("SMPT: serialization failed");
 ///         return Err(e);
 ///     }
 /// }
@@ -16069,23 +16457,50 @@ impl MessagePostFile {
 fn serialize_messagepost_toml(message: &MessagePostFile) -> Result<String, ThisProjectError> {
     let mut toml_string = String::new();
 
+    // =========================================================================
+    // Core Identification Fields (every .toml has these four)
+    // =========================================================================
+
     // Serialize owner field - identifies who created this message post
     toml_string.push_str(&format!("owner = \"{}\"\n", escape_toml_basic_string(&message.owner)));
 
-    // Serialize node_name field - identifies which node this message belongs to
+    // Serialize node_name field - human-readable name of the node this message belongs to
     toml_string.push_str(&format!("node_name = \"{}\"\n", escape_toml_basic_string(&message.node_name)));
+
+    // Serialize node_id field - unique byte-based identifier for the node
+    // This uses compact integer array format [u8, u8, u8] for consistency with other
+    // project TOML files (e.g., node configuration files using node_unique_id = [151, 47, 173, 74])
+    serialize_byte_array_to_toml(&mut toml_string, "node_id", &message.node_id)?;
 
     // Serialize filepath_in_node field - relative path within node directory structure
     toml_string.push_str(&format!("filepath_in_node = \"{}\"\n", escape_toml_basic_string(&message.filepath_in_node)));
 
-    // Serialize text_message using multi-line string format
-    // This is appropriate for message content which may be multi-line
-    toml_string.push_str(&format!("text_message = \"{}\"\n", message.text_message));
+    // =========================================================================
+    // Message Content and Metadata
+    // =========================================================================
+
+    // TODO un-esape maybe useful, maybe
+    // Note: more or less format handling may be desired here, or a different system
+    // of serialization e.g. everything after '=' on that line.
+    // Serialize text_message - the actual message content/body
+    // Uses standard TOML string format with escaping to handle special characters
+    toml_string.push_str(&format!("text_message = \"{}\"\n", escape_toml_basic_string(&message.text_message)));
+
+    // =========================================================================
+    // Access Control and Notification Fields
+    // =========================================================================
 
     // Serialize the recipients list as a TOML array
     // This contains all users who have access to view this message post
     serialize_string_array_to_toml(&mut toml_string, "teamchannel_collaborators_with_access", &message.teamchannel_collaborators_with_access)?;
+
+    // Serialize the ping list - users to be notified ("to the attention of")
+    // This is a subset notification mechanism for directing attention
     serialize_string_array_to_toml(&mut toml_string, "ping", &message.ping)?;
+
+    // =========================================================================
+    // Temporal and Security Fields
+    // =========================================================================
 
     // Serialize updated_at_timestamp - POSIX UTC timestamp of last update
     toml_string.push_str(&format!("updated_at_timestamp = {}\n", message.updated_at_timestamp));
@@ -16257,6 +16672,7 @@ fn serialize_string_array_to_toml(
 /// * If creating or saving the CoreNode fails
 fn create_new_team_channel(
     team_channel_name: String,
+
     owner: String,
     // teamchannel_collaborators_with_access: Vec<String>,
 ) -> Result<(), ThisProjectError> {
@@ -16460,13 +16876,62 @@ fn create_new_team_channel(
 
     let relative_newchannel_pathbuf = extract_relative_node_path_after_known_segments(&new_channel_path)?;
 
+    // 2. Calculate the hash
+    let updated_at_timestamp = get_current_unix_timestamp();
+
+    // Get armored public key, using key-id (full fingerprint in)
+    let full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+        Ok(fingerprint) => fingerprint,
+        Err(e) => {
+            eprintln!("IUA Failed to read GPG fingerprint from uma.toml: {}", e);
+            return Err(ThisProjectError::IoError(e));
+        }
+    };
+
+    // 1. Get the salt list using the correct function
+    debug_log!("implCoreNode-new: About to get address book data for owner: {}", owner);
+    let owner_data = match get_addressbook_file_by_username(
+        &owner,
+        &full_fingerprint_key_id_string,
+        ) {
+        Ok(data) => {
+            debug_log!("implCoreNode-new: Successfully got address book data");
+            data
+        },
+        Err(e) => {
+            debug_log!("implCoreNode-new: impl corenode new() Error getting address book data: {:?}", e);
+            return Err(e);
+        }
+    };
+    let salt_list = owner_data.user_salt_list;
+    // TODO add new fields to hash
+    let node_unique_id = match calculate_corenode_hashes(
+        &team_channel_name.clone(),
+        &team_channel_name.clone(),
+        updated_at_timestamp,
+        &salt_list,
+    ) {
+        Ok(id) => {
+            debug_log!("implCoreNode-new: Successfully calculated node_unique_id");
+            id
+        },
+        Err(e) => {
+            debug_log!("implCoreNode-new: Error calculating node_unique_id: {:?}", e);
+            return Err(e);
+        }
+    };
+
+    // team channels have no parent
+    let parent_node_uniqueid: Vec<u8> = Vec::new();
 
     // option to save as .gpgtoml
     let new_node_result = CoreNode::new(
-        team_channel_name.clone(),
-        corenode_gpgtoml,
-        team_channel_name.clone(),
-        relative_newchannel_pathbuf, //new_channel_path.clone(),//
+        team_channel_name.clone(), // node_name: String,
+        node_unique_id.clone(),
+        corenode_gpgtoml, // corenode_gpgtoml: bool,
+        team_channel_name.clone(),  // description_for_tui
+        relative_newchannel_pathbuf, //new_channel_path.clone(),// path_in_parentnode
+        parent_node_uniqueid,
         owner.clone(),
         teamchannel_collaborators_with_access.clone(),
         abstract_collaborator_port_assignments,
@@ -16551,7 +17016,8 @@ fn create_new_team_channel(
     // 2. Create and Save 0.toml Metadata (with error handling)
     let zerotoml_metadata_path = instant_msg_path.join("0.toml");
     let zerotoml_metadata = NodeMessagePostBrowserMetadata::new(
-        &team_channel_name,
+        &team_channel_name, // node name (happens to be a team-channel)
+        node_unique_id,  // Vec<u8>, // unique node id
         &relative_messagepost_channel_pathbuf, // nodepath_for_path_in_node
         owner,
         teamchannel_collaborators_with_access,
@@ -16588,7 +17054,7 @@ fn create_new_team_channel(
                     Ok(_) => {
                         debug_log!("save_node_as_gpgtoml: CoreNode saved successfully as node.gpgtoml");
                         println!("\n✓ Node successfully saved as encrypted file: {}/node.gpgtoml; new_channel_path,{:?}",
-                                new_node.directory_path.display(),
+                                new_node.path_in_parentnode.display(),
                                 new_channel_path
                         );
                         Ok(())
@@ -16608,7 +17074,7 @@ fn create_new_team_channel(
                     Ok(_) => {
                         debug_log!("save_node_to_clearsigned_file: CoreNode saved successfully as node.toml");
                         println!("\n✓ Node successfully saved as clearsigned file: {}/node.toml, new_channel_path {:?}",
-                                new_node.directory_path.display(),
+                                new_node.path_in_parentnode.display(),
                                 new_channel_path
                         );
 
@@ -16729,8 +17195,8 @@ fn update_core_node(
     debug_log!("UCN: Starting update_core_node for path: {:?}", node_path);
 
     // Step 1: Load the existing CoreNode from disk
-    // Uses load_core_node_from_toml_file to read and parse the node.toml file
-    let mut existing_node = match load_core_node_from_toml_file(&node_path) {
+    // Uses deseri_get_core_node_struct_from_toml_file to read and parse the node.toml file
+    let mut existing_node = match deseri_get_core_node_struct_from_toml_file(&node_path) {
         Ok(node) => {
             debug_log!("UCN: Successfully loaded CoreNode from {:?}", node_path);
             node
@@ -17240,12 +17706,205 @@ fn update_core_node(
     }
 }
 
+/// Computes the relative path by removing a parent path prefix from a current path.
+///
+/// # Project Context
+/// This function supports path manipulation operations where we need to determine
+/// the relative portion of a path after removing a known parent directory prefix.
+/// Common in file system traversal, relative path resolution, and directory
+/// structure analysis where we need to know "what remains" after a base path.
+///
+/// # Operational Behavior
+/// - Takes two paths: a full current path and a parent prefix path
+/// - Attempts to strip the parent prefix from the current path
+/// - Returns the remaining relative path as a PathBuf
+/// - On any error condition, returns an empty PathBuf (safe fallback)
+///
+/// # Arguments
+/// * `current_path` - The full path from which to subtract the prefix
+/// * `parent_path` - The parent/prefix path to remove from current_path
+///
+/// # Returns
+/// * `PathBuf` - The relative path after removing the prefix, or empty PathBuf on error
+///
+/// # Error Handling
+/// All errors are handled gracefully without panic:
+/// - Non-prefix paths return empty PathBuf
+/// - Empty inputs return empty PathBuf
+/// - Identical paths return empty PathBuf
+/// - All error conditions are logged in debug builds only
+///
+/// # Example
+/// ```
+/// use std::path::PathBuf;
+///
+/// let current = PathBuf::from("animals/pets/cats/hungry_cats/tibbles");
+/// let parent = PathBuf::from("animals/pets/cats");
+/// let result = subtract_path(current, parent);
+/// // result will be "hungry_cats/tibbles"
+/// ```
+pub fn subtract_path(current_path: PathBuf, parent_path: PathBuf) -> PathBuf {
+    // Check for empty current_path - cannot compute relative path from nothing
+    if current_path.as_os_str().is_empty() {
+        #[cfg(debug_assertions)]
+        eprintln!("SUBPATH: current_path is empty, returning empty PathBuf");
+        return PathBuf::new();
+    }
+
+    // Check for empty parent_path - cannot subtract nothing meaningfully
+    if parent_path.as_os_str().is_empty() {
+        #[cfg(debug_assertions)]
+        eprintln!("SUBPATH: parent_path is empty, returning empty PathBuf");
+        return PathBuf::new();
+    }
+
+    // Attempt to strip the parent prefix from the current path
+    // strip_prefix returns Result<&Path, StripPrefixError>
+    match current_path.strip_prefix(&parent_path) {
+        Ok(relative_path) => {
+            // Successfully stripped prefix - convert borrowed Path to owned PathBuf
+            let result = relative_path.to_path_buf();
+
+            // Log successful operation in debug builds
+            #[cfg(debug_assertions)]
+            eprintln!(
+                "SUBPATH: Successfully computed relative path: {:?} = {:?} - {:?}",
+                result, current_path, parent_path
+            );
+
+            result
+        }
+        Err(_e) => {
+            // strip_prefix failed - parent_path is not a prefix of current_path
+            // This is the main error case: paths don't have the expected relationship
+            #[cfg(debug_assertions)]
+            eprintln!(
+                "SUBPATH: strip_prefix failed - parent_path {:?} is not a prefix of current_path {:?}, error: {:?}, returning empty PathBuf",
+                parent_path, current_path, _e
+            );
+
+            PathBuf::new()
+        }
+    }
+}
+
+#[cfg(test)]
+mod subtractpath_tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    /// Test the happy path: valid parent prefix removal
+    #[test]
+    fn test_valid_prefix_removal() {
+        let current = PathBuf::from("animals/pets/cats/hungry_cats/tibbles");
+        let parent = PathBuf::from("animals/pets/cats");
+        let result = subtract_path(current, parent);
+        let expected = PathBuf::from("hungry_cats/tibbles");
+
+        assert_eq!(result, expected, "Should return the relative path after removing valid prefix");
+    }
+
+    /// Test case where parent_path is not actually a prefix
+    #[test]
+    fn test_non_prefix_paths() {
+        let current = PathBuf::from("animals/pets/cats");
+        let parent = PathBuf::from("animals/wild");
+        let result = subtract_path(current, parent);
+
+        assert_eq!(result, PathBuf::new(), "Should return empty PathBuf when parent is not a prefix");
+    }
+
+    /// Test with empty current_path
+    #[test]
+    fn test_empty_current_path() {
+        let current = PathBuf::new();
+        let parent = PathBuf::from("animals/pets");
+        let result = subtract_path(current, parent);
+
+        assert_eq!(result, PathBuf::new(), "Should return empty PathBuf when current_path is empty");
+    }
+
+    /// Test with empty parent_path
+    #[test]
+    fn test_empty_parent_path() {
+        let current = PathBuf::from("animals/pets/cats");
+        let parent = PathBuf::new();
+        let result = subtract_path(current, parent);
+
+        assert_eq!(result, PathBuf::new(), "Should return empty PathBuf when parent_path is empty");
+    }
+
+    /// Test with identical paths - difference should be empty
+    #[test]
+    fn test_identical_paths() {
+        let current = PathBuf::from("animals/pets/cats");
+        let parent = PathBuf::from("animals/pets/cats");
+        let result = subtract_path(current, parent);
+
+        assert_eq!(result, PathBuf::from(""), "Should return empty path when paths are identical");
+    }
+
+    /// Test where parent is longer than current (impossible to be a prefix)
+    #[test]
+    fn test_parent_longer_than_current() {
+        let current = PathBuf::from("animals/pets");
+        let parent = PathBuf::from("animals/pets/cats/dogs");
+        let result = subtract_path(current, parent);
+
+        assert_eq!(result, PathBuf::new(), "Should return empty PathBuf when parent is longer than current");
+    }
+
+    /// Test with single segment paths
+    #[test]
+    fn test_single_segment() {
+        let current = PathBuf::from("animals/pets");
+        let parent = PathBuf::from("animals");
+        let result = subtract_path(current, parent);
+        let expected = PathBuf::from("pets");
+
+        assert_eq!(result, expected, "Should handle single segment remainder");
+    }
+
+    /// Test with deeply nested paths
+    #[test]
+    fn test_deeply_nested_paths() {
+        let current = PathBuf::from("a/b/c/d/e/f/g/h");
+        let parent = PathBuf::from("a/b/c");
+        let result = subtract_path(current, parent);
+        let expected = PathBuf::from("d/e/f/g/h");
+
+        assert_eq!(result, expected, "Should handle deeply nested path structures");
+    }
+
+    /// Test with root-like paths
+    #[test]
+    fn test_root_prefix() {
+        let current = PathBuf::from("/home/user/documents/file.txt");
+        let parent = PathBuf::from("/home/user");
+        let result = subtract_path(current, parent);
+        let expected = PathBuf::from("documents/file.txt");
+
+        assert_eq!(result, expected, "Should handle absolute paths with root prefix");
+    }
+
+    /// Test where paths share common prefix but parent is not exact prefix
+    #[test]
+    fn test_partial_match_not_prefix() {
+        let current = PathBuf::from("animals/pets/cats");
+        let parent = PathBuf::from("animals/pets/dogs");
+        let result = subtract_path(current, parent);
+
+        assert_eq!(result, PathBuf::new(), "Should return empty when paths share partial prefix but parent is not exact prefix");
+    }
+}
+
 /// Creates a new (core)Node directory, subdirectories, and metadata files.
 /// Handles errors and returns a Result to indicate success or failure.
 ///
 /// # Arguments
 ///
 /// * `path_to_node` - Base path where the node will be created
+/// * 'parent_node_uniqueid' - Strawberry Ice Cream with Rock Salt
 /// * `teamchannel_collaborators_with_access` - List of collaborators
 /// * `team_channel_name` - Name of the team channel
 ///
@@ -17253,12 +17912,13 @@ fn update_core_node(
 ///
 /// * `Result<(), ThisProjectError>` - `Ok(())` on success, or a `ThisProjectError`
 fn create_core_node(
-    node_path: PathBuf,
+    current_node_path: PathBuf,
+    parent_node_uniqueid: Vec<u8>,
     teamchannel_collaborators_with_access: Vec<String>,
     use_padnet: Option<bool>,
 ) -> Result<(), ThisProjectError> {
     #[cfg(debug_assertions)]
-    debug_log!("CCN: start create_core_node(), node_path -> {:?}", node_path);
+    debug_log!("CCN: start create_core_node(), node_path -> {:?}", current_node_path);
 
     // Get user input for node name
     println!("Enter node name:");
@@ -17292,7 +17952,7 @@ fn create_core_node(
     let description = description.trim().to_string();
 
     // Create the specific node directory path
-    let node_specific_path = node_path.join(&node_name);
+    let node_specific_path = current_node_path.join(&node_name);
 
     #[cfg(debug_assertions)]
     debug_log!("CCN: Creating node at specific path: {:?}", node_specific_path);
@@ -17347,18 +18007,203 @@ fn create_core_node(
         // TODO maybe custom shallow node with no tasks option needed...
     }
 
-    // for node
-    let node_relative_channel_pathbuf = extract_relative_node_path_after_known_segments(&node_specific_path.clone())?;
+    // ===============
+    // make path items
+    // ===============
+    /*
+    These
+    path_in_parentnode,
+    parent_node_uniqueid,
+
+    Are the basis for nested nodes.
+
+    */
+
+    /*
+    current_node_directory_path should be:
+
+    - parent_unique_node_id
+    - path_to_parent comes from lookup-table...
+    - path_in_parent (including parent name)
+
+    path to parent node...(by name? by id?)
+    +
+    path from parent node...
+
+    */
+    // 1. Create lookup table:
+    let channel_dir_path_str = match read_state_string("current_node_directory_path.txt") {
+        Ok(path) => path,
+        Err(_e) => {
+            #[cfg(debug_assertions)]
+            debug_log!("CCN Failed to get absolute path: {}", _e);
+            "".to_string()
+        }
+    };
+    #[cfg(all(debug_assertions, not(test)))]
+    debug_log!("CCN loop-1.1 Channel directory path (from session state): {}", channel_dir_path_str);
+
+    // use absolute file path
+    let team_channel_path = PathBuf::from(channel_dir_path_str);
+    #[cfg(all(debug_assertions, not(test)))]
+    debug_log!("CCN loop 1.1.1 paths: team_channel_path {:?}", team_channel_path);
+
+    // let mut hashtable_node_id_to_path = create_node_id_to_path_lookup(&team_channel_path)?;
+    let hashtable_node_id_to_path = match create_node_id_to_path_lookup(&team_channel_path) {
+        Ok(path) => path,
+        Err(_e) => {
+            #[cfg(debug_assertions)]
+            debug_log!("CCN Failed to get absolute path: {}", _e);
+            HashMap::new() // Return an empty HashMap<Vec<u8>, PathBuf>
+        }
+    };
+
+    // Get local_abs_path_to_parent
+    // let Some(local_abs_path_to_parent) = hashtable_node_id_to_path.get(&node_unique_id_vec)...
+
+    // let mut current_node_uniqueid_path: PathBuf;
+
+    // // Get file path (if exists)
+    // if let Some(existing_pathbuf) = hashtable_node_id_to_path.get(&node_unique_id_vec) {
+
+    //     // make old directory path
+    //     // maybe this step not needed
+    //     current_node_uniqueid_path = PathBuf::from(existing_pathbuf);
+
+    //     debug_log!(
+    //         "CCN 7.2 got-made current_node_uniqueid_path -> {:?}",
+    //         &current_node_uniqueid_path
+    //     );
+    // }
+
+    // let current_node_uniqueid_path: PathBuf;
 
     #[cfg(debug_assertions)]
-    debug_log!("CCN: node_relative_channel_pathbuf {:?}", node_relative_channel_pathbuf);
+    debug_log!(
+        "CCN got-made hashtable_node_id_to_path -> {:?}",
+        hashtable_node_id_to_path
+    );
+
+    #[cfg(debug_assertions)]
+    debug_log!(
+        "CCN parent_node_uniqueid -> {:?}",
+        parent_node_uniqueid
+    );
+
+    // Get file path from hashtable, or empty PathBuf if not found
+    // Setting current_node_uniqueid_path from Option<PathBuf> lookup
+    let current_node_uniqueid_path: PathBuf = match hashtable_node_id_to_path.get(&parent_node_uniqueid) {
+        Some(existing_pathbuf) => {
+            #[cfg(debug_assertions)]
+            debug_log!(
+                "CCN got-made current_node_uniqueid_path -> {:?}",
+                existing_pathbuf
+            );
+
+            // Clone the PathBuf from the hashtable
+            existing_pathbuf.clone()
+        }
+        None => {
+            // #[cfg(debug_assertions)]
+            debug_log!("CCN error warning no current_node_uniqueid_path");
+
+            #[cfg(debug_assertions)]
+            debug_log!(
+                "CCN error None from hashtable_node_id_to_path.get(&parent_node_uniqueid) -> {:?}",
+                parent_node_uniqueid
+            );
+
+            PathBuf::new()
+        }
+    };
+
+    // // Get file path (if exists)
+    // // 'if' likely not needed, just setting value from option: current_node_uniqueid_path
+    // if let Some(existing_pathbuf) = hashtable_node_id_to_path.get(&current_node_unique_id) {
+    //     // Clone the PathBuf from the hashtable
+    //     current_node_uniqueid_path = existing_pathbuf.clone();
+
+    //     #[cfg(debug_assertions)]
+    //     debug_log!(
+    //         "HLOD 7.2 got-made current_node_uniqueid_path -> {:?}",
+    //         &current_node_uniqueid_path
+    //     );
+    // } else {
+    //     #[cfg(debug_assertions)]
+    //     debug_log!("HLOD 7.2 error warning no current_node_uniqueid_path ");
+    //     current_node_uniqueid_path = PathBuf::new()
+    // };
+
+    // let parent_node_uniqueid = current_node_unique_id;
+
+    #[cfg(debug_assertions)]
+    debug_log!("CCN: current_node_uniqueid_path {:?}", current_node_uniqueid_path);
+
+    // for node
+    // let node_relative_channel_pathbuf = extract_relative_node_path_after_known_segments(&node_specific_path.clone())?;
+
+
+
+    // pub fn subtract_path(current_path: PathBuf, parent_path: PathBuf) -> PathBuf
+    let path_in_parentnode = subtract_path(
+        current_node_path, // current node path
+        current_node_uniqueid_path, // parent_path
+    );
+
+
+    // 2. Calculate the hash
+    let updated_at_timestamp = get_current_unix_timestamp();
+
+    // Get armored public key, using key-id (full fingerprint in)
+    let full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+        Ok(fingerprint) => fingerprint,
+        Err(e) => {
+            eprintln!("CCN Failed to read GPG fingerprint from uma.toml: {}", e);
+            return Err(ThisProjectError::IoError(e));
+        }
+    };
+
+    // 1. Get the salt list using the correct function
+    debug_log!("implCoreNode-CCN: About to get address book data for owner: {}", owner);
+    let owner_data = match get_addressbook_file_by_username(
+        &owner,
+        &full_fingerprint_key_id_string,
+        ) {
+        Ok(data) => {
+            debug_log!("implCoreNode-CCN: Successfully got address book data");
+            data
+        },
+        Err(e) => {
+            debug_log!("implCoreNode-CCN: impl corenode new() Error getting address book data: {:?}", e);
+            return Err(e);
+        }
+    };
+    let salt_list = owner_data.user_salt_list;
+    // TODO add new fields to hash
+    let node_unique_id = match calculate_corenode_hashes(
+        &node_name.clone(),
+        &node_name.clone(),
+        updated_at_timestamp,
+        &salt_list,
+    ) {
+        Ok(id) => {
+            debug_log!("implCoreNode-CCN: Successfully calculated node_unique_id");
+            id
+        },
+        Err(e) => {
+            debug_log!("implCoreNode-CCN: Error calculating node_unique_id: {:?}", e);
+            return Err(e);
+        }
+    };
 
     // Create CoreNode instance
     let new_node_result = CoreNode::new(
         node_name.clone(),                 // node_name
+        node_unique_id.clone(),
         corenode_gpgtoml,
         description,                       // description_for_tui
-        node_relative_channel_pathbuf,  // node_specific_path.clone()      // directory_path
+        path_in_parentnode,                 // node_specific_path.clone()      // path_in_parentnode
+        parent_node_uniqueid,             // parent_node_uniqueid,
         owner.clone(),                             // owner
         teamchannel_collaborators_with_access.clone(),
         HashMap::new(),                    // for ports
@@ -17398,6 +18243,7 @@ fn create_core_node(
     let metadata_path = message_dir.join("0.toml");
     let metadata = NodeMessagePostBrowserMetadata::new(
         &node_name,
+        node_unique_id.clone(),
         &relative_channel_pathbuf, //&node_specific_path.clone()
         owner,
         teamchannel_collaborators_with_access,
@@ -17439,11 +18285,11 @@ fn create_core_node(
     // }
 
 
-    debug_log!("CTC: CoreNode creation complete, saving...");
+    debug_log!("CCN: CoreNode creation complete, saving...");
 
     // User Q&A: Ask user to choose file format for node
     println!("\n=== Node File Format Selection ===");
-    println!("Choose the format for saving the node file:");
+    println!("Choose the format for saving your copy of the node file:");
     println!();
     println!("1. 'gpgtoml' - GPG encrypted clearsigned file (node.gpgtoml) [DEFAULT - RECOMMENDED]");
     println!("   - Maximum security: encrypted AND signed");
@@ -17512,7 +18358,7 @@ fn create_core_node(
                         #[cfg(debug_assertions)] {
                             debug_log!("save_node_as_gpgtoml: CoreNode saved successfully as node.gpgtoml");
                             debug_log!("\n✓ Node successfully saved as encrypted file: {}/node.gpgtoml; new_channel_path,{:?}",
-                                    new_node.directory_path.display(),
+                                    new_node.path_in_parentnode.display(),
                                     node_specific_path
                             );
                         }
@@ -17538,7 +18384,7 @@ fn create_core_node(
                         #[cfg(debug_assertions)] {
                             debug_log!("save_node_to_clearsigned_file: CoreNode saved successfully as node.toml");
                             println!("\n✓ Node successfully saved as clearsigned file: {}/node.toml, new_channel_path {:?}",
-                                    new_node.directory_path.display(),
+                                    new_node.path_in_parentnode.display(),
                                     node_specific_path
                             );
                         }
@@ -19321,7 +20167,10 @@ fn q_and_a_get_corenode_gpgtoml() -> Result<bool, ThisProjectError> {
     let _ = clear_terminal_screen();
     println!("Task-Node -> security -> .gpgtoml");
     println!("");
-    println!("This Node is node.gpgtoml encrypted (by policy for those you share with)? -> (y)es / (n)o / Press-Enter for default [yes]:");
+    println!("This Node is node.gpgtoml encrypted? -> (y)es / (n)o");
+    println!("(Set policy for those you share with. ");
+    println!(" Your remote collaborator's local file will be encrypted?)");
+    println!("Press-Enter for default [yes].");
     println!("");
     println!("(y/n)");
     print!("> ");
@@ -22407,10 +23256,17 @@ if let Some(existing_path) = node_id_to_path.get(&node_unique_id_str) {
 
 }
 */
+
+
 /// Creates a lookup table of node unique IDs to their full file paths.
 ///
-/// This function iterates through the team channel directory, identifies node directories (those containing a `node.toml` file),
-/// extracts the node's unique ID from the `node.toml`, and stores the ID and full file path in a HashMap.
+/// This function iterates through the team channel directory, identifies node directories
+/// (those containing a `node.toml` or `node.gpgtoml` file), extracts the node's unique ID
+/// (a Pearson hash-based byte array) from the configuration file, and stores the ID and
+/// full file path in a HashMap.
+///
+/// The node unique ID is now stored as a Vec<u8> byte array (generated using Pearson hashes
+/// of the node's other fields), rather than as a string.
 ///
 /// # Arguments
 ///
@@ -22418,26 +23274,40 @@ if let Some(existing_path) = node_id_to_path.get(&node_unique_id_str) {
 ///
 /// # Returns
 ///
-/// * `Result<HashMap<String, PathBuf>, ThisProjectError>`:  A HashMap mapping node unique IDs to their paths, or a `ThisProjectError` if an error occurs.
+/// * `Result<HashMap<Vec<u8>, PathBuf>, ThisProjectError>`: A HashMap mapping node unique IDs
+///   (as byte arrays) to their paths, or a `ThisProjectError` if an error occurs during
+///   directory traversal or GPG operations.
+///
+/// # Error Handling
+///
+/// This function continues processing other nodes if:
+/// - A node configuration file cannot be found
+/// - A node configuration file cannot be decrypted/read
+/// - A node's unique ID cannot be read or is empty
+///
+/// The function only returns an error for critical failures:
+/// - Cannot read GPG fingerprint from uma.toml
+/// - Cannot get temp directory path
+/// - Directory traversal fails (WalkDir error)
 fn create_node_id_to_path_lookup(
     team_channel_path: &Path,
-) -> Result<HashMap<String, PathBuf>, ThisProjectError> {
+) -> Result<HashMap<Vec<u8>, PathBuf>, ThisProjectError> {
 
-    debug_log("CNITPL: startng create_node_id_to_path_lookup");
+    debug_log("CNITPL: starting create_node_id_to_path_lookup");
     debug_log!("CNITPL team_channel_path {:?}", team_channel_path);
 
-    let mut node_lookup: HashMap<String, PathBuf> = HashMap::new();
-
+    // HashMap now uses Vec<u8> keys for byte-array node IDs
+    let mut node_lookup: HashMap<Vec<u8>, PathBuf> = HashMap::new();
 
     // Get GPG fingerprint for decryption/verification
-    debug_log!("LIM: Getting GPG fingerprint from uma.toml");
+    debug_log!("CNITPL: Getting GPG fingerprint from uma.toml");
     let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
         Ok(fingerprint) => {
-            debug_log!("LIM: GPG fingerprint retrieved: {}", fingerprint);
+            debug_log!("CNITPL: GPG fingerprint retrieved: {}", fingerprint);
             fingerprint
         }
         Err(e) => {
-            debug_log!("LIM: Failed to read GPG fingerprint from uma.toml: {}", e);
+            debug_log!("CNITPL: Failed to read GPG fingerprint from uma.toml: {}", e);
             println!("Error: Cannot load messages without GPG fingerprint");
             return Err(ThisProjectError::from(e));
         }
@@ -22447,51 +23317,45 @@ fn create_node_id_to_path_lookup(
     let base_uma_temp_directory_path = match get_base_uma_temp_directory_path() {
         Ok(path) => path,
         Err(e) => {
-            debug_log!("LIM: Failed to get temp directory path: {}", e);
+            debug_log!("CNITPL: Failed to get temp directory path: {}", e);
             println!("Error: Cannot create temp directory for message reading");
             return Err(ThisProjectError::from(e));
         }
     };
 
-
+    // Iterate through all entries in the team channel directory
     for entry in WalkDir::new(team_channel_path) {
         let entry = entry?;
         let path = entry.path();
 
-        if path.is_dir() { // A. Nodes only (directories)
+        // A. Process only directories (potential node directories)
+        if path.is_dir() {
 
-            // let node_toml_path = path.join("node.toml");
-
-
-            // Construct path to node.toml or node.gpgtoml
             // Find the configuration file (could be either node.toml OR node.gpgtoml)
-            let node_toml_path = match find_node_toml_or_gpgtoml_file(
-                &path,
-                ) {
+            let node_toml_path = match find_node_toml_or_gpgtoml_file(&path) {
                 Ok(Some(found_path)) => {
                     // This is the path to whichever file was found (node.toml OR node.gpgtoml)
                     #[cfg(debug_assertions)]
                     debug_log!("CNITPL found configuration file at: {:?}", found_path);
-                    found_path  // <-- This could be either file
+                    found_path
                 },
                 Ok(None) => {
-                    // No file found - handle the error properly
+                    // No configuration file found - skip this directory
                     debug_log("CNITPL Neither node.toml nor node.gpgtoml found");
                     continue;
                 },
                 Err(_e) => {
-                    // Error occurred - handle it properly
+                    // Error occurred - skip this directory
                     #[cfg(debug_assertions)]
                     debug_log!("CNITPL Neither node.toml nor node.gpgtoml found >> {}", _e);
                     continue;
                 }
             };
 
-
             if node_toml_path.exists() {
 
                 // Get readable temp copy (handles both .toml and .gpgtoml)
-                let mnode_toml_readcopy_path = match get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
+                let node_toml_readcopy_path = match get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
                     &node_toml_path,
                     &gpg_full_fingerprint_key_id_string,
                     &base_uma_temp_directory_path,
@@ -22503,65 +23367,207 @@ fn create_node_id_to_path_lookup(
                     Err(_e) => {
                         #[cfg(debug_assertions)]
                         debug_log!("CNITPL: Failed to get readable copy {:?}", _e);
-
                         continue;
                     }
                 };
 
-
-
-
-                // // Found a node directory
-                // let toml_string = std::fs::read_to_string(&node_toml_path)?;
-
-                // // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
-                // let toml_value: Value = toml::from_str(&toml_string)?;
-
-                // // B. Extract node unique ID
-                // // let node_unique_id = toml_value.get("node_unique_id").and_then(Value::as_integer).unwrap_or(0) as u64;
-
-                // // Updated to get unique_id as hex_string:
-                // let node_unique_id_str = toml_value.get("node_unique_id").and_then(Value::as_str).map(|s| s.to_owned()).unwrap_or_default();
-
-
-                // if node_unique_id_str.is_empty() {
-                //     continue; // Skip this node if no valid ID
-                // }
-
-                let node_unique_id_str = match read_single_line_string_field_from_toml(
-                    &mnode_toml_readcopy_path,  //  string
-                    "node_unique_id",
+                // B. Extract node unique ID as Vec<u8> byte array
+                // Using the existing working function for reading u8 arrays from TOML
+                let node_unique_id_vec = match read_u8_array_field_from_toml(
+                    &node_toml_readcopy_path,  // path as string
+                    "node_unique_id",          // field name
                 ) {
-                    Ok(username) => {
-                        if username.is_empty() {
-                            // Convert to String error instead of GpgError
+                    Ok(id_bytes) => {
+                        if id_bytes.is_empty() {
+                            // Skip nodes with empty IDs
+                            // #[cfg(debug_assertions)]
+                            debug_log!("CNITPL: Node has empty unique ID, skipping");
                             continue;
                         }
-                        username
+                        id_bytes
                     }
                     Err(_e) => {
-
+                        // Failed to read node ID - skip this node
                         #[cfg(debug_assertions)]
-                        debug_log!("CNITPL: Failed to get readable copy {:?}", _e);
-
-                        // Convert to String error instead of GpgError
+                        debug_log!("CNITPL: Failed to read node_unique_id: {:?}", _e);
                         continue;
                     }
                 };
 
-                // C. Get full file path
+                // C. Get full file path to the node directory
                 let full_path = path.to_path_buf();
 
-                // Add to lookup table:
-                node_lookup.insert(node_unique_id_str, full_path);
+                // Add to lookup table: byte array ID -> directory path
+                node_lookup.insert(node_unique_id_vec, full_path);
             }
         }
     }
 
-    debug_log("CNITPL: to end of end");
+    #[cfg(debug_assertions)]
+    debug_log("CNITPL: completed create_node_id_to_path_lookup");
+
+    #[cfg(debug_assertions)]
+    debug_log!("CNITPL: node_lookup -> {:?}", node_lookup);
 
     Ok(node_lookup)
 }
+
+// /// Creates a lookup table of node unique IDs to their full file paths.
+// ///
+// /// This function iterates through the team channel directory, identifies node directories (those containing a `node.toml` file),
+// /// extracts the node's unique ID from the `node.toml`, and stores the ID and full file path in a HashMap.
+// ///
+// /// # Arguments
+// ///
+// /// * `team_channel_path`: The path to the team channel directory.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<HashMap<String, PathBuf>, ThisProjectError>`:  A HashMap mapping node unique IDs to their paths, or a `ThisProjectError` if an error occurs.
+// fn create_node_id_to_path_lookup(
+//     team_channel_path: &Path,
+// ) -> Result<HashMap<String, PathBuf>, ThisProjectError> {
+
+//     debug_log("CNITPL: startng create_node_id_to_path_lookup");
+//     debug_log!("CNITPL team_channel_path {:?}", team_channel_path);
+
+//     let mut node_lookup: HashMap<String, PathBuf> = HashMap::new();
+
+
+//     // Get GPG fingerprint for decryption/verification
+//     debug_log!("LIM: Getting GPG fingerprint from uma.toml");
+//     let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+//         Ok(fingerprint) => {
+//             debug_log!("LIM: GPG fingerprint retrieved: {}", fingerprint);
+//             fingerprint
+//         }
+//         Err(e) => {
+//             debug_log!("LIM: Failed to read GPG fingerprint from uma.toml: {}", e);
+//             println!("Error: Cannot load messages without GPG fingerprint");
+//             return Err(ThisProjectError::from(e));
+//         }
+//     };
+
+//     // Get temp directory for read copies
+//     let base_uma_temp_directory_path = match get_base_uma_temp_directory_path() {
+//         Ok(path) => path,
+//         Err(e) => {
+//             debug_log!("LIM: Failed to get temp directory path: {}", e);
+//             println!("Error: Cannot create temp directory for message reading");
+//             return Err(ThisProjectError::from(e));
+//         }
+//     };
+
+
+//     for entry in WalkDir::new(team_channel_path) {
+//         let entry = entry?;
+//         let path = entry.path();
+
+//         if path.is_dir() { // A. Nodes only (directories)
+
+//             // let node_toml_path = path.join("node.toml");
+
+
+//             // Construct path to node.toml or node.gpgtoml
+//             // Find the configuration file (could be either node.toml OR node.gpgtoml)
+//             let node_toml_path = match find_node_toml_or_gpgtoml_file(
+//                 &path,
+//                 ) {
+//                 Ok(Some(found_path)) => {
+//                     // This is the path to whichever file was found (node.toml OR node.gpgtoml)
+//                     #[cfg(debug_assertions)]
+//                     debug_log!("CNITPL found configuration file at: {:?}", found_path);
+//                     found_path  // <-- This could be either file
+//                 },
+//                 Ok(None) => {
+//                     // No file found - handle the error properly
+//                     debug_log("CNITPL Neither node.toml nor node.gpgtoml found");
+//                     continue;
+//                 },
+//                 Err(_e) => {
+//                     // Error occurred - handle it properly
+//                     #[cfg(debug_assertions)]
+//                     debug_log!("CNITPL Neither node.toml nor node.gpgtoml found >> {}", _e);
+//                     continue;
+//                 }
+//             };
+
+
+//             if node_toml_path.exists() {
+
+//                 // Get readable temp copy (handles both .toml and .gpgtoml)
+//                 let node_toml_readcopy_path = match get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
+//                     &node_toml_path,
+//                     &gpg_full_fingerprint_key_id_string,
+//                     &base_uma_temp_directory_path,
+//                 ) {
+//                     Ok(path) => {
+//                         debug_log!("CNITPL: Got temp read copy at: {}", path);
+//                         path
+//                     }
+//                     Err(_e) => {
+//                         #[cfg(debug_assertions)]
+//                         debug_log!("CNITPL: Failed to get readable copy {:?}", _e);
+
+//                         continue;
+//                     }
+//                 };
+
+
+
+
+//                 // // Found a node directory
+//                 // let toml_string = std::fs::read_to_string(&node_toml_path)?;
+
+//                 // // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+//                 // let toml_value: Value = toml::from_str(&toml_string)?;
+
+//                 // // B. Extract node unique ID
+//                 // // let node_unique_id = toml_value.get("node_unique_id").and_then(Value::as_integer).unwrap_or(0) as u64;
+
+//                 // // Updated to get unique_id as hex_string:
+//                 // let node_unique_id_str = toml_value.get("node_unique_id").and_then(Value::as_str).map(|s| s.to_owned()).unwrap_or_default();
+
+
+//                 // if node_unique_id_str.is_empty() {
+//                 //     continue; // Skip this node if no valid ID
+//                 // }
+
+//                 // TODO: type string?
+//                 let node_unique_id_str = match read_single_line_string_field_from_toml(
+//                     &node_toml_readcopy_path,  // string
+//                     "node_unique_id", // string
+//                 ) {
+//                     Ok(username) => {
+//                         if username.is_empty() {
+//                             // Convert to String error instead of GpgError
+//                             continue;
+//                         }
+//                         username
+//                     }
+//                     Err(_e) => {
+
+//                         #[cfg(debug_assertions)]
+//                         debug_log!("CNITPL: Failed to get readable copy {:?}", _e);
+
+//                         // Convert to String error instead of GpgError
+//                         continue;
+//                     }
+//                 };
+
+//                 // C. Get full file path
+//                 let full_path = path.to_path_buf();
+
+//                 // Add to lookup table:
+//                 node_lookup.insert(node_unique_id_str, full_path);
+//             }
+//         }
+//     }
+
+//     debug_log("CNITPL: to end of end");
+
+//     Ok(node_lookup)
+// }
 
 // /// Creates a lookup table of node unique IDs to their full file paths.
 // ///
@@ -27096,8 +28102,19 @@ fn handle_command_main_mode(
 
                 debug_log!("app.current_path {:?}", app.current_path);
 
+
+                /*
+                fn create_core_node(
+                    node_path: PathBuf,
+                    parent_node_uniqueid: Vec<u8>,
+                    teamchannel_collaborators_with_access: Vec<String>,
+                    use_padnet: Option<bool>,
+                ) -> Result<(), ThisProjectError> {
+                */
+
                 let _ = create_core_node(
                     app.current_path.clone(), // node_path: PathBuf,
+                    app.graph_navigation_instance_state.parent_node_uniqueid.clone(),
                     app.graph_navigation_instance_state.current_node_teamchannel_collaborators_with_access.clone(),  // teamchannel_collaborators_with_access: Vec<String>,
                     Some(app.graph_navigation_instance_state.use_padnet.clone()), // Padnet Option(bool)
                 );
@@ -29060,9 +30077,9 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
 
     // --- 2. Load/Read node.toml ---
     // Read that (node toml) data into an organized 'struct' of variables
-    // Read node.toml data with fn load_core_node_from_toml_file()
+    // Read node.toml data with deseri_get_core_node_struct_from_toml_file()
     // loading the fields into an organized struct with datatypes
-    let teamchannel_nodetoml_data: CoreNode = match load_core_node_from_toml_file(&channel_node_toml_path) {
+    let teamchannel_nodetoml_data: CoreNode = match deseri_get_core_node_struct_from_toml_file(&channel_node_toml_path) {
         Ok(node) => {
             debug_log!("MSMD 2. Successfully read channel node.toml");
             node // ???
@@ -31709,6 +32726,7 @@ fn handle_local_owner_desk(
 
         // 1. Create lookup table:
         let channel_dir_path_str = read_state_string("current_node_directory_path.txt")?; // read as string first
+        #[cfg(all(debug_assertions, not(test)))]
         debug_log!("HLOD loop-1.1 Channel directory path (from session state): {}", channel_dir_path_str);
 
         // use absolute file path
@@ -31716,7 +32734,7 @@ fn handle_local_owner_desk(
         #[cfg(all(debug_assertions, not(test)))]
         debug_log!("HLOD loop 1.1.1 paths: team_channel_path {:?}", team_channel_path);
 
-        let hashtable_node_id_to_path = create_node_id_to_path_lookup(&team_channel_path)?;
+        let mut hashtable_node_id_to_path = create_node_id_to_path_lookup(&team_channel_path)?;
 
         let remote_collaborator_name_for_thread_1 = remote_collaborator_name.clone();
         let remote_collaborator_name_for_thread_2 = remote_collaborator_name.clone();
@@ -32610,6 +33628,20 @@ fn handle_local_owner_desk(
                     // File Type Processing 1. message Posts
                     // =====================================
 
+                    /*
+
+                    optional but maybe not needed?
+                    read_u8_array_from_clearsigntoml_without_publicgpgkey
+
+                    lighter:
+                    pub fn read_u8_array_field_from_toml(
+                        path: &str,
+                        name_of_toml_field_key_to_read: &str,
+                    )
+
+                    */
+
+
                     // TODO handling:
                     // 1. message Posts <-
                     // 2. 0toml config for message posts
@@ -32619,85 +33651,107 @@ fn handle_local_owner_desk(
                     // if file_str.contains("filepath_in_node = \"/message_posts_browser\"") {
                     if file_str.contains("filepath_in_node = \"message_posts_browser\"") {
 
+                        #[cfg(debug_assertions)]
                         debug_log!("HLOD-InTray: an instant message file.");
+
+                        let messagepost_node_id = read_u8_array_field_from_string(
+                            file_str,
+                            "node_id"
+                        )?;
+
 
                         // 7.2
                         // 2. Generating File Path
 
-                        // let mut current_path = PathBuf::from("project_graph_data/team_channels");
-                        let mut current_path = make_input_path_name_abs_executabledirectoryrelative_nocheck(
-                            "project_graph_data/team_channels"
-                        )?;
+                        // Get existing node.toml file path (if exists)
+                        if let Some(msgpost_existing_node_directory_path) = hashtable_node_id_to_path.get(&messagepost_node_id) {
 
-                        current_path.push(&team_channel_name);
-                        current_path.push("message_posts_browser");
+                            // make old directory path
+                            let mut msgpost_node_abs_directory_path = PathBuf::from(msgpost_existing_node_directory_path);
 
-                        incoming_file_path = get_next_message_file_path(
-                            &current_path,
-                            &local_owner_desk_setup_data.remote_collaborator_name // local user name
-                        );
+                            #[cfg(debug_assertions)]
+                            debug_log!(
+                                "HLOD 7.2 got-made msgpost_abs_node_directory_path -> {:?}",
+                                &msgpost_node_abs_directory_path
+                            );
 
-                        // Adjust extension based on flag
-                        if save_as_gpgtoml {
-                            incoming_file_path.set_extension("gpgtoml");
-                        }
+                            // message post directory
+                            msgpost_node_abs_directory_path.push("message_posts_browser");
 
-                        debug_log!(
-                            "HLOD 7.2 got-made incoming_file_path -> {:?}",
-                            incoming_file_path
-                        );
+                            // get message TUI name
+                            incoming_file_path = get_next_message_file_path(
+                                &msgpost_node_abs_directory_path,
+                                &local_owner_desk_setup_data.remote_collaborator_name // local user name
+                            );
 
-                        // check: see if this same file was already saved
-                        // 1. Calculate the hash of the received file content using the *local* user's salts and the *raw bytes*:
-                        let received_file_hash_result = calculate_pearson_hashlist_for_string( // Use a byte-oriented hash function
-                            &file_str,  // Hash the raw bytes
-                            &local_owner_desk_setup_data.local_user_salt_list, // Use *local* user's salts
-                        );
-
-                        let received_file_hash = match received_file_hash_result {
-                            Ok(hash) => hash,
-                            Err(e) => {
-                                debug_log!("HLOD-InTray Error calculating hash for received file: {}", e);
-                                continue; // Skip to next file if hashing fails
+                            // Adjust extension based on flag
+                            if save_as_gpgtoml {
+                                incoming_file_path.set_extension("gpgtoml");
                             }
-                        };
 
-                        // 2. Check for duplicates and insert the hash (as before)
-                        if file_hash_set_session_nonce.contains(&received_file_hash) {
-                            debug_log!("Duplicate file received (hash match). Discarding.");
-                            continue; // Discard the duplicate file
-                        }
-                        file_hash_set_session_nonce.insert(received_file_hash); // Insert BEFORE saving
+                            #[cfg(debug_assertions)]
+                            debug_log!(
+                                "HLOD 7.2 got-made incoming_file_path -> {:?}",
+                                incoming_file_path
+                            );
 
-                        // 3. Saving the File
-                        // MODIFIED: Choose what to save
-                        let data_to_save = if save_as_gpgtoml {
-                            still_encrypted_file_blob  // Save encrypted version
-                        } else {
-                            &decrypted_clearsignfile_data  // Save clearsigned version
-                        };
+                            // check: see if this same file was already saved
+                            // 1. Calculate the hash of the received file content using the *local* user's salts and the *raw bytes*:
+                            let received_file_hash_result = calculate_pearson_hashlist_for_string( // Use a byte-oriented hash function
+                                &file_str,  // Hash the raw bytes
+                                &local_owner_desk_setup_data.local_user_salt_list, // Use *local* user's salts
+                            );
 
-                        // 3. Saving the File
+                            let received_file_hash = match received_file_hash_result {
+                                Ok(hash) => hash,
+                                Err(_e) => {
+                                    #[cfg(debug_assertions)]
+                                    debug_log!("HLOD-InTray Error calculating hash for received file: {}", _e);
+                                    continue; // Skip to next file if hashing fails
+                                }
+                            };
 
-                        // Create parent directories if they don't exist
-                        if let Some(parent) = Path::new(&incoming_file_path).parent() {
-                            if let Err(e) = fs::create_dir_all(parent) {
-                                debug_log!("HLOD-InTray error: Failed to create directories: {:?}", e);
+                            // 2. Check for duplicates and insert the hash (as before)
+                            if file_hash_set_session_nonce.contains(&received_file_hash) {
+                                debug_log!("Duplicate file received (hash match). Discarding.");
+                                continue; // Discard the duplicate file
+                            }
+                            file_hash_set_session_nonce.insert(received_file_hash); // Insert BEFORE saving
+
+                            // 3. Saving the File
+                            // MODIFIED: Choose what to save
+                            let data_to_save = if save_as_gpgtoml {
+                                still_encrypted_file_blob  // Save encrypted version
+                            } else {
+                                &decrypted_clearsignfile_data  // Save clearsigned version
+                            };
+
+                            // 3. Saving the File
+
+                            // Create parent directories if they don't exist
+                            if let Some(parent) = Path::new(&incoming_file_path).parent() {
+                                if let Err(e) = fs::create_dir_all(parent) {
+                                    #[cfg(debug_assertions)]
+                                    debug_log!("HLOD-InTray error: Failed to create directories: {:?}", e);
+                                    return Err(ThisProjectError::from(e));
+                                }
+                            }
+
+                            // 3. Saving the File
+                            if let Err(e) = fs::write(&incoming_file_path, data_to_save) {
+                                #[cfg(debug_assertions)]
+                                debug_log!("HLOD-InTray: Failed to write message file: {:?}", e);
                                 return Err(ThisProjectError::from(e));
                             }
+
+                            #[cfg(debug_assertions)]
+                            debug_log!("7.3 HLOD-InTray: IM message file saved to: {:?}", incoming_file_path);
                         }
-
-                        // 3. Saving the File
-                        if let Err(e) = fs::write(&incoming_file_path, data_to_save) {
-                            debug_log!("HLOD-InTray: Failed to write message file: {:?}", e);
-                            return Err(ThisProjectError::from(e));
-                        }
-
-                        debug_log!("7.3 HLOD-InTray: IM message file saved to: {:?}", incoming_file_path);
-
                     }
 
-
+                    // ================
+                    // 0.toml ZERO toml
+                    // ================
                     // ======================================================
                     // File Type Processing 2: 0toml config for message posts
                     // ======================================================
@@ -32721,10 +33775,6 @@ fn handle_local_owner_desk(
                     from get_current...
 
                     search for path to nodename
-
-
-
-
                     */
 
                     // TODO handling:
@@ -32734,86 +33784,124 @@ fn handle_local_owner_desk(
                     // future
                     // 4. Uma Data
                     if file_str.contains("messageposts_expire_after_n_min =") {
+
+
+                        #[cfg(debug_assertions)]
                         debug_log!("HLOD-InTray: an instant message file.");
 
-                        // 7.2
+                        // 7.2.2
                         // 2. Generating File Path
 
-                        // let mut current_path = PathBuf::from("project_graph_data/team_channels");
-                        let mut current_path = make_input_path_name_abs_executabledirectoryrelative_nocheck(
-                            "project_graph_data/team_channels"
+                        // // let mut current_path = PathBuf::from("project_graph_data/team_channels");
+                        // let mut current_path = make_input_path_name_abs_executabledirectoryrelative_nocheck(
+                        //     "project_graph_data/team_channels"
+                        // )?;
+
+                        // current_path.push(&team_channel_name);
+
+
+                        let messagepost_node_id = read_u8_array_field_from_string(
+                            file_str,
+                            "node_id"
                         )?;
 
-                        current_path.push(&team_channel_name);
-                        current_path.push("message_posts_browser");
-
-                        // "Always"
-                        current_path.push("0.toml");
-
-                        // incoming_file_path = get_next_message_file_path(
-                        //     &current_path,
-                        //     &local_owner_desk_setup_data.remote_collaborator_name // local user name
-                        // );
-
-
-                        // NEW: Adjust extension based on flag
-                        if save_as_gpgtoml {
-                            current_path.set_extension("gpgtoml");
-                        }
-
+                        #[cfg(debug_assertions)]
                         debug_log!(
-                            "HLOD 7.2 got-made incoming_file_path -> {:?}",
-                            current_path
+                            "HLOD 7.2.2 messagepost_node_id -> {:?}",
+                            &messagepost_node_id
                         );
 
-                        // check: see if this same file was already saved
-                        // 1. Calculate the hash of the received file content using the *local* user's salts and the *raw bytes*:
-                        let received_file_hash_result = calculate_pearson_hashlist_for_string( // Use a byte-oriented hash function
-                            &file_str,  // Hash the raw bytes
-                            &local_owner_desk_setup_data.local_user_salt_list, // Use *local* user's salts
-                        );
 
-                        let received_file_hash = match received_file_hash_result {
-                            Ok(hash) => hash,
-                            Err(e) => {
-                                debug_log!("Error calculating hash for received file: {}", e);
-                                continue; // Skip to next file if hashing fails
+                        // Get existing node.toml file path (if exists)
+                        if let Some(zero_msgpost_existing_node_directory_path) = hashtable_node_id_to_path.get(&messagepost_node_id) {
+
+                            // make old directory path
+                            let mut zero_msgpost_node_abs_directory_path = PathBuf::from(zero_msgpost_existing_node_directory_path);
+
+                            #[cfg(debug_assertions)]
+                            debug_log!(
+                                "HLOD 7.2.2 got-made zero_msgpost_node_abs_directory_path -> {:?}",
+                                &zero_msgpost_node_abs_directory_path
+                            );
+
+                            // message post directory
+                            zero_msgpost_node_abs_directory_path.push("message_posts_browser");
+
+                            // current_path.push("message_posts_browser");
+
+                            // "Always"
+                            zero_msgpost_node_abs_directory_path.push("0.toml");
+
+                            // incoming_file_path = get_next_message_file_path(
+                            //     &current_path,
+                            //     &local_owner_desk_setup_data.remote_collaborator_name // local user name
+                            // );
+
+
+                            // NEW: Adjust extension based on flag
+                            if save_as_gpgtoml {
+                                zero_msgpost_node_abs_directory_path.set_extension("gpgtoml");
                             }
-                        };
 
-                        // 2. Check for duplicates and insert the hash (as before)
-                        if file_hash_set_session_nonce.contains(&received_file_hash) {
-                            debug_log!("Duplicate file received (hash match). Discarding.");
-                            continue; // Discard the duplicate file
-                        }
-                        file_hash_set_session_nonce.insert(received_file_hash); // Insert BEFORE saving
+                            #[cfg(debug_assertions)]
+                            debug_log!(
+                                "HLOD 7.2 got-made incoming_file_path -> {:?}",
+                                zero_msgpost_node_abs_directory_path
+                            );
 
-                        // 3. Saving the File
-                        // MODIFIED: Choose what to save
-                        let data_to_save = if save_as_gpgtoml {
-                            still_encrypted_file_blob  // Save encrypted version
-                        } else {
-                            &decrypted_clearsignfile_data  // Save clearsigned version
-                        };
+                            // check: see if this same file was already saved
+                            // 1. Calculate the hash of the received file content using the *local* user's salts and the *raw bytes*:
+                            let received_file_hash_result = calculate_pearson_hashlist_for_string( // Use a byte-oriented hash function
+                                &file_str,  // Hash the raw bytes
+                                &local_owner_desk_setup_data.local_user_salt_list, // Use *local* user's salts
+                            );
 
-                        // 3. Saving the File
+                            let received_file_hash = match received_file_hash_result {
+                                Ok(hash) => hash,
+                                Err(_e) => {
+                                    #[cfg(debug_assertions)]
+                                    debug_log!("Error calculating hash for received file: {}", _e);
+                                    continue; // Skip to next file if hashing fails
+                                }
+                            };
 
-                        // Create parent directories if they don't exist
-                        if let Some(parent) = Path::new(&current_path).parent() {
-                            if let Err(e) = fs::create_dir_all(parent) {
-                                debug_log!("HLOD-InTray: Failed to create directories: {:?}", e);
+                            // 2. Check for duplicates and insert the hash (as before)
+                            if file_hash_set_session_nonce.contains(&received_file_hash) {
+                                debug_log!("Duplicate file received (hash match). Discarding.");
+                                continue; // Discard the duplicate file
+                            }
+                            file_hash_set_session_nonce.insert(received_file_hash); // Insert BEFORE saving
+
+                            // 3. Saving the File
+                            // MODIFIED: Choose what to save
+                            let data_to_save = if save_as_gpgtoml {
+                                still_encrypted_file_blob  // Save encrypted version
+                            } else {
+                                &decrypted_clearsignfile_data  // Save clearsigned version
+                            };
+
+                            // 3. Saving the File
+
+                            // Create parent directories if they don't exist
+                            if let Some(parent) = Path::new(&zero_msgpost_node_abs_directory_path).parent() {
+                                if let Err(e) = fs::create_dir_all(parent) {
+                                    #[cfg(debug_assertions)]
+                                    debug_log!("HLOD-InTray: Failed to create directories: {:?}", e);
+                                    return Err(ThisProjectError::from(e));
+                                }
+                            }
+
+                            // 3. Saving the File
+                            if let Err(e) = fs::write(&zero_msgpost_node_abs_directory_path, data_to_save) {
+                                #[cfg(debug_assertions)]
+                                debug_log!("HLOD-InTray: Failed to write message file: {:?}", e);
                                 return Err(ThisProjectError::from(e));
                             }
+
+                            #[cfg(debug_assertions)]
+                            debug_log!("7.3 HLOD-InTray: IM message file saved to: {:?}", zero_msgpost_node_abs_directory_path);
+
                         }
-
-                        // 3. Saving the File
-                        if let Err(e) = fs::write(&current_path, data_to_save) {
-                            debug_log!("HLOD-InTray: Failed to write message file: {:?}", e);
-                            return Err(ThisProjectError::from(e));
-                        }
-
-                        debug_log!("7.3 HLOD-InTray: IM message file saved to: {:?}", current_path);
-
                     }
 
 
@@ -32838,6 +33926,8 @@ fn handle_local_owner_desk(
                     // 3. Node files <-
                     // Future:
                     // 4. Uma Data
+                    // For nodes, rebuild lookup table
+                    //
                     // TODO, don't load whole file...
                     if file_str.contains("node_unique_id = [") {
                         debug_log!("HLOD-InTray: an Ode file. (Grecian Urn...you know.)");
@@ -32933,15 +34023,22 @@ fn handle_local_owner_desk(
                         */
 
                         // 2. Access node data (must match `node_unique_id_str` from `create_node_id_to_path_lookup`):
-                        let node_unique_id_str_result = extract_string_from_toml_bytes(&extracted_clearsigned_file_data, "node_unique_id");
+                        // let node_unique_id_str_result = extract_string_from_toml_bytes(&extracted_clearsigned_file_data, "node_unique_id");
                         // ?
                         // let new_node_dir_path_str = match extract_string_from_toml_bytes(received_file_bytes, "directory_path") {
                         //     Ok(s) => s,
                         //     Err(_) => return Err(ThisProjectError::InvalidData("directory_path field missing from node file".into())),
                         // };
+                        //
 
-                        match node_unique_id_str_result {
-                            Ok(node_unique_id_str) => { // Node exists, handle move/replace:
+
+                        let node_unique_id_vec_result = read_u8_array_field_from_string(
+                            file_str,
+                            "node_unique_id"
+                        );
+
+                        match node_unique_id_vec_result {
+                            Ok(node_unique_id_vec) => { // Node exists, handle move/replace:
                                 // TODO! check this, test it
                                 /*
                                 Establish Variables
@@ -32971,7 +34068,7 @@ fn handle_local_owner_desk(
                                 // let new_node_toml_path = new_node_dir_path.join("node.toml"); // Path to the new node.toml
 
                                 // Get old node.toml file path (if exists)
-                                if let Some(olddir_existing_node_directory_path) = hashtable_node_id_to_path.get(&node_unique_id_str) {
+                                if let Some(olddir_existing_node_directory_path) = hashtable_node_id_to_path.get(&node_unique_id_vec) {
 
                                     // make old directory path
                                     let olddir_abs_node_directory_path = PathBuf::from(olddir_existing_node_directory_path);
@@ -33005,22 +34102,7 @@ fn handle_local_owner_desk(
                                     }
 
 
-                                    // let oldfile_node_toml_file_path = olddir_abs_node_directory_path.join("node.toml"); // Path to the new node.toml
-
-                                    // debug_log!(
-                                    //     "HLOD 7.2 got-made oldfile_node_toml_file_path -> {:?}",
-                                    //     &oldfile_node_toml_file_path
-                                    // );
-
-                                    // // 3.2 replace (delete the old) node.toml file (file, not directory)
-                                    // // Write the received data to the OLD node.toml location, replacing it:
-                                    // if let Err(e) = fs::write(&oldfile_node_toml_file_path, &extracted_clearsigned_file_data) {
-                                    //     debug_log!("Error writing node.toml: {:?} - {}", &oldfile_node_toml_file_path, e);
-                                    //     return Err(ThisProjectError::from(e));
-                                    // }
-
                                     // 3.3 Move old node directory (not remove/delete) (directory, not file)
-                                    // TODO HERE HERE
                                     // from olddir_abs_node_directory_path to new_full_abs_node_directory_path
                                     if let Err(error) = move_directory_from_path_to_path(&olddir_abs_node_directory_path, &new_full_abs_node_directory_path) {
                                         debug_log!("An error occurred: {}", error);
@@ -33029,14 +34111,11 @@ fn handle_local_owner_desk(
                                     debug_log!("7.3 HLOD-InTray: moved file moved from: {:?}", &olddir_abs_node_directory_path);
                                     debug_log!("7.3 HLOD-InTray: moved-new file saved to: {:?}", &new_full_abs_node_directory_path);
 
-                                } else if file_str.contains("messageposts_expire_after_n_min =") {
-
-
+                                    // rebuild lookup table
+                                    hashtable_node_id_to_path = create_node_id_to_path_lookup(&team_channel_path)?;
 
                                 } else {
                                     // 3. saving node as clearsigned .toml or .gpgtoml
-
-
 
                                     // Determine filename based on flag
                                     let node_filename = if save_as_gpgtoml {
@@ -33061,6 +34140,11 @@ fn handle_local_owner_desk(
                                         &decrypted_clearsignfile_data  // Save clearsigned version
                                     };
 
+
+
+                                    // Node is new, save it:
+                                    // no unpacking because only existing files are sent
+
                                     // Create directory
                                     fs::create_dir_all(&new_full_abs_node_directory_path)?;
 
@@ -33070,35 +34154,11 @@ fn handle_local_owner_desk(
                                         return Err(ThisProjectError::from(e));
                                     }
 
+                                    // rebuild lookup table
+                                    hashtable_node_id_to_path = create_node_id_to_path_lookup(&team_channel_path)?;
+
                                     debug_log!("7.3 HLOD-InTray: new file saved to: {:?}", new_node_file_path);
 
-
-                                    // Node is new, save it:
-                                    // 3. Unpacking/Saving the File as node.toml file
-
-                                    // match unpack_new_node_save_toml_and_create_dir(
-                                    //     &extracted_clearsigned_file_data,
-                                    //     &new_full_abs_node_directory_path
-                                    // ) {
-                                    //     Ok(_) => debug_log("Node unpacked and saved successfully."),
-                                    //     Err(e) => debug_log!("Error unpacking node: {}", e),
-                                    // }
-
-                                    // debug_log!("7.3 HLOD-InTray: new file saved to: {:?}", new_full_abs_node_directory_path);
-
-                                    // unpack_new_node_save_toml_and_create_dir(
-                                    //     &extracted_clearsigned_file_data,
-                                    //     &new_full_abs_node_directory_path,
-                                    // );
-
-                                    // if let Err(e) = fs::write(
-                                    //     &new_node_toml_file_path,
-                                    //     &extracted_clearsigned_file_data
-                                    // ) {
-                                    //     debug_log!("HLOD-InTray: Failed to write message file: {:?}", e);
-                                    //     // Consider returning an error here instead of continuing the loop
-                                    //     return Err(ThisProjectError::from(e));
-                                    // }
                                 }
                             }
                             Err(_) => {
@@ -36507,6 +37567,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         current_node_description_for_tui: String::new(),
         current_node_directory_path: PathBuf::new(),
         current_node_unique_id: Vec::new(),
+        parent_node_uniqueid: Vec::new(),
         current_node_members: Vec::new(),
         home_square_one: true,
         // Project Areas,

@@ -720,6 +720,142 @@ pub fn read_single_line_string_field_from_toml(
     ))
 }
 
+// /// Reads a single-line string field from a TOML-formatted string.
+// ///
+// /// # Purpose
+// /// This function parses a TOML-formatted string to extract a single-line string
+// /// field value. It handles basic TOML string fields in the format:
+// /// ```toml
+// /// field_name = "value"
+// /// ```
+// ///
+// /// # Project Context
+// /// This function is part of the instant messaging file persistence system's manual
+// /// TOML deserialization. It complements the manual serialization functions, allowing
+// /// round-trip serialization/deserialization of string fields like `owner`, `node_name`,
+// /// and `filepath_in_node` from MessagePostFile structures.
+// ///
+// /// This string-based variant parallels `read_single_line_string_field_from_toml()`
+// /// but operates on in-memory TOML content rather than reading from disk. This is
+// /// useful when:
+// /// - TOML content has already been read into memory
+// /// - Processing streamed or transmitted TOML data
+// /// - Testing serialization/deserialization without filesystem I/O
+// /// - Parsing TOML segments or fragments
+// /// - Processing decrypted TOML content that exists only in memory
+// ///
+// /// # Arguments
+// /// - `file_string` - Reference to a string containing TOML-formatted content
+// /// - `name_of_toml_field_key_to_read` - Name of the field to read (must be a
+// ///   string field in the TOML)
+// ///
+// /// # Returns
+// /// - `Ok(String)` - The unquoted field value if found
+// /// - `Err(String)` - Error message if the field is not found
+// ///
+// /// # Error Handling
+// /// This function returns descriptive error messages when:
+// /// - The specified field is not found in the TOML string
+// /// - The field exists but has invalid format (though this is handled gracefully)
+// ///
+// /// All error messages include the function name prefix "RSLSFFS" (Read Single Line
+// /// String Field From Str) for unique identification in logs and debugging.
+// ///
+// /// # Format Requirements
+// /// The function expects TOML string field format on a single line:
+// /// ```toml
+// /// field_name = "value"
+// /// ```
+// ///
+// /// Supported variations:
+// /// - With quotes: `owner = "alice"`
+// /// - Extra whitespace: `owner  =  "alice"  `
+// /// - Values with spaces: `node_name = "primary node"`
+// ///
+// /// # String Unescaping
+// /// This function does NOT perform TOML string unescaping. It only removes the
+// /// surrounding quotes. If the value contains escaped characters (e.g., `\"`, `\\`,
+// /// `\n`), they will remain in their escaped form in the returned string.
+// ///
+// /// For fields that may contain escaped content, additional unescaping processing
+// /// may be required after calling this function.
+// ///
+// /// # Example
+// /// For a TOML string containing:
+// /// ```toml
+// /// owner = "alice"
+// /// node_name = "primary"
+// /// filepath_in_node = "/messages/msg001.toml"
+// /// ```
+// ///
+// /// Usage:
+// /// ```rust
+// /// let toml_content = "owner = \"alice\"\nnode_name = \"primary\"\n";
+// /// let owner = read_single_line_string_field_from_str(toml_content, "owner")?;
+// /// // Returns: Ok("alice".to_string())
+// /// ```
+// ///
+// /// # Implementation Notes
+// /// - Empty lines and comment lines (starting with #) are skipped
+// /// - Only the first occurrence of the field is processed
+// /// - Surrounding double quotes are removed from the value
+// /// - Internal quotes are not processed (no escape sequence handling)
+// /// - Missing field returns an error (not an empty string)
+// ///
+// /// # Design Rationale
+// /// - **Line-by-line processing**: Minimizes memory usage by processing incrementally
+// /// - **Graceful handling**: Uses defensive extraction with fallback to empty string
+// ///   rather than panicking on malformed input
+// /// - **Simple quote removal**: Only removes outer quotes, avoiding complex escape
+// ///   sequence parsing that could introduce bugs
+// /// - **Clear error messages**: Includes field name for debugging context
+// ///
+// /// # Safety Notes
+// /// - Uses `unwrap_or("")` instead of `unwrap()` to avoid panics on malformed input
+// /// - Returns empty string for malformed values rather than crashing
+// /// - This graceful degradation follows the project's "handle and move on" principle
+// pub fn read_single_line_string_field_from_str(
+//     file_string: &str,
+//     name_of_toml_field_key_to_read: &str,
+// ) -> Result<String, String> {
+//     // Process each line looking for our field
+//     // Line-by-line processing avoids loading full document into memory
+//     for line in file_string.lines() {
+//         let trimmed = line.trim();
+
+//         // Skip empty lines and comments
+//         // This matches standard TOML comment syntax
+//         if trimmed.is_empty() || trimmed.starts_with('#') {
+//             continue;
+//         }
+
+//         // Check if this line contains our field
+//         // Format expected: field_name = "value"
+//         if trimmed.starts_with(&format!("{} = ", name_of_toml_field_key_to_read)) {
+//             // Extract the value portion after the '=' sign
+//             // Split on '=' to separate field name from value
+//             // Use splitn(2, '=') to handle values that contain '=' characters
+//             let value = trimmed
+//                 .splitn(2, '=')
+//                 .nth(1) // Get the part after '='
+//                 .unwrap_or("") // Defensive: return empty string if split fails
+//                 .trim() // Remove leading/trailing whitespace
+//                 .trim_matches('"') // Remove surrounding double quotes
+//                 .to_string();
+
+//             // Successfully extracted the field value
+//             return Ok(value);
+//         }
+//     }
+
+//     // Field was not found in any line of the TOML string
+//     // This is a normal error case when a field is missing or misnamed
+//     Err(format!(
+//         "RSLSFFS: Field '{}' not found in TOML string",
+//         name_of_toml_field_key_to_read
+//     ))
+// }
+
 /// Reads a u8 integer value from a TOML file.
 ///
 /// # Arguments
@@ -9813,6 +9949,193 @@ pub fn read_u8_array_field_from_toml(
     Err(format!(
         "Byte array field '{}' not found in file '{}'",
         name_of_toml_field_key_to_read, path
+    ))
+}
+
+/// Reads an array of u8 bytes from a TOML-formatted string into a Vec<u8>.
+///
+/// # Purpose
+/// This function parses a TOML-formatted string to extract an array of unsigned
+/// 8-bit integers (bytes) defined by the specified field name. It handles arrays
+/// in the format:
+/// ```toml
+/// node_id = [160, 167, 195, 169]
+/// ```
+///
+/// # Project Context
+/// This function is part of the instant messaging file persistence system's manual
+/// TOML deserialization. It complements the `serialize_byte_array_to_toml()` function,
+/// allowing round-trip serialization/deserialization of byte-based identifiers like
+/// `node_id` which uniquely identify nodes in the distributed messaging system.
+///
+/// This string-based variant parallels `read_u8_array_field_from_toml()` but operates
+/// on in-memory TOML content rather than reading from disk. This is useful when:
+/// - TOML content has already been read into memory
+/// - Processing streamed or transmitted TOML data
+/// - Testing serialization/deserialization without filesystem I/O
+/// - Parsing TOML segments or fragments
+///
+/// # Arguments
+/// - `file_string` - Reference to a string containing TOML-formatted content
+/// - `field_name` - Name of the field to read (must be an array of integers in the TOML string)
+///
+/// # Returns
+/// - `Ok(Vec<u8>)` - A vector containing all bytes in the array if successful
+/// - `Err(String)` - Error message if the field is not found or values are out of
+///   u8 range (0-255)
+///
+/// # Error Handling
+/// This function returns descriptive error messages when:
+/// - The specified field is not found in the TOML string
+/// - The field is not a valid array format
+/// - Any value in the array is not a valid u8 (outside 0-255 range)
+/// - Any value cannot be parsed as an integer
+/// - The array syntax is malformed (missing brackets, etc.)
+///
+/// All error messages include the function name prefix "RU8AFFS" (Read U8 Array
+/// Field From String) for unique identification in logs and debugging.
+///
+/// # Format Requirements
+/// The function expects TOML array format on a single line:
+/// ```toml
+/// field_name = [value1, value2, value3]
+/// ```
+///
+/// Supported variations:
+/// - Empty arrays: `field_name = []`
+/// - Trailing commas: `field_name = [1, 2, 3,]`
+/// - Extra whitespace: `field_name = [ 1 ,  2  , 3 ]`
+///
+/// # Example
+/// For a TOML string containing:
+/// ```toml
+/// owner = "alice"
+/// node_id = [160, 167, 195, 169]
+/// node_name = "primary"
+/// ```
+///
+/// Usage:
+/// ```rust
+/// let toml_content = "owner = \"alice\"\nnode_id = [160, 167, 195, 169]\n";
+/// let node_id = read_u8_array_field_from_string(toml_content, "node_id")?;
+/// // Returns: Ok(vec![160, 167, 195, 169])
+/// ```
+///
+/// # Implementation Notes
+/// - Values must be in the range 0-255 (valid u8 range)
+/// - Negative numbers will result in an error
+/// - Floating point numbers will result in an error
+/// - The function trims whitespace and handles trailing commas
+/// - Empty lines and comment lines (starting with #) are skipped
+/// - Only the first occurrence of the field is processed
+///
+/// # Design Rationale
+/// - **Line-by-line processing**: Minimizes memory usage by processing incrementally
+///   rather than loading entire data structures
+/// - **Defensive parsing**: Validates each value before conversion to prevent panics
+/// - **Clear error messages**: Each error includes context (field name, value, position)
+///   for debugging
+/// - **Format flexibility**: Handles common TOML formatting variations (whitespace,
+///   trailing commas) that may appear in manually edited or generated files
+pub fn read_u8_array_field_from_string(
+    file_string: &str,
+    field_name: &str,
+) -> Result<Vec<u8>, String> {
+    /*
+    e.g.
+    // Deserialize a TOML string that was previously serialized
+    let toml_string = serialize_messagepost_toml(&message)?;
+
+    // Later, read back the node_id field
+    let node_id = read_u8_array_field_from_string(&toml_string, "node_id")?;
+
+    // Verify round-trip
+    assert_eq!(node_id, message.node_id);
+    */
+    // Process each line looking for our field
+    // Line-by-line processing avoids loading full document into memory
+    for (line_number, line) in file_string.lines().enumerate() {
+        let trimmed = line.trim();
+
+        // Skip empty lines and comments
+        // This matches standard TOML comment syntax
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+
+        // Check if this line contains our field with an array
+        // Format expected: field_name = [value1, value2, ...]
+        if trimmed.starts_with(&format!("{} = [", field_name)) {
+            // Extract the array portion between brackets
+            // Split on '=' to separate field name from value
+            let array_part = trimmed
+                .splitn(2, '=')
+                .nth(1)
+                .ok_or_else(|| {
+                    format!(
+                        "RU8AFFS: Invalid array format for field '{}' at line {}",
+                        field_name,
+                        line_number + 1
+                    )
+                })?
+                .trim()
+                .trim_start_matches('[')
+                .trim_end_matches(']')
+                .trim();
+
+            // Handle empty array case: node_id = []
+            // This is valid TOML and represents an empty byte vector
+            if array_part.is_empty() {
+                return Ok(Vec::new());
+            }
+
+            // Parse each comma-separated value as u8
+            let mut byte_values = Vec::new();
+
+            for (index, value_str) in array_part.split(',').enumerate() {
+                let cleaned_value = value_str.trim();
+
+                // Skip empty entries (handles trailing commas gracefully)
+                // E.g., [1, 2, 3,] has an empty string after the last comma
+                if cleaned_value.is_empty() {
+                    continue;
+                }
+
+                // Parse as i32 first to safely check range before u8 conversion
+                // This prevents panic on values outside u8 range
+                match cleaned_value.parse::<i32>() {
+                    Ok(int_value) => {
+                        // Validate value is in valid u8 range (0-255)
+                        // Negative values and values > 255 are rejected
+                        if int_value < 0 || int_value > 255 {
+                            return Err(format!(
+                                "RU8AFFS: Value {} at index {} in array field '{}' is out of valid byte range (0-255)",
+                                int_value, index, field_name
+                            ));
+                        }
+                        // Safe to convert to u8 now that range is validated
+                        byte_values.push(int_value as u8);
+                    }
+                    Err(e) => {
+                        // Handle parse failures (non-numeric strings, floats, etc.)
+                        return Err(format!(
+                            "RU8AFFS: Failed to parse value '{}' at index {} in array field '{}' as integer: {}",
+                            cleaned_value, index, field_name, e
+                        ));
+                    }
+                }
+            }
+
+            // Successfully parsed all values
+            return Ok(byte_values);
+        }
+    }
+
+    // Field was not found in any line of the TOML string
+    // This is a normal error case when a field is missing or misnamed
+    Err(format!(
+        "RU8AFFS: Byte array field '{}' not found in TOML string",
+        field_name
     ))
 }
 
