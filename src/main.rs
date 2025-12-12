@@ -15517,6 +15517,7 @@ fn save_clearsigned_messagepost_config_0toml(
          updated_at_timestamp = {}\n\
          messageposts_expire_after_n_min = {}\n\
          node_name = \"{}\"\n\
+         node_id = {:?}\n\
          path_in_node = \"{}\"\n\
          max_message_size_char = {}\n\
          total_max_size_mb = {}\n",
@@ -15525,24 +15526,25 @@ fn save_clearsigned_messagepost_config_0toml(
         metadata.updated_at_timestamp,
         metadata.messageposts_expire_after_n_min,
         metadata.node_name,
+        metadata.node_id,
         metadata.path_in_node,
         metadata.max_message_size_char,
         metadata.total_max_size_mb
     );
-
-    debug_log!("SCMC0: TOML content constructed, length: {} bytes", toml_content.len());
-    debug_log!("SCMC0: TOML content preview (first 200 chars): {}",
-        if toml_content.len() > 200 {
-            &toml_content[..200]
-        } else {
-            &toml_content
-        }
-    );
-
+    #[cfg(debug_assertions)]{
+        debug_log!("SCMC0: TOML content constructed, length: {} bytes", toml_content.len());
+        debug_log!("SCMC0: TOML content preview (first 200 chars): {}",
+            if toml_content.len() > 200 {
+                &toml_content[..200]
+            } else {
+                &toml_content
+            }
+        );
+    }
     // =================================================
     // Delegate to Existing Clearsigning Function
     // =================================================
-
+    #[cfg(debug_assertions)]
     debug_log!("SCMC0: Delegating to save_message_as_clearsigned_toml");
 
     // Call existing function that handles:
@@ -15552,6 +15554,7 @@ fn save_clearsigned_messagepost_config_0toml(
     // - Clearsigning operation
     save_message_as_clearsigned_toml(file_path, &toml_content)
         .map_err(|e| {
+            #[cfg(debug_assertions)]
             debug_log!("SCMC0: Error from save_message_as_clearsigned_toml: {}", e);
             io::Error::new(
                 e.kind(),
@@ -15559,9 +15562,10 @@ fn save_clearsigned_messagepost_config_0toml(
             )
         })?;
 
-    debug_log!("SCMC0: Successfully created clearsigned 0.toml at: {:?}", file_path);
-    debug_log!("SCMC0: save_clearsigned_messagepost_config_0toml completed");
-
+    #[cfg(debug_assertions)] {
+        debug_log!("SCMC0: Successfully created clearsigned 0.toml at: {:?}", file_path);
+        debug_log!("SCMC0: save_clearsigned_messagepost_config_0toml completed");
+    }
     Ok(())
 }
 

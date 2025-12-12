@@ -57,15 +57,19 @@ pub mod tiny_tui {
         // 2b. Display added core node fields
         println!("\nProcess: {}", pa1_process);
 
-        if pa2_schedule.len() == 2 {
+        // inspect
+        println!("a2_schedule.len() {}", pa2_schedule.len());
+
+        if pa2_schedule.len() == 3 {
             let start_time = pa2_schedule[0];
             let end_time = pa2_schedule[1];
-            let duration_days = (end_time - start_time) / (60 * 60 * 24);
+            // let duration_days = (end_time - start_time) / (60 * 60 * 24);
+            let duration_days = pa2_schedule[2] / (60 * 60 * 24);
 
             let start_date = format_timestamp_to_date(start_time);
             let end_date = format_timestamp_to_date(end_time);
             println!(
-                "Schedule: {} - {} ({} days)",
+                "Schedule: {} to {}  ({} days)",
                 start_date, end_date, duration_days
             );
         } else {
