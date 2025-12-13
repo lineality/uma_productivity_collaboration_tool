@@ -57,8 +57,9 @@ pub mod tiny_tui {
         // 2b. Display added core node fields
         println!("\nProcess: {}", pa1_process);
 
+        // should this be 2?
         // inspect
-        println!("a2_schedule.len() {}", pa2_schedule.len());
+        // println!("a2_schedule.len() {}", pa2_schedule.len());
 
         if pa2_schedule.len() == 3 {
             let start_time = pa2_schedule[0];
