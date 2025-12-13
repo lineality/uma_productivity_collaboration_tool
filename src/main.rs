@@ -32801,11 +32801,14 @@ fn handle_local_owner_desk(
             &remote_collaborator_name_for_thread_1,
         ) {
             Ok(temp_extractor) => temp_extractor,
-            Err(e) => {
-                debug_log!("HLOD Error getting timestamp via get_latest_received_from_rc_file_timestamp: e'{}'e. Using 0.", e);
+            Err(_e) => {
+                #[cfg(debug_assertions)]
+                debug_log!("HLOD Error getting timestamp via get_latest_received_from_rc_file_timestamp: e'{}'e. Using 0.", _e);
                 0 // Use a default timestamp (0) if an error occurs.
             }
         };
+
+        #[cfg(debug_assertions)]
         debug_log!(
             "HLOD: latest_received_from_rc_file_timestamp -> {:?}",
             latest_received_from_rc_file_timestamp,
@@ -32863,11 +32866,15 @@ fn handle_local_owner_desk(
                     &remote_collaborator_name_for_thread_2,
                 ) {
                     Ok(temp_extractor) => temp_extractor,
-                    Err(e) => {
-                        debug_log!("HLOD GotItSignal Error getting timestamp via get_latest_received_from_rc_in_teamchannel_file_timestamp_filecrawl: e'{}'e. Using 0.", e);
+                    Err(_e) => {
+
+                        #[cfg(debug_assertions)]
+                        debug_log!("HLOD GotItSignal Error getting timestamp via get_latest_received_from_rc_in_teamchannel_file_timestamp_filecrawl: e'{}'e. Using 0.", _e);
                         0 // Use a default timestamp (0) if an error occurs.
                     }
                 };
+
+                #[cfg(debug_assertions)]
                 debug_log!(
                     "HLOD drone loop (ready-signals) latest_received_from_rc_file_timestamp -> {:?}",
                     latest_received_from_rc_file_timestamp,
@@ -32906,6 +32913,7 @@ fn handle_local_owner_desk(
 
             // --- 3.3 Check for 'should_halt_uma' Signal ---
             if should_halt_uma() {
+                #[cfg(debug_assertions)]
                 debug_log!(
                     "HLOD-InTray 3.3 main loop Check for halt signal. Halting handle_local_owner_desk() for {}",
                     local_owner_desk_setup_data.remote_collaborator_name
@@ -32941,6 +32949,7 @@ fn handle_local_owner_desk(
 
                 match intray_socket.recv_from(&mut buf) {
                     Ok((amt, src)) => {
+                    #[cfg(debug_assertions)]
                     debug_log!(
                         "HLOD-InTray match intray_socket.recv_from(&mut buf) Ok((amt, src)) {:?} {:?}",
                         amt,
@@ -33499,6 +33508,7 @@ fn handle_local_owner_desk(
 
                     // TODO clean up gpg_blob_file_path?
 
+                    #[cfg(debug_assertions)]
                     debug_log!(
                         "HLOD 6.2 decrypt the data decrypted_clearsignfile_data -> {:?}",
                         decrypted_clearsignfile_data
@@ -33574,11 +33584,14 @@ fn handle_local_owner_desk(
                     // 6.3 Extract the clearsigned data
                     let extracted_clearsigned_file_data = match extract_clearsign_data(&decrypted_clearsignfile_data) {
                         Ok(data) => data,
-                        Err(e) => {
-                            debug_log!("HLOD 6.3: Clearsign extraction failed: {}. Skipping.", e);
+                        Err(_e) => {
+                            #[cfg(debug_assertions)]
+                            debug_log!("HLOD 6.3: Clearsign extraction failed: {}. Skipping.", _e);
                             continue;
                         }
                     };
+
+                    #[cfg(debug_assertions)]
                     debug_log!(
                         "HLOD 6.3 extracted_clearsigned_file_data -> {:?}",
                         extracted_clearsigned_file_data
@@ -33597,6 +33610,7 @@ fn handle_local_owner_desk(
                     let save_as_gpgtoml = file_str.contains("\nmessagepost_gpgtoml = true\n")
                         || file_str.contains("\ncorenode_gpgtoml = true\n");
 
+                    #[cfg(debug_assertions)]
                     debug_log!("HLOD 6.4: save_as_gpgtoml flag = {}", save_as_gpgtoml);
 
                     // 7 Save File into Uma Folder Structure
@@ -33619,6 +33633,7 @@ fn handle_local_owner_desk(
 
 
                     // TODO
+                    #[cfg(debug_assertions)]
                     debug_log!(
                         "HLOD 7.1 found message file, file_str -> {:?}",
                         file_str
@@ -33649,6 +33664,16 @@ fn handle_local_owner_desk(
 
                     */
 
+                    // =================
+                    // Make Save-To Path
+                    // =================
+                    /*
+                    1. re-make node_id:path lookup table
+                    2. get parent node_id from node
+                    3. get path for parent node_id from lookup table
+                    4. get path-in-node from node
+                    5. add path-in-node to parent-path
+                    */
 
                     // TODO handling:
                     // 1. message Posts <-
@@ -33668,9 +33693,19 @@ fn handle_local_owner_desk(
                         )?;
 
 
-                        // 7.2
-                        // 2. Generating File Path
 
+                        // Generating File Path
+                        // =================
+                        // Make Save-To Path
+                        // =================
+
+                        /*
+                        1. re-make node_id:path lookup table
+                        2. get parent node_id from node
+                        3. get path for parent node_id from lookup table
+                        4. get path-in-node from node
+                        5. add path-in-node to parent-path
+                        */
                         // Get existing node.toml file path (if exists)
                         if let Some(msgpost_existing_node_directory_path) = hashtable_node_id_to_path.get(&messagepost_node_id) {
 
@@ -33683,7 +33718,10 @@ fn handle_local_owner_desk(
                                 &msgpost_node_abs_directory_path
                             );
 
-                            // message post directory
+                            // For this edge case, the path-in-node is already known:
+                            // a node's standard messages are by definition in the same place:
+                            // -> "message_posts_browser"
+                            // add message post directory to node path
                             msgpost_node_abs_directory_path.push("message_posts_browser");
 
                             // get message TUI name
@@ -33710,6 +33748,7 @@ fn handle_local_owner_desk(
                                 &local_owner_desk_setup_data.local_user_salt_list, // Use *local* user's salts
                             );
 
+                            // extract from result
                             let received_file_hash = match received_file_hash_result {
                                 Ok(hash) => hash,
                                 Err(_e) => {
@@ -33727,7 +33766,7 @@ fn handle_local_owner_desk(
                             file_hash_set_session_nonce.insert(received_file_hash); // Insert BEFORE saving
 
                             // 3. Saving the File
-                            // MODIFIED: Choose what to save
+                            // MODIFIED: Choose what filetype to save to
                             let data_to_save = if save_as_gpgtoml {
                                 still_encrypted_file_blob  // Save encrypted version
                             } else {
@@ -33785,6 +33824,17 @@ fn handle_local_owner_desk(
                     search for path to nodename
                     */
 
+                    // =================
+                    // Make Save-To Path
+                    // =================
+                    /*
+                    1. re-make node_id:path lookup table
+                    2. get parent node_id from node
+                    3. get path for parent node_id from lookup table
+                    4. get path-in-node from node
+                    5. add path-in-node to parent-path
+                    */
+
                     // TODO handling:
                     // 1. message Posts
                     // 2. 0toml config for message posts <-
@@ -33808,20 +33858,20 @@ fn handle_local_owner_desk(
                         // current_path.push(&team_channel_name);
 
 
-                        let messagepost_node_id = read_u8_array_field_from_string(
+                        let messagepost_parent_node_id = read_u8_array_field_from_string(
                             file_str,
                             "node_id"
                         )?;
 
                         #[cfg(debug_assertions)]
                         debug_log!(
-                            "HLOD 7.2.2 messagepost_node_id -> {:?}",
-                            &messagepost_node_id
+                            "HLOD 7.2.2 messagepost_parent_node_id -> {:?}",
+                            &messagepost_parent_node_id
                         );
 
 
                         // Get existing node.toml file path (if exists)
-                        if let Some(zero_msgpost_existing_node_directory_path) = hashtable_node_id_to_path.get(&messagepost_node_id) {
+                        if let Some(zero_msgpost_existing_node_directory_path) = hashtable_node_id_to_path.get(&messagepost_parent_node_id) {
 
                             // make old directory path
                             let mut zero_msgpost_node_abs_directory_path = PathBuf::from(zero_msgpost_existing_node_directory_path);
@@ -33832,7 +33882,10 @@ fn handle_local_owner_desk(
                                 &zero_msgpost_node_abs_directory_path
                             );
 
-                            // message post directory
+                            // For this edge case, the path-in-node is already known:
+                            // a node's standard messages are by definition in the same place:
+                            // -> "message_posts_browser"
+                            // add message post directory to node path
                             zero_msgpost_node_abs_directory_path.push("message_posts_browser");
 
                             // current_path.push("message_posts_browser");
@@ -33875,6 +33928,7 @@ fn handle_local_owner_desk(
 
                             // 2. Check for duplicates and insert the hash (as before)
                             if file_hash_set_session_nonce.contains(&received_file_hash) {
+                                // safe log
                                 debug_log!("Duplicate file received (hash match). Discarding.");
                                 continue; // Discard the duplicate file
                             }
@@ -33938,7 +33992,7 @@ fn handle_local_owner_desk(
                     //
                     // TODO, don't load whole file...
                     if file_str.contains("node_unique_id = [") {
-                        debug_log!("HLOD-InTray: an Ode file. (Grecian Urn...you know.)");
+                        debug_log!("HLOD-InTray: nOde file. (Grecian Urn)");
 
                         // 7.2
                         // 2. Generating File Path
@@ -33952,24 +34006,26 @@ fn handle_local_owner_desk(
                                     let path_str = &line["path_in_parentnode = \"".len()..line.len() - 1];
                                     Some(PathBuf::from(path_str))
                                 } else {
+                                    // safe log
                                     debug_log!("HLOD Extract path_in_parentnode failed, warning.error?");
                                     None
                                 }
                             });
 
-                        // #[cfg(debug_assertions)]
+                        #[cfg(debug_assertions)]
                         debug_log!("HLOD nodes: new_node_directory_path_result {:?}", new_node_directory_path_result);
 
-                        let node_file_path = match new_node_directory_path_result {
+                        let node_file_path_in_parent = match new_node_directory_path_result {
                             Some(path) => path,
                             None => {
+                                // safe log
                                 debug_log!("'directory_path' not found or invalid format in node.toml");
                                 continue; // Or handle error as you see fit
                             }
                         };
 
-                        // #[cfg(debug_assertions)]
-                        debug_log!("HLOD nodes: node_file_path {:?}", node_file_path);
+                        #[cfg(debug_assertions)]
+                        debug_log!("HLOD nodes: node_file_path_in_parent {:?}", node_file_path_in_parent);
 
                         /*
                         Make a new path that is
@@ -33982,16 +34038,18 @@ fn handle_local_owner_desk(
                         let local_abs_teamchannelsbase_pathbuf = get_team_channels_homebase_directory_path()?;
 
                         // combines local base + new path tail from the struct-recieved
-                        let new_full_abs_node_directory_path = local_abs_teamchannelsbase_pathbuf.join(node_file_path);
+                        let new_full_abs_node_directory_path = local_abs_teamchannelsbase_pathbuf.join(node_file_path_in_parent);
 
                         // get absolute path
-                        // let new_full_abs_node_directory_path = PathBuf::from(node_file_path);
-                        // let new_full_abs_node_directory_path = PathBuf::from(exe_abs_node_file_path);
+                        // let new_full_abs_node_directory_path = PathBuf::from(node_file_path_in_parent);
+                        // let new_full_abs_node_directory_path = PathBuf::from(exe_abs_node_file_path_in_parent);
+                        #[cfg(debug_assertions)]
                         debug_log!("HLOD nodes: new_full_abs_node_directory_path {:?}", new_full_abs_node_directory_path);
 
                         // make sure path exists
                         fs::create_dir_all(&new_full_abs_node_directory_path)?;
 
+                        #[cfg(debug_assertions)]
                         debug_log!(
                             "HLOD 7.2 got-made new_full_abs_node_directory_path -> {:?}",
                             &new_full_abs_node_directory_path
@@ -34006,14 +34064,16 @@ fn handle_local_owner_desk(
 
                         let received_file_hash = match received_file_hash_result {
                             Ok(hash) => hash,
-                            Err(e) => {
-                                debug_log!("HLOD 7.2.1 Error calculating hash for received file: {}", e);
+                            Err(_e) => {
+                                #[cfg(debug_assertions)]
+                                debug_log!("HLOD 7.2.1 Error calculating hash for received file: {}", _e);
                                 continue; // Skip to next file if hashing fails
                             }
                         };
 
                         // 2. Check for duplicates and insert the hash (as before)
                         if file_hash_set_session_nonce.contains(&received_file_hash) {
+                            // safe log
                             debug_log!("HLOD 7.2.2 Duplicate file received (hash match). Discarding.");
                             continue; // Discard the duplicate file
                         }
@@ -34048,6 +34108,20 @@ fn handle_local_owner_desk(
 
                         match node_unique_id_vec_result {
                             Ok(node_unique_id_vec) => { // Node exists, handle move/replace:
+                                // If old path exists:
+                                //
+                                // get old and new base-path directory path
+                                // get old and new full file path
+                                //
+                                // Old path (easy)
+                                // 5B. archive OLD node FILE w/ timestamp (just the file, not the directory)
+                                // 6B. save (relace) new node file in old directory
+                                //
+                                // New Path (see below to make)
+                                // 7. recoursively move the old directory to the NEW directory path
+
+
+
                                 // TODO! check this, test it
                                 /*
                                 Establish Variables
@@ -34066,7 +34140,7 @@ fn handle_local_owner_desk(
                                 6A. save new file
 
                                 If old path exists:
-                                5B. remove OLD node FILE (just the file, not the directory)
+                                5B. archive OLD node FILE (just the file, not the directory)
                                 6B. save (relace) new node file in old directory
                                 7. recoursively move the old directory to the NEW directory path
 
@@ -34077,97 +34151,264 @@ fn handle_local_owner_desk(
                                 // let new_node_toml_path = new_node_dir_path.join("node.toml"); // Path to the new node.toml
 
                                 // Get old node.toml file path (if exists)
-                                if let Some(olddir_existing_node_directory_path) = hashtable_node_id_to_path.get(&node_unique_id_vec) {
+                                if let Some(base_olddir_existing_node_directory_path) = hashtable_node_id_to_path.get(&node_unique_id_vec) {
 
-                                    // make old directory path
-                                    let olddir_abs_node_directory_path = PathBuf::from(olddir_existing_node_directory_path);
 
-                                    debug_log!(
-                                        "HLOD 7.2 got-made olddir_abs_node_directory_path -> {:?}",
-                                        &olddir_abs_node_directory_path
+
+                                    // get parent node_id
+                                    let parent_node_uniqueid_vec_result = read_u8_array_field_from_string(
+                                        file_str,
+                                        "parent_node_uniqueid"
                                     );
+                                    match parent_node_uniqueid_vec_result {
+                                        Ok(parent_node_uniqueid_vec) => { // Node exists, handle move/replace:
 
-                                    // for clearsigned .toml and .gpgtoml
-                                    // Determine filename based on flag
-                                    let node_filename = if save_as_gpgtoml {
-                                        "node.gpgtoml"
-                                    } else {
-                                        "node.toml"
-                                    };
+                                            if let Some(existing_parent_node_directory_path) = hashtable_node_id_to_path.get(&parent_node_uniqueid_vec) {
 
-                                    let oldfile_node_file_path = olddir_abs_node_directory_path.join(node_filename);
+                                                #[cfg(debug_assertions)]
+                                                debug_log!(
+                                                    "HLOD node-type got existing_parent_node_directory_path -> {:?}",
+                                                    &existing_parent_node_directory_path
+                                                );
 
-                                    // Choose what to save
-                                    let data_to_save = if save_as_gpgtoml {
-                                        still_encrypted_file_blob  // Save encrypted version
-                                    } else {
-                                        &decrypted_clearsignfile_data  // Save clearsigned version
-                                    };
+                                                // 3. saving node as clearsigned .toml or .gpgtoml
 
-                                    // 3.2 replace (delete the old) node file
-                                    if let Err(e) = fs::write(&oldfile_node_file_path, data_to_save) {
-                                        debug_log!("Error writing node file: {:?} - {}", &oldfile_node_file_path, e);
-                                        return Err(ThisProjectError::from(e));
+                                                // Determine filename based on flag
+                                                let node_filename = if save_as_gpgtoml {
+                                                    "node.gpgtoml"
+                                                } else {
+                                                    "node.toml"
+                                                };
+
+                                                // =================
+                                                // Make Save-To Path
+                                                // =================
+                                                /*
+                                                1. re-make node_id:path lookup table
+                                                2. get parent node_id from node
+                                                3. get path for parent node_id from lookup table
+                                                4. get path-in-node from node
+                                                5. add path-in-node to parent-path
+                                                */
+
+                                                // new base is local real parent path plus abstract 'in-parent' path from node
+                                                let base_node_path_new = existing_parent_node_directory_path.join(existing_parent_node_directory_path);
+
+                                                #[cfg(debug_assertions)]
+                                                debug_log!(
+                                                    "HLOD 7.2 got-made base_node_path -> {:?}",
+                                                    &base_node_path_new
+                                                );
+
+
+                                                // add name and extention to path (node.toml or node.gpgtoml)
+                                                // though only to make path
+                                                let new_node_file_path = base_node_path_new.join(node_filename);
+
+                                                // Create directory path (if not already there)
+                                                fs::create_dir_all(&new_node_file_path)?;
+
+                                                // old
+                                                // let new_node_toml_file_path = new_full_abs_node_directory_path.join("node.toml"); // Path to the new node.toml
+
+                                                #[cfg(debug_assertions)]
+                                                debug_log!(
+                                                    "HLOD 7.2 got-made new_node_toml_file_path -> {:?}",
+                                                    &new_node_file_path
+                                                );
+
+
+                                                // Choose what to save
+                                                let data_to_save = if save_as_gpgtoml {
+                                                    still_encrypted_file_blob  // Save encrypted version
+                                                } else {
+                                                    &decrypted_clearsignfile_data  // Save clearsigned version
+                                                };
+
+                                                // Node is new, save it:
+                                                // no unpacking because only existing files are sent
+
+                                                // TODO: more optimal way to make/skip zero-toml file?
+
+
+
+                                                // // Save file
+                                                // if let Err(e) = fs::write(&new_node_file_path, data_to_save) {
+                                                //     debug_log!("Error writing node file: {:?} - {}", &new_node_file_path, e);
+                                                //     return Err(ThisProjectError::from(e));
+                                                // }
+
+                                                // // rebuild lookup table
+                                                // hashtable_node_id_to_path = create_node_id_to_path_lookup(&team_channel_path)?;
+
+                                                // #[cfg(debug_assertions)]
+                                                // debug_log!("7.3 HLOD-InTray: new file saved to: {:?}", new_node_file_path);
+
+
+                                                // make old directory path
+                                                // let olddir_abs_node_directory_path = PathBuf::from(base_olddir_existing_node_directory_path);
+
+                                                #[cfg(debug_assertions)]
+                                                debug_log!(
+                                                    "HLOD 7.2 got-made base_olddir_existing_node_directory_path -> {:?}",
+                                                    &base_olddir_existing_node_directory_path
+                                                );
+
+                                                // for clearsigned .toml and .gpgtoml
+                                                // Determine filename based on flag
+                                                let node_filename = if save_as_gpgtoml {
+                                                    "node.gpgtoml"
+                                                } else {
+                                                    "node.toml"
+                                                };
+
+                                                let oldfile_node_file_path = base_olddir_existing_node_directory_path.join(node_filename);
+
+                                                // // Choose what to save
+                                                // let data_to_save = if save_as_gpgtoml {
+                                                //     still_encrypted_file_blob  // Save encrypted version
+                                                // } else {
+                                                //     &decrypted_clearsignfile_data  // Save clearsigned version
+                                                // };
+
+                                                // TODO archive oldfile_node_file_path
+
+                                                // 3.2 replace (delete the old) node file
+                                                if let Err(e) = fs::write(&oldfile_node_file_path, data_to_save) {
+                                                    #[cfg(debug_assertions)]
+                                                    debug_log!("Error writing node file: {:?} - {}", &oldfile_node_file_path, e);
+                                                    return Err(ThisProjectError::from(e));
+                                                }
+
+
+                                                // 3.3 Move old node directory (not remove/delete) (directory, not file)
+                                                // from olddir_abs_node_directory_path to new_full_abs_node_directory_path
+                                                if let Err(_error) = move_directory_from_path_to_path(&base_olddir_existing_node_directory_path, &base_node_path_new) {
+                                                    #[cfg(debug_assertions)]
+                                                    debug_log!("An error occurred: {}", _error);
+                                                }
+
+                                                #[cfg(debug_assertions)]{
+                                                    debug_log!("7.3 HLOD-InTray: moved file moved from: {:?}", &base_olddir_existing_node_directory_path);
+                                                    debug_log!("7.3 HLOD-InTray: moved-new file saved to: {:?}", &base_node_path_new);
+                                                }
+                                                // rebuild lookup table
+                                                hashtable_node_id_to_path = create_node_id_to_path_lookup(&team_channel_path)?;
+
+
+
+
+                                            }
+                                        }
+                                        Err(_) => {
+                                            // error in parent_node_uniqueid_vec_result
+                                            continue;
+                                        }
                                     }
 
 
-                                    // 3.3 Move old node directory (not remove/delete) (directory, not file)
-                                    // from olddir_abs_node_directory_path to new_full_abs_node_directory_path
-                                    if let Err(error) = move_directory_from_path_to_path(&olddir_abs_node_directory_path, &new_full_abs_node_directory_path) {
-                                        debug_log!("An error occurred: {}", error);
-                                    }
 
-                                    debug_log!("7.3 HLOD-InTray: moved file moved from: {:?}", &olddir_abs_node_directory_path);
-                                    debug_log!("7.3 HLOD-InTray: moved-new file saved to: {:?}", &new_full_abs_node_directory_path);
 
-                                    // rebuild lookup table
-                                    hashtable_node_id_to_path = create_node_id_to_path_lookup(&team_channel_path)?;
+
+
 
                                 } else {
-                                    // 3. saving node as clearsigned .toml or .gpgtoml
+                                    // =======================s
+                                    // Not-Moving, Just Saving
+                                    // =======================
 
-                                    // Determine filename based on flag
-                                    let node_filename = if save_as_gpgtoml {
-                                        "node.gpgtoml"
-                                    } else {
-                                        "node.toml"
-                                    };
 
-                                    let new_node_file_path = new_full_abs_node_directory_path.join(node_filename);
-
-                                    // let new_node_toml_file_path = new_full_abs_node_directory_path.join("node.toml"); // Path to the new node.toml
-
-                                    debug_log!(
-                                        "HLOD 7.2 got-made new_node_toml_file_path -> {:?}",
-                                        &new_node_file_path
+                                    // get parent node_id
+                                    let parent_node_uniqueid_vec_result = read_u8_array_field_from_string(
+                                        file_str,
+                                        "parent_node_uniqueid"
                                     );
+                                    match parent_node_uniqueid_vec_result {
+                                        Ok(parent_node_uniqueid_vec) => { // Node exists, handle move/replace:
 
-                                    // Choose what to save
-                                    let data_to_save = if save_as_gpgtoml {
-                                        still_encrypted_file_blob  // Save encrypted version
-                                    } else {
-                                        &decrypted_clearsignfile_data  // Save clearsigned version
-                                    };
+                                            if let Some(existing_parent_node_directory_path) = hashtable_node_id_to_path.get(&parent_node_uniqueid_vec) {
+
+                                                #[cfg(debug_assertions)]
+                                                debug_log!(
+                                                    "HLOD node-type got existing_parent_node_directory_path -> {:?}",
+                                                    &existing_parent_node_directory_path
+                                                );
+
+                                                // 3. saving node as clearsigned .toml or .gpgtoml
+
+                                                // Determine filename based on flag
+                                                let node_filename = if save_as_gpgtoml {
+                                                    "node.gpgtoml"
+                                                } else {
+                                                    "node.toml"
+                                                };
+
+                                                // =================
+                                                // Make Save-To Path
+                                                // =================
+                                                /*
+                                                1. re-make node_id:path lookup table
+                                                2. get parent node_id from node
+                                                3. get path for parent node_id from lookup table
+                                                4. get path-in-node from node
+                                                5. add path-in-node to parent-path
+                                                */
+
+                                                // new base is local real parent path plus abstract 'in-parent' path from node
+                                                let base_node_path = existing_parent_node_directory_path.join(existing_parent_node_directory_path);
+
+                                                #[cfg(debug_assertions)]
+                                                debug_log!(
+                                                    "HLOD 7.2 got-made base_node_path -> {:?}",
+                                                    &base_node_path
+                                                );
 
 
+                                                // add name and extention to path (node.toml or node.gpgtoml)
+                                                let new_node_file_path = base_node_path.join(node_filename);
 
-                                    // Node is new, save it:
-                                    // no unpacking because only existing files are sent
+                                                // old
+                                                // let new_node_toml_file_path = new_full_abs_node_directory_path.join("node.toml"); // Path to the new node.toml
 
-                                    // Create directory
-                                    fs::create_dir_all(&new_full_abs_node_directory_path)?;
+                                                #[cfg(debug_assertions)]
+                                                debug_log!(
+                                                    "HLOD 7.2 got-made new_node_toml_file_path -> {:?}",
+                                                    &new_node_file_path
+                                                );
 
-                                    // Save file
-                                    if let Err(e) = fs::write(&new_node_file_path, data_to_save) {
-                                        debug_log!("Error writing node file: {:?} - {}", &new_node_file_path, e);
-                                        return Err(ThisProjectError::from(e));
+                                                // Choose what to save
+                                                let data_to_save = if save_as_gpgtoml {
+                                                    still_encrypted_file_blob  // Save encrypted version
+                                                } else {
+                                                    &decrypted_clearsignfile_data  // Save clearsigned version
+                                                };
+
+                                                // Node is new, save it:
+                                                // no unpacking because only existing files are sent
+
+                                                // TODO: more optimal way to make/skip zero-toml file?
+
+                                                // Create directory
+                                                fs::create_dir_all(&new_node_file_path)?;
+
+                                                // Save file
+                                                if let Err(e) = fs::write(&new_node_file_path, data_to_save) {
+                                                    debug_log!("Error writing node file: {:?} - {}", &new_node_file_path, e);
+                                                    return Err(ThisProjectError::from(e));
+                                                }
+
+                                                // rebuild lookup table
+                                                hashtable_node_id_to_path = create_node_id_to_path_lookup(&team_channel_path)?;
+
+                                                #[cfg(debug_assertions)]
+                                                debug_log!("7.3 HLOD-InTray: new file saved to: {:?}", new_node_file_path);
+                                            }
+                                        }
+                                        Err(_) => {
+                                            // error in parent_node_uniqueid_vec_result
+                                            continue;
+                                        }
                                     }
-
-                                    // rebuild lookup table
-                                    hashtable_node_id_to_path = create_node_id_to_path_lookup(&team_channel_path)?;
-
-                                    debug_log!("7.3 HLOD-InTray: new file saved to: {:?}", new_node_file_path);
-
                                 }
                             }
                             Err(_) => {
@@ -34284,6 +34525,7 @@ fn handle_local_owner_desk(
         ); // Add collaborator name
         debug_log(">*< Halt signal received. Exiting The Uma. Closing... handle_local_owner_desk() |o|");
     }
+    // finis: fn handle_local_owner_desk
 }
 
 // /// Calculates Pearson hashes for a vector of byte slices.

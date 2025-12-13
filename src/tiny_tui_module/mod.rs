@@ -63,6 +63,8 @@ pub mod tiny_tui {
         if pa2_schedule.len() == 3 {
             let start_time = pa2_schedule[0];
             let end_time = pa2_schedule[1];
+
+            // TODO... for optimization, this may go back to two
             // let duration_days = (end_time - start_time) / (60 * 60 * 24);
             let duration_days = pa2_schedule[2] / (60 * 60 * 24);
 
