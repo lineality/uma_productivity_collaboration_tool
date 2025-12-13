@@ -32831,7 +32831,7 @@ fn handle_local_owner_desk(
             loop {
 
                 // 1.1 Wait (and check for exit Uma)  this waits and checks N times: for i in 0..N {
-                for _ in 0..10 {
+                for _ in 0..15 {
                     // break for loop ?
                     if should_halt_uma() {
                         #[cfg(debug_assertions)]
@@ -32846,6 +32846,7 @@ fn handle_local_owner_desk(
                     break;
                 }
 
+                #[cfg(debug_assertions)]
                 debug_log!("\nHLOD Drone Loop Start...thanks for coming around!");
 
                 // 1.2 Refresh Timestamp
@@ -34076,6 +34077,53 @@ fn handle_local_owner_desk(
                         // #[cfg(debug_assertions)]
                         debug_log!("HLOD nodes: node_file_path_in_parent {:?}", node_file_path_in_parent);
 
+                            // =========
+                        // node name
+                        // =========
+                        // Extract path_in_parentnode:
+                        let new_node_name_result = file_str
+                            .lines()  // Iterate over lines
+                            .find_map(|line| { // Use find_map to extract and parse in one step
+                                if line.starts_with("node_name = \"") && line.ends_with("\"") {
+                                    let path_str = &line["node_name = \"".len()..line.len() - 1];
+                                    Some(String::from(path_str))
+                                } else {
+                                    // checks each line
+                                    None
+                                }
+                            });
+
+                        if new_node_name_result.is_none() {
+                            // safe log
+                            debug_log!("HLOD Extract new_node_name_result failed, warning.error?");
+
+                            // dangermouse log
+                            // #[cfg(debug_assertions)]
+                            debug_log!(
+                                "HLOD oopsy file: file_str {:?}",
+                                file_str
+                            );
+
+                            debug_log!("HLOD Extract new_node_name_result failed, warning.error?");
+                            debug_log!("HLOD oopsy file: file_str {:?}", file_str);
+                        }
+
+                        // #[cfg(debug_assertions)]
+                        debug_log!("HLOD nodes: new_node_name_result {:?}", new_node_name_result);
+
+                        let incoming_node_name = match new_node_name_result {
+                            Some(path) => path,
+                            None => {
+                                // safe log
+                                debug_log!("'node_name' not found or invalid format in node.toml");
+                                continue; // Or handle error as you see fit
+                            }
+                        };
+
+                        // #[cfg(debug_assertions)]
+                        debug_log!("HLOD nodes: incoming_node_name {:?}", incoming_node_name);
+
+
                         /*
                         Make a new path that is
                         incoming relative end-path
@@ -34247,8 +34295,9 @@ fn handle_local_owner_desk(
                                                 1. re-make node_id:path lookup table
                                                 2. get parent node_id from node
                                                 3. get path for parent node_id from lookup table
-                                                4. get path-in-node from node
-                                                5. add path-in-node to parent-path
+                                                4. add node_name to path in parent
+                                                5. get path-in-node from node
+                                                6. add path-in-node to parent-path
                                                 */
 
                                                 // new base is local real parent path plus abstract 'in-parent' path from node
@@ -34261,12 +34310,21 @@ fn handle_local_owner_desk(
                                                     &base_node_path_new
                                                 );
 
+                                                // new base is local real parent path plus abstract 'in-parent' path from node
+                                                let new_node_dir_path = base_node_path_new.join(incoming_node_name);
+
+                                                // #[cfg(debug_assertions)]
+                                                debug_log!(
+                                                    "HLOD 7.2 NMoving, new_node_dir_path -> {:?}",
+                                                    &new_node_dir_path
+                                                );
+
                                                 // Create directory path (if not already there)
-                                                fs::create_dir_all(&base_node_path_new)?;
+                                                fs::create_dir_all(&new_node_dir_path)?;
 
                                                 // add name and extention to path (node.toml or node.gpgtoml)
                                                 // though only to make path
-                                                let new_node_file_path = base_node_path_new.join(node_filename);
+                                                let new_node_file_path = new_node_dir_path.join(node_filename);
 
 
 
@@ -34405,8 +34463,9 @@ fn handle_local_owner_desk(
                                                 1. re-make node_id:path lookup table
                                                 2. get parent node_id from node
                                                 3. get path for parent node_id from lookup table
-                                                4. get path-in-node from node
-                                                5. add path-in-node to parent-path
+                                                4. add node_name to path in parent
+                                                5. get path-in-node from node
+                                                6. add path-in-node to parent-path
                                                 */
 
                                                 // new base is local real parent path plus abstract 'in-parent' path from node
@@ -34418,11 +34477,20 @@ fn handle_local_owner_desk(
                                                     &base_node_path
                                                 );
 
+                                                // new base is local real parent path plus abstract 'in-parent' path from node
+                                                let new_node_dir_path = base_node_path.join(incoming_node_name);
+
+                                                // #[cfg(debug_assertions)]
+                                                debug_log!(
+                                                    "HLOD 7.2 Not-Moving, Just Saving new_node_dir_path -> {:?}",
+                                                    &new_node_dir_path
+                                                );
+
                                                 // // make sure path exists
-                                                fs::create_dir_all(&base_node_path)?;
+                                                fs::create_dir_all(&new_node_dir_path)?;
 
                                                 // add name and extention to path (node.toml or node.gpgtoml)
-                                                let new_node_file_path = base_node_path.join(node_filename);
+                                                let new_node_file_path = new_node_dir_path.join(node_filename);
 
                                                 // old
                                                 // let new_node_toml_file_path = new_full_abs_node_directory_path.join("node.toml"); // Path to the new node.toml
