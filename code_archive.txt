@@ -12757,3 +12757,62 @@ fn get_latest_timestamp_from_team_channel_dir() -> Result<u64, ThisProjectError>
     }
     Ok(latest_timestamp)
 }
+
+/// Moves a task (node) from one column to another in the task browser.
+/// Updates all relevant paths in node.toml files.
+///
+/// # Arguments
+///
+/// * `path_lookup_table` - HashMap containing path lookups by number
+///
+/// # Returns
+///
+/// * `Result<(), ThisProjectError>` - Success or error status
+fn move_task(
+    next_path_lookup_table: &HashMap<usize, PathBuf>
+) -> Result<(), ThisProjectError> {
+    debug_log("starting move_task()");
+
+    /*
+    1. from destination
+    2. look for node.toml or node.gpgtoml back until found
+    3. get id of parent node
+    4. get path in parent node
+    5. update updated_at field
+    6. move whole dir?
+    7. node.toml to send-q of ?
+    */
+
+    // 1. Get source task number
+    println!("Enter task number to move:");
+    let task_num = get_user_input_number()?;
+
+    // Get source path from lookup
+    let source_path = match next_path_lookup_table.get(&task_num) {
+        Some(path) => path.clone(),
+        None => return Err(ThisProjectError::InvalidData(
+            format!("Task number {} not found", task_num)
+        )),
+    };
+    debug_log!("move_task(), Source path: {:?}", source_path);
+
+    // 2. Get destination column number
+    println!("Enter destination column number:");
+    let dest_num = get_user_input_number()?;
+
+    // Get destination path from lookup
+    let dest_path = match next_path_lookup_table.get(&dest_num) {
+        Some(path) => path.clone(),
+        None => return Err(ThisProjectError::InvalidData(
+            format!("Destination column {} not found", dest_num)
+        )),
+    };
+    debug_log!("move_task(), Destination path: {:?}", dest_path);
+
+    // 3. Perform the move operation
+    move_node_directory(source_path, dest_path)?;
+    debug_log!(
+        "ending move_task()"
+        );
+    Ok(())
+}

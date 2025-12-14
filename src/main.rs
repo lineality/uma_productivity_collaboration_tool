@@ -29618,10 +29618,26 @@ fn get_addressbook_file_by_username(
 /// # Returns
 ///
 /// * `Result<(), ThisProjectError>` - Success or error status
-fn move_task(
-    next_path_lookup_table: &HashMap<usize, PathBuf>
+fn move_task_q_and_a_wrapper(
+    next_path_lookup_table: &HashMap<usize, PathBuf>,
+    parent_node_uniqueid: Vec<u8>,
 ) -> Result<(), ThisProjectError> {
-    debug_log("starting move_task()");
+    debug_log("starting move_task_q_and_a_wrapper()");
+
+    /* Moving Node:
+    load node like fn update_core_node()
+    1. from destination
+    2. look for node.toml or node.gpgtoml back until found
+    3. get id of parent node
+    4. get path in parent node
+    5. update updated_at field
+    6. re-clearsign
+    7. if gpgtoml, re-gpg
+    6. move whole dir?
+    7. node.toml to send-q of ?
+
+    */
+
     // 1. Get source task number
     println!("Enter task number to move:");
     let task_num = get_user_input_number()?;
@@ -29633,7 +29649,7 @@ fn move_task(
             format!("Task number {} not found", task_num)
         )),
     };
-    debug_log!("move_task(), Source path: {:?}", source_path);
+    debug_log!("move_task_q_and_a_wrapper(), Source path: {:?}", source_path);
 
     // 2. Get destination column number
     println!("Enter destination column number:");
@@ -29646,12 +29662,14 @@ fn move_task(
             format!("Destination column {} not found", dest_num)
         )),
     };
-    debug_log!("move_task(), Destination path: {:?}", dest_path);
+    debug_log!("move_task_q_and_a_wrapper(), Destination path: {:?}", dest_path);
+
+
 
     // 3. Perform the move operation
     move_node_directory(source_path, dest_path)?;
     debug_log!(
-        "ending move_task()"
+        "ending move_task_q_and_a_wrapper()"
         );
     Ok(())
 }
@@ -29688,7 +29706,18 @@ fn move_node_directory(
     debug_log!("MND Starting move_node_directory()");
     debug_log!("Moving node from {:?} to {:?}", source_path, dest_path);
 
+    /* Moving Node:
+    1. from destination
+    2. look for node.toml or node.gpgtoml back until found
+    3. get id of parent node
+    4. get path in parent node
+    5. update updated_at field
+    6. move whole dir?
+    7. node.toml to send-q of ?
+    */
+
     // 1. Construct the new node path (where the moved node will be located).
+    // NO UNWRAP!!
     let new_node_path = dest_path.join(source_path.file_name().unwrap());
     debug_log!("MND: new_node_path is: {:?}", new_node_path);
 
@@ -34212,18 +34241,6 @@ fn handle_local_owner_desk(
 
                         match node_unique_id_vec_result {
                             Ok(node_unique_id_vec) => {
-                                // Node exists, handle move/replace:
-                                // If old path exists:
-                                //
-                                // get old and new base-path directory path
-                                // get old and new full file path
-                                //
-                                // Old path (easy)
-                                // 5B. archive OLD node FILE w/ timestamp (just the file, not the directory)
-                                // 6B. save (relace) new node file in old directory
-                                //
-                                // New Path (see below to make)
-                                // 7. recoursively move the old directory to the NEW directory path
 
 
 
@@ -34257,6 +34274,34 @@ fn handle_local_owner_desk(
 
                                 // Get old node.toml file path (if exists)
                                 if let Some(base_olddir_existing_node_directory_path) = hashtable_node_id_to_path.get(&node_unique_id_vec) {
+
+                                    // ====
+                                    // Move
+                                    // ====
+                                    // 1. construct hybrid path to new destination
+                                    // 2. get old domicile
+                                    // 3. move/replace node.toml/gpgtoml at current old locaction
+                                    // 3. move all dir to new location
+                                    //
+                                    //  see fn move_task_q_and_a_wrapper() for start of process by sender
+                                    // and fn move_node_directory()
+
+
+
+                                    // Node exists, handle move/replace:
+                                    // If old path exists:
+                                    //
+                                    // get old and new base-path directory path
+                                    // get old and new full file path
+                                    //
+                                    // Old path (easy)
+                                    // 5B. archive OLD node FILE w/ timestamp (just the file, not the directory)
+                                    // 6B. save (relace) new node file in old directory
+                                    //
+                                    // New Path (see below to make)
+                                    // 7. recoursively move the old directory to the NEW directory path
+
+
 
                                     // #[cfg(debug_assertions)]
                                     debug_log!(
@@ -34400,7 +34445,7 @@ fn handle_local_owner_desk(
                                                     return Err(ThisProjectError::from(e));
                                                 }
 
-
+                                                // Recursive Move Whole Directory
                                                 // 3.3 Move old node directory (not remove/delete) (directory, not file)
                                                 // from olddir_abs_node_directory_path to new_full_abs_node_directory_path
                                                 if let Err(_error) = move_directory_from_path_to_path(&base_olddir_existing_node_directory_path, &base_node_path_new) {
@@ -38356,8 +38401,9 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                 // pass (no additional action if task mode entered)
 
             } else if input == "move" {
-                let _ = move_task(
+                let _ = move_task_q_and_a_wrapper(
                     &app.next_path_lookup_table,
+                    app.graph_navigation_instance_state.parent_node_uniqueid.clone(), // parent node id
                 );
 
             } else if input == "back" {
