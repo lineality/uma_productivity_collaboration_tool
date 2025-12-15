@@ -146,3 +146,33 @@ fn alt_find_node_toml_or_gpgtoml_file(input_node_parent_path: &Path) -> Option<P
     //     .filter_map(|e| e.ok())
     //     .filter(|e| e.file_type().is_dir())
     // {
+
+
+
+/// Recursively moves directory contents
+fn move_directory_contents(
+    from: &Path,
+    to: &Path
+) -> Result<(), ThisProjectError> {
+    #[cfg(debug_assertions)]
+    {
+        debug_log("MDC starting move_directory_contents()");
+        debug_log!("MDC from {:?}", from);
+        debug_log!("MDC to {:?}", to);
+    }
+
+    for entry in fs::read_dir(from)? {
+        let entry = entry?;
+        let path = entry.path();
+        let destination = to.join(path.file_name().unwrap());
+
+        if path.is_dir() {
+            fs::create_dir_all(&destination)?;
+            move_directory_contents(&path, &destination)?;
+        } else {
+            // Now, move the file instead of copying it
+            fs::rename(&path, &destination)?;
+        }
+    }
+    Ok(())
+}

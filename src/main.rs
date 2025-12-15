@@ -31580,34 +31580,6 @@ fn safe_update_for_moving_node_toml_fields(
     }
 }
 
-/// Recursively moves directory contents
-fn move_directory_contents(
-    from: &Path,
-    to: &Path
-) -> Result<(), ThisProjectError> {
-    #[cfg(debug_assertions)]
-    {
-        debug_log("MDC starting move_directory_contents()");
-        debug_log!("MDC from {:?}", from);
-        debug_log!("MDC to {:?}", to);
-    }
-
-    for entry in fs::read_dir(from)? {
-        let entry = entry?;
-        let path = entry.path();
-        let destination = to.join(path.file_name().unwrap());
-
-        if path.is_dir() {
-            fs::create_dir_all(&destination)?;
-            move_directory_contents(&path, &destination)?;
-        } else {
-            // Now, move the file instead of copying it
-            fs::rename(&path, &destination)?;
-        }
-    }
-    Ok(())
-}
-
 /// Loads connection data for members of the currently active team channel.
 /// On success, returns a `HashSet` of `MeetingRoomSyncDataset` structs,
 /// each containing connection
@@ -34735,8 +34707,6 @@ fn handle_local_owner_desk(
                     // --- 3.5.3 Deserialize the SendFile signal ---
                     let use_padnet_flag = &local_owner_desk_setup_data.use_padnet;
 
-
-
                     // If Padnet
                     let incoming_intray_file_struct: SendFile = if *use_padnet_flag {
 
@@ -35098,156 +35068,6 @@ fn handle_local_owner_desk(
                             }
                         }
 
-                        // Return GPG-encrypted bytes (still need GPG decryption below)
-                        // gpg_encrypted_bytes
-
-                        // // 1. still OTP layer, get blob
-                        // let still_otp_encrypted_file_blob = match &incoming_intray_file_struct.gpg_encrypted_intray_file {
-                        //     Some(data) => data,  // Extract the Vec<u8> if Some
-                        //     None => {
-                        //         debug_log!("HLOD: if *use_padnet_flag:  6.1: gpg_encrypted_intray_file is None. Skipping.");
-                        //         continue; // Or handle the None case differently (e.g., return an error)
-                        //     }
-                        // };
-
-                        // // 2. make paths; 1. to write OTP blob to, 2. to write gpg blob to
-                        // let otp_blob_file_path = create_unique_temp_filepathbuf(
-                        //     &std::env::temp_dir(),
-                        //     "uma_xor_result",
-                        //     TEMP_FILE_CREATION_RETRY_ATTEMPTS,
-                        //     TEMP_FILE_RETRY_DELAY_MS,
-                        // ).map_err(|e| {
-                        //     ThisProjectError::IoError(std::io::Error::new(
-                        //         e.kind(),
-                        //         format!("HLOD: if *use_padnet_flag: failed to create temp file #2: {}", e),
-                        //     ))
-                        // })?;
-
-                        // // let gpg_blob_file_path = create_unique_temp_filepathbuf(
-                        // //     &std::env::temp_dir(),
-                        // //     "uma_xor_result",
-                        // //     TEMP_FILE_CREATION_RETRY_ATTEMPTS,
-                        // //     TEMP_FILE_RETRY_DELAY_MS,
-                        // // ).map_err(|e| {
-                        // //     ThisProjectError::IoError(std::io::Error::new(
-                        // //         e.kind(),
-                        // //         format!("HLOD: if *use_padnet_flag: failed to create temp file #2: {}", e),
-                        // //     ))
-                        // // })?;
-
-
-                        // // 3. write OTP blob to file
-                        // // set blob to blob_as_file_path;
-                        // /*
-                        // fn write_bytes_to_file_atomic(
-                        //     data: &[u8],
-                        //     file_path: &Path,
-                        // ) -> Result<(), ThisProjectError> {
-                        // */
-                        // // // let _ = write_bytes_to_file_atomic(
-                        // // //     still_otp_encrypted_file_blob, // data: &[u8],
-                        // // //     &gpg_blob_file_path, // file_path: &Path,
-                        // // // )?;
-                        // // let wbtfaresult = write_bytes_to_file_atomic(
-                        // //     still_otp_encrypted_file_blob,
-                        // //     &gpg_blob_file_path,
-                        // // )
-                        // // .map_err(|e| {
-                        // //     eprintln!("Failed to write encrypted blob to {:?}: {}", gpg_blob_file_path, e);
-                        // //     e
-                        // // })?;
-                        // // debug_log!("wbtfaresult {:?}", wbtfaresult);
-
-                        // let gpg_blob_file_path = write_bytes_to_unique_temp_file(
-                        //     &still_otp_encrypted_file_blob,
-                        //     &std::env::temp_dir(),
-                        //     "uma_xor_result",
-                        //     TEMP_FILE_CREATION_RETRY_ATTEMPTS,
-                        //     TEMP_FILE_RETRY_DELAY_MS,)
-                        //     .map_err(|e| {
-                        //         ThisProjectError::IoError(std::io::Error::new(
-                        //             std::io::ErrorKind::Other,
-                        //             format!("HLOD error : failed write_bytes_to_unique_temp_file: {}", e),
-                        //         ))
-                        //     })?;
-
-                        // #[cfg(debug_assertions)]
-                        // {eprintln!("HLOD: Created temp file: {:?}", gpg_blob_file_path);
-                        //     debug_log!("HLOD: Created temp file: {:?}", gpg_blob_file_path);}
-
-
-                        // // 4. get padnet_directory_path, read-pad path (with id and channel name)
-                        // let team_channel_name = match get_current_team_channel_name_from_nav_path() {
-                        //     Some(name) => name,
-                        //     None => {
-                        //         debug_log!("HLOD: if *use_padnet_flag: Error: Could not get current channel name. Skipping set_as_active.");
-                        //         return Err(ThisProjectError::InvalidData("Could not get team channel name".into()));
-                        //     },
-                        // };
-                        // let rc_key_id = &local_owner_desk_setup_data.remote_collaborator_gpg_publickey_id;
-
-                        // // make name
-                        // //  -- /padnet/to/{team_channel}/{RC key-id}
-                        // let mut padnet_directory_path = get_reader_from_padnet_directory_path()?;
-                        // padnet_directory_path.push(&team_channel_name);
-                        // padnet_directory_path.push(rc_key_id);
-
-                        // // 5. read OTP file, make gpg file
-                        // /*
-
-                        // /// # Arguments
-                        // /// * `path_to_target_file` - Absolute path to file to XOR
-                        // /// * `result_path` - Absolute path for output file
-                        // /// * `path_to_padset` - Absolute path to padset root
-                        // /// * `pad_index` - Starting line index for XOR operation
-                        // ///
-                        // /// # Returns
-                        // /// * `Ok(usize)` - Number of bytes processed
-                        // /// * `Err(PadnetError)` - Operation failed, no output created
-                        // pub fn padnet_reader_xor_file(
-                        //     path_to_target_file: &Path, // `path_to_target_file` - Absolute path to file to XOR
-                        //     result_path: &Path,         // `result_path` - Absolute path for output file
-                        //     path_to_padset: &Path,      // `path_to_padset` - Absolute path to padset root
-                        //     pad_index: &PadIndex,       // `pad_index` - Starting line index for XOR operation
-                        // ) -> Result<usize, PadnetError> {
-                        // */
-
-                        // let padnet_index_array = match &incoming_intray_file_struct.padnet_index_array {
-                        //     Some(data) => data,  // Extract the Vec<u8> if Some
-                        //     None => {
-                        //         debug_log!("HLOD: if *use_padnet_flag:  6.1: padnet_index_array is None. Skipping.");
-
-                        //         continue; // Or handle the None case differently (e.g., return an error)
-                        //     }
-                        // };
-
-
-                        // let _ = padnet_reader_xor_file(
-                        //     &otp_blob_file_path,  // path_to_target_file: &Path, // `path_to_target_file` - Absolute path to file to XOR
-                        //     &gpg_blob_file_path,         // `result_path` - Absolute path for output file
-                        //     &padnet_directory_path,      // `path_to_padset` - Absolute path to padset root
-                        //     padnet_index_array, // pad_index: &PadIndex,       // `pad_index` - Starting line index for XOR operation
-                        // );
-
-                        // // 6. get bytes from file
-                        // /*
-                        // fn read_file_to_bytes(
-                        //     file_path: &Path,
-                        // ) -> Result<Vec<u8>, ThisProjectError> {
-                        // */
-                        // // 6. get bytes from file
-                        // match read_file_to_bytes(&gpg_blob_file_path) {
-                        //     Ok(bytes) => {
-                        //         #[cfg(debug_assertions)]
-                        //         println!("HLOD: if *use_padnet_flag:  6.6: Read {} bytes from GPG file", bytes.len());
-
-                        //         bytes  // ← Return the Vec<u8> (no semicolon!)
-                        //     },
-                        //     Err(e) => {
-                        //         debug_log!("HLOD: if *use_padnet_flag:  6.6: Read failed: {}. Skipping.", e);
-                        //         continue; // Skip to next packet
-                        //     }
-                        // }
                     } else {
 
                         debug_log("HLOD NOT*use_padnet_flag: 6.2: GPG decryption...");
@@ -35291,57 +35111,6 @@ fn handle_local_owner_desk(
 
                     */
 
-                    // let extracted_clearsigned_file_data = if *use_padnet_flag {
-
-                    //     /*
-                    //     // 1. flag for padnet-mode where?
-                    //     // 2. get team-channel-name
-                    //     // 3. get RC key-id (state)
-                    //     // 4. get read-pad path (with id, team-channel)
-                    //     //  -- /padnet/to/{team_channel}/{RC key-id}
-                    //     */
-
-                    //     // let team_channel_name = match get_current_team_channel_name_from_nav_path() {
-                    //     //     Some(name) => name,
-                    //     //     None => {
-                    //     //         debug_log!("Error: Could not get current channel name. Skipping set_as_active.");
-                    //     //         return Err(ThisProjectError::InvalidData("Could not get team channel name".into()));
-                    //     //     },
-                    //     // };
-                    //     // let rc_key_id = &local_owner_desk_setup_data.remote_collaborator_gpg_publickey_id;
-
-                    //     // ();
-                    //     // // 3. get read-pad path (with id)
-                    //     // //  -- /padnet/to/{team_channel}/{RC key-id}
-                    //     // let mut padnet_directory_path = get_reader_from_padnet_directory_path()?;
-                    //     // padnet_directory_path.push(&team_channel_name);
-                    //     // padnet_directory_path.push(rc_key_id);
-
-
-                    //     // 6.3 Extract the clearsigned data
-                    //     match extract_clearsign_data(&decrypted_clearsignfile_data) {
-                    //         Ok(data) => data,
-                    //         Err(e) => {
-                    //             debug_log!("HLOD 6.3: Clearsign extraction failed: {}. Skipping.", e);
-                    //             continue;
-                    //         }
-                    //     }
-
-                    // } else {
-                    // // Normal Mode, No Padnet OTP Network Layer
-
-                    //     // 6.3 Extract the clearsigned data
-                    //     match extract_clearsign_data(&decrypted_clearsignfile_data) {
-                    //         Ok(data) => data,
-                    //         Err(e) => {
-                    //             debug_log!("HLOD 6.3: Clearsign extraction failed: {}. Skipping.", e);
-                    //             continue;
-                    //         }
-                    //     }
-
-
-                    // };
-
                     // 6.3 Extract the clearsigned data
                     let extracted_clearsigned_file_data = match extract_clearsign_data(&decrypted_clearsignfile_data) {
                         Ok(data) => data,
@@ -35357,11 +35126,6 @@ fn handle_local_owner_desk(
                         "HLOD 6.3 extracted_clearsigned_file_data -> {:?}",
                         extracted_clearsigned_file_data
                     );
-
-                    // debug_log!(
-                    //     "HLOD 6.3 extracted_clearsigned_file_data -> {:?}",
-                    //     extracted_clearsigned_file_data
-                    // );
 
                     // Section 6.4 - Extract flag - for clearsigned .toml / .gpgtoml
                     let file_str = std::str::from_utf8(&extracted_clearsigned_file_data)
@@ -35392,8 +35156,6 @@ fn handle_local_owner_desk(
                         ThisProjectError::InvalidData("Invalid UTF-8 in file content".into())
                     })?;
 
-
-
                     #[cfg(debug_assertions)]
                     debug_log!(
                         "HLOD 7.1 found message file, file_str -> {:?}",
@@ -35408,7 +35170,6 @@ fn handle_local_owner_desk(
                             "HLOD error Unable to get team channel name, get_current_team_channel_name_from_nav_path()".into())
                         )?;
 
-
                     // =====================================
                     // File Type Processing 1. message Posts
                     // =====================================
@@ -35420,7 +35181,6 @@ fn handle_local_owner_desk(
                     debug_log!("HLOD loop 1.2 paths: hashtable_node_id_to_path {:?}", hashtable_node_id_to_path);
 
                     /*
-
                     optional but maybe not needed?
                     read_u8_array_from_clearsigntoml_without_publicgpgkey
 
@@ -35429,7 +35189,6 @@ fn handle_local_owner_desk(
                         path: &str,
                         name_of_toml_field_key_to_read: &str,
                     )
-
                     */
 
                     // =================
@@ -35459,8 +35218,6 @@ fn handle_local_owner_desk(
                             file_str,
                             "node_id"
                         )?;
-
-
 
                         // Generating File Path
                         // =================
@@ -35621,14 +35378,6 @@ fn handle_local_owner_desk(
                         // 7.2.2
                         // 2. Generating File Path
 
-                        // // let mut current_path = PathBuf::from("project_graph_data/team_channels");
-                        // let mut current_path = make_input_path_name_abs_executabledirectoryrelative_nocheck(
-                        //     "project_graph_data/team_channels"
-                        // )?;
-
-                        // current_path.push(&team_channel_name);
-
-
                         let messagepost_parent_node_id = read_u8_array_field_from_string(
                             file_str,
                             "node_id"
@@ -35663,12 +35412,6 @@ fn handle_local_owner_desk(
 
                             // "Always"
                             zero_msgpost_node_abs_directory_path.push("0.toml");
-
-                            // incoming_file_path = get_next_message_file_path(
-                            //     &current_path,
-                            //     &local_owner_desk_setup_data.remote_collaborator_name // local user name
-                            // );
-
 
                             // NEW: Adjust extension based on flag
                             if save_as_gpgtoml {
@@ -35737,18 +35480,6 @@ fn handle_local_owner_desk(
                         }
                     }
 
-
-                    // // TODO?
-                    // // if message file
-                    // // if nav-state fule
-                    // // if contains gpg "\ngpgtoml = true\n"
-                    // if file_str.contains("\nmessagepost_gpgtoml = true\n") || file_str.contains("\ncorenode_gpgtoml = true\n"){
-
-                    //     // save .gpg version as .gpgtoml
-                    //     // ...file name if message...
-
-                    // }
-
                     // ==================================
                     // File Type Processing 3. Node files
                     // ==================================
@@ -35813,7 +35544,7 @@ fn handle_local_owner_desk(
                         // #[cfg(debug_assertions)]
                         debug_log!("HLOD nodes: node_file_path_in_parent {:?}", node_file_path_in_parent);
 
-                            // =========
+                        // =========
                         // node name
                         // =========
                         // Extract path_in_parentnode:
@@ -35860,35 +35591,6 @@ fn handle_local_owner_desk(
                         debug_log!("HLOD nodes: incoming_node_name {:?}", incoming_node_name);
 
 
-                        /*
-                        Make a new path that is
-                        incoming relative end-path
-                        +
-                        local base absolute path
-
-                        */
-                        // get absolute exe-raltive base, local
-                        // let local_abs_teamchannelsbase_pathbuf = get_team_channels_homebase_directory_path()?;
-
-                        // combines local base + new path tail from the struct-recieved
-                        // let new_full_abs_node_directory_path = local_abs_teamchannelsbase_pathbuf.join(node_file_path_in_parent);
-
-                        // get absolute path
-                        // let new_full_abs_node_directory_path = PathBuf::from(node_file_path_in_parent);
-                        // let new_full_abs_node_directory_path = PathBuf::from(exe_abs_node_file_path_in_parent);
-
-                        // // #[cfg(debug_assertions)]
-                        // debug_log!("HLOD nodes: new_full_abs_node_directory_path {:?}, -> fs::create_dir_all()", new_full_abs_node_directory_path);
-
-                        // // make sure path exists
-                        // fs::create_dir_all(&new_full_abs_node_directory_path)?;
-
-                        // // #[cfg(debug_assertions)]
-                        // debug_log!(
-                        //     "HLOD 7.2 got-made new_full_abs_node_directory_path -> {:?}",
-                        //     &new_full_abs_node_directory_path
-                        // );
-
                         // check: see if this same file was already saved
                         // 1. Calculate the hash of the received file content using the *local* user's salts and the *raw bytes*:
                         let received_file_hash_result = calculate_pearson_hashlist_for_string( // Use a byte-oriented hash function
@@ -35913,7 +35615,6 @@ fn handle_local_owner_desk(
                         }
                         file_hash_set_session_nonce.insert(received_file_hash); // Insert BEFORE saving
 
-
                         /////////////////
                         // Move or Save
                         ////////////////
@@ -35926,15 +35627,6 @@ fn handle_local_owner_desk(
                         */
 
                         // 2. Access node data (must match `node_unique_id_str` from `create_node_id_to_path_lookup`):
-                        // let node_unique_id_str_result = extract_string_from_toml_bytes(&extracted_clearsigned_file_data, "node_unique_id");
-                        // ?
-                        // let new_node_dir_path_str = match extract_string_from_toml_bytes(received_file_bytes, "directory_path") {
-                        //     Ok(s) => s,
-                        //     Err(_) => return Err(ThisProjectError::InvalidData("directory_path field missing from node file".into())),
-                        // };
-                        //
-
-
                         let node_unique_id_vec_result = read_u8_array_field_from_string(
                             file_str,
                             "node_unique_id"
@@ -35949,9 +35641,6 @@ fn handle_local_owner_desk(
                         match node_unique_id_vec_result {
                             Ok(node_unique_id_vec) => {
 
-
-
-                                // TODO! check this, test it
                                 /*
                                 Establish Variables
                                 1. new node directory path (get) - Done Above
@@ -35974,10 +35663,6 @@ fn handle_local_owner_desk(
                                 7. recoursively move the old directory to the NEW directory path
 
                                 */
-                                // Use the node_unique_id_str
-
-                                // let new_node_dir_path = PathBuf::from(new_node_dir_path_str);
-                                // let new_node_toml_path = new_node_dir_path.join("node.toml"); // Path to the new node.toml
 
                                 // Get old node.toml file path (if exists)
                                 if let Some(base_olddir_existing_node_directory_path) = hashtable_node_id_to_path.get(&node_unique_id_vec) {
@@ -35992,9 +35677,6 @@ fn handle_local_owner_desk(
                                     //
                                     //  see fn move_task_q_and_a_wrapper() for start of process by sender
                                     // and fn move_node_directory()
-
-
-
                                     // Node exists, handle move/replace:
                                     // If old path exists:
                                     //
@@ -36008,9 +35690,7 @@ fn handle_local_owner_desk(
                                     // New Path (see below to make)
                                     // 7. recoursively move the old directory to the NEW directory path
 
-
-
-                                    // #[cfg(debug_assertions)]
+                                    #[cfg(debug_assertions)]
                                     debug_log!(
                                         "HLOD Node-Moving:"
                                     );
@@ -36025,7 +35705,7 @@ fn handle_local_owner_desk(
 
                                             if let Some(existing_parent_node_directory_path) = hashtable_node_id_to_path.get(&parent_node_uniqueid_vec) {
 
-                                                // #[cfg(debug_assertions)]
+                                                #[cfg(debug_assertions)]
                                                 debug_log!(
                                                     "HLOD Node exists, handle move/replace: node-type got existing_parent_node_directory_path -> {:?}",
                                                     &existing_parent_node_directory_path
@@ -36033,12 +35713,6 @@ fn handle_local_owner_desk(
 
                                                 // 3. saving node as clearsigned .toml or .gpgtoml
 
-                                                // Determine filename based on flag
-                                                let node_filename = if save_as_gpgtoml {
-                                                    "node.gpgtoml"
-                                                } else {
-                                                    "node.toml"
-                                                };
 
                                                 // =================
                                                 // Make Save-To Path
@@ -36055,7 +35729,7 @@ fn handle_local_owner_desk(
                                                 // new base is local real parent path plus abstract 'in-parent' path from node
                                                 let base_node_path_new = existing_parent_node_directory_path.join(node_file_path_in_parent);
 
-                                                // #[cfg(debug_assertions)]
+                                                #[cfg(debug_assertions)]
                                                 debug_log!(
 
                                                     "HLOD 7.2.1 Node exists, handle move/replace: got-made base_node_path_new, existing_parent_node_directory_path.join(node_file_path_in_parent) -> {:?}",
@@ -36065,7 +35739,7 @@ fn handle_local_owner_desk(
                                                 // new base is local real parent path plus abstract 'in-parent' path from node
                                                 let new_node_dir_path = base_node_path_new.join(incoming_node_name);
 
-                                                // #[cfg(debug_assertions)]
+                                                #[cfg(debug_assertions)]
                                                 debug_log!(
                                                     "HLOD 7.2.2 Moving, new_node_dir_path -> {:?}",
                                                     &new_node_dir_path
@@ -36074,25 +35748,31 @@ fn handle_local_owner_desk(
                                                 // Create directory path (if not already there)
                                                 fs::create_dir_all(&new_node_dir_path)?;
 
-                                                // add name and extention to path (node.toml or node.gpgtoml)
-                                                // though only to make path
-                                                let new_node_file_path = new_node_dir_path.join(node_filename);
+                                                #[cfg(debug_assertions)]
+                                                {
+                                                    // inspection
 
+                                                    // Determine filename based on flag
+                                                    let node_filename = if save_as_gpgtoml {
+                                                        "node.gpgtoml"
+                                                    } else {
+                                                        "node.toml"
+                                                    };
 
+                                                    // add name and extention to path (node.toml or node.gpgtoml)
+                                                    // though only to make path
+                                                    let new_node_file_path = new_node_dir_path.join(node_filename);
 
-                                                // old
-                                                // let new_node_toml_file_path = new_full_abs_node_directory_path.join("node.toml"); // Path to the new node.toml
+                                                    debug_log!(
+                                                        "HLOD 7.2.3 Node exists, handle move/replace: got-made new_node_toml_file_path -> {:?}",
+                                                        &new_node_file_path
+                                                    );
 
-                                                // #[cfg(debug_assertions)]
-                                                debug_log!(
-                                                    "HLOD 7.2.3 Node exists, handle move/replace: got-made new_node_toml_file_path -> {:?}",
-                                                    &new_node_file_path
-                                                );
-
-                                                debug_log!(
-                                                    "HLOD 7.2.3.4 save_as_gpgtoml -> {:?}",
-                                                    &save_as_gpgtoml
-                                                );
+                                                    debug_log!(
+                                                        "HLOD 7.2.3.4 save_as_gpgtoml -> {:?}",
+                                                        &save_as_gpgtoml
+                                                    );
+                                                }
 
                                                 // Choose what to save
                                                 let move_data_to_save = if save_as_gpgtoml {
@@ -36101,28 +35781,7 @@ fn handle_local_owner_desk(
                                                     &decrypted_clearsignfile_data  // Save clearsigned version
                                                 };
 
-                                                // Node is new, save it:
-                                                // no unpacking because only existing files are sent
-
-                                                // TODO: more optimal way to make/skip zero-toml file?
-
-                                                // // Save file
-                                                // if let Err(e) = fs::write(&new_node_file_path, move_data_to_save) {
-                                                //     debug_log!("Error writing node file: {:?} - {}", &new_node_file_path, e);
-                                                //     return Err(ThisProjectError::from(e));
-                                                // }
-
-                                                // // rebuild lookup table
-                                                // hashtable_node_id_to_path = create_node_id_to_path_lookup(&team_channel_path)?;
-
-                                                // #[cfg(debug_assertions)]
-                                                // debug_log!("7.3 HLOD-InTray: new file saved to: {:?}", new_node_file_path);
-
-
-                                                // make old directory path
-                                                // let olddir_abs_node_directory_path = PathBuf::from(base_olddir_existing_node_directory_path);
-
-                                                // #[cfg(debug_assertions)]
+                                                #[cfg(debug_assertions)]
                                                 debug_log!(
                                                     "HLOD 7.2.5 Node exists, handle move/replace: got-made base_olddir_existing_node_directory_path -> {:?}",
                                                     &base_olddir_existing_node_directory_path
@@ -36137,17 +35796,6 @@ fn handle_local_owner_desk(
                                                 };
 
                                                 let oldfile_node_file_path = base_olddir_existing_node_directory_path.join(node_filename);
-
-                                                // // Choose what to save
-                                                // let move_data_to_save = if save_as_gpgtoml {
-                                                //     still_encrypted_file_blob  // Save encrypted version
-                                                // } else {
-                                                //     &decrypted_clearsignfile_data  // Save clearsigned version
-                                                // };
-
-                                                // TODO:
-                                                // Update vs. Move: if paths are the same: do nothing
-
 
                                                 // Canonicalize the paths
                                                 let canonical_path1 = match fs::canonicalize(base_olddir_existing_node_directory_path) {
@@ -36166,20 +35814,20 @@ fn handle_local_owner_desk(
                                                     }
                                                 };
 
-                                                // #[cfg(debug_assertions)]
+                                                #[cfg(debug_assertions)]
                                                 {
                                                     debug_log!("7.3.1 HLOD-InTray canonical_path1 {:?}", canonical_path1);
                                                     debug_log!("7.3.2 HLOD-InTray canonical_path2 {:?}", canonical_path2);
                                                 }
 
                                                 if canonical_path1 == canonical_path2 {
-                                                    // #[cfg(debug_assertions)]
+                                                    #[cfg(debug_assertions)]
                                                     debug_log!("7.4.b paths ARE the same, so -> only updating node toml");
 
 
                                                     // 3.2 replace (delete the old) node file
                                                     if let Err(e) = fs::write(&oldfile_node_file_path, move_data_to_save) {
-                                                        // #[cfg(debug_assertions)]
+                                                        #[cfg(debug_assertions)]
                                                         debug_log!("HLOD Node exists, handle move/replace: Error writing node file: {:?} - {}", &oldfile_node_file_path, e);
 
                                                         // should this skip not error?
@@ -36189,13 +35837,13 @@ fn handle_local_owner_desk(
                                                     debug_log!("7.4.a -- HLOD-InTray: updated,  not moved");
 
                                                 } else {
-                                                    // #[cfg(debug_assertions)]
+                                                    #[cfg(debug_assertions)]
                                                     debug_log!("7.4.b paths not the same, so -> moving node");
 
 
                                                     // 3.2 replace (delete the old) node file
                                                     if let Err(e) = fs::write(&oldfile_node_file_path, move_data_to_save) {
-                                                        // #[cfg(debug_assertions)]
+                                                        #[cfg(debug_assertions)]
                                                         debug_log!("HLOD Node exists, handle move/replace: Error writing node file: {:?} - {}", &oldfile_node_file_path, e);
 
                                                         // should this skip not error?
@@ -36206,11 +35854,11 @@ fn handle_local_owner_desk(
                                                     // 3.3 Move old node directory (not remove/delete) (directory, not file)
                                                     // from olddir_abs_node_directory_path to new_full_abs_node_directory_path
                                                     if let Err(_error) = move_directory_tree_to_new_path(&base_olddir_existing_node_directory_path, &base_node_path_new) {
-                                                        // #[cfg(debug_assertions)]
+                                                        #[cfg(debug_assertions)]
                                                         debug_log!("HLOD An error occurred: {}", _error);
                                                     }
 
-                                                    // #[cfg(debug_assertions)]
+                                                    #[cfg(debug_assertions)]
                                                     {
                                                         debug_log!("7.3.4 HLOD-InTray: moved file moved from: {:?}", &base_olddir_existing_node_directory_path);
                                                         debug_log!("7.3.5 HLOD-InTray: moved-new file saved to: {:?}", &base_node_path_new);
@@ -36232,7 +35880,7 @@ fn handle_local_owner_desk(
                                     // Not-Moving, Just Saving
                                     // =======================
 
-                                    // #[cfg(debug_assertions)]
+                                    #[cfg(debug_assertions)]
                                     debug_log!(
                                         "HLOD Not-Moving, Just Saving node-type "
                                     );
@@ -36247,7 +35895,7 @@ fn handle_local_owner_desk(
 
                                             if let Some(existing_parent_node_directory_path) = hashtable_node_id_to_path.get(&parent_node_uniqueid_vec) {
 
-                                                // #[cfg(debug_assertions)]
+                                                #[cfg(debug_assertions)]
                                                 debug_log!(
                                                     "HLOD Not-Moving, Just Saving node-type got existing_parent_node_directory_path -> {:?}",
                                                     &existing_parent_node_directory_path
@@ -36277,7 +35925,7 @@ fn handle_local_owner_desk(
                                                 // new base is local real parent path plus abstract 'in-parent' path from node
                                                 let base_node_path = existing_parent_node_directory_path.join(node_file_path_in_parent);
 
-                                                // #[cfg(debug_assertions)]
+                                                #[cfg(debug_assertions)]
                                                 debug_log!(
                                                     "HLOD 7.2 Not-Moving, Just Saving got-made base_node_path, existing_parent_node_directory_path.join(node_file_path_in_parent) -> {:?}",
                                                     &base_node_path
@@ -36286,7 +35934,7 @@ fn handle_local_owner_desk(
                                                 // new base is local real parent path plus abstract 'in-parent' path from node
                                                 let new_node_dir_path = base_node_path.join(incoming_node_name);
 
-                                                // #[cfg(debug_assertions)]
+                                                #[cfg(debug_assertions)]
                                                 debug_log!(
                                                     "HLOD 7.2 Not-Moving, Just Saving new_node_dir_path -> {:?}",
                                                     &new_node_dir_path
@@ -36301,7 +35949,7 @@ fn handle_local_owner_desk(
                                                 // old
                                                 // let new_node_toml_file_path = new_full_abs_node_directory_path.join("node.toml"); // Path to the new node.toml
 
-                                                // #[cfg(debug_assertions)]
+                                                #[cfg(debug_assertions)]
                                                 debug_log!(
                                                     "HLOD 7.2 Not-Moving, Just Saving got-made new_node_toml_file_path -> {:?}",
                                                     &new_node_file_path
@@ -36321,12 +35969,12 @@ fn handle_local_owner_desk(
 
                                                 // Save file
                                                 if let Err(e) = fs::write(&new_node_file_path, data_to_save) {
-                                                    // #[cfg(debug_assertions)]
+                                                    #[cfg(debug_assertions)]
                                                     debug_log!("HLOD Not-Moving, Just Saving Error writing node file: {:?} - {}", &new_node_file_path, e);
                                                     return Err(ThisProjectError::from(e));
                                                 }
 
-                                                // #[cfg(debug_assertions)]
+                                                #[cfg(debug_assertions)]
                                                 debug_log!("7.3 Not-Moving, Just Saving HLOD-InTray: new file saved to: {:?}", new_node_file_path);
                                             }
                                         }
