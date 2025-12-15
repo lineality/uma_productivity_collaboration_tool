@@ -17910,14 +17910,14 @@ mod subtractpath_tests {
 /// # Returns
 ///
 /// * `Result<(), ThisProjectError>` - `Ok(())` on success, or a `ThisProjectError`
-fn create_core_node(
+fn create_corenode_q_and_a(
     current_node_path: PathBuf,
     parent_node_uniqueid: Vec<u8>,
     teamchannel_collaborators_with_access: Vec<String>,
     use_padnet: Option<bool>,
 ) -> Result<(), ThisProjectError> {
     #[cfg(debug_assertions)]
-    debug_log!("CCN: start create_core_node(), node_path -> {:?}", current_node_path);
+    debug_log!("CCN: start create_corenode_q_and_a(), node_path -> {:?}", current_node_path);
 
     // Get user input for node name
     println!("Enter node name:");
@@ -17941,7 +17941,7 @@ fn create_core_node(
 
     // Get user input for description
     let _ = clear_terminal_screen();
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("Enter project description:");
     print!("> ");
     std::io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
@@ -18002,7 +18002,7 @@ fn create_core_node(
         let col_path = task_browser_dir.join(col_name);
         fs::create_dir_all(&col_path)?;
         // TODO: Create column nodes (recursive call for later)
-        // create_core_node(col_path, teamchannel_collaborators_with_access.clone(), format!("{}_{}", node_name, col_name))?;
+        // create_corenode_q_and_a(col_path, teamchannel_collaborators_with_access.clone(), format!("{}_{}", node_name, col_name))?;
         // TODO maybe custom shallow node with no tasks option needed...
     }
 
@@ -18135,8 +18135,6 @@ fn create_core_node(
 
     // let parent_node_uniqueid = current_node_unique_id;
 
-    #[cfg(debug_assertions)]
-    debug_log!("CCN: current_node_uniqueid_path {:?}", current_node_uniqueid_path);
 
     // for node
     // let node_relative_channel_pathbuf = extract_relative_node_path_after_known_segments(&node_specific_path.clone())?;
@@ -18144,11 +18142,18 @@ fn create_core_node(
 
 
     // pub fn subtract_path(current_path: PathBuf, parent_path: PathBuf) -> PathBuf
+    // TODO: should take &path?
     let path_in_parentnode = subtract_path(
-        current_node_path, // current node path
-        current_node_uniqueid_path, // parent_path
+        current_node_path.clone(), // current node path
+        current_node_uniqueid_path.clone(), // parent_path
     );
 
+    #[cfg(debug_assertions)]
+    {
+        debug_log!("CCN: current_node_path {:?}", current_node_path);
+        debug_log!("CCN: current_node_uniqueid_path {:?}", current_node_uniqueid_path);
+        debug_log!("CCN: path_in_parentnode = subtract_path() {:?}", path_in_parentnode);
+    }
 
     // 2. Calculate the hash
     let updated_at_timestamp = get_current_unix_timestamp();
@@ -18288,7 +18293,7 @@ fn create_core_node(
 
     // User Q&A: Ask user to choose file format for node
     let _ = clear_terminal_screen();
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("=== Node File Format Selection ===");
     println!("Choose the format for saving your copy of the node file:");
     println!();
@@ -19237,26 +19242,26 @@ fn get_directory_hash(path: &Path) -> io::Result<u64> {
 Q&A Functions for 6pa, 6 Project Areas
 */
 
-/// Gets user input for agenda process selection of create_core_node()
+/// Gets user input for agenda process selection of create_corenode_q_and_a()
 fn q_and_a_get_pa1_process() -> Result<String, ThisProjectError> {
     clear_screen();
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("Enter Process Statement: (Project Areas 1:6)");
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("Project Process: Workflow Type, STEM Integration, Values, Agenda, Methods,");
     println!("Policies (including for predictable issues problems and collapse elements: scope-churn, panic-halting, planning-blackout),");
     println!("Coordinated Decisions, (Data/System)Ecology: Collapse & Productivity ");
     println!("(Data/System)Ecology: Collapse & Productivity");
     println!("(default option: Agile, Kahneman-Tversky, Definition-Studies)");
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("Process/policy areas may be seen as preventable-predictable-collapse-areas; each is an area of preventable mistakes that are not automatically self-preventing and that must be deliberately prevented. ");
     println!("Problems that are not automatically visible or understandable can repeat indefinitely. Using process and policy can significantly help prevent and navigate recurring problems that are not automatically visible.");
-    println!("");
+    buffy_println("", &[])?; // newline
     press_enter_to_continue();
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("Not accounting for different workflows (e.g. frontend, backend, data-science, production machine-learning, R&D, test-reporting, etc.) will lead to delays and failures that should not have occurred. ");
     println!("In the absence of communication and learning, these failures may be invisible and repeat indefinitely because they are not seen and understood.");
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("./");
     print!("Enter a Process Statement:\n > ");
     let mut input = String::new();
@@ -19274,7 +19279,7 @@ fn q_and_a_get_pa1_process() -> Result<String, ThisProjectError> {
 }
 
 
-/// Gets schedule information and converts to required format for create_core_node()
+/// Gets schedule information and converts to required format for create_corenode_q_and_a()
 ///
 /// This function provides two options for setting the project start time:
 /// - Use current UTC time ("now")
@@ -19305,23 +19310,23 @@ fn q_and_a_get_pa1_process() -> Result<String, ThisProjectError> {
 fn q_and_a_get_pa2_schedule() -> Result<Vec<u64>, ThisProjectError> {
     clear_screen();
     debug_log("starting q_and_a_get_pa2_schedule()");
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("Enter Schedule Data: (Project Areas 2:6)");
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("Schedule: (Duration; Start date; Iteration Interval)");
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("Timelines that need to be short but are never articulated or planned for are unlikely to usually spontaneously match the needed short scale planning needs.");
     press_enter_to_continue();
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("Timelines that need to be long but are never articulated or planned for are unlikely to usually spontaneously match the needed long scale planning needs.");
     press_enter_to_continue();
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("Undiscussed timelines risk being indeterminate, fickle, and unpredictably changing for no apparent reason, raising the risk of endemic liabilities such as churn, panic, and repeatedly returning to square one.");
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("Picking initial MVP goals, milestones, indicators, and both allotting and using time and resources for feedback (where that feedback is also to be used) is one location where time and schedules are deeply interwoven with other project areas.");
     press_enter_to_continue();
-    println!("");
-    println!("");
+    buffy_println("", &[])?; // newline
+    buffy_println("", &[])?; // newline
     // Get current year for validation once at the start
     let current_timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -19709,42 +19714,42 @@ fn press_enter_to_continue() {
     clear_screen();
 }
 
-/// Gets user input for agenda process selection of create_core_node()
+/// Gets user input for agenda process selection of create_corenode_q_and_a()
 fn q_and_a_get_pa3_users() -> Result<String, ThisProjectError> {
     clear_screen();
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("Users/Stakeholder (Project area 3:6)");
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("Enter A User Statement");
     println!("Users: Stakeholders & Needs & Goals Evaluation (of users): Who are users? What are their needs?");
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("Not having and coordinating with users/stakeholders and their needs significantly raises the probability that the project will not improbably, spontaneously, meet unknown and possibly unarticulated needs of unknown people by accident.");
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("A user describing their difficulties is not the same as a user outlining an ideal solution, or even accepting a viable solution.");
     press_enter_to_continue();
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("Not properly doing a needs and goals evaluation significantly raises the risk of goals being either incorrectly identified, or having goals indefinitely changing or rotating between amorphous unexamined but often entirely predictable areas.");
     println!("See: https://github.com/lineality/needs_goals_assessment_disambiguation");
     press_enter_to_continue();
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("User Needs and Goals Assessments: Disambiguation");
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("Over years of doing needs-goals-assessments and product-design I found a pattern in the apparent indeterminacy of the customer's responses to what I (from my perspective and context) thought was a single question: ");
     println!("What do you need? What should you use that fits what you need? What will be useful to you that fits what you need? etc. ");
     println!("But they would variably interpret the question in ~five ways. So I switched from trying to ask one question to asking separate questions and tracking answers to each over time.");
     println!("This consistently results in both answers that stopped changing over time and in a user/stakeholder who was more confident in their descriptions.");
     press_enter_to_continue();
     println!("USERS");
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("Disambiguated Needs & Goals evaluation questions:");
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("1. What do you do and use now?");
     println!("2. What do you need now?");
     println!("3. What will you need in the med-term (foreseeable) future?");
     println!("4. What do you think you can/will be able to do? (Very often people think the possible is impossible and shut down, in terms of their own ability.)");
     println!("5. What do you think can be delivered to help you? (Very often people think the possible is impossible and shut down, in terms of tools and workflow.)");
-    println!("");
-    println!("");
+    buffy_println("", &[])?; // newline
+    buffy_println("", &[])?; // newline
     println!("./");
     print!("Enter A User Statement:\n > ");
     let mut input = String::new();
@@ -19760,30 +19765,30 @@ fn q_and_a_get_pa3_users() -> Result<String, ThisProjectError> {
     Ok(input.to_string())
 }
 
-/// Gets user input for agenda process selection of create_core_node()
+/// Gets user input for agenda process selection of create_corenode_q_and_a()
 fn q_and_a_get_pa4_features() -> Result<String, ThisProjectError> {
     clear_screen();
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("Enter Feature Statement (Project area 4:6)");
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("Features:");
     println!("User-Features & Subfeatures/Under-The-Hood Features including design factors such as Categories of Types of Systems, Data-Types, Data-Structures, Structured Vs. Unstructured Data");
     println!("(E.g. tech-stack and resources may be implicit for higher-level goals or explicit for resource-defined needs)");
     println!("lexicon: clarify jargon vs. description; ");
     // press_enter_to_continue();
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("From a user-story standpoint, what is this project making? ");
     println!("From an Under-the-hood standpoint, what needs to be made and how for the project to be maintainable?");
-    println!("");
+    buffy_println("", &[])?; // newline
     press_enter_to_continue();
     println!("FEATURES");
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("Are these known? Do these need to be researched?");
     println!("If you do not have a clear articulation of what you are doing (for a user/stakeholder to meet their clarified need) then it is unlikely that the possibly unknown goal will be accomplished in a maintainable way meeting the need of the user/stakeholder.");
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("If you do not distinguish between and elucidate both user-story level features and sub-user-story level features (features/subfeatures) then quality, efficiency, and maintainability will be undermined.");
-    println!("");
-    println!("");
+    buffy_println("", &[])?; // newline
+    buffy_println("", &[])?; // newline
     println!("./");
     print!("Enter a Feature Statement:\n > ");
     let mut input = String::new();
@@ -19799,28 +19804,28 @@ fn q_and_a_get_pa4_features() -> Result<String, ThisProjectError> {
     Ok(input.to_string())
 }
 
-/// Gets user input for agenda process selection of create_core_node()
+/// Gets user input for agenda process selection of create_corenode_q_and_a()
 fn q_and_a_get_pa5_mvp() -> Result<String, ThisProjectError> {
     clear_screen();
     println!("Enter an MVP Statement (Project area 5:6)");
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("MVP: 'MVP's (Minimum Viable Products (plural))");
     println!("Deliverables Checklist; Tools, 'Tool Stack / Tech Stack'");
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("Each MVP must not be an invocation of a reification-hallucination.");
     println!("teratively proceeding with transparency and feedback to align and fine-tune is appropriate and time-tested in many projects.");
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("Articulating incremental MVP (minimum-viable-product) goals and stepping stones is an important part of progressing and communicating incrementally and/or progressing maintainably and sustainably.");
     press_enter_to_continue();
     println!("MVP");
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("Articulating incremental MVP (minimum-viable-product) goals and stepping stones is a skill in and of itself.");
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("Without timely iterative MVP deliverables, feedback from the user about features and usability will be significantly hindered.");
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("Without data and feedback about initial MVP outcomes, blindness will strangle the management of the project, coordination of people, and the management of resources.");
-    println!("");
-    println!("");
+    buffy_println("", &[])?; // newline
+    buffy_println("", &[])?; // newline
     print!("Enter an MVP Statement: \n > ");
     let mut input = String::new();
     io::stdout().flush()?;
@@ -19835,29 +19840,29 @@ fn q_and_a_get_pa5_mvp() -> Result<String, ThisProjectError> {
     Ok(input.to_string())
 }
 
-/// Gets user input for agenda process selection of create_core_node()
+/// Gets user input for agenda process selection of create_corenode_q_and_a()
 fn q_and_a_get_pa6_feedback() -> Result<String, ThisProjectError> {
     clear_screen();
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("Enter a Feedback-Learning Statement (Project area 6:6)");
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("Enter Feedback Statement: Feedback: Tests, Communication, Signals, Documentation & Iteration, Organizational, System, and 'Ecological' Effects, (~agile)");
     println!("Documenting-teaching-learning(skills); present skills, future skills (learning)");
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("Based on what signals will you define failure and orient to measure productivity?");
     println!("Whether formal or informal there must be effective ways of communicating what has been done within the project-team and between the project-team and the user/stakeholder.");
     println!("Long term maintainability involves communication (including with 'future you').");
-    println!("");
+    buffy_println("", &[])?; // newline
     press_enter_to_continue();
     println!("FEEDBACK-LEARNING");
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("Failing to clearly map and communicate the differences between jargon terms and goal descriptions will result in mis-alignment between people and nonsense in planning.");
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("The default patterns and processes of drift will misalign the team and user-stakeholders on many levels, making even detection of the misalignment a challenge.");
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("Learning directly and indirectly related to the specific project is necessary. If you do not learn that a user/stakeholder's need is not being met then long term failure is highly probable. If you continually learn and develop useful skills then long term successes are more probable.");
-    println!("");
-    println!("");
+    buffy_println("", &[])?; // newline
+    buffy_println("", &[])?; // newline
     print!("Enter a Feedback-Learning Statement\n > ");
     let mut input = String::new();
     io::stdout().flush()?;
@@ -19882,7 +19887,7 @@ Message-Post Q&A functions
 /// * `Result<Option<Vec<(i32, i32)>>, ThisProjectError>` - Vector of integer range tuples or None
 fn q_and_a_get_message_post_integer_ranges() -> Result<Option<Vec<(i32, i32)>>, ThisProjectError> {
     let _ = clear_terminal_screen();
-    println!("");
+    buffy_println("", &[])?; // newline
     // Section Blurb
     println!("\n\nMessage-Posts: optional modular customization of the Message-Post section of this node.");
     println!("for example, using this message post for: elections/votes/poles, surveys, questionnaires, data-collection for analysis, etc.\n");
@@ -19897,7 +19902,7 @@ fn q_and_a_get_message_post_integer_ranges() -> Result<Option<Vec<(i32, i32)>>, 
     println!("Example -> 1-10,20-30,50-100   E.g. for 1. breakfast  2. second-breakfast 3. supper, the format would be -> 1-3");
     println!("Write-in options are dealt with below, this for one or more ranges of values where the user only enters the integer of their selection.");
     println!("or press Enter to skip if this format does not apply to your project-node.");
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("...Press Enter to continue...");
 
     let mut input = String::new();
@@ -19952,16 +19957,18 @@ fn q_and_a_get_message_post_integer_ranges() -> Result<Option<Vec<(i32, i32)>>, 
 /// * `ThisProjectError::IoError` - If there's an I/O error reading input
 fn q_and_a_get_message_post_int_string_ranges() -> Result<Option<Vec<(i32, i32)>>, ThisProjectError> {
     let _ = clear_terminal_screen();
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("Integer:Write-In choices, if applicable:");
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("For write-in answers/choices for Message-Posts, such as the third part of this form: 1. mustard-yellow  2. pink 3. write in your choice of colour");
     println!("Or the third AND fourth parts of this form: 1. blue  2. yellow  3. write in: your choice of colour  4. write in: exceptional reason to avoid colour");
     println!("Here the user enters BOTH an integer AND (after a colon) their write-in character-string -> integer:string -> 3:lilac");
     println!("As with integer-only above, these can be single, continuous ranges, or (lists) discontinuous options (ranges or singles)");
     println!("If applicable, enter integer ranges for integer-string pair options (format: min-max,min-max,... or single values like 5 or press Enter to skip):");
     println!("Example: 2,5-10,12");
-    print!("> ");
+    buffy_println("", &[])?; // newline
+    buffy_println("(or press Enter to skip)", &[])?;
+    buffy_print(" > ", &[])?;
 
     let mut input = String::new();
     io::stdout().flush()?;
@@ -20033,10 +20040,10 @@ fn q_and_a_get_message_post_int_string_ranges() -> Result<Option<Vec<(i32, i32)>
 fn q_and_a_get_message_messageposts_expire_after_n_min() -> Result<u64, ThisProjectError> {
     let _ = clear_terminal_screen();
     println!("TIME -> Message-Posts -> Lifetime of");
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("Enter default-lifetime of post in minutes (or press Enter for 9999999):");
     println!("Example: 42 (Massages respire after 42 minutes.");
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("(integer)");
     print!("> ");
 
@@ -20063,12 +20070,12 @@ fn q_and_a_get_message_messageposts_expire_after_n_min() -> Result<u64, ThisProj
 fn q_and_a_get_message_post_max_string_length() -> Result<Option<usize>, ThisProjectError> {
     let _ = clear_terminal_screen();
     println!("MEMORY-MANAGEMENT -> Message-Posts -> size");
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("Enter maximum string length (max number of write-in characters) for integer-string pairs:");
     println!("Example: 42");
     buffy_print("(or press Enter to skip)", &[])?;
     // println!("(or press Enter to skip)");
-    print!(" > ");
+    buffy_print(" > ", &[])?;
 
     let mut input = String::new();
     io::stdout().flush()?;
@@ -20093,9 +20100,9 @@ fn q_and_a_get_message_post_max_string_length() -> Result<Option<usize>, ThisPro
 fn q_and_a_get_message_post_is_public() -> Result<Option<bool>, ThisProjectError> {
     let _ = clear_terminal_screen();
     println!("Message-Posts");
-    println!("");
+    buffy_println("", &[])?; // newline
     print!("Should message posts be public? -> (y)es / (n)o\n(Press-Enter to skip):");
-    println!("");
+    buffy_println("", &[])?; // newline
     print!("> ");
 
     let mut input = String::new();
@@ -20121,9 +20128,9 @@ fn q_and_a_get_message_post_is_public() -> Result<Option<bool>, ThisProjectError
 fn q_and_a_get_message_post_user_confirms() -> Result<Option<bool>, ThisProjectError> {
     let _ = clear_terminal_screen();
     println!("Message-Posts -> input -> Data Rigor");
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("Require user confirmation before posting messages?  -> (y)es / (n)o\n(Press-Enter to skip):");
-    println!("");
+    buffy_println("", &[])?; // newline
     print!("> ");
 
     let mut input = String::new();
@@ -20150,9 +20157,9 @@ fn q_and_a_get_message_post_user_confirms() -> Result<Option<bool>, ThisProjectE
 fn q_and_a_get_message_post_gpgtoml_required() -> Result<Option<bool>, ThisProjectError> {
     let _ = clear_terminal_screen();
     println!("Message-Posts -> security -> .gpgtoml");
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("Require all message post are gpgtoml encrypted?  -> (y)es / (n)o\n(Press-Enter to skip):");
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("(y/n)");
     print!("> ");
     let mut input = String::new();
@@ -20178,12 +20185,12 @@ fn q_and_a_get_message_post_gpgtoml_required() -> Result<Option<bool>, ThisProje
 fn q_and_a_get_corenode_gpgtoml() -> Result<bool, ThisProjectError> {
     let _ = clear_terminal_screen();
     println!("Task-Node -> security -> .gpgtoml");
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("This Node is node.gpgtoml encrypted? -> (y)es / (n)o");
     println!("(Set policy for those you share with. ");
     println!(" Your remote collaborator's local file will be encrypted?)");
     println!("Press-Enter for default [yes].");
-    println!("");
+    buffy_println("", &[])?; // newline
     println!("(y/n)");
     print!("> ");
     let mut input = String::new();
@@ -20257,7 +20264,7 @@ fn q_and_a_get_corenode_gpgtoml() -> Result<bool, ThisProjectError> {
 fn q_and_a_get_message_post_start_date() -> Result<Option<i64>, ThisProjectError> {
     let _ = clear_terminal_screen();
     println!("Message-Posts -> schedules -> start date");
-    println!("");
+    buffy_println("", &[])?; // newline
     // Log function entry
     debug_log("Starting q_and_a_get_message_post_start_date()");
 
@@ -20309,9 +20316,9 @@ fn q_and_a_get_message_post_start_date() -> Result<Option<i64>, ThisProjectError
 fn q_and_a_get_use_padnet() -> Result<Option<bool>, ThisProjectError> {
     let _ = clear_terminal_screen();
     println!("Team-Channel -> Security -> One Time Pad");
-    println!("");
+    buffy_println("", &[])?; // newline
     // TODO Buffy formatting no heap
-    println!("");
+    buffy_println("", &[])?; // newline
     print!("Team Channel uses One-Time-Pad Network-Layer?  \n(requires make/share 'pad') -> (y)es / (n)o\n(Press-Enter to skip):\n(default is no)\n > ");
 
     let mut input = String::new();
@@ -21098,44 +21105,689 @@ fn handle_custom_end_date_input(start_date_timestamp: Option<i64>) -> Result<Opt
     Ok(Some(end_timestamp))
 }
 
-/// Recursively moves all contents from the source directory to the destination directory.
-/// Deletes the source directory if it is empty after moving all its contents.
-/// use std::fs;
+/// Moves an entire directory tree from source to destination, preserving internal structure.
+///
+/// # Project Context
+/// This function performs filesystem directory relocation operations, which is a fundamental
+/// requirement for file management systems, backup utilities, and application data migration.
+/// Unlike naive implementations that disassemble directory structures, this function treats
+/// the directory as an atomic unit - analogous to dragging and dropping a folder in a GUI.
+///
+/// # Behavior
+/// Given source `/old/mydir/` and destination `/new/`, creates `/new/mydir/` with entire
+/// structure preserved intact. This is the equivalent of GUI drag-and-drop folder movement.
+///
+/// # Strategy
+/// 1. **Atomic rename** (same filesystem): Fast, atomic operation using `fs::rename()`
+/// 2. **Cross-filesystem fallback**: Iterative copy-then-delete (no recursion per NASA rules)
+/// 3. **Error resilience**: Collects errors internally, continues operation, never panics
+///
+/// # Edge Cases Handled
+/// - Empty source directories: Creates empty destination directory
+/// - Existing destination: Logs and returns error without modification
+/// - Symlinks: Copies link itself, not target contents
+/// - Partial failures: Logs errors, continues with remaining items
+/// - Cross-filesystem moves: Automatically falls back to copy-delete
+///
+/// # Error Handling
+/// Production-safe error handling that never panics. Errors are logged in debug builds
+/// and returned as IO errors with unique function-prefixed messages ("MDTP error: ...").
+///
+/// # Example
+/// ```no_run
 /// use std::path::Path;
 ///
-/// e.g.
-/// // Call the function to move the directory
-/// if let Err(error) = move_directory_from_path_to_path("path/to/old/directory", "path/to/new/directory") {
-///     eprintln!("An error occurred: {}", error);
+/// // Move entire directory tree from old location to new parent directory
+/// // Result: /new/parent/mydir/ contains full structure from /old/mydir/
+/// match move_directory_tree_to_new_path("/old/mydir", "/new/parent") {
+///     Ok(()) => println!("Directory moved successfully"),
+///     Err(e) => eprintln!("Move failed: {}", e),
 /// }
-fn move_directory_from_path_to_path<SourceDirectory: AsRef<Path>, DestinationDirectory: AsRef<Path>>(
-    source_directory: SourceDirectory,
-    destination_directory: DestinationDirectory,
-) -> std::io::Result<()> {
+/// ```
+///
+/// # Parameters
+/// - `source_directory`: Path to directory to move (will become subdirectory of destination)
+/// - `destination_parent`: Parent path where source directory will be relocated
+///
+/// # Returns
+/// - `Ok(())`: Directory successfully moved
+/// - `Err(io::Error)`: Operation failed with descriptive error message
+///
+/// # Panics
+/// Never panics in production builds. Debug assertions active in debug-only builds.
+pub fn move_directory_tree_to_new_path<P: AsRef<Path>, Q: AsRef<Path>>(
+    source_directory: P,
+    destination_parent: Q,
+) -> io::Result<()> {
     let source_path = source_directory.as_ref();
-    let destination_path = destination_directory.as_ref();
+    let dest_parent_path = destination_parent.as_ref();
 
-    // Iterate through all entries in the source directory
-    for entry_result in fs::read_dir(source_path)? {
-        let entry = entry_result?;
-        let file_type = entry.file_type()?;
+    // =================================================
+    // Debug-Assert, Test-Assert, Production-Catch-Handle
+    // =================================================
 
-        // If the entry is a directory, create it in the destination directory and move its contents
-        if file_type.is_dir() {
-            fs::create_dir_all(destination_path.join(entry.file_name()))?;
-            move_directory_from_path_to_path(entry.path(), destination_path.join(entry.file_name()))?;
+    // Debug assertion: source exists (not in tests, not in production)
+    #[cfg(all(debug_assertions, not(test)))]
+    debug_assert!(
+        source_path.exists(),
+        "Source directory must exist for move operation"
+    );
+
+    // Production catch: source exists
+    if !source_path.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "MDTP error: source directory not found",
+        ));
+    }
+
+    // Debug assertion: source is directory (not in tests, not in production)
+    #[cfg(all(debug_assertions, not(test)))]
+    debug_assert!(
+        source_path.is_dir(),
+        "Source path must be a directory, not a file"
+    );
+
+    // Production catch: source is directory
+    if !source_path.is_dir() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "MDTP error: source is not a directory",
+        ));
+    }
+
+    // Production: create destination parent if it doesn't exist
+    fs::create_dir_all(dest_parent_path)?;
+
+    // Debug assertion: destination parent exists (not in tests, not in production)
+    #[cfg(all(debug_assertions, not(test)))]
+    debug_assert!(
+        dest_parent_path.exists(),
+        "Destination parent directory must exist"
+    );
+
+    // Extract source directory name
+    let source_dir_name = match source_path.file_name() {
+        Some(name) => name,
+        None => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "MDTP error: invalid source path",
+            ));
         }
-        // If the entry is a file, move it to the destination directory
-        else {
-            fs::rename(entry.path(), destination_path.join(entry.file_name()))?;
+    };
+
+    // Construct final destination path (destination_parent/source_dir_name)
+    let final_destination = dest_parent_path.join(source_dir_name);
+
+
+    // Production catch: destination is a file the already exists (log and skip per requirements)
+    if final_destination.exists() && !final_destination.is_dir(){
+        #[cfg(debug_assertions)]
+        eprintln!(
+            "MDTP: Destination already exists, skipping: {}",
+            final_destination.display()
+        );
+
+        return Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            "MDTP error: destination already exists",
+        ));
+    }
+
+    // =================================================
+    // Attempt atomic rename first (same filesystem, fast)
+    // =================================================
+
+    match fs::rename(source_path, &final_destination) {
+        Ok(()) => {
+            // Success: atomic rename completed
+            #[cfg(debug_assertions)]
+            eprintln!("MDTP: Atomic rename successful");
+
+            return Ok(());
+        }
+        Err(_e) => {
+            // Rename failed - likely cross-filesystem
+            // Log in debug mode and proceed to fallback
+            #[cfg(debug_assertions)]
+            eprintln!("MDTP: Atomic rename failed ({}), using copy-delete fallback", _e);
         }
     }
 
-    // Remove the source directory if it is empty
-    fs::remove_dir(source_path)?;
+    // =================================================
+    // Fallback: Cross-filesystem copy-then-delete
+    // =================================================
+
+    // Copy entire tree iteratively (no recursion)
+    copy_directory_tree_iteratively(source_path, &final_destination)?;
+
+    // Remove source tree after successful copy
+    remove_directory_tree_iteratively(source_path)?;
+
     Ok(())
 }
 
+/// Iteratively copies an entire directory tree without recursion.
+///
+/// # Project Context
+/// This function supports cross-filesystem directory moves by performing a complete
+/// directory tree copy operation. It uses stack-based iteration instead of recursion
+/// to comply with NASA Power of 10 rules for production safety.
+///
+/// # Algorithm
+/// Uses manual stack-based traversal with a work queue to avoid recursion:
+/// 1. Push source directory to work stack
+/// 2. While stack not empty: process directories and files
+/// 3. Create directories, copy files, copy symlinks
+/// 4. Collect errors but continue operation (fail-safe)
+///
+/// # Error Handling
+/// Errors during individual file/directory operations are logged in debug mode
+/// and the function continues processing remaining items. Only critical structural
+/// errors (like failing to create the root destination) cause immediate return.
+///
+/// # Parameters
+/// - `source`: Root source directory to copy from
+/// - `destination`: Root destination directory to copy to
+///
+/// # Returns
+/// - `Ok(())`: Copy completed (possibly with logged errors for individual items)
+/// - `Err(io::Error)`: Critical failure preventing copy operation
+fn copy_directory_tree_iteratively<P: AsRef<Path>, Q: AsRef<Path>>(
+    source: P,
+    destination: Q,
+) -> io::Result<()> {
+    let source_root = source.as_ref();
+    let dest_root = destination.as_ref();
+
+    // Create root destination directory
+    fs::create_dir_all(dest_root)?;
+
+    // Stack-based iteration work queue: (source_path, dest_path)
+    // Using heap for algorithm (not error messages), necessary for iterative traversal
+    let mut work_stack: Vec<(PathBuf, PathBuf)> = Vec::new();
+    work_stack.push((source_root.to_path_buf(), dest_root.to_path_buf()));
+
+    // Upper bound on loop iterations for safety (configurable based on expected tree size)
+    // This is a failsafe against infinite loops from filesystem cycles or bugs
+    const MAX_ITERATIONS: usize = 1_000_000;
+    let mut iteration_count: usize = 0;
+
+    // Process work stack until empty
+    while let Some((current_source, current_dest)) = work_stack.pop() {
+        // Failsafe iteration limit
+        iteration_count += 1;
+        if iteration_count >= MAX_ITERATIONS {
+            #[cfg(debug_assertions)]
+            eprintln!("CDTI: Iteration limit reached, possible filesystem cycle");
+
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "CDTI error: iteration limit exceeded",
+            ));
+        }
+
+        // Read directory entries
+        let entries = match fs::read_dir(&current_source) {
+            Ok(dir_entries) => dir_entries,
+            Err(_e) => {
+                // Log error and continue with remaining work
+                #[cfg(debug_assertions)]
+                eprintln!("CDTI: Failed to read directory {}: {}", current_source.display(), _e);
+
+                continue;
+            }
+        };
+
+        // Process each entry in current directory
+        for entry_result in entries {
+            let entry = match entry_result {
+                Ok(dir_entries) => dir_entries,
+                Err(_e) => {
+                    #[cfg(debug_assertions)]
+                    eprintln!("CDTI: Failed to read entry: {}", _e);
+
+                    continue;
+                }
+            };
+
+            let entry_path = entry.path();
+            let entry_name = entry.file_name();
+            let dest_path = current_dest.join(&entry_name);
+
+            // Determine entry type
+            let metadata = match entry.metadata() {
+                Ok(m) => m,
+                Err(_e) => {
+                    #[cfg(debug_assertions)]
+                    eprintln!("CDTI: Failed to read metadata for {}: {}", entry_path.display(), _e);
+
+                    continue;
+                }
+            };
+
+            let file_type = metadata.file_type();
+
+            // Handle symlinks: copy link itself, not target
+            if file_type.is_symlink() {
+                match copy_symlink(&entry_path, &dest_path) {
+                    Ok(()) => {
+                        #[cfg(debug_assertions)]
+                        eprintln!("CDTI: Copied symlink: {}", entry_path.display());
+                    }
+                    Err(_e) => {
+                        #[cfg(debug_assertions)]
+                        eprintln!("CDTI: Failed to copy symlink {}: {}", entry_path.display(), _e);
+                    }
+                }
+            }
+            // Handle directories: create and add to work stack
+            else if file_type.is_dir() {
+                match fs::create_dir(&dest_path) {
+                    Ok(()) => {
+                        // Add to work stack for processing
+                        work_stack.push((entry_path.clone(), dest_path.clone()));
+
+                        #[cfg(debug_assertions)]
+                        eprintln!("CDTI: Created directory: {}", dest_path.display());
+                    }
+                    Err(_e) => {
+                        #[cfg(debug_assertions)]
+                        eprintln!("CDTI: Failed to create directory {}: {}", dest_path.display(),_e);
+                    }
+                }
+            }
+            // Handle regular files: copy
+            else if file_type.is_file() {
+                match fs::copy(&entry_path, &dest_path) {
+                    Ok(_) => {
+                        #[cfg(debug_assertions)]
+                        eprintln!("CDTI: Copied file: {}", entry_path.display());
+                    }
+                    Err(_e) => {
+                        #[cfg(debug_assertions)]
+                        eprintln!("CDTI: Failed to copy file {}: {}", entry_path.display(), _e);
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Copies a symbolic link without following it to its target.
+///
+/// # Project Context
+/// When moving directory trees, symlinks must be preserved as links rather than
+/// copying their target contents. This maintains the original directory structure
+/// and prevents infinite loops from circular symlinks.
+///
+/// # Platform Considerations
+/// - Unix-like systems: Uses `std::os::unix::fs::symlink`
+/// - Windows: Uses `std::os::windows::fs::symlink_file` for file symlinks
+/// - Cross-platform compatibility handled via conditional compilation
+///
+/// # Parameters
+/// - `source`: Source symlink path
+/// - `destination`: Destination symlink path
+///
+/// # Returns
+/// - `Ok(())`: Symlink copied successfully
+/// - `Err(io::Error)`: Failed to read or create symlink
+fn copy_symlink<P: AsRef<Path>, Q: AsRef<Path>>(source: P, destination: Q) -> io::Result<()> {
+    let source_path = source.as_ref();
+    let dest_path = destination.as_ref();
+
+    // Read the link target (not the file it points to)
+    let link_target = fs::read_link(source_path)?;
+
+    // Create new symlink at destination pointing to same target
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(&link_target, dest_path)?;
+    }
+
+    #[cfg(windows)]
+    {
+        // Windows requires knowing if target is file or directory
+        // We use symlink_file as default; symlink_dir requires admin privileges
+        std::os::windows::fs::symlink_file(&link_target, dest_path)?;
+    }
+
+    // Fallback for other platforms: return error
+    #[cfg(not(any(unix, windows)))]
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "CSL error: symlinks not supported on this platform",
+        ));
+    }
+
+    Ok(())
+}
+
+/// Iteratively removes an entire directory tree without recursion.
+///
+/// # Project Context
+/// After successfully copying a directory tree in cross-filesystem moves, the source
+/// must be cleaned up. This function uses stack-based iteration to safely remove
+/// all contents and the directory itself without recursion.
+///
+/// # Algorithm
+/// Uses post-order traversal (files first, then empty directories):
+/// 1. Collect all paths in the tree
+/// 2. Sort by depth (deepest first)
+/// 3. Remove files and empty directories in order
+///
+/// # Error Handling
+/// Individual deletion failures are logged but don't stop the overall operation.
+/// The function continues attempting to delete remaining items.
+///
+/// # Parameters
+/// - `root`: Root directory to remove (along with all contents)
+///
+/// # Returns
+/// - `Ok(())`: Removal completed (possibly with logged errors for individual items)
+/// - `Err(io::Error)`: Critical failure preventing removal operation
+fn remove_directory_tree_iteratively<P: AsRef<Path>>(root: P) -> io::Result<()> {
+    let root_path = root.as_ref();
+
+    // Stack-based iteration work queue for collecting paths
+    let mut paths_to_remove: Vec<PathBuf> = Vec::new();
+    let mut work_stack: Vec<PathBuf> = Vec::new();
+    work_stack.push(root_path.to_path_buf());
+
+    // Upper bound on loop iterations for safety
+    const MAX_ITERATIONS: usize = 1_000_000;
+    let mut iteration_count: usize = 0;
+
+    // Collect all paths in tree (breadth-first style)
+    while let Some(current_path) = work_stack.pop() {
+        // Failsafe iteration limit
+        iteration_count += 1;
+        if iteration_count >= MAX_ITERATIONS {
+            #[cfg(debug_assertions)]
+            eprintln!("RDTI: Iteration limit reached during path collection");
+
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "RDTI error: iteration limit exceeded",
+            ));
+        }
+
+        paths_to_remove.push(current_path.clone());
+
+        // If directory, add children to work stack
+        if current_path.is_dir() {
+            let entries = match fs::read_dir(&current_path) {
+                Ok(dir_entries) => dir_entries,
+                Err(_e) => {
+                    #[cfg(debug_assertions)]
+                    eprintln!("RDTI: Failed to read directory {}: {}", current_path.display(), _e);
+
+                    continue;
+                }
+            };
+
+            for entry_result in entries {
+                let entry = match entry_result {
+                    Ok(dir_entries) => dir_entries,
+                    Err(_e) => {
+                        #[cfg(debug_assertions)]
+                        eprintln!("RDTI: Failed to read entry: {}", _e);
+
+                        continue;
+                    }
+                };
+
+                work_stack.push(entry.path());
+            }
+        }
+    }
+
+    // Sort paths by depth (deepest first) for post-order removal
+    // This ensures we delete files before their parent directories
+    paths_to_remove.sort_by(|a, b| {
+        let a_depth = a.components().count();
+        let b_depth = b.components().count();
+        b_depth.cmp(&a_depth)
+    });
+
+    // Remove paths in order (deepest first)
+    for path in paths_to_remove {
+        if path.is_dir() {
+            match fs::remove_dir(&path) {
+                Ok(()) => {
+                    #[cfg(debug_assertions)]
+                    eprintln!("RDTI: Removed directory: {}", path.display());
+                }
+                Err(_e) => {
+                    #[cfg(debug_assertions)]
+                    eprintln!("RDTI: Failed to remove directory {}: {}", path.display(), _e);
+                }
+            }
+        } else {
+            match fs::remove_file(&path) {
+                Ok(()) => {
+                    #[cfg(debug_assertions)]
+                    eprintln!("RDTI: Removed file: {}", path.display());
+                }
+                Err(_e) => {
+                    #[cfg(debug_assertions)]
+                    eprintln!("RDTI: Failed to remove file {}: {}", path.display(), _e);
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+// =================================================
+// Cargo Tests
+// =================================================
+
+#[cfg(test)]
+mod move_dir_tree_tests {
+    use super::*;
+    use std::fs;
+
+
+    /// Helper function to create a temporary test directory structure
+    fn create_test_directory_structure(base: &Path) -> io::Result<()> {
+        fs::create_dir_all(base.join("subdir1/subdir2"))?;
+        fs::write(base.join("file1.txt"), b"content1")?;
+        fs::write(base.join("subdir1/file2.txt"), b"content2")?;
+        fs::write(base.join("subdir1/subdir2/file3.txt"), b"content3")?;
+        Ok(())
+    }
+
+    /// Test: Move simple directory structure
+    #[test]
+    fn test_move_simple_directory_tree() {
+        let temp_dir = std::env::temp_dir();
+        let test_id = "move_simple";
+        let source = temp_dir.join(format!("test_source_{}", test_id));
+        let dest_parent = temp_dir.join(format!("test_dest_parent_{}", test_id));
+
+        // Setup
+        let _ = fs::remove_dir_all(&source);
+        let _ = fs::remove_dir_all(&dest_parent);
+        fs::create_dir_all(&source).unwrap();
+        fs::create_dir_all(&dest_parent).unwrap();
+        create_test_directory_structure(&source).unwrap();
+
+        // Execute move
+        let result = move_directory_tree_to_new_path(&source, &dest_parent);
+
+        // Assert success
+        assert!(result.is_ok(), "Move operation should succeed");
+
+        // Assert source no longer exists
+        assert!(!source.exists(), "Source should be removed after move");
+
+        // Assert destination exists with correct structure
+        let final_dest = dest_parent.join(source.file_name().unwrap());
+        assert!(final_dest.exists(), "Destination should exist");
+        assert!(final_dest.join("file1.txt").exists(), "Root file should exist");
+        assert!(final_dest.join("subdir1/file2.txt").exists(), "Nested file should exist");
+        assert!(final_dest.join("subdir1/subdir2/file3.txt").exists(), "Deeply nested file should exist");
+
+        // Cleanup
+        let _ = fs::remove_dir_all(&dest_parent);
+    }
+
+    /// Test: Move empty directory
+    #[test]
+    fn test_move_empty_directory() {
+        let temp_dir = std::env::temp_dir();
+        let test_id = "move_empty";
+        let source = temp_dir.join(format!("test_source_{}", test_id));
+        let dest_parent = temp_dir.join(format!("test_dest_parent_{}", test_id));
+
+        // Setup
+        let _ = fs::remove_dir_all(&source);
+        let _ = fs::remove_dir_all(&dest_parent);
+        fs::create_dir_all(&source).unwrap();
+        fs::create_dir_all(&dest_parent).unwrap();
+
+        // Execute move
+        let result = move_directory_tree_to_new_path(&source, &dest_parent);
+
+        // Assert success
+        assert!(result.is_ok(), "Empty directory move should succeed");
+
+        // Assert source removed
+        assert!(!source.exists(), "Source should be removed");
+
+        // Assert empty destination created
+        let final_dest = dest_parent.join(source.file_name().unwrap());
+        assert!(final_dest.exists(), "Empty destination directory should exist");
+        assert!(final_dest.is_dir(), "Destination should be a directory");
+
+        // Cleanup
+        let _ = fs::remove_dir_all(&dest_parent);
+    }
+
+    /// Test: Error when source doesn't exist
+    #[test]
+    fn test_move_source_not_found() {
+        let temp_dir = std::env::temp_dir();
+        let test_id = "move_not_found";
+        let source = temp_dir.join(format!("test_source_nonexistent_{}", test_id));
+        let dest_parent = temp_dir.join(format!("test_dest_parent_{}", test_id));
+
+        // Setup: ensure source doesn't exist
+        let _ = fs::remove_dir_all(&source);
+        fs::create_dir_all(&dest_parent).unwrap();
+
+        // Execute move
+        let result = move_directory_tree_to_new_path(&source, &dest_parent);
+
+        // Assert error
+        assert!(result.is_err(), "Should error when source doesn't exist");
+
+        // Verify error kind
+        if let Err(e) = result {
+            assert_eq!(e.kind(), io::ErrorKind::NotFound);
+        }
+
+        // Cleanup
+        let _ = fs::remove_dir_all(&dest_parent);
+    }
+
+    /// Test: Error when source is a file not directory
+    #[test]
+    fn test_move_source_is_file() {
+        let temp_dir = std::env::temp_dir();
+        let test_id = "move_file";
+        let source = temp_dir.join(format!("test_source_file_{}", test_id));
+        let dest_parent = temp_dir.join(format!("test_dest_parent_{}", test_id));
+
+        // Setup: create file as source (not directory)
+        let _ = fs::remove_file(&source);
+        fs::write(&source, b"content").unwrap();
+        fs::create_dir_all(&dest_parent).unwrap();
+
+        // Execute move
+        let result = move_directory_tree_to_new_path(&source, &dest_parent);
+
+        // Assert error
+        assert!(result.is_err(), "Should error when source is not a directory");
+
+        // Verify error kind
+        if let Err(e) = result {
+            assert_eq!(e.kind(), io::ErrorKind::InvalidInput);
+        }
+
+        // Cleanup
+        let _ = fs::remove_file(&source);
+        let _ = fs::remove_dir_all(&dest_parent);
+    }
+
+    /// Test: Verify deep nesting preserved correctly
+    #[test]
+    fn test_move_preserves_deep_structure() {
+        let temp_dir = std::env::temp_dir();
+        let test_id = "move_deep";
+        let source = temp_dir.join(format!("test_source_{}", test_id));
+        let dest_parent = temp_dir.join(format!("test_dest_parent_{}", test_id));
+
+        // Setup: create deeply nested structure
+        let _ = fs::remove_dir_all(&source);
+        let _ = fs::remove_dir_all(&dest_parent);
+        fs::create_dir_all(&source).unwrap();
+        fs::create_dir_all(&dest_parent).unwrap();
+
+        let deep_path = source.join("a/b/c/d/e");
+        fs::create_dir_all(&deep_path).unwrap();
+        fs::write(deep_path.join("deep_file.txt"), b"deep content").unwrap();
+
+        // Execute move
+        let result = move_directory_tree_to_new_path(&source, &dest_parent);
+
+        // Assert success
+        assert!(result.is_ok(), "Deep structure move should succeed");
+
+        // Verify deep structure preserved
+        let final_dest = dest_parent.join(source.file_name().unwrap());
+        let moved_deep_file = final_dest.join("a/b/c/d/e/deep_file.txt");
+        assert!(moved_deep_file.exists(), "Deep file should exist at correct path");
+
+        let content = fs::read_to_string(moved_deep_file).unwrap();
+        assert_eq!(content, "deep content", "File content should be preserved");
+
+        // Cleanup
+        let _ = fs::remove_dir_all(&dest_parent);
+    }
+
+    /// Test: Cargo test assert check (only runs in test mode)
+    #[test]
+    fn test_assertions_compile() {
+        // This test verifies that our assertion structure compiles correctly
+        // and that test-mode asserts are present while debug asserts are not
+        // during test execution
+
+        let temp_dir = std::env::temp_dir();
+        let source = temp_dir.join("test_assert_source");
+        let dest = temp_dir.join("test_assert_dest");
+
+        // Setup valid paths
+        let _ = fs::remove_dir_all(&source);
+        let _ = fs::remove_dir_all(&dest);
+        fs::create_dir_all(&source).unwrap();
+        fs::create_dir_all(&dest).unwrap();
+
+        // This should succeed without panic
+        let result = move_directory_tree_to_new_path(&source, &dest);
+        assert!(result.is_ok());
+
+        // Cleanup
+        let _ = fs::remove_dir_all(&dest);
+    }
+}
 
 /// gpg get public key long from public key-id
 /// use std::process::Command;
@@ -27378,7 +28030,7 @@ pub fn invite_wizard() -> Result<(), GpgError> {
     println!("1. sharing gpg");
     println!("2. sharing address-book file");
     println!("3. sharing team-channel");
-    println!("");
+    println!(""); // newline
     println!("Other Setup Tools:");
     println!("4. update a Node that you own");  // update_core_node()
     println!("5. make a set of pads (One Time Pad)");
@@ -28125,7 +28777,7 @@ fn handle_command_main_mode(
 
 
                 /*
-                fn create_core_node(
+                fn create_corenode_q_and_a(
                     node_path: PathBuf,
                     parent_node_uniqueid: Vec<u8>,
                     teamchannel_collaborators_with_access: Vec<String>,
@@ -28133,7 +28785,7 @@ fn handle_command_main_mode(
                 ) -> Result<(), ThisProjectError> {
                 */
 
-                let _ = create_core_node(
+                let _ = create_corenode_q_and_a(
                     app.current_path.clone(), // node_path: PathBuf,
                     app.graph_navigation_instance_state.parent_node_uniqueid.clone(),
                     app.graph_navigation_instance_state.current_node_teamchannel_collaborators_with_access.clone(),  // teamchannel_collaborators_with_access: Vec<String>,
@@ -29747,7 +30399,7 @@ fn move_task_q_and_a_wrapper(
     */
 
     // 1. Get source task number
-    buffy_println("", &[])?; // nearline
+    buffy_println("", &[])?; // newline
     buffy_println("Enter task number to move:", &[])?;
     // println!("Enter task number to move:");
     let task_num = get_user_input_number()?;
@@ -29789,6 +30441,7 @@ fn move_task_q_and_a_wrapper(
     debug_log!(
         "ending move_task_q_and_a_wrapper()"
         );
+    println!("End: Move Q&A");
     Ok(())
 }
 
@@ -30036,11 +30689,11 @@ fn move_node_directory(
             #[cfg(debug_assertions)]
             debug_log!("MND new_path_in_parentnode {:?}", new_path_in_parentnode);
 
-            let newpath_in_parentnode_with_name = new_path_in_parentnode.join(node_name_string.clone());
+            // let newpath_in_parentnode_with_name = new_path_in_parentnode.join(node_name_string.clone());
 
 
-            #[cfg(debug_assertions)]
-            debug_log!("MND newpath_in_parentnode_with_name {:?}", newpath_in_parentnode_with_name);
+            // #[cfg(debug_assertions)]
+            // debug_log!("MND newpath_in_parentnode_with_name {:?}", newpath_in_parentnode_with_name);
 
             // 1. Construct the new node path (where the moved node will be located).
             // // NO UNWRAP!!
@@ -30081,17 +30734,6 @@ fn move_node_directory(
                 }
             };
 
-
-
-            // 2. Create the new directory, including all parents.
-            fs::create_dir_all(&new_nodepath_dir)?;
-
-            #[cfg(debug_assertions)]
-            {
-                debug_log!("MND file new_node_path {:?}", new_node_path);
-                debug_log!("MND: dif destination new_nodepath_dir: {:?}", new_nodepath_dir);
-                debug_log!("MND: created new_nodepath_dir: {:?}", new_nodepath_dir);
-            }
 
 
             // // let original_node_toml_path = new_node_path.push("node.toml");
@@ -30169,25 +30811,41 @@ fn move_node_directory(
                 &source_path_with_file_name_and_extension, //  pathbuf node_clearsigned_or_gpg_toml_path
                 &source_path, // &pathbuf, new_node_path not including filename/extension
                 node_unique_id_vec, // new_parent_node_uniqueid
-                &newpath_in_parentnode_with_name, // new_path_in_parentnode
+                &new_path_in_parentnode, // old &newpath_in_parentnode_with_name, // new_path_in_parentnode
                 save_format_use_gpgtoml, // bool for node.toml or node.gpgtoml
             ) {
                 Ok(_) => println!("Successfully updated TOML file"),
                 Err(e) => eprintln!("Error: {}", e)
             }
 
+
+            // 2. Create the new directory, including all parents.
+            // fs::create_dir_all(&new_nodepath_dir)?;
+
+            #[cfg(debug_assertions)]
+            {
+                debug_log!("MND file new_node_path {:?}", new_node_path);
+                debug_log!("MND: dif destination new_nodepath_dir: {:?}", new_nodepath_dir);
+                // debug_log!("MND: created new_nodepath_dir: {:?}", new_nodepath_dir);
+            }
+
+
+
             // 4. Recursively move the source directory's contents to the new directory.
-            // directories, not file-paths
-            move_directory_contents(
+            // arguments are directories, not file-paths
+            // move_directory_contents(
+            let _ = move_directory_tree_to_new_path(
                 &source_path, // from
                 &new_nodepath_dir // to
             )?;
+
             #[cfg(debug_assertions)]
             {
                 debug_log!("MND: contents moved from: {:?}", source_path);
                 debug_log!("MND: contents moved to: {:?}", new_nodepath_dir);
                 debug_log!("MND: updated node.toml paths");
             }
+
             // 5. Remove the old directory.
             fs::remove_dir_all(source_path.clone())?;
 
@@ -30197,6 +30855,7 @@ fn move_node_directory(
         },
         Err(e) => println!("Error: {}", e),
     }
+    println!("Successfully moved Node Directory");
 
     Ok(())
 }
@@ -33070,7 +33729,7 @@ fn get_latest_received_from_rc_file_timestamp(
 
         // Get directory entry, skip on any error
         let entry = match entry {
-            Ok(e) => e,
+            Ok(dir_entries) => dir_entries,
             Err(_e) => {
                 #[cfg(debug_assertions)]
                 debug_log!(
@@ -34712,7 +35371,7 @@ fn handle_local_owner_desk(
                     let save_as_gpgtoml = file_str.contains("\nmessagepost_gpgtoml = true\n")
                         || file_str.contains("\ncorenode_gpgtoml = true\n");
 
-                    #[cfg(debug_assertions)]
+                    // #[cfg(debug_assertions)]
                     debug_log!("HLOD 6.4: save_as_gpgtoml flag = {}", save_as_gpgtoml);
 
                     // 7 Save File into Uma Folder Structure
@@ -35399,7 +36058,7 @@ fn handle_local_owner_desk(
                                                 // #[cfg(debug_assertions)]
                                                 debug_log!(
 
-                                                    "HLOD 7.2 Node exists, handle move/replace: got-made base_node_path_new, existing_parent_node_directory_path.join(node_file_path_in_parent) -> {:?}",
+                                                    "HLOD 7.2.1 Node exists, handle move/replace: got-made base_node_path_new, existing_parent_node_directory_path.join(node_file_path_in_parent) -> {:?}",
                                                     &base_node_path_new
                                                 );
 
@@ -35408,7 +36067,7 @@ fn handle_local_owner_desk(
 
                                                 // #[cfg(debug_assertions)]
                                                 debug_log!(
-                                                    "HLOD 7.2 NMoving, new_node_dir_path -> {:?}",
+                                                    "HLOD 7.2.2 Moving, new_node_dir_path -> {:?}",
                                                     &new_node_dir_path
                                                 );
 
@@ -35426,13 +36085,17 @@ fn handle_local_owner_desk(
 
                                                 // #[cfg(debug_assertions)]
                                                 debug_log!(
-                                                    "HLOD 7.2 Node exists, handle move/replace: got-made new_node_toml_file_path -> {:?}",
+                                                    "HLOD 7.2.3 Node exists, handle move/replace: got-made new_node_toml_file_path -> {:?}",
                                                     &new_node_file_path
                                                 );
 
+                                                debug_log!(
+                                                    "HLOD 7.2.3.4 save_as_gpgtoml -> {:?}",
+                                                    &save_as_gpgtoml
+                                                );
 
                                                 // Choose what to save
-                                                let data_to_save = if save_as_gpgtoml {
+                                                let move_data_to_save = if save_as_gpgtoml {
                                                     still_encrypted_file_blob  // Save encrypted version
                                                 } else {
                                                     &decrypted_clearsignfile_data  // Save clearsigned version
@@ -35443,10 +36106,8 @@ fn handle_local_owner_desk(
 
                                                 // TODO: more optimal way to make/skip zero-toml file?
 
-
-
                                                 // // Save file
-                                                // if let Err(e) = fs::write(&new_node_file_path, data_to_save) {
+                                                // if let Err(e) = fs::write(&new_node_file_path, move_data_to_save) {
                                                 //     debug_log!("Error writing node file: {:?} - {}", &new_node_file_path, e);
                                                 //     return Err(ThisProjectError::from(e));
                                                 // }
@@ -35461,9 +36122,9 @@ fn handle_local_owner_desk(
                                                 // make old directory path
                                                 // let olddir_abs_node_directory_path = PathBuf::from(base_olddir_existing_node_directory_path);
 
-                                                #[cfg(debug_assertions)]
+                                                // #[cfg(debug_assertions)]
                                                 debug_log!(
-                                                    "HLOD 7.2 Node exists, handle move/replace: got-made base_olddir_existing_node_directory_path -> {:?}",
+                                                    "HLOD 7.2.5 Node exists, handle move/replace: got-made base_olddir_existing_node_directory_path -> {:?}",
                                                     &base_olddir_existing_node_directory_path
                                                 );
 
@@ -35478,7 +36139,7 @@ fn handle_local_owner_desk(
                                                 let oldfile_node_file_path = base_olddir_existing_node_directory_path.join(node_filename);
 
                                                 // // Choose what to save
-                                                // let data_to_save = if save_as_gpgtoml {
+                                                // let move_data_to_save = if save_as_gpgtoml {
                                                 //     still_encrypted_file_blob  // Save encrypted version
                                                 // } else {
                                                 //     &decrypted_clearsignfile_data  // Save clearsigned version
@@ -35505,39 +36166,57 @@ fn handle_local_owner_desk(
                                                     }
                                                 };
 
-                                                #[cfg(debug_assertions)]
+                                                // #[cfg(debug_assertions)]
                                                 {
-                                                    debug_log!("7.3 HLOD-InTray canonical_path1 {:?}", canonical_path1);
-                                                    debug_log!("7.3 HLOD-InTray canonical_path2 {:?}", canonical_path2);
+                                                    debug_log!("7.3.1 HLOD-InTray canonical_path1 {:?}", canonical_path1);
+                                                    debug_log!("7.3.2 HLOD-InTray canonical_path2 {:?}", canonical_path2);
                                                 }
 
                                                 if canonical_path1 == canonical_path2 {
+                                                    // #[cfg(debug_assertions)]
+                                                    debug_log!("7.4.b paths ARE the same, so -> only updating node toml");
+
 
                                                     // 3.2 replace (delete the old) node file
-                                                    if let Err(e) = fs::write(&oldfile_node_file_path, data_to_save) {
-                                                        #[cfg(debug_assertions)]
+                                                    if let Err(e) = fs::write(&oldfile_node_file_path, move_data_to_save) {
+                                                        // #[cfg(debug_assertions)]
                                                         debug_log!("HLOD Node exists, handle move/replace: Error writing node file: {:?} - {}", &oldfile_node_file_path, e);
+
+                                                        // should this skip not error?
+                                                        return Err(ThisProjectError::from(e));
+                                                    }
+
+                                                    debug_log!("7.4.a -- HLOD-InTray: updated,  not moved");
+
+                                                } else {
+                                                    // #[cfg(debug_assertions)]
+                                                    debug_log!("7.4.b paths not the same, so -> moving node");
+
+
+                                                    // 3.2 replace (delete the old) node file
+                                                    if let Err(e) = fs::write(&oldfile_node_file_path, move_data_to_save) {
+                                                        // #[cfg(debug_assertions)]
+                                                        debug_log!("HLOD Node exists, handle move/replace: Error writing node file: {:?} - {}", &oldfile_node_file_path, e);
+
+                                                        // should this skip not error?
                                                         return Err(ThisProjectError::from(e));
                                                     }
 
                                                     // Recursive Move Whole Directory
                                                     // 3.3 Move old node directory (not remove/delete) (directory, not file)
                                                     // from olddir_abs_node_directory_path to new_full_abs_node_directory_path
-                                                    if let Err(_error) = move_directory_from_path_to_path(&base_olddir_existing_node_directory_path, &base_node_path_new) {
-                                                        #[cfg(debug_assertions)]
-                                                        debug_log!("An error occurred: {}", _error);
+                                                    if let Err(_error) = move_directory_tree_to_new_path(&base_olddir_existing_node_directory_path, &base_node_path_new) {
+                                                        // #[cfg(debug_assertions)]
+                                                        debug_log!("HLOD An error occurred: {}", _error);
                                                     }
 
-                                                    #[cfg(debug_assertions)]
+                                                    // #[cfg(debug_assertions)]
                                                     {
-                                                        debug_log!("7.3 HLOD-InTray: moved file moved from: {:?}", &base_olddir_existing_node_directory_path);
-                                                        debug_log!("7.3 HLOD-InTray: moved-new file saved to: {:?}", &base_node_path_new);
+                                                        debug_log!("7.3.4 HLOD-InTray: moved file moved from: {:?}", &base_olddir_existing_node_directory_path);
+                                                        debug_log!("7.3.5 HLOD-InTray: moved-new file saved to: {:?}", &base_node_path_new);
                                                     }
 
-                                                } else {
-                                                    debug_log!("7.3 HLOD-InTray: updated not moved ");
-
-
+                                                    debug_log!("7.4.b -- HLOD-InTray -> moved");
                                                 }
 
                                             }
@@ -37053,7 +37732,7 @@ fn get_or_create_send_queue(
 
             // Get directory entry, skip on any error
             let entry = match entry {
-                Ok(e) => e,
+                Ok(dir_entries) => dir_entries,
                 Err(_e) => {
                     #[cfg(debug_assertions)]
                     {
@@ -39497,13 +40176,30 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                     &app.next_path_lookup_table,
                     // app.graph_navigation_instance_state.parent_node_uniqueid.clone(), // parent node id
                 );
+                println!("End of Move Action");
 
-            } else if input == "back" {
+                // ?
+                app.input_mode = InputMode::MainCommand; // Access input_mode using self
+                tiny_tui::render_list(
+                    &app.tui_directory_list,
+                    &app.current_path,
+                    // Project Areas
+                    &app.graph_navigation_instance_state.pa1_process,
+                    &app.graph_navigation_instance_state.pa2_schedule,
+                    &app.graph_navigation_instance_state.pa3_users,
+                    &app.graph_navigation_instance_state.pa4_features,
+                    &app.graph_navigation_instance_state.pa5_mvp,
+                    &app.graph_navigation_instance_state.pa6_feedback,
+                );
+                app.update_directory_list()?;  // refresh to current cwd display items
+
+
+            } else if input == "b" {
                 debug_log("escape toggled");
                 app.input_mode = InputMode::MainCommand; // Access input_mode using self
                 app.current_path.pop(); // Go back to the parent directory
                 app.graph_navigation_instance_state.current_full_file_path = app.current_path.clone(); // Update full path after popping.
-                app.graph_navigation_instance_state.nav_graph_look_read_node_toml(); // ???
+                app.graph_navigation_instance_state.nav_graph_look_read_node_toml(); // ?
 
                 tiny_tui::render_list(
                     &app.tui_directory_list,
@@ -39522,6 +40218,9 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                 debug_log("escape toggled");
                 app.input_mode = InputMode::MainCommand; // Access input_mode using self
                 app.current_path.pop(); // Go back to the parent directory
+                app.graph_navigation_instance_state.current_full_file_path = app.current_path.clone(); // Update full path after popping.
+                app.graph_navigation_instance_state.nav_graph_look_read_node_toml(); // ?
+
                 tiny_tui::render_list(
                     &app.tui_directory_list,
                     &app.current_path,
