@@ -10714,7 +10714,7 @@ fn deseri_get_core_node_struct_from_toml_file(
     fn cleanup_collaborator_temp_file(temp_file_path: &Path) -> Result<(), GpgError> {
     */
 
-
+    #[cfg(debug_assertions)]
     debug_log!(
         "DGCNSFTF: Starting: deseri_get_core_node_struct_from_toml_file(), file_path -> {:?}",
         file_path,
@@ -10754,11 +10754,15 @@ fn deseri_get_core_node_struct_from_toml_file(
     // //    // simple read string to get owner name
     // //    // not for extraction and return, just part of validation
 
+    #[cfg(debug_assertions)]
+    debug_log!("DGCNSFTF: node_readcopy_path: {:?}", node_readcopy_path);
+
 
     ////////////////////////////////
     // Extract Owner for Key Lookup
     ////////////////////////////////
     let owner_name_of_toml_field_key_to_read = "owner";
+    #[cfg(debug_assertions)]
     debug_log!(
         "DGCNSFTF: Reading file owner from field '{}' for security validation",
         owner_name_of_toml_field_key_to_read
@@ -10887,7 +10891,7 @@ fn deseri_get_core_node_struct_from_toml_file(
     // If either verification failed, clean up and return error
     if !verify_addressbook_file_result || !verify_node_file_result {
 
-        debug_log("DGCNSFTF: Whoops, something faileded...");
+        debug_log("DGCNSFTF: Whoops, something faileded... (error)");
 
         // Clean up temporary files
         cleanup_closure();
@@ -18283,21 +18287,28 @@ fn create_core_node(
     debug_log!("CCN: CoreNode creation complete, saving...");
 
     // User Q&A: Ask user to choose file format for node
-    println!("\n=== Node File Format Selection ===");
+    let _ = clear_terminal_screen();
+    println!("");
+    println!("=== Node File Format Selection ===");
     println!("Choose the format for saving your copy of the node file:");
     println!();
-    println!("1. 'gpgtoml' - GPG encrypted clearsigned file (node.gpgtoml) [DEFAULT - RECOMMENDED]");
+        println!();
+    println!("'gpgtoml' -> GPG encrypted clearsigned file: node.gpgtoml");
+    println!("   - Default, Recommended");
     println!("   - Maximum security: encrypted AND signed");
     println!("   - Only you can decrypt with your private key");
     println!("   - Integrity verified through clearsigning");
     println!();
-    println!("2. 'clearsign' - Clearsigned only file (node.toml)");
+    println!();
+    println!("'clearsign' -> Clearsigned only file (node.toml)");
+    println!("   - Optional");
     println!("   - Signed for integrity verification");
     println!("   - Contents readable by anyone");
     println!("   - Suitable for public/shared nodes");
     println!();
-    println!("Enter your choice [gpgtoml/clearsign] (press Enter for default 'gpgtoml'): ");
-    print!("> ");
+    println!();
+    println!("Enter your choice ['gpgtoml'/'clearsign'], press Enter for default 'gpgtoml'");
+    print!("(string) > ");
 
     // Flush stdout to ensure the prompt appears
     std::io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
@@ -19594,6 +19605,8 @@ fn q_and_a_get_pa2_schedule() -> Result<Vec<u64>, ThisProjectError> {
         println!("\nProject Schedule: Enter project duration in days (1-3650):");
         buffy_print("(int)", &[])?;
         write_red_hotkey("", " > ")?;
+        buffy_print("{}", &[BuffyFormatArg::Str(RESET)])?;
+
         io::stdout().flush().map_err(|e| ThisProjectError::IoError(e))?;
 
         let mut days_input = String::new();
@@ -19883,7 +19896,9 @@ fn q_and_a_get_message_post_integer_ranges() -> Result<Option<Vec<(i32, i32)>>, 
     println!("I.e. enter a list of integer ranges that the user will be able select from, using integers, dashes, and commas: Format: min1-max1,min2-max2,");
     println!("Example -> 1-10,20-30,50-100   E.g. for 1. breakfast  2. second-breakfast 3. supper, the format would be -> 1-3");
     println!("Write-in options are dealt with below, this for one or more ranges of values where the user only enters the integer of their selection.");
-    println!("...or press Enter to skip if this format does not apply to your project-node.");
+    println!("or press Enter to skip if this format does not apply to your project-node.");
+    println!("");
+    println!("...Press Enter to continue...");
 
     let mut input = String::new();
     io::stdout().flush()?;
@@ -20250,7 +20265,7 @@ fn q_and_a_get_message_post_start_date() -> Result<Option<i64>, ThisProjectError
     println!("Enter start date for accepting posts:");
     println!("  - Type \"now\" for current UTC time");
     println!("  - Type \"custom\" to enter a specific date");
-    println!("  - Press Enter to skip");
+    println!("  (Press Enter to skip)");
     print!("> ");
 
     // Ensure prompt is displayed before reading input
@@ -20675,7 +20690,7 @@ fn q_and_a_get_message_post_end_date(start_date_timestamp: Option<i64>) -> Resul
     }
 
     println!("  - Type \"custom\" to enter a specific date");
-    println!("  - Press Enter to skip");
+    println!("  (Press Enter to skip)");
 
     // If start date exists, show it for reference
     if let Some(start_ts) = start_date_timestamp {
@@ -29732,7 +29747,9 @@ fn move_task_q_and_a_wrapper(
     */
 
     // 1. Get source task number
-    println!("Enter task number to move:");
+    buffy_println("", &[])?; // nearline
+    buffy_println("Enter task number to move:", &[])?;
+    // println!("Enter task number to move:");
     let task_num = get_user_input_number()?;
 
     // Get source path from lookup
@@ -29760,6 +29777,7 @@ fn move_task_q_and_a_wrapper(
     debug_log!("move_task_q_and_a_wrapper(), Destination path: {:?}", dest_path);
 
 
+    // todo: maybe parent of source needs to go here...
 
     // 3. Perform the move operation
     move_node_directory(
@@ -29804,35 +29822,39 @@ fn move_node_directory(
     dest_path: PathBuf,
     // parent_node_uniqueid: Vec<u8>,
 ) -> Result<(), ThisProjectError> {
-    debug_log!("MND Starting move_node_directory()");
-    #[cfg(debug_assertions)]
-    debug_log!("Moving node from source_path {:?}, to dest_path {:?}", source_path, dest_path);
 
+    #[cfg(debug_assertions)]
+    {
+        debug_log!("MND Starting move_node_directory()");
+        debug_log!("MND Moving node from source_path {:?}", source_path);
+        debug_log!("MND Moving node to dest_path {:?}", dest_path);
+    }
     /*
     Moving Node:
 
-    load node like fn update_core_node()
+    1. load node ~like fn update_core_node()
 
-    1. from destination
-    2. look for node.toml or node.gpgtoml
+    2. from destination
+    3. look for node.toml or node.gpgtoml
        if not fuond then look in parent
        etc back until found
        or exit
 
-    3. make path_in_parent by
+    4. make path_in_parent by
        comparing new destination path with
        with the parent of the node.* of new parent node
 
-    3. from node.* file, get id of parent node
-    4. from node.* file, get path in parent node
-    5. update updated_at field
-    5. update parent_node_id field
-    5. update parent_node_name? field
+    5. from node.* file, get id of parent node
+    6. from node.* file, get path in parent node
+    7. update updated_at field
+    8. update parent_node_id field
+    9. update parent_node_name? field
 
-    6. re-clearsign
-    7. if gpgtoml, re-gpg
-    6. move whole dir?
-    7. node.toml to send-q of ?
+    10. re-clearsign
+    11. if gpgtoml, re-gpg
+    12. make sure destination is directory path
+    13. move whole dir
+    14. node.toml to send-q of ?
 
     */
 
@@ -29912,11 +29934,11 @@ fn move_node_directory(
                 //         e
                 //     ));
                 // }
-                Err(e) => {
+                Err(_e) => {
                     #[cfg(debug_assertions)]
                     debug_log(&format!(
                         "{}: MND: error ",
-                        e
+                        _e
                     ));
                     return Err(ThisProjectError::from(
                         "MND: error gpg_full_fingerprint_key_id_string".to_string()
@@ -30045,14 +30067,31 @@ fn move_node_directory(
                 ));
             };
 
-            #[cfg(debug_assertions)]
-            debug_log!("MND destination new_node_path {:?}", new_node_path);
+            // parent of destination file
+            // Safely get the parent directory as a PathBuf
+            let new_nodepath_dir = match new_node_path.parent() {
+                Some(parent) => parent.to_path_buf(),
+                None => {
+                    #[cfg(debug_assertions)]
+                    debug_log!("error MND No parent directory found for path: {:?}", new_node_path);
+                    // Handle the error case, e.g., return early or use a default
+                    return Err(ThisProjectError::from(
+                        "MND: error MND No parent directory found for path".to_string()
+                    ));
+                }
+            };
+
+
 
             // 2. Create the new directory, including all parents.
-            fs::create_dir_all(&new_node_path)?;
-            #[cfg(debug_assertions)]
-            debug_log!("MND: created new_node_path: {:?}", new_node_path);
+            fs::create_dir_all(&new_nodepath_dir)?;
 
+            #[cfg(debug_assertions)]
+            {
+                debug_log!("MND file new_node_path {:?}", new_node_path);
+                debug_log!("MND: dif destination new_nodepath_dir: {:?}", new_nodepath_dir);
+                debug_log!("MND: created new_nodepath_dir: {:?}", new_nodepath_dir);
+            }
 
 
             // // let original_node_toml_path = new_node_path.push("node.toml");
@@ -30106,16 +30145,10 @@ fn move_node_directory(
 
 
 
-            //
-            let readfile_path_to_source_node = get_pathstring_to_temp_plaintoml_verified_extracted(
-                &source_path_with_file_name_and_extension, // input_toml_absolute_path: &Path,
-                &gpg_full_fingerprint_key_id_string, // gpg_full_fingerprint_key_id_string: &str, // COLLABORATOR_ADDRESSBOOK_PATH_STR
-                &base_uma_temp_directory_path, // base_uma_temp_directory_path: &Path,
-            )
-            .map_err(|e| format!("MND: GPG decryption failed: {:?}", e))?;
+
 
             /*
-            read_from_path_to_node_file, // pathbuf readfile_path_to_source_node
+            read_from_path_to_node_file, // pathbuf
             save_to_path_dir, // &pathbuf, new_node_path not including filename/extension
             new_parent_node_uniqueid, // vec<u8>, value to update
             new_path_in_parentnode, // string, value to update
@@ -30130,10 +30163,10 @@ fn move_node_directory(
             ) -> Result<(), String> {
             */
 
-            let read_from_path_to_node_file = PathBuf::from(readfile_path_to_source_node);
+
 
             match safe_update_for_moving_node_toml_fields(
-                &read_from_path_to_node_file, //  pathbuf readfile_path_to_source_node
+                &source_path_with_file_name_and_extension, //  pathbuf node_clearsigned_or_gpg_toml_path
                 &source_path, // &pathbuf, new_node_path not including filename/extension
                 node_unique_id_vec, // new_parent_node_uniqueid
                 &newpath_in_parentnode_with_name, // new_path_in_parentnode
@@ -30143,17 +30176,18 @@ fn move_node_directory(
                 Err(e) => eprintln!("Error: {}", e)
             }
 
-
             // 4. Recursively move the source directory's contents to the new directory.
-            move_directory_contents(&source_path, &new_node_path)?;
+            // directories, not file-paths
+            move_directory_contents(
+                &source_path, // from
+                &new_nodepath_dir // to
+            )?;
             #[cfg(debug_assertions)]
-            debug_log!("MND: contents moved to: {:?}", new_node_path);
-
-
-
-            #[cfg(debug_assertions)]
-            debug_log!("MND: updated node.toml paths");
-
+            {
+                debug_log!("MND: contents moved from: {:?}", source_path);
+                debug_log!("MND: contents moved to: {:?}", new_nodepath_dir);
+                debug_log!("MND: updated node.toml paths");
+            }
             // 5. Remove the old directory.
             fs::remove_dir_all(source_path.clone())?;
 
@@ -30691,7 +30725,7 @@ mod node_paths_tests {
 /// }
 /// ```
 fn safe_update_for_moving_node_toml_fields(
-    read_from_path_to_node_file: &PathBuf,
+    node_clearsigned_or_gpg_toml_path: &PathBuf, //
     save_to_path_dir: &PathBuf,
     new_parent_node_uniqueid: Vec<u8>,
     new_path_in_parentnode: &PathBuf,
@@ -30711,7 +30745,7 @@ fn safe_update_for_moving_node_toml_fields(
         FUNC_PREFIX
     ));
 
-    let mut existing_node = match deseri_get_core_node_struct_from_toml_file(&read_from_path_to_node_file) {
+    let mut existing_node = match deseri_get_core_node_struct_from_toml_file(&node_clearsigned_or_gpg_toml_path) {
         Ok(node) => {
             #[cfg(debug_assertions)]
             debug_log(&format!("{}: CoreNode loaded successfully", FUNC_PREFIX));
@@ -30720,7 +30754,7 @@ fn safe_update_for_moving_node_toml_fields(
         Err(_e) => {
             #[cfg(debug_assertions)]
             debug_log(&format!(
-                "{}: Failed to load or parse CoreNode: {}",
+                "{}: error Failed to load or parse CoreNode: {}",
                 FUNC_PREFIX, _e
             ));
             // Production-safe error: no file path or details exposed
@@ -30832,13 +30866,15 @@ fn safe_update_for_moving_node_toml_fields(
     // =========================================================================
     // Choose save format based on caller's specification (non-interactive)
 
-    let format_name = if save_format_use_gpgtoml { "gpgtoml" } else { "toml" };
-
     #[cfg(debug_assertions)]
-    debug_log(&format!(
-        "{}: Attempting to save as {} format",
-        FUNC_PREFIX, format_name
-    ));
+    {
+        let format_name = if save_format_use_gpgtoml { "gpgtoml" } else { "toml" };
+
+        debug_log(&format!(
+            "{}: Attempting to save as {} format",
+            FUNC_PREFIX, format_name
+        ));
+    }
 
     if save_format_use_gpgtoml {
         // Save as GPG encrypted clearsigned file (node.gpgtoml)
@@ -30890,7 +30926,13 @@ fn move_directory_contents(
     from: &Path,
     to: &Path
 ) -> Result<(), ThisProjectError> {
-    debug_log("starting move_directory_contents()");
+    #[cfg(debug_assertions)]
+    {
+        debug_log("MDC starting move_directory_contents()");
+        debug_log!("MDC from {:?}", from);
+        debug_log!("MDC to {:?}", to);
+    }
+
     for entry in fs::read_dir(from)? {
         let entry = entry?;
         let path = entry.path();
@@ -35419,7 +35461,7 @@ fn handle_local_owner_desk(
                                                 // make old directory path
                                                 // let olddir_abs_node_directory_path = PathBuf::from(base_olddir_existing_node_directory_path);
 
-                                                // #[cfg(debug_assertions)]
+                                                #[cfg(debug_assertions)]
                                                 debug_log!(
                                                     "HLOD 7.2 Node exists, handle move/replace: got-made base_olddir_existing_node_directory_path -> {:?}",
                                                     &base_olddir_existing_node_directory_path
@@ -35442,28 +35484,62 @@ fn handle_local_owner_desk(
                                                 //     &decrypted_clearsignfile_data  // Save clearsigned version
                                                 // };
 
-                                                // TODO archive oldfile_node_file_path
+                                                // TODO:
+                                                // Update vs. Move: if paths are the same: do nothing
 
-                                                // 3.2 replace (delete the old) node file
-                                                if let Err(e) = fs::write(&oldfile_node_file_path, data_to_save) {
-                                                    // #[cfg(debug_assertions)]
-                                                    debug_log!("HLOD Node exists, handle move/replace: Error writing node file: {:?} - {}", &oldfile_node_file_path, e);
-                                                    return Err(ThisProjectError::from(e));
-                                                }
 
-                                                // Recursive Move Whole Directory
-                                                // 3.3 Move old node directory (not remove/delete) (directory, not file)
-                                                // from olddir_abs_node_directory_path to new_full_abs_node_directory_path
-                                                if let Err(_error) = move_directory_from_path_to_path(&base_olddir_existing_node_directory_path, &base_node_path_new) {
-                                                    // #[cfg(debug_assertions)]
-                                                    debug_log!("An error occurred: {}", _error);
-                                                }
+                                                // Canonicalize the paths
+                                                let canonical_path1 = match fs::canonicalize(base_olddir_existing_node_directory_path) {
+                                                    Ok(canonical) => canonical,
+                                                    Err(e) => {
+                                                        eprintln!("HLOD Error canonicalizing path1: {}", e);
+                                                        return Err(ThisProjectError::from(e));
+                                                    }
+                                                };
 
-                                                // #[cfg(debug_assertions)]
+                                                let canonical_path2 = match fs::canonicalize(base_node_path_new.clone()) {
+                                                    Ok(canonical) => canonical,
+                                                    Err(e) => {
+                                                        eprintln!("HLOD Error canonicalizing path2: {}", e);
+                                                        return Err(ThisProjectError::from(e));
+                                                    }
+                                                };
+
+                                                #[cfg(debug_assertions)]
                                                 {
-                                                    debug_log!("7.3 HLOD-InTray: moved file moved from: {:?}", &base_olddir_existing_node_directory_path);
-                                                    debug_log!("7.3 HLOD-InTray: moved-new file saved to: {:?}", &base_node_path_new);
+                                                    debug_log!("7.3 HLOD-InTray canonical_path1 {:?}", canonical_path1);
+                                                    debug_log!("7.3 HLOD-InTray canonical_path2 {:?}", canonical_path2);
                                                 }
+
+                                                if canonical_path1 == canonical_path2 {
+
+                                                    // 3.2 replace (delete the old) node file
+                                                    if let Err(e) = fs::write(&oldfile_node_file_path, data_to_save) {
+                                                        #[cfg(debug_assertions)]
+                                                        debug_log!("HLOD Node exists, handle move/replace: Error writing node file: {:?} - {}", &oldfile_node_file_path, e);
+                                                        return Err(ThisProjectError::from(e));
+                                                    }
+
+                                                    // Recursive Move Whole Directory
+                                                    // 3.3 Move old node directory (not remove/delete) (directory, not file)
+                                                    // from olddir_abs_node_directory_path to new_full_abs_node_directory_path
+                                                    if let Err(_error) = move_directory_from_path_to_path(&base_olddir_existing_node_directory_path, &base_node_path_new) {
+                                                        #[cfg(debug_assertions)]
+                                                        debug_log!("An error occurred: {}", _error);
+                                                    }
+
+                                                    #[cfg(debug_assertions)]
+                                                    {
+                                                        debug_log!("7.3 HLOD-InTray: moved file moved from: {:?}", &base_olddir_existing_node_directory_path);
+                                                        debug_log!("7.3 HLOD-InTray: moved-new file saved to: {:?}", &base_node_path_new);
+                                                    }
+
+                                                } else {
+                                                    debug_log!("7.3 HLOD-InTray: updated not moved ");
+
+
+                                                }
+
                                             }
                                         }
                                         Err(_) => {
@@ -39407,6 +39483,16 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
                 // pass (no additional action if task mode entered)
 
             } else if input == "move" {
+                // moving a task in the task board:
+                /*
+
+                */
+
+
+                // refresh task view
+                app.load_tasks();
+
+                // get user Q&A input
                 let _ = move_task_q_and_a_wrapper(
                     &app.next_path_lookup_table,
                     // app.graph_navigation_instance_state.parent_node_uniqueid.clone(), // parent node id
