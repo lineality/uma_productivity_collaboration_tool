@@ -10101,6 +10101,7 @@ impl CoreNode {
         // }
 
         // 3. Serialize the CoreNode struct to a TOML string
+        // TODO: STOP USING toml CRATE!!!!
         let toml_string = toml::to_string(&self).map_err(|e| {
             debug_log!("SNAGTF: TOML serialization error: {}", e);
             io::Error::new(
@@ -17133,7 +17134,6 @@ fn prompt_for_usize(prompt: &str) -> usize {
     }
 }
 
-// todo: deprecated?
 /// Updates an existing CoreNode by walking the user through optional field updates.
 ///
 /// This function loads an existing CoreNode from disk, presents the current values of
@@ -17182,6 +17182,7 @@ fn prompt_for_usize(prompt: &str) -> usize {
 ///     Err(e) => eprintln!("Failed to update node: {}", e),
 /// }
 /// ```
+/// modify_core_node
 fn update_core_node(
     node_path: PathBuf,
 ) -> Result<(), ThisProjectError> {
@@ -29608,6 +29609,83 @@ fn get_addressbook_file_by_username(
     }
 }
 
+/// Finds the path to either `node.toml` or `node.gpgtoml` file starting from `start_path`.
+///
+/// This function searches for the specified files in the `start_path` and its parent directories.
+/// It stops searching if it reaches a directory named `team_channels` or if it exceeds a maximum
+/// loop limit of 100 iterations.
+///
+/// # Arguments
+/// * `start_path` - The starting path to begin the search.
+///
+/// # Returns
+/// * `Ok(PathBuf)` - The path to the found file.
+/// * `Err(String)` - An error message if the file is not found, the search exceeds the limit,
+///                  or the `team_channels` directory is reached.
+/// e.g.
+/// fn main() {
+///     / / Example usage
+///     let start_path = Path::new("/path/to/start");
+///     match find_toml_path(start_path) {
+///         Ok(path) => println!("Found TOML file at: {:?}", path),
+///         Err(e) => println!("Error: {}", e),
+///     }
+/// }
+fn find_parentnode_toml_path(start_path: &Path) -> Result<PathBuf, ThisProjectError> {
+
+    const MAX_ITERATIONS: usize = 100;
+
+    let mut current_path = start_path.to_path_buf();
+    let mut iterations = 0;
+
+    while iterations < MAX_ITERATIONS {
+        // // Check for `node.toml` or `node.gpgtoml`
+        // for file_name in ["node.toml", "node.gpgtoml"] {
+        //     let file_path = current_path.join(file_name);
+        //     if file_path.exists() {
+        //         return Ok(file_path);
+        //     }
+        // }
+
+        // Check for `node.toml` or `node.gpgtoml`
+        for file_name in ["node.toml", "node.gpgtoml"] {
+            let file_path = current_path.join(file_name);
+
+            // FIX: Verify it's actually a FILE, not a directory
+            if file_path.exists() && file_path.is_file() {
+                return Ok(file_path);
+            }
+
+            // Debug: Warn if we find a directory with this name
+            #[cfg(debug_assertions)]
+            if file_path.exists() && file_path.is_dir() {
+                debug_log!(
+                    "FPNTP WARNING: Found DIRECTORY (not file) named: {:?}",
+                    file_path
+                );
+            }
+        }
+
+        // Check if current directory is `team_channels`
+        if current_path.file_name().and_then(|n| n.to_str()) == Some("team_channels") {
+            return Err(ThisProjectError::from("Reached `team_channels` directory without finding the file.".to_string()));
+        }
+
+        // Move to parent directory
+        match current_path.parent() {
+            Some(parent) => current_path = parent.to_path_buf(),
+            None => return Err(ThisProjectError::from("Reached the root directory without finding the file.".to_string())),
+        }
+
+        iterations += 1;
+    }
+
+    Err(ThisProjectError::from("Exceeded maximum iterations without finding the file.".to_string()))
+}
+
+
+
+
 /// Moves a task (node) from one column to another in the task browser.
 /// Updates all relevant paths in node.toml files.
 ///
@@ -29620,17 +29698,32 @@ fn get_addressbook_file_by_username(
 /// * `Result<(), ThisProjectError>` - Success or error status
 fn move_task_q_and_a_wrapper(
     next_path_lookup_table: &HashMap<usize, PathBuf>,
-    parent_node_uniqueid: Vec<u8>,
+    // parent_node_uniqueid: Vec<u8>,
 ) -> Result<(), ThisProjectError> {
+    #[cfg(debug_assertions)]
     debug_log("starting move_task_q_and_a_wrapper()");
 
-    /* Moving Node:
+    /*
+    Moving Node:
+
     load node like fn update_core_node()
+
     1. from destination
-    2. look for node.toml or node.gpgtoml back until found
-    3. get id of parent node
-    4. get path in parent node
+    2. look for node.toml or node.gpgtoml
+       if not fuond then look in parent
+       etc back until found
+       or exit
+
+    3. make path_in_parent by
+       comparing new destination path with
+       with the parent of the node.* of new parent node
+
+    3. from node.* file, get id of parent node
+    4. from node.* file, get path in parent node
     5. update updated_at field
+    5. update parent_node_id field
+    5. update parent_node_name? field
+
     6. re-clearsign
     7. if gpgtoml, re-gpg
     6. move whole dir?
@@ -29649,6 +29742,7 @@ fn move_task_q_and_a_wrapper(
             format!("Task number {} not found", task_num)
         )),
     };
+    #[cfg(debug_assertions)]
     debug_log!("move_task_q_and_a_wrapper(), Source path: {:?}", source_path);
 
     // 2. Get destination column number
@@ -29662,12 +29756,18 @@ fn move_task_q_and_a_wrapper(
             format!("Destination column {} not found", dest_num)
         )),
     };
+    #[cfg(debug_assertions)]
     debug_log!("move_task_q_and_a_wrapper(), Destination path: {:?}", dest_path);
 
 
 
     // 3. Perform the move operation
-    move_node_directory(source_path, dest_path)?;
+    move_node_directory(
+        source_path,
+        dest_path,
+        // parent_node_uniqueid,
+    )?;
+    #[cfg(debug_assertions)]
     debug_log!(
         "ending move_task_q_and_a_wrapper()"
         );
@@ -29702,67 +29802,367 @@ fn get_user_input_number() -> Result<usize, ThisProjectError> {
 fn move_node_directory(
     source_path: PathBuf,
     dest_path: PathBuf,
+    // parent_node_uniqueid: Vec<u8>,
 ) -> Result<(), ThisProjectError> {
     debug_log!("MND Starting move_node_directory()");
-    debug_log!("Moving node from {:?} to {:?}", source_path, dest_path);
+    #[cfg(debug_assertions)]
+    debug_log!("Moving node from source_path {:?}, to dest_path {:?}", source_path, dest_path);
 
-    /* Moving Node:
+    /*
+    Moving Node:
+
+    load node like fn update_core_node()
+
     1. from destination
-    2. look for node.toml or node.gpgtoml back until found
-    3. get id of parent node
-    4. get path in parent node
+    2. look for node.toml or node.gpgtoml
+       if not fuond then look in parent
+       etc back until found
+       or exit
+
+    3. make path_in_parent by
+       comparing new destination path with
+       with the parent of the node.* of new parent node
+
+    3. from node.* file, get id of parent node
+    4. from node.* file, get path in parent node
     5. update updated_at field
+    5. update parent_node_id field
+    5. update parent_node_name? field
+
+    6. re-clearsign
+    7. if gpgtoml, re-gpg
     6. move whole dir?
     7. node.toml to send-q of ?
+
     */
 
-    // 1. Construct the new node path (where the moved node will be located).
-    // NO UNWRAP!!
-    let new_node_path = dest_path.join(source_path.file_name().unwrap());
-    debug_log!("MND: new_node_path is: {:?}", new_node_path);
+    match find_parentnode_toml_path(&dest_path) {
+        Ok(parent_node_path_of_destination) => {
 
-    // 2. Create the new directory, including all parents.
-    fs::create_dir_all(&new_node_path)?;
-    debug_log!("MND: created new_node_path: {:?}", new_node_path);
+            #[cfg(debug_assertions)]
+            debug_log!("MND parent_node_path_of_destination {:?}", parent_node_path_of_destination);
+
+            // // A. Print the absolute path of the channel directory
+            // match parent_node_path_of_destination.canonicalize() {
+            //     Ok(abs_path) => debug_log!("MND 1. Absolute channel directory path: {:?}", abs_path),
+            //     Err(e) => debug_log!("MND Error 1. getting absolute path of channel directory: {}", e),
+            // }
 
 
-    // let original_node_toml_path = new_node_path.push("node.toml");
-    let mut original_node_toml_path = source_path.clone();
-    original_node_toml_path.push("node.toml");
+            /*
+            3. Get the parent path vs. new node path difference for 'path in parent'
+            - remove path to parent from whole path, what remains is path local to parent
 
-    // 3. Update node.toml (use full path)
-    // Option 1: Using to_string_lossy() (safest for paths that might contain non-UTF-8 characters)
-    let new_node_path_string = dest_path.to_string_lossy().into_owned();
 
-    debug_log!(
-        "next: match safe_update_toml_field(\n{:?},\n{:?},\n{:?},\n)",
-        &original_node_toml_path,   // path to .toml
-        &new_node_path_string, // new value
-        "path_in_parentnode",      // name of field
-    );
+            e.g.
+            full path
+            animals/pets/fuzzy_pets/cats/long_haired_orange/
 
-    match safe_update_toml_field(
-        &original_node_toml_path,        // path to .toml
-        &new_node_path_string, // new value
-        "path_in_parentnode",     // name of field
-    ) {
-        Ok(_) => println!("Successfully updated TOML file"),
-        Err(e) => eprintln!("Error: {}", e)
+            "node" path:
+            animals/pets/
+
+            result: relative path from node
+            fuzzy_pets/cats/long_haired_orange/
+
+            */
+
+            // If parent_node_path points to a file (like node.toml), get its parent directory
+            let parent_node_dir = if parent_node_path_of_destination.is_file() || parent_node_path_of_destination.extension().is_some() {
+                match parent_node_path_of_destination.parent() {
+                    Some(dir) => dir.to_path_buf(),
+                    None => return Err(ThisProjectError::from("GRPIPN error: cannot get parent directory")),
+                }
+            } else {
+                parent_node_path_of_destination.clone()
+            };
+
+            // Either-or .toml .gpgtoml
+            // A. Check for either node.toml or node.gpgtoml
+            let node_toml_path = parent_node_dir.join("node.toml");
+            let node_gpgtoml_path = parent_node_dir.join("node.gpgtoml");
+
+            let destination_parent_node_file_path = if node_toml_path.exists() {
+                debug_log!("MND: destination_parent_node_file_path Found node.toml");
+                node_toml_path
+            } else if node_gpgtoml_path.exists() {
+                debug_log!("MND: destination_parent_node_file_path Found node.gpgtoml");
+                node_gpgtoml_path
+            } else {
+                return Err(ThisProjectError::from(
+                    "MND: error Neither node.toml nor node.gpgtoml found in team channel directory".to_string()
+                ));
+            };
+
+            #[cfg(debug_assertions)]
+            debug_log!("MND destination_parent_node_file_path {:?}", destination_parent_node_file_path);
+
+            // get values from parent
+            // node_name = "alicetown"
+            // node_unique_id = [222, 22, 116, 195]
+            // 1 make readcopy
+            // 2 read
+
+            // Get armored public key, using key-id (full fingerprint in)
+            let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+                Ok(fingerprint) => fingerprint,
+                // Err(e) => {
+                //     // Since the function returns Result<CoreNode, String>, we need to return a String error
+                //     return Err(format!(
+                //         "LCNFTF: implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}",
+                //         e
+                //     ));
+                // }
+                Err(e) => {
+                    #[cfg(debug_assertions)]
+                    debug_log(&format!(
+                        "{}: MND: error ",
+                        e
+                    ));
+                    return Err(ThisProjectError::from(
+                        "MND: error gpg_full_fingerprint_key_id_string".to_string()
+                    ));
+                }
+            };
+
+            // Get the UME temp directory path with explicit String conversion
+            let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
+                .map_err(|io_err| {
+                    let gpg_error = GpgError::ValidationError(
+                        format!("MND: Failed to get UME temp directory path: {}", io_err)
+                    );
+                    // Convert GpgError to String for the function's return type
+                    format!("MND: {:?}", gpg_error)
+                })?;
+
+            let temp_dest_path_string = get_pathstring_to_temp_plaintoml_verified_extracted(
+                &destination_parent_node_file_path, // input_toml_absolute_path: &Path,
+                &gpg_full_fingerprint_key_id_string, // gpg_full_fingerprint_key_id_string: &str, // COLLABORATOR_ADDRESSBOOK_PATH_STR
+                &base_uma_temp_directory_path, // base_uma_temp_directory_path: &Path,
+            )
+            .map_err(|e| format!("MND: GPG decryption failed: {:?}", e))?;
+
+
+
+            // make path in parent...
+            // parent_node_dir vs.
+
+
+            #[cfg(debug_assertions)]
+            debug_log!("MND temp_dest_path_string {:?}", temp_dest_path_string);
+
+            let node_unique_id_vec = read_u8_array_field_from_toml(
+                &temp_dest_path_string,
+                "node_unique_id"
+            )?;
+
+            #[cfg(debug_assertions)]
+            debug_log!(
+                "MND: node_unique_id_vec_result {:?}",
+                &node_unique_id_vec
+            );
+
+            // Either-or .toml .gpgtoml
+            // A. Check sourth path for either node.toml or node.gpgtoml
+            let node_toml_path2 = source_path.join("node.toml");
+            let node_gpgtoml_path2 = source_path.join("node.gpgtoml");
+
+            // just extensions type
+            let source_path_with_file_name_and_extension: PathBuf = if node_toml_path2.exists() {
+                debug_log!("MND: source_path_with_file_name_and_extension Found node.toml");
+                node_toml_path2.clone()
+            } else if node_gpgtoml_path2.exists() {
+                debug_log!("MND: source_path_with_file_name_and_extension found node.gpgtoml");
+                node_gpgtoml_path2.clone()
+            } else {
+                return Err(ThisProjectError::from(
+                    "MND: Neither node.toml nor node.gpgtoml found in team channel directory".to_string()
+                ));
+            };
+
+
+
+            // node name
+            let temp_source_path_string = get_pathstring_to_temp_plaintoml_verified_extracted(
+                &source_path_with_file_name_and_extension, // input_toml_absolute_path: &Path,
+                &gpg_full_fingerprint_key_id_string, // gpg_full_fingerprint_key_id_string: &str, // COLLABORATOR_ADDRESSBOOK_PATH_STR
+                &base_uma_temp_directory_path, // base_uma_temp_directory_path: &Path,
+            )
+            .map_err(|e| format!("MND: GPG decryption failed: {:?}", e))?;
+            // get name
+            let node_name_string = read_single_line_string_field_from_toml(
+                &temp_source_path_string,
+                "node_name"
+            ).map_err(|e| {
+                let error_msg = format!("MND Failed to read node_name: {}", e);
+                println!("Error: {}", error_msg);
+                GpgError::ValidationError(error_msg)
+            })?;
+
+            #[cfg(debug_assertions)]
+            debug_log!(
+                "MND node_name_string {:?}",
+                &node_name_string
+            );
+
+
+
+            let new_path_in_parentnode = get_relative_path_in_parent_node(
+                &dest_path, // full file destination path
+                &parent_node_dir, // parent_node_path in middle of whole full path
+            )?;
+
+            #[cfg(debug_assertions)]
+            debug_log!("MND new_path_in_parentnode {:?}", new_path_in_parentnode);
+
+            let newpath_in_parentnode_with_name = new_path_in_parentnode.join(node_name_string.clone());
+
+
+            #[cfg(debug_assertions)]
+            debug_log!("MND newpath_in_parentnode_with_name {:?}", newpath_in_parentnode_with_name);
+
+            // 1. Construct the new node path (where the moved node will be located).
+            // // NO UNWRAP!!
+            // let new_node_path = dest_path.join(source_path.file_name().unwrap());
+            // #[cfg(debug_assertions)]
+            // debug_log!("MND: new_node_path is: {:?}", new_node_path);
+
+
+
+            // add source file name to => destination_path
+            let new_node_path: PathBuf = if node_toml_path2.exists() {
+                debug_log!("MND: for new_node_path using node.toml");
+                let newdestpath = dest_path.join(node_name_string);
+
+                newdestpath.join("node.toml")
+            } else if node_gpgtoml_path2.exists() {
+                debug_log!("MND: for new_node_path using node.gpgtoml");
+                let newdestpath = dest_path.join(node_name_string);
+
+                newdestpath.join("node.gpgtoml")
+            } else {
+                return Err(ThisProjectError::from(
+                    "MND: Neither node.toml nor node.gpgtoml found in team channel directory".to_string()
+                ));
+            };
+
+            #[cfg(debug_assertions)]
+            debug_log!("MND destination new_node_path {:?}", new_node_path);
+
+            // 2. Create the new directory, including all parents.
+            fs::create_dir_all(&new_node_path)?;
+            #[cfg(debug_assertions)]
+            debug_log!("MND: created new_node_path: {:?}", new_node_path);
+
+
+
+            // // let original_node_toml_path = new_node_path.push("node.toml");
+            // let mut original_node_toml_path = source_path.clone();
+            // original_node_toml_path.push("node.toml");
+
+            // // 3. Update node.toml (use full path)
+            // // Option 1: Using to_string_lossy() (safest for paths that might contain non-UTF-8 characters)
+            // let new_node_path_string = dest_path.to_string_lossy().into_owned();
+
+            // #[cfg(debug_assertions)]
+            // debug_log!(
+            //     "next: match safe_update_toml_field(\n{:?},\n{:?},\n{:?},\n)",
+            //     &original_node_toml_path,   // path to .toml
+            //     &new_node_path_string, // new value
+            //     "path_in_parentnode",      // name of field
+            // );
+
+
+            /*
+
+
+
+
+            */
+
+
+
+
+
+
+
+            // 2. Create the new directory, including all parents.
+            #[cfg(debug_assertions)]
+            debug_log!("MND: source_path_with_file_name_and_extension: {:?}", source_path_with_file_name_and_extension);
+
+            // add source file name to => source_path
+            // source_path_with_file_name_and_extension
+            // read_path...
+            let save_format_use_gpgtoml: bool = if node_toml_path2.exists() {
+                debug_log!("MND: Found node.toml");
+                false
+            } else if node_gpgtoml_path2.exists() {
+                debug_log!("MND: Found node.gpgtoml");
+                true
+            } else {
+                return Err(ThisProjectError::from(
+                    "MND: Neither node.toml nor node.gpgtoml found in team channel directory".to_string()
+                ));
+            };
+
+
+
+            //
+            let readfile_path_to_source_node = get_pathstring_to_temp_plaintoml_verified_extracted(
+                &source_path_with_file_name_and_extension, // input_toml_absolute_path: &Path,
+                &gpg_full_fingerprint_key_id_string, // gpg_full_fingerprint_key_id_string: &str, // COLLABORATOR_ADDRESSBOOK_PATH_STR
+                &base_uma_temp_directory_path, // base_uma_temp_directory_path: &Path,
+            )
+            .map_err(|e| format!("MND: GPG decryption failed: {:?}", e))?;
+
+            /*
+            read_from_path_to_node_file, // pathbuf readfile_path_to_source_node
+            save_to_path_dir, // &pathbuf, new_node_path not including filename/extension
+            new_parent_node_uniqueid, // vec<u8>, value to update
+            new_path_in_parentnode, // string, value to update
+            save_format_use_gpgtoml, // bool for node.toml or node.gpgtoml
+
+            fn safe_update_for_moving_node_toml_fields(
+               1 read_from_path_to_node_file: PathBuf,
+               2 save_to_path_dir: PathBuf,
+               3 new_parent_node_uniqueid: Vec<u8>,
+               4 new_path_in_parentnode: String,
+               5 save_format_use_gpgtoml: bool,
+            ) -> Result<(), String> {
+            */
+
+            let read_from_path_to_node_file = PathBuf::from(readfile_path_to_source_node);
+
+            match safe_update_for_moving_node_toml_fields(
+                &read_from_path_to_node_file, //  pathbuf readfile_path_to_source_node
+                &source_path, // &pathbuf, new_node_path not including filename/extension
+                node_unique_id_vec, // new_parent_node_uniqueid
+                &newpath_in_parentnode_with_name, // new_path_in_parentnode
+                save_format_use_gpgtoml, // bool for node.toml or node.gpgtoml
+            ) {
+                Ok(_) => println!("Successfully updated TOML file"),
+                Err(e) => eprintln!("Error: {}", e)
+            }
+
+
+            // 4. Recursively move the source directory's contents to the new directory.
+            move_directory_contents(&source_path, &new_node_path)?;
+            #[cfg(debug_assertions)]
+            debug_log!("MND: contents moved to: {:?}", new_node_path);
+
+
+
+            #[cfg(debug_assertions)]
+            debug_log!("MND: updated node.toml paths");
+
+            // 5. Remove the old directory.
+            fs::remove_dir_all(source_path.clone())?;
+
+            #[cfg(debug_assertions)]
+            debug_log!("MND: removed source_path at : {:?}", source_path);
+
+        },
+        Err(e) => println!("Error: {}", e),
     }
-
-
-    // 4. Recursively move the source directory's contents to the new directory.
-    move_directory_contents(&source_path, &new_node_path)?;
-    debug_log!("MND: contents moved to: {:?}", new_node_path);
-
-
-
-
-    debug_log!("MND: updated node.toml paths");
-
-    // 5. Remove the old directory.
-    fs::remove_dir_all(source_path.clone())?;
-    debug_log!("MND: removed source_path at : {:?}", source_path);
 
     Ok(())
 }
@@ -29830,53 +30230,659 @@ pub fn update_toml_field(
     Ok(())
 }
 
-/// A safer wrapper function that includes additional error checking.
+// // old deprecated
+// /// A safer wrapper function that includes additional error checking.
+// ///
+// /// # Arguments
+// ///
+// /// * `path` - A PathBuf containing the path to the TOML file
+// /// * `new_string` - A string slice containing the new value to be set
+// /// * `field` - A string slice containing the name of the field to update
+// ///
+// /// # Returns
+// ///
+// /// * `Result<(), String>` - Ok(()) on success, or an error message if the operation fails
+// ///
+// /// Example Use:
+// /// ```
+// /// use std::path::PathBuf;
+// /// let config_path = PathBuf::from("config.toml");
+// /// match safe_update_toml_field(&config_path, "alice", "user_name") {
+// ///     Ok(_) => println!("Successfully updated TOML file"),
+// ///     Err(e) => eprintln!("Error: {}", e)
+// /// }
+// /// ```
+// pub fn safe_update_moving_node_toml_fields(
+//     path: &PathBuf,
+//     new_string: &str,
+//     field: &str
+//     destination_parent_node_file_path: &Pathbuf,
+// ) -> Result<(), String> {
+//     /*
+//     fn safe_update_for_moving_node_toml_fields(
+
+//     read_from_path_to_node_file, // pathbuf readfile_path_to_source_node
+//     save_to_path, // &pathbuf, new_node_path with file name and extension
+//     new_parent_node_uniqueid, // vec<u8>
+//     new_path_in_parentnode, // string
+//     save_format_use_gpgtoml, // bool for node.toml or node.gpgtoml
+
+//     ) -> Result<(), String> {
+//     */
+//     debug_log("starting safe_update_toml_field()");
+
+//     debug_log!(
+//         "in safe_update_toml_field(\n{:?},\n{:?},\n{:?},\n)",
+//         &path,        // path to .toml
+//         &new_string,  // new value
+//         "field",      // name of field
+//     );
+
+//     // Validate inputs
+//     if field.is_empty() {
+//         return Err("Error: safe_update_toml_field() Field name cannot be empty".to_string());
+//     }
+
+//     if !path.exists() {
+//         return Err(format!("Error: safe_update_toml_field() File not found: {}", path.display()));
+//     }
+
+//     update_toml_field(path, new_string, field)
+//         .map_err(|e| format!("Error: safe_update_toml_field() Failed to update TOML file: {}", e))
+// }
+
+/// Extracts the relative path from a full path given a parent node path.
+///
+/// # Project Context
+/// This function is critical for hierarchical path navigation in the file system
+/// where we need to determine what path remains after a known parent path.
+/// This is commonly used in tree-based file operations where we track both
+/// the full destination path and intermediate node paths, needing to extract
+/// the local path relative to a parent node.
+///
+/// # Arguments
+/// * `full_path` - The complete path from root to final destination
+///                 Example: "animals/pets/fuzzy_pets/cats/long_haired_orange/"
+/// * `parent_node_path` - The path to an intermediate parent node
+///                        Example: "animals/pets/"
+///
+/// # Returns
+/// * `Ok(PathBuf)` - The remaining path after the parent node path
+///                   Example: "fuzzy_pets/cats/long_haired_orange/"
+/// * `Err(&'static str)` - Error message with function prefix "GRPIPN" for tracing
+///
+/// # Errors
+/// * "GRPIPN error: full path empty" - full_path has no components
+/// * "GRPIPN error: parent path empty" - parent_node_path has no components
+/// * "GRPIPN error: parent not prefix" - parent_node_path is not a prefix of full_path
+///
+/// # Security & Safety
+/// * No heap allocation for error messages (production safe)
+/// * No file system access (pure path manipulation)
+/// * No panic in production builds
+/// * Validates all inputs defensively
+/// * Returns Result for proper error propagation
+///
+/// # Examples
+/// ```
+/// use std::path::PathBuf;
+///
+/// let full = PathBuf::from("animals/pets/fuzzy_pets/cats/long_haired_orange/");
+/// let parent = PathBuf::from("animals/pets/");
+///
+/// if let Ok(result) = get_relative_path_in_parent_node(&full, &parent) {
+///     assert_eq!(result, PathBuf::from("fuzzy_pets/cats/long_haired_orange/"));
+/// }
+/// // If Err, the example silently handles it by not asserting
+/// ```
+fn get_relative_path_in_parent_node(
+    full_path: &PathBuf,
+    parent_node_path: &PathBuf,
+) -> Result<PathBuf, &'static str> {
+    #[cfg(debug_assertions)]
+    debug_log("GRPIPN starting get_relative_path_in_parent_node()");
+
+    // Debug build only (not test): Check full_path is not empty
+    #[cfg(debug_assertions)]
+    {
+        debug_log!("GRPIPN full_path {:?}", full_path);
+        debug_log!("GRPIPN parent_node_path {:?}", parent_node_path);
+    }
+
+    // =================================================
+    // Debug-Assert, Test-Asset, Production-Catch-Handle
+    // =================================================
+
+    // Debug build only (not test): Check full_path is not empty
+    #[cfg(all(debug_assertions, not(test)))]
+    debug_assert!(
+        full_path.components().count() > 0,
+        "GRPIPN Full path must not be empty"
+    );
+
+
+
+    // Production catch: Handle empty full_path
+    if full_path.components().count() == 0 {
+        return Err("GRPIPN error: full path empty");
+    }
+
+    // Debug build only (not test): Check parent_node_path is not empty
+    #[cfg(all(debug_assertions, not(test)))]
+    debug_assert!(
+        parent_node_path.components().count() > 0,
+        "Parent node path must not be empty"
+    );
+
+    // Production catch: Handle empty parent_node_path
+    if parent_node_path.components().count() == 0 {
+        return Err("GRPIPN error: parent path empty");
+    }
+
+    // Core logic: Strip the parent path prefix from the full path
+    // This uses standard library's strip_prefix which returns Option
+    match full_path.strip_prefix(parent_node_path) {
+        Ok(relative_path) => {
+            // Successfully stripped prefix, return the remaining path
+            Ok(relative_path.to_path_buf())
+        }
+        Err(_) => {
+            // Parent path is not a prefix of full path
+            // This is a valid case to handle: parent is not actually a parent
+            Err("GRPIPN error: parent not prefix")
+        }
+    }
+}
+
+// =================================================
+// Cargo Tests
+// =================================================
+
+#[cfg(test)]
+mod node_paths_tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    /// Test: Basic successful path stripping
+    /// Validates the primary use case from the requirements
+    #[test]
+    fn test_basic_path_stripping() {
+        let full = PathBuf::from("animals/pets/fuzzy_pets/cats/long_haired_orange/");
+        let parent = PathBuf::from("animals/pets/");
+
+        let result = get_relative_path_in_parent_node(&full, &parent);
+
+        // Test-only assert: verify function succeeded
+        #[cfg(test)]
+        assert!(result.is_ok(), "Expected Ok result for valid prefix");
+
+        if let Ok(relative) = result {
+            let expected = PathBuf::from("fuzzy_pets/cats/long_haired_orange/");
+
+            #[cfg(test)]
+            assert_eq!(
+                relative,
+                expected,
+                "Relative path should match expected remainder"
+            );
+        }
+    }
+
+    /// Test: Parent path is not a prefix of full path
+    /// Validates error handling when paths don't have parent-child relationship
+    #[test]
+    fn test_parent_not_prefix() {
+        let full = PathBuf::from("animals/pets/fuzzy_pets/");
+        let parent = PathBuf::from("plants/flowers/");
+
+        let result = get_relative_path_in_parent_node(&full, &parent);
+
+        #[cfg(test)]
+        assert!(result.is_err(), "Expected error when parent is not prefix");
+
+        if let Err(e) = result {
+            #[cfg(test)]
+            assert_eq!(e, "GRPIPN error: parent not prefix");
+        }
+    }
+
+    /// Test: Full path equals parent path (edge case)
+    /// Should return empty path when they are identical
+    #[test]
+    fn test_identical_paths() {
+        let full = PathBuf::from("animals/pets/");
+        let parent = PathBuf::from("animals/pets/");
+
+        let result = get_relative_path_in_parent_node(&full, &parent);
+
+        #[cfg(test)]
+        assert!(result.is_ok(), "Should handle identical paths");
+
+        if let Ok(relative) = result {
+            #[cfg(test)]
+            assert_eq!(
+                relative.components().count(),
+                0,
+                "Should return empty path for identical inputs"
+            );
+        }
+    }
+
+    /// Test: Empty full path
+    /// Validates defensive handling of invalid input
+    #[test]
+    fn test_empty_full_path() {
+        let full = PathBuf::new();
+        let parent = PathBuf::from("animals/pets/");
+
+        let result = get_relative_path_in_parent_node(&full, &parent);
+
+        #[cfg(test)]
+        assert!(result.is_err(), "Should error on empty full path");
+
+        if let Err(e) = result {
+            #[cfg(test)]
+            assert_eq!(e, "GRPIPN error: full path empty");
+        }
+    }
+
+    /// Test: Empty parent path
+    /// Validates defensive handling of invalid input
+    #[test]
+    fn test_empty_parent_path() {
+        let full = PathBuf::from("animals/pets/fuzzy_pets/");
+        let parent = PathBuf::new();
+
+        let result = get_relative_path_in_parent_node(&full, &parent);
+
+        #[cfg(test)]
+        assert!(result.is_err(), "Should error on empty parent path");
+
+        if let Err(e) = result {
+            #[cfg(test)]
+            assert_eq!(e, "GRPIPN error: parent path empty");
+        }
+    }
+
+    /// Test: Single component paths
+    /// Validates behavior with minimal path depth
+    #[test]
+    fn test_single_components() {
+        let full = PathBuf::from("animals/pets/");
+        let parent = PathBuf::from("animals/");
+
+        let result = get_relative_path_in_parent_node(&full, &parent);
+
+        #[cfg(test)]
+        assert!(result.is_ok(), "Should handle single component remainder");
+
+        if let Ok(relative) = result {
+            #[cfg(test)]
+            assert_eq!(relative, PathBuf::from("pets/"));
+        }
+    }
+
+    /// Test: Deep nested paths
+    /// Validates function scales with path depth
+    #[test]
+    fn test_deep_nesting() {
+        let full = PathBuf::from("a/b/c/d/e/f/g/h/i/j/");
+        let parent = PathBuf::from("a/b/c/");
+
+        let result = get_relative_path_in_parent_node(&full, &parent);
+
+        #[cfg(test)]
+        assert!(result.is_ok(), "Should handle deeply nested paths");
+
+        if let Ok(relative) = result {
+            let expected = PathBuf::from("d/e/f/g/h/i/j/");
+            #[cfg(test)]
+            assert_eq!(relative, expected);
+        }
+    }
+
+    /// Test: Absolute paths (Unix-style)
+    /// Validates handling of absolute vs relative paths
+    #[cfg(unix)]
+    #[test]
+    fn test_absolute_paths_unix() {
+        let full = PathBuf::from("/home/user/animals/pets/cats/");
+        let parent = PathBuf::from("/home/user/animals/");
+
+        let result = get_relative_path_in_parent_node(&full, &parent);
+
+        #[cfg(test)]
+        assert!(result.is_ok(), "Should handle absolute Unix paths");
+
+        if let Ok(relative) = result {
+            let expected = PathBuf::from("pets/cats/");
+            #[cfg(test)]
+            assert_eq!(relative, expected);
+        }
+    }
+
+    /// Test: Windows-style paths
+    /// Validates handling of Windows path separators
+    #[cfg(windows)]
+    #[test]
+    fn test_windows_paths() {
+        let full = PathBuf::from(r"C:\Users\Name\animals\pets\cats\");
+        let parent = PathBuf::from(r"C:\Users\Name\animals\");
+
+        let result = get_relative_path_in_parent_node(&full, &parent);
+
+        #[cfg(test)]
+        assert!(result.is_ok(), "Should handle Windows paths");
+
+        if let Ok(relative) = result {
+            let expected = PathBuf::from(r"pets\cats\");
+            #[cfg(test)]
+            assert_eq!(relative, expected);
+        }
+    }
+
+    /// Test: Parent path longer than full path
+    /// Validates error handling when parent is deeper than full
+    #[test]
+    fn test_parent_longer_than_full() {
+        let full = PathBuf::from("animals/");
+        let parent = PathBuf::from("animals/pets/fuzzy_pets/");
+
+        let result = get_relative_path_in_parent_node(&full, &parent);
+
+        #[cfg(test)]
+        assert!(result.is_err(), "Should error when parent is longer");
+
+        if let Err(e) = result {
+            #[cfg(test)]
+            assert_eq!(e, "GRPIPN error: parent not prefix");
+        }
+    }
+}
+
+/// Updates a CoreNode's metadata fields in preparation for moving the node to a new parent location.
+///
+/// # Project Context
+///
+/// In this system, nodes form a hierarchical tree structure where each node has a parent node
+/// and a path within that parent. When a node is to be moved to a different parent or location,
+/// its metadata must be updated *before* the filesystem move occurs. This function performs that
+/// critical metadata update in-place, ensuring the node's internal references remain consistent
+/// with the intended new hierarchy.
+///
+/// This is a non-interactive, programmatic update (see `update_core_node` for interactive updates).
+/// The update is deterministic and caller-controlled (format determined by parameter).
+///
+/// # What This Function Does
+///
+/// 1. Loads the CoreNode from disk (may be a decrypted temporary copy)
+/// 2. Validates ownership (only the local owner can modify)
+/// 3. Validates input parameters
+/// 4. Updates exactly three fields:
+///    - `updated_at_timestamp` → current system time (POSIX seconds)
+///    - `parent_node_uniqueid` → new parent ID
+///    - `path_in_parentnode` → new path within parent
+/// 5. Saves the updated node back to disk in the specified format
+///
+/// # What This Function Does NOT Do
+///
+/// - Does NOT move files on the filesystem (that's a separate operation)
+/// - Does NOT update any fields other than the three listed above
+/// - Does NOT prompt the user or perform interactive input
+/// - Does NOT modify the caller's provided arguments
 ///
 /// # Arguments
 ///
-/// * `path` - A PathBuf containing the path to the TOML file
-/// * `new_string` - A string slice containing the new value to be set
-/// * `field` - A string slice containing the name of the field to update
+/// * `read_from_path_to_node_file` - Absolute path to the node TOML file to read.
+///   This may be a decrypted temporary copy of an encrypted node.gpgtoml file.
+///   Must exist and be readable.
+///
+/// * `save_to_path_dir` - Absolute directory path (NOT including filename) where the
+///   updated file will be saved. The filename is determined by `save_format_use_gpgtoml`.
+///
+/// * `new_parent_node_uniqueid` - The unique identifier (bytes) of the new parent node.
+///   **Cannot be empty.** Returning Err if empty catches programming errors early.
+///
+/// * `new_path_in_parentnode` - The path/location string within the parent node.
+///   **CAN be empty** (valid for some hierarchy structures).
+///   Examples: "", "documents", "archive/2024", etc.
+///
+/// * `save_format_use_gpgtoml` - Determines output format:
+///   - `true` → saves as `node.gpgtoml` (GPG encrypted + clearsigned)
+///   - `false` → saves as `node.toml` (clearsigned only)
 ///
 /// # Returns
 ///
-/// * `Result<(), String>` - Ok(()) on success, or an error message if the operation fails
+/// * `Ok(())` - Node successfully updated and saved, OR ownership check failed
+///   (non-owners return Ok(()) gracefully, not Err).
 ///
-/// Example Use:
-/// ```
+/// * `Err(String)` - Error occurred. Message prefixed with "SUFMNTF" for log tracking.
+///   Production error messages do NOT include file paths or internal details.
+///
+/// # Errors
+///
+/// Returns `Err(String)` in these cases:
+/// - **Load Failure**: Node file cannot be read or deserialized
+/// - **Empty Parent ID**: `new_parent_node_uniqueid` is empty (validation error)
+/// - **System Time Error**: Cannot obtain current system time
+/// - **Save Failure**: Updated node cannot be written to disk
+///
+/// Returns `Ok(())` gracefully (not Err) when ownership check fails.
+///
+/// # Example
+///
+/// ```ignore
 /// use std::path::PathBuf;
-/// let config_path = PathBuf::from("config.toml");
-/// match safe_update_toml_field(&config_path, "alice", "user_name") {
-///     Ok(_) => println!("Successfully updated TOML file"),
-///     Err(e) => eprintln!("Error: {}", e)
+///
+/// let read_path = PathBuf::from("/tmp/decrypted_node.toml");
+/// let save_dir = PathBuf::from("/home/user/.nodes/my_node_dir");
+/// let new_parent_id = vec![0xAB, 0xCD, 0xEF, 0x12];
+/// let new_path = "documents/projects".to_string();
+///
+/// match safe_update_for_moving_node_toml_fields(
+///     read_path,
+///     save_dir,
+///     new_parent_id,
+///     new_path,
+///     true, // save as .gpgtoml
+/// ) {
+///     Ok(()) => println!("Node metadata updated for move"),
+///     Err(e) => eprintln!("Failed to update node: {}", e),
 /// }
 /// ```
-pub fn safe_update_toml_field(
-    path: &PathBuf,
-    new_string: &str,
-    field: &str
+fn safe_update_for_moving_node_toml_fields(
+    read_from_path_to_node_file: &PathBuf,
+    save_to_path_dir: &PathBuf,
+    new_parent_node_uniqueid: Vec<u8>,
+    new_path_in_parentnode: &PathBuf,
+    save_format_use_gpgtoml: bool,
 ) -> Result<(), String> {
+    // Function abbreviation for unique error identification
+    const FUNC_PREFIX: &str = "SUFMNTF";
 
-    debug_log("starting safe_update_toml_field()");
+    // =========================================================================
+    // STEP 1: LOAD THE EXISTING CORENODE FROM DISK
+    // =========================================================================
+    // Reads and deserializes the node file (may be a decrypted temporary copy)
 
-    debug_log!(
-        "in safe_update_toml_field(\n{:?},\n{:?},\n{:?},\n)",
-        &path,   // path to .toml
-        &new_string, // new value
-        "field",      // name of field
-    );
+    #[cfg(debug_assertions)]
+    debug_log(&format!(
+        "{}: Loading node from disk",
+        FUNC_PREFIX
+    ));
 
-    // Validate inputs
-    if field.is_empty() {
-        return Err("Error: safe_update_toml_field() Field name cannot be empty".to_string());
+    let mut existing_node = match deseri_get_core_node_struct_from_toml_file(&read_from_path_to_node_file) {
+        Ok(node) => {
+            #[cfg(debug_assertions)]
+            debug_log(&format!("{}: CoreNode loaded successfully", FUNC_PREFIX));
+            node
+        }
+        Err(_e) => {
+            #[cfg(debug_assertions)]
+            debug_log(&format!(
+                "{}: Failed to load or parse CoreNode: {}",
+                FUNC_PREFIX, _e
+            ));
+            // Production-safe error: no file path or details exposed
+            return Err(format!("{}: Failed to load node file", FUNC_PREFIX));
+        }
+    };
+
+    // =========================================================================
+    // STEP 2: VALIDATE OWNERSHIP
+    // =========================================================================
+    // Only the local owner can modify the node. This is a security boundary.
+
+    let local_owner_username = get_local_owner_username();
+
+    #[cfg(debug_assertions)]
+    debug_log(&format!(
+        "{}: Ownership check - node owner: '{}', local user: '{}'",
+        FUNC_PREFIX, existing_node.owner, local_owner_username
+    ));
+
+    // Safety: Require node owner is local owner user
+    if existing_node.owner != local_owner_username {
+        #[cfg(debug_assertions)]
+        debug_log(&format!(
+            "{}: Ownership validation failed - silently returning Ok()",
+            FUNC_PREFIX
+        ));
+        // Return Ok(()) gracefully: non-owners simply skip processing.
+        // This prevents error spam when this function is called on many nodes.
+        return Ok(());
     }
 
-    if !path.exists() {
-        return Err(format!("Error: safe_update_toml_field() File not found: {}", path.display()));
+    // =========================================================================
+    // STEP 3: VALIDATE INPUT PARAMETERS
+    // =========================================================================
+
+    // Validation: new_parent_node_uniqueid cannot be empty
+    if new_parent_node_uniqueid.is_empty() {
+        #[cfg(debug_assertions)]
+        debug_log(&format!(
+            "{}: Input validation failed - parent_node_uniqueid is empty",
+            FUNC_PREFIX
+        ));
+        return Err(format!(
+            "{}: parent_node_uniqueid cannot be empty",
+            FUNC_PREFIX
+        ));
     }
 
-    update_toml_field(path, new_string, field)
-        .map_err(|e| format!("Error: safe_update_toml_field() Failed to update TOML file: {}", e))
+    #[cfg(debug_assertions)]
+    debug_log(&format!(
+        "{}: Input validation passed",
+        FUNC_PREFIX
+    ));
+
+    // Note: new_path_in_parentnode can be empty - this is valid and expected
+    // in some hierarchy structures.
+
+    // =========================================================================
+    // STEP 4: UPDATE THE THREE REQUIRED FIELDS
+    // =========================================================================
+
+    // 4a. Update timestamp to current system time (POSIX seconds since epoch)
+    let current_timestamp = match std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+    {
+        Ok(duration) => duration.as_secs(),
+        Err(_e) => {
+            #[cfg(debug_assertions)]
+            debug_log(&format!(
+                "{}: System time error: {}",
+                FUNC_PREFIX, _e
+            ));
+            return Err(format!(
+                "{}: Cannot obtain current system time",
+                FUNC_PREFIX
+            ));
+        }
+    };
+
+    existing_node.updated_at_timestamp = current_timestamp;
+
+    #[cfg(debug_assertions)]
+    debug_log(&format!(
+        "{}: Field 1/3 updated - updated_at_timestamp = {}",
+        FUNC_PREFIX, current_timestamp
+    ));
+
+    // 4b. Update path_in_parentnode
+    existing_node.path_in_parentnode = new_path_in_parentnode.clone();
+
+    #[cfg(debug_assertions)]
+    debug_log(&format!(
+        "{}: Field 2/3 updated - path_in_parentnode {:?})",
+        FUNC_PREFIX, new_path_in_parentnode
+    ));
+
+    // 4c. Update parent_node_uniqueid
+    existing_node.parent_node_uniqueid = new_parent_node_uniqueid.clone();
+
+    #[cfg(debug_assertions)]
+    debug_log(&format!(
+        "{}: Field 3/3 updated - parent_node_uniqueid (length: {})",
+        FUNC_PREFIX, new_parent_node_uniqueid.len()
+    ));
+
+    // =========================================================================
+    // STEP 5: SAVE THE UPDATED NODE BACK TO DISK
+    // =========================================================================
+    // Choose save format based on caller's specification (non-interactive)
+
+    let format_name = if save_format_use_gpgtoml { "gpgtoml" } else { "toml" };
+
+    #[cfg(debug_assertions)]
+    debug_log(&format!(
+        "{}: Attempting to save as {} format",
+        FUNC_PREFIX, format_name
+    ));
+
+    if save_format_use_gpgtoml {
+        // Save as GPG encrypted clearsigned file (node.gpgtoml)
+        match existing_node.save_node_as_gpgtoml(&save_to_path_dir) {
+            Ok(_) => {
+                #[cfg(debug_assertions)]
+                debug_log(&format!(
+                    "{}: Successfully saved as encrypted gpgtoml",
+                    FUNC_PREFIX
+                ));
+                Ok(())
+            }
+            Err(_e) => {
+                #[cfg(debug_assertions)]
+                debug_log(&format!(
+                    "{}: Failed to save as gpgtoml: {}",
+                    FUNC_PREFIX, _e
+                ));
+                // Production-safe error: no file path exposed
+                Err(format!("{}: Failed to save encrypted node file", FUNC_PREFIX))
+            }
+        }
+    } else {
+        // Save as clearsigned only file (node.toml)
+        match existing_node.save_node_to_clearsigned_file(&save_to_path_dir) {
+            Ok(_) => {
+                #[cfg(debug_assertions)]
+                debug_log(&format!(
+                    "{}: Successfully saved as clearsigned toml",
+                    FUNC_PREFIX
+                ));
+                Ok(())
+            }
+            Err(_e) => {
+                #[cfg(debug_assertions)]
+                debug_log(&format!(
+                    "{}: Failed to save as toml: {}",
+                    FUNC_PREFIX, _e
+                ));
+                // Production-safe error: no file path exposed
+                Err(format!("{}: Failed to save node file", FUNC_PREFIX))
+            }
+        }
+    }
 }
 
 /// Recursively moves directory contents
@@ -30041,7 +31047,7 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
         Err(e) => debug_log!("MSMD Error 1. getting absolute path of channel directory: {}", e),
     }
 
-    // todo: add either-or .toml .gpgtoml
+    // either-or .toml .gpgtoml
     // A. Check for either node.toml or node.gpgtoml
     let node_toml_path = channel_dir_path.join("node.toml");
     let node_gpgtoml_path = channel_dir_path.join("node.gpgtoml");
@@ -38403,7 +39409,7 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
             } else if input == "move" {
                 let _ = move_task_q_and_a_wrapper(
                     &app.next_path_lookup_table,
-                    app.graph_navigation_instance_state.parent_node_uniqueid.clone(), // parent node id
+                    // app.graph_navigation_instance_state.parent_node_uniqueid.clone(), // parent node id
                 );
 
             } else if input == "back" {

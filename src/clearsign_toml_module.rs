@@ -10052,6 +10052,9 @@ pub fn read_u8_array_field_from_string(
     // Verify round-trip
     assert_eq!(node_id, message.node_id);
     */
+    #[cfg(debug_assertions)]
+    debug_log!("starting RUAFFS");
+
     // Process each line looking for our field
     // Line-by-line processing avoids loading full document into memory
     for (line_number, line) in file_string.lines().enumerate() {
@@ -10089,6 +10092,9 @@ pub fn read_u8_array_field_from_string(
                 return Ok(Vec::new());
             }
 
+            #[cfg(debug_assertions)]
+            debug_log!("RUAFFS 2");
+
             // Parse each comma-separated value as u8
             let mut byte_values = Vec::new();
 
@@ -10119,12 +10125,14 @@ pub fn read_u8_array_field_from_string(
                     Err(e) => {
                         // Handle parse failures (non-numeric strings, floats, etc.)
                         return Err(format!(
-                            "RU8AFFS: Failed to parse value '{}' at index {} in array field '{}' as integer: {}",
+                            "RU8AFFS: error Failed to parse value '{}' at index {} in array field '{}' as integer: {}",
                             cleaned_value, index, field_name, e
                         ));
                     }
                 }
             }
+            #[cfg(debug_assertions)]
+            debug_log!("ending RUAFFS");
 
             // Successfully parsed all values
             return Ok(byte_values);
@@ -10138,6 +10146,115 @@ pub fn read_u8_array_field_from_string(
         field_name
     ))
 }
+
+// pub fn read_u8_array_field_from_string(
+//     file_string: &str,
+//     field_name: &str,
+// ) -> Result<Vec<u8>, String> {
+//     debug_log!("starting RUAFFS");
+//     debug_log!("RUAFFS: Looking for field_name: '{}'", field_name);
+//     debug_log!("RUAFFS: file_string length: {}", file_string.len());
+//     debug_log!("RUAFFS: file_string content: '{}'", file_string);
+
+//     // Process each line looking for our field
+//     for (line_number, line) in file_string.lines().enumerate() {
+//         debug_log!("RUAFFS: Processing line {}: '{}'", line_number, line);
+
+//         let trimmed = line.trim();
+//         debug_log!("RUAFFS: Trimmed line {}: '{}'", line_number, trimmed);
+
+//         // Skip empty lines and comments
+//         if trimmed.is_empty() || trimmed.starts_with('#') {
+//             debug_log!("RUAFFS: Skipping line {} (empty or comment)", line_number);
+//             continue;
+//         }
+
+//         // Check if this line contains our field with an array
+//         let expected_start = format!("{} = [", field_name);
+//         debug_log!("RUAFFS: Checking if line starts with: '{}'", expected_start);
+//         debug_log!(
+//             "RUAFFS: Line starts_with result: {}",
+//             trimmed.starts_with(&expected_start)
+//         );
+
+//         if trimmed.starts_with(&format!("{} = [", field_name)) {
+//             debug_log!("RUAFFS: MATCH FOUND on line {}", line_number);
+
+//             // Extract the array portion between brackets
+//             let array_part = trimmed
+//                 .splitn(2, '=')
+//                 .nth(1)
+//                 .ok_or_else(|| {
+//                     format!(
+//                         "RU8AFFS: Invalid array format for field '{}' at line {}",
+//                         field_name,
+//                         line_number + 1
+//                     )
+//                 })?
+//                 .trim()
+//                 .trim_start_matches('[')
+//                 .trim_end_matches(']')
+//                 .trim();
+
+//             debug_log!("RUAFFS: Extracted array_part: '{}'", array_part);
+
+//             // Handle empty array case
+//             if array_part.is_empty() {
+//                 debug_log!("RUAFFS: Empty array detected, returning empty Vec");
+//                 return Ok(Vec::new());
+//             }
+
+//             debug_log!("RUAFFS 2");
+
+//             // Parse each comma-separated value as u8
+//             let mut byte_values = Vec::new();
+
+//             for (index, value_str) in array_part.split(',').enumerate() {
+//                 let cleaned_value = value_str.trim();
+//                 debug_log!(
+//                     "RUAFFS: Processing value {} at index {}: '{}'",
+//                     cleaned_value,
+//                     index,
+//                     cleaned_value
+//                 );
+
+//                 if cleaned_value.is_empty() {
+//                     debug_log!("RUAFFS: Skipping empty value at index {}", index);
+//                     continue;
+//                 }
+
+//                 match cleaned_value.parse::<i32>() {
+//                     Ok(int_value) => {
+//                         debug_log!("RUAFFS: Parsed value: {}", int_value);
+//                         if int_value < 0 || int_value > 255 {
+//                             return Err(format!(
+//                                 "RU8AFFS: Value {} at index {} in array field '{}' is out of valid byte range (0-255)",
+//                                 int_value, index, field_name
+//                             ));
+//                         }
+//                         byte_values.push(int_value as u8);
+//                         debug_log!("RUAFFS: Added byte value: {}", int_value);
+//                     }
+//                     Err(e) => {
+//                         return Err(format!(
+//                             "RU8AFFS: Failed to parse value '{}' at index {} in array field '{}' as integer: {}",
+//                             cleaned_value, index, field_name, e
+//                         ));
+//                     }
+//                 }
+//             }
+//             debug_log!("ending RUAFFS with {} values", byte_values.len());
+
+//             return Ok(byte_values);
+//         }
+//     }
+
+//     debug_log!("RUAFFS: Field '{}' not found in entire string", field_name);
+//     Err(format!(
+//         "RU8AFFS: Byte array field '{}' not found in TOML string",
+//         field_name
+//     ))
+// }
 
 // /// Reads an array of u8 bytes from a clearsigned TOML file into a Vec<u8>.
 // ///
@@ -17537,6 +17654,12 @@ pub fn get_pathstring_to_temp_plaintoml_verified_extracted(
 ) -> Result<String, GpgError> {
     debug_log(
         "starting gpttpve() 1 -> get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml",
+    );
+
+    #[cfg(debug_assertions)]
+    debug_log!(
+        "gpttpve input_toml_absolute_path {:?}",
+        input_toml_absolute_path
     );
 
     // Validate input parameters before proceeding

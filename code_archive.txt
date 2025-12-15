@@ -12816,3 +12816,53 @@ fn move_task(
         );
     Ok(())
 }
+
+
+/// A safer wrapper function that includes additional error checking.
+///
+/// # Arguments
+///
+/// * `path` - A PathBuf containing the path to the TOML file
+/// * `new_string` - A string slice containing the new value to be set
+/// * `field` - A string slice containing the name of the field to update
+///
+/// # Returns
+///
+/// * `Result<(), String>` - Ok(()) on success, or an error message if the operation fails
+///
+/// Example Use:
+/// ```
+/// use std::path::PathBuf;
+/// let config_path = PathBuf::from("config.toml");
+/// match safe_update_toml_field(&config_path, "alice", "user_name") {
+///     Ok(_) => println!("Successfully updated TOML file"),
+///     Err(e) => eprintln!("Error: {}", e)
+/// }
+/// ```
+pub fn safe_update_toml_field(
+    path: &PathBuf,
+    new_string: &str,
+    field: &str
+) -> Result<(), String> {
+
+    debug_log("starting safe_update_toml_field()");
+
+    debug_log!(
+        "in safe_update_toml_field(\n{:?},\n{:?},\n{:?},\n)",
+        &path,        // path to .toml
+        &new_string,  // new value
+        "field",      // name of field
+    );
+
+    // Validate inputs
+    if field.is_empty() {
+        return Err("Error: safe_update_toml_field() Field name cannot be empty".to_string());
+    }
+
+    if !path.exists() {
+        return Err(format!("Error: safe_update_toml_field() File not found: {}", path.display()));
+    }
+
+    update_toml_field(path, new_string, field)
+        .map_err(|e| format!("Error: safe_update_toml_field() Failed to update TOML file: {}", e))
+}
