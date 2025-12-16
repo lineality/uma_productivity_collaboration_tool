@@ -5,12 +5,31 @@
 ```
 "Read the old books."
 
-## cli tui messenger planner
+## Tasks Boards & Messages Posts for Team-Channels
+Uma aims to be a do-one-thing-well distributed-multipoint-conferencing-unit (d-MCU) for type-strict task and message structures in the form of a distributed graph-database for project/product planning and management, agile-like alignment, and coordinated decisions.
+- Task-Board Functionality (modular)
+- Message-Post Functionality (modular)
+- cli
+- TUI
 - Distributed Multi-point Conferencing Unit 
 - Distributed Graph Database
+- RustY
 
 
-## Setup Steps
+## 1 ~Install
+Uma is pre-compiled binary executable based. Your choices:
+- A. compile locally yourself: install rust, build from git or local source (e.g. an online computer)
+- B. compile or get binary-executible for the same type of hardware, then get that compiled binary executable, or if rust can be installed build from source offline (e.g. a lan-only computer that has no internet connection)
+
+Be deliberate about where the executable is (do not flail through mysterious install procedures), and put it where you need it and use it how you need to use it. The 'Alias' method is recommended, easy to set up, easy to remove/undo/"uninstall". (see below)
+
+## 2. setup-up
+- when you run a particular binary-executible it will look to see (you can see them too) if there are configuration-setup files
+- the first time you run Uma (or any time there is no local setup done) it will automatically start a Q&A-guide to set up A. local-owner-user and gpg B.team-channel-building. 
+
+You can set up and use (at the same time) different instances of Uma as different binaries in different directories.
+
+While uma tries to supply helpers and wizards, but you can make, update, and remove any file you want at any time. Uma is your files on your system.
 
 
 ## Tutorial: Messages & Tasks in Uma
@@ -211,9 +230,6 @@ Not all activities include these characteristics.
 ## Security
 Different users will have different security needs and concerns, including how many steps they want or need to take to reduce their attack-surface. 
 
-
-
-# ~Install
 
 ## Alias Method
 The alias method is nice because you can keep your files wherever you want and still call 'Uma' from a terminal with whatever call-name you want. (It is also not exposed to being called as an installed program by other installed programs, which reduces attack-surface.)
