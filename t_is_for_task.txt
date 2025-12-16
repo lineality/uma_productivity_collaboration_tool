@@ -726,6 +726,21 @@ Part of my start in Data-Science, AI, and software development was under Profess
 
 Uma is, or appears, in various ways to be minimal and old-fashioned, but that may be a trick of the light. Uma is designed to be robustly maintainable in such a way that it can make use of newer technologies, such as vector-embeddings, hybrid-databased (especially structure/unstructured databases) and generative foundation models.
 
+
+#### Flexibility of Use
+
+The goal of Uma is to stay focused on a do-one-thing-well, small-ish-team collaboration use-case, and a very modular design. It takes a bit of design and under-the-hood 'feature' work to create a user-surface that is both simple and concrete. But the intention is that more work on Uma will make Uma more efficient, secure, maintainable, time-enduring, clear, and accessible. By analogy, look at the design and functionality of the Post-It-Note; it has a design that is flexible by virtue of its simple-modular design. It is probably impossible to count all the ways that teams and offices and households and boy-scouts and engineers have used Post-It-Nodes. A proper-simple design can leverage ever more uses.
+
+The basic modules of task-nodes and message-posts aim to move in this direction, not by spiraling into an ever-expanding array of high-level declared-features and 'functions' but by being functionally and concretely useful at a stable lower level, and by virtue of that being applicable to more areas, users, and disciplines. The more simply-defined the modules of Uma become, the more (like legos) they can be used in modular recombination to form a larger variety of more robust structures (almost like a programming language itself...sort of). Further development can and should increase efficiency, understandability, modify-ability, configure-ability, accessibility, etc.
+
+Low-code-no-code, high-convenience quick-start solutions notoriously lead to intractable situations of ever decreasing flexibility and compounding liabilities and costs. Too often more work on a set of tools becomes a vortex of abstractions that lead to less efficiency (more bloat), less compatibility, and less flexibility, not only more cumbersome for the user, but also so unmanageable by the engineers that they cannot be maintained anymore (so that either the company abandons the product or they go out of business). Both Visicalc and Lotus123 ruled the world for a few years as they started out as lean largely assembly-language built utilities, and both fell into scope-creap and abstraction chasing, and both went out of business in only a few years in a spiral of unmanageable technical debt. The amount of time needed to climb the next higher peak of abstraction and gimmickry was ever expanding, so that the 'next release' never came and the customers were all gone. The work-space of the spreadsheet has drifted over entire lifetimes and generations of people into a confused quagmire that people do not even recognize. Did data-science, machine learning, or deep learning AI come from using spreadsheet-software? These came from newer and lower level data-table software, not from the dead-end evolutionary boneyard of  GUI-spreadsheets. Yet the financial and psychological cost of fantasy-spreadsheets and "SQL" querying continues to be a spectacular cost and drain, fiercely defended by people who have lost all hope and who refuse to read anything like Arxiv submissions.
+
+Scalability: Is there a looming cost that grows in hiding for an institution using Uma? If more teams, classrooms, offices, units, or squads, use Uma, is there any overall change in cost or maintainability? No. Is there a risk over time of plain text files not being accessible? No. Is there a risk that posix terminals will suddenly disappear? No. If you have access to Uma is there anything that can revoke your access? No. Is the need for the basic functionalities of shared Task-boards, project areas, and message-posts going to either disappear or transform into something else? On an overall scale of likelihood, these are unlikely.
+
+
+
+#### Compatibility-Flexibility, e.g. for Future Technology
+
 For example: To a consumer who only sees the hype-fueled advertisements, a Super-Skip-Dream big-business audio-video-ai-multi-platoform-meeting-agent that spans across zoom, slack, MS-teams, jira, outlook, sharepoint, google-drive, etc., probably sounds easy for a big company to make. But the road map for that is very unclear and implementation would be costly, fragile, and most likely is simply impossible to produce in a rapid and high quality way (e.g. by the end of 2025). In 2035-2045, expensive and more limited and narrow versions for big companies in a particular ecosystem will probably be (maybe) generally available. On the other hand, connecting UMA to a local foundation model, a vector database, and a structured database, is shovel-ready. On a basic level, pointing a locally run model to query your project-database directory for a team-channel in Uma, including setting up prompts about project data, is already set up and very simple (this is a working application that I made and use: query-gguf
 https://github.com/lineality/query_gguf_cli_rust_llamacpp
 
@@ -1038,13 +1053,19 @@ See:
 - https://openresearch.okstate.edu/server/api/core/bitstreams/9297c881-b145-4100-b574-b058a470464e/content
 - https://ex-vi.sourceforge.net/
 - https://www.gnu.org/software/ed/manual/ed_manual.html
-- Tomayko CS "Software Engineering Education" Proceedings - 1991 https://link.springer.com/book/10.1007/BFb0024280  , https://www.amazon.com/Software-Engineering-Education-Pennsylvania-Proceedings/dp/3540545026/
+- Tomayko CS "Software Engineering Education" Proceedings - 1991 https://link.springer.com/book/10.1007/BFb0024280, https://www.amazon.com/Software-Engineering-Education-Pennsylvania-Proceedings/dp/3540545026/
 - https://en.wikipedia.org/wiki/Trello
 - https://en.wikipedia.org/wiki/Friden_Flexowriter
 - https://twit.tv/shows/security-now
 - grc.com/sn
 - https://en.wikipedia.org/wiki/Trello
 - https://twit.tv/shows/security-now/episodes/1054
+
+
+- In Security-Now Episode 1054, there is an interesting anecdote about people still using an Apple IIGS for the music study software, and the technical details of what they may need to do to keep being able to access the physical floppy disk memory.
+https://twit.tv/shows/security-now/episodes/1054
+https://www.grc.com/sn/sn-1054.txt
+(And if this seems too remote, remember that large international companies are and will be indefinately scrambling to find hobbyist emulator kludges to fill the gap of DOS being made technically and legally inaccessible by microsoft.)
 
 
 ### Notes
