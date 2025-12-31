@@ -12905,3 +12905,88 @@ fn move_directory_from_path_to_path<SourceDirectory: AsRef<Path>, DestinationDir
     fs::remove_dir(source_path)?;
     Ok(())
 }
+
+
+
+// // TODO: this may be mostly right: directing to readcopy .toml?
+// // or... readcopy clearsigned toml?
+// // or... new struct serialized to .toml?
+// /// Prepares file contents for secure sending by clearsigning and encrypting them.
+// ///
+// /// This function reads the contents of the file at the given `file_path`,
+// /// clearsigns the content using GPG to ensure integrity and non-repudiation,
+// /// and then encrypts the clearsigned content using the provided
+// /// `recipient_public_key` for confidentiality.
+// ///
+// /// # Arguments
+// ///
+// /// * `file_path`: The path to the file whose contents should be processed.
+// /// * `recipient_public_key`: The recipient's GPG public key used for encryption.
+// ///
+// /// # Returns
+// ///
+// /// * `Ok(Vec<u8>)`: A vector of bytes containing the encrypted, clearsigned file content on success.
+// /// * `Err(ThisProjectError)`: An error if file reading, clearsigning, or encryption fails.
+// fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
+//     file_path: &Path,
+//     recipient_public_key: &str,
+//     padnet_directory_path: &Path,
+// ) -> Result<Vec<u8, >, ThisProjectError> {
+
+//     // 1. Clearsign the file contents.
+//     let clearsigned_content = gpg_clearsign_file_to_sendbytes(file_path)?;
+
+//     // 2. Encrypt the clearsigned content.
+//     let encrypted_content = gpg_encrypt_to_bytes(&clearsigned_content, recipient_public_key)?;
+
+//     let (padnet_index_array, _) = match padnet_writer_strict_cleanup_continuous_xor_file(
+//         &path_sendfile_readcopy_path, // path_to_target_file
+//         &temp_filepath_padnet, // result_path (XOR'd bytes file)
+//         &padnet_directory_path, // path_to_padset
+//     ) {
+//         Ok((idx, bytes)) => {
+//             println!("  ✓ Encrypted {} bytes", bytes);
+//             println!("  ✓ Starting index: {:?}", idx);
+//             (idx, bytes)
+//         }
+//         Err(e) => {
+//             println!("  ✗ Failed: {}", e);
+//             continue;
+//         }
+//     };
+
+//     debug_log!(
+//         "(in HRCD) wrapper_path_to_clearsign_to_gpgencrypt_to_send_bytes  encrypted_content {:?}",
+//         &encrypted_content
+//     );
+
+//     Ok(encrypted_content)
+// }
+
+
+
+// /// string-mod: remove_non_alphanumeric
+// /// takes a string slice (&str) as input and returns a new String that
+// /// contains only the ASCII alphanumeric characters from the input string.
+// /// The original string is not modified.
+// ///
+// fn remove_non_alphanumeric(s: &str) -> String {
+//     s.chars().filter(|c| c.is_ascii_alphanumeric()).collect()
+// }
+
+// /// save for every member with access in channel...
+// fn write_newfile_sendq_flag(
+//     recipients_list: Vec<String>,
+//     file_path: Path,
+// ) {
+//     team_channel_name = get_current_team_channel_name_from_nav_path();
+//     // e.g. sync_data/teamtest/new_file_path_flags/bob}
+
+//     // // maybe iterate through recipients_list
+
+//     // 1. make paths (for each participant in list)
+//     // make parent path if not yet exists
+
+//     // 2. save files to paths
+
+// }
