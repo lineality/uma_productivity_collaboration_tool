@@ -23777,7 +23777,18 @@ fn write_newfile_sendq_flag(
     #[cfg(debug_assertions)]
     debug_log!("write_newfile_sendq_flag -> recipients_list {:?}", recipients_list);
 
+    // todo, can remove self from list
+    let self_name = get_local_owner_username();
+
+    #[cfg(debug_assertions)]
+    debug_log!("write_newfile_sendq_flag -> self_name {}", self_name);
+
     for recipient in recipients_list {
+
+        // todo, can remove self from list
+        if recipient != &self_name{
+
+        }
 
         let mut flag_path = make_input_path_name_abs_executabledirectoryrelative_nocheck(
             "sync_data"
@@ -34472,8 +34483,9 @@ fn handle_local_owner_desk(
 
         #[cfg(debug_assertions)]
         debug_log!(
-            "HLOD: latest_received_from_rc_file_timestamp -> {:?}",
+            "HLOD: latest_received_from_rc_file_timestamp -> {:?} ({})",
             latest_received_from_rc_file_timestamp,
+            loop_remote_collaborator_name
         );
 
         // initialization
@@ -34542,8 +34554,9 @@ fn handle_local_owner_desk(
 
                 #[cfg(debug_assertions)]
                 debug_log!(
-                    "HLOD drone loop (ready-signals) latest_received_from_rc_file_timestamp -> {:?}",
+                    "HLOD drone loop (ready-signals) latest_received_from_rc_file_timestamp -> {:?} ({})",
                     latest_received_from_rc_file_timestamp,
+                    loop_remote_collaborator_name
                 );
 
                 // 1.3 Send Ready Signal (using a function)
@@ -34601,7 +34614,7 @@ fn handle_local_owner_desk(
             band_local_user_ipv4_address,
             band_local_user_ipv6_address,
             */
-            // #[cfg(debug_assertions)]
+            #[cfg(debug_assertions)]
             debug_log("HLOD Creating intray socket listening UDP...");
             let intray_socket = create_local_udp_socket(
                 &band_local_network_type,
@@ -34609,6 +34622,8 @@ fn handle_local_owner_desk(
                 &band_local_user_ipv6_address,
                 local_owner_desk_setup_data.localuser_intray_port_yourdesk_youlisten_bind_yourlocal_ip,
             )?;
+
+            #[cfg(debug_assertions)]
             debug_log!("HLOD: Intray socket created.");
 
             // --- 3.5 in-tray Send-File Event ---
@@ -34624,6 +34639,7 @@ fn handle_local_owner_desk(
 
                 match intray_socket.recv_from(&mut buf) {
                     Ok((amt, _src)) => {
+
                     #[cfg(debug_assertions)]
                     debug_log!(
                         "HLOD-InTray match intray_socket.recv_from(&mut buf) Ok((amt, src)) {:?} {:?}",
@@ -34636,16 +34652,17 @@ fn handle_local_owner_desk(
                         #[cfg(debug_assertions)]
                         debug_log!(
                             "HLOD-InTray 3.5.2 main loop Check for halt signal. Halting handle_local_owner_desk() for {}",
-                            local_owner_desk_setup_data.remote_collaborator_name
+                            &remote_collaborator_name
                         );
                         break;
                     }
 
                     #[cfg(debug_assertions)]
                     debug_log!(
-                        "HLOD-InTray 3.5.2.1 Ok((amt, src)) ready_port Signal Received {} bytes from {}",
+                        "HLOD-InTray 3.5.2.1 Ok((amt, src)) ready_port Signal Received {} bytes from {} ({})",
                         amt,
-                        _src
+                        _src,
+                        &remote_collaborator_name,
                     );
 
                     // --- Inspect Raw Bytes ---
@@ -34686,7 +34703,7 @@ fn handle_local_owner_desk(
 
                                 #[cfg(debug_assertions)] {
                                     debug_log!("HLOD-InTray 2.3 Deserialize Ok(incoming_intray_file_struct) {}: Received SendFile: {:?}",
-                                        local_owner_desk_setup_data.remote_collaborator_name,
+                                        &remote_collaborator_name,
                                         incoming_intray_file_struct
                                     ); // Log the signal
                                 }
@@ -34695,7 +34712,8 @@ fn handle_local_owner_desk(
                             },
                             Err(_e) => {
                                 #[cfg(debug_assertions)]
-                                debug_log!("HLOD-InTray 2.3 Deserialize Err Receive data Failed to parse ready signal: {}", _e);
+                                debug_log!("HLOD-InTray 2.3 Deserialize Err Receive data Failed to parse ready signal: {} ({})",
+                                    _e, &remote_collaborator_name);
                                 continue; // Continue to the next iteration of the loop
                             }
                         } // no semicolon, to pass value
@@ -34711,7 +34729,7 @@ fn handle_local_owner_desk(
 
                                 #[cfg(debug_assertions)]
                                 debug_log!("HLOD-InTray 2.3 Deserialize Ok(incoming_intray_file_struct) {}: Received SendFile: {:?}",
-                                    local_owner_desk_setup_data.remote_collaborator_name,
+                                    remote_collaborator_name,
                                     incoming_intray_file_struct
                                 ); // Log the signal
 
@@ -34855,8 +34873,9 @@ fn handle_local_owner_desk(
                     #[cfg(debug_assertions)]
                     {
                         debug_log!(
-                            "HLOD 6.1 still_encrypted_file_blob (raw OTP or raw GPG)-> {:?}",
-                            still_encrypted_file_blob
+                            "HLOD 6.1 still_encrypted_file_blob (raw OTP or raw GPG)-> {:?} ({})",
+                            still_encrypted_file_blob,
+                            &remote_collaborator_name
                         );
 
                         debug_log!(
@@ -34933,7 +34952,7 @@ fn handle_local_owner_desk(
                         cleanup_guard.add(gpg_blob_file_path.clone());
 
                         #[cfg(debug_assertions)]
-                        debug_log!("HLOD-Padnet: Created GPG result temp file: {:?}", gpg_blob_file_path);
+                        debug_log!("HLOD-Padnet: Created GPG result temp file: {:?} ({})", gpg_blob_file_path, remote_collaborator_name);
 
                         // =========================================================================
                         // 4. Get padnet directory path
@@ -34960,7 +34979,9 @@ fn handle_local_owner_desk(
                         let padnet_index_array = match &incoming_intray_file_struct.padnet_index_array {
                             Some(data) => data,
                             None => {
+                                // safe log
                                 debug_log!("HLOD-Padnet: padnet_index_array is None. Skipping.");
+
                                 // cleanup_guard will auto-cleanup on continue
                                 continue;
                             }
@@ -34972,8 +34993,10 @@ fn handle_local_owner_desk(
                             &padnet_directory_path,      // Padset directory
                             padnet_index_array,          // Pad index
                         ).map_err(|e| {
+
                             #[cfg(debug_assertions)]
                             debug_log!("HLOD-Padnet: XOR decryption failed: {:?}", e);
+
                             // cleanup_guard will auto-cleanup on error
                             ThisProjectError::PadnetError(format!("XOR decryption failed: {:?}", e))
                         })?;
@@ -35057,8 +35080,9 @@ fn handle_local_owner_desk(
 
                     #[cfg(debug_assertions)]
                     debug_log!(
-                        "HLOD 6.2 decrypt the data decrypted_clearsignfile_data -> {:?}",
-                        decrypted_clearsignfile_data
+                        "HLOD 6.2 decrypt the data decrypted_clearsignfile_data -> {:?} ({})",
+                        decrypted_clearsignfile_data,
+                        remote_collaborator_name
                     );
 
                     /*
@@ -35082,7 +35106,7 @@ fn handle_local_owner_desk(
                         Ok(data) => data,
                         Err(_e) => {
                             #[cfg(debug_assertions)]
-                            debug_log!("HLOD 6.3: Clearsign extraction failed: {}. Skipping.", _e);
+                            debug_log!("HLOD 6.3: Clearsign extraction failed: {}. Skipping. ({})", _e, remote_collaborator_name);
                             continue;
                         }
                     };
@@ -35124,8 +35148,9 @@ fn handle_local_owner_desk(
 
                     #[cfg(debug_assertions)]
                     debug_log!(
-                        "HLOD 7.1 found message file, file_str -> {:?}",
-                        file_str
+                        "HLOD 7.1 found message file, file_str -> {:?} ({})",
+                        file_str,
+                        remote_collaborator_name
                     );
 
                     // let mut incoming_file_path: PathBuf = PathBuf::from("project_graph_data/team_channels");
@@ -35354,7 +35379,6 @@ fn handle_local_owner_desk(
                             "HLOD 7.2.2 messagepost_parent_node_id -> {:?}",
                             &messagepost_parent_node_id
                         );
-
 
                         // Get existing node.toml file path (if exists)
                         if let Some(zero_msgpost_existing_node_directory_path) = hashtable_node_id_to_path.get(&messagepost_parent_node_id) {
