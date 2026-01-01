@@ -21255,7 +21255,7 @@ pub fn move_directory_tree_to_new_path<P: AsRef<Path>, Q: AsRef<Path>>(
             // Rename failed - likely cross-filesystem
             // Log in debug mode and proceed to fallback
             #[cfg(debug_assertions)]
-            eprintln!("MDTP: Atomic rename failed ({}), using copy-delete fallback", _e);
+            eprintln!("MDTP: Atomic rename failed e={}, using copy-delete fallback", _e);
         }
     }
 
@@ -23799,7 +23799,7 @@ fn write_newfile_sendq_flag(
         flag_path.push(format!("{}.txt", timestamp_flagfile_name));
 
         #[cfg(debug_assertions)]
-        debug_log!("get_or_create_send_queue -> flag_path, recipient {:?}, ({})", flag_path, recipient);
+        debug_log!("get_or_create_send_queue -> flag_path, recipient {:?}, (to {})", flag_path, recipient);
 
         if let Some(parent_dir) = flag_path.parent() {
             create_dir_all(parent_dir)?;
@@ -24916,7 +24916,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
 
     // if !dir_at_path_is_empty_returns_false(COLLABORATOR_ADDRESSBOOK_PATH_STR) {
     debug_log!(
-        "if !dir_at_path_is_empty_returns_false(Path::new({})) ",
+        "if !dir_at_path_is_empty_returns_false(Path::new, COLLABORATOR_ADDRESSBOOK_PATH_STR={}) ",
         COLLABORATOR_ADDRESSBOOK_PATH_STR,
     );
 
@@ -34386,7 +34386,7 @@ fn handle_local_owner_desk(
         };
 
     #[cfg(debug_assertions)]
-    debug_log!("HLOD setup: hlod_udp_handshake_rc_network_type_rc_ip_addr() run {}", remote_collaborator_name);
+    debug_log!("HLOD setup: hlod_udp_handshake_rc_network_type_rc_ip_addr() run, ({})", remote_collaborator_name);
 
     loop { // 1. start overall loop to (re)start whole desk
 
@@ -34483,7 +34483,7 @@ fn handle_local_owner_desk(
 
         #[cfg(debug_assertions)]
         debug_log!(
-            "HLOD: latest_received_from_rc_file_timestamp -> {:?} ({})",
+            "HLOD: latest_received_from_rc_file_timestamp -> {:?} (to {})",
             latest_received_from_rc_file_timestamp,
             loop_remote_collaborator_name
         );
@@ -34515,7 +34515,7 @@ fn handle_local_owner_desk(
                     // break for loop ?
                     if should_halt_uma() {
                         #[cfg(debug_assertions)]
-                        debug_log!("should_halt_uma(), exiting Uma in handle_local_owner_desk()");
+                        debug_log!("HLOD Drone loop should_halt_uma(), exiting Uma in handle_local_owner_desk()");
                         break;
                     }
                     thread::sleep(Duration::from_millis(1000));
@@ -34523,7 +34523,7 @@ fn handle_local_owner_desk(
                 // break loop loop?
                 if should_halt_uma() {
                     #[cfg(debug_assertions)]
-                    debug_log!("HLOD should_halt_uma(), exiting Uma in handle_local_owner_desk()");
+                    debug_log!("HLOD Drone loop HLOD should_halt_uma(), exiting Uma in handle_local_owner_desk()");
 
                     break;
                 }
@@ -34547,14 +34547,14 @@ fn handle_local_owner_desk(
                     Err(_e) => {
 
                         #[cfg(debug_assertions)]
-                        debug_log!("HLOD GotItSignal Error getting timestamp via get_latest_received_from_rc_in_teamchannel_file_timestamp_filecrawl: e'{}'e. Using 0.", _e);
+                        debug_log!("HLOD drone loop GotItSignal Error getting timestamp via get_latest_received_from_rc_in_teamchannel_file_timestamp_filecrawl: e'{}'e. Using 0.", _e);
                         0 // Use a default timestamp (0) if an error occurs.
                     }
                 };
 
                 #[cfg(debug_assertions)]
                 debug_log!(
-                    "HLOD drone loop (ready-signals) latest_received_from_rc_file_timestamp -> {:?} ({})",
+                    "HLOD drone loop (ready-signals) latest_received_from_rc_file_timestamp -> {:?} (to {})",
                     latest_received_from_rc_file_timestamp,
                     loop_remote_collaborator_name
                 );
@@ -34571,12 +34571,18 @@ fn handle_local_owner_desk(
                 );
 
                 #[cfg(debug_assertions)]
+                debug_log!(
+                    "HLOD drone loop send ready signal: latest_received_from_rc_file_timestamp -> to (to {})",
+                    loop_remote_collaborator_name
+                );
+
+                #[cfg(debug_assertions)]
                 debug_log!("\n\n");
             } // end drone loop (ready-signals)
 
             #[cfg(debug_assertions)]
             debug_log!(
-                "HLOD end ready_thread {}",
+                "HLOD drone loop end: ready_thread (to {})",
                 loop_remote_collaborator_name
             );
 
@@ -37235,7 +37241,7 @@ fn get_or_create_send_queue(
     // let mut back_of_queue_timestamp = session_send_queue.back_of_queue_timestamp.clone();
     #[cfg(debug_assertions)]
     debug_log!(
-        "inHRCD->get_or_create_send_queue 1: start;  ready_signal_rt_timestamp -> {:?} (for {})",
+        "inHRCD->get_or_create_send_queue 1: start;  ready_signal_rt_timestamp -> {:?} (to {})",
         ready_signal_rt_timestamp,
         remote_collaborator_name
     );
@@ -37264,7 +37270,7 @@ fn get_or_create_send_queue(
 
     #[cfg(debug_assertions)]
     debug_log!(
-        "inHRCD->get_or_create_send_queue: bootstrap_sendqueue={:?}, make_a_new_queue_flag={:?}  (for {})",
+        "inHRCD->get_or_create_send_queue: bootstrap_sendqueue={:?}, make_a_new_queue_flag={:?}  (to {})",
         bootstrap_sendqueue,
         make_a_new_queue_flag,
         remote_collaborator_name
@@ -37305,7 +37311,7 @@ fn get_or_create_send_queue(
                 };
 
                 #[cfg(debug_assertions)]
-                debug_log!("inHRCD->get_or_create_send_queue  Resetting send queue using timestamp from flag: {} ({})", oldest_prefail_flag_rt_timestamp, remote_collaborator_name);
+                debug_log!("inHRCD->get_or_create_send_queue  Resetting send queue using timestamp from flag: {} (to {})", oldest_prefail_flag_rt_timestamp, remote_collaborator_name);
 
                 // safe log
                 #[cfg(debug_assertions)]
@@ -37321,7 +37327,7 @@ fn get_or_create_send_queue(
         Err(_e) => {
             // 4. Handle the error:
             #[cfg(debug_assertions)]
-            debug_log!("inHRCD->get_or_create_send_queue  Error getting oldest retry timestamp: {}, ({})",
+            debug_log!("inHRCD->get_or_create_send_queue  Error getting oldest retry timestamp: {}, (to {})",
                 _e,
                 remote_collaborator_name
             );
@@ -37359,7 +37365,7 @@ fn get_or_create_send_queue(
         Err(e) => {
             // Since the function returns Result<CoreNode, String>, we need to return a String error
             return Err(format!(
-                "implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {} ({})",
+                "implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {} (to {})",
                 e,
                 remote_collaborator_name
             ).into());
@@ -37376,14 +37382,14 @@ fn get_or_create_send_queue(
     // --- 3. Make a new Queue ---
     #[cfg(debug_assertions)]
     debug_log!(
-        "inHRCD->get_or_create_send_queue 5: no crawl if false, make_a_new_queue_flag -> {:?} ({})",
+        "inHRCD->get_or_create_send_queue 5: no crawl if false, make_a_new_queue_flag -> {:?} (to {})",
         make_a_new_queue_flag,
         remote_collaborator_name
     );
 
     if make_a_new_queue_flag {
         #[cfg(debug_assertions)]
-        debug_log!("inHRCD->get_or_create_send_queue 5: Starting crawl of directory: {:?} ({})",
+        debug_log!("inHRCD->get_or_create_send_queue 5: Starting crawl of directory: {:?} (to {})",
             team_channel_path,
             remote_collaborator_name
         );
@@ -37404,7 +37410,7 @@ fn get_or_create_send_queue(
                     #[cfg(debug_assertions)]
                     {
                         debug_log!(
-                            "inHRCD->get_or_create_send_queue: WalkDir entry error (skipping): {} ({})",
+                            "inHRCD->get_or_create_send_queue: WalkDir entry error (skipping): {} (to {})",
                             _e,
                             remote_collaborator_name
                         );
@@ -37430,7 +37436,7 @@ fn get_or_create_send_queue(
 
             #[cfg(debug_assertions)]
             debug_log!(
-                "inHRCD->get_or_create_send_queue 6: Processing file: {:?}, extension: {} ({})",
+                "inHRCD->get_or_create_send_queue 6: Processing file: {:?}, extension: {} (to {})",
                 entry.path(),
                 extension,
                 remote_collaborator_name
@@ -37448,7 +37454,7 @@ fn get_or_create_send_queue(
                 Err(_e) => {
                     #[cfg(debug_assertions)]
                     debug_log!(
-                        "inHRCD->get_or_create_send_queue: Failed to prepare readable path for {:?}: {} (skipping) (({}))",
+                        "inHRCD->get_or_create_send_queue: Failed to prepare readable path for {:?}: {} (skipping) ((to {}))",
                         entry.path(),
                         _e,
                         remote_collaborator_name,
@@ -37472,7 +37478,7 @@ fn get_or_create_send_queue(
 
                     #[cfg(debug_assertions)]
                     debug_log!(
-                        "inHRCD->get_or_create_send_queue 10: Added to queue: {:?} ({})",
+                        "inHRCD->get_or_create_send_queue 10: Added to queue: {:?} (to {})",
                         entry.path(),
                         remote_collaborator_name
                     );
@@ -37489,7 +37495,7 @@ fn get_or_create_send_queue(
                     // File is malformed or unreadable
                     #[cfg(debug_assertions)]
                     debug_log!(
-                        "inHRCD->get_or_create_send_queue: File read/parse error for {:?}: {} (skipping), ({})",
+                        "inHRCD->get_or_create_send_queue: File read/parse error for {:?}: {} (skipping), (to {})",
                         entry.path(),
                         _e,
                         remote_collaborator_name,
@@ -37502,7 +37508,7 @@ fn get_or_create_send_queue(
         // Log metrics
         #[cfg(debug_assertions)]
         debug_log!(
-            "inHRCD->get_or_create_send_queue: Crawl complete - encountered: {}, skipped: {}, added: {}, ({})",
+            "inHRCD->get_or_create_send_queue: Crawl complete - encountered: {}, skipped: {}, added: {}, (to {})",
             _files_encountered,
             _files_skipped,
             _files_added_to_queue,
@@ -37525,14 +37531,14 @@ fn get_or_create_send_queue(
 
         Err(_e) => {
             #[cfg(debug_assertions)]
-            debug_log!("inHRCD->get_or_create_send_queue 2: Error getting update flag paths: {} ({})", _e, remote_collaborator_name);
+            debug_log!("inHRCD->get_or_create_send_queue 2: Error getting update flag paths: {} (to {})", _e, remote_collaborator_name);
 
             return Err(_e); // Or handle as needed
         }
     };
 
     #[cfg(debug_assertions)]
-    debug_log!("get_or_create_send_queue -> newpath_list {:?} ({})", newpath_list, remote_collaborator_name);
+    debug_log!("get_or_create_send_queue -> newpath_list {:?} (to {})", newpath_list, remote_collaborator_name);
 
     // Add new paths to the front of the queue
     for this_iter_newpath in newpath_list {
@@ -37564,7 +37570,7 @@ fn get_or_create_send_queue(
 
     // Sort the files in the queue based on their modification time
     #[cfg(debug_assertions)]
-    debug_log!("Sequence of queue should be youngest last, oldest first ({})", remote_collaborator_name);
+    debug_log!("Sequence of queue should be youngest last, oldest first (to {})", remote_collaborator_name);
     // session_send_queue.items.sort_by_key(|path| {
     //     get_toml_file_updated_at_timestamp(path).unwrap_or(0) // Handle potential errors in timestamp retrieval
     //     // std::cmp::Reverse(get_toml_file_updated_at_timestamp(path).unwrap_or(0)) // puts older items' first in queue
@@ -37596,7 +37602,7 @@ fn get_or_create_send_queue(
 
     #[cfg(debug_assertions)]
     debug_log!(
-        "Building timestamp lookup table for {} files ({})",
+        "Building timestamp lookup table for {} files (to {})",
         session_send_queue.items.len(),
         remote_collaborator_name,
     );
@@ -37610,7 +37616,7 @@ fn get_or_create_send_queue(
             Some(ext) if ext == "toml" || ext == "gpgtoml" => ext,
             _ => {
                 #[cfg(debug_assertions)]
-                debug_log!("Skipping non-TOML file in queue: {:?} ({})",
+                debug_log!("Skipping non-TOML file in queue: {:?} (to {})",
                     original_path,
                     remote_collaborator_name
                 );
@@ -37629,7 +37635,7 @@ fn get_or_create_send_queue(
             Err(_e) => {
                 #[cfg(debug_assertions)]
                 debug_log!(
-                    "Failed to prepare readable path for {:?}: {} - using timestamp 0 ({})",
+                    "Failed to prepare readable path for {:?}: {} - using timestamp 0 (to {})",
                     original_path,
                     _e,
                     remote_collaborator_name,
@@ -37662,7 +37668,7 @@ fn get_or_create_send_queue(
     }
 
     #[cfg(debug_assertions)]
-    debug_log!("??? GTFUAT Timestamp table built with {} entries ({})",
+    debug_log!("??? GTFUAT Timestamp table built with {} entries (to {})",
         timestamp_lookup.len(),
         remote_collaborator_name
     );
@@ -37688,12 +37694,11 @@ fn get_or_create_send_queue(
 
     #[cfg(debug_assertions)]
     debug_log!(
-        "GOCSQ: session_send_queue.items -> {:?} ({})",
+        "GOCSQ: session_send_queue.items -> {:?} (to {})",
         session_send_queue.items,
         remote_collaborator_name
     );
 
-    // TODO(remove this later) extra Inspection here:
     #[cfg(debug_assertions)]
     {
         debug_log("|| Extra Insepction || get_or_create_send_queue: end: Q");
@@ -37701,7 +37706,7 @@ fn get_or_create_send_queue(
             "inHRCD->get_or_create_send_queue 12: start;  ready_signal_rt_timestamp -> {:?}",
             ready_signal_rt_timestamp
         );
-        debug_log!("inHRCD->get_or_create_send_queue 13: end: Q -> {:?}", session_send_queue);
+        debug_log!("inHRCD->get_or_create_send_queue 13: end: Q -> {:?} (to {})", session_send_queue, remote_collaborator_name);
     }
 
     // Testing?
@@ -38018,10 +38023,9 @@ fn handle_remote_collaborator_meetingroom_desk(
 ) -> Result<(), ThisProjectError> {
     /*
 
-
     */
     loop { // 1. start overall loop to restart whole desk
-        // --- 1. overall loop to restard handler in case of failure ---
+        // --- 1. overall loop to restart handler in case of failure ---
         //  1.1 Check for halt signal.
         if should_halt_uma() {
             #[cfg(debug_assertions)]
@@ -38044,13 +38048,13 @@ fn handle_remote_collaborator_meetingroom_desk(
             room_sync_input
         );
 
+
         /////////////
         // Bootstrap
         /////////////
 
         debug_log("HRCD calling get_current_team_channel_name_from_nav_path");
 
-        // TODO
         // setup: Get Team Channel Name
         let team_channel_name = get_current_team_channel_name_from_nav_path()
             .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
@@ -38068,7 +38072,7 @@ fn handle_remote_collaborator_meetingroom_desk(
             };
 
         debug_log!(
-            "HRCD get_rc_band_ready_gotit_socketaddrses_hrcd: RC -> {:?} || ready_socket_addr -> {:?} || gotit_socket_addr -> {:?}",
+            "HRCD get_rc_band_ready_gotit_socketaddrses_hrcd: RC -> (from {}) || ready_socket_addr -> {:?} || gotit_socket_addr -> {:?}",
             room_sync_input.remote_collaborator_name,
             ready_socket_addr,
             gotit_socket_addr
@@ -38116,15 +38120,18 @@ fn handle_remote_collaborator_meetingroom_desk(
             ////////////////////////////////////
 
             loop { // gotit loop
+
                 #[cfg(debug_assertions)]
                 debug_log!(
-                    "HRCD Got it loop starting. GotItloop for",
-                    // room_sync_input.remote_collaborator_name.clone()
+                    "HRCD Got it loop starting. GotItloop (from {})",
+                    remote_collaborator_name_clone
                 );
+
                 // 1.5.1 Check for halt-uma signal
                 if should_halt_uma() {
                     #[cfg(debug_assertions)]
-                    debug_log!("HRCD 1.5.1 GotItloop Got It loop: Halt signal received. Exiting. in handle_remote_collaborator_meetingroom_desk");
+                    debug_log!("HRCD 1.5.1 GotItloop Got It loop: Halt signal received. Exiting. in handle_remote_collaborator_meetingroom_desk (from {})",
+                        remote_collaborator_name_clone);
 
                     break; // Exit the loop
                 }
@@ -38137,43 +38144,61 @@ fn handle_remote_collaborator_meetingroom_desk(
                         // Check for exit-signal:
                         if should_halt_uma() {
                             #[cfg(debug_assertions)]
-                            debug_log(
-                                "HRCD 1.5.2 should_halt_uma() Halting handle_remote_collaborator_meetingroom_desk",
+                            debug_log!(
+                                "HRCD 1.5.2 should_halt_uma() Halting handle_remote_collaborator_meetingroom_desk (from {})",
+                                remote_collaborator_name_clone
                             );
                             break;
                         }
 
                         #[cfg(debug_assertions)]
-                        debug_log!("HRCD 1.5.2 GotItloop Ok((amt, src)) Received {} bytes from {} on gotit port", amt, _src);
+                        debug_log!("HRCD 1.5.2 (from {}) GotItloop Ok((amt, src)) Received {} bytes from {} on gotit port",
+                            remote_collaborator_name_clone,
+                            amt,
+                            _src);
 
                         // --- Inspect Raw Bytes ---
                         #[cfg(debug_assertions)]
+                        {
                         debug_log!(
-                            // this does require &
-                            "HRCD 1.5.2 GotItloop Raw bytes received: {:?}",
-                            &buf[..amt]
-                        );
+                                // this does require &
+                                "HRCD 1.5.2 GotItloop Raw bytes received: {:?} (from {})",
+                                &buf[..amt],
+                                remote_collaborator_name_clone
+                            );
+                            // --- Inspect Bytes as Hex ---
+                            let hex_string = buf[..amt].iter()
+                                .map(|b| format!("{:02X}", b))
+                                .collect::<String>();
 
-                        // --- Inspect Bytes as Hex ---
-                        let hex_string = buf[..amt].iter()
-                            .map(|b| format!("{:02X}", b))
-                            .collect::<String>();
-                        debug_log!("HRCD 1.5.2 GotItloop Raw bytes as hex: {}", hex_string);
 
+                            debug_log!("HRCD 1.5.2 GotItloop Raw bytes as hex: {} (from {})",
+                                hex_string,
+                                remote_collaborator_name_clone
+                            );
+                        }
                         // Clone the values you need from room_sync_input
                         // let remote_collaborator_name = room_sync_input.remote_collaborator_name.clone();
 
                         // 1.5.3 Deserialize the GotItSignal
                         let gotit_signal: GotItSignal = match process_incoming_gotit_signal_bytes(&buf[..amt]) {
                             Ok(gotit_signal) => {
-                                debug_log!("HRCD 1.5.3 GotItloop Ok(gotit_signal) : Received GotItSignal: {:?}",
-                                    // remote_collaborator_name,
+
+                                #[cfg(debug_assertions)]
+                                debug_log!("HRCD 1.5.3 (from {}) GotItloop Ok(gotit_signal) : Received GotItSignal: {:?}",
+                                    remote_collaborator_name_clone,
                                     gotit_signal
                                 ); // Log the signal
+
                                 gotit_signal
                             },
-                            Err(e) => {
-                                debug_log!("HRCD 1.5.3 GotItloop Err Receive data Failed to parse ready signal: {}", e);
+                            Err(_e) => {
+
+                                #[cfg(debug_assertions)]
+                                debug_log!("HRCD 1.5.3 (from {}) GotItloop Err Receive data Failed to parse ready signal: {}",
+                                    remote_collaborator_name_clone,
+                                    _e);
+
                                 continue; // Continue to the next iteration of the loop
                             }
                         };
@@ -38181,8 +38206,10 @@ fn handle_remote_collaborator_meetingroom_desk(
                         // 1.5.4  get document_id from signal
                         let document_id = gotit_signal.di;
 
-                        debug_log(
-                            "HRCD: Done event of got-it listener."
+                        #[cfg(debug_assertions)]
+                        debug_log!(
+                            "HRCD: Done event of got-it listener. (from {})",
+                            remote_collaborator_name_clone
                         );
 
                         // 1.5.5 check and remove filestubs with name==document_id
@@ -38196,7 +38223,7 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                         let _ = remove_one_prefail_flag_for_sendfile(
                             document_id, // di_flag_id: String,
-                            &remote_collaborator_name_clone, // remote_collaborator_name: String,
+                            &remote_collaborator_name_clone.clone(), // remote_collaborator_name: String,
                             &team_channel_name, // team_channel_name: String,
                         );
                         // 1.5.6 update ~timestamp_of_latest_received_file_that_i_sent
@@ -38205,8 +38232,12 @@ fn handle_remote_collaborator_meetingroom_desk(
                     // thread::sleep(Duration::from_millis(1000));
 
                     },
-                    Err(e) => {
-                        debug_log!("HRCD 1.5 GotItloop Error receiving data on gotit_port: {}", e);
+                    Err(_e) => {
+                        #[cfg(debug_assertions)]
+                        debug_log!("HRCD 1.5 GotItloop Error receiving data on gotit_port: {} (from {})",
+                            _e,
+                            remote_collaborator_name_clone
+                        );
                         // You might want to handle the error more specifically here (e.g., retry, break the loop, etc.)
                         // For now, we'll just log the error and continue listening.
                         continue;
@@ -38232,14 +38263,14 @@ fn handle_remote_collaborator_meetingroom_desk(
         loop {
             #[cfg(debug_assertions)]
             debug_log!(
-                "HRCD  2.: Starting, restarting Main loop: {}",
+                "HRCD  2.: Starting, restarting Main Ready-Signal Loop: (to {})",
                 room_sync_input.remote_collaborator_name
             );
 
             // --- 2.1 Check for 'should_halt_uma' Signal ---
             if should_halt_uma() {
                 debug_log!(
-                    "HRCD 2.1 main loop Check for halt signal. Halting handle_remote_collaborator_meetingroom_desk() for {}",
+                    "HRCD 2.1 main loop Check for halt signal. Halting handle_remote_collaborator_meetingroom_desk() (for {})",
                     room_sync_input.remote_collaborator_name
                 );
                 break;
@@ -38259,28 +38290,42 @@ fn handle_remote_collaborator_meetingroom_desk(
                         src
                     );
 
+                    #[cfg(debug_assertions)]
                     debug_log!(
-                        "HRCD 2.2.1 check queue {:?}",
+                        "HRCD 2.2.1 check queue {:?} (from {})",
                         session_send_queue.items,
+                        room_sync_input.remote_collaborator_name
                     );
 
                     if should_halt_uma() {
+                        #[cfg(debug_assertions)]
                         debug_log!(
-                            "HRCD Halting handle_local_owner_desk() for {}",
+                            "HRCD Halting handle_local_owner_desk() (for {})",
                             room_sync_input.remote_collaborator_name
                         );
                         break;
                     }
 
                     if !rc_set_as_active {
-                        if let Err(e) = set_as_active(&room_sync_input.remote_collaborator_name) {
-                            debug_log!("Error setting collaborator as active: {}", e);
+                        if let Err(_e) = set_as_active(&room_sync_input.remote_collaborator_name) {
+                            #[cfg(debug_assertions)]
+                            debug_log!(
+                                "Error setting collaborator as active: {} (for {})",
+                                _e,
+                                room_sync_input.remote_collaborator_name
+                            );
                             // Handle the error appropriately (e.g., continue or return)
                             continue; // Example: skip to the next iteration
                         }
 
                         rc_set_as_active = true;
-                        debug_log("HRCD rc_set_as_active = true")
+
+                        #[cfg(debug_assertions)]
+                        debug_log!(
+                            "HRCD rc_set_as_active = true (for {})",
+                            room_sync_input.remote_collaborator_name
+                        );
+
                     }
 
 
@@ -38288,7 +38333,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                     // --- Inspect Raw Bytes ---
                     #[cfg(debug_assertions)]
                     debug_log!(
-                        "HRCD 2.2.1 Ready Signal Raw bytes received: {:?} {}",
+                        "HRCD 2.2.1 Ready Signal Raw bytes received: {:?} (for {})",
                         &buf[..amt],
                         room_sync_input.remote_collaborator_name
                     );
@@ -38296,7 +38341,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                     // --- Inspect Raw Bytes ---
                     #[cfg(debug_assertions)]
                     debug_log!(
-                        "HRCD thread::sleep(Duration::from_secs(3)) {}",
+                        "HRCD thread::sleep(Duration::from_secs(3)) (for {})",
                         room_sync_input.remote_collaborator_name
                     );
 
@@ -38312,7 +38357,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                             .collect::<String>();
 
                         debug_log!(
-                            "HRCD 2.2.1 Ready Signal Raw bytes as hex: {} {}",
+                            "HRCD 2.2.1 Ready Signal Raw bytes as hex: {} (for {})",
                             hex_string,
                             room_sync_input.remote_collaborator_name
                         );
@@ -38327,7 +38372,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                             // ); // Print to console
 
                             #[cfg(debug_assertions)]
-                            debug_log!("HRCD 2.3 Deserialize Ok(ready_signal) {}: Received ReadySignal: {:?}",
+                            debug_log!("HRCD 2.3 Deserialize Ok(ready_signal) (for {}): Received ReadySignal: {:?}",
                                 room_sync_input.remote_collaborator_name,
                                 ready_signal
                             ); // Log the signal
@@ -38337,7 +38382,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                         Err(_e) => {
                             #[cfg(debug_assertions)]
                             debug_log!(
-                                "HRCD 2.3 Deserialize Err Receive data Failed to parse ready signal: {}, {}",
+                                "HRCD 2.3 Deserialize Err Receive data Failed to parse ready signal: {}, (for {})",
                                 _e,
                                 room_sync_input.remote_collaborator_name
                             );
@@ -38371,7 +38416,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                         &room_sync_input.remote_collaborator_salt_list,
                     ) {
                         #[cfg(debug_assertions)]
-                        debug_log!("HRCD 2.5: ReadySignal hash verification failed. Discarding signal.{}",
+                        debug_log!("HRCD 2.5: ReadySignal hash verification failed. Discarding signal. (for {})",
                         room_sync_input.remote_collaborator_name
                         );
 
@@ -38486,14 +38531,14 @@ fn handle_remote_collaborator_meetingroom_desk(
                     };
 
                     #[cfg(debug_assertions)]
-                    debug_log!("HRCD 3.3 this_team_channelname -> {:?} ({})",
+                    debug_log!("HRCD 3.3 this_team_channelname -> {:?} (to {})",
                         this_team_channelname,
                         &room_sync_input.remote_collaborator_name,
                     );
 
                     // TODO currently set to always run... ok?
                     #[cfg(debug_assertions)]
-                    debug_log!("HRCD 3.3 get_or_create_send_queue ({})",
+                    debug_log!("HRCD 3.3 get_or_create_send_queue (to {})",
                         &room_sync_input.remote_collaborator_name,);
 
                     session_send_queue = get_or_create_send_queue(
@@ -38510,7 +38555,7 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                     #[cfg(debug_assertions)]
                     debug_log!(
-                        "HRCD ->[]<- 3.3 Get / Make session_send_queue, sendqueue send-queue ({}) {:?}",
+                        "HRCD ->[]<- 3.3 Get / Make session_send_queue, sendqueue send-queue (to {}) {:?}",
                         &room_sync_input.remote_collaborator_name, // remote_collaborator_name
                         session_send_queue
                     );
@@ -38576,7 +38621,7 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                     #[cfg(debug_assertions)]
                     debug_log!(
-                        "HRCD ->[cue]<- 4.1 Send One File from Queue, session_send_queue -> ({}) {:?}",
+                        "HRCD ->[cue]<- 4.1 Send One File from Queue, session_send_queue -> (to {}) {:?}",
                         &room_sync_input.remote_collaborator_name, // remote_collaborator_name
                         session_send_queue
                     );
@@ -38587,7 +38632,7 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                         #[cfg(debug_assertions)]
                         debug_log!(
-                            "HRCD 4 before le pop, queue.items -> ({}) {:?}",
+                            "HRCD 4 before le pop, queue.items -> (to {}) {:?}",
                             &room_sync_input.remote_collaborator_name, // remote_collaborator_name
                             session_send_queue.items
                         );
@@ -38596,14 +38641,14 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                             #[cfg(debug_assertions)]
                             debug_log!(
-                                "HRCD 4 after le pop, queue.items -> ({}) {:?}",
+                                "HRCD 4 after le pop, queue.items -> (to {}) {:?}",
                                 &room_sync_input.remote_collaborator_name, // remote_collaborator_name
                                 session_send_queue.items
                             );
 
                             #[cfg(debug_assertions)]
                             debug_log!(
-                                "HRCD 4.2 Send File: if/while let Some(file_path) = queue.items.pop()  file_path ({}) {:?}",
+                                "HRCD 4.2 Send File: if/while let Some(file_path) = queue.items.pop()  file_path (to {}) {:?}",
                                 &room_sync_input.remote_collaborator_name, // remote_collaborator_name
                                 file_path
                             );
@@ -38958,7 +39003,7 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                             #[cfg(debug_assertions)]
                             debug_log!(
-                                "HRCD 4.6 Create sendfile_struct {:?} ({})",
+                                "HRCD 4.6 Create sendfile_struct {:?} (to {})",
                                 sendfile_struct,
                                 &room_sync_input.remote_collaborator_name
                             );
@@ -39027,7 +39072,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                                             }
                                             Err(_e) => {
                                                 #[cfg(debug_assertions)]
-                                                debug_log!("Error sending data: {} ({})", _e, &room_sync_input.remote_collaborator_name);
+                                                debug_log!("Error sending data: {} (to {})", _e, &room_sync_input.remote_collaborator_name);
                                                 // Handle the send error (e.g., log, retry, etc.)
                                             }
                                         }
