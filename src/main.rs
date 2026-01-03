@@ -38151,26 +38151,26 @@ fn handle_remote_collaborator_meetingroom_desk(
                             break;
                         }
 
-                        #[cfg(debug_assertions)]
-                        debug_log!("HRCD 1.5.2 (from {}) GotItloop Ok((amt, src)) Received {} bytes from {} on gotit port",
-                            remote_collaborator_name_clone,
-                            amt,
-                            _src);
 
                         // --- Inspect Raw Bytes ---
                         #[cfg(debug_assertions)]
                         {
-                        debug_log!(
-                                // this does require &
+                            debug_log!("HRCD 1.5.2 (from {}) GotItloop Ok((amt, src)) Received {} bytes from {} on gotit port",
+                                remote_collaborator_name_clone,
+                                amt,
+                                _src
+                            );
+
+                            debug_log!(
                                 "HRCD 1.5.2 GotItloop Raw bytes received: {:?} (from {})",
                                 &buf[..amt],
                                 remote_collaborator_name_clone
                             );
+
                             // --- Inspect Bytes as Hex ---
                             let hex_string = buf[..amt].iter()
                                 .map(|b| format!("{:02X}", b))
                                 .collect::<String>();
-
 
                             debug_log!("HRCD 1.5.2 GotItloop Raw bytes as hex: {} (from {})",
                                 hex_string,
@@ -38197,7 +38197,8 @@ fn handle_remote_collaborator_meetingroom_desk(
                                 #[cfg(debug_assertions)]
                                 debug_log!("HRCD 1.5.3 (from {}) GotItloop Err Receive data Failed to parse ready signal: {}",
                                     remote_collaborator_name_clone,
-                                    _e);
+                                    _e
+                                );
 
                                 continue; // Continue to the next iteration of the loop
                             }
@@ -38268,6 +38269,12 @@ fn handle_remote_collaborator_meetingroom_desk(
 
             // --- 2.1 Check for 'should_halt_uma' Signal ---
             if should_halt_uma() {
+                // safe log
+                debug_log!(
+                    "HRCD 2.1 main loop Check for halt signal. Halting handle_remote_collaborator_meetingroom_desk()",
+                );
+
+                #[cfg(debug_assertions)]
                 debug_log!(
                     "HRCD 2.1 main loop Check for halt signal. Halting handle_remote_collaborator_meetingroom_desk() (for {})",
                     room_sync_input.remote_collaborator_name
@@ -38283,18 +38290,19 @@ fn handle_remote_collaborator_meetingroom_desk(
                 Ok((amt, src)) => {
 
                     #[cfg(debug_assertions)]
-                    debug_log!(
-                        "HRCD 2.2.1 Ok((amt, src)) ready_port Signal Received {} bytes from {}",
-                        amt,
-                        src
-                    );
+                    {
+                        debug_log!(
+                            "HRCD 2.2.1 Ok((amt, src)) ready_port Signal Received {} bytes from {}",
+                            amt,
+                            src
+                        );
 
-                    #[cfg(debug_assertions)]
-                    debug_log!(
-                        "HRCD 2.2.1 check queue {:?} (for {}) (why here?)",
-                        session_send_queue.items,
-                        room_sync_input.remote_collaborator_name
-                    );
+                        debug_log!(
+                            "HRCD 2.2.1 check queue {:?} (for {}) (why here?)",
+                            session_send_queue.items,
+                            room_sync_input.remote_collaborator_name
+                        );
+                    }
 
                     if should_halt_uma() {
                         #[cfg(debug_assertions)]
@@ -38327,15 +38335,6 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                     }
 
-                    // --- Inspect Raw Bytes ---
-                    #[cfg(debug_assertions)]
-                    debug_log!(
-                        "HRCD 2.2.1 Ready Signal Raw bytes received: {:?} (for {})",
-                        &buf[..amt],
-                        room_sync_input.remote_collaborator_name
-                    );
-
-                    // --- Inspect Raw Bytes ---
                     // #[cfg(debug_assertions)]
                     // debug_log!(
                     //     "HRCD thread::sleep(Duration::from_secs(3)) (for {})",
@@ -38346,9 +38345,16 @@ fn handle_remote_collaborator_meetingroom_desk(
                     // this lets last item run
                     // thread::sleep(Duration::from_secs(5));
 
-                    // --- Inspect Bytes as Hex ---
                     #[cfg(debug_assertions)]
                     {
+                        // --- Inspect Raw Bytes ---
+                        debug_log!(
+                            "HRCD 2.2.1 Ready Signal Raw bytes received: {:?} (for {})",
+                            &buf[..amt],
+                            room_sync_input.remote_collaborator_name
+                        );
+
+                        // --- Inspect Bytes as Hex ---
                         let hex_string = buf[..amt].iter()
                             .map(|b| format!("{:02X}", b))
                             .collect::<String>();
@@ -38445,23 +38451,23 @@ fn handle_remote_collaborator_meetingroom_desk(
                     }
 
                     // --- 3. Get or Create Send Queue ---
-
                     // 3.1 ready_signal_timestamp for send-queue
                     let rst_sent_ready_signal_timestamp = ready_signal.rst; // Unwrap the timestamp outside the match, as it's always required.
 
                     #[cfg(debug_assertions)]
-                    debug_log!(
-                        "HRCD 3.1 check rst_sent_ready_signal_timestamp for send-queue: rst_sent_ready_signal_timestamp -> {:?} {}",
-                        rst_sent_ready_signal_timestamp,
-                        room_sync_input.remote_collaborator_name
-                    );
+                    {
+                        debug_log!(
+                            "HRCD 3.1 check rst_sent_ready_signal_timestamp for send-queue: rst_sent_ready_signal_timestamp -> {:?} {}",
+                            rst_sent_ready_signal_timestamp,
+                            room_sync_input.remote_collaborator_name
+                        );
 
-                    #[cfg(debug_assertions)]
-                    debug_log!(
-                        "HRCD 3.1 check rt: rc's last-file-received-from-you timestamp received in a readysignal. ready_signal.rt -> {:?} {}",
-                        ready_signal.rt,
-                        room_sync_input.remote_collaborator_name
-                    );
+                        debug_log!(
+                            "HRCD 3.1 check rt: rc's last-file-received-from-you timestamp received in a readysignal. ready_signal.rt -> {:?} {}",
+                            ready_signal.rt,
+                            room_sync_input.remote_collaborator_name
+                        );
+                    }
 
                     // --- 3.2 timestamp freshness checks ---
                     let current_timestamp = get_current_unix_timestamp();
