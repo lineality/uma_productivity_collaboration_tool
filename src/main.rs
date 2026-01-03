@@ -34665,7 +34665,7 @@ fn handle_local_owner_desk(
 
                     #[cfg(debug_assertions)]
                     debug_log!(
-                        "HLOD-InTray 3.5.2.1 Ok((amt, src)) ready_port Signal Received {} bytes from {} ({})",
+                        "HLOD-InTray 3.5.2.1 Ok((amt, src)) Intray socket file Received {} bytes from {} (from {})",
                         amt,
                         _src,
                         &remote_collaborator_name,
@@ -34675,7 +34675,7 @@ fn handle_local_owner_desk(
                     #[cfg(debug_assertions)]
                     {
                         debug_log!(
-                            "HLOD-InTray 3.5.2.2 Ready Signal Raw bytes received: {:?}",
+                            "HLOD-InTray 3.5.2.2 Intray: Sent-File Raw bytes received: {:?}",
                             &buf[..amt]
                         );
 
@@ -34685,7 +34685,7 @@ fn handle_local_owner_desk(
                             .collect::<String>();
 
                         debug_log!(
-                            "HLOD-InTray 3.5.2.3 Ready Signal Raw bytes as hex: {}",
+                            "HLOD-InTray 3.5.2.3 Intray: Sent-File Raw bytes as hex: {}",
                             hex_string
                         );
                     }
@@ -38257,7 +38257,6 @@ fn handle_remote_collaborator_meetingroom_desk(
         // For first-time bootstrap
         let mut bootstrap_sendqueue = true;
 
-
         // --- 2. Enter Main Loop ---
         // enter main loop (to handling signals, sending)
         loop {
@@ -38292,7 +38291,7 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                     #[cfg(debug_assertions)]
                     debug_log!(
-                        "HRCD 2.2.1 check queue {:?} (from {})",
+                        "HRCD 2.2.1 check queue {:?} (for {}) (why here?)",
                         session_send_queue.items,
                         room_sync_input.remote_collaborator_name
                     );
@@ -38328,8 +38327,6 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                     }
 
-
-
                     // --- Inspect Raw Bytes ---
                     #[cfg(debug_assertions)]
                     debug_log!(
@@ -38339,11 +38336,11 @@ fn handle_remote_collaborator_meetingroom_desk(
                     );
 
                     // --- Inspect Raw Bytes ---
-                    #[cfg(debug_assertions)]
-                    debug_log!(
-                        "HRCD thread::sleep(Duration::from_secs(3)) (for {})",
-                        room_sync_input.remote_collaborator_name
-                    );
+                    // #[cfg(debug_assertions)]
+                    // debug_log!(
+                    //     "HRCD thread::sleep(Duration::from_secs(3)) (for {})",
+                    //     room_sync_input.remote_collaborator_name
+                    // );
 
                     // TODO: how long?
                     // this lets last item run
