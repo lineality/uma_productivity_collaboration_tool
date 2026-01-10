@@ -3,13 +3,10 @@ name = "uma"
 version = "0.1.1"
 edition = "2024"
 
-
 [dependencies]
 walkdir = "2.5.0"
-toml = "0.8.19"
-serde = { version = "1.0.210", features = ["derive"] }
 rand = "0.9"
-getifaddrs = "0.1"
+getifaddrs = "0.6"
 
 # build with -> cargo build --profile release-performance
 [profile.release-performance]

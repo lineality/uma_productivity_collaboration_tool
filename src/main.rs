@@ -357,13 +357,11 @@ use std::fs::{
     remove_dir_all,
     read_dir,
 };
-use toml;
-use toml::Value;
-use serde::{
-    Deserialize,
-    Serialize,
+// use serde::{
+//     // Deserialize,
+//     // Serialize,
 
-};
+// };
 
 use std::ffi::OsStr;
 use std::collections::HashMap;
@@ -771,7 +769,7 @@ enum MyCustomError {
     /// IO errors from file operations
     IoError(std::io::Error),
     /// TOML parsing and deserialization errors
-    TomlDeserializationError(toml::de::Error),
+    // TomlDeserializationError(toml::de::Error),
     /// Invalid data format or content errors
     InvalidData(String),
     /// Port collision errors when ports are already in use
@@ -786,7 +784,7 @@ impl From<ThisProjectError> for MyCustomError {
     fn from(error: ThisProjectError) -> Self {
         match error {
             ThisProjectError::IoError(e) => MyCustomError::IoError(e),
-            ThisProjectError::TomlDeserializationError(e) => MyCustomError::TomlDeserializationError(e),
+            // ThisProjectError::TomlDeserializationError(e) => MyCustomError::TomlDeserializationError(e),
             ThisProjectError::InvalidData(msg) => MyCustomError::InvalidData(msg),
             ThisProjectError::InvalidInput(msg) => MyCustomError::InvalidData(msg),
             ThisProjectError::PortCollision(msg) => MyCustomError::PortCollision(msg),
@@ -815,7 +813,7 @@ impl std::fmt::Display for MyCustomError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             MyCustomError::IoError(e) => write!(f, "IO Error: {}", e),
-            MyCustomError::TomlDeserializationError(e) => write!(f, "TOML Error: {}", e),
+            // MyCustomError::TomlDeserializationError(e) => write!(f, "TOML Error: {}", e),
             MyCustomError::InvalidData(msg) => write!(f, "Invalid Data: {}", msg),
             MyCustomError::PortCollision(msg) => write!(f, "Port Collision: {}", msg),
             MyCustomError::Custom(msg) => write!(f, "Error: {}", msg),
@@ -832,7 +830,7 @@ impl PartialEq for MyCustomError {
                 // Or you can use:
                 // e1.to_string() == e2.to_string()
             },
-            (MyCustomError::TomlDeserializationError(e1), MyCustomError::TomlDeserializationError(e2)) => e1 == e2,
+            // (MyCustomError::TomlDeserializationError(e1), MyCustomError::TomlDeserializationError(e2)) => e1 == e2,
             // Add other arms for your variants as needed
             _ => false, // Different variants are never equal
         }
@@ -844,7 +842,7 @@ impl StdError for MyCustomError {
     fn source(&self) -> Option<&(dyn StdError + 'static)> {
         match *self {
             MyCustomError::IoError(ref err) => Some(err),
-            MyCustomError::TomlDeserializationError(ref err) => Some(err),
+            // MyCustomError::TomlDeserializationError(ref err) => Some(err),
             _ => None, // No underlying source for these variants
         }
     }
@@ -870,16 +868,16 @@ impl From<io::Error> for MyCustomError {
     }
 }
 
-impl From<toml::de::Error> for MyCustomError {
-    fn from(error: toml::de::Error) -> Self {
-        MyCustomError::TomlDeserializationError(error)
-    }
-}
+// impl From<toml::de::Error> for MyCustomError {
+//     fn from(error: toml::de::Error) -> Self {
+//         MyCustomError::TomlDeserializationError(error)
+//     }
+// }
 
 #[derive(Debug)]
 pub enum ThisProjectError {
     IoError(std::io::Error),
-    TomlDeserializationError(toml::de::Error), // May be depricated along with serde-crate
+    // TomlDeserializationError(toml::de::Error), // May be depricated along with serde-crate
     TomlVanillaDeserialStrError(String), // use without serede crate (good)
     InvalidInput(String),
     InvalidData(String),
@@ -932,19 +930,19 @@ impl From<ParseIntError> for ThisProjectError {
     }
 }
 
-// Implement From<toml::de::Error> for ThisProjectError
-impl From<toml::de::Error> for ThisProjectError {
-    fn from(err: toml::de::Error) -> Self {
-        ThisProjectError::TomlDeserializationError(err)
-    }
-}
+// // Implement From<toml::de::Error> for ThisProjectError
+// impl From<toml::de::Error> for ThisProjectError {
+//     fn from(err: toml::de::Error) -> Self {
+//         ThisProjectError::TomlDeserializationError(err)
+//     }
+// }
 
 // Implement the std::error::Error trait for ThisProjectError
 impl std::error::Error for ThisProjectError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match *self {
             ThisProjectError::IoError(ref err) => Some(err),
-            ThisProjectError::TomlDeserializationError(ref err) => Some(err),
+            // ThisProjectError::TomlDeserializationError(ref err) => Some(err),
             _ => None,
         }
     }
@@ -955,7 +953,7 @@ impl std::fmt::Display for ThisProjectError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match *self {
             ThisProjectError::IoError(ref err) => write!(f, "IO Error: {}", err),
-            ThisProjectError::TomlDeserializationError(ref err) => write!(f, "TOML TomlDeserializationError  Error: {}", err),
+            // ThisProjectError::TomlDeserializationError(ref err) => write!(f, "TOML TomlDeserializationError  Error: {}", err),
             ThisProjectError::TomlVanillaDeserialStrError(ref err) => write!(f, "TomlVanillaDeserialStrError TOML Error: {}", err),
             ThisProjectError::InvalidData(ref msg) => write!(f, "Invalid Data: {}", msg),
             ThisProjectError::InvalidInput(ref msg) => write!(f, "Invalid Input: {}", msg),
@@ -1050,22 +1048,70 @@ impl From<io::Error> for ThisProjectError {
 // End Uma Error Section
 // =====================
 
-/// utility: Gets a list of all IPv4 and IPv6 addresses associated with the current system's network interfaces.
+// /// utility: Gets a list of all IPv4 and IPv6 addresses associated with the current system's network interfaces.
+// ///
+// /// Returns:
+// /// - `Ok(Vec<IpAddr>)`: A vector of IP addresses on success.
+// /// - `Err(io::Error)`: An error if obtaining network interface information fails.
+// /// From: https://docs.rs/getifaddrs/latest/getifaddrs/
+// /// use getifaddrs::{getifaddrs, InterfaceFlags};
+// fn get_local_ip_addresses() -> Result<Vec<IpAddr>, std::io::Error> {
+//     // https://docs.rs/getifaddrs/latest/getifaddrs/
+
+//     // Test Print in Debug Log
+//     for interface in getifaddrs()? {
+//         debug_log("fn get_local_ip_addresses() -> std::io::Result<()> {");
+//         debug_log!("Interface: {}", interface.name);
+//         debug_log!("  Address: {}", interface.address);
+//         if let Some(netmask) = interface.netmask {
+//             debug_log!("  Netmask: {}", netmask);
+//         }
+//         debug_log!("  Flags: {:?}", interface.flags);
+//         if interface.flags.contains(InterfaceFlags::UP) {
+//             debug_log!("  Status: Up");
+//         } else {
+//             debug_log!("  Status: Down");
+//         }
+//         debug_log!();
+//     }
+
+//     let mut addresses = Vec::new();
+
+//     for interface in getifaddrs()? {
+//         if interface.flags.contains(InterfaceFlags::UP) && // Interface is up
+//            !interface.flags.contains(InterfaceFlags::LOOPBACK) { // Not a loopback interface
+//                match interface.address {
+//                    IpAddr::V4(addr) => addresses.push(IpAddr::V4(addr)),
+//                    IpAddr::V6(addr) => addresses.push(IpAddr::V6(addr)),
+//                }
+//            }
+//     }
+
+
+
+//     Ok(addresses)
+// }
+
+
+// use getifaddrs::getifaddrs;
+// use std::net::IpAddr;
+
+/// Gets a list of all IPv4 and IPv6 addresses associated with the current system's network interfaces.
 ///
 /// Returns:
 /// - `Ok(Vec<IpAddr>)`: A vector of IP addresses on success.
 /// - `Err(io::Error)`: An error if obtaining network interface information fails.
-/// From: https://docs.rs/getifaddrs/latest/getifaddrs/
-/// use getifaddrs::{getifaddrs, InterfaceFlags};
+/// Gets a list of all IPv4 and IPv6 addresses associated with the current system's network interfaces.
 fn get_local_ip_addresses() -> Result<Vec<IpAddr>, std::io::Error> {
-    // https://docs.rs/getifaddrs/latest/getifaddrs/
+    let mut addresses = Vec::new();
 
-    // Test Print in Debug Log
+    // Debug logging
     for interface in getifaddrs()? {
-        debug_log("fn get_local_ip_addresses() -> std::io::Result<()> {");
         debug_log!("Interface: {}", interface.name);
-        debug_log!("  Address: {}", interface.address);
-        if let Some(netmask) = interface.netmask {
+        if let Some(ip_addr) = interface.address.ip_addr() {
+            debug_log!("  IP Address: {}", ip_addr);
+        }
+        if let Some(netmask) = interface.address.netmask() {
             debug_log!("  Netmask: {}", netmask);
         }
         debug_log!("  Flags: {:?}", interface.flags);
@@ -1077,16 +1123,15 @@ fn get_local_ip_addresses() -> Result<Vec<IpAddr>, std::io::Error> {
         debug_log!();
     }
 
-    let mut addresses = Vec::new();
-
+    // Collect non-loopback addresses
     for interface in getifaddrs()? {
-        if interface.flags.contains(InterfaceFlags::UP) && // Interface is up
-           !interface.flags.contains(InterfaceFlags::LOOPBACK) { // Not a loopback interface
-               match interface.address {
-                   IpAddr::V4(addr) => addresses.push(IpAddr::V4(addr)),
-                   IpAddr::V6(addr) => addresses.push(IpAddr::V6(addr)),
-               }
-           }
+        if interface.flags.contains(InterfaceFlags::UP)
+            && !interface.flags.contains(InterfaceFlags::LOOPBACK)
+        {
+            if let Some(ip_addr) = interface.address.ip_addr() {
+                addresses.push(ip_addr);
+            }
+        }
     }
 
     Ok(addresses)
@@ -5103,7 +5148,7 @@ macro_rules! debug_log {
 
 /// struct for reading/extracting raw abstract port assignments
 /// from the team_channels/NAME/node.toml
-#[derive(Debug, Deserialize, Serialize, Clone, Hash, PartialEq, Eq)] // Add
+#[derive(Debug, Clone, Hash, PartialEq, Eq)] // Add
 struct AbstractTeamchannelNodeTomlPortsData {
     user_name: String,
     ready_port: u16,
@@ -5118,7 +5163,7 @@ struct AbstractTeamchannelNodeTomlPortsData {
 /// Because Rust does not automatically deal with 'list of dicts' in python terms
 /// this struct is a list (array) of 'dictionaries/hashmaps' which are a separate struct
 /// so this list is a single list, that is a list of other structs that are dicts/hashmaps
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Clone)]
 pub struct ReadTeamchannelCollaboratorPortsToml {
     /// The port used by the REMOTE collaborator to signal readiness to receive data.
     collaborator_ports: Vec<AbstractTeamchannelNodeTomlPortsData>,
@@ -7947,7 +7992,7 @@ log_mode_refresh = {}"#,
 }
 
 
-#[derive(Debug, Deserialize, serde::Serialize, Clone)]
+#[derive(Debug, Clone)]
 struct CollaboratorTomlData {
     user_name: String,
     user_salt_list: Vec<u128>,
@@ -8886,7 +8931,8 @@ fn add_collaborator_qa(
 /// In UMA, the file path of the `node.toml` file within the `project_graph_data/team_channels`
 /// directory uniquely identifies a team channel. This method reads data from the `node.toml`
 /// file at the current path to determine the active team channel and load relevant information.
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[allow(dead_code)] // false alarm
+#[derive(Debug, Clone)]
 struct GraphNavigationInstanceState {
     local_owner_user: String, // Store the local user data here
     // local_owner_hash_list: Vec<u8>,
@@ -9517,7 +9563,7 @@ graph-dungeon location.
 /// I think it is safer to define it as a physical directory basal location, in the team_channels direcorry
 /// rather than give it ia declarative-definiiton where anyone could invent or uninvent a team-channel
 /// and all the port use that goes along with that
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Clone)]
 struct CoreNode {
     /// The name of the node. This is used for display and identification.
     node_name: String,
@@ -9792,6 +9838,685 @@ impl CoreNode {
         Ok(node)
     }
 
+    /// Manually serializes a `CoreNode` struct to a TOML-formatted string.
+    ///
+    /// # Project Context
+    ///
+    /// This function provides manual TOML serialization for CoreNode structs as part of
+    /// Uma's security-hardened approach. By avoiding third-party serialization crates,
+    /// we maintain full control over the serialization process, ensuring predictable
+    /// output format and eliminating supply-chain risks from external dependencies.
+    ///
+    /// CoreNode instances represent nodes in Uma's distributed graph database. These nodes
+    /// contain project metadata, collaborator information, port assignments for P2P
+    /// communication, and message-post configuration. The serialized TOML is saved to
+    /// `node.toml` files which are then GPG clearsigned for integrity verification.
+    ///
+    /// # Security Design
+    ///
+    /// - **No third-party dependencies**: Eliminates attack surface from external crates
+    /// - **Deterministic output**: Manual serialization ensures consistent format
+    /// - **Size limiting**: Enforces 4KB maximum to prevent resource exhaustion
+    /// - **UTF-8 validation**: Prevents encoding attacks via non-UTF-8 injection
+    /// - **Fail-safe error handling**: Returns detailed errors without panicking
+    ///
+    /// # Serialization Rules
+    ///
+    /// 1. **Required fields**: All non-Option fields are always serialized
+    /// 2. **Optional fields**: Omitted entirely if `None` (no key in output)
+    /// 3. **Empty collections**: Written as `[]` (not omitted)
+    /// 4. **Empty HashMap**: Entire section omitted if no entries
+    /// 5. **Field order**: Matches struct definition order
+    /// 6. **String escaping**: All strings escaped per TOML basic string spec
+    /// 7. **Size limit**: Returns error if output exceeds 4096 bytes
+    ///
+    /// # TOML Format Output
+    ///
+    /// Simple fields are serialized as key-value pairs:
+    /// ```toml
+    /// node_name = "alicetown"
+    /// corenode_gpgtoml = false
+    /// updated_at_timestamp = 1765635381
+    /// ```
+    ///
+    /// Arrays are serialized inline:
+    /// ```toml
+    /// node_unique_id = [222, 22, 116, 195]
+    /// teamchannel_collaborators_with_access = ["alice", "bob"]
+    /// ```
+    ///
+    /// Nested port assignments use TOML array-of-tables syntax:
+    /// ```toml
+    /// [[abstract_collaborator_port_assignments.alice_bob]]
+    ///
+    /// [[abstract_collaborator_port_assignments.alice_bob.collaborator_ports]]
+    /// user_name = "alice"
+    /// ready_port = 50726
+    /// ```
+    ///
+    /// # Memory Management
+    ///
+    /// Pre-allocates string buffer with 2KB capacity. Since node saving is a rare
+    /// operation (only on node creation/update), heap allocation is acceptable here.
+    /// The 4KB size limit ensures reasonable memory bounds.
+    ///
+    /// # Error Conditions
+    ///
+    /// Returns `io::Error` with terse, unique error messages for:
+    /// - Non-UTF-8 characters in string fields
+    /// - Invalid path encoding in PathBuf fields
+    /// - Final serialized size exceeding 4096 bytes
+    ///
+    /// Error messages use "SNCTF:" prefix (Serialize Node CoreNode To File) for
+    /// unique identification and traceability.
+    ///
+    /// # Parameters
+    ///
+    /// - `&self`: Reference to the CoreNode instance to serialize
+    ///
+    /// # Returns
+    ///
+    /// - `Ok(String)`: Successfully serialized TOML string (≤4096 bytes)
+    /// - `Err(io::Error)`: Serialization failure with descriptive error message
+    ///
+    /// # Example Usage
+    ///
+    /// ```rust,no_run
+    /// let node = CoreNode {
+    ///     node_name: "research_node".to_string(),
+    ///     owner: "alice".to_string(),
+    ///     // ... other fields
+    /// };
+    ///
+    /// match node.serialize_corenode_struct_to_string() {
+    ///     Ok(toml_string) => {
+    ///         // Write to file, clearsign, etc.
+    ///         println!("Serialized {} bytes", toml_string.len());
+    ///     }
+    ///     Err(e) => {
+    ///         eprintln!("Serialization failed: {}", e);
+    ///         // Handle error without panic
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// # Performance Considerations
+    ///
+    /// - O(n) where n is total data size across all fields
+    /// - Single-pass serialization (no buffering/re-processing)
+    /// - Pre-allocated string minimizes reallocations
+    /// - HashMap iteration order is arbitrary (unordered)
+    ///
+    /// # Relationship to Deserialization
+    ///
+    /// This function's output is designed to be read by
+    /// `deseri_get_core_node_struct_from_toml_file()`, which performs
+    /// field-by-field validated extraction with GPG signature verification.
+    ///
+    fn serialize_corenode_struct_to_string(
+        &self,
+    ) -> Result<String, io::Error> {
+
+        // Pre-allocate string buffer with estimated capacity
+        // 2KB baseline should handle typical nodes without reallocation
+        // Will grow automatically if needed (checked against 4KB limit at end)
+        let mut toml_output = String::with_capacity(2048);
+
+        //=================================================================
+        // SECTION 1: Simple Required Fields (Strings, Bool, Numbers)
+        //=================================================================
+
+        // Serialize node_name (String)
+        // Validate UTF-8 and escape special characters for TOML compliance
+        if !self.node_name.is_empty() {
+            let escaped_name = escape_toml_basic_string(&self.node_name);
+            toml_output.push_str("node_name = \"");
+            toml_output.push_str(&escaped_name);
+            toml_output.push_str("\"\n");
+        } else {
+            // Empty node_name is technically valid but unusual
+            toml_output.push_str("node_name = \"\"\n");
+        }
+
+        // Serialize corenode_gpgtoml (bool)
+        // Required field: always present
+        toml_output.push_str("corenode_gpgtoml = ");
+        if self.corenode_gpgtoml {
+            toml_output.push_str("true\n");
+        } else {
+            toml_output.push_str("false\n");
+        }
+
+        // Serialize description_for_tui (String)
+        let escaped_description = escape_toml_basic_string(&self.description_for_tui);
+        toml_output.push_str("description_for_tui = \"");
+        toml_output.push_str(&escaped_description);
+        toml_output.push_str("\"\n");
+
+        //=================================================================
+        // SECTION 2: Array Fields - Vec<u8> (Node IDs)
+        //=================================================================
+
+        // Serialize node_unique_id (Vec<u8>)
+        // Format: node_unique_id = [222, 22, 116, 195]
+        toml_output.push_str("node_unique_id = [");
+        for (idx, byte_val) in self.node_unique_id.iter().enumerate() {
+            if idx > 0 {
+                toml_output.push_str(", ");
+            }
+            // Convert u8 to string without heap allocation where possible
+            // Using itoa-like manual conversion for efficiency
+            let mut val = *byte_val;
+
+            if val == 0 {
+                toml_output.push('0');
+            } else {
+                // Build digits in reverse
+                let mut temp_digits = [0u8; 3];
+                let mut digit_count = 0;
+                while val > 0 {
+                    temp_digits[digit_count] = (val % 10) as u8;
+                    val /= 10;
+                    digit_count += 1;
+                }
+                // Push in correct order
+                for i in (0..digit_count).rev() {
+                    toml_output.push((b'0' + temp_digits[i]) as char);
+                }
+            }
+        }
+        toml_output.push_str("]\n");
+
+        //=================================================================
+        // SECTION 3: PathBuf Field
+        //=================================================================
+
+        // Serialize path_in_parentnode (PathBuf)
+        // Convert PathBuf to UTF-8 string, return error if invalid encoding
+        let path_str = self.path_in_parentnode.to_str()
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "SNCTF: field 'path_in_parentnode' contains non-UTF-8"
+                )
+            })?;
+        let escaped_path = escape_toml_basic_string(path_str);
+        toml_output.push_str("path_in_parentnode = \"");
+        toml_output.push_str(&escaped_path);
+        toml_output.push_str("\"\n");
+
+        // Serialize parent_node_uniqueid (Vec<u8>)
+        toml_output.push_str("parent_node_uniqueid = [");
+        for (idx, byte_val) in self.parent_node_uniqueid.iter().enumerate() {
+            if idx > 0 {
+                toml_output.push_str(", ");
+            }
+            // Manual u8 to string conversion (same pattern as node_unique_id)
+            let mut val = *byte_val;
+            if val == 0 {
+                toml_output.push('0');
+            } else {
+                let mut temp_digits = [0u8; 3];
+                let mut digit_count = 0;
+                while val > 0 {
+                    temp_digits[digit_count] = (val % 10) as u8;
+                    val /= 10;
+                    digit_count += 1;
+                }
+                for i in (0..digit_count).rev() {
+                    toml_output.push((b'0' + temp_digits[i]) as char);
+                }
+            }
+        }
+        toml_output.push_str("]\n");
+
+        //=================================================================
+        // SECTION 4: Owner and Timestamps
+        //=================================================================
+
+        // Serialize owner (String)
+        let escaped_owner = escape_toml_basic_string(&self.owner);
+        toml_output.push_str("owner = \"");
+        toml_output.push_str(&escaped_owner);
+        toml_output.push_str("\"\n");
+
+        // Serialize updated_at_timestamp (u64)
+        toml_output.push_str("updated_at_timestamp = ");
+        self.append_u64_to_string(&mut toml_output, self.updated_at_timestamp);
+        toml_output.push('\n');
+
+        // Serialize expires_at (u64)
+        toml_output.push_str("expires_at = ");
+        self.append_u64_to_string(&mut toml_output, self.expires_at);
+        toml_output.push('\n');
+
+        //=================================================================
+        // SECTION 5: Collaborators Array (Vec<String>)
+        //=================================================================
+
+        // Serialize teamchannel_collaborators_with_access (Vec<String>)
+        toml_output.push_str("teamchannel_collaborators_with_access = [");
+        for (idx, collab) in self.teamchannel_collaborators_with_access.iter().enumerate() {
+            if idx > 0 {
+                toml_output.push_str(", ");
+            }
+            let escaped_collab = escape_toml_basic_string(collab);
+            toml_output.push('"');
+            toml_output.push_str(&escaped_collab);
+            toml_output.push('"');
+        }
+        toml_output.push_str("]\n");
+
+        //=================================================================
+        // SECTION 6: Project Areas
+        //=================================================================
+
+        // Serialize pa1_process (String)
+        let escaped_pa1 = escape_toml_basic_string(&self.pa1_process);
+        toml_output.push_str("pa1_process = \"");
+        toml_output.push_str(&escaped_pa1);
+        toml_output.push_str("\"\n");
+
+        // Serialize pa2_schedule (Vec<u64>)
+        toml_output.push_str("pa2_schedule = [");
+        for (idx, timestamp) in self.pa2_schedule.iter().enumerate() {
+            if idx > 0 {
+                toml_output.push_str(", ");
+            }
+            self.append_u64_to_string(&mut toml_output, *timestamp);
+        }
+        toml_output.push_str("]\n");
+
+        // Serialize pa3_users (String)
+        let escaped_pa3 = escape_toml_basic_string(&self.pa3_users);
+        toml_output.push_str("pa3_users = \"");
+        toml_output.push_str(&escaped_pa3);
+        toml_output.push_str("\"\n");
+
+        // Serialize pa4_features (String)
+        let escaped_pa4 = escape_toml_basic_string(&self.pa4_features);
+        toml_output.push_str("pa4_features = \"");
+        toml_output.push_str(&escaped_pa4);
+        toml_output.push_str("\"\n");
+
+        // Serialize pa5_mvp (String)
+        let escaped_pa5 = escape_toml_basic_string(&self.pa5_mvp);
+        toml_output.push_str("pa5_mvp = \"");
+        toml_output.push_str(&escaped_pa5);
+        toml_output.push_str("\"\n");
+
+        // Serialize pa6_feedback (String)
+        let escaped_pa6 = escape_toml_basic_string(&self.pa6_feedback);
+        toml_output.push_str("pa6_feedback = \"");
+        toml_output.push_str(&escaped_pa6);
+        toml_output.push_str("\"\n");
+
+        //=================================================================
+        // SECTION 7: Abstract Collaborator Port Assignments (HashMap)
+        //=================================================================
+
+        // Only serialize if HashMap is non-empty
+        // Format: TOML array-of-tables with nested structure
+        if !self.abstract_collaborator_port_assignments.is_empty() {
+            toml_output.push('\n'); // Blank line before complex section
+
+            // Iterate over HashMap entries (order is arbitrary)
+            for (pair_name, port_data_vec) in &self.abstract_collaborator_port_assignments {
+                // Validate pair_name is valid for TOML table name
+                let escaped_pair_name = escape_toml_basic_string(pair_name);
+
+                // Write array-of-tables header for this pair
+                toml_output.push_str("[[abstract_collaborator_port_assignments.");
+                toml_output.push_str(&escaped_pair_name);
+                toml_output.push_str("]]\n");
+
+                // Iterate over Vec<ReadTeamchannelCollaboratorPortsToml>
+                for port_entry in port_data_vec {
+                    // Each entry contains Vec<AbstractTeamchannelNodeTomlPortsData>
+                    for port_data in &port_entry.collaborator_ports {
+                        // Write nested array-of-tables for individual collaborator ports
+                        toml_output.push_str("[[abstract_collaborator_port_assignments.");
+                        toml_output.push_str(&escaped_pair_name);
+                        toml_output.push_str(".collaborator_ports]]\n");
+
+                        // Serialize user_name
+                        let escaped_username = escape_toml_basic_string(&port_data.user_name);
+                        toml_output.push_str("user_name = \"");
+                        toml_output.push_str(&escaped_username);
+                        toml_output.push_str("\"\n");
+
+                        // Serialize ready_port (u16)
+                        toml_output.push_str("ready_port = ");
+                        self.append_u16_to_string(&mut toml_output, port_data.ready_port);
+                        toml_output.push('\n');
+
+                        // Serialize intray_port (u16)
+                        toml_output.push_str("intray_port = ");
+                        self.append_u16_to_string(&mut toml_output, port_data.intray_port);
+                        toml_output.push('\n');
+
+                        // Serialize gotit_port (u16)
+                        toml_output.push_str("gotit_port = ");
+                        self.append_u16_to_string(&mut toml_output, port_data.gotit_port);
+                        toml_output.push('\n');
+
+                        toml_output.push('\n'); // Blank line between port entries
+                    }
+                }
+            }
+        }
+
+        //=================================================================
+        // SECTION 8: Message Post Optional Fields
+        //=================================================================
+
+        // Serialize message_post_gpgtoml_required (Option<bool>)
+        if let Some(gpgtoml_required) = self.message_post_gpgtoml_required {
+            toml_output.push_str("message_post_gpgtoml_required = ");
+            if gpgtoml_required {
+                toml_output.push_str("true\n");
+            } else {
+                toml_output.push_str("false\n");
+            }
+        }
+
+        // Serialize message_post_data_format_specs_integer_ranges_from_to_tuple_array
+        // Format: Option<Vec<(i32, i32)>> -> [[1, 10], [20, 30]]
+        if let Some(ref int_ranges) = self.message_post_data_format_specs_integer_ranges_from_to_tuple_array {
+            toml_output.push_str("message_post_data_format_specs_integer_ranges_from_to_tuple_array = [");
+            for (idx, (min_val, max_val)) in int_ranges.iter().enumerate() {
+                if idx > 0 {
+                    toml_output.push_str(", ");
+                }
+                toml_output.push('[');
+                self.append_i32_to_string(&mut toml_output, *min_val);
+                toml_output.push_str(", ");
+                self.append_i32_to_string(&mut toml_output, *max_val);
+                toml_output.push(']');
+            }
+            toml_output.push_str("]\n");
+        }
+
+        // Serialize message_post_data_format_specs_int_string_ranges_from_to_tuple_array
+        if let Some(ref int_string_ranges) = self.message_post_data_format_specs_int_string_ranges_from_to_tuple_array {
+            toml_output.push_str("message_post_data_format_specs_int_string_ranges_from_to_tuple_array = [");
+            for (idx, (min_val, max_val)) in int_string_ranges.iter().enumerate() {
+                if idx > 0 {
+                    toml_output.push_str(", ");
+                }
+                toml_output.push('[');
+                self.append_i32_to_string(&mut toml_output, *min_val);
+                toml_output.push_str(", ");
+                self.append_i32_to_string(&mut toml_output, *max_val);
+                toml_output.push(']');
+            }
+            toml_output.push_str("]\n");
+        }
+
+        // Serialize message_post_max_string_length_int (Option<usize>)
+        if let Some(max_length) = self.message_post_max_string_length_int {
+            toml_output.push_str("message_post_max_string_length_int = ");
+            self.append_usize_to_string(&mut toml_output, max_length);
+            toml_output.push('\n');
+        }
+
+        // Serialize message_post_is_public_bool (Option<bool>)
+        if let Some(is_public) = self.message_post_is_public_bool {
+            toml_output.push_str("message_post_is_public_bool = ");
+            if is_public {
+                toml_output.push_str("true\n");
+            } else {
+                toml_output.push_str("false\n");
+            }
+        }
+
+        // Serialize message_post_user_confirms_bool (Option<bool>)
+        if let Some(user_confirms) = self.message_post_user_confirms_bool {
+            toml_output.push_str("message_post_user_confirms_bool = ");
+            if user_confirms {
+                toml_output.push_str("true\n");
+            } else {
+                toml_output.push_str("false\n");
+            }
+        }
+
+        // Serialize message_post_start_date_utc_posix (Option<i64>)
+        if let Some(start_date) = self.message_post_start_date_utc_posix {
+            toml_output.push_str("message_post_start_date_utc_posix = ");
+            self.append_i64_to_string(&mut toml_output, start_date);
+            toml_output.push('\n');
+        }
+
+        // Serialize message_post_end_date_utc_posix (Option<i64>)
+        if let Some(end_date) = self.message_post_end_date_utc_posix {
+            toml_output.push_str("message_post_end_date_utc_posix = ");
+            self.append_i64_to_string(&mut toml_output, end_date);
+            toml_output.push('\n');
+        }
+
+        //=================================================================
+        // SECTION 9: Padnet Optional Field
+        //=================================================================
+
+        // Serialize use_padnet (Option<bool>)
+        if let Some(use_padnet_val) = self.use_padnet {
+            toml_output.push_str("use_padnet = ");
+            if use_padnet_val {
+                toml_output.push_str("true\n");
+            } else {
+                toml_output.push_str("false\n");
+            }
+        }
+
+        //=================================================================
+        // SECTION 10: Size Validation
+        //=================================================================
+
+        // Check if serialized output exceeds 4096 byte limit
+        // This prevents resource exhaustion and ensures reasonable node sizes
+        let output_size = toml_output.len();
+        if output_size > 4096 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("SNCTF: node size {} exceeds 4096 bytes", output_size)
+            ));
+        }
+
+        // Success: return serialized TOML string
+        Ok(toml_output)
+    }
+
+    //=====================================================================
+    // Helper Methods: Number-to-String Conversion Without Heap Allocation
+    //=====================================================================
+
+    /// Appends a u16 value to a string buffer without heap allocation.
+    ///
+    /// # Project Context
+    ///
+    /// Used for serializing port numbers (0-65535) in collaborator port assignments.
+    /// Avoids format! macro which uses heap allocation.
+    ///
+    /// # Parameters
+    ///
+    /// - `buffer`: Mutable string to append to
+    /// - `value`: u16 value to convert and append
+    ///
+    fn append_u16_to_string(&self, buffer: &mut String, value: u16) {
+        if value == 0 {
+            buffer.push('0');
+            return;
+        }
+
+        let mut temp_digits = [0u8; 5]; // Max 5 digits for u16 (0-65535)
+        let mut digit_count = 0;
+        let mut val = value;
+
+        while val > 0 {
+            temp_digits[digit_count] = (val % 10) as u8;
+            val /= 10;
+            digit_count += 1;
+        }
+
+        for i in (0..digit_count).rev() {
+            buffer.push((b'0' + temp_digits[i]) as char);
+        }
+    }
+
+    /// Appends a u64 value to a string buffer without heap allocation.
+    ///
+    /// # Project Context
+    ///
+    /// Used for serializing timestamps and schedule values. Unix timestamps
+    /// fit within u64 range (up to year 292 billion+).
+    ///
+    /// # Parameters
+    ///
+    /// - `buffer`: Mutable string to append to
+    /// - `value`: u64 value to convert and append
+    ///
+    fn append_u64_to_string(&self, buffer: &mut String, value: u64) {
+        if value == 0 {
+            buffer.push('0');
+            return;
+        }
+
+        let mut temp_digits = [0u8; 20]; // Max 20 digits for u64
+        let mut digit_count = 0;
+        let mut val = value;
+
+        while val > 0 {
+            temp_digits[digit_count] = (val % 10) as u8;
+            val /= 10;
+            digit_count += 1;
+        }
+
+        for i in (0..digit_count).rev() {
+            buffer.push((b'0' + temp_digits[i]) as char);
+        }
+    }
+
+    /// Appends an i32 value to a string buffer without heap allocation.
+    ///
+    /// # Project Context
+    ///
+    /// Used for serializing signed integer ranges in message post validation
+    /// specifications. Handles negative values with '-' prefix.
+    ///
+    /// # Parameters
+    ///
+    /// - `buffer`: Mutable string to append to
+    /// - `value`: i32 value to convert and append
+    ///
+    fn append_i32_to_string(&self, buffer: &mut String, value: i32) {
+        if value == 0 {
+            buffer.push('0');
+            return;
+        }
+
+        // Handle negative values
+        let (is_negative, abs_value) = if value < 0 {
+            (true, value.wrapping_abs() as u32)
+        } else {
+            (false, value as u32)
+        };
+
+        if is_negative {
+            buffer.push('-');
+        }
+
+        let mut temp_digits = [0u8; 10]; // Max 10 digits for i32
+        let mut digit_count = 0;
+        let mut val = abs_value;
+
+        while val > 0 {
+            temp_digits[digit_count] = (val % 10) as u8;
+            val /= 10;
+            digit_count += 1;
+        }
+
+        for i in (0..digit_count).rev() {
+            buffer.push((b'0' + temp_digits[i]) as char);
+        }
+    }
+
+    /// Appends an i64 value to a string buffer without heap allocation.
+    ///
+    /// # Project Context
+    ///
+    /// Used for serializing signed 64-bit timestamps (POSIX times can be
+    /// negative for dates before Unix epoch: 1970-01-01).
+    ///
+    /// # Parameters
+    ///
+    /// - `buffer`: Mutable string to append to
+    /// - `value`: i64 value to convert and append
+    ///
+    fn append_i64_to_string(&self, buffer: &mut String, value: i64) {
+        if value == 0 {
+            buffer.push('0');
+            return;
+        }
+
+        // Handle negative values
+        let (is_negative, abs_value) = if value < 0 {
+            (true, value.wrapping_abs() as u64)
+        } else {
+            (false, value as u64)
+        };
+
+        if is_negative {
+            buffer.push('-');
+        }
+
+        let mut temp_digits = [0u8; 20]; // Max 20 digits for i64
+        let mut digit_count = 0;
+        let mut val = abs_value;
+
+        while val > 0 {
+            temp_digits[digit_count] = (val % 10) as u8;
+            val /= 10;
+            digit_count += 1;
+        }
+
+        for i in (0..digit_count).rev() {
+            buffer.push((b'0' + temp_digits[i]) as char);
+        }
+    }
+
+    /// Appends a usize value to a string buffer without heap allocation.
+    ///
+    /// # Project Context
+    ///
+    /// Used for serializing size limits (e.g., maximum string length).
+    /// Platform-dependent size (32 or 64 bits).
+    ///
+    /// # Parameters
+    ///
+    /// - `buffer`: Mutable string to append to
+    /// - `value`: usize value to convert and append
+    ///
+    fn append_usize_to_string(&self, buffer: &mut String, value: usize) {
+        if value == 0 {
+            buffer.push('0');
+            return;
+        }
+
+        let mut temp_digits = [0u8; 20]; // Max 20 digits (for 64-bit platforms)
+        let mut digit_count = 0;
+        let mut val = value;
+
+        while val > 0 {
+            temp_digits[digit_count] = (val % 10) as u8;
+            val /= 10;
+            digit_count += 1;
+        }
+
+        for i in (0..digit_count).rev() {
+            buffer.push((b'0' + temp_digits[i]) as char);
+        }
+    }
+
     /// Saves the `CoreNode` data to a `node.toml` file.
     ///
     /// This function serializes the `CoreNode` struct into TOML format and writes
@@ -9847,14 +10572,26 @@ impl CoreNode {
             ));
         }
 
+        // // 3. Serialize the CoreNode struct to a TOML string
+        // let toml_string = toml::to_string(&self).map_err(|e| {
+        //     debug_log!("SNCTF: TOML serialization error: {}", e);
+        //     io::Error::new(
+        //         io::ErrorKind::Other,
+        //         format!("SNCTF: TOML serialization error: {}", e),
+        //     )
+        // })?;
+
         // 3. Serialize the CoreNode struct to a TOML string
-        let toml_string = toml::to_string(&self).map_err(|e| {
-            debug_log!("SNCTF: TOML serialization error: {}", e);
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("SNCTF: TOML serialization error: {}", e),
-            )
-        })?;
+        let toml_string = match self.serialize_corenode_struct_to_string() {
+            Ok(toml_string) => toml_string,
+            Err(e) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("SNCTF Error, fialed toml_string: {}", e)
+                ));
+            }
+        };
+
         debug_log!("SNCTF: Successfully serialized CoreNode to TOML");
 
         // // 4. Construct and verify the file path
@@ -10105,14 +10842,25 @@ impl CoreNode {
         // }
 
         // 3. Serialize the CoreNode struct to a TOML string
-        // TODO: STOP USING toml CRATE!!!!
-        let toml_string = toml::to_string(&self).map_err(|e| {
-            debug_log!("SNAGTF: TOML serialization error: {}", e);
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("SNAGTF: TOML serialization error: {}", e),
-            )
-        })?;
+        // // TODO: STOP USING toml CRATE!!!!
+        // let toml_string = toml::to_string(&self).map_err(|e| {
+        //     debug_log!("SNAGTF: TOML serialization error: {}", e);
+        //     io::Error::new(
+        //         io::ErrorKind::Other,
+        //         format!("SNAGTF: TOML serialization error: {}", e),
+        //     )
+        // })?;
+
+        // 3. Serialize the CoreNode struct to a TOML string
+        let toml_string = match self.serialize_corenode_struct_to_string() {
+            Ok(toml_string) => toml_string,
+            Err(e) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("SNAGTF Error, fialed toml_string: {}", e)
+                ));
+            }
+        };
 
         #[cfg(debug_assertions)]
         {
@@ -10398,9 +11146,6 @@ match node_unique_id_str_result {
 // }
 
 /*
-Under Construction!
-should not use any 3rd party crates
-- pending:
 -- clearsign validate: new functions in clearsign module
 -- add new fields for message-post
 
@@ -11492,18 +12237,18 @@ fn deseri_get_core_node_struct_from_toml_file(
 }
 
 
-// NO!!!!!! NOT TOML CRATE!!!!!!!!!!!!
-// Generic function to save any serializable data to a TOML file
-pub fn save_toml_to_file<T: Serialize>(data: &T, file_path: &Path) -> Result<(), Error> {
-    let toml_string = toml::to_string(data).map_err(|e| {
-        Error::new(
-            std::io::ErrorKind::Other,
-            format!("TOML serialization error: {}", e),
-        )
-    })?;
-    fs::write(file_path, toml_string)?;
-    Ok(())
-}
+// // NO!!!!!! NOT TOML CRATE!!!!!!!!!!!!
+// // Generic function to save any serializable data to a TOML file
+// pub fn save_toml_to_file<T: Serialize>(data: &T, file_path: &Path) -> Result<(), Error> {
+//     let toml_string = toml::to_string(data).map_err(|e| {
+//         Error::new(
+//             std::io::ErrorKind::Other,
+//             format!("TOML serialization error: {}", e),
+//         )
+//     })?;
+//     fs::write(file_path, toml_string)?;
+//     Ok(())
+// }
 
 // ====================
 // Message Post Section
@@ -15635,7 +16380,8 @@ mod scmc0_tests {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[allow(dead_code)]
+#[derive(Debug)]
 struct NodeMessagePostBrowserMetadata {
     // every .toml has these four
     owner: String, // owner of this item
@@ -16083,7 +16829,7 @@ but only if that is best
 unless there is a clear reason to included created_at, it should not be included
 nothing should be included with empirical data in support
 */
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug)]
 struct MessagePostFile {
     // every .toml has these four
     owner: String, // owner of this item
@@ -32454,7 +33200,7 @@ struct SendFile {
 /// - Contents are 'Option<T>' so that assembly and inspection can occur in steps.
 /// - Terse names to reduce network traffic, as an exceptional circumstance
 /// - Ready-signals are the most commonly sent and most disposable
-#[derive(Serialize, Deserialize, Debug)] // Add Serialize/Deserialize for sending/receiving
+#[derive(Debug)] // Add Serialize/Deserialize for sending/receiving
 struct ReadySignal {
     rt: u64, // ready signal timestamp: last file obtained timestamp
     rst: u64, // send-time: generate_terse_timestamp_freshness_proxy(); for replay-attack protection
@@ -32879,70 +33625,6 @@ fn hash_checker_for_sendfile_struct(
     debug_log!("HCFSS hash_checker_for_sendfile_struct(): Verification completed. Result: {}", all_hashes_match);
 
     all_hashes_match
-}
-
-/// Extracts the `updated_at_timestamp` field from a TOML file.
-///
-/// This function reads the TOML file at the specified path, parses it, and extracts the
-/// `updated_at_timestamp` field.  It handles potential errors during file reading, TOML
-/// parsing, and missing or invalid timestamp fields.
-///
-/// # Arguments
-///
-/// * `file_path`: The path to the TOML file.
-///
-/// # Returns
-///
-/// * `Result<u64, ThisProjectError>`: The `updated_at_timestamp` value on success, or a
-///   `ThisProjectError` if an error occurs.
-fn get_updated_at_timestamp_from_toml_file(file_path: &Path) -> Result<u64, ThisProjectError> {
-    // 1. Read the TOML file: Handle file read errors
-    let toml_string = match std::fs::read_to_string(file_path) {
-        Ok(content) => content,
-        Err(e) => {
-
-            #[cfg(all(debug_assertions, not(test)))]
-            debug_log!("Error reading TOML file {:?}: {}", file_path, e);
-
-            return Err(ThisProjectError::from(e));
-        }
-    };
-    debug_log!("GUATFTF Read TOML file: {:?}", file_path);
-
-
-    // 2. Parse the TOML string: Handle TOML parsing errors
-    // // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
-    let toml_value: Value = match toml::from_str(&toml_string) {
-        Ok(value) => value,
-        Err(e) => {
-
-            #[cfg(all(debug_assertions, not(test)))]
-            debug_log!("GUATFTF Error parsing TOML string: {}", e);
-
-            return Err(ThisProjectError::from(e)); // Or handle error differently
-        }
-    };
-    debug_log!("Parsed TOML value.");
-
-    // 3. Extract updated_at_timestamp:  Handle missing/invalid timestamp
-    let updated_at_timestamp = match toml_value.get("updated_at_timestamp") {
-        Some(Value::Integer(ts)) => *ts as u64, // Convert to u64, handle overflow
-        Some(_) => {
-            debug_log!("'GUATFTF updated_at_timestamp' has invalid type");
-            return Err(ThisProjectError::InvalidData(
-                "GUATFTF 'updated_at_timestamp' has invalid type".into(),
-            ));
-        }
-        None => {
-            debug_log!("GUATFTF 'updated_at_timestamp' field not found in TOML file");
-            return Err(ThisProjectError::InvalidData(
-                "GUATFTF 'updated_at_timestamp' field not found in TOML file".into(),
-            ));
-        }
-    };
-    debug_log!("GUATFTF Extracted timestamp: {}", updated_at_timestamp);
-
-    Ok(updated_at_timestamp) // Return the timestamp if successful
 }
 
 /// Retrieves the .rt timestamp from the oldest pre-fail flag file.
@@ -38633,265 +39315,198 @@ fn handle_remote_collaborator_meetingroom_desk(
                     // if let ref mut queue = session_send_queue {
                     // if let ref mut queue = session_send_queue {
 
+                    #[cfg(debug_assertions)]
+                    debug_log!(
+                        "HRCD 4 before le pop, queue.items -> (to {}) {:?}",
+                        &room_sync_input.remote_collaborator_name, // remote_collaborator_name
+                        session_send_queue.items
+                    );
+
+                    while let Some(file_path) = session_send_queue.items.pop() {
+
                         #[cfg(debug_assertions)]
                         debug_log!(
-                            "HRCD 4 before le pop, queue.items -> (to {}) {:?}",
+                            "HRCD 4 after le pop, queue.items -> (to {}) {:?}",
                             &room_sync_input.remote_collaborator_name, // remote_collaborator_name
                             session_send_queue.items
                         );
 
-                        while let Some(file_path) = session_send_queue.items.pop() {
+                        #[cfg(debug_assertions)]
+                        debug_log!(
+                            "HRCD 4.2 Send File: if/while let Some(file_path) = queue.items.pop()  file_path (to {}) {:?}",
+                            &room_sync_input.remote_collaborator_name, // remote_collaborator_name
+                            file_path
+                        );
+
+                        /*
+                        Probably from raw path to file
+                        get path to readcopy of toml (checked and 'unpackaged' from clearsign and gpg encrypt)
+                        */
+                        // Using Debug trait for more detailed error information
+                        // this is in clearsigntoml module
+                        /*
+                        pub fn get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
+                            input_toml_absolute_path: &Path,
+                            gpg_full_fingerprint_key_id_string: &str, // COLLABORATOR_ADDRESSBOOK_PATH_STR
+                            base_uma_temp_directory_path: &Path,
+                        ) -> Result<String, GpgError> {
+                        */
+                        // Get armored public key, using key-id (full fingerprint in)
+                        let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+                            Ok(fingerprint) => fingerprint,
+                            Err(e) => {
+
+                                // safe log
+                                debug_log!( "LCNFTF: implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}", e);
+
+                                continue; // Skip to the next file if hashing fails
+                            }
+                        };
+
+                        // 1. Paths & Reading-Copies Part 1: node.toml path and read-copy
+                        // Get the UME temp directory path with explicit String conversion
+                        let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
+                            .map_err(|io_err| {
+                                let gpg_error = GpgError::ValidationError(
+                                    format!("LCNFTF: Failed to get UME temp directory path: {}", io_err)
+                                );
+                                // Convert GpgError to String for the function's return type
+                                format!("LCNFTF: {:?}", gpg_error)
+                            })?;
+
+                        // base file to send is clearsigned
+                        let sendfile_readcopy_pathstring = get_pathstring_to_temp_plaintoml_verified_extracted(
+                            &file_path,
+                            &gpg_full_fingerprint_key_id_string,
+                            &base_uma_temp_directory_path,
+                        ).map_err(|e| format!("LCNFTF: Failed to get temporary read copy of TOML file: {:?}", e))?;
+
+                        // converst from path-string to path-type path
+                        let path_sendfile_readcopy_path = Path::new(&sendfile_readcopy_pathstring);
+
+                        /*
+                        /// ## Error Handling
+                        /// - On ANY error: delete temp file, return error
+                        /// - Lines already deleted stay deleted (cannot retry from same position)
+                        /// - Caller must restart from new first-available line
+                        ///
+                        /// # Arguments
+                        /// * `path_to_target_file` - Absolute path to file to XOR
+                        /// * `result_path` - Absolute path for output file
+                        /// * `path_to_padset` - Absolute path to padset root
+                        ///
+                        /// # Returns
+                        /// * `Ok((PadIndex, usize))` - Starting index used and bytes processed
+                        /// * `Err(PadnetError)` - Operation failed, no output created
+                        pub fn padnet_writer_strict_cleanup_continuous_xor_file(
+                            path_to_target_file: &Path,
+                            result_path: &Path,
+                            path_to_padset: &Path,
+                        ) -> Result<(PadIndex, usize), PadnetError> {
+                        */
+
+                        // 4.2.1 Get File Send Time
+                        let intray_send_time = get_current_unix_timestamp();
+
+                        let use_padnet_flag = &room_sync_input.use_padnet;
+
+                        // let mut padnet_index_array: PadIndex;
+
+                        let sendfile_struct: SendFile = if *use_padnet_flag {
+
+                            // - check file for flag, if *use_padnet_flag
+                            // 1. flag for padnet-mode where?
+                            // 2. get team-channel-name
+                            // 3. get RC key-id (state)
+                            // 4. get write-pad path (with id, team-channel)
+                            //  -- /padnet/to/{team_channel}/{RC key-id}
+                            // 5. use padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes
+                            // - clearsign
+                            // - gpg
+                            // - otp
+                            // - to bytes, get array-index
+                            // 5. use bytes for file_bytes2send
+                            // 6. use arry index in struct
+
+
+                            let team_channel_name = match get_current_team_channel_name_from_nav_path() {
+                                Some(name) => name,
+                                None => {
+                                    debug_log!("Error: Could not get current channel name. Skipping set_as_active.");
+                                    return Err(ThisProjectError::InvalidData("Could not get team channel name".into()));
+                                },
+                            };
+                            let rc_key_id = &room_sync_input.remote_collaborator_gpg_publickey_id;
+
+                            // 3. get write-pad path (with id)
+                            //  -- /padnet/to/{team_channel}/{RC key-id}
+                            let mut padnet_directory_path = get_writer_to_padnet_directory_path()?;
+                            padnet_directory_path.push(&team_channel_name);
+                            padnet_directory_path.push(rc_key_id);
+
+                            // Get temp directory path with explicit String conversion
+                            // let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
+                            //     .map_err(|io_err| {
+                            //         let gpg_error = GpgError::ValidationError(
+                            //             format!("HRCMD: Failed to get UME temp directory path: {}", io_err)
+                            //         );
+                            //         // Convert GpgError to String for the function's return type
+                            //         format!("HRCMD: {:?}", gpg_error)
+                            //     })?;
+
+                            /*
+                            fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
+                                original_target_file_path: &Path,
+                                recipient_public_key: &str,
+                                padnet_directory_path: &Path,
+                            ) -> Result<(Vec<u8>, PadIndex), ThisProjectError> {
+                            */
+
+                            // calls padnet_writer_strict_cleanup_continuous_xor_file
+                            let (file_bytes2send, padnet_index_array) = padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
+                                &path_sendfile_readcopy_path, // original_target_file_path: &Path,
+                                &room_sync_input.remote_collaborator_public_gpg, // recipient_public_key: &str,
+                                &padnet_directory_path, // padnet_directory_path: &Path,
+                            )?;
 
                             #[cfg(debug_assertions)]
                             debug_log!(
-                                "HRCD 4 after le pop, queue.items -> (to {}) {:?}",
-                                &room_sync_input.remote_collaborator_name, // remote_collaborator_name
-                                session_send_queue.items
+                                "HRCD 4.5 OTP XOred file_bytes2send {:?}",
+                                file_bytes2send
                             );
 
-                            #[cfg(debug_assertions)]
-                            debug_log!(
-                                "HRCD 4.2 Send File: if/while let Some(file_path) = queue.items.pop()  file_path (to {}) {:?}",
-                                &room_sync_input.remote_collaborator_name, // remote_collaborator_name
-                                file_path
+                            // // 4.5. Calculate SendFile Struct Hashes (Using Collaborator's Salts)
+                            // 4.5 calculate hashes: HRCD
+                            let calculated_hrcd_sendfile_hashes_result = hash_sendfile_struct_fields(
+                                &room_sync_input.local_user_salt_list,
+                                intray_send_time,
+                                &file_bytes2send,
                             );
 
-                            /*
-                            Probably from raw path to file
-                            get path to readcopy of toml (checked and 'unpackaged' from clearsign and gpg encrypt)
-                            */
-                            // Using Debug trait for more detailed error information
-                            // this is in clearsigntoml module
-                            /*
-                            pub fn get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
-                                input_toml_absolute_path: &Path,
-                                gpg_full_fingerprint_key_id_string: &str, // COLLABORATOR_ADDRESSBOOK_PATH_STR
-                                base_uma_temp_directory_path: &Path,
-                            ) -> Result<String, GpgError> {
-                            */
-                            // Get armored public key, using key-id (full fingerprint in)
-                            let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
-                                Ok(fingerprint) => fingerprint,
+                            // Handle the Result from hash_sendfile_struct_fields
+                            let calculated_hashes = match calculated_hrcd_sendfile_hashes_result {
+                                Ok(hashes) => hashes,
                                 Err(e) => {
-
-                                    // safe log
-                                    debug_log!( "LCNFTF: implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}", e);
-
+                                    debug_log!("HRCD 4.5 Error calculating hashes: {}", e);
                                     continue; // Skip to the next file if hashing fails
                                 }
                             };
 
-                            // 1. Paths & Reading-Copies Part 1: node.toml path and read-copy
-                            // Get the UME temp directory path with explicit String conversion
-                            let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
-                                .map_err(|io_err| {
-                                    let gpg_error = GpgError::ValidationError(
-                                        format!("LCNFTF: Failed to get UME temp directory path: {}", io_err)
-                                    );
-                                    // Convert GpgError to String for the function's return type
-                                    format!("LCNFTF: {:?}", gpg_error)
-                                })?;
+                            #[cfg(debug_assertions)]
+                            debug_log!(
+                                "HRCD 4.5 calculated_hashes {:?}",
+                                calculated_hashes
+                            );
 
-                            // base file to send is clearsigned
-                            let sendfile_readcopy_pathstring = get_pathstring_to_temp_plaintoml_verified_extracted(
-                                &file_path,
-                                &gpg_full_fingerprint_key_id_string,
-                                &base_uma_temp_directory_path,
-                            ).map_err(|e| format!("LCNFTF: Failed to get temporary read copy of TOML file: {:?}", e))?;
+                            // 4.6. Create SendFile Struct
+                            SendFile {
+                                intray_send_time: Some(intray_send_time),
+                                gpg_encrypted_intray_file: Some(file_bytes2send), // Clone needed here if file_bytes2send is used later
+                                intray_hash_list: Some(calculated_hashes),  // Clone here as well
+                                padnet_index_array: Some(padnet_index_array),
+                            }
 
-                            // converst from path-string to path-type path
-                            let path_sendfile_readcopy_path = Path::new(&sendfile_readcopy_pathstring);
-
-                            /*
-                            /// ## Error Handling
-                            /// - On ANY error: delete temp file, return error
-                            /// - Lines already deleted stay deleted (cannot retry from same position)
-                            /// - Caller must restart from new first-available line
-                            ///
-                            /// # Arguments
-                            /// * `path_to_target_file` - Absolute path to file to XOR
-                            /// * `result_path` - Absolute path for output file
-                            /// * `path_to_padset` - Absolute path to padset root
-                            ///
-                            /// # Returns
-                            /// * `Ok((PadIndex, usize))` - Starting index used and bytes processed
-                            /// * `Err(PadnetError)` - Operation failed, no output created
-                            pub fn padnet_writer_strict_cleanup_continuous_xor_file(
-                                path_to_target_file: &Path,
-                                result_path: &Path,
-                                path_to_padset: &Path,
-                            ) -> Result<(PadIndex, usize), PadnetError> {
-                            */
-
-                            // 4.2.1 Get File Send Time
-                            let intray_send_time = get_current_unix_timestamp();
-
-                            let use_padnet_flag = &room_sync_input.use_padnet;
-
-                            // let mut padnet_index_array: PadIndex;
-
-                            let sendfile_struct: SendFile = if *use_padnet_flag {
-
-                                // - check file for flag, if *use_padnet_flag
-                                // 1. flag for padnet-mode where?
-                                // 2. get team-channel-name
-                                // 3. get RC key-id (state)
-                                // 4. get write-pad path (with id, team-channel)
-                                //  -- /padnet/to/{team_channel}/{RC key-id}
-                                // 5. use padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes
-                                // - clearsign
-                                // - gpg
-                                // - otp
-                                // - to bytes, get array-index
-                                // 5. use bytes for file_bytes2send
-                                // 6. use arry index in struct
-
-
-                                let team_channel_name = match get_current_team_channel_name_from_nav_path() {
-                                    Some(name) => name,
-                                    None => {
-                                        debug_log!("Error: Could not get current channel name. Skipping set_as_active.");
-                                        return Err(ThisProjectError::InvalidData("Could not get team channel name".into()));
-                                    },
-                                };
-                                let rc_key_id = &room_sync_input.remote_collaborator_gpg_publickey_id;
-
-                                // 3. get write-pad path (with id)
-                                //  -- /padnet/to/{team_channel}/{RC key-id}
-                                let mut padnet_directory_path = get_writer_to_padnet_directory_path()?;
-                                padnet_directory_path.push(&team_channel_name);
-                                padnet_directory_path.push(rc_key_id);
-
-                                // Get temp directory path with explicit String conversion
-                                // let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
-                                //     .map_err(|io_err| {
-                                //         let gpg_error = GpgError::ValidationError(
-                                //             format!("HRCMD: Failed to get UME temp directory path: {}", io_err)
-                                //         );
-                                //         // Convert GpgError to String for the function's return type
-                                //         format!("HRCMD: {:?}", gpg_error)
-                                //     })?;
-
-                                /*
-                                fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
-                                    original_target_file_path: &Path,
-                                    recipient_public_key: &str,
-                                    padnet_directory_path: &Path,
-                                ) -> Result<(Vec<u8>, PadIndex), ThisProjectError> {
-                                */
-
-                                // calls padnet_writer_strict_cleanup_continuous_xor_file
-                                let (file_bytes2send, padnet_index_array) = padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
-                                    &path_sendfile_readcopy_path, // original_target_file_path: &Path,
-                                    &room_sync_input.remote_collaborator_public_gpg, // recipient_public_key: &str,
-                                    &padnet_directory_path, // padnet_directory_path: &Path,
-                                )?;
-
-                                #[cfg(debug_assertions)]
-                                debug_log!(
-                                    "HRCD 4.5 OTP XOred file_bytes2send {:?}",
-                                    file_bytes2send
-                                );
-
-                                // // 4.5. Calculate SendFile Struct Hashes (Using Collaborator's Salts)
-                                // 4.5 calculate hashes: HRCD
-                                let calculated_hrcd_sendfile_hashes_result = hash_sendfile_struct_fields(
-                                    &room_sync_input.local_user_salt_list,
-                                    intray_send_time,
-                                    &file_bytes2send,
-                                );
-
-                                // Handle the Result from hash_sendfile_struct_fields
-                                let calculated_hashes = match calculated_hrcd_sendfile_hashes_result {
-                                    Ok(hashes) => hashes,
-                                    Err(e) => {
-                                        debug_log!("HRCD 4.5 Error calculating hashes: {}", e);
-                                        continue; // Skip to the next file if hashing fails
-                                    }
-                                };
-
-                                #[cfg(debug_assertions)]
-                                debug_log!(
-                                    "HRCD 4.5 calculated_hashes {:?}",
-                                    calculated_hashes
-                                );
-
-                                // 4.6. Create SendFile Struct
-                                SendFile {
-                                    intray_send_time: Some(intray_send_time),
-                                    gpg_encrypted_intray_file: Some(file_bytes2send), // Clone needed here if file_bytes2send is used later
-                                    intray_hash_list: Some(calculated_hashes),  // Clone here as well
-                                    padnet_index_array: Some(padnet_index_array),
-                                }
-
-                            } else {
-
-                                // Wrapper of bytes to bytes:
-                                // 4.2.2 Read File Contents
-                                // 4.3.1 GPG Clearsign the File (with your private key)
-                                // 4.3.2 GPG Encrypt File (with their public key)
-                                let file_bytes2send = wrapper_path_to_clearsign_to_gpgencrypt_to_send_bytes(
-                                    &path_sendfile_readcopy_path,
-                                    &room_sync_input.remote_collaborator_public_gpg,
-                                )?;
-
-                                #[cfg(debug_assertions)]
-                                debug_log(
-                                    "HRCD 4.2, 4.3.1, 4.3.2 done gpg wrapper"
-                                );
-
-                                // // 4.5. Calculate SendFile Struct Hashes (Using Collaborator's Salts)
-                                // 4.5 calculate hashes: HRCD
-                                let calculated_hrcd_sendfile_hashes = hash_sendfile_struct_fields(
-                                    &room_sync_input.local_user_salt_list,
-                                    intray_send_time,
-                                    &file_bytes2send,
-                                );
-
-                                // Handle the Result from hash_sendfile_struct_fields
-                                let calculated_hashes = match calculated_hrcd_sendfile_hashes {
-                                    Ok(hashes) => hashes,
-                                    Err(_e) => {
-
-                                        // safe log
-                                        debug_log(
-                                            "HRCD 4.5 Error calculating hashes",
-                                        );
-
-                                        #[cfg(debug_assertions)]
-                                        debug_log!(
-                                            "HRCD 4.5 Error calculating hashes: {} {}",
-                                            &room_sync_input.remote_collaborator_name, // remote_collaborator_name
-                                            _e
-                                        );
-                                        continue; // Skip to the next file if hashing fails
-                                    }
-                                };
-
-                                #[cfg(debug_assertions)]
-                                debug_log!(
-                                    "HRCD 4.5 calculated_hashes {:?} {}",
-                                    calculated_hashes,
-                                    &room_sync_input.remote_collaborator_name, // remote_collaborator_name
-                                );
-
-                                // 4.6. Create SendFile Struct (no padnet)
-                                SendFile {
-                                    intray_send_time: Some(intray_send_time),
-                                    gpg_encrypted_intray_file: Some(file_bytes2send), // Clone needed here if file_bytes2send is used later
-                                    intray_hash_list: Some(calculated_hashes),  // Clone here as well
-                                    padnet_index_array: None,
-                                }
-
-                            };
-
-                            // TODO
-                            // 1. get &room_sync_input.remote_collaborator_gpg_publickey_id,
-                            // 2. look at bool field from file if there: padnet_opt: true
-                            // TODO, maybe this gets OPT array etc
-
-                            /*
-
+                        } else {
 
                             // Wrapper of bytes to bytes:
                             // 4.2.2 Read File Contents
@@ -38902,17 +39517,10 @@ fn handle_remote_collaborator_meetingroom_desk(
                                 &room_sync_input.remote_collaborator_public_gpg,
                             )?;
 
+                            #[cfg(debug_assertions)]
                             debug_log(
                                 "HRCD 4.2, 4.3.1, 4.3.2 done gpg wrapper"
                             );
-
-                            // remove file... clean function
-                            let _ = cleanup_collaborator_temp_file(
-                                &node_readcopy_path,
-                                &base_uma_temp_directory_path,
-                                );
-
-                            // }
 
                             // // 4.5. Calculate SendFile Struct Hashes (Using Collaborator's Salts)
                             // 4.5 calculate hashes: HRCD
@@ -38925,221 +39533,306 @@ fn handle_remote_collaborator_meetingroom_desk(
                             // Handle the Result from hash_sendfile_struct_fields
                             let calculated_hashes = match calculated_hrcd_sendfile_hashes {
                                 Ok(hashes) => hashes,
-                                Err(e) => {
-                                    debug_log!("HRCD 4.5 Error calculating hashes: {}", e);
+                                Err(_e) => {
+
+                                    // safe log
+                                    debug_log(
+                                        "HRCD 4.5 Error calculating hashes",
+                                    );
+
+                                    #[cfg(debug_assertions)]
+                                    debug_log!(
+                                        "HRCD 4.5 Error calculating hashes: {} {}",
+                                        &room_sync_input.remote_collaborator_name, // remote_collaborator_name
+                                        _e
+                                    );
                                     continue; // Skip to the next file if hashing fails
                                 }
                             };
 
+                            #[cfg(debug_assertions)]
                             debug_log!(
-                                "HRCD 4.5 calculated_hashes {:?}",
-                                calculated_hashes
+                                "HRCD 4.5 calculated_hashes {:?} {}",
+                                calculated_hashes,
+                                &room_sync_input.remote_collaborator_name, // remote_collaborator_name
                             );
 
-                            // 4.6. Create SendFile Struct
-                            let sendfile_struct = SendFile {
+                            // 4.6. Create SendFile Struct (no padnet)
+                            SendFile {
                                 intray_send_time: Some(intray_send_time),
                                 gpg_encrypted_intray_file: Some(file_bytes2send), // Clone needed here if file_bytes2send is used later
                                 intray_hash_list: Some(calculated_hashes),  // Clone here as well
                                 padnet_index_array: None,
-
-                            };
-
-                            make novel path with timestamp
-
-
-
-                            if any issues: continue;
-                             */
-
-
-                            // // } else {
-
-                            // // Wrapper of bytes to bytes:
-                            // // 4.2.2 Read File Contents
-                            // // 4.3.1 GPG Clearsign the File (with your private key)
-                            // // 4.3.2 GPG Encrypt File (with their public key)
-                            // let file_bytes2send = wrapper_path_to_clearsign_to_gpgencrypt_to_send_bytes(
-                            //     &path_sendfile_readcopy_path,
-                            //     &room_sync_input.remote_collaborator_public_gpg,
-                            // )?;
-
-                            // debug_log(
-                            //     "HRCD 4.2, 4.3.1, 4.3.2 done gpg wrapper"
-                            // );
-
-                            // // }
-                            // //
-
-                            // // // 4.5. Calculate SendFile Struct Hashes (Using Collaborator's Salts)
-                            // // 4.5 calculate hashes: HRCD
-                            // let calculated_hrcd_sendfile_hashes = hash_sendfile_struct_fields(
-                            //     &room_sync_input.local_user_salt_list,
-                            //     intray_send_time,
-                            //     &file_bytes2send,
-                            // );
-
-                            // // Handle the Result from hash_sendfile_struct_fields
-                            // let calculated_hashes = match calculated_hrcd_sendfile_hashes {
-                            //     Ok(hashes) => hashes,
-                            //     Err(e) => {
-                            //         debug_log!("HRCD 4.5 Error calculating hashes: {}", e);
-                            //         continue; // Skip to the next file if hashing fails
-                            //     }
-                            // };
-
-                            // debug_log!(
-                            //     "HRCD 4.5 calculated_hashes {:?}",
-                            //     calculated_hashes
-                            // );
-
-                            // // 4.6. Create SendFile Struct
-                            // let sendfile_struct = SendFile {
-                            //     intray_send_time: Some(intray_send_time),
-                            //     gpg_encrypted_intray_file: Some(file_bytes2send), // Clone needed here if file_bytes2send is used later
-                            //     intray_hash_list: Some(calculated_hashes),  // Clone here as well
-                            //     padnet_index_array: None,
-
-                            // };
-
-                            // end padnet if?
-
-                            #[cfg(debug_assertions)]
-                            debug_log!(
-                                "HRCD 4.6 Create sendfile_struct {:?} (to {})",
-                                sendfile_struct,
-                                &room_sync_input.remote_collaborator_name
-                            );
-
-                            #[cfg(debug_assertions)]
-                            debug_log!("HRCD 4.7.2 ready_signal.rt for set_prefail_flag_rt_timestamp_for_sendfile {:?}", ready_signal.rt);
-
-
-                            // get updatedat value of .toml
-                            let file_last_updatedat_time: u64 = get_updated_at_timestamp_from_toml_file(&path_sendfile_readcopy_path)?;
-
-
-                            // 4.7.2 HRCD set_prefail_flag_rt_timestamp_for_sendfile
-                            if let Err(_e) = set_prefail_flag_rt_timestamp_for_sendfile(
-                                file_last_updatedat_time, // for fail flag file name
-                                ready_signal.rt, // for fail flag file value
-                                &room_sync_input.remote_collaborator_name,
-                            ) {
-                                #[cfg(debug_assertions)]
-                                debug_log!("HRCD 4.7.2.e Error setting pre-fail flag: {}", _e);
-                                continue; // Handle error as you see fit
                             }
 
-                            #[cfg(debug_assertions)]
-                            debug_log!("HRCD 4.7.2 prefail flag set using timestamp {:?}", &ready_signal.rt);
+                        };
 
-                            #[cfg(debug_assertions)]
-                            debug_log!(
-                                "HRCD 4.6-7 Create sendfile_struct {:?}",
-                                sendfile_struct
+                        // TODO
+                        // 1. get &room_sync_input.remote_collaborator_gpg_publickey_id,
+                        // 2. look at bool field from file if there: padnet_opt: true
+                        // TODO, maybe this gets OPT array etc
+
+                        /*
+
+
+                        // Wrapper of bytes to bytes:
+                        // 4.2.2 Read File Contents
+                        // 4.3.1 GPG Clearsign the File (with your private key)
+                        // 4.3.2 GPG Encrypt File (with their public key)
+                        let file_bytes2send = wrapper_path_to_clearsign_to_gpgencrypt_to_send_bytes(
+                            &path_sendfile_readcopy_path,
+                            &room_sync_input.remote_collaborator_public_gpg,
+                        )?;
+
+                        debug_log(
+                            "HRCD 4.2, 4.3.1, 4.3.2 done gpg wrapper"
+                        );
+
+                        // remove file... clean function
+                        let _ = cleanup_collaborator_temp_file(
+                            &node_readcopy_path,
+                            &base_uma_temp_directory_path,
                             );
 
+                        // }
 
-                            if *use_padnet_flag {
+                        // // 4.5. Calculate SendFile Struct Hashes (Using Collaborator's Salts)
+                        // 4.5 calculate hashes: HRCD
+                        let calculated_hrcd_sendfile_hashes = hash_sendfile_struct_fields(
+                            &room_sync_input.local_user_salt_list,
+                            intray_send_time,
+                            &file_bytes2send,
+                        );
 
-                                // Padnet Netowrk Layer
-                                let serialized_file_struct_to_send = padnet_serialize_sendfile_struct(&sendfile_struct);
+                        // Handle the Result from hash_sendfile_struct_fields
+                        let calculated_hashes = match calculated_hrcd_sendfile_hashes {
+                            Ok(hashes) => hashes,
+                            Err(e) => {
+                                debug_log!("HRCD 4.5 Error calculating hashes: {}", e);
+                                continue; // Skip to the next file if hashing fails
+                            }
+                        };
 
-                                // --- 4.7 Send serializd-file: send UDP to intray ---
-                                // 4.7.1 Send file
-                                // 4.7 Send serializd-file Send if serialization was successful (handle Result)
-                                match serialized_file_struct_to_send {
-                                    Ok(extracted_serialized_data) => {  // Serialization OK
-                                        match send_data_via_udp(
-                                            &extracted_serialized_data,
-                                            src,
-                                            room_sync_input.remote_collab_intray_port_theirdesk_yousend_aimat_their_rmtclb_ip,
-                                            ) {
-                                            Ok(_) => {
-                                                #[cfg(debug_assertions)]
-                                                debug_log!("HRCD 4.7 File sent successfully");
-                                                // ... (Handle successful send, e.g., update timestamp log)
+                        debug_log!(
+                            "HRCD 4.5 calculated_hashes {:?}",
+                            calculated_hashes
+                        );
 
-                                                // --- 4.7.3 Get Timestamp ---
-                                                //  Timestamp Log is depricated (most likely)
-                                                #[cfg(debug_assertions)]
-                                                debug_log("HRCD calling calling get_toml_file_updated_at_timestamp(), yes...");
-                                                // if let Ok(timestamp) = get_toml_file_updated_at_timestamp(&file_path) {
-                                                // //     update_collaborator_sendqueue_timestamp_log(
-                                                // //         // TODO: Replace with the actual team channel name
-                                                // //         &this_team_channelname,
-                                                // //         &room_sync_input.remote_collaborator_name,
-                                                // //     )?;
-                                                //     // debug_log!("HRCD 4.7.3  Updated timestamp log for {}", room_sync_input.remote_collaborator_name);
-                                                // }
-                                            }
-                                            Err(_e) => {
-                                                #[cfg(debug_assertions)]
-                                                debug_log!("Error sending data: {} (to {})", _e, &room_sync_input.remote_collaborator_name);
-                                                // Handle the send error (e.g., log, retry, etc.)
-                                            }
+                        // 4.6. Create SendFile Struct
+                        let sendfile_struct = SendFile {
+                            intray_send_time: Some(intray_send_time),
+                            gpg_encrypted_intray_file: Some(file_bytes2send), // Clone needed here if file_bytes2send is used later
+                            intray_hash_list: Some(calculated_hashes),  // Clone here as well
+                            padnet_index_array: None,
+
+                        };
+
+                        make novel path with timestamp
+
+
+
+                        if any issues: continue;
+                            */
+
+
+                        // // } else {
+
+                        // // Wrapper of bytes to bytes:
+                        // // 4.2.2 Read File Contents
+                        // // 4.3.1 GPG Clearsign the File (with your private key)
+                        // // 4.3.2 GPG Encrypt File (with their public key)
+                        // let file_bytes2send = wrapper_path_to_clearsign_to_gpgencrypt_to_send_bytes(
+                        //     &path_sendfile_readcopy_path,
+                        //     &room_sync_input.remote_collaborator_public_gpg,
+                        // )?;
+
+                        // debug_log(
+                        //     "HRCD 4.2, 4.3.1, 4.3.2 done gpg wrapper"
+                        // );
+
+                        // // }
+                        // //
+
+                        // // // 4.5. Calculate SendFile Struct Hashes (Using Collaborator's Salts)
+                        // // 4.5 calculate hashes: HRCD
+                        // let calculated_hrcd_sendfile_hashes = hash_sendfile_struct_fields(
+                        //     &room_sync_input.local_user_salt_list,
+                        //     intray_send_time,
+                        //     &file_bytes2send,
+                        // );
+
+                        // // Handle the Result from hash_sendfile_struct_fields
+                        // let calculated_hashes = match calculated_hrcd_sendfile_hashes {
+                        //     Ok(hashes) => hashes,
+                        //     Err(e) => {
+                        //         debug_log!("HRCD 4.5 Error calculating hashes: {}", e);
+                        //         continue; // Skip to the next file if hashing fails
+                        //     }
+                        // };
+
+                        // debug_log!(
+                        //     "HRCD 4.5 calculated_hashes {:?}",
+                        //     calculated_hashes
+                        // );
+
+                        // // 4.6. Create SendFile Struct
+                        // let sendfile_struct = SendFile {
+                        //     intray_send_time: Some(intray_send_time),
+                        //     gpg_encrypted_intray_file: Some(file_bytes2send), // Clone needed here if file_bytes2send is used later
+                        //     intray_hash_list: Some(calculated_hashes),  // Clone here as well
+                        //     padnet_index_array: None,
+
+                        // };
+
+                        // end padnet if?
+
+                        #[cfg(debug_assertions)]
+                        debug_log!(
+                            "HRCD 4.6 Create sendfile_struct {:?} (to {})",
+                            sendfile_struct,
+                            &room_sync_input.remote_collaborator_name
+                        );
+
+                        #[cfg(debug_assertions)]
+                        debug_log!("HRCD 4.7.2 ready_signal.rt for set_prefail_flag_rt_timestamp_for_sendfile {:?}", ready_signal.rt);
+
+                        // // get_updated_at_timestamp_from_toml_file, old version uses toml crate
+                        // let file_last_updatedat_time: u64 = get_updated_at_timestamp_from_toml_file(&path_sendfile_readcopy_path)?;
+
+                        // get updatedat value of .toml
+                        let file_last_updatedat_time: u64 = read_u64_field_from_toml(
+                            &path_sendfile_readcopy_path.to_string_lossy(),
+                            "updated_at_timestamp"
+                        ).map_err(|e| {
+                            let error_msg = format!("WLPL Failed to read default_im_messages_expiration_days: {}", e);
+                            println!("Error: {}", error_msg);
+                            io::Error::new(io::ErrorKind::InvalidData, error_msg)
+                        })?;
+
+                        debug_log!("HRCD file_last_updatedat_time->{}", file_last_updatedat_time);
+
+
+                        // 4.7.2 HRCD set_prefail_flag_rt_timestamp_for_sendfile
+                        if let Err(_e) = set_prefail_flag_rt_timestamp_for_sendfile(
+                            file_last_updatedat_time, // for fail flag file name
+                            ready_signal.rt, // for fail flag file value
+                            &room_sync_input.remote_collaborator_name,
+                        ) {
+                            #[cfg(debug_assertions)]
+                            debug_log!("HRCD 4.7.2.e Error setting pre-fail flag: {}", _e);
+                            continue; // Handle error as you see fit
+                        }
+
+                        #[cfg(debug_assertions)]
+                        debug_log!("HRCD 4.7.2 prefail flag set using timestamp {:?}", &ready_signal.rt);
+
+                        #[cfg(debug_assertions)]
+                        debug_log!(
+                            "HRCD 4.6-7 Create sendfile_struct {:?}",
+                            sendfile_struct
+                        );
+
+
+                        if *use_padnet_flag {
+
+                            // Padnet Netowrk Layer
+                            let serialized_file_struct_to_send = padnet_serialize_sendfile_struct(&sendfile_struct);
+
+                            // --- 4.7 Send serializd-file: send UDP to intray ---
+                            // 4.7.1 Send file
+                            // 4.7 Send serializd-file Send if serialization was successful (handle Result)
+                            match serialized_file_struct_to_send {
+                                Ok(extracted_serialized_data) => {  // Serialization OK
+                                    match send_data_via_udp(
+                                        &extracted_serialized_data,
+                                        src,
+                                        room_sync_input.remote_collab_intray_port_theirdesk_yousend_aimat_their_rmtclb_ip,
+                                        ) {
+                                        Ok(_) => {
+                                            #[cfg(debug_assertions)]
+                                            debug_log!("HRCD 4.7 File sent successfully");
+                                            // ... (Handle successful send, e.g., update timestamp log)
+
+                                            // --- 4.7.3 Get Timestamp ---
+                                            //  Timestamp Log is depricated (most likely)
+                                            #[cfg(debug_assertions)]
+                                            debug_log("HRCD calling calling get_toml_file_updated_at_timestamp(), yes...");
+                                            // if let Ok(timestamp) = get_toml_file_updated_at_timestamp(&file_path) {
+                                            // //     update_collaborator_sendqueue_timestamp_log(
+                                            // //         // TODO: Replace with the actual team channel name
+                                            // //         &this_team_channelname,
+                                            // //         &room_sync_input.remote_collaborator_name,
+                                            // //     )?;
+                                            //     // debug_log!("HRCD 4.7.3  Updated timestamp log for {}", room_sync_input.remote_collaborator_name);
+                                            // }
                                         }
-                                    }
-                                    Err(_e) => { // Serialization error
-                                        #[cfg(debug_assertions)]
-                                        debug_log!("Serialization error: {}", _e);
-                                        // Handle the serialization error (e.g., log, skip file)
+                                        Err(_e) => {
+                                            #[cfg(debug_assertions)]
+                                            debug_log!("Error sending data: {} (to {})", _e, &room_sync_input.remote_collaborator_name);
+                                            // Handle the send error (e.g., log, retry, etc.)
+                                        }
                                     }
                                 }
-
-
-                            } else {
-
-                                let serialized_file_struct_to_send = serialize_send_file_struct(&sendfile_struct);
-
-                                // --- 4.7 Send serializd-file: send UDP to intray ---
-                                // 4.7.1 Send file
-                                // 4.7 Send serializd-file Send if serialization was successful (handle Result)
-                                match serialized_file_struct_to_send {
-                                    Ok(extracted_serialized_data) => {  // Serialization OK
-                                        match send_data_via_udp(
-                                            &extracted_serialized_data,
-                                            src,
-                                            room_sync_input.remote_collab_intray_port_theirdesk_yousend_aimat_their_rmtclb_ip,
-                                            ) {
-                                            Ok(_) => {
-                                                #[cfg(debug_assertions)]
-                                                debug_log!("HRCD 4.7 File sent successfully");
-                                                // ... (Handle successful send, e.g., update timestamp log)
-
-                                                // --- 4.7.3 Get Timestamp ---
-                                                //  Timestamp Log is depricated (most likely)
-                                                #[cfg(debug_assertions)]
-                                                debug_log("HRCD calling calling get_toml_file_updated_at_timestamp(), yes...");
-                                                // if let Ok(timestamp) = get_toml_file_updated_at_timestamp(&file_path) {
-                                                // //     update_collaborator_sendqueue_timestamp_log(
-                                                // //         // TODO: Replace with the actual team channel name
-                                                // //         &this_team_channelname,
-                                                // //         &room_sync_input.remote_collaborator_name,
-                                                // //     )?;
-                                                //     // debug_log!("HRCD 4.7.3  Updated timestamp log for {}", room_sync_input.remote_collaborator_name);
-                                                // }
-                                            }
-                                            Err(_e) => {
-                                                #[cfg(debug_assertions)]
-                                                debug_log!("Error sending data: {}", _e);
-                                                // Handle the send error (e.g., log, retry, etc.)
-                                            }
-                                        }
-                                    }
-                                    Err(_e) => { // Serialization error
-                                        #[cfg(debug_assertions)]
-                                        debug_log!("Serialization error: {}", _e);
-                                        // Handle the serialization error (e.g., log, skip file)
-                                    }
+                                Err(_e) => { // Serialization error
+                                    #[cfg(debug_assertions)]
+                                    debug_log!("Serialization error: {}", _e);
+                                    // Handle the serialization error (e.g., log, skip file)
                                 }
                             }
 
-                            // debugpause(30);
-                            #[cfg(debug_assertions)]
-                            debug_log!("\nHRCD: bottom of ready_signal listener. (maybe)\n");
 
-                        } // end of while
+                        } else {
+
+                            let serialized_file_struct_to_send = serialize_send_file_struct(&sendfile_struct);
+
+                            // --- 4.7 Send serializd-file: send UDP to intray ---
+                            // 4.7.1 Send file
+                            // 4.7 Send serializd-file Send if serialization was successful (handle Result)
+                            match serialized_file_struct_to_send {
+                                Ok(extracted_serialized_data) => {  // Serialization OK
+                                    match send_data_via_udp(
+                                        &extracted_serialized_data,
+                                        src,
+                                        room_sync_input.remote_collab_intray_port_theirdesk_yousend_aimat_their_rmtclb_ip,
+                                        ) {
+                                        Ok(_) => {
+                                            #[cfg(debug_assertions)]
+                                            debug_log!("HRCD 4.7 File sent successfully");
+                                            // ... (Handle successful send, e.g., update timestamp log)
+
+                                            // --- 4.7.3 Get Timestamp ---
+                                            //  Timestamp Log is depricated (most likely)
+                                            #[cfg(debug_assertions)]
+                                            debug_log("HRCD calling calling get_toml_file_updated_at_timestamp(), yes...");
+                                            // if let Ok(timestamp) = get_toml_file_updated_at_timestamp(&file_path) {
+                                            // //     update_collaborator_sendqueue_timestamp_log(
+                                            // //         // TODO: Replace with the actual team channel name
+                                            // //         &this_team_channelname,
+                                            // //         &room_sync_input.remote_collaborator_name,
+                                            // //     )?;
+                                            //     // debug_log!("HRCD 4.7.3  Updated timestamp log for {}", room_sync_input.remote_collaborator_name);
+                                            // }
+                                        }
+                                        Err(_e) => {
+                                            #[cfg(debug_assertions)]
+                                            debug_log!("Error sending data: {}", _e);
+                                            // Handle the send error (e.g., log, retry, etc.)
+                                        }
+                                    }
+                                }
+                                Err(_e) => { // Serialization error
+                                    #[cfg(debug_assertions)]
+                                    debug_log!("Serialization error: {}", _e);
+                                    // Handle the serialization error (e.g., log, skip file)
+                                }
+                            }
+                        }
+
+                        // debugpause(30);
+                        #[cfg(debug_assertions)]
+                        debug_log!("\nHRCD: bottom of ready_signal listener. (maybe)\n");
+
+                    } // end of while
                     // } // end of 4.4: if let Some(ref mut queue) = session_send_queue {
                     #[cfg(debug_assertions)]
                     debug_log!("\nHRCD: end of inner match.\n");
