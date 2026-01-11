@@ -8051,7 +8051,7 @@ fn prompt_user_for_collaborator_file_format() -> bool {
     println!("\n=== Collaborator File Format Selection ===");
     println!("Do you want to save this as a read-able clearsigned .toml, not encrypted .gpgtoml (also clearsigned)?");
     println!("The default (recommended) is GPG protected (.gpgtoml).");
-    println!("Type 'clearsign' to choose clearsign only, anything else (or empty enter) for default (recommended) GPG encrypted.");
+    println!("Type 'clearsigned' to choose clearsign only, anything else (or empty enter) for default (recommended) GPG encrypted.");
     print!("\nEnter your choice: ");
 
     // Ensure the prompt is displayed immediately
@@ -8064,7 +8064,7 @@ fn prompt_user_for_collaborator_file_format() -> bool {
             // Trim whitespace and convert to lowercase for case-insensitive comparison
             let cleaned_input = input.trim().to_lowercase();
             // Return true only if user explicitly typed "yes"
-            cleaned_input == "clearsign"
+            cleaned_input == "clearsigned"
         }
         Err(e) => {
             eprintln!("Error reading input: {}. Defaulting to GPG encrypted format.", e);
@@ -18397,7 +18397,7 @@ fn update_core_node(
             println!("Selected: GPG encrypted clearsigned format (node.gpgtoml)");
             true
         },
-        "clearsign" | "clear" | "signed" | "toml" => {
+        "clearsign" | "clearsigned" |"clear" | "signed" | "toml" => {
             println!("Selected: Clearsigned only format (node.toml)");
             false
         },
@@ -19090,7 +19090,7 @@ fn create_corenode_q_and_a(
             println!("Selected: GPG encrypted clearsigned format (node.gpgtoml)");
             true
         },
-        "clearsign" | "clear" | "signed" | "toml" => {
+        "clearsign" | "clearsigned" | "clear" | "signed" | "toml" => {
             println!("Selected: Clearsigned only format (node.toml)");
             false
         },
@@ -20959,7 +20959,7 @@ fn q_and_a_get_corenode_gpgtoml() -> Result<bool, ThisProjectError> {
     // Match responses
     match input.as_str() {
         "yes" | "y" | "true" | "1" => Ok(true),
-        "clearsign" | "no" | "n" | "false" | "0" => Ok(false),
+        "clearsign" | "clearsigned" | "no" | "n" | "false" | "0" => Ok(false),
         _ => Ok(true), // Any invalid input defaults to true
     }
 }
