@@ -25097,37 +25097,15 @@ fn get_local_owner_username() -> String {
 /// return true for online, false for offline
 fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
     // Welcome to Uma Land!!
+    #[cfg(debug_assertions)]
     debug_log("Staring initialize_uma_application()");
 
     // --- 1. CHECK FOR & SETUP uma.toml ---
-    // let uma_toml_path = Path::new("uma.toml");
-
 
     // Check for uma.toml file relative to the executable's directory
     let uma_toml_path_result = make_file_path_abs_executabledirectoryrelative_canonicalized_or_error(
         UMA_TOML_CONFIGFILE_PATH_STR
     );
-
-    // // Handle the result appropriately
-    // let uma_toml_path = match uma_toml_path_result {
-    //     Ok(file_path) => {
-    //         // File exists, we can proceed with using it
-    //         debug_log!("Found uma.toml at: {:?}", file_path);
-    //         file_path
-    //     },
-    //     Err(io_error) => {
-    //         if io_error.kind() == std::io::ErrorKind::NotFound {
-    //             // File doesn't exist - handle this specific case
-    //             return Err(format!("Configuration file uma.toml not found in executable directory").into());
-    //         } else if io_error.kind() == std::io::ErrorKind::InvalidInput {
-    //             // Path exists but is a directory
-    //             return Err(format!("uma.toml exists but is a directory, not a file").into());
-    //         } else {
-    //             // Other I/O errors
-    //             return Err(format!("Error accessing uma.toml: {}", io_error).into());
-    //         }
-    //     }
-    // };
 
     // This will pass an empty 'uma_toml_path' ahead if initial setup is needed
     let uma_toml_path = match uma_toml_path_result {
@@ -25148,7 +25126,10 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
                 )?;
                 default_path.pop(); // Remove executable name
                 default_path.push(UMA_TOML_CONFIGFILE_PATH_STR);
+
+                #[cfg(debug_assertions)]
                 debug_log!("Using default uma.toml path: {:?}", default_path);
+
                 default_path
             } else {
                 // Other I/O errors
@@ -25175,43 +25156,14 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         println!("will change the local-owner-user when running Uma.");
         println!("Please enter your local-owner name for uma.toml file:");
 
-        // let mut owner_input = String::new();
-        // io::stdin().read_line(&mut owner_input).unwrap();  // TODO remove this unwrap!!!!!!!!!!!!!!!!!!!!!
-
-        // let owner = owner_input.trim().to_string();
-
-        // let local_user_metadata = LocalUserUma::new(owner); // Create LocalUserUma
-
-        // if let Err(e) = local_user_metadata.save_owner_to_file(&uma_toml_path) {
-        //     eprintln!("Failed to create uma.toml: {}", e);
-        //     // Handle the error (e.g., exit gracefully)
-        //     return Ok(false);
-        // }
-
-
-        // // Get armored public key, using key-id (full fingerprint in)
-        // let mut full_fingerprint_key_id_string = String::new();
-        // match q_and_a_user_selects_gpg_key_full_fingerprint() {
-        //     Ok(temp_fullfingerprint_key_idstring) => {
-
-        //         println!("Selected key id (full fingerprint in): {}", temp_fullfingerprint_key_idstring);
-        //         full_fingerprint_key_id_string = temp_fullfingerprint_key_idstring;
-        // }
-        //     Err(e) => eprintln!("Error selecting full_fingerprint_key_id_string: {}", e.to_string()),
-        // }
-
-        // Initialize Uma configuration
-        // println!("Welcome to the Uma Collaboration Tools.");
-        // println!("Please enter your username.");
-        // println!("This nickname will be the local-owner-user for this Uma 'instance.'");
-        // println!("Changing 'uma_local_owner_user = ___' in uma.toml");
-        // println!("will change the local-owner-user when running Uma.");
-        // println!("Please enter your username:");
-
         // Read owner username with error handling
         let mut owner_input = String::new();
-        if let Err(e) = io::stdin().read_line(&mut owner_input) {
-            eprintln!("Failed to read username input: {}", e);
+        if let Err(_e) = io::stdin().read_line(&mut owner_input) {
+
+            #[cfg(debug_assertions)]
+            debug_log!("Failed to read username input: {}", _e);
+
+            eprintln!("Failed to read username input");
             return Ok(false);
         }
         let owner = owner_input.trim().to_string();
@@ -25243,32 +25195,17 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
             return Ok(false);
         }
 
+        #[cfg(debug_assertions)]
         debug_log!("uma.toml created successfully!");
     }
 
-
-
-
-
     // // ... 2. Load user metadata from the now-existing uma.toml
-    // let user_metadata = match toml::from_str::<LocalUserUma>(&fs::read_to_string(&uma_toml_path)?) {
-    //     Ok(metadata) => {
-    //         debug_log!("uma.toml loaded successfully!");
-    //         metadata
-    //     },
-    //     Err(e) => {
-    //         eprintln!("Failed to load or parse uma.toml: {}", e);
-    //         return Ok(false);
-    //     }
-    // };
-
     // // Set the uma_local_owner_user from the loaded metadata
-    // let uma_local_owner_user = user_metadata.uma_local_owner_user;
-
 
     // Read only the owner username from uma.toml
     let uma_local_owner_user = match LocalUserUma::read_owner_from_file() {
         Ok(owner) => {
+            #[cfg(debug_assertions)]
             debug_log!("Owner username loaded successfully: {}", owner);
             owner
         },
@@ -25278,11 +25215,13 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         }
     };
 
-    let to_padnet_dir = get_writer_to_padnet_directory_path();
-    debug_log!("IUA: to_padnet -> {:?}/team-channel-name", to_padnet_dir);
+    // let to_padnet_dir = get_writer_to_padnet_directory_path();
+    // #[cfg(debug_assertions)]
+    // debug_log!("IUA: to_padnet -> {:?}/team-channel-name", to_padnet_dir);
 
-    let from_padnet_dir = get_reader_from_padnet_directory_path();
-    debug_log!("IUA: from_padnet_dir -> {:?}/team-channel-name", from_padnet_dir);
+    // let from_padnet_dir = get_reader_from_padnet_directory_path();
+    // #[cfg(debug_assertions)]
+    // debug_log!("IUA: from_padnet_dir -> {:?}/team-channel-name", from_padnet_dir);
 
 
     // using path relative to exe-parent:
@@ -25298,23 +25237,8 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         }
     };
 
+    #[cfg(debug_assertions)]
     debug_log!("IUA: project_graph_directory -> {:?}", project_graph_directory);
-
-    // // Check if the data directory exists
-    // let invites_outgoing_pathbuf = Path::new("invites_updates/invites_outgoing_pathbuf/export");
-    // if !invites_outgoing_pathbuf.exists() {
-    //     // If the directory does not exist, create it
-    //     fs::create_dir_all(invites_outgoing_pathbuf).expect("Failed to create invites_outgoing_pathbuf directory");
-    // }
-
-    // not yet working
-    // export_addressbook()?;
-
-
-    // TODO
-    // look for a file in import_export_invites/addressbook_invite/export
-    // try to read it as a gpg key
-    // export your addressbook file clearsigned by you and encrypted with the public gpg key in that file
 
     // // relative version
     // // Check if the sync_data directory exists,
@@ -25325,18 +25249,6 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
     // // note: each 'local instance' should be specific
     // // to the location of the uma executable file
     // // more than one user may be running on a given computer
-    // let sync_data_directory = Path::new("sync_data");
-    // if sync_data_directory.exists() {
-    //     // If the directory exists, remove it recursively
-    //     if let Err(e) = remove_dir_all(sync_data_directory) {
-    //         // Handle the error appropriately, e.g., log it and continue, or return an error if you want to stop initialization
-    //         debug_log!("Error removing sync_data directory: {}", e);
-    //         // Or: return Err(e.into()); // Or handle the error differently
-    //     }
-    // }
-    // // Create the directory fresh for the new session.
-    // fs::create_dir_all(sync_data_directory).expect("Failed to create sync_data directory");
-
 
     // Check if the sync_data directory exists relative to the executable location,
     // and recursively erase all old files.
@@ -25359,10 +25271,16 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
                 Ok(exists) => {
                     if exists {
                         // Directory exists, remove it recursively to start fresh
+                        #[cfg(debug_assertions)]
                         debug_log!("Clearing existing sync_data directory at: {}", sync_data_directory.display());
-                        if let Err(remove_err) = remove_dir_all(&sync_data_directory) {
+
+                        if let Err(_remove_err) = remove_dir_all(&sync_data_directory) {
                             // Handle the error appropriately, log it and continue
-                            debug_log!("Error removing sync_data directory: {}", remove_err);
+                            #[cfg(debug_assertions)]
+                            debug_log!("Error removing sync_data directory: {}", _remove_err);
+
+                            // safe log
+                            debug_log!("Error removing sync_data directory");
                             // We'll still attempt to create the directory below
                         }
                     }
@@ -25371,43 +25289,69 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
                     // removed successfully or didn't exist at all
                     match fs::create_dir_all(&sync_data_directory) {
                         Ok(_) => {
+                            #[cfg(debug_assertions)]
                             debug_log!("Successfully created fresh sync_data directory at: {}", sync_data_directory.display());
                         },
-                        Err(create_err) => {
+                        Err(_create_err) => {
                             // This is a more serious error as we need the directory
-                            debug_log!("Critical error: Failed to create sync_data directory: {}", create_err);
+                            #[cfg(debug_assertions)]
+                            debug_log!("Critical error: Failed to create sync_data directory: {}", _create_err);
+
+                            // safe log
+                            debug_log!("Critical error: Failed to create sync_data directory");
                             // Depending on app requirements, you might want to handle this more severely
                             // or implement a fallback mechanism
                         }
                     }
                 },
-                Err(check_err) => {
-                    debug_log!("Error checking if sync_data directory exists: {}", check_err);
+                Err(_check_err) => {
+                    #[cfg(debug_assertions)]
+                    debug_log!("Error checking if sync_data directory exists: {}", _check_err);
+
+                    // safe log
+                    debug_log!("Error checking if sync_data directory exists");
+
                     // Attempt to create the directory anyway
-                    if let Err(create_err) = fs::create_dir_all(&sync_data_directory) {
-                        debug_log!("Critical error: Failed to create sync_data directory: {}", create_err);
+                    if let Err(_create_err) = fs::create_dir_all(&sync_data_directory) {
+                        #[cfg(debug_assertions)]
+                        debug_log!("Critical error: Failed to create sync_data directory: {}", _create_err);
+
+                        // safe log
+                        debug_log!("Critical error: Failed to create sync_data directory");
                     }
                 }
             }
         },
-        Err(path_err) => {
+        Err(_path_err) => {
             // Failed to determine the executable-relative path
-            debug_log!("Error determining sync_data directory path: {}", path_err);
+            #[cfg(debug_assertions)]
+            debug_log!("Error determining sync_data directory path: {}", _path_err);
 
-            // Fallback to using a relative path as a last resort
+            // safe log
+            debug_log!("Error determining sync_data directory path");
+
+            // retry
             let fallback_sync_data_directory = make_input_path_name_abs_executabledirectoryrelative_nocheck(
                 "sync_data"
             )?;
-            debug_log!("Falling back to current directory relative path for sync_data");
+            debug_log!("error: Falling back to directory path for sync_data");
 
             if fallback_sync_data_directory.exists() {
-                if let Err(remove_err) = remove_dir_all(fallback_sync_data_directory.clone()) {
-                    debug_log!("Error removing fallback sync_data directory: {}", remove_err);
+                if let Err(_remove_err) = remove_dir_all(fallback_sync_data_directory.clone()) {
+                    #[cfg(debug_assertions)]
+                    debug_log!("Error removing fallback sync_data directory: {}", _remove_err);
+
+                    // safe log
+                    debug_log!("Error removing fallback sync_data directory");
                 }
             }
 
-            if let Err(create_err) = fs::create_dir_all(fallback_sync_data_directory) {
-                debug_log!("Critical error: Failed to create fallback sync_data directory: {}", create_err);
+            if let Err(_create_err) = fs::create_dir_all(fallback_sync_data_directory) {
+                #[cfg(debug_assertions)]
+                debug_log!("Critical error: Failed to create fallback sync_data directory: {}", _create_err);
+
+                // safe log
+                debug_log!("Critical error: Failed to create fallback sync_data directory");
                 // This is a critical failure point - consider how your application should handle it
             }
         }
@@ -25416,6 +25360,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
     /////////////////////
     // Log Housekeeping
     /////////////////////
+    #[cfg(debug_assertions)]
     debug_log("IUA: Log Housekeeping");
 
     // 1. Create the archive directory if it doesn't exist, relative to the executable.
@@ -25424,8 +25369,14 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
 
     let uma_archive_dir = match archive_dir_result {
         Ok(dir_path) => dir_path,
-        Err(io_error) => {
-            eprintln!("Warning: Failed to create uma_archive/logs directory: {}", io_error);
+        Err(_io_error) => {
+            #[cfg(debug_assertions)]
+            eprintln!("Warning: Failed to create uma_archive/logs directory: {}", _io_error);
+
+            // safe log
+            eprintln!("Warning: Failed to create uma_archive/logs directory");
+            debug_log!("Warning: Failed to create uma_archive/logs directory");
+
             // Create a fallback directory in case the executable-relative path fails
             let mut fallback_dir = make_input_path_name_abs_executabledirectoryrelative_nocheck(
                 "uma_archive"
@@ -25437,8 +25388,14 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
             // Try to create the fallback directory
             if !fallback_dir.exists() {
 
-                if let Err(e) = fs::create_dir_all(&fallback_dir) {
-                    eprintln!("Critical: Failed to create fallback archive directory: {}", e);
+                if let Err(_e) = fs::create_dir_all(&fallback_dir) {
+                    #[cfg(debug_assertions)]
+                    eprintln!("Critical: Failed to create fallback archive directory: {}", _e);
+
+                    // safe log
+                    eprintln!("Critical: Failed to create fallback archive directory");
+                    debug_log!("Critical: Failed to create fallback archive directory");
+
                     // Return a sensible default to allow the program to continue
                     make_input_path_name_abs_executabledirectoryrelative_nocheck(
                         "uma_archive/logs"
@@ -25463,6 +25420,8 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
 
     // 3. Construct the new archive file path.
     let archived_log_path = uma_archive_dir.join(format!("uma__{}.log", timestamp));
+
+    #[cfg(debug_assertions)]
     debug_log!("IUA archived_log_path -> {:?}", archived_log_path);
 
     // 4. Get the source log file path relative to the executable
@@ -25473,69 +25432,69 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
             // Check if the source log file exists before trying to rename it
             if Path::new(&source_log_path).exists() {
                 // Rename (move) the uma.log file to the archive directory
-                if let Err(e) = fs::rename(&source_log_path, &archived_log_path) {
-                    eprintln!("Failed to archive uma.log: {}", e);
+                if let Err(_e) = fs::rename(&source_log_path, &archived_log_path) {
+                    #[cfg(debug_assertions)]
+                    eprintln!("Failed to archive uma.log: {}", _e);
+
+                    #[cfg(debug_assertions)]
+                    debug_log!("Failed to archive uma.log: {}", _e);
+
+                    // safe log
+                    debug_log!("Failed to archive uma.log");
                     // Handle the error, but don't stop initialization.
                 }
             } else {
                 // No log file to archive, this might be the first run
-                eprintln!("Notice: No uma.log file found to archive");
+                debug_log!("Notice: No uma.log file found to archive");
             }
         },
-        Err(io_error) => {
+        Err(_io_error) => {
             // Log the error and continue
-            eprintln!("Warning: Failed to determine uma.log path: {}", io_error);
+            #[cfg(debug_assertions)]
+            eprintln!("Warning: Failed to determine uma.log path: {}", _io_error);
             debug_log!("Could not archive log file: Failed to determine executable-relative path");
             // Do NOT attempt with a relative path - just continue the program
             // No fallback to a relative path - this would defeat the purpose
         }
     }
 
-    // relative path version
+
     // /////////////////////
     // // Log Housekeeping
     // /////////////////////
 
-    // // 1. Create the archive directory if it doesn't exist.
-    // // saves archives not in the project_graph_data directory, not for sync
-    // let mut uma_archive_dir = PathBuf::new(); // Start with an empty PathBuf safe path os
-    // uma_archive_dir.push("uma_archive");    // Push the 'uma_archive' directory
-    // uma_archive_dir.push("logs");            // Push the 'logs' subdirectory
+    // 1. Create the archive directory if it doesn't exist.
 
-    // if !uma_archive_dir.exists() {
-    //     fs::create_dir_all(&uma_archive_dir).expect("Failed to create uma_archive directory");
-    // }
+    // 2. Get the current timestamp.
 
-    // // 2. Get the current timestamp.
-    // let timestamp = SystemTime::now()
-    //     .duration_since(UNIX_EPOCH)
-    //     .expect("Time went backwards!")
-    //     .as_secs();
+    // 3. Construct the new archive file path.
 
-    // // 3. Construct the new archive file path.
-    // let archived_log_path = uma_archive_dir.join(format!("uma__{}.log", timestamp));
+    // 4. Rename (move) the uma.log file to the archive directory.
 
-    // // 4. Rename (move) the uma.log file to the archive directory.
-    // if let Err(e) = fs::rename("uma.log", &archived_log_path) {
-    //     eprintln!("Failed to archive uma.log: {}", e); // Handle the error, but don't stop initialization.
-    // }
-
-
+    #[cfg(debug_assertions)]
     debug_log("next IUA runs fn  check_all_ports_in_team_channels()");
 
     // Check for port collisions across all team channels
-    if let Err(e) = check_all_ports_in_team_channels_clearsign_validated() {
-        eprintln!("Error: {}", e); // Print the error message
-        debug_log!("Error: {}", e);
+    if let Err(_e) = check_all_ports_in_team_channels_clearsign_validated() {
+        #[cfg(debug_assertions)]
+        eprintln!("Error in initialize_uma in check_all_ports_in_team_channels_clearsign_validated() {}", _e); // Print the error message
+
+        #[cfg(debug_assertions)]
+        debug_log!("Error in initialize_uma in check_all_ports_in_team_channels_clearsign_validated() {}", _e); // Print the error message
+
+        // safe log
+        eprintln!("Error in initialize_uma in check_all_ports_in_team_channels_clearsign_validated()");
+        debug_log!("Error in initialize_uma in check_all_ports_in_team_channels_clearsign_validated()");
         // Handle the error as needed (e.g., exit UMA)
         return Ok(false);
     }
 
+    #[cfg(debug_assertions)]
     debug_log("next IUA get_local_ip_addresses");
+
     let _ = get_local_ip_addresses();
 
-
-
+    #[cfg(debug_assertions)]
     debug_log("next IUA ensure some dirs exist");
 
 
@@ -25550,18 +25509,26 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         fs::create_dir_all(&team_channels_dir).expect("Failed to create team_channels directory");
     }
 
+    #[cfg(debug_assertions)]
     debug_log!("IUA: team_channels_dir -> {:?}", team_channels_dir);
 
 
-    // invite/update
-    let outgoing_dir_result = make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path(
-        "invites_updates/outgoing"
-    );
-    debug_log!("IUA: outgoing_dir_result outgoing -> {:?}", outgoing_dir_result);
-    let incoming_dir_result = make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path(
-        "invites_updates/incoming"
-    );
-    debug_log!("IUA: incoming_dir_result outgoing -> {:?}", incoming_dir_result);
+    // invite/update inspect
+    #[cfg(debug_assertions)] {
+        let outgoing_dir_result = make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path(
+            "invites_updates/outgoing"
+        );
+
+        #[cfg(debug_assertions)]
+        debug_log!("IUA: outgoing_dir_result outgoing -> {:?}", outgoing_dir_result);
+
+        let incoming_dir_result = make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path(
+            "invites_updates/incoming"
+        );
+
+        #[cfg(debug_assertions)]
+        debug_log!("IUA: incoming_dir_result outgoing -> {:?}", incoming_dir_result);
+    }
 
     // Get the UME temp directory path with error handling
     let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
@@ -25571,34 +25538,25 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         ))?;
 
     // Clear contents: TODO (dev: xcomment this out to track remaining files)
-    if let Err(e) = remove_dir_contents_if_exists(&base_uma_temp_directory_path) {
-        eprintln!("Error clearing directory: {}", e);
-    }
+    if let Err(_e) = remove_dir_contents_if_exists(&base_uma_temp_directory_path) {
+        #[cfg(debug_assertions)]
+        {
+            eprintln!("Error clearing directory: {}", _e);
+            debug_log!("Error clearing directory: {}", _e);
+        }
 
+        // safe log
+        eprintln!("Error clearing directory");
+        debug_log!("Error clearing directory");
+    }
 
     // Ensure base_uma_temp_directory_path exists
     if !base_uma_temp_directory_path.exists() {
         fs::create_dir_all(&base_uma_temp_directory_path).expect("Failed to create base_uma_temp_directory_path directory");
     }
 
-    // debug_log!("IUA: base_uma_temp_directory_path -> {:?}", base_uma_temp_directory_path);
-
-
+    #[cfg(debug_assertions)]
     debug_log!("IUA: base_uma_temp_directory_path -> {:?}", base_uma_temp_directory_path);
-
-    // // using path relative to exe-parent:
-    // // Ensure directory exists relative to the executable
-    // let team_channelsdir_result = make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path("team_channels");
-
-    // // Handle any errors that might occur during directory creation or verification
-    // let team_channels_dir = match team_channelsdir_result {
-    //     Ok(directory_path) => directory_path,
-    //     Err(io_error) => {
-    //         // Log the error and handle appropriately for your application
-    //         return Err(format!("Failed to ensure team_channels directory exists: {}", io_error).into());
-    //     }
-    // };
-
 
     // assumes 'project_graph_directory' path is exe-parent based
     // Ensure COLLABORATOR_ADDRESSBOOK_PATH_STR directory exists
@@ -25607,20 +25565,6 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         fs::create_dir_all(&collaborator_files_address_book_dir).expect("Failed to create collaborator_files_address_book directory");
     }
 
-    // // using path relative to exe-parent:
-    // // Ensure directory exists relative to the executable
-    // let collaborator_files_addressbook_result = make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path("collaborator_files_address_book");
-
-    // // Handle any errors that might occur during directory creation or verification
-    // let collaborator_files_address_book_dir = match collaborator_files_addressbook_result {
-    //     Ok(directory_path) => directory_path,
-    //     Err(io_error) => {
-    //         // Log the error and handle appropriately for your application
-    //         return Err(format!("Failed to ensure collaborator_files_address_book directory exists: {}", io_error).into());
-    //     }
-    // };
-
-
     // assumes 'project_graph_directory' path is exe-parent based
     // Ensure project_graph_data/session_state_items directory exists
     let session_state_dir = project_graph_directory.join("session_state_items");
@@ -25628,51 +25572,29 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         fs::create_dir_all(&session_state_dir).expect("Failed to create session_state_items directory");
     }
 
-    // // using path relative to exe-parent:
-    // // Ensure directory exists relative to the executable
-    // let session_statedir_result = make_verify_or_create_executabledirectoryrelative_canonicalized_dir_path("session_state_items");
-
-    // // Handle any errors that might occur during directory creation or verification
-    // let session_state_dir = match session_statedir_result {
-    //     Ok(directory_path) => directory_path,
-    //     Err(io_error) => {
-    //         // Log the error and handle appropriately for your application
-    //         return Err(format!("Failed to ensure session_state_items exists: {}", io_error).into());
-    //     }
-    // };
-
-    // // Handle any errors that might occur during directory creation or verification
-    // let sync_state_dir = match sync_statedir_result {
-    //     Ok(directory_path) => directory_path,
-    //     Err(io_error) => {
-    //         // Log the error and handle appropriately for your application
-    //         return Err(format!("Failed to ensure sync_state_items directory exists: {}", io_error).into());
-    //     }
-    // };
-
+    #[cfg(debug_assertions)]
     debug_log("IUA ensured some dirs existed...");
-    // println!("IUA ensured some dirs existed...");
-
 
     // To stop sync from starting before a channel is entered:
     let _ = initialize_ok_to_start_sync_flag_to_false();
 
     // Check if there are any directories in project_graph_data/team_channels
+    #[cfg(debug_assertions)]
     debug_log("let number_of_team_channels = fs::read_dir(&team_channels_dir)");
 
     // if !dir_at_path_is_empty_returns_false(COLLABORATOR_ADDRESSBOOK_PATH_STR) {
+    #[cfg(debug_assertions)]
     debug_log!(
-        "if !dir_at_path_is_empty_returns_false(Path::new, COLLABORATOR_ADDRESSBOOK_PATH_STR={}) ",
+        "next: if !dir_at_path_is_empty_returns_false(Path::new, COLLABORATOR_ADDRESSBOOK_PATH_STR={}) ",
         COLLABORATOR_ADDRESSBOOK_PATH_STR,
     );
-
-
 
     // if !dir_at_path_is_empty_returns_false(Path::new(COLLABORATOR_ADDRESSBOOK_PATH_STR)) {
     if !dir_at_path_is_empty_returns_false(
         &collaborator_files_address_book_dir
             ) {
 
+        #[cfg(debug_assertions)]
         debug_log("IUA if !dir_at_path_is_empty_returns_false");
 
         // If there are no existing users, prompt the user to add a new user
@@ -25684,28 +25606,6 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         // let mut username_input = String::new(); // Use a temporary variable for input
 
         let username_for_function = get_local_owner_username();
-
-        // let username_for_function: String = match std::io::stdin().read_line(&mut username_input) {
-        //     Ok(_) => {
-        //         // Successfully read input, trim it, and this will be the value of username_for_function
-        //         let trimmed = username_input.trim().to_string();
-        //         if trimmed.is_empty() {
-        //             eprintln!("Username cannot be empty.");
-        //             // Handle empty username case, perhaps by returning or panicking
-        //             // For now, let's panic as an example, but you should handle it gracefully.
-        //             panic!("Username was empty after trimming.");
-        //         }
-        //         println!("Hello, (trimmed): '{}'", trimmed); // Debug: Check the trimmed value
-        //         trimmed
-        //     },
-        //     Err(io_error) => {
-        //         // Handle the error appropriately
-        //         eprintln!("Failed to read input: {}", io_error);
-        //         // You must return or panic here, as username_for_function needs a value.
-        //         // Or provide a default, though that's unlikely for a username.
-        //         panic!("Failed to read username: {}", io_error);
-        //     }
-        // };
 
         // choice...
         // Get IP address input method
@@ -25731,19 +25631,20 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
             }
         }
 
-        // // Prompt the user to enter an IP address
-        // println!("Enter an ipv6_addresses:");
-        // let mut ipv6_address = String::new();
-        // io::stdin().read_line(&mut ipv6_address).unwrap();
-        // let ipv6_address: Ipv6Addr = ipv6_address.trim().parse().unwrap(); // Parse into Ipv6Addr
-        // show user their gpg key id list
-        // new Q&A workflow, not requiring the user to open a new terminal and use gpg cli
-
         // Get armored public key, using key-id (full fingerprint in)
         let full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
             Ok(fingerprint) => fingerprint,
-            Err(e) => {
-                eprintln!("IUA Failed to read GPG fingerprint from uma.toml: {}", e);
+            Err(_e) => {
+                #[cfg(debug_assertions)]
+                {
+                    eprintln!("IUA Failed to read GPG fingerprint from uma.toml: {}", _e);
+                    debug_log!("IUA Failed to read GPG fingerprint from uma.toml: {}", _e);
+                }
+
+                // safe log
+                eprintln!("IUA Failed to read GPG fingerprint from uma.toml");
+                debug_log!("IUA Failed to read GPG fingerprint from uma.toml");
+
                 return Ok(false);
             }
         };
@@ -25755,15 +25656,25 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
                 println!("Armored Public Key:\n{}", armored_key);
                 gpg_key_public = armored_key;
             }
-            Err(e) => {
-                eprintln!("IUA Error: {}", e);
+            Err(_e) => {
+                #[cfg(debug_assertions)]
+                {
+                eprintln!("IUA Error: {}", _e);
+                debug_log!("IUA Error: {}", _e);
+                }
+
+                // safe log
+                eprintln!("IUA Error");
+                debug_log!("IUA Error");
             }
         }
 
         println!("GPG key entered:\n{}", gpg_key_public); // Confirmation (remove in production)
+        #[cfg(debug_assertions)]
         debug_log("IUA GPG key entered");
 
-        // // Salt List!
+        // Salt List!
+        #[cfg(debug_assertions)]
         debug_log("IUA Salt List");
         // Generate salt list (4 random u128 values)
         let new_usersalt_list: Vec<u128> = (0..4)
@@ -25771,6 +25682,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
             .collect();
 
         println!("Using salts: {:?}", new_usersalt_list);
+        #[cfg(debug_assertions)]
         debug_log!("IUA Using salts: {:?}", new_usersalt_list);
 
         // // Add a new user to Uma file system
@@ -25785,21 +25697,13 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
             get_current_unix_timestamp(),
         );
 
-        // // Save the updated collaborator list to the data directory
-        // let toml_data = toml::to_string(&collaborator_list).expect("Failed to serialize collaborator list");
-        // fs::write(collaborator_list_file, toml_data).expect("Failed to write collaborator list file");
-
         debug_log("User added successfully!");
         println!("User added successfully!");
     }
 
-    /////////////////////////////
-    // Check & Make Team Channel
-    /////////////////////////////
-    // let number_of_team_channels = fs::read_dir(&team_channels_dir)
-    //     .unwrap()
-    //     .filter(|entry| entry.as_ref().unwrap().path().is_dir())
-    //     .count();
+    // ///////////////////////////
+    //  Check & Make Team Channel
+    // ///////////////////////////
 
     // No unwrap calls: Uses pattern matching to handle errors gracefully
     // Handles the potential error from fs::read_dir
@@ -25839,14 +25743,33 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
     };
 
 
-    // let number_of_team_channels = count_subdirectories_executabledirectoryrelative_default_zero(&team_channels_dir);
+    // User Choice to make new team channel or not
+    // e.g. initial setup has no remote-collaborators to add yet.
+    // // Determine if we should create a channel BEFORE the main logic
+    let should_create_channel: bool;
 
     if number_of_team_channels == 0 {
+        println!("There are no existing team channels. Would you like to create one? (yes/no)");
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input).expect("Failed to read input");
+
+        if input.trim().eq_ignore_ascii_case("yes") {
+            should_create_channel = true;
+        } else {
+            should_create_channel = false;
+        }
+    } else {
+        // Channels already exist;
+        should_create_channel = false;
+    }
+
+    if should_create_channel {
         debug_log("IUA if number_of_team_channels == 0");
+        debug_log("IUA should_create_channel == true");
 
         // If no team channels exist, create the first one
-        println!("There are no existing team channels. Let's create one.");
-        println!("Enter a name for a new Team-Channel:");
+        println!("Let's create a Team-Channel that you own.");
+        println!("Enter a name for your new Team-Channel: (recommended: lowercase ascii alpha-numeric)");
 
         let mut team_channel_name = String::new();
         io::stdin().read_line(&mut team_channel_name).unwrap();
@@ -25864,9 +25787,6 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         */
 
         // // In initialize_uma_application, when creating the first channel:
-        // // Get the owner from somewhere (e.g., user input or instance metadata)
-        // let owner = "initial_owner".to_string(); // Replace with actual owner
-
         let _ = create_new_team_channel(
             team_channel_name,
             uma_local_owner_user.clone(),
@@ -25879,51 +25799,9 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
     debug_log("IUA after create_new_team_channel()");
 
 
-    //////////////////////////////////////////////////////////////////////////
-    // --- Band: Network Band Finder: IP Validity Check and Flag Setting ---
-    /////////////////////////////////////////////////////////////////////////
-
-    // let (ipv4_list, ipv6_list) = load_local_ip_lists_to_ipvec(&user_metadata.uma_local_owner_user)?;
-    // let (str_ipv4list, str_ipv6list) = load_local_iplists_as_stringtype(&user_metadata.uma_local_owner_user)?;
-
-    // // currently only using ipv6
-    // let local_user_ipv6_address = find_valid_local_owner_ip_address(
-    //     &ipv6_list
-    // )
-    //     .ok_or(ThisProjectError::NetworkError("No valid local IPv6 address found".to_string()))?;
-
-    // // // Instead of cloning the first address, use the result of the selector:
-    // // ipv6_addr_1 = Some(local_user_ipv6_address); // No need to clone or dereference as the variable now directly holds the Ipv6Addr
-    // // ipv6_addr_2 = ipv6_addr_1.clone(); // Clone the selected address for ipv6_addr_2 if needed
-
-    // // get index of valid IP v6
-    // let ip_index = get_index_byof_ip(
-    //     &str_ipv4list,
-    //     &str_ipv6list,
-    //     &local_user_ipv6_address.to_string(), // as ip_address
-    // );
-
-    // debug_log!(
-    //     "Found IP/index <{:?} {:?}>",
-    //     local_user_ipv6_address,
-    //     ip_index
-    // );
-
-
-    // Network Detection or Work Offline?
-
-    // println!("\nSign-In: You are your GPG: Who are you?");
-
-    // // Get armored public key, using key-id (full fingerprint in)
-    // let mut full_fingerprint_key_id_string = String::new();
-    // match q_and_a_user_selects_gpg_key_full_fingerprint() {
-    //     Ok(temp_fullfingerprint_key_idstring) => {
-
-    //         println!("Selected key id (full fingerprint in): {}", temp_fullfingerprint_key_idstring);
-    //         full_fingerprint_key_id_string = temp_fullfingerprint_key_idstring;
-    // }
-    //     Err(e) => eprintln!("Error selecting full_fingerprint_key_id_string: {}", e.to_string()),
-    // }
+    // ////////////////////////////////////////////////////////////////////////
+    //  --- Band: Network Band Finder: IP Validity Check and Flag Setting ---
+    // ///////////////////////////////////////////////////////////////////////
 
     // Get armored public key, using key-id (full fingerprint in)
     let full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
@@ -25946,7 +25824,6 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         &full_fingerprint_key_id_string,
         );
 
-
     println!("IUA next: get_band_find_valid_network_index_and_type");
     println!(
         "IUA: network_found_ok -> {:?}",
@@ -25957,14 +25834,11 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
         network_type
         );
 
-
     // Handle offline mode if no network connection is found
     if !network_found_ok {  // Check the flag *before* writing/saving values to prevent corrupting or creating bad data from invalid inputs.
         debug_log!("No valid network connection found. Entering offline mode.");
         return Ok(false); // Return false to signal offline mode; do not initialize sync, do not continue processing those invalid or undefined network type and IP values. Halt immediately in this specific scenario and set `network_found_ok` boolean flag to `false` consistent with best practice for what you stated was the desired and specified handling for this exact use-case: halt Uma.
     }
-
-
 
     // set network data state-file(s) in sync_data/ directory:
     if let Err(e) = write_local_band_save_network_band_type_index( // Check if writing to sync data state files fails
@@ -28712,6 +28586,7 @@ pub fn invite_wizard() -> Result<(), GpgError> {
     println!("Other Setup Tools:");
     println!("4. update a Node that you own");  // update_core_node()
     println!("5. make a set of pads (One Time Pad)");
+    println!("6. Make a new Team Channel");
     println!("\nQ: Which step do you want to do now?");
     println!("(Enter: number + enter)");
 
@@ -29297,6 +29172,40 @@ pub fn invite_wizard() -> Result<(), GpgError> {
             }
 
         }
+
+        6 => {
+
+            // If no team channels exist, create the first one
+            println!("Let's create a Team-Channel that you own.");
+            println!("Enter a name for your new Team-Channel: (recommended: lowercase ascii alpha-numeric)");
+
+            let mut team_channel_name = String::new();
+            io::stdin().read_line(&mut team_channel_name).unwrap();
+            let team_channel_name = team_channel_name.trim().to_string();
+
+            // TUI Setup, TODO
+            /*
+            If there is an umi.toml,
+            and it has tui_height/tui_height that are not 80/24
+            use those new values (from umi.toml) for
+            tui_height =
+            tui_width =
+
+            or maybe this gets done in the project-manager-thread (not the sink thread)
+            */
+
+            // local owner user name
+            let uma_local_owner_user = get_local_owner_username();
+
+            // // In initialize_uma_application, when creating the first channel:
+            let _ = create_new_team_channel(
+                team_channel_name,
+                uma_local_owner_user,
+            );
+
+
+        }
+
         _ => {
             return Err(GpgError::GpgOperationError("Invalid choice".to_string()));
         }
