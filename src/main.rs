@@ -35190,7 +35190,7 @@ fn handle_local_owner_desk(
         // TODO: to scale this should be perhaps a stub-file flag
         let mut file_hash_set_session_nonce = HashSet::new();  // Create a HashSet to store received hashes
 
-        // --- 2. Enter In-Try-loop ---
+        // --- 2. Enter In-Tray-loop ---
         // restarts if crashes
         // enter main loop (to handle in-tray Send-File, gotit signl sending, 'echo' ready-signal sending)
         loop { // 3.2 In-Try-loop
@@ -35199,8 +35199,8 @@ fn handle_local_owner_desk(
             if should_halt_uma() {
                 #[cfg(debug_assertions)]
                 debug_log!(
-                    "HLOD-InTray 3.3 main loop Check for halt signal. Halting handle_local_owner_desk() for {}",
-                    remote_collaborator_name
+                    "(for {}) starting In-Tray-loop HLOD-InTray 3.3 main loop Check for halt signal. Halting handle_local_owner_desk()",
+                    remote_collaborator_name,
                 );
                 break;
             }
@@ -35230,7 +35230,12 @@ fn handle_local_owner_desk(
             loop { // In-Tray-Loop
                 // Check for halt signal at the beginning of the loop
                 if should_halt_uma() {
-                    debug_log!("HLOD-InTray: Halt signal received. Exiting.");
+                    #[cfg(debug_assertions)]
+                    debug_log!(
+                        "HLOD-InTray: Halt signal received. Exiting. ({} thread)",
+                        &remote_collaborator_name
+                    );
+
                     break;
                 }
 
@@ -35239,7 +35244,8 @@ fn handle_local_owner_desk(
 
                     #[cfg(debug_assertions)]
                     debug_log!(
-                        "HLOD-InTray match intray_socket.recv_from(&mut buf) Ok((amt, src)) {:?} {:?}",
+                        "(from {}) HLOD-InTray match intray_socket.recv_from(&mut buf) Ok((amt, src)) {:?} {:?}",
+                        &remote_collaborator_name,
                         amt,
                         _src
                     );
@@ -35248,7 +35254,7 @@ fn handle_local_owner_desk(
                     if should_halt_uma() {
                         #[cfg(debug_assertions)]
                         debug_log!(
-                            "HLOD-InTray 3.5.2 main loop Check for halt signal. Halting handle_local_owner_desk() for {}",
+                            "(from {}) HLOD-InTray 3.5.2 main loop Check for halt signal. Halting handle_local_owner_desk()",
                             &remote_collaborator_name
                         );
                         break;
@@ -35256,17 +35262,19 @@ fn handle_local_owner_desk(
 
                     #[cfg(debug_assertions)]
                     debug_log!(
-                        "HLOD-InTray 3.5.2.1 Ok((amt, src)) Intray socket file Received {} bytes from {} (from {})",
+                        "(from {}) HLOD-InTray 3.5.2.1 Ok((amt, src)) Intray socket file Received {} bytes from {}",
+                        &remote_collaborator_name,
                         amt,
                         _src,
-                        &remote_collaborator_name,
+
                     );
 
                     // --- Inspect Raw Bytes ---
                     #[cfg(debug_assertions)]
                     {
                         debug_log!(
-                            "HLOD-InTray 3.5.2.2 Intray: Sent-File Raw bytes received: {:?}",
+                            "(from {}) HLOD-InTray 3.5.2.2 Intray: Sent-File Raw bytes received: {:?}",
+                            &remote_collaborator_name,
                             &buf[..amt]
                         );
 
@@ -35276,7 +35284,8 @@ fn handle_local_owner_desk(
                             .collect::<String>();
 
                         debug_log!(
-                            "HLOD-InTray 3.5.2.3 Intray: Sent-File Raw bytes as hex: {}",
+                            "(from {}) HLOD-InTray 3.5.2.3 Intray: Sent-File Raw bytes as hex: {}",
+                            &remote_collaborator_name,
                             hex_string
                         );
                     }
@@ -35299,7 +35308,7 @@ fn handle_local_owner_desk(
                                 debug_log("HLOD-InTray 2.3 SendFile listener: Receive File Data...do you copy, gold leader... >*<");
 
                                 #[cfg(debug_assertions)] {
-                                    debug_log!("HLOD-InTray 2.3 Deserialize Ok(incoming_intray_file_struct) {}: Received SendFile: {:?}",
+                                    debug_log!("(from {}) HLOD-InTray 2.3 Deserialize Ok(incoming_intray_file_struct): Received SendFile: {:?}",
                                         &remote_collaborator_name,
                                         incoming_intray_file_struct
                                     ); // Log the signal
@@ -35309,8 +35318,10 @@ fn handle_local_owner_desk(
                             },
                             Err(_e) => {
                                 #[cfg(debug_assertions)]
-                                debug_log!("HLOD-InTray 2.3 Deserialize Err Receive data Failed to parse ready signal: {} ({})",
-                                    _e, &remote_collaborator_name);
+                                debug_log!("(from {}) HLOD-InTray 2.3 Deserialize Err Receive data Failed to parse ready signal: {}",
+                                    &remote_collaborator_name,
+                                    _e,
+                                );
                                 continue; // Continue to the next iteration of the loop
                             }
                         } // no semicolon, to pass value
@@ -35325,8 +35336,8 @@ fn handle_local_owner_desk(
                                 debug_log("HLOD-InTray 2.3 SendFile listener: Receive File Data...do you copy, gold leader... >*<");
 
                                 #[cfg(debug_assertions)]
-                                debug_log!("HLOD-InTray 2.3 Deserialize Ok(incoming_intray_file_struct) {}: Received SendFile: {:?}",
-                                    remote_collaborator_name,
+                                debug_log!("(from {}) HLOD-InTray 2.3 Deserialize Ok(incoming_intray_file_struct): Received SendFile: {:?}",
+                                    &remote_collaborator_name,
                                     incoming_intray_file_struct
                                 ); // Log the signal
 
@@ -35334,7 +35345,10 @@ fn handle_local_owner_desk(
                             },
                             Err(_e) => {
                                 #[cfg(debug_assertions)]
-                                debug_log!("HLOD-InTray 2.3 Deserialize Err Receive data Failed to parse ready signal: {}", _e);
+                                debug_log!("(from {}) HLOD-InTray 2.3 Deserialize Err Receive data Failed to parse ready signal: {}",
+                                    &remote_collaborator_name,
+                                    _e
+                                );
                                 continue; // Continue to the next iteration of the loop
                             }
                         } // no semicolon, to pass value
@@ -35344,40 +35358,76 @@ fn handle_local_owner_desk(
                     #[cfg(debug_assertions)]
                     debug_log("##HLOD-InTray## starting checks (hound's tooth) 2.4");
 
-                    // --- 3.2 timestamp freshness checks ---
+                    // ////////////////////////////////////////
+                    //  --- 3.2 timestamp freshness checks ---
+                    // ////////////////////////////////////////
                     let current_timestamp = get_current_unix_timestamp();
 
                     #[cfg(debug_assertions)]
                     debug_log!(
-                        "HLOD 2.4.1 check timestamp freshness checks: current_timestamp -> {:?}",
+                        "(from {}) HLOD 2.4.1 check timestamp freshness checks: current_timestamp -> {:?}",
+                        &remote_collaborator_name,
                         current_timestamp
                     );
+
 
                     // 3.2.1 No Future Dated Requests
                     if incoming_intray_file_struct.intray_send_time > Some(current_timestamp + 5) { // Allow for some clock skew (5 seconds)
                         #[cfg(debug_assertions)]
-                        debug_log!("HLOD 2.4.2 check: Received future-dated timestamp. Discarding.");
+                        debug_log!(
+                            "(from {}) HLOD 2.4.2 check: Received future-dated timestamp. Discarding.",
+                            &remote_collaborator_name,
+                        );
+
+                        // safe log
+                        debug_log(
+                            "HLOD 2.4.2 check: Received future-dated timestamp. Discarding.",
+                        );
                         continue;
                     }
 
                     // 3.2.2 No Requests Older Than ~10 sec
                     if current_timestamp - 10 > incoming_intray_file_struct.intray_send_time.expect("REASON") {
                         #[cfg(debug_assertions)]
-                        debug_log!("HLOD 2.4.3 check: Received outdated timestamp (older than 10 seconds). Discarding.");
+                        debug_log!(
+                            "(from {}) HLOD 2.4.3 check: Received outdated timestamp (older than 10 seconds). Discarding.",
+                            &remote_collaborator_name,
+                        );
+
+                        // safe log
+                        debug_log(
+                            "HLOD 2.4.3 check: Received outdated timestamp (older than 10 seconds). Discarding.",
+                        );
                         continue;
                     }
 
                     // 3.2.3 Check .intray_hash_list hash
                     if incoming_intray_file_struct.intray_hash_list.is_none() {
                         #[cfg(debug_assertions)]
-                        debug_log("HLOD 2.4.4 Check: intray_hash_list hash field is empty. Drop packet and keep going.");
+                        debug_log!(
+                            "(from {}) HLOD 2.4.4 Check: intray_hash_list hash field is empty. Drop packet and keep going.",
+                            &remote_collaborator_name,
+                        );
+
+                        // safe log
+                        debug_log(
+                            "HLOD 2.4.4 Check: intray_hash_list hash field is empty. Drop packet and keep going.",
+                        );
                         continue; // Drop packet: Restart the loop to listen for the next signal
                     }
 
                     // 3.2.4 Check .intray_send_time timestamp
                     if incoming_intray_file_struct.intray_send_time.is_none() {
                         #[cfg(debug_assertions)]
-                        debug_log("HLOD 2.4.5 Check: intray_send_time ready signal sent-at timestamp field is empty. Drop packet and keep going.");
+                        debug_log!(
+                            "(from {}) HLOD 2.4.5 Check: intray_send_time ready signal sent-at timestamp field is empty. Drop packet and keep going.",
+                            &remote_collaborator_name,
+                        );
+
+                        // safe log
+                        debug_log(
+                            "HLOD 2.4.5 Check: intray_send_time ready signal sent-at timestamp field is empty. Drop packet and keep going.",
+                        );
                         continue; // Drop packet: Restart the loop to listen for the next signal
                     }
 
@@ -35390,13 +35440,28 @@ fn handle_local_owner_desk(
                     if !incoming_intray_file_struct_hash_vec.is_empty() {
                         if intrystruct_hash_set_session_nonce.contains(&incoming_intray_file_struct_hash_vec) {
                             #[cfg(debug_assertions)]
-                            debug_log!("HLOD 4.2 quasi nonce check: Duplicate SendFile received (hash match). Discarding.");
+                            debug_log!(
+                                "(from {}) HLOD 4.2 quasi nonce check: Duplicate SendFile received (hash match). Discarding.",
+                                &remote_collaborator_name,
+                            );
+                            // safe log
+                            debug_log(
+                                "HLOD 4.2 quasi nonce check: Duplicate SendFile received (hash match). Discarding.",
+                            );
                             continue; // Discard the duplicate signal
                         }
                         intrystruct_hash_set_session_nonce.insert(incoming_intray_file_struct_hash_vec); // Add hash to the set
                     } else {
+                        #[cfg(debug_assertions)]
+                        debug_log!(
+                            "(from {}) HLOD 4.2 quasi nonce check: SendFile received without hashes. Discarding.",
+                             &remote_collaborator_name
+                        ); // Or handle differently
+
                         // safe log
-                        debug_log!("HLOD 4.2 quasi nonce check: SendFile received without hashes. Discarding."); // Or handle differently
+                        debug_log(
+                        "HLOD 4.2 quasi nonce check: SendFile received without hashes. Discarding.",
+                        );
                         continue;
                     }
 
@@ -35410,13 +35475,22 @@ fn handle_local_owner_desk(
                         incoming_intray_file_struct.intray_hash_list.as_deref().expect("Missing hash list")  //Safe unwrap, checked earlier
 
                     ) {
+                        #[cfg(debug_assertions)]
+                        debug_log!(
+                            "(from {}) failed HLOD 5.0: SendFile Struct hash verification failed. Discarding signal.",
+                             &remote_collaborator_name
+                        );
+
                         // safe log
                         debug_log!("failed HLOD 5.0: SendFile Struct hash verification failed. Discarding signal.");
                         continue; // Discard the signal and continue listening
                     }
 
                     #[cfg(debug_assertions)]
-                    debug_log!("Passed HLOD 5.0: SendFile Struct hash verified.");
+                    debug_log!(
+                        "(from {}) Passed! HLOD 5.0: SendFile Struct hash verified.",
+                        &remote_collaborator_name
+                    );
 
                     /*
                     TODO?
@@ -35461,6 +35535,13 @@ fn handle_local_owner_desk(
 
                         Some(data) => data,  // Extract the Vec<u8> if Some
                         None => {
+
+                            #[cfg(debug_assertions)]
+                            debug_log!(
+                            "(from {}) HLOD 6.1: gpg_encrypted_intray_file is None. Skipping.",
+                            &remote_collaborator_name
+                            );
+
                             // safe log
                             debug_log!("HLOD 6.1: gpg_encrypted_intray_file is None. Skipping.");
                             continue; // Or handle the None case differently (e.g., return an error)
@@ -35470,9 +35551,9 @@ fn handle_local_owner_desk(
                     #[cfg(debug_assertions)]
                     {
                         debug_log!(
-                            "HLOD 6.1 still_encrypted_file_blob (raw OTP or raw GPG)-> {:?} ({})",
+                            "(from {}) HLOD 6.1 still_encrypted_file_blob (raw OTP or raw GPG)-> {:?}",
+                            &remote_collaborator_name,
                             still_encrypted_file_blob,
-                            &remote_collaborator_name
                         );
 
                         debug_log!(
@@ -35492,7 +35573,11 @@ fn handle_local_owner_desk(
                         5. read OTP file, make gpg file
                         6. get bytes from file
                         */
-                        debug_log("HLOD-Padnet: use_padnet_flag: 6.2: GPG decryption...");
+                        #[cfg(debug_assertions)]
+                        debug_log!(
+                            "(from {}) HLOD-Padnet: use_padnet_flag: 6.2: GPG decryption...",
+                            &remote_collaborator_name,
+                        );
 
                         // =========================================================================
                         // Setup: Initialize cleanup guard for this packet
@@ -35503,6 +35588,13 @@ fn handle_local_owner_desk(
                         let still_otp_encrypted_file_blob = match &incoming_intray_file_struct.gpg_encrypted_intray_file {
                             Some(data) => data,
                             None => {
+                                #[cfg(debug_assertions)]
+                                debug_log!(
+                                    "(from {}) HLOD-Padnet: gpg_encrypted_intray_file is None. Skipping.",
+                                    &remote_collaborator_name,
+                                );
+
+                                // safe log
                                 debug_log!("HLOD-Padnet: gpg_encrypted_intray_file is None. Skipping.");
                                 continue;
                             }
@@ -35520,7 +35612,11 @@ fn handle_local_owner_desk(
                         ).map_err(|e| {
                             ThisProjectError::IoError(std::io::Error::new(
                                 e.kind(),
-                                format!("HLOD: failed to create OTP temp file: {}", e),
+                                format!(
+                                    "(from {}) HLOD: error failed to create OTP temp file: {}",
+                                    &remote_collaborator_name,
+                                    e,
+                                ),
                             ))
                         })?;
 
@@ -35528,7 +35624,11 @@ fn handle_local_owner_desk(
                         cleanup_guard.add(otp_blob_file_path.clone());
 
                         #[cfg(debug_assertions)]
-                        debug_log!("HLOD-Padnet: Created OTP temp file: {:?}", otp_blob_file_path);
+                        debug_log!(
+                            "(from {}) HLOD-Padnet: Created OTP temp file: {:?}",
+                            &remote_collaborator_name,
+                            otp_blob_file_path,
+                        );
 
                         // =========================================================================
                         // 3. Create empty file for XOR result (GPG-encrypted data)
@@ -35541,7 +35641,11 @@ fn handle_local_owner_desk(
                         ).map_err(|e| {
                             ThisProjectError::IoError(std::io::Error::new(
                                 e.kind(),
-                                format!("HLOD-Padnet: failed to create GPG result temp file: {}", e),
+                                format!(
+                                    "(from {}) HLOD-Padnet: failed to create GPG result temp file: {}",
+                                    &remote_collaborator_name,
+                                    e
+                                ),
                             ))
                         })?;
 
@@ -35549,7 +35653,11 @@ fn handle_local_owner_desk(
                         cleanup_guard.add(gpg_blob_file_path.clone());
 
                         #[cfg(debug_assertions)]
-                        debug_log!("HLOD-Padnet: Created GPG result temp file: {:?} ({})", gpg_blob_file_path, remote_collaborator_name);
+                        debug_log!(
+                            "(from {}) HLOD-Padnet: Created GPG result temp file: {:?}",
+                            &remote_collaborator_name,
+                            gpg_blob_file_path,
+                        );
 
                         // =========================================================================
                         // 4. Get padnet directory path
@@ -35557,7 +35665,17 @@ fn handle_local_owner_desk(
                         let team_channel_name = match get_current_team_channel_name_from_nav_path() {
                             Some(name) => name,
                             None => {
-                                debug_log!("HLOD: Error: Could not get current channel name.");
+                                #[cfg(debug_assertions)]
+                                debug_log!(
+                                    "(from {}) HLOD: Error: Could not get current channel name.",
+                                    &remote_collaborator_name,
+                                );
+
+                                // safe log
+                                debug_log(
+                                    "HLOD: Error: Could not get current channel name.",
+                                );
+
                                 // cleanup_guard will auto-cleanup on return
                                 return Err(ThisProjectError::InvalidData(
                                     "Could not get team channel name".into()
@@ -35576,6 +35694,13 @@ fn handle_local_owner_desk(
                         let padnet_index_array = match &incoming_intray_file_struct.padnet_index_array {
                             Some(data) => data,
                             None => {
+
+                                #[cfg(debug_assertions)]
+                                debug_log!(
+                                    "(from {}) HLOD-Padnet: padnet_index_array is None. Skipping.",
+                                    &remote_collaborator_name,
+                                );
+
                                 // safe log
                                 debug_log!("HLOD-Padnet: padnet_index_array is None. Skipping.");
 
@@ -35592,7 +35717,11 @@ fn handle_local_owner_desk(
                         ).map_err(|e| {
 
                             #[cfg(debug_assertions)]
-                            debug_log!("HLOD-Padnet: XOR decryption failed: {:?}", e);
+                            debug_log!(
+                                "(from {}) HLOD-Padnet: XOR decryption failed: {:?}",
+                                &remote_collaborator_name,
+                                e,
+                            );
 
                             // cleanup_guard will auto-cleanup on error
                             ThisProjectError::PadnetError(format!("XOR decryption failed: {:?}", e))
@@ -35621,7 +35750,11 @@ fn handle_local_owner_desk(
                         };
 
                         #[cfg(debug_assertions)]
-                        debug_log!("HLOD-Padnet: gpg_encrypted_bytes {:?}", gpg_encrypted_bytes);
+                        debug_log!(
+                            "(from {}) HLOD-Padnet: gpg_encrypted_bytes {:?}",
+                            &remote_collaborator_name,
+                            gpg_encrypted_bytes
+                        );
 
                         // =========================================================================
                         // 7. Cleanup temp files (explicit for logging, Drop handles it too)
@@ -35630,13 +35763,25 @@ fn handle_local_owner_desk(
                             // Log warnings but don't fail (we got the data successfully)
                             #[cfg(debug_assertions)]
                             for error_msg in _errors {
-                                debug_log!("HLOD-Padnet: cleanup warning: {}", error_msg);
+                                debug_log!(
+                                    "(from {}) HLOD-Padnet: cleanup warning: {}",
+                                    &remote_collaborator_name,
+                                    error_msg
+                                );
                             }
+
+                            // Safe Log
+                            debug_log(
+                                "HLOD-Padnet: cleanup warning",
+                            );
+
                         }
 
                         #[cfg(debug_assertions)]
-                        debug_log!("HLOD-Padnet: Padnet decryption complete, temp files cleaned up");
-
+                        debug_log!(
+                            "(from {}) HLOD-Padnet: Padnet decryption complete, temp files cleaned up",
+                            &remote_collaborator_name,
+                        );
 
                         // let decrypted_clearsignfile_data = match gpg_decrypt_from_bytes(
                         match gpg_decrypt_from_bytes(
@@ -35646,7 +35791,18 @@ fn handle_local_owner_desk(
                             Ok(data) => data,
                             Err(_e) => {
                                 #[cfg(debug_assertions)]
-                                debug_log!("HLOD NOT*use_padnet_flag: 6.2: GPG decryption failed: {}. Skipping.", _e);
+                                debug_log!(
+                                    "(from {}) HLOD NOT*use_padnet_flag: 6.2: GPG decryption failed: {}. Skipping.",
+                                     &remote_collaborator_name,
+                                    _e
+
+                                );
+
+                                // Safe Log
+                                debug_log!(
+                                    "HLOD NOT*use_padnet_flag: 6.2: GPG decryption failed:. Skipping.",
+                                );
+
                                 continue; // Skip to the next packet if decryption fails
                             }
                         }
@@ -35664,9 +35820,22 @@ fn handle_local_owner_desk(
                             Err(_e) => {
                                 #[cfg(debug_assertions)]
                                 {
-                                debug_log!("HLOD NOT*use_padnet_flag: 6.2: GPG decryption failed: {}. Skipping.", _e);
-                                debug_log!("still_encrypted_file_blob {:?}", still_encrypted_file_blob);
+                                    debug_log!(
+                                        "(from {}) HLOD NOT*use_padnet_flag: 6.2: GPG decryption failed: {}. Skipping.",
+                                        &remote_collaborator_name,
+                                        _e,
+                                    );
+                                    debug_log!(
+                                        "(from {}) still_encrypted_file_blob {:?}",
+                                        &remote_collaborator_name,
+                                        still_encrypted_file_blob,
+                                    );
                                 }
+
+                                // Safe Log
+                                debug_log!(
+                                    "HLOD NOT*use_padnet_flag: 6.2: GPG decryption failed. Skipping.",
+                                );
                                 continue; // Skip to the next packet if decryption fails
                             }
                         }
@@ -35677,9 +35846,9 @@ fn handle_local_owner_desk(
 
                     #[cfg(debug_assertions)]
                     debug_log!(
-                        "HLOD 6.2 decrypt the data decrypted_clearsignfile_data -> {:?} ({})",
+                        "(from {}) HLOD 6.2 decrypt the data decrypted_clearsignfile_data -> {:?}",
+                        &remote_collaborator_name,
                         decrypted_clearsignfile_data,
-                        remote_collaborator_name
                     );
 
                     /*
@@ -35703,14 +35872,19 @@ fn handle_local_owner_desk(
                         Ok(data) => data,
                         Err(_e) => {
                             #[cfg(debug_assertions)]
-                            debug_log!("HLOD 6.3: Clearsign extraction failed: {}. Skipping. ({})", _e, remote_collaborator_name);
+                            debug_log!(
+                                "(from {}) HLOD 6.3: Clearsign extraction failed: {}. Skipping.",
+                                &remote_collaborator_name,
+                                _e,
+                            );
                             continue;
                         }
                     };
 
                     #[cfg(debug_assertions)]
                     debug_log!(
-                        "HLOD 6.3 extracted_clearsigned_file_data -> {:?}",
+                        "(from {}) HLOD 6.3 extracted_clearsigned_file_data -> {:?}",
+                        &remote_collaborator_name,
                         extracted_clearsigned_file_data
                     );
 
@@ -35722,8 +35896,12 @@ fn handle_local_owner_desk(
                     let save_as_gpgtoml = file_str.contains("\nmessagepost_gpgtoml = true\n")
                         || file_str.contains("\ncorenode_gpgtoml = true\n");
 
-                    // #[cfg(debug_assertions)]
-                    debug_log!("HLOD 6.4: save_as_gpgtoml flag = {}", save_as_gpgtoml);
+                    #[cfg(debug_assertions)]
+                    debug_log!(
+                        "(from {}) HLOD 6.4: save_as_gpgtoml flag = {}",
+                        &remote_collaborator_name,
+                        save_as_gpgtoml
+                    );
 
                     // 7 Save File into Uma Folder Structure
                     // let received_toml: Value = toml::from_slice(&extracted_clearsigned_file_data)?;
@@ -35745,9 +35923,9 @@ fn handle_local_owner_desk(
 
                     #[cfg(debug_assertions)]
                     debug_log!(
-                        "HLOD 7.1 found message file, file_str -> {:?} ({})",
+                        "(from {}) HLOD 7.1 found message file, file_str -> {:?}",
+                        &remote_collaborator_name,
                         file_str,
-                        remote_collaborator_name
                     );
 
                     // let mut incoming_file_path: PathBuf = PathBuf::from("project_graph_data/team_channels");
@@ -35765,8 +35943,12 @@ fn handle_local_owner_desk(
                     // build look up table
                     let hashtable_node_id_to_path = create_node_id_to_path_lookup(&team_channel_path)?;
 
-                    #[cfg(all(debug_assertions, not(test)))]
-                    debug_log!("HLOD loop 1.2 paths: hashtable_node_id_to_path {:?}", hashtable_node_id_to_path);
+                    #[cfg(debug_assertions)]
+                    debug_log!(
+                        "(from {}) HLOD loop 1.2 paths: hashtable_node_id_to_path {:?}",
+                        &remote_collaborator_name,
+                        hashtable_node_id_to_path,
+                    );
 
                     /*
                     optional but maybe not needed?
@@ -35800,7 +35982,10 @@ fn handle_local_owner_desk(
                     if file_str.contains("filepath_in_node = \"message_posts_browser\"") {
 
                         #[cfg(debug_assertions)]
-                        debug_log!("HLOD-InTray: an instant message file.");
+                        debug_log!(
+                            "(from {}) HLOD-InTray: an instant message file.",
+                            &remote_collaborator_name,
+                        );
 
                         let messagepost_node_id = read_u8_array_field_from_string(
                             file_str,
@@ -35830,7 +36015,8 @@ fn handle_local_owner_desk(
 
                             #[cfg(debug_assertions)]
                             debug_log!(
-                                "HLOD 7.2 got-made msgpost_abs_node_directory_path -> {:?}",
+                                "(from {}) HLOD 7.2 got-made msgpost_abs_node_directory_path -> {:?}",
+                                &remote_collaborator_name,
                                 &msgpost_node_abs_directory_path
                             );
 
@@ -35853,7 +36039,8 @@ fn handle_local_owner_desk(
 
                             #[cfg(debug_assertions)]
                             debug_log!(
-                                "HLOD 7.2 got-made incoming_file_path -> {:?}",
+                                "(from {}) HLOD 7.2 got-made incoming_file_path -> {:?}",
+                                &remote_collaborator_name,
                                 incoming_file_path
                             );
 
@@ -35869,7 +36056,11 @@ fn handle_local_owner_desk(
                                 Ok(hash) => hash,
                                 Err(_e) => {
                                     #[cfg(debug_assertions)]
-                                    debug_log!("HLOD-InTray Error calculating hash for received file: {}", _e);
+                                    debug_log!(
+                                        "(from {}) HLOD-InTray Error calculating hash for received file: {}",
+                                        &remote_collaborator_name,
+                                        _e
+                                    );
                                     continue; // Skip to next file if hashing fails
                                 }
                             };
@@ -35895,7 +36086,11 @@ fn handle_local_owner_desk(
                             if let Some(parent) = Path::new(&incoming_file_path).parent() {
                                 if let Err(e) = fs::create_dir_all(parent) {
                                     #[cfg(debug_assertions)]
-                                    debug_log!("HLOD-InTray error: Failed to create directories: {:?}", e);
+                                    debug_log!(
+                                        "(from {}) HLOD-InTray error: Failed to create directories: {:?}",
+                                        &remote_collaborator_name,
+                                        e,
+                                    );
                                     return Err(ThisProjectError::from(e));
                                 }
                             }
@@ -35903,12 +36098,20 @@ fn handle_local_owner_desk(
                             // 3. Saving the File
                             if let Err(e) = fs::write(&incoming_file_path, data_to_save) {
                                 #[cfg(debug_assertions)]
-                                debug_log!("HLOD-InTray: Failed to write message file: {:?}", e);
+                                debug_log!(
+                                    "(from {}) HLOD-InTray: Failed to write message file: {:?}",
+                                    &remote_collaborator_name,
+                                    e,
+                                );
                                 return Err(ThisProjectError::from(e));
                             }
 
                             #[cfg(debug_assertions)]
-                            debug_log!("7.3 HLOD-InTray: IM message file saved to: {:?}", incoming_file_path);
+                            debug_log!(
+                                "(from {}) 7.3 HLOD-InTray: IM message file saved to: {:?}",
+                                &remote_collaborator_name,
+                                incoming_file_path,
+                            );
                         }
                     }
 
@@ -35961,7 +36164,10 @@ fn handle_local_owner_desk(
 
 
                         #[cfg(debug_assertions)]
-                        debug_log!("HLOD-InTray: an instant message file.");
+                        debug_log!(
+                            "(from {}) HLOD-InTray: an instant message file.",
+                            &remote_collaborator_name,
+                        );
 
                         // 7.2.2
                         // 2. Generating File Path
@@ -35973,7 +36179,8 @@ fn handle_local_owner_desk(
 
                         #[cfg(debug_assertions)]
                         debug_log!(
-                            "HLOD 7.2.2 messagepost_parent_node_id -> {:?}",
+                            "(from {}) HLOD 7.2.2 messagepost_parent_node_id -> {:?}",
+                            &remote_collaborator_name,
                             &messagepost_parent_node_id
                         );
 
@@ -35985,7 +36192,8 @@ fn handle_local_owner_desk(
 
                             #[cfg(debug_assertions)]
                             debug_log!(
-                                "HLOD 7.2.2 got-made zero_msgpost_node_abs_directory_path -> {:?}",
+                                "(from {}) HLOD 7.2.2 got-made zero_msgpost_node_abs_directory_path -> {:?}",
+                                &remote_collaborator_name,
                                 &zero_msgpost_node_abs_directory_path
                             );
 
@@ -36007,7 +36215,8 @@ fn handle_local_owner_desk(
 
                             #[cfg(debug_assertions)]
                             debug_log!(
-                                "HLOD 7.2 got-made incoming_file_path -> {:?}",
+                                "(from {}) HLOD 7.2 got-made incoming_file_path -> {:?}",
+                                &remote_collaborator_name,
                                 zero_msgpost_node_abs_directory_path
                             );
 
@@ -36022,7 +36231,11 @@ fn handle_local_owner_desk(
                                 Ok(hash) => hash,
                                 Err(_e) => {
                                     #[cfg(debug_assertions)]
-                                    debug_log!("Error calculating hash for received file: {}", _e);
+                                    debug_log!(
+                                        "(from {}) Error calculating hash for received file: {}",
+                                        &remote_collaborator_name,
+                                        _e
+                                    );
                                     continue; // Skip to next file if hashing fails
                                 }
                             };
@@ -36081,8 +36294,12 @@ fn handle_local_owner_desk(
                     //
                     // TODO, don't load whole file...
                     if file_str.contains("node_unique_id = [") {
-                        // #[cfg(debug_assertions)]
-                        debug_log!("HLOD-InTray: File Type Processing 3. Node files  (Grecian Urn)");
+
+                        #[cfg(debug_assertions)]
+                        debug_log!(
+                            "(from {}) HLOD-InTray: File Type Processing 3. Node files (Grecian Urn)",
+                            &remote_collaborator_name,
+                        );
 
                         // 7.2
                         // 2. Generating File Path
@@ -36106,18 +36323,25 @@ fn handle_local_owner_desk(
                             debug_log!("HLOD Extract path_in_parentnode failed, warning.error?");
 
                             // dangermouse log
-                            // #[cfg(debug_assertions)]
+                            #[cfg(debug_assertions)]
                             debug_log!(
-                                "HLOD oopsy file: file_str {:?}",
+                                "(from {}) HLOD oopsy file: file_str {:?}",
+                                &remote_collaborator_name,
                                 file_str
                             );
 
                             debug_log!("HLOD Extract path_in_parentnode failed, warning.error?");
+
+                            #[cfg(debug_assertions)]
                             debug_log!("HLOD oopsy file: file_str {:?}", file_str);
                         }
 
-                        // #[cfg(debug_assertions)]
-                        debug_log!("HLOD nodes: new_node_directory_path_result {:?}", new_node_directory_path_result);
+                        #[cfg(debug_assertions)]
+                        debug_log!(
+                            "(from {}) HLOD nodes: new_node_directory_path_result {:?}",
+                            &remote_collaborator_name,
+                            new_node_directory_path_result
+                        );
 
                         let node_file_path_in_parent = match new_node_directory_path_result {
                             Some(path) => path,
@@ -36128,8 +36352,12 @@ fn handle_local_owner_desk(
                             }
                         };
 
-                        // #[cfg(debug_assertions)]
-                        debug_log!("HLOD nodes: node_file_path_in_parent {:?}", node_file_path_in_parent);
+                        #[cfg(debug_assertions)]
+                        debug_log!(
+                            "(from {}) HLOD nodes: node_file_path_in_parent {:?}",
+                            &remote_collaborator_name,
+                            node_file_path_in_parent
+                        );
 
                         // =========
                         // node name
@@ -36152,18 +36380,25 @@ fn handle_local_owner_desk(
                             debug_log!("HLOD Extract new_node_name_result failed, warning.error?");
 
                             // dangermouse log
-                            // #[cfg(debug_assertions)]
+                            #[cfg(debug_assertions)]
                             debug_log!(
-                                "HLOD oopsy file: file_str {:?}",
+                                "(from {}) HLOD oopsy file: file_str {:?}",
+                                &remote_collaborator_name,
                                 file_str
                             );
 
                             debug_log!("HLOD Extract new_node_name_result failed, warning.error?");
+
+                            #[cfg(debug_assertions)]
                             debug_log!("HLOD oopsy file: file_str {:?}", file_str);
                         }
 
-                        // #[cfg(debug_assertions)]
-                        debug_log!("HLOD nodes: new_node_name_result {:?}", new_node_name_result);
+                        #[cfg(debug_assertions)]
+                        debug_log!(
+                            "(from {}) HLOD nodes: new_node_name_result {:?}",
+                            &remote_collaborator_name,
+                            new_node_name_result
+                        );
 
                         let incoming_node_name = match new_node_name_result {
                             Some(path) => path,
@@ -36174,9 +36409,12 @@ fn handle_local_owner_desk(
                             }
                         };
 
-                        // #[cfg(debug_assertions)]
-                        debug_log!("HLOD nodes: incoming_node_name {:?}", incoming_node_name);
-
+                        #[cfg(debug_assertions)]
+                        debug_log!(
+                            "(from {}) HLOD nodes: incoming_node_name {:?}",
+                            &remote_collaborator_name,
+                            incoming_node_name
+                        );
 
                         // check: see if this same file was already saved
                         // 1. Calculate the hash of the received file content using the *local* user's salts and the *raw bytes*:
@@ -36189,7 +36427,11 @@ fn handle_local_owner_desk(
                             Ok(hash) => hash,
                             Err(_e) => {
                                 #[cfg(debug_assertions)]
-                                debug_log!("HLOD 7.2.1 Error calculating hash for received file: {}", _e);
+                                debug_log!(
+                                    "(from {}) HLOD 7.2.1 Error calculating hash for received file: {}",
+                                    &remote_collaborator_name,
+                                    _e
+                                );
                                 continue; // Skip to next file if hashing fails
                             }
                         };
@@ -36221,7 +36463,8 @@ fn handle_local_owner_desk(
 
                         #[cfg(debug_assertions)]
                         debug_log!(
-                            "HLOD nodes: node_unique_id_vec_result {:?}",
+                            "(from {}) HLOD nodes: node_unique_id_vec_result {:?}",
+                            &remote_collaborator_name,
                             &node_unique_id_vec_result
                         );
 
@@ -36279,7 +36522,8 @@ fn handle_local_owner_desk(
 
                                     #[cfg(debug_assertions)]
                                     debug_log!(
-                                        "HLOD Node-Moving:"
+                                        "(from {}) HLOD Node-Moving:",
+                                        &remote_collaborator_name,
                                     );
 
                                     // get parent node_id
@@ -36294,12 +36538,12 @@ fn handle_local_owner_desk(
 
                                                 #[cfg(debug_assertions)]
                                                 debug_log!(
-                                                    "HLOD Node exists, handle move/replace: node-type got existing_parent_node_directory_path -> {:?}",
+                                                    "(from {}) HLOD Node exists, handle move/replace: node-type got existing_parent_node_directory_path -> {:?}",
+                                                    &remote_collaborator_name,
                                                     &existing_parent_node_directory_path
                                                 );
 
                                                 // 3. saving node as clearsigned .toml or .gpgtoml
-
 
                                                 // =================
                                                 // Make Save-To Path
@@ -36319,7 +36563,8 @@ fn handle_local_owner_desk(
                                                 #[cfg(debug_assertions)]
                                                 debug_log!(
 
-                                                    "HLOD 7.2.1 Node exists, handle move/replace: got-made base_node_path_new, existing_parent_node_directory_path.join(node_file_path_in_parent) -> {:?}",
+                                                    "(from {}) HLOD 7.2.1 Node exists, handle move/replace: got-made base_node_path_new, existing_parent_node_directory_path.join(node_file_path_in_parent) -> {:?}",
+                                                    &remote_collaborator_name,
                                                     &base_node_path_new
                                                 );
 
@@ -36328,7 +36573,8 @@ fn handle_local_owner_desk(
 
                                                 #[cfg(debug_assertions)]
                                                 debug_log!(
-                                                    "HLOD 7.2.2 Moving, new_node_dir_path -> {:?}",
+                                                    "(from {}) HLOD 7.2.2 Moving, new_node_dir_path -> {:?}",
+                                                    &remote_collaborator_name,
                                                     &new_node_dir_path
                                                 );
 
@@ -36351,12 +36597,14 @@ fn handle_local_owner_desk(
                                                     let new_node_file_path = new_node_dir_path.join(node_filename);
 
                                                     debug_log!(
-                                                        "HLOD 7.2.3 Node exists, handle move/replace: got-made new_node_toml_file_path -> {:?}",
+                                                        "(from {}) HLOD 7.2.3 Node exists, handle move/replace: got-made new_node_toml_file_path -> {:?}",
+                                                        &remote_collaborator_name,
                                                         &new_node_file_path
                                                     );
 
                                                     debug_log!(
-                                                        "HLOD 7.2.3.4 save_as_gpgtoml -> {:?}",
+                                                        "(from {}) HLOD 7.2.3.4 save_as_gpgtoml -> {:?}",
+                                                        &remote_collaborator_name,
                                                         &save_as_gpgtoml
                                                     );
                                                 }
@@ -36370,7 +36618,8 @@ fn handle_local_owner_desk(
 
                                                 #[cfg(debug_assertions)]
                                                 debug_log!(
-                                                    "HLOD 7.2.5 Node exists, handle move/replace: got-made base_olddir_existing_node_directory_path -> {:?}",
+                                                    "(from {}) HLOD 7.2.5 Node exists, handle move/replace: got-made base_olddir_existing_node_directory_path -> {:?}",
+                                                    &remote_collaborator_name,
                                                     &base_olddir_existing_node_directory_path
                                                 );
 
@@ -36388,7 +36637,11 @@ fn handle_local_owner_desk(
                                                 let canonical_path1 = match fs::canonicalize(base_olddir_existing_node_directory_path) {
                                                     Ok(canonical) => canonical,
                                                     Err(e) => {
-                                                        eprintln!("HLOD Error canonicalizing path1: {}", e);
+                                                        debug_log!(
+                                                            "(from {}) HLOD Error canonicalizing path1: {}",
+                                                            &remote_collaborator_name,
+                                                            e
+                                                        );
                                                         return Err(ThisProjectError::from(e));
                                                     }
                                                 };
@@ -36396,7 +36649,11 @@ fn handle_local_owner_desk(
                                                 let canonical_path2 = match fs::canonicalize(base_node_path_new.clone()) {
                                                     Ok(canonical) => canonical,
                                                     Err(e) => {
-                                                        eprintln!("HLOD Error canonicalizing path2: {}", e);
+                                                        debug_log!(
+                                                            "(from {}) HLOD Error canonicalizing path2: {}",
+                                                            &remote_collaborator_name,
+                                                            e
+                                                        );
                                                         return Err(ThisProjectError::from(e));
                                                     }
                                                 };
@@ -36409,18 +36666,26 @@ fn handle_local_owner_desk(
 
                                                 if canonical_path1 == canonical_path2 {
                                                     #[cfg(debug_assertions)]
-                                                    debug_log!("7.4.b paths ARE the same, so -> only updating node toml");
-
+                                                    debug_log!(
+                                                        "(from {}) 7.4.b paths ARE the same, so -> only updating node toml",
+                                                        &remote_collaborator_name,
+                                                    );
 
                                                     // 3.2 replace (delete the old) node file
                                                     if let Err(e) = fs::write(&oldfile_node_file_path, move_data_to_save) {
                                                         #[cfg(debug_assertions)]
-                                                        debug_log!("HLOD Node exists, handle move/replace: Error writing node file: {:?} - {}", &oldfile_node_file_path, e);
+                                                        debug_log!(
+                                                            "(from {}) HLOD Node exists, handle move/replace: Error writing node file: {:?} - {}",
+                                                            &remote_collaborator_name,
+                                                            &oldfile_node_file_path,
+                                                            e
+                                                        );
 
                                                         // should this skip not error?
                                                         return Err(ThisProjectError::from(e));
                                                     }
 
+                                                    #[cfg(debug_assertions)]
                                                     debug_log!("7.4.a -- HLOD-InTray: updated,  not moved");
 
                                                 } else {
@@ -36431,7 +36696,12 @@ fn handle_local_owner_desk(
                                                     // 3.2 replace (delete the old) node file
                                                     if let Err(e) = fs::write(&oldfile_node_file_path, move_data_to_save) {
                                                         #[cfg(debug_assertions)]
-                                                        debug_log!("HLOD Node exists, handle move/replace: Error writing node file: {:?} - {}", &oldfile_node_file_path, e);
+                                                        debug_log!(
+                                                            "(from {}) HLOD Node exists, handle move/replace: Error writing node file: {:?} - {}",
+                                                            &remote_collaborator_name,
+                                                            &oldfile_node_file_path,
+                                                            e
+                                                        );
 
                                                         // should this skip not error?
                                                         return Err(ThisProjectError::from(e));
@@ -36442,18 +36712,31 @@ fn handle_local_owner_desk(
                                                     // from olddir_abs_node_directory_path to new_full_abs_node_directory_path
                                                     if let Err(_error) = move_directory_tree_to_new_path(&base_olddir_existing_node_directory_path, &base_node_path_new) {
                                                         #[cfg(debug_assertions)]
-                                                        debug_log!("HLOD An error occurred: {}", _error);
+                                                        debug_log!(
+                                                            "(from {}) HLOD An error occurred: {}",
+                                                            &remote_collaborator_name,
+                                                            _error
+                                                        );
                                                     }
 
                                                     #[cfg(debug_assertions)]
                                                     {
-                                                        debug_log!("7.3.4 HLOD-InTray: moved file moved from: {:?}", &base_olddir_existing_node_directory_path);
-                                                        debug_log!("7.3.5 HLOD-InTray: moved-new file saved to: {:?}", &base_node_path_new);
+                                                        debug_log!(
+                                                            "(from {}) 7.3.4 HLOD-InTray: moved file moved from: {:?}",
+                                                            &remote_collaborator_name,
+                                                            &base_olddir_existing_node_directory_path
+                                                        );
+                                                        debug_log!(
+                                                            "(from {}) 7.3.5 HLOD-InTray: moved-new file saved to: {:?}",
+                                                            &remote_collaborator_name,
+                                                            &base_node_path_new
+                                                        );
+                                                        debug_log!(
+                                                            "(from {}) 7.4.b -- HLOD-InTray -> moved",
+                                                            &remote_collaborator_name,
+                                                        );
                                                     }
-
-                                                    debug_log!("7.4.b -- HLOD-InTray -> moved");
                                                 }
-
                                             }
                                         }
                                         Err(_) => {
@@ -36469,7 +36752,8 @@ fn handle_local_owner_desk(
 
                                     #[cfg(debug_assertions)]
                                     debug_log!(
-                                        "HLOD Not-Moving, Just Saving node-type "
+                                        "(from {}) HLOD Not-Moving, Just Saving node-type",
+                                        &remote_collaborator_name,
                                     );
 
                                     // get parent node_id
@@ -36484,7 +36768,8 @@ fn handle_local_owner_desk(
 
                                                 #[cfg(debug_assertions)]
                                                 debug_log!(
-                                                    "HLOD Not-Moving, Just Saving node-type got existing_parent_node_directory_path -> {:?}",
+                                                    "(from {}) HLOD Not-Moving, Just Saving node-type got existing_parent_node_directory_path -> {:?}",
+                                                    &remote_collaborator_name,
                                                     &existing_parent_node_directory_path
                                                 );
 
@@ -36514,7 +36799,8 @@ fn handle_local_owner_desk(
 
                                                 #[cfg(debug_assertions)]
                                                 debug_log!(
-                                                    "HLOD 7.2 Not-Moving, Just Saving got-made base_node_path, existing_parent_node_directory_path.join(node_file_path_in_parent) -> {:?}",
+                                                    "(from {}) HLOD 7.2 Not-Moving, Just Saving got-made base_node_path, existing_parent_node_directory_path.join(node_file_path_in_parent) -> {:?}",
+                                                    &remote_collaborator_name,
                                                     &base_node_path
                                                 );
 
@@ -36523,7 +36809,8 @@ fn handle_local_owner_desk(
 
                                                 #[cfg(debug_assertions)]
                                                 debug_log!(
-                                                    "HLOD 7.2 Not-Moving, Just Saving new_node_dir_path -> {:?}",
+                                                    "(from {}) HLOD 7.2 Not-Moving, Just Saving new_node_dir_path -> {:?}",
+                                                    &remote_collaborator_name,
                                                     &new_node_dir_path
                                                 );
 
@@ -36538,7 +36825,8 @@ fn handle_local_owner_desk(
 
                                                 #[cfg(debug_assertions)]
                                                 debug_log!(
-                                                    "HLOD 7.2 Not-Moving, Just Saving got-made new_node_toml_file_path -> {:?}",
+                                                    "(from {}) HLOD 7.2 Not-Moving, Just Saving got-made new_node_toml_file_path -> {:?}",
+                                                    &remote_collaborator_name,
                                                     &new_node_file_path
                                                 );
 
@@ -36557,12 +36845,21 @@ fn handle_local_owner_desk(
                                                 // Save file
                                                 if let Err(e) = fs::write(&new_node_file_path, data_to_save) {
                                                     #[cfg(debug_assertions)]
-                                                    debug_log!("HLOD Not-Moving, Just Saving Error writing node file: {:?} - {}", &new_node_file_path, e);
+                                                    debug_log!(
+                                                        "(from {}) HLOD Not-Moving, Just Saving Error writing node file: {:?} - {}",
+                                                        &remote_collaborator_name,
+                                                        &new_node_file_path,
+                                                        e
+                                                    );
                                                     return Err(ThisProjectError::from(e));
                                                 }
 
                                                 #[cfg(debug_assertions)]
-                                                debug_log!("7.3 Not-Moving, Just Saving HLOD-InTray: new file saved to: {:?}", new_node_file_path);
+                                                debug_log!(
+                                                    "(from {}) 7.3 Not-Moving, Just Saving HLOD-InTray: new file saved to: {:?}",
+                                                    &remote_collaborator_name,
+                                                    new_node_file_path
+                                                );
                                             }
                                         }
                                         Err(_) => {
@@ -36597,7 +36894,14 @@ fn handle_local_owner_desk(
                     ) {
                         Ok(temp_extraction_timestamp) => temp_extraction_timestamp,
                         Err(e) => {
-                            debug_log!("HLOD-InTray: Error extracting timestamp: {}. Skipping.", e);
+                            #[cfg(debug_assertions)]
+                            debug_log!(
+                                "(from {}) HLOD-InTray: Error extracting timestamp: {}. Skipping.",
+                                &remote_collaborator_name,
+                                e
+                            );
+
+
                             continue;
                         }
                     };
@@ -36610,7 +36914,12 @@ fn handle_local_owner_desk(
                     );
 
                     // Now you have the received_file_updatedat_timestamp timestamp
-                    debug_log!("7.3 HLOD-InTray: Received file was updated_at: {}", received_file_updatedat_timestamp);
+                    #[cfg(debug_assertions)]
+                    debug_log!(
+                        "(from {}) 7.3 HLOD-InTray: Received file was updated_at: {}",
+                        &remote_collaborator_name,
+                        received_file_updatedat_timestamp
+                    );
                     // println!("Received file updated at: {}", received_file_updatedat_timestamp);
 
                     // 1.4 Send Echo Ready Signal (using a function)
@@ -36657,33 +36966,52 @@ fn handle_local_owner_desk(
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                     // No data available yet.  Don't treat this as an error.
+
+                    #[cfg(debug_assertions)]
+                    debug_log!(
+                        "(from {}) HLOD-InTray: No data available yet...WouldBlock",
+                        &remote_collaborator_name,
+                    );
+
+                    // Safe Log
                     debug_log!("HLOD-InTray: No data available yet...WouldBlock");
                     std::thread::sleep(std::time::Duration::from_millis(100));
                     continue; // Continue to the next loop iteration
                 }
-                Err(e) => {
-                    // A real error occurred. Log and handle it.
-                    debug_log!("HLOD-InTray: Error receiving data: {}", e);
-                    return Err(ThisProjectError::NetworkError(format!(
-                        "Error receiving data: {}",
-                        e
-                    )));  // Or choose another way to handle this
-                }
+                    Err(e) => {
+                        // A real error occurred. Log and handle it.
+                        #[cfg(debug_assertions)]
+                        debug_log!(
+                            "(from {}) HLOD-InTray: Error receiving data: {}",
+                            &remote_collaborator_name,
+                            e,
+                        );
+
+                        // Safe Log
+                        debug_log!("HLOD-InTray: Error receiving data");
+
+                        return Err(ThisProjectError::NetworkError(format!(
+                            "Error receiving data: {}",
+                            e,
+                        )));  // Or choose another way to handle this
+                    }
                 }
             } // end match ready_socket.recv_from(&mut buf) {
         } // end In-Tray-Loop
+
+
         ////////////////////////
         // InTrayListerLoop End
         ////////////////////////
-
 
         // TESTING ONLY wait, if only for testing, so thread debug prints do not ~overlap
         thread::sleep(Duration::from_millis(100)); // Avoid busy-waiting
 
         debug_log!(
-            "HLOD Exiting handle_local_owner_desk() for {}",
-            local_owner_desk_setup_data.local_user_name
+            "({} thread) HLOD Exiting handle_local_owner_desk()",
+            &remote_collaborator_name,
         ); // Add collaborator name
+
         debug_log(">*< Halt signal received. Exiting The Uma. Closing... handle_local_owner_desk() |o|");
     }
     // finis: fn handle_local_owner_desk
@@ -36747,7 +37075,6 @@ fn deserialize_ready_signal(bytes: &[u8], salt_list: &[u128]) -> Result<ReadySig
     // 3. Extract rt (receive timestamp)
     let rt = u64::from_be_bytes(bytes[0..timestamp_len].try_into().map_err(|_| ThisProjectError::InvalidData("Failed to convert rst bytes to u64".into()))?);
 
-
     // 4. Extract rst (send timestamp)
     let rst_start = timestamp_len;
     let rst_end = rst_start + timestamp_len;
@@ -36756,7 +37083,6 @@ fn deserialize_ready_signal(bytes: &[u8], salt_list: &[u128]) -> Result<ReadySig
     }
     let rst_bytes = &bytes[rst_start..rst_end];
     let rst = u64::from_be_bytes(rst_bytes.try_into().map_err(|_| ThisProjectError::InvalidData("Failed to convert rst bytes to u64".into()))?);
-
 
     // 6. Extract b (network index) -- u8
     let b_start = rst_start + timestamp_len;
@@ -36806,7 +37132,6 @@ fn deserialize_intray_send_file_struct(
     }
 
     debug_log!("DISFS bytes.len() >= min_length");
-
 
     // 2. Extract intray_send_time (as before)
     // // TODO: NO UNWRAP!!!!
@@ -37364,9 +37689,7 @@ mod padnet_sds_tests {
 }
 
 fn get_absolute_team_channel_path(team_channel_name: &str) -> io::Result<PathBuf> {
-
     // let team_channels_dir = Path::new("project_graph_data/team_channels");
-
     let team_channels_dir = match get_team_channels_homebase_directory_path() {
         Ok(path) => path,
         Err(e) => {
@@ -38883,22 +39206,23 @@ fn handle_remote_collaborator_meetingroom_desk(
                     #[cfg(debug_assertions)]
                     {
                         debug_log!(
-                            "HRCD 2.2.1 Ok((amt, src)) ready_port Signal Received {} bytes from {}",
+                            "(from {}) HRCD 2.2.1 Ok((amt, src)) ready_port Signal Received {} bytes from {}",
+                            room_sync_input.remote_collaborator_name,
                             amt,
-                            src
+                            src,
                         );
 
                         debug_log!(
-                            "HRCD 2.2.1 check queue {:?} (for {}) (why here?)",
+                            "(from {}) HRCD 2.2.1 check queue {:?} (why here?)",
+                            room_sync_input.remote_collaborator_name,
                             session_send_queue.items,
-                            room_sync_input.remote_collaborator_name
                         );
                     }
 
                     if should_halt_uma() {
                         #[cfg(debug_assertions)]
                         debug_log!(
-                            "HRCD Halting handle_local_owner_desk() (for {})",
+                            "(from {}) HRCD Halting handle_local_owner_desk()",
                             room_sync_input.remote_collaborator_name
                         );
                         break;
@@ -38908,9 +39232,9 @@ fn handle_remote_collaborator_meetingroom_desk(
                         if let Err(_e) = set_as_active(&room_sync_input.remote_collaborator_name) {
                             #[cfg(debug_assertions)]
                             debug_log!(
-                                "Error setting collaborator as active: {} (for {})",
+                                "(from {}) Error setting collaborator as active: {} ",
+                                room_sync_input.remote_collaborator_name,
                                 _e,
-                                room_sync_input.remote_collaborator_name
                             );
                             // Handle the error appropriately (e.g., continue or return)
                             continue; // Example: skip to the next iteration
@@ -38920,7 +39244,7 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                         #[cfg(debug_assertions)]
                         debug_log!(
-                            "HRCD rc_set_as_active = true (for {})",
+                            "(for {}) HRCD rc_set_as_active = true",
                             room_sync_input.remote_collaborator_name
                         );
 
@@ -38976,9 +39300,9 @@ fn handle_remote_collaborator_meetingroom_desk(
                         Err(_e) => {
                             #[cfg(debug_assertions)]
                             debug_log!(
-                                "HRCD 2.3 Deserialize Err Receive data Failed to parse ready signal: {}, (for {})",
+                                "(from {}) HRCD 2.3 Deserialize Err Receive data Failed to parse ready signal: {}, ",
+                                room_sync_input.remote_collaborator_name,
                                 _e,
-                                room_sync_input.remote_collaborator_name
                             );
                             continue; // Continue to the next iteration of the loop
                         }
@@ -39010,7 +39334,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                         &room_sync_input.remote_collaborator_salt_list,
                     ) {
                         #[cfg(debug_assertions)]
-                        debug_log!("HRCD 2.5: ReadySignal hash verification failed. Discarding signal. (for {})",
+                        debug_log!("(from {}) HRCD 2.5: ReadySignal hash verification failed. Discarding signal. ",
                         room_sync_input.remote_collaborator_name
                         );
 
@@ -39026,7 +39350,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                         if intrystruct_hash_set_session_nonce.contains(&ready_signal_hash_vec) {
                             #[cfg(debug_assertions)]
                             debug_log!(
-                                "HRCD 2.6 quasi nonce check: Duplicate ReadySignal received (hash match). Discarding. {}",
+                                "(from {}) HRCD 2.6 quasi nonce check: Duplicate ReadySignal received (hash match). Discarding.",
                                 room_sync_input.remote_collaborator_name
                             );
                             continue; // Discard the duplicate signal
@@ -39035,7 +39359,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                     } else {
                         #[cfg(debug_assertions)]
                         debug_log!(
-                            "HRCD 2.6 quasi nonce check: ReadySignal received without hashes. Discarding. {}",
+                            "(from {}) HRCD 2.6 quasi nonce check: ReadySignal received without hashes. Discarding.",
                             room_sync_input.remote_collaborator_name
                         ); // Or handle differently
                         continue;
@@ -39048,15 +39372,15 @@ fn handle_remote_collaborator_meetingroom_desk(
                     #[cfg(debug_assertions)]
                     {
                         debug_log!(
-                            "HRCD 3.1 check rst_sent_ready_signal_timestamp for send-queue: rst_sent_ready_signal_timestamp -> {:?} {}",
+                            "({} thread) HRCD 3.1 check rst_sent_ready_signal_timestamp for send-queue: rst_sent_ready_signal_timestamp -> {:?}",
+                            room_sync_input.remote_collaborator_name,
                             rst_sent_ready_signal_timestamp,
-                            room_sync_input.remote_collaborator_name
                         );
 
                         debug_log!(
-                            "HRCD 3.1 check rt: rc's last-file-received-from-you timestamp received in a readysignal. ready_signal.rt -> {:?} {}",
+                            "({} thread) HRCD 3.1 check rt: rc's last-file-received-from-you timestamp received in a readysignal. ready_signal.rt -> {:?}",
+                            room_sync_input.remote_collaborator_name,
                             ready_signal.rt,
-                            room_sync_input.remote_collaborator_name
                         );
                     }
 
@@ -39065,7 +39389,7 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                     #[cfg(debug_assertions)]
                     debug_log!(
-                        "HRCD 3.2 check timestamp freshness checks: current_timestamp -> {:?} {}",
+                        "({} thread) HRCD 3.2 check timestamp freshness checks: current_timestamp -> {:?}",
                         current_timestamp,
                         room_sync_input.remote_collaborator_name
                     );
@@ -39074,7 +39398,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                     if rst_sent_ready_signal_timestamp > current_timestamp + 5 {
                         // Allow for some clock skew (5 seconds)
                         #[cfg(debug_assertions)]
-                        debug_log!("HRCD 3.2.1 check: Received future-dated timestamp. Discarding. {}",
+                        debug_log!("({} thread) HRCD 3.2.1 check: Received future-dated timestamp. Discarding.",
                         room_sync_input.remote_collaborator_name);
                         continue;
                     }
@@ -39082,7 +39406,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                     // 3.2.2 No Requests Older Than ~10 sec
                     if current_timestamp - 10 > rst_sent_ready_signal_timestamp {
                         #[cfg(debug_assertions)]
-                        debug_log!("HRCD 3.2.2 check: Received outdated timestamp (older than 10 seconds). Discarding. {}",
+                        debug_log!("({} thread) HRCD 3.2.2 check: Received outdated timestamp (older than 10 seconds). Discarding.",
                         room_sync_input.remote_collaborator_name);
                         continue;
                     }
@@ -39091,7 +39415,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                     if rst_sent_ready_signal_timestamp == 0 {
                         if zero_timestamp_counter >= 5 {
                             #[cfg(debug_assertions)]
-                            debug_log!("HRCD 3.2.3 check: Too many zero-timestamp requests. Discarding. {}",
+                            debug_log!("({} thread) HRCD 3.2.3 check: Too many zero-timestamp requests. Discarding.s",
                             room_sync_input.remote_collaborator_name);
                             continue;
                         }
@@ -39116,7 +39440,7 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                             #[cfg(debug_assertions)]
                             debug_log!(
-                                "HRCD 3.3: Error: Could not get current channel name. Skipping send queue creation. {}",
+                                "({} thread) HRCD 3.3: Error: Could not get current channel name. Skipping send queue creation.",
                                 &room_sync_input.remote_collaborator_name,
                             );
 
@@ -39125,14 +39449,13 @@ fn handle_remote_collaborator_meetingroom_desk(
                     };
 
                     #[cfg(debug_assertions)]
-                    debug_log!("HRCD 3.3 this_team_channelname -> {:?} (to {})",
-                        this_team_channelname,
+                    debug_log!("(to {}) HRCD 3.3 this_team_channelname -> {:?} ",
                         &room_sync_input.remote_collaborator_name,
+                        this_team_channelname,
                     );
 
-                    // TODO currently set to always run... ok?
                     #[cfg(debug_assertions)]
-                    debug_log!("HRCD 3.3 get_or_create_send_queue (to {})",
+                    debug_log!("(to {}) HRCD 3.3 get_or_create_send_queue ",
                         &room_sync_input.remote_collaborator_name,);
 
                     session_send_queue = get_or_create_send_queue(
@@ -39149,7 +39472,7 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                     #[cfg(debug_assertions)]
                     debug_log!(
-                        "HRCD ->[]<- 3.3 Get / Make session_send_queue, sendqueue send-queue (to {}) {:?}",
+                        "(to {}) HRCD ->[]<- 3.3 Get / Make session_send_queue, sendqueue send-queue {:?}",
                         &room_sync_input.remote_collaborator_name, // remote_collaborator_name
                         session_send_queue
                     );
@@ -39215,9 +39538,9 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                     #[cfg(debug_assertions)]
                     debug_log!(
-                        "HRCD ->[cue]<- 4.1 Send One File from Queue, session_send_queue -> (to {}) {:?}",
+                        "(to {}) HRCD ->[cue]<- 4.1 Send One File from Queue, session_send_queue -> {:?}",
                         &room_sync_input.remote_collaborator_name, // remote_collaborator_name
-                        session_send_queue
+                        session_send_queue,
                     );
 
                     // 4. while: Send File: Send One File from Queue
@@ -39226,7 +39549,7 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                     #[cfg(debug_assertions)]
                     debug_log!(
-                        "HRCD 4 before le pop, queue.items -> (to {}) {:?}",
+                        "(to {}) HRCD 4 before le pop, queue.items -> {:?}",
                         &room_sync_input.remote_collaborator_name, // remote_collaborator_name
                         session_send_queue.items
                     );
@@ -39235,16 +39558,16 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                         #[cfg(debug_assertions)]
                         debug_log!(
-                            "HRCD 4 after le pop, queue.items -> (to {}) {:?}",
+                            "(to {}) HRCD 4 after le pop, queue.items -> {:?}",
                             &room_sync_input.remote_collaborator_name, // remote_collaborator_name
-                            session_send_queue.items
+                            session_send_queue.items,
                         );
 
                         #[cfg(debug_assertions)]
                         debug_log!(
-                            "HRCD 4.2 Send File: if/while let Some(file_path) = queue.items.pop()  file_path (to {}) {:?}",
+                            "(to {}) HRCD 4.2 Send File: if/while let Some(file_path) = queue.items.pop() file_path {:?}",
                             &room_sync_input.remote_collaborator_name, // remote_collaborator_name
-                            file_path
+                            file_path,
                         );
 
                         /*
@@ -39266,7 +39589,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                             Err(e) => {
 
                                 // safe log
-                                debug_log!( "LCNFTF: implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}", e);
+                                debug_log!("LCNFTF: implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}", e);
 
                                 continue; // Skip to the next file if hashing fails
                             }
@@ -39288,7 +39611,10 @@ fn handle_remote_collaborator_meetingroom_desk(
                             &file_path,
                             &gpg_full_fingerprint_key_id_string,
                             &base_uma_temp_directory_path,
-                        ).map_err(|e| format!("LCNFTF: Failed to get temporary read copy of TOML file: {:?}", e))?;
+                        ).map_err(|e| format!(
+                            "(to {}) hrcmd: Failed to get temporary read copy of TOML file: {:?}",
+                            &room_sync_input.remote_collaborator_name,
+                            e))?;
 
                         // converst from path-string to path-type path
                         let path_sendfile_readcopy_path = Path::new(&sendfile_readcopy_pathstring);
@@ -39319,8 +39645,6 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                         let use_padnet_flag = &room_sync_input.use_padnet;
 
-                        // let mut padnet_index_array: PadIndex;
-
                         let sendfile_struct: SendFile = if *use_padnet_flag {
 
                             // - check file for flag, if *use_padnet_flag
@@ -39337,14 +39661,15 @@ fn handle_remote_collaborator_meetingroom_desk(
                             // 5. use bytes for file_bytes2send
                             // 6. use arry index in struct
 
-
                             let team_channel_name = match get_current_team_channel_name_from_nav_path() {
                                 Some(name) => name,
                                 None => {
+                                    // safe log
                                     debug_log!("Error: Could not get current channel name. Skipping set_as_active.");
                                     return Err(ThisProjectError::InvalidData("Could not get team channel name".into()));
                                 },
                             };
+
                             let rc_key_id = &room_sync_input.remote_collaborator_gpg_publickey_id;
 
                             // 3. get write-pad path (with id)
@@ -39352,16 +39677,6 @@ fn handle_remote_collaborator_meetingroom_desk(
                             let mut padnet_directory_path = get_writer_to_padnet_directory_path()?;
                             padnet_directory_path.push(&team_channel_name);
                             padnet_directory_path.push(rc_key_id);
-
-                            // Get temp directory path with explicit String conversion
-                            // let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
-                            //     .map_err(|io_err| {
-                            //         let gpg_error = GpgError::ValidationError(
-                            //             format!("HRCMD: Failed to get UME temp directory path: {}", io_err)
-                            //         );
-                            //         // Convert GpgError to String for the function's return type
-                            //         format!("HRCMD: {:?}", gpg_error)
-                            //     })?;
 
                             /*
                             fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
@@ -39380,11 +39695,12 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                             #[cfg(debug_assertions)]
                             debug_log!(
-                                "HRCD 4.5 OTP XOred file_bytes2send {:?}",
+                                "(to {}) HRCD 4.5 send file: OTP XOred file_bytes2send {:?}",
+                                &room_sync_input.remote_collaborator_name,
                                 file_bytes2send
                             );
 
-                            // // 4.5. Calculate SendFile Struct Hashes (Using Collaborator's Salts)
+                            // 4.5. Calculate SendFile Struct Hashes (Using Collaborator's Salts)
                             // 4.5 calculate hashes: HRCD
                             let calculated_hrcd_sendfile_hashes_result = hash_sendfile_struct_fields(
                                 &room_sync_input.local_user_salt_list,
@@ -39396,14 +39712,18 @@ fn handle_remote_collaborator_meetingroom_desk(
                             let calculated_hashes = match calculated_hrcd_sendfile_hashes_result {
                                 Ok(hashes) => hashes,
                                 Err(e) => {
-                                    debug_log!("HRCD 4.5 Error calculating hashes: {}", e);
+                                    debug_log!(
+                                        "(to {})HRCD 4.5 Error calculating hashes: {}",
+                                        &room_sync_input.remote_collaborator_name,
+                                        e);
                                     continue; // Skip to the next file if hashing fails
                                 }
                             };
 
                             #[cfg(debug_assertions)]
                             debug_log!(
-                                "HRCD 4.5 calculated_hashes {:?}",
+                                "(to {}) HRCD 4.5 send: calculated_hashes {:?}",
+                                &room_sync_input.remote_collaborator_name,
                                 calculated_hashes
                             );
 
@@ -39427,8 +39747,9 @@ fn handle_remote_collaborator_meetingroom_desk(
                             )?;
 
                             #[cfg(debug_assertions)]
-                            debug_log(
-                                "HRCD 4.2, 4.3.1, 4.3.2 done gpg wrapper"
+                            debug_log!(
+                                "(to {}) HRCD 4.2, 4.3.1, 4.3.2 send: done gpg wrapper",
+                                &room_sync_input.remote_collaborator_name,
                             );
 
                             // // 4.5. Calculate SendFile Struct Hashes (Using Collaborator's Salts)
@@ -39446,12 +39767,12 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                                     // safe log
                                     debug_log(
-                                        "HRCD 4.5 Error calculating hashes",
+                                        "HRCD 4.5 Error calculating send hashes",
                                     );
 
                                     #[cfg(debug_assertions)]
                                     debug_log!(
-                                        "HRCD 4.5 Error calculating hashes: {} {}",
+                                        "(to {}) HRCD 4.5 Error calculating send hashes:e->{}",
                                         &room_sync_input.remote_collaborator_name, // remote_collaborator_name
                                         _e
                                     );
@@ -39461,9 +39782,9 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                             #[cfg(debug_assertions)]
                             debug_log!(
-                                "HRCD 4.5 calculated_hashes {:?} {}",
-                                calculated_hashes,
+                                "(to {}) HRCD 4.5 calculated_hashes {:?}",
                                 &room_sync_input.remote_collaborator_name, // remote_collaborator_name
+                                calculated_hashes,
                             );
 
                             // 4.6. Create SendFile Struct (no padnet)
@@ -39476,137 +39797,18 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                         };
 
-                        // TODO
-                        // 1. get &room_sync_input.remote_collaborator_gpg_publickey_id,
-                        // 2. look at bool field from file if there: padnet_opt: true
-                        // TODO, maybe this gets OPT array etc
-
-                        /*
-
-
-                        // Wrapper of bytes to bytes:
-                        // 4.2.2 Read File Contents
-                        // 4.3.1 GPG Clearsign the File (with your private key)
-                        // 4.3.2 GPG Encrypt File (with their public key)
-                        let file_bytes2send = wrapper_path_to_clearsign_to_gpgencrypt_to_send_bytes(
-                            &path_sendfile_readcopy_path,
-                            &room_sync_input.remote_collaborator_public_gpg,
-                        )?;
-
-                        debug_log(
-                            "HRCD 4.2, 4.3.1, 4.3.2 done gpg wrapper"
-                        );
-
-                        // remove file... clean function
-                        let _ = cleanup_collaborator_temp_file(
-                            &node_readcopy_path,
-                            &base_uma_temp_directory_path,
-                            );
-
-                        // }
-
-                        // // 4.5. Calculate SendFile Struct Hashes (Using Collaborator's Salts)
-                        // 4.5 calculate hashes: HRCD
-                        let calculated_hrcd_sendfile_hashes = hash_sendfile_struct_fields(
-                            &room_sync_input.local_user_salt_list,
-                            intray_send_time,
-                            &file_bytes2send,
-                        );
-
-                        // Handle the Result from hash_sendfile_struct_fields
-                        let calculated_hashes = match calculated_hrcd_sendfile_hashes {
-                            Ok(hashes) => hashes,
-                            Err(e) => {
-                                debug_log!("HRCD 4.5 Error calculating hashes: {}", e);
-                                continue; // Skip to the next file if hashing fails
-                            }
-                        };
-
-                        debug_log!(
-                            "HRCD 4.5 calculated_hashes {:?}",
-                            calculated_hashes
-                        );
-
-                        // 4.6. Create SendFile Struct
-                        let sendfile_struct = SendFile {
-                            intray_send_time: Some(intray_send_time),
-                            gpg_encrypted_intray_file: Some(file_bytes2send), // Clone needed here if file_bytes2send is used later
-                            intray_hash_list: Some(calculated_hashes),  // Clone here as well
-                            padnet_index_array: None,
-
-                        };
-
-                        make novel path with timestamp
-
-
-
-                        if any issues: continue;
-                            */
-
-
-                        // // } else {
-
-                        // // Wrapper of bytes to bytes:
-                        // // 4.2.2 Read File Contents
-                        // // 4.3.1 GPG Clearsign the File (with your private key)
-                        // // 4.3.2 GPG Encrypt File (with their public key)
-                        // let file_bytes2send = wrapper_path_to_clearsign_to_gpgencrypt_to_send_bytes(
-                        //     &path_sendfile_readcopy_path,
-                        //     &room_sync_input.remote_collaborator_public_gpg,
-                        // )?;
-
-                        // debug_log(
-                        //     "HRCD 4.2, 4.3.1, 4.3.2 done gpg wrapper"
-                        // );
-
-                        // // }
-                        // //
-
-                        // // // 4.5. Calculate SendFile Struct Hashes (Using Collaborator's Salts)
-                        // // 4.5 calculate hashes: HRCD
-                        // let calculated_hrcd_sendfile_hashes = hash_sendfile_struct_fields(
-                        //     &room_sync_input.local_user_salt_list,
-                        //     intray_send_time,
-                        //     &file_bytes2send,
-                        // );
-
-                        // // Handle the Result from hash_sendfile_struct_fields
-                        // let calculated_hashes = match calculated_hrcd_sendfile_hashes {
-                        //     Ok(hashes) => hashes,
-                        //     Err(e) => {
-                        //         debug_log!("HRCD 4.5 Error calculating hashes: {}", e);
-                        //         continue; // Skip to the next file if hashing fails
-                        //     }
-                        // };
-
-                        // debug_log!(
-                        //     "HRCD 4.5 calculated_hashes {:?}",
-                        //     calculated_hashes
-                        // );
-
-                        // // 4.6. Create SendFile Struct
-                        // let sendfile_struct = SendFile {
-                        //     intray_send_time: Some(intray_send_time),
-                        //     gpg_encrypted_intray_file: Some(file_bytes2send), // Clone needed here if file_bytes2send is used later
-                        //     intray_hash_list: Some(calculated_hashes),  // Clone here as well
-                        //     padnet_index_array: None,
-
-                        // };
-
-                        // end padnet if?
-
                         #[cfg(debug_assertions)]
                         debug_log!(
-                            "HRCD 4.6 Create sendfile_struct {:?} (to {})",
+                            "(to {}) HRCD 4.6 Create sendfile_struct {:?}",
+                             &room_sync_input.remote_collaborator_name,
                             sendfile_struct,
-                            &room_sync_input.remote_collaborator_name
                         );
 
                         #[cfg(debug_assertions)]
-                        debug_log!("HRCD 4.7.2 ready_signal.rt for set_prefail_flag_rt_timestamp_for_sendfile {:?}", ready_signal.rt);
-
-                        // // get_updated_at_timestamp_from_toml_file, old version uses toml crate
-                        // let file_last_updatedat_time: u64 = get_updated_at_timestamp_from_toml_file(&path_sendfile_readcopy_path)?;
+                        debug_log!("(to {}) HRCD 4.7.2 ready_signal.rt for set_prefail_flag_rt_timestamp_for_sendfile {:?}",
+                            &room_sync_input.remote_collaborator_name,
+                            ready_signal.rt
+                        );
 
                         // get updatedat value of .toml
                         let file_last_updatedat_time: u64 = read_u64_field_from_toml(
@@ -39618,7 +39820,11 @@ fn handle_remote_collaborator_meetingroom_desk(
                             io::Error::new(io::ErrorKind::InvalidData, error_msg)
                         })?;
 
-                        debug_log!("HRCD file_last_updatedat_time->{}", file_last_updatedat_time);
+                        #[cfg(debug_assertions)]
+                        debug_log!("(to {}) HRCD file_last_updatedat_time->{}",
+                            &room_sync_input.remote_collaborator_name,
+                            file_last_updatedat_time
+                        );
 
 
                         // 4.7.2 HRCD set_prefail_flag_rt_timestamp_for_sendfile
@@ -39628,19 +39834,25 @@ fn handle_remote_collaborator_meetingroom_desk(
                             &room_sync_input.remote_collaborator_name,
                         ) {
                             #[cfg(debug_assertions)]
-                            debug_log!("HRCD 4.7.2.e Error setting pre-fail flag: {}", _e);
+                            debug_log!("(to {}) HRCD 4.7.2.e Error setting pre-fail flag: {}",
+                                &room_sync_input.remote_collaborator_name,
+                                _e
+                            );
                             continue; // Handle error as you see fit
                         }
 
                         #[cfg(debug_assertions)]
-                        debug_log!("HRCD 4.7.2 prefail flag set using timestamp {:?}", &ready_signal.rt);
+                        debug_log!("(to {}) HRCD 4.7.2 prefail flag set using timestamp {:?}",
+                            &room_sync_input.remote_collaborator_name,
+                            &ready_signal.rt
+                        );
 
                         #[cfg(debug_assertions)]
                         debug_log!(
-                            "HRCD 4.6-7 Create sendfile_struct {:?}",
+                            "(to {}) HRCD 4.6-7 Create sendfile_struct {:?}",
+                            &room_sync_input.remote_collaborator_name,
                             sendfile_struct
                         );
-
 
                         if *use_padnet_flag {
 
@@ -39659,13 +39871,16 @@ fn handle_remote_collaborator_meetingroom_desk(
                                         ) {
                                         Ok(_) => {
                                             #[cfg(debug_assertions)]
-                                            debug_log!("HRCD 4.7 File sent successfully");
+                                            debug_log!("({} thread) HRCD 4.7 File sent successfully",
+                                                &room_sync_input.remote_collaborator_name,
+                                            );
                                             // ... (Handle successful send, e.g., update timestamp log)
 
                                             // --- 4.7.3 Get Timestamp ---
+                                            // ...or update happens at got-it signal?
                                             //  Timestamp Log is depricated (most likely)
-                                            #[cfg(debug_assertions)]
-                                            debug_log("HRCD calling calling get_toml_file_updated_at_timestamp(), yes...");
+                                            // #[cfg(debug_assertions)]
+                                            // debug_log("HRCD calling calling get_toml_file_updated_at_timestamp(), yes...");
                                             // if let Ok(timestamp) = get_toml_file_updated_at_timestamp(&file_path) {
                                             // //     update_collaborator_sendqueue_timestamp_log(
                                             // //         // TODO: Replace with the actual team channel name
@@ -39677,14 +39892,20 @@ fn handle_remote_collaborator_meetingroom_desk(
                                         }
                                         Err(_e) => {
                                             #[cfg(debug_assertions)]
-                                            debug_log!("Error sending data: {} (to {})", _e, &room_sync_input.remote_collaborator_name);
+                                            debug_log!("({} thread) HRCD Error sending data: {} ",
+                                                &room_sync_input.remote_collaborator_name,
+                                                _e,
+                                            );
                                             // Handle the send error (e.g., log, retry, etc.)
                                         }
                                     }
                                 }
                                 Err(_e) => { // Serialization error
                                     #[cfg(debug_assertions)]
-                                    debug_log!("Serialization error: {}", _e);
+                                    debug_log!("({} thread) HRCD Serialization error: {}",
+                                        &room_sync_input.remote_collaborator_name,
+                                        _e,
+                                    );
                                     // Handle the serialization error (e.g., log, skip file)
                                 }
                             }
@@ -39706,32 +39927,40 @@ fn handle_remote_collaborator_meetingroom_desk(
                                         ) {
                                         Ok(_) => {
                                             #[cfg(debug_assertions)]
-                                            debug_log!("HRCD 4.7 File sent successfully");
+                                            debug_log!("({} thread) HRCD 4.7 File sent successfully",
+                                                &room_sync_input.remote_collaborator_name,
+                                            );
                                             // ... (Handle successful send, e.g., update timestamp log)
 
-                                            // --- 4.7.3 Get Timestamp ---
-                                            //  Timestamp Log is depricated (most likely)
-                                            #[cfg(debug_assertions)]
-                                            debug_log("HRCD calling calling get_toml_file_updated_at_timestamp(), yes...");
-                                            // if let Ok(timestamp) = get_toml_file_updated_at_timestamp(&file_path) {
-                                            // //     update_collaborator_sendqueue_timestamp_log(
-                                            // //         // TODO: Replace with the actual team channel name
-                                            // //         &this_team_channelname,
-                                            // //         &room_sync_input.remote_collaborator_name,
-                                            // //     )?;
-                                            //     // debug_log!("HRCD 4.7.3  Updated timestamp log for {}", room_sync_input.remote_collaborator_name);
-                                            // }
+                                            // // --- 4.7.3 Get Timestamp ---
+                                            // //  Timestamp Log is depricated (most likely)
+                                            // #[cfg(debug_assertions)]
+                                            // debug_log("HRCD calling calling get_toml_file_updated_at_timestamp(), yes...");
+                                            // // if let Ok(timestamp) = get_toml_file_updated_at_timestamp(&file_path) {
+                                            // // //     update_collaborator_sendqueue_timestamp_log(
+                                            // // //         // TODO: Replace with the actual team channel name
+                                            // // //         &this_team_channelname,
+                                            // // //         &room_sync_input.remote_collaborator_name,
+                                            // // //     )?;
+                                            // //     // debug_log!("HRCD 4.7.3  Updated timestamp log for {}", room_sync_input.remote_collaborator_name);
+                                            // // }
                                         }
                                         Err(_e) => {
                                             #[cfg(debug_assertions)]
-                                            debug_log!("Error sending data: {}", _e);
+                                            debug_log!("({} thread) Error sending data: {}",
+                                                &room_sync_input.remote_collaborator_name,
+                                                _e
+                                            );
                                             // Handle the send error (e.g., log, retry, etc.)
                                         }
                                     }
                                 }
                                 Err(_e) => { // Serialization error
                                     #[cfg(debug_assertions)]
-                                    debug_log!("Serialization error: {}", _e);
+                                    debug_log!("({} thread) Serialization error: {}",
+                                       &room_sync_input.remote_collaborator_name,
+                                       _e
+                                    );
                                     // Handle the serialization error (e.g., log, skip file)
                                 }
                             }
@@ -39739,12 +39968,16 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                         // debugpause(30);
                         #[cfg(debug_assertions)]
-                        debug_log!("\nHRCD: bottom of ready_signal listener. (maybe)\n");
+                        debug_log!("\n({} thread) HRCD: bottom of ready_signal listener. (maybe)\n",
+                            &room_sync_input.remote_collaborator_name,
+                        );
 
                     } // end of while
                     // } // end of 4.4: if let Some(ref mut queue) = session_send_queue {
                     #[cfg(debug_assertions)]
-                    debug_log!("\nHRCD: end of inner match.\n");
+                    debug_log!("\n({} thread) HRCD: end of inner match.\n",
+                        &room_sync_input.remote_collaborator_name,
+                    );
                 }, // end of the Ok inside the match: Ok((amt, src)) => {
                 Err(e) if e.kind() == ErrorKind::WouldBlock => {
                     // TODO What is all this then?
@@ -39757,13 +39990,25 @@ fn handle_remote_collaborator_meetingroom_desk(
                     //                room_sync_input.remote_collab_ready_port_theirdesk_youlisten_bind_yourlocal_ip);
                     //     last_debug_log_time = Instant::now();
                     // }
-                    debug_log!("HRCD Err(e) if e.kind() == ErrorKind::WouldBlock =>");
+
+                    // safe log
+                    debug_log!("HRCD error Err(e) if e.kind() == ErrorKind::WouldBlock =>");
+
+                    #[cfg(debug_assertions)]
+                    debug_log!("({} thread) HRCD error Err(e) if e.kind() == ErrorKind::WouldBlock =>",
+                        &room_sync_input.remote_collaborator_name,
+                    );
+
                 },
                 Err(e) => {
                     // --- 3.7 Handle Other Errors ---
                     #[cfg(debug_assertions)]
-                    debug_log!("HRCD #? {}: Error receiving data on ready_port: {} ({:?})",
-                            room_sync_input.remote_collaborator_name, e, e.kind());
+                    debug_log!(
+                        "({} thread) HRCD #?: Error receiving data on ready_port: {} ({:?})",
+                            room_sync_input.remote_collaborator_name,
+                            e,
+                            e.kind()
+                    );
 
                     return Err(ThisProjectError::NetworkError(e.to_string()));
                 }
