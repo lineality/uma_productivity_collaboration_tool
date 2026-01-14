@@ -35120,10 +35120,10 @@ fn handle_local_owner_desk(
                 }
 
                 #[cfg(debug_assertions)]
-                debug_log!("\nHLOD Drone Loop Start...thanks for coming around!");
+                debug_log!("\nHLOD Drone Loop (sending ready signals) Start...thanks for coming around!");
 
                 // 1.2 Refresh Timestamp
-                // get timestamp of the file you (local owner user) recieved most recently from the RC
+                // get timestamp of the file you (local owner user) received most recently from the RC
                 // remote collaborator in this team-channel.
                 /*
                 @
@@ -35145,7 +35145,7 @@ fn handle_local_owner_desk(
 
                 #[cfg(debug_assertions)]
                 debug_log!(
-                    "HLOD drone loop (ready-signals) latest_received_from_rc_file_timestamp -> {:?} (to {})",
+                    "HLOD drone loop (send ready-signals) latest_received_from_rc_file_timestamp -> {:?} (to {})",
                     latest_received_from_rc_file_timestamp,
                     loop_remote_collaborator_name
                 );
@@ -35163,7 +35163,7 @@ fn handle_local_owner_desk(
 
                 #[cfg(debug_assertions)]
                 debug_log!(
-                    "HLOD drone loop send ready signal: latest_received_from_rc_file_timestamp -> to (to {})",
+                    "HLOD drone loop send ready signal: latest_received_from_rc_file_timestamp sent -> (to {})",
                     loop_remote_collaborator_name
                 );
 
@@ -35173,7 +35173,7 @@ fn handle_local_owner_desk(
 
             #[cfg(debug_assertions)]
             debug_log!(
-                "HLOD drone loop end: ready_thread (to {})",
+                "HLOD drone loop send ready signal end: ready_thread (to {})",
                 loop_remote_collaborator_name
             );
 
@@ -36675,7 +36675,7 @@ fn handle_local_owner_desk(
                                                     if let Err(e) = fs::write(&oldfile_node_file_path, move_data_to_save) {
                                                         #[cfg(debug_assertions)]
                                                         debug_log!(
-                                                            "(from {}) HLOD Node exists, handle move/replace: Error writing node file: {:?} - {}",
+                                                            "(from {}) HLOD Node exists, handle move/replace: Error writing node file: {:?}; e={}",
                                                             &remote_collaborator_name,
                                                             &oldfile_node_file_path,
                                                             e
@@ -36697,7 +36697,7 @@ fn handle_local_owner_desk(
                                                     if let Err(e) = fs::write(&oldfile_node_file_path, move_data_to_save) {
                                                         #[cfg(debug_assertions)]
                                                         debug_log!(
-                                                            "(from {}) HLOD Node exists, handle move/replace: Error writing node file: {:?} - {}",
+                                                            "(from {}) HLOD Node exists, handle move/replace: Error writing node file: {:?}; e={}",
                                                             &remote_collaborator_name,
                                                             &oldfile_node_file_path,
                                                             e
@@ -36931,8 +36931,12 @@ fn handle_local_owner_desk(
                             (because context= filesync timeline ID)
                         gh: Option<Vec<u8>>, // N hashes of rt + re
                     */
+                    #[cfg(debug_assertions)]
+                    debug_log!(
+                        "(from/to {}) 7.3 HLOD-InTray: send_gotit_signal",
+                        &remote_collaborator_name,
+                    );
 
-                    debug_log("7.3 HLOD-InTray: send_gotit_signal ");
                     let _ = send_gotit_signal(
                         &local_owner_desk_setup_data.local_user_salt_list,
                         &band_local_user_ipv4_address, // local_user_ipv4_address: &Ipv4Addr,
@@ -39050,6 +39054,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                     break; // Exit the loop
                 }
 
+                // TODO is this a loop that isn't ending?
                 // 1.5.2 Receive and handle "Got It" signals // under construction TODO
                 let mut buf = [0; 1024];
                 match gotit_socket.recv_from(&mut buf) {
@@ -39059,26 +39064,25 @@ fn handle_remote_collaborator_meetingroom_desk(
                         if should_halt_uma() {
                             #[cfg(debug_assertions)]
                             debug_log!(
-                                "HRCD 1.5.2 should_halt_uma() Halting handle_remote_collaborator_meetingroom_desk (from {})",
+                                "(from {}) HRCD 1.5.2 should_halt_uma() Halting handle_remote_collaborator_meetingroom_desk",
                                 remote_collaborator_name_clone
                             );
                             break;
                         }
 
-
                         // --- Inspect Raw Bytes ---
                         #[cfg(debug_assertions)]
                         {
-                            debug_log!("HRCD 1.5.2 (from {}) GotItloop Ok((amt, src)) Received {} bytes from {} on gotit port",
+                            debug_log!("(from {}) HRCD 1.5.2 GotItloop Ok((amt, src)) Received {} bytes from {} on gotit port",
                                 remote_collaborator_name_clone,
                                 amt,
                                 _src
                             );
 
                             debug_log!(
-                                "HRCD 1.5.2 GotItloop Raw bytes received: {:?} (from {})",
+                                "(from {}) HRCD 1.5.2 GotItloop Raw bytes received: {:?}",
+                                remote_collaborator_name_clone,
                                 &buf[..amt],
-                                remote_collaborator_name_clone
                             );
 
                             // --- Inspect Bytes as Hex ---
@@ -39086,9 +39090,9 @@ fn handle_remote_collaborator_meetingroom_desk(
                                 .map(|b| format!("{:02X}", b))
                                 .collect::<String>();
 
-                            debug_log!("HRCD 1.5.2 GotItloop Raw bytes as hex: {} (from {})",
+                            debug_log!("(from {}) HRCD 1.5.2 GotItloop Raw bytes as hex: {}",
+                                remote_collaborator_name_clone,
                                 hex_string,
-                                remote_collaborator_name_clone
                             );
                         }
                         // Clone the values you need from room_sync_input
@@ -39099,7 +39103,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                             Ok(gotit_signal) => {
 
                                 #[cfg(debug_assertions)]
-                                debug_log!("HRCD 1.5.3 (from {}) GotItloop Ok(gotit_signal) : Received GotItSignal: {:?}",
+                                debug_log!("(from {}) HRCD 1.5.3 GotItloop Ok(gotit_signal) : Received GotItSignal: {:?}",
                                     remote_collaborator_name_clone,
                                     gotit_signal
                                 ); // Log the signal
@@ -39109,7 +39113,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                             Err(_e) => {
 
                                 #[cfg(debug_assertions)]
-                                debug_log!("HRCD 1.5.3 (from {}) GotItloop Err Receive data Failed to parse ready signal: {}",
+                                debug_log!("(from {}) Error HRCD 1.5.3  GotItloop Err Receive data Failed to parse ready signal: {}",
                                     remote_collaborator_name_clone,
                                     _e
                                 );
@@ -39123,7 +39127,7 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                         #[cfg(debug_assertions)]
                         debug_log!(
-                            "HRCD: Done event of got-it listener. (from {})",
+                            "(from {}) HRCD: GotItloop Done event of got-it listener. ",
                             remote_collaborator_name_clone
                         );
 
