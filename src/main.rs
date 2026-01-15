@@ -1472,7 +1472,7 @@ fn try_read_iplists_from_gpg_encrypted_collaborator_file(
         Ok(path) => path,
         Err(e) => {
             // Log the error but return None to allow fallback
-            eprintln!("Warning: Failed to decrypt GPG file for {}: {}", owner, e);
+            eprintln!("Warning: Failed to decrypt GPG file owner={}: {}", owner, e);
             return Ok(None);
         }
     };
@@ -1918,6 +1918,7 @@ fn hlod_udp_handshake_rc_network_type_rc_ip_addr(
                 &local_owner_desk_setup_data.remote_collaborator_name, // Correct collaborator name
                 &team_channel_name, // Use correctly retrieved team channel name
             ) {
+                #[cfg(debug_assertions)]
                 debug_log!(
                     "hlod_udp_handshake_rc_network_type_rc_ip_addr(): Ready signal information found in sync_data for {}. rc_network_type: {}, rc_ip: {:?}",
                     local_owner_desk_setup_data.remote_collaborator_name,
@@ -1927,11 +1928,13 @@ fn hlod_udp_handshake_rc_network_type_rc_ip_addr(
 
                 return Ok((rc_network_type, rc_ip_addr_string)); // Return address, breaking loop
             } else {
-                // ... (No ready signal yet, continue sending your own)
+                // ... (No ready signal yet, continue sending your own)\
+                #[cfg(debug_assertions)]
                 debug_log("hlod_udp_handshake path but no files");
             }
         } else {
                 // ... (No ready signal yet, continue sending your own)
+                #[cfg(debug_assertions)]
                 debug_log("hlod_udp_handshake no path yet");
         } // End of if got_signal_check_base_path.exists()
 
@@ -1939,7 +1942,9 @@ fn hlod_udp_handshake_rc_network_type_rc_ip_addr(
         // ... [Iterate remote IP addresses *only* if no ReadySignal received]
 
         // Send to each IPv6 address in rc_ipv6_list
+        #[cfg(debug_assertions)]
         debug_log("hlod_udp_handshake_rc_network_type_rc_ip_addr() \nSending Handshake ready signals!\n");
+
         for ipv6_addr_string in &local_owner_desk_setup_data.remote_collaborator_ipv6_addr_list {
             send_ready_signal(
                 &local_owner_desk_setup_data.local_user_salt_list,
@@ -1950,8 +1955,10 @@ fn hlod_udp_handshake_rc_network_type_rc_ip_addr(
                 band_local_network_type,                       // band_local_network_type
                 band_local_network_index,                      // Use band index
             )?;
+
+            #[cfg(debug_assertions)]
             debug_log!(
-                "ReadySignal sent to IPv6: {}:{}",
+                "handshake ReadySignal sent to IPv6: {}:{}",
                 ipv6_addr_string,
                 local_owner_desk_setup_data.local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip
             );
@@ -1968,8 +1975,10 @@ fn hlod_udp_handshake_rc_network_type_rc_ip_addr(
                 band_local_network_type,
                 band_local_network_index,                           // Use consistent type for band index. // Correct: Consistent order
             )?;
+
+            #[cfg(debug_assertions)]
             debug_log!(
-                "ReadySignal sent to IPv4: {}:{}",
+                "handshake ReadySignal sent to IPv4: {}:{}",
                 ipv4_addr_string,
                 local_owner_desk_setup_data.local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip
             );
@@ -1979,14 +1988,14 @@ fn hlod_udp_handshake_rc_network_type_rc_ip_addr(
         for _i in 0..5 {
             // break for loop ?
             if should_halt_uma() {
-                debug_log!("hold_udp_handshake: should_halt_uma(), exiting Uma in handle_local_owner_desk()");
+                debug_log!("handshake hold_udp_handshake: should_halt_uma(), exiting Uma in handle_local_owner_desk()");
                 break; // break this for-loop
             }
             thread::sleep(Duration::from_secs(3));
         }
         // Then break out of this function main loop
         if should_halt_uma() {
-            debug_log!("hold_udp_handshake: should_halt_uma(). Exiting hlod_upd_handshake()");
+            debug_log!("handshake hold_udp_handshake: should_halt_uma(). Exiting hlod_upd_handshake()");
             break Ok((Default::default(), Default::default()));
         }
 
@@ -35381,7 +35390,7 @@ fn handle_local_owner_desk(
 
                         // safe log
                         debug_log(
-                            "HLOD 2.4.2 check: Received future-dated timestamp. Discarding.",
+                            "Warning: HLOD 2.4.2 check: Received future-dated timestamp. Discarding.",
                         );
                         continue;
                     }
@@ -35396,7 +35405,7 @@ fn handle_local_owner_desk(
 
                         // safe log
                         debug_log(
-                            "HLOD 2.4.3 check: Received outdated timestamp (older than 10 seconds). Discarding.",
+                            "Warning: HLOD 2.4.3 check: Received outdated timestamp (older than 10 seconds). Discarding.",
                         );
                         continue;
                     }
@@ -35411,7 +35420,7 @@ fn handle_local_owner_desk(
 
                         // safe log
                         debug_log(
-                            "HLOD 2.4.4 Check: intray_hash_list hash field is empty. Drop packet and keep going.",
+                            "Warning: HLOD 2.4.4 Check: intray_hash_list hash field is empty. Drop packet and keep going.",
                         );
                         continue; // Drop packet: Restart the loop to listen for the next signal
                     }
@@ -35426,7 +35435,7 @@ fn handle_local_owner_desk(
 
                         // safe log
                         debug_log(
-                            "HLOD 2.4.5 Check: intray_send_time ready signal sent-at timestamp field is empty. Drop packet and keep going.",
+                            "Warning: HLOD 2.4.5 Check: intray_send_time ready signal sent-at timestamp field is empty. Drop packet and keep going.",
                         );
                         continue; // Drop packet: Restart the loop to listen for the next signal
                     }
@@ -36893,12 +36902,12 @@ fn handle_local_owner_desk(
                         &extracted_clearsigned_file_data
                     ) {
                         Ok(temp_extraction_timestamp) => temp_extraction_timestamp,
-                        Err(e) => {
+                        Err(_e) => {
                             #[cfg(debug_assertions)]
                             debug_log!(
                                 "(from {}) HLOD-InTray: Error extracting timestamp: {}. Skipping.",
                                 &remote_collaborator_name,
-                                e
+                                _e
                             );
 
 
@@ -36957,7 +36966,7 @@ fn handle_local_owner_desk(
                     thread::sleep(Duration::from_secs(5));
                     thread::sleep(Duration::from_secs(3));
 
-                    send_ready_signal(
+                    let _ready_signal_result = send_ready_signal(
                         &local_owner_desk_setup_data.local_user_salt_list, // local_user_salt_list: &[u128],
                         rc_network_type_string_2, // Remote collaborator's network type (ipv4, ipv6
                         rc_ip_addr_string_2,  // Remote collaborator's IP string
@@ -36966,6 +36975,13 @@ fn handle_local_owner_desk(
                         &band_local_network_type, // network_type: String, // for nt
                         band_local_network_index, //network_index: u8, // for ni
                     )?;
+
+                    #[cfg(debug_assertions)]
+                    debug_log!(
+                        "(to {}) HLOD-InTray, (post-file-followup) ready_signal_result = send_ready_signal()->{:?}",
+                        &remote_collaborator_name,
+                        _ready_signal_result,
+                    );
 
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
@@ -39194,7 +39210,7 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                 #[cfg(debug_assertions)]
                 debug_log!(
-                    "HRCD 2.1 main loop Check for halt signal. Halting handle_remote_collaborator_meetingroom_desk() (for {})",
+                    "HRCD 2.1 main loop Check for halt signal. Halting handle_remote_collaborator_meetingroom_desk() (from {})",
                     room_sync_input.remote_collaborator_name
                 );
                 break;
@@ -39248,7 +39264,7 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                         #[cfg(debug_assertions)]
                         debug_log!(
-                            "(for {}) HRCD rc_set_as_active = true",
+                            "(from {}) HRCD rc_set_as_active = true",
                             room_sync_input.remote_collaborator_name
                         );
 
@@ -39256,7 +39272,7 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                     // #[cfg(debug_assertions)]
                     // debug_log!(
-                    //     "HRCD thread::sleep(Duration::from_secs(3)) (for {})",
+                    //     "HRCD thread::sleep(Duration::from_secs(3)) (from {})",
                     //     room_sync_input.remote_collaborator_name
                     // );
 
@@ -39268,7 +39284,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                     {
                         // --- Inspect Raw Bytes ---
                         debug_log!(
-                            "HRCD 2.2.1 Ready Signal Raw bytes received: {:?} (for {})",
+                            "HRCD 2.2.1 Ready Signal Raw bytes received: {:?} (from {})",
                             &buf[..amt],
                             room_sync_input.remote_collaborator_name
                         );
@@ -39279,7 +39295,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                             .collect::<String>();
 
                         debug_log!(
-                            "HRCD 2.2.1 Ready Signal Raw bytes as hex: {} (for {})",
+                            "HRCD 2.2.1 Ready Signal Raw bytes as hex: {} (from {})",
                             hex_string,
                             room_sync_input.remote_collaborator_name
                         );
@@ -39294,7 +39310,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                             // ); // Print to console
 
                             #[cfg(debug_assertions)]
-                            debug_log!("HRCD 2.3 Deserialize Ok(ready_signal) (for {}): Received ReadySignal: {:?}",
+                            debug_log!("HRCD 2.3 Deserialize Ok(ready_signal) (from {}): Received ReadySignal: {:?}",
                                 room_sync_input.remote_collaborator_name,
                                 ready_signal
                             ); // Log the signal
@@ -39891,7 +39907,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                                             // //         &this_team_channelname,
                                             // //         &room_sync_input.remote_collaborator_name,
                                             // //     )?;
-                                            //     // debug_log!("HRCD 4.7.3  Updated timestamp log for {}", room_sync_input.remote_collaborator_name);
+                                            //     // debug_log!("HRCD 4.7.3  Updated timestamp log from {}", room_sync_input.remote_collaborator_name);
                                             // }
                                         }
                                         Err(_e) => {
@@ -39946,7 +39962,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                                             // // //         &this_team_channelname,
                                             // // //         &room_sync_input.remote_collaborator_name,
                                             // // //     )?;
-                                            // //     // debug_log!("HRCD 4.7.3  Updated timestamp log for {}", room_sync_input.remote_collaborator_name);
+                                            // //     // debug_log!("HRCD 4.7.3  Updated timestamp log from {}", room_sync_input.remote_collaborator_name);
                                             // // }
                                         }
                                         Err(_e) => {
