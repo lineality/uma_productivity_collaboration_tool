@@ -12990,3 +12990,311 @@ fn move_directory_from_path_to_path<SourceDirectory: AsRef<Path>, DestinationDir
 //     // 2. save files to paths
 
 // }
+
+// pub fn sign_toml_file(file_path: &Path) -> Result<(), Error> {
+//     let output = MainStdCommand::new("gpg")
+//         .arg("--clearsign")
+//         .arg(file_path)
+//         .output()
+//         .map_err(|e| Error::new(ErrorKind::Other, format!("Failed to run GPG: {}", e)))?;
+
+//     if output.status.success() {
+//         fs::write(file_path, output.stdout)?; // Overwrite with the signed content
+//         debug_log!("File {} successfully signed with GPG.", file_path.display());
+//         Ok(())
+//     } else {
+//         debug_log!("GPG signing failed: {}", String::from_utf8_lossy(&output.stderr));
+//         Err(Error::new(ErrorKind::Other, "GPG signing failed"))
+//     }
+// }
+
+
+// //relative path version
+// fn debug_log(message: &str) {
+//     if DEBUG_FLAG {
+//         let mut file = OpenOptions::new()
+//             .append(true)
+//             .create(true)
+//             .open("uma.log")
+//             .expect("Failed to open log file");
+
+//         writeln!(file, "{}", message).expect("Failed to write to log file");
+//     }
+// }
+// // old relative path version
+// fn dir_at_path_is_empty_returns_false(path_to_dir: &Path) -> bool {
+
+//     debug_log!("dir_at_path_is_empty_returns_false()-> Checking if directory is empty: {:?}", path_to_dir);
+//     if let Ok(mut entries) = fs::read_dir(path_to_dir) {
+
+//         entries.next().is_some() // Returns false if the directory is empty
+//     } else {
+//         true // Assume directory is NOT empty if an error occurs reading it
+//     }
+// }
+
+
+// use std::fs;
+// use std::path::Path;
+// use crate::manage_absolute_executable_directory_relative_paths::make_input_path_name_abs_executabledirectoryrelative_nocheck;
+
+// /// Generates pairwise port assignments for all collaborators.
+// ///
+// /// # Purpose
+// /// Creates unique port assignments for every pair of collaborators in a team channel.
+// /// Each pair gets 6 unique ports (3 for each collaborator) that don't conflict with
+// /// any existing ports in the system.
+// ///
+// /// # Parameters
+// /// * `collaborators` - Sorted list of all collaborators (including owner)
+// /// * `exclusion_list` - Set of all ports currently in use globally
+// ///
+// /// # Returns
+// /// * `Ok(HashMap)` - Map of pair names to port assignments
+// /// * `Err(ThisProjectError)` - If unable to generate unique ports
+// ///
+// /// # Port Ranges
+// /// * Primary: 49152-65535 (IANA Dynamic/Private ports)
+// /// * Fallback: 32768-65535 (Traditional ephemeral range)
+// pub fn generate_pairwise_port_assignments(
+//     collaborators: &[String],
+//     exclusion_list: &HashSet<u16>,
+// ) -> Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, ThisProjectError> {
+//     println!("\n=== Generating Pairwise Port Assignments ===");
+
+//     let mut port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>> = HashMap::new();
+//     let mut local_used_ports: HashSet<u16> = HashSet::new();
+//     let mut rng = rand::rng();
+
+//     // Define port ranges
+//     const PRIMARY_RANGE: (u16, u16) = (49152, 65535);
+//     const FALLBACK_RANGE: (u16, u16) = (32768, 65535);
+
+//     // Calculate total number of pairs
+//     let n = collaborators.len();
+//     let total_pairs = n * (n - 1) / 2;
+//     println!("Generating {} collaboration pairs for {} collaborators", total_pairs, n);
+
+//     // Generate pairs
+//     for i in 0..n {
+//         for j in (i + 1)..n {
+//             let collaborator1 = &collaborators[i];
+//             let collaborator2 = &collaborators[j];
+//             let pair_name = format!("{}_{}", collaborator1, collaborator2);
+
+//             println!("\nGenerating ports for pair: {}", pair_name);
+
+//             // Generate ports for first collaborator
+//             let ready_port1 = generate_unique_port(
+//                 &mut rng,
+//                 exclusion_list,
+//                 &local_used_ports,
+//                 PRIMARY_RANGE,
+//                 FALLBACK_RANGE,
+//             )?;
+//             local_used_ports.insert(ready_port1);
+
+//             let intray_port1 = generate_unique_port(
+//                 &mut rng,
+//                 exclusion_list,
+//                 &local_used_ports,
+//                 PRIMARY_RANGE,
+//                 FALLBACK_RANGE,
+//             )?;
+//             local_used_ports.insert(intray_port1);
+
+//             let gotit_port1 = generate_unique_port(
+//                 &mut rng,
+//                 exclusion_list,
+//                 &local_used_ports,
+//                 PRIMARY_RANGE,
+//                 FALLBACK_RANGE,
+//             )?;
+//             local_used_ports.insert(gotit_port1);
+
+//             // Generate ports for second collaborator
+//             let ready_port2 = generate_unique_port(
+//                 &mut rng,
+//                 exclusion_list,
+//                 &local_used_ports,
+//                 PRIMARY_RANGE,
+//                 FALLBACK_RANGE,
+//             )?;
+//             local_used_ports.insert(ready_port2);
+
+//             let intray_port2 = generate_unique_port(
+//                 &mut rng,
+//                 exclusion_list,
+//                 &local_used_ports,
+//                 PRIMARY_RANGE,
+//                 FALLBACK_RANGE,
+//             )?;
+//             local_used_ports.insert(intray_port2);
+
+//             let gotit_port2 = generate_unique_port(
+//                 &mut rng,
+//                 exclusion_list,
+//                 &local_used_ports,
+//                 PRIMARY_RANGE,
+//                 FALLBACK_RANGE,
+//             )?;
+//             local_used_ports.insert(gotit_port2);
+
+//             // Create port assignment structures
+//             let ports_data1 = AbstractTeamchannelNodeTomlPortsData {
+//                 user_name: collaborator1.clone(),
+//                 ready_port: ready_port1,
+//                 intray_port: intray_port1,
+//                 gotit_port: gotit_port1,
+//             };
+
+//             let ports_data2 = AbstractTeamchannelNodeTomlPortsData {
+//                 user_name: collaborator2.clone(),
+//                 ready_port: ready_port2,
+//                 intray_port: intray_port2,
+//                 gotit_port: gotit_port2,
+//             };
+
+//             // Store in the HashMap
+//             port_assignments.insert(
+//                 pair_name.clone(),
+//                 vec![ReadTeamchannelCollaboratorPortsToml {
+//                     collaborator_ports: vec![ports_data1, ports_data2],
+//                 }],
+//             );
+
+//             println!("  {} ports: ready={}, intray={}, gotit={}",
+//                 collaborator1, ready_port1, intray_port1, gotit_port1);
+//             println!("  {} ports: ready={}, intray={}, gotit={}",
+//                 collaborator2, ready_port2, intray_port2, gotit_port2);
+
+//             debug_log!(
+//                 "generate_pairwise_port_assignments: Pair '{}' assigned 6 ports",
+//                 pair_name
+//             );
+//         }
+//     }
+
+//     // Final verification - ensure no local collisions
+//     if local_used_ports.len() != (total_pairs * 6) as usize {
+//         let error_msg = format!(
+//             "CRITICAL: Local port collision detected! Expected {} unique ports but got {}",
+//             total_pairs * 6,
+//             local_used_ports.len()
+//         );
+//         eprintln!("{}", error_msg);
+//         return Err(ThisProjectError::from(error_msg));
+//     }
+
+//     println!("\n✅ Successfully generated {} unique ports across {} pairs",
+//         local_used_ports.len(), total_pairs);
+
+//     Ok(port_assignments)
+// }
+
+            // // Construct the collaborator file path
+            // let collaborator_file = format!("{}__collaborator.toml", name);
+            // let file_path = collaborator_files_dir.join(&collaborator_file);
+
+            // // Check if the file exists
+            // if file_path.exists() {
+            //     println!("  ✓ Found collaborator: {}", name);
+            //     valid_names.push(name.clone());
+            //     debug_log!(
+            //         "collect_and_validate_collaborators: Validated collaborator '{}' at {}",
+            //         name,
+            //         file_path.display()
+            //     );
+            // } else {
+            //     println!("  ✗ NOT FOUND: {}", name);
+            //     invalid_names.push(name.clone());
+            //     debug_log!(
+            //         "collect_and_validate_collaborators: Collaborator '{}' not found at {}",
+            //         name,
+            //         file_path.display()
+            //     );
+            // }
+
+// // use example
+// let current_full_file_path = PathBuf::from("/home/user/project/nodes/example");
+
+// // Find the configuration file (could be either node.toml OR node.gpgtoml)
+// let node_toml_path = match find_node_toml_or_gpgtoml_file(&current_full_file_path) {
+//     Ok(Some(path)) => {
+//         // This is the path to whichever file was found (node.toml OR node.gpgtoml)
+//         debug_log!("Found configuration file at: {:?}", path);
+//         path  // <-- This could be either file!
+//     },
+//     Ok(None) => {
+//         // No file found - handle the error properly
+//         return Err("Neither node.toml nor node.gpgtoml found".to_string());
+//     },
+//     Err(error_message) => {
+//         // Error occurred - handle it properly
+//         return Err(error_message);
+//     }
+// };
+
+// // node_toml_path now contains the path to whichever file was found
+
+        // let absolute_addressbook_directory_path = Path::new(&absolute_addressbook_directory_pathbuf);
+
+        // // Get GPG fingerprint
+        // let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+        //     Ok(fingerprint) => fingerprint,
+        //     Err(e) => {
+        //         return Err(format!("Failed to read GPG fingerprint from uma.toml: {}", e).into());
+        //     }
+        // };
+
+        // // Get temp directory path
+        // let base_uma_temp_directory_path = get_base_uma_temp_directory_path().map_err(|io_err| {
+        //     GpgError::ValidationError(format!("Failed to get UME temp directory path: {}", io_err))
+        // })?;
+
+        // --- Stage 4: Read and Validate Clearsigned Configuration ---
+        //
+        // match read_all_collaborator_port_assignments_clearsigntoml_optimized(
+        //     &node_readcopy_path_path,
+        //     &absolute_addressbook_directory_path,
+        //     &gpg_full_fingerprint_key_id_string,
+        //     &base_uma_temp_directory_path,
+        // ) {
+
+        // // Determine which file exists and use that path
+        // let node_file_path = if node_toml_path.exists() {
+        //     node_toml_path
+        // } else if node_gpgtoml_path.exists() {
+        //     node_gpgtoml_path
+        // } else {
+        //     // Neither exists, skip this directory
+        //     continue;
+        // };
+
+        // // Get GPG fingerprint (could move this outside the loop if same for all)
+        // let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+        //     Ok(fingerprint) => fingerprint,
+        //     Err(e) => {
+        //         #[cfg(debug_assertions)]
+        //         debug_log!(
+        //             "CAPITCCV error Failed to read GPG fingerprint for {:?}: {} (skipping)",
+        //             entry.path(),
+        //             e
+        //         );
+        //         continue; // Skip this directory, continue with next
+        //     }
+        // };
+
+        // // Get temp directory path (could move this outside the loop if same for all)
+        // let base_uma_temp_directory_path = match get_base_uma_temp_directory_path() {
+        //     Ok(path) => path,
+        //     Err(e) => {
+        //         #[cfg(debug_assertions)]
+        //         debug_log!(
+        //             "CAPITCCV error Failed to get temp directory path for {:?}: {} (skipping)",
+        //             entry.path(),
+        //             e
+        //         );
+        //         continue; // Skip this directory, continue with next
+        //     }
+        // };

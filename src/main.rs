@@ -2958,10 +2958,7 @@ This matches the pattern of the original function:
 - Hardcodes the collaborator path as COLLABORATOR_ADDRESSBOOK_PATH_STR
 The global function would internally call the single-channel function for each `node.toml` found, aggregating all ports into one master `HashSet<u16>`.
 ...
-
 */
-
-
 
 /// Checks all ports across all team channels for collisions and usage conflicts.
 ///
@@ -3090,44 +3087,6 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
         // let node_toml_path = entry.path().join("node.toml");
         // let node_gpgtoml_path = entry.path().join("node.gpgtoml");
 
-        // // Determine which file exists and use that path
-        // let node_file_path = if node_toml_path.exists() {
-        //     node_toml_path
-        // } else if node_gpgtoml_path.exists() {
-        //     node_gpgtoml_path
-        // } else {
-        //     // Neither exists, skip this directory
-        //     continue;
-        // };
-
-        // // Get GPG fingerprint (could move this outside the loop if same for all)
-        // let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
-        //     Ok(fingerprint) => fingerprint,
-        //     Err(e) => {
-        //         #[cfg(debug_assertions)]
-        //         debug_log!(
-        //             "CAPITCCV error Failed to read GPG fingerprint for {:?}: {} (skipping)",
-        //             entry.path(),
-        //             e
-        //         );
-        //         continue; // Skip this directory, continue with next
-        //     }
-        // };
-
-        // // Get temp directory path (could move this outside the loop if same for all)
-        // let base_uma_temp_directory_path = match get_base_uma_temp_directory_path() {
-        //     Ok(path) => path,
-        //     Err(e) => {
-        //         #[cfg(debug_assertions)]
-        //         debug_log!(
-        //             "CAPITCCV error Failed to get temp directory path for {:?}: {} (skipping)",
-        //             entry.path(),
-        //             e
-        //         );
-        //         continue; // Skip this directory, continue with next
-        //     }
-        // };
-
         // Extract channel name from directory path
         let channel_name = entry.path()
             .file_name()
@@ -3164,30 +3123,6 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
                 )));
             }
         };
-
-        // let absolute_addressbook_directory_path = Path::new(&absolute_addressbook_directory_pathbuf);
-
-        // // Get GPG fingerprint
-        // let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
-        //     Ok(fingerprint) => fingerprint,
-        //     Err(e) => {
-        //         return Err(format!("Failed to read GPG fingerprint from uma.toml: {}", e).into());
-        //     }
-        // };
-
-        // // Get temp directory path
-        // let base_uma_temp_directory_path = get_base_uma_temp_directory_path().map_err(|io_err| {
-        //     GpgError::ValidationError(format!("Failed to get UME temp directory path: {}", io_err))
-        // })?;
-
-        // --- Stage 4: Read and Validate Clearsigned Configuration ---
-        //
-        // match read_all_collaborator_port_assignments_clearsigntoml_optimized(
-        //     &node_readcopy_path_path,
-        //     &absolute_addressbook_directory_path,
-        //     &gpg_full_fingerprint_key_id_string,
-        //     &base_uma_temp_directory_path,
-        // ) {
 
         // Check for both file types
         let node_toml_path = entry.path().join("node.toml");
@@ -3439,7 +3374,6 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
     if !collision_found {
         println!("✓ No port collisions detected!");
         debug_log!("No port collisions detected!");
-
     }
 
     // --- Stage 7: Summary Report ---
@@ -3485,11 +3419,6 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
         Ok(())
     }
 }
-
-/*
-
-*/
-
 
 /// Extracts all ports from a single team channel's node.toml file.
 ///
@@ -3701,27 +3630,6 @@ fn find_node_toml_or_gpgtoml_file(input_node_parent_path: &Path) -> Result<Optio
 
     Ok(None)
 }
-// // use example
-// let current_full_file_path = PathBuf::from("/home/user/project/nodes/example");
-
-// // Find the configuration file (could be either node.toml OR node.gpgtoml)
-// let node_toml_path = match find_node_toml_or_gpgtoml_file(&current_full_file_path) {
-//     Ok(Some(path)) => {
-//         // This is the path to whichever file was found (node.toml OR node.gpgtoml)
-//         debug_log!("Found configuration file at: {:?}", path);
-//         path  // <-- This could be either file!
-//     },
-//     Ok(None) => {
-//         // No file found - handle the error properly
-//         return Err("Neither node.toml nor node.gpgtoml found".to_string());
-//     },
-//     Err(error_message) => {
-//         // Error occurred - handle it properly
-//         return Err(error_message);
-//     }
-// };
-
-// // node_toml_path now contains the path to whichever file was found
 
 /// Scans ALL team channels and returns a complete exclusion list of all ports in use.
 ///
@@ -3884,9 +3792,6 @@ pub fn global_ports_exclusion_list_generator() -> Result<HashSet<u16>, ThisProje
             "global_ports_exclusion_list_generator: Processing channel '{}'",
             channel_name
         );
-
-
-
 
         // code from load_core_node...()
         // Get the UME temp directory path with proper GpgError conversion
@@ -4197,29 +4102,6 @@ pub fn collect_and_validate_collaborators(
                 continue;
             }
 
-            // // Construct the collaborator file path
-            // let collaborator_file = format!("{}__collaborator.toml", name);
-            // let file_path = collaborator_files_dir.join(&collaborator_file);
-
-            // // Check if the file exists
-            // if file_path.exists() {
-            //     println!("  ✓ Found collaborator: {}", name);
-            //     valid_names.push(name.clone());
-            //     debug_log!(
-            //         "collect_and_validate_collaborators: Validated collaborator '{}' at {}",
-            //         name,
-            //         file_path.display()
-            //     );
-            // } else {
-            //     println!("  ✗ NOT FOUND: {}", name);
-            //     invalid_names.push(name.clone());
-            //     debug_log!(
-            //         "collect_and_validate_collaborators: Collaborator '{}' not found at {}",
-            //         name,
-            //         file_path.display()
-            //     );
-            // }
-
             // Construct the collaborator file paths for both possible extensions
             let collaborator_gpgtoml = format!("{}__collaborator.gpgtoml", name);
             let collaborator_toml = format!("{}__collaborator.toml", name);
@@ -4342,160 +4224,6 @@ fn generate_unique_port(
         "Unable to find available port after maximum attempts"
     ))
 }
-
-// /// Generates pairwise port assignments for all collaborators.
-// ///
-// /// # Purpose
-// /// Creates unique port assignments for every pair of collaborators in a team channel.
-// /// Each pair gets 6 unique ports (3 for each collaborator) that don't conflict with
-// /// any existing ports in the system.
-// ///
-// /// # Parameters
-// /// * `collaborators` - Sorted list of all collaborators (including owner)
-// /// * `exclusion_list` - Set of all ports currently in use globally
-// ///
-// /// # Returns
-// /// * `Ok(HashMap)` - Map of pair names to port assignments
-// /// * `Err(ThisProjectError)` - If unable to generate unique ports
-// ///
-// /// # Port Ranges
-// /// * Primary: 49152-65535 (IANA Dynamic/Private ports)
-// /// * Fallback: 32768-65535 (Traditional ephemeral range)
-// pub fn generate_pairwise_port_assignments(
-//     collaborators: &[String],
-//     exclusion_list: &HashSet<u16>,
-// ) -> Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, ThisProjectError> {
-//     println!("\n=== Generating Pairwise Port Assignments ===");
-
-//     let mut port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>> = HashMap::new();
-//     let mut local_used_ports: HashSet<u16> = HashSet::new();
-//     let mut rng = rand::rng();
-
-//     // Define port ranges
-//     const PRIMARY_RANGE: (u16, u16) = (49152, 65535);
-//     const FALLBACK_RANGE: (u16, u16) = (32768, 65535);
-
-//     // Calculate total number of pairs
-//     let n = collaborators.len();
-//     let total_pairs = n * (n - 1) / 2;
-//     println!("Generating {} collaboration pairs for {} collaborators", total_pairs, n);
-
-//     // Generate pairs
-//     for i in 0..n {
-//         for j in (i + 1)..n {
-//             let collaborator1 = &collaborators[i];
-//             let collaborator2 = &collaborators[j];
-//             let pair_name = format!("{}_{}", collaborator1, collaborator2);
-
-//             println!("\nGenerating ports for pair: {}", pair_name);
-
-//             // Generate ports for first collaborator
-//             let ready_port1 = generate_unique_port(
-//                 &mut rng,
-//                 exclusion_list,
-//                 &local_used_ports,
-//                 PRIMARY_RANGE,
-//                 FALLBACK_RANGE,
-//             )?;
-//             local_used_ports.insert(ready_port1);
-
-//             let intray_port1 = generate_unique_port(
-//                 &mut rng,
-//                 exclusion_list,
-//                 &local_used_ports,
-//                 PRIMARY_RANGE,
-//                 FALLBACK_RANGE,
-//             )?;
-//             local_used_ports.insert(intray_port1);
-
-//             let gotit_port1 = generate_unique_port(
-//                 &mut rng,
-//                 exclusion_list,
-//                 &local_used_ports,
-//                 PRIMARY_RANGE,
-//                 FALLBACK_RANGE,
-//             )?;
-//             local_used_ports.insert(gotit_port1);
-
-//             // Generate ports for second collaborator
-//             let ready_port2 = generate_unique_port(
-//                 &mut rng,
-//                 exclusion_list,
-//                 &local_used_ports,
-//                 PRIMARY_RANGE,
-//                 FALLBACK_RANGE,
-//             )?;
-//             local_used_ports.insert(ready_port2);
-
-//             let intray_port2 = generate_unique_port(
-//                 &mut rng,
-//                 exclusion_list,
-//                 &local_used_ports,
-//                 PRIMARY_RANGE,
-//                 FALLBACK_RANGE,
-//             )?;
-//             local_used_ports.insert(intray_port2);
-
-//             let gotit_port2 = generate_unique_port(
-//                 &mut rng,
-//                 exclusion_list,
-//                 &local_used_ports,
-//                 PRIMARY_RANGE,
-//                 FALLBACK_RANGE,
-//             )?;
-//             local_used_ports.insert(gotit_port2);
-
-//             // Create port assignment structures
-//             let ports_data1 = AbstractTeamchannelNodeTomlPortsData {
-//                 user_name: collaborator1.clone(),
-//                 ready_port: ready_port1,
-//                 intray_port: intray_port1,
-//                 gotit_port: gotit_port1,
-//             };
-
-//             let ports_data2 = AbstractTeamchannelNodeTomlPortsData {
-//                 user_name: collaborator2.clone(),
-//                 ready_port: ready_port2,
-//                 intray_port: intray_port2,
-//                 gotit_port: gotit_port2,
-//             };
-
-//             // Store in the HashMap
-//             port_assignments.insert(
-//                 pair_name.clone(),
-//                 vec![ReadTeamchannelCollaboratorPortsToml {
-//                     collaborator_ports: vec![ports_data1, ports_data2],
-//                 }],
-//             );
-
-//             println!("  {} ports: ready={}, intray={}, gotit={}",
-//                 collaborator1, ready_port1, intray_port1, gotit_port1);
-//             println!("  {} ports: ready={}, intray={}, gotit={}",
-//                 collaborator2, ready_port2, intray_port2, gotit_port2);
-
-//             debug_log!(
-//                 "generate_pairwise_port_assignments: Pair '{}' assigned 6 ports",
-//                 pair_name
-//             );
-//         }
-//     }
-
-//     // Final verification - ensure no local collisions
-//     if local_used_ports.len() != (total_pairs * 6) as usize {
-//         let error_msg = format!(
-//             "CRITICAL: Local port collision detected! Expected {} unique ports but got {}",
-//             total_pairs * 6,
-//             local_used_ports.len()
-//         );
-//         eprintln!("{}", error_msg);
-//         return Err(ThisProjectError::from(error_msg));
-//     }
-
-//     println!("\n✅ Successfully generated {} unique ports across {} pairs",
-//         local_used_ports.len(), total_pairs);
-
-//     Ok(port_assignments)
-// }
 
 /// Generates pairwise port assignments for all collaborators.
 ///
@@ -4728,7 +4456,6 @@ pub fn create_teamchannel_port_assignments(
     Ok((collaborators, port_assignments))
 }
 
-
 /// Checks if a specific port is currently in use on the system.
 ///
 /// # Purpose
@@ -4874,23 +4601,6 @@ pub fn debug_print_flag_status() {
     debug_log!("===== END FLAG STATUS =====");
 }
 
-// // old relative path version
-// fn dir_at_path_is_empty_returns_false(path_to_dir: &Path) -> bool {
-
-//     debug_log!("dir_at_path_is_empty_returns_false()-> Checking if directory is empty: {:?}", path_to_dir);
-//     if let Ok(mut entries) = fs::read_dir(path_to_dir) {
-
-//         entries.next().is_some() // Returns false if the directory is empty
-//     } else {
-//         true // Assume directory is NOT empty if an error occurs reading it
-//     }
-// }
-
-
-// use std::fs;
-// use std::path::Path;
-// use crate::manage_absolute_executable_directory_relative_paths::make_input_path_name_abs_executabledirectoryrelative_nocheck;
-
 /// Checks if a directory is empty and returns the appropriate boolean value.
 ///
 /// This function attempts to check if the directory at the given path is empty.
@@ -4979,6 +4689,7 @@ fn get_ipv4_addresses() -> Result<Option<Vec<Ipv4Addr>>, io::Error> {
     Ok(Some(addresses))
 }
 
+// TODO, doc string etc needed, loop safety limit?
 fn get_ipv6_addresses() -> Result<Option<Vec<Ipv6Addr>>, io::Error> {
     let mut addresses = Vec::new();
     loop {
@@ -4999,23 +4710,6 @@ fn get_ipv6_addresses() -> Result<Option<Vec<Ipv6Addr>>, io::Error> {
     Ok(Some(addresses))
 }
 
-// pub fn sign_toml_file(file_path: &Path) -> Result<(), Error> {
-//     let output = MainStdCommand::new("gpg")
-//         .arg("--clearsign")
-//         .arg(file_path)
-//         .output()
-//         .map_err(|e| Error::new(ErrorKind::Other, format!("Failed to run GPG: {}", e)))?;
-
-//     if output.status.success() {
-//         fs::write(file_path, output.stdout)?; // Overwrite with the signed content
-//         debug_log!("File {} successfully signed with GPG.", file_path.display());
-//         Ok(())
-//     } else {
-//         debug_log!("GPG signing failed: {}", String::from_utf8_lossy(&output.stderr));
-//         Err(Error::new(ErrorKind::Other, "GPG signing failed"))
-//     }
-// }
-
 pub fn verify_toml_signature(file_path: &Path) -> Result<(), Error> {
     let output = StdCommand::new("gpg")
         .arg("--verify")
@@ -5032,18 +4726,6 @@ pub fn verify_toml_signature(file_path: &Path) -> Result<(), Error> {
     }
 }
 
-// //relative path version
-// fn debug_log(message: &str) {
-//     if DEBUG_FLAG {
-//         let mut file = OpenOptions::new()
-//             .append(true)
-//             .create(true)
-//             .open("uma.log")
-//             .expect("Failed to open log file");
-
-//         writeln!(file, "{}", message).expect("Failed to write to log file");
-//     }
-// }
 /// Logs a debug message to a log file located relative to the executable directory.
 ///
 /// This function only writes to the log file if the DEBUG_FLAG is set to true.
@@ -6628,19 +6310,6 @@ impl App {
                         needs_display_refresh = true;
                     } else {
                         // Process non-empty input (possibly a command or message)
-                        // match user_input_buffer.as_str() {
-                        //     "q" | "quit" | "b" | "back" => {
-                        //         // Exit message browser
-                        //         break 'browser_loop;
-                        //     },
-                        //     _ => {
-                        //         // Send message
-                        //         self.add_new_message_from_input(&user_input_buffer)?;
-                        //         user_input_buffer.clear();
-                        //         self.load_messagepost_messages();
-                        //         needs_display_refresh = true;
-                        //     }
-                        // }
                         match user_input_buffer.as_str() {
                             "q" | "quit" | "b" | "back" => {
                             debug_log("EMMPB exit");
@@ -19446,35 +19115,6 @@ fn run_passive_task_mode(path: &Path) -> io::Result<()> {
     }
 }
 
-// /// for passive view mode
-// fn run_passive_task_mode(path: &Path) -> io::Result<()> {
-//     debug_log("Starting passive task mode...");
-
-//     // 1. Read refresh rate from uma.toml (similar to log mode)
-//     // let refresh_rate = get_refresh_rate()?;
-//     let refresh_rate: f32 = 10.0;
-
-//     // 2. Initialize last known state
-//     let mut last_directory_state = get_task_directory_hash(path)?;
-
-//     // 3. Initial display
-//     tiny_tui::passive_display_tasks(path)?;
-
-//     // 4. Enter refresh loop
-//     loop {
-//         let current_directory_state = get_task_directory_hash(path)?;
-
-//         if current_directory_state != last_directory_state {
-//             print!("\x1B[2J\x1B[1;1H"); // Clear screen
-//             tiny_tui::passive_display_tasks(path)?;
-//             last_directory_state = current_directory_state;
-//         }
-
-//         thread::sleep(Duration::from_secs_f32(refresh_rate));
-//     }
-// }
-
-
 /// for passive view mode
 /// Passive Message View Mode Implementation
 ///
@@ -19581,7 +19221,7 @@ fn run_passive_message_mode(path: &Path) -> io::Result<()> {
     passive_display_messages(path)?;
 
     // 4. Enter refresh loop
-    loop {
+    loop { // should loop indefinately...
         let current_directory_state = get_directory_hash(path)?;
 
         if current_directory_state != last_directory_state {
@@ -20267,6 +19907,7 @@ fn q_and_a_get_pa2_schedule() -> Result<Vec<u64>, ThisProjectError> {
                     println!("\nSetting time of day for {}-{:02}-{:02}:", year, month, day);
 
                     // Get hour with retry loop
+                    // TODO add safety limit to loop
                     let hour: u32 = loop {
                         println!("Enter hour (0-23, 24-hour format):");
                         println!("  Examples: 0 = midnight, 12 = noon, 23 = 11 PM");
@@ -20300,6 +19941,7 @@ fn q_and_a_get_pa2_schedule() -> Result<Vec<u64>, ThisProjectError> {
                     };
 
                     // Get minute with retry loop
+                    // TODO add safety limit to loop
                     let minute: u32 = loop {
                         println!("Enter minute (0-59):");
                         print!("> ");
@@ -20365,6 +20007,7 @@ fn q_and_a_get_pa2_schedule() -> Result<Vec<u64>, ThisProjectError> {
     };
 
     // Duration input with retry loop
+    // TODO add safety limit to loop
     let days: u64 = loop {
         println!("\nProject Schedule: Enter project duration in days (1-3650):");
         buffy_print("(int)", &[])?;
@@ -21374,6 +21017,7 @@ fn timestamp_to_utc_components(timestamp: i64) -> (i32, u32, u32, u32, u32, u32)
     let mut year = 1970;
     let mut days_counted: i64 = 0;
 
+    // TODO add safety limit to loop
     loop {
         let days_in_year = if is_leap_year(year) { 366 } else { 365 };
         if days_counted + days_in_year > total_days {
@@ -21388,6 +21032,8 @@ fn timestamp_to_utc_components(timestamp: i64) -> (i32, u32, u32, u32, u32, u32)
 
     // Calculate month and day
     let mut month = 1;
+
+    // TODO add safety limit to loop
     loop {
         let days_in_month = get_days_in_month(year, month);
         if days_in_year < days_in_month {
@@ -23088,10 +22734,8 @@ fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
     }
 
     #[cfg(debug_assertions)]
-    {
-    eprintln!("PWPCTGTOTSB: padnet_directory_path {:?}", padnet_directory_path);
     debug_log!("PWPCTGTOTSB: padnet_directory_path {:?}", padnet_directory_path);
-    }
+
 
     // Check that original file exists and is within size limits
     // This prevents wasting GPG processing time on invalid inputs
@@ -23124,10 +22768,8 @@ fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
 
     #[cfg(debug_assertions)]
     {
-    eprintln!("PWPCTGTOTSB: Step 1 - Clearsigning file");
     debug_log!("PWPCTGTOTSB: Step 1 - Clearsigning file");
     debug_log!("PWPCTGTOTSB: Step 1 - original_target_file_path {:?}", original_target_file_path);
-
     }
     let clearsigned_content = gpg_clearsign_file_to_sendbytes(original_target_file_path)
         .map_err(|e| {
@@ -23138,17 +22780,14 @@ fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
         })?;
 
     #[cfg(debug_assertions)]
-    {
-    eprintln!("PWPCTGTOTSB: Clearsigned {} bytes", clearsigned_content.len());
     debug_log!("PWPCTGTOTSB: Clearsigned {} bytes", clearsigned_content.len());
-    }
+
     // =============================================================================
     // Step 2: Encrypt the clearsigned content (confidentiality)
     // =============================================================================
 
     #[cfg(debug_assertions)]
-    {eprintln!("PWPCTGTOTSB: Step 2 - Encrypting clearsigned content");
-        debug_log!("PWPCTGTOTSB: Step 2 - Encrypting clearsigned content");}
+    debug_log!("PWPCTGTOTSB: Step 2 - Encrypting clearsigned content");
 
     let encrypted_content = gpg_encrypt_to_bytes(&clearsigned_content, recipient_public_key)
         .map_err(|e| {
@@ -23158,16 +22797,14 @@ fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
         })?;
 
     #[cfg(debug_assertions)]
-    {eprintln!("PWPCTGTOTSB: Encrypted {} bytes", encrypted_content.len());
-        debug_log!("PWPCTGTOTSB: Encrypted {} bytes", encrypted_content.len());}
+    debug_log!("PWPCTGTOTSB: Encrypted {} bytes", encrypted_content.len());
 
     // =============================================================================
     // Step 3: Create temporary file #1 for GPG-encrypted data (XOR input)
     // =============================================================================
 
     #[cfg(debug_assertions)]
-    {eprintln!("PWPCTGTOTSB: Step 3 - Creating temp file for encrypted data");
-        debug_log!("PWPCTGTOTSB: Step 3 - Creating temp file for encrypted data");}
+    debug_log!("PWPCTGTOTSB: Step 3 - Creating temp file for encrypted data");
 
     // let temp_gpg_encrypted_path = create_unique_temp_filepathbuf(
     //     &std::env::temp_dir(),
@@ -23205,8 +22842,7 @@ fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
         })?;
 
     #[cfg(debug_assertions)]
-    {eprintln!("PWPCTGTOTSB: Created temp file: {:?}", temp_gpg_encrypted_path);
-        debug_log!("PWPCTGTOTSB: Created temp file: {:?}", temp_gpg_encrypted_path);}
+    debug_log!("PWPCTGTOTSB: Created temp file: {:?}", temp_gpg_encrypted_path);
 
     // // Write encrypted content to temp file
     // let result_wbtfa = write_bytes_to_file_atomic(&encrypted_content, &temp_gpg_encrypted_path)
@@ -23217,24 +22853,22 @@ fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
     //         ))
     //     })?;
 
-    // Register temp file for cleanup
-    cleanup_guard.add(temp_gpg_encrypted_path.clone());
-
     // #[cfg(debug_assertions)]
     // {eprintln!("PWPCTGTOTSB: result_wbtfa: {:?}", result_wbtfa);
     // debug_log!("PWPCTGTOTSB: result_wbtfa: {:?}", result_wbtfa);}
 
+    // Register temp file for cleanup
+    cleanup_guard.add(temp_gpg_encrypted_path.clone());
+
     #[cfg(debug_assertions)]
-    {eprintln!("PWPCTGTOTSB: Wrote {} bytes to temp file #1", encrypted_content.len());
-        debug_log!("PWPCTGTOTSB: Wrote {} bytes to temp file #1", encrypted_content.len());}
+    debug_log!("PWPCTGTOTSB: Wrote {} bytes to temp file #1", encrypted_content.len());
 
     // =============================================================================
     // Step 4: Create temporary file #2 for XOR result (OTP output)
     // =============================================================================
 
     #[cfg(debug_assertions)]
-    {eprintln!("PWPCTGTOTSB: Step 4 - Creating temp file for XOR result");
-        debug_log!("PWPCTGTOTSB: Step 4 - Creating temp file for XOR result");}
+    debug_log!("PWPCTGTOTSB: Step 4 - Creating temp file for XOR result");
 
     let temp_xor_result_path = create_unique_temp_filepathbuf(
         &std::env::temp_dir(),
@@ -23252,8 +22886,7 @@ fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
     cleanup_guard.add(temp_xor_result_path.clone());
 
     #[cfg(debug_assertions)]
-    {eprintln!("PWPCTGTOTSB: Created temp file: {:?}", temp_xor_result_path);
-        debug_log!("PWPCTGTOTSB: Created temp file: {:?}", temp_xor_result_path);}
+    debug_log!("PWPCTGTOTSB: Created temp file: {:?}", temp_xor_result_path);
 
     // =============================================================================
     // Step 5: XOR encrypt with OTP pad (information-theoretic security)
@@ -23283,13 +22916,14 @@ fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
     #[cfg(debug_assertions)]
     debug_log!("PWPCTGTOTSB: Step 6 - Reading OTP result into memory");
 
-    let final_otp_encrypted_bytes = read_file_to_bytes(&temp_xor_result_path)
-        .map_err(|e| {
-            ThisProjectError::IoError(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("PWPCTGTOTSB error : failed to read OTP result: {}", e),
-            ))
-        })?;
+    let final_otp_encrypted_bytes = read_file_to_bytes(
+        &temp_xor_result_path
+    ).map_err(|e| {
+        ThisProjectError::IoError(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("PWPCTGTOTSB error : failed to read OTP result: {}", e),
+        ))
+    })?;
 
     #[cfg(debug_assertions)]
     debug_log!("PWPCTGTOTSB: Read {} final bytes", final_otp_encrypted_bytes.len());
@@ -23307,7 +22941,6 @@ fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
         // The encryption succeeded, cleanup failures are non-critical
         #[cfg(debug_assertions)]
         for error_msg in _errors {
-            eprintln!("PWPCTGTOTSB error  cleanup warning: {}", error_msg);
             debug_log!("PWPCTGTOTSB error  cleanup warning: {}", error_msg);
         }
     }
@@ -23321,9 +22954,6 @@ fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
         "PWPCTGTOTSB: SUCCESS - {} bytes ready for transmission",
         final_otp_encrypted_bytes.len()
     );
-
-    #[cfg(debug_assertions)]
-    eprintln!("PWPCTGTOTSB finish");
 
     Ok((final_otp_encrypted_bytes, pad_index))
 }
@@ -34874,6 +34504,12 @@ fn send_gotit_signal(
     Ok(())
 }
 
+/*
+TODO:
+1. a shared stop_all_threads_flag variable
+2. ability to halt a listening thread
+3. restarting loops if early-stop/crash
+*/
 /// Set up the local owner users in-tray desk
 /// requests to recieve are sent from here
 /// other people's owned docs are received here
@@ -34916,24 +34552,20 @@ fn handle_local_owner_desk(
     // TODO maybe a flag here to exit the function?
     // let mut exit_hlod = false;
 
-    debug_log("HLOD Starting the handle_local_owner_desk()");
-
     #[cfg(debug_assertions)]
-    let thread_id = thread::current().id();
-
+    debug_log("HLOD Starting the handle_local_owner_desk()");
 
     let localowner_gotit_port = local_owner_desk_setup_data.local_user_gotit_port_yourdesk_yousend_aimat_their_rmtclb_ip.clone();
 
     let remote_collaborator_name = local_owner_desk_setup_data.remote_collaborator_name.clone();
 
     #[cfg(debug_assertions)]
-    debug_log!("HLOD inspect thread_id {:?}", thread_id);
-    #[cfg(debug_assertions)]
-    debug_log!("HLOD inspect remote_collaborator_name {:?}", remote_collaborator_name);
-
-
-    debug_log("HLOD setup: cloned values.");
-
+    {
+        let thread_id = thread::current().id();
+        debug_log!("HLOD inspect thread_id {:?}", thread_id);
+        debug_log!("HLOD inspect remote_collaborator_name {:?}", remote_collaborator_name);
+        debug_log("HLOD setup: cloned values.");
+    }
     /////////////////////////////////////////
     // Band: Load Network Band Configuration
     /////////////////////////////////////////
@@ -34983,7 +34615,7 @@ fn handle_local_owner_desk(
     ) else {
         // TODO, handled another way?
         return Err(ThisProjectError::NetworkError("Handshake failed".into()));
-        };
+    };
 
     #[cfg(debug_assertions)]
     debug_log!("HLOD setup: hlod_udp_handshake_rc_network_type_rc_ip_addr() run, ({})", remote_collaborator_name);
@@ -35103,11 +34735,15 @@ fn handle_local_owner_desk(
         let rc_ip_addr_string_1 = rc_ip_addr_string.clone();
         let rc_network_type_string_1 = rc_network_type_string.clone();
 
+        /*
+        TODO:
+
+        */
         // --- 1.5 Drone Loop to Send ReadySignals ---
         let _ = thread::spawn(move || {
-            ////////////////////////////////////
-            // Drone Loop to Send ReadySignals  (hlod)
-            //////////////////////////////////
+            // //////////////////////////////////
+            //  Drone Loop to Send ReadySignals
+            // /////////////////////////////////
             loop {
 
                 // 1.1 Wait (and check for exit Uma)  this waits and checks N times: for i in 0..N {
@@ -35129,7 +34765,10 @@ fn handle_local_owner_desk(
                 }
 
                 #[cfg(debug_assertions)]
-                debug_log!("\nHLOD Drone Loop (sending ready signals) Start...thanks for coming around!");
+                debug_log!(
+                    "(to {}) HLOD Drone Loop (sending ready signals) Start...thanks for coming around!",
+                    &remote_collaborator_name_for_thread_2,
+                );
 
                 // 1.2 Refresh Timestamp
                 // get timestamp of the file you (local owner user) received most recently from the RC
@@ -35147,7 +34786,11 @@ fn handle_local_owner_desk(
                     Err(_e) => {
 
                         #[cfg(debug_assertions)]
-                        debug_log!("HLOD drone loop GotItSignal Error getting timestamp via get_latest_received_from_rc_in_teamchannel_file_timestamp_filecrawl: e'{}'e. Using 0.", _e);
+                        debug_log!(
+                            "(to {}) HLOD drone loop GotItSignal Error getting timestamp via get_latest_received_from_rc_in_teamchannel_file_timestamp_filecrawl: e'{}'e. Using 0.",
+                            &remote_collaborator_name_for_thread_2,
+                            _e
+                        );
                         0 // Use a default timestamp (0) if an error occurs.
                     }
                 };
@@ -35199,7 +34842,7 @@ fn handle_local_owner_desk(
         // TODO: to scale this should be perhaps a stub-file flag
         let mut file_hash_set_session_nonce = HashSet::new();  // Create a HashSet to store received hashes
 
-        // --- 2. Enter In-Tray-loop ---
+        // --- 3. Enter In-Tray-loop ---
         // restarts if crashes
         // enter main loop (to handle in-tray Send-File, gotit signl sending, 'echo' ready-signal sending)
         loop { // 3.2 In-Try-loop
@@ -37018,8 +36661,6 @@ fn handle_local_owner_desk(
                 }
             } // end match ready_socket.recv_from(&mut buf) {
         } // end In-Tray-Loop
-
-
         ////////////////////////
         // InTrayListerLoop End
         ////////////////////////
@@ -38683,7 +38324,7 @@ fn get_or_create_send_queue(
 /// * `Result<(SocketAddr, SocketAddr), ThisProjectError>`:
 /// Tuple of SocketAddrs (ready, gotit), or an error.
 ///
-fn get_rc_band_ready_gotit_socketaddrses_hrcd(
+fn handshake_get_rc_bands_socketaddrses_for_hrcd(
     room_sync_input: &ForRemoteCollaboratorDeskThread,
 ) -> Result<(SocketAddr, SocketAddr), ThisProjectError> {
     let timeout_duration = Duration::from_secs(15);
@@ -38830,10 +38471,10 @@ fn get_rc_band_ready_gotit_socketaddrses_hrcd(
             },
             Err(e) => {
                 #[cfg(debug_assertions)]
-                debug_log!("get_rc_band_ready_gotit_socketaddrses_hrcd: Error receiving ReadySignal: {}", e);
+                debug_log!("handshake_get_rc_bands_socketaddrses_for_hrcd: Error receiving ReadySignal: {}", e);
 
                 // safe log
-                debug_log!("get_rc_band_ready_gotit_socketaddrses_hrcd: Error receiving ReadySignal");
+                debug_log!("handshake_get_rc_bands_socketaddrses_for_hrcd: Error receiving ReadySignal");
 
 
                 return Err(e); // Return any other errors
@@ -38937,9 +38578,9 @@ fn receive_ready_signal_with_timeout( // Hash and timestamp checks moved HERE!
 
 /// handle_remote_collaborator_meetingroom_desk (send files here)
 /// very brief overview:
-/// 1. listen for got-it signals and remove fail-flags (yes, their 'last' 3rd step is actually done first)
+/// 1. listen for "got-it" signals and remove fail-flags (yes, their 'last' 3rd step is actually done first)
 /// 2. listen for 'ready' signal
-/// 3. send one send-queue item at at time & update send-queue (pop item and update back_of_queue_timestamp)
+/// 3. send one send-queue item at a time (per ready-signal received) & update send-queue (pop item and update back_of_queue_timestamp)
 ///
 /// delete/rewrite:
 /// ```path
@@ -38956,6 +38597,12 @@ fn handle_remote_collaborator_meetingroom_desk(
     room_sync_input: &ForRemoteCollaboratorDeskThread,
 ) -> Result<(), ThisProjectError> {
     /*
+    TODO:
+    There maybe should be a 5-10min reboot
+    where if no ready-signal is recieved for N minutes
+    e.g. 2-10,
+    then
+    the main loop restarts and rebootstraps
 
     */
     loop { // 1. start overall loop to restart whole desk
@@ -38983,10 +38630,9 @@ fn handle_remote_collaborator_meetingroom_desk(
         );
 
 
-        /////////////
-        // Bootstrap
-        /////////////
-
+        // /////////////////////
+        //  Handshake Bootstrap
+        // /////////////////////
         debug_log("HRCD calling get_current_team_channel_name_from_nav_path");
 
         // setup: Get Team Channel Name
@@ -38997,7 +38643,7 @@ fn handle_remote_collaborator_meetingroom_desk(
         debug_log("HRCD starting search for Remote Collaborator's IP");
 
         let (ready_socket_addr, gotit_socket_addr) =
-            match get_rc_band_ready_gotit_socketaddrses_hrcd(room_sync_input) {
+            match handshake_get_rc_bands_socketaddrses_for_hrcd(room_sync_input) {
                 Ok(addrs) => addrs,
                 Err(e) => {
                     debug_log!("HRCD: Error getting SocketAddrs: {}", e);
@@ -39005,20 +38651,16 @@ fn handle_remote_collaborator_meetingroom_desk(
                 }
             };
 
+        #[cfg(debug_assertions)]
         debug_log!(
-            "HRCD get_rc_band_ready_gotit_socketaddrses_hrcd: RC -> (from {}) || ready_socket_addr -> {:?} || gotit_socket_addr -> {:?}",
+            "HRCD handshake_get_rc_bands_socketaddrses_for_hrcd: RC -> (from {}) || ready_socket_addr -> {:?} || gotit_socket_addr -> {:?}",
             room_sync_input.remote_collaborator_name,
             ready_socket_addr,
             gotit_socket_addr
         );
 
-
-
-
         // 1. UPD Handshake
         // hrcd_udp_handshake(&room_sync_input);
-
-
 
         // --- 1.3 Create two UDP Sockets for Ready and GotIt Signals ---`
         // #[cfg(debug_assertions)]
@@ -40226,11 +39868,11 @@ fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
 
     // 1.5.1 Check for halt-uma signal
     if should_halt_uma() {
-        debug_log(">*< Halt signal received. Exiting The Uma. Closing... you_love_the_sync_team_office() |o|");
+        debug_log(">*< Halt signal received. Exiting The Uma. Closing... you_love_the_sync_team_office () |o|");
         return Ok(()); // Exit the function
     }
 
-    debug_log("starting YLTSTO! UMA Sync Team Office...you_love_the_sync_team_office()");
+    debug_log("starting YLTSTO! UMA Sync Team Office...you_love_the_sync_team_office ()");
 
     // // Read uma_local_owner_user from uma.toml
     // // maybe add gpg and make this a separate function TODO
@@ -40359,6 +40001,42 @@ fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
             use_padnet: this_meetingroom_iter.use_padnet.clone(),
         };
 
+        /*
+        TODO Items:
+
+        1. ability to halt a listening thread
+        add halt-checking to all loops:
+        - gotit signal loop
+        - handshake loop, in handshake_get_rc_bands_socketaddrses_for_hrcd()
+
+        2. restarting connection if no signals received in N minutes (e.g. 2-10) (e.g. new UDP ~handshake)
+        - maybe requires (or should have) a second more specific end_desk_signals variable: e.g. a separate signal to just halt the (old) thread:from
+        ```
+                let owner_desk_thread = thread::spawn(move || {
+                    let _ = handle_local_owner_desk(data_baggy_for_owner_desk);
+
+                });
+                // Their Desk
+                let collaborator_desk_thread = thread::spawn(move || {
+                    let _ = handle_remote_collaborator_meetingroom_desk(&data_baggy_for_collaborator_desk);
+                });
+
+        ```
+
+        3. general: restarting loops if early-stop/crash
+
+        4. maybe a new Arc-shared stop_all_threads_flag variable
+        Is a new Arc-shared variable needed, or can the existing file-check mechanism work (if for MVP-1)
+
+        */
+
+
+        // TODO: maybe a 2nd shared end_desk_threads variable
+        // for allowing restart or sync team office
+        // e.g. after N (2-10) min of no ready-signal received
+        // for a thread-specific remote collaborator
+
+
         // Create the two "meeting room desks" for each collaborator pair:
         // Your Desk
         let owner_desk_thread = thread::spawn(move || {
@@ -40382,7 +40060,7 @@ fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-// TODO doc string needed, massive, huge.
+// TODO extensive doc string needed
 /// Proverbial Main()
 fn we_love_projects_loop() -> Result<(), io::Error> {
     /*
@@ -40675,10 +40353,8 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         &app.current_path,
     );
 
-
-
     // Start
-    loop {
+    loop { // not a thread-spawn-loop (I think)
         // // Read the 'continue_uma.txt' file
         // let file_content = match fs::read_to_string(CONTINUE_UMA_PATH_STR) {
         //     Ok(content) => content,
@@ -42532,6 +42208,7 @@ fn handle_args() -> bool {
 /*
 An Appropriately Svelt Mainland:
 */
+/// update...
 /// Initializes the UMA continue/halt signal by creating or resetting the
 /// `continue_uma.txt` file and setting its value to "1" (continue).
 /// set to hault by quit_set_continue_uma_to_false()
@@ -42559,30 +42236,44 @@ fn main() {
 
     loop { // Main loop: let it fail, and try again
 
-        if should_not_hard_restart() { // Check for restart
+        if should_not_hard_restart() { // Check for restart or quit...
+            // safe log(s)
             debug_log("should_halt_uma(), exiting Uma in main()");
-            break;
+            debug_log(">*< Halt signal received. Exiting The Uma. Closing... main() |o|");
+            break; // only break upon user-command
         }
 
-        debug_log("boot...");
+        #[cfg(debug_assertions)]
+        debug_log("uma boot...");
         match initialize_uma_application() {
             Ok(temp_online_val) => {
                 online_mode = temp_online_val;
                 if online_mode {
+                    // safe log
                     debug_log!("UMA initialized in online mode.");
                 } else {
+                    // safe log
                     debug_log!("UMA initialized in offline mode.")
                 }
             }
-            Err(e) => {
-                eprintln!("Initialization failed: {}", e);
-                debug_log!("Initialization failed: {}", e);
+            Err(_e) => {
+                #[cfg(debug_assertions)]
+                {
+                    eprintln!("Uma Initialization failed in main(): {}", _e);
+                    debug_log!("Uma Initialization failed in main(): {}", _e);
+                }
+
+                // safe log(s)
+                eprintln!("Uma Initialization failed in main()");
+                debug_log!("Uma Initialization failed in main()");
+
+                // if we cannot Initialize, then exit with exit_code=1 (error)
                 std::process::exit(1);
-                // break;
             }
         }
 
-        debug_log("Start!");
+        #[cfg(debug_assertions)]
+        debug_log("Start! in main()");
 
         // Thread 1: Executes the thread1_loop function
         let we_love_projects_loop = thread::spawn(move || {
@@ -42594,26 +42285,19 @@ fn main() {
             let you_love_the_sync_team_office = thread::spawn(move || {
                 let _ = you_love_the_sync_team_office();
             });
-            you_love_the_sync_team_office.join().unwrap(); // Wait for finish
+            you_love_the_sync_team_office.join().unwrap(); // Wait for finish TODO NO UNWRAP!
         };
 
-        we_love_projects_loop.join().unwrap(); // Wait for finish
-        // if online_mode {
-        //     you_love_the_sync_team_office.join().unwrap();
-        //     } // Wait for finish
-        // End
-        println!("All threads completed. The Uma says fare well and strive.");
-        debug_log("All threads completed. The Uma says fare well and strive.");
-        debug_log(">*< Halt signal received. Exiting The Uma. Closing... main() |o|");
+        we_love_projects_loop.join().unwrap(); // Wait for finish TODO NO UNWRAP!
     }
+    // safe log(s)
+    println!("All threads completed. The Uma says fare well and strive.");
+    debug_log("All threads completed. The Uma says fare well and strive.");
 }
-
-
 
 /*
 Help Section
 */
-
 
 /// Clear the terminal screen using ANSI escape codes
 ///
