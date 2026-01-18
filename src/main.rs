@@ -385,6 +385,8 @@ use std::net::{
 use getifaddrs::{getifaddrs, InterfaceFlags};
 
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 
 
@@ -1021,7 +1023,16 @@ impl From<&str> for ThisProjectError {
     }
 }
 
-
+impl From<MyCustomError> for ThisProjectError {
+    fn from(error: MyCustomError) -> Self {
+        match error {
+            MyCustomError::IoError(e) => ThisProjectError::IoError(e),
+            MyCustomError::InvalidData(msg) => ThisProjectError::InvalidData(msg),
+            MyCustomError::PortCollision(msg) => ThisProjectError::PortCollision(msg),
+            MyCustomError::Custom(msg) => ThisProjectError::StringError(msg),
+        }
+    }
+}
 
 fn remove_duplicates_from_path_array(vec: Vec<PathBuf>) -> Vec<PathBuf> {
     let mut seen = HashSet::new();
@@ -28857,6 +28868,7 @@ pub fn invite_wizard() -> Result<(), GpgError> {
 fn handle_command_main_mode(
     input: &str,
     app: &mut App,
+    should_stop_all_threads: Arc<AtomicBool>,
     // graph_navigation_instance_state: &GraphNavigationInstanceState
 ) -> Result<bool, io::Error> {
     /*
@@ -30262,6 +30274,20 @@ fn handle_command_main_mode(
                 debug_log("quit");
                 let _ = no_restart_set_hard_reset_flag_to_false();
                 let _ = quit_set_continue_uma_to_false();
+
+                #[cfg(debug_assertions)]
+                debug_log!("CMD: Quit command received, setting should_stop_all_threads flag");
+
+                // ═════════════════════════════════════════════════════════════════
+                // Set the global Arc-thread shutdown flag
+                // ═════════════════════════════════════════════════════════════════
+                // This signals ALL threads (network coordinator, desk threads,
+                // drone threads) to exit their loops gracefully
+                // ═════════════════════════════════════════════════════════════════
+                should_stop_all_threads.store(true, Ordering::Relaxed);
+
+                #[cfg(debug_assertions)]
+                debug_log!("CMD: Shutdown flag set, returning true to exit UI loop");
 
                 return Ok(true); // Signal to exit the loop
             }
@@ -34531,6 +34557,7 @@ TODO:
 ///     6. Send the signal @ local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip (exact ip choice pending...)
 fn handle_local_owner_desk(
     local_owner_desk_setup_data: ForLocalOwnerDeskThread,
+    should_stop_all_threads: Arc<AtomicBool>,
 ) -> Result<(), ThisProjectError> {
     /*
     TODO:
@@ -34566,6 +34593,7 @@ fn handle_local_owner_desk(
         debug_log!("HLOD inspect remote_collaborator_name {:?}", remote_collaborator_name);
         debug_log("HLOD setup: cloned values.");
     }
+
     /////////////////////////////////////////
     // Band: Load Network Band Configuration
     /////////////////////////////////////////
@@ -34735,10 +34763,9 @@ fn handle_local_owner_desk(
         let rc_ip_addr_string_1 = rc_ip_addr_string.clone();
         let rc_network_type_string_1 = rc_network_type_string.clone();
 
-        /*
-        TODO:
+        // Clone the shutdown flag for this thread
+        let should_stop_clone_for_readysignal_send_drone = should_stop_all_threads.clone();
 
-        */
         // --- 1.5 Drone Loop to Send ReadySignals ---
         let _ = thread::spawn(move || {
             // //////////////////////////////////
@@ -34748,6 +34775,14 @@ fn handle_local_owner_desk(
 
                 // 1.1 Wait (and check for exit Uma)  this waits and checks N times: for i in 0..N {
                 for _ in 0..15 {
+
+                    // Check Arc shutdown flag
+                    if should_stop_clone_for_readysignal_send_drone.load(Ordering::Relaxed) {
+                        #[cfg(debug_assertions)]
+                        debug_log!("HLOD Drone loop should_stop_all_threads detected, exiting Uma in handle_local_owner_desk()");
+                        break;
+                    }
+
                     // break for loop ?
                     if should_halt_uma() {
                         #[cfg(debug_assertions)]
@@ -34757,10 +34792,15 @@ fn handle_local_owner_desk(
                     thread::sleep(Duration::from_millis(1000));
                 }
                 // break loop loop?
+                // Check Arc shutdown flag
+                if should_stop_clone_for_readysignal_send_drone.load(Ordering::Relaxed) {
+                    #[cfg(debug_assertions)]
+                    debug_log!("HLOD Drone loop should_stop_all_threads detected, exiting Uma in handle_local_owner_desk()");
+                    break;
+                }
                 if should_halt_uma() {
                     #[cfg(debug_assertions)]
                     debug_log!("HLOD Drone loop HLOD should_halt_uma(), exiting Uma in handle_local_owner_desk()");
-
                     break;
                 }
 
@@ -34842,12 +34882,22 @@ fn handle_local_owner_desk(
         // TODO: to scale this should be perhaps a stub-file flag
         let mut file_hash_set_session_nonce = HashSet::new();  // Create a HashSet to store received hashes
 
+        let should_stop_clone_for_intray_loop = should_stop_all_threads.clone();
+
+
         // --- 3. Enter In-Tray-loop ---
         // restarts if crashes
         // enter main loop (to handle in-tray Send-File, gotit signl sending, 'echo' ready-signal sending)
         loop { // 3.2 In-Try-loop
 
             // --- 3.3 Check for 'should_halt_uma' Signal ---
+            //
+            // Check Arc shutdown flag
+            if should_stop_clone_for_intray_loop.load(Ordering::Relaxed) {
+                #[cfg(debug_assertions)]
+                debug_log!("HLOD intray loop should_stop_clone_for_intray_loop should_stop_all_threads detected, exiting Uma in handle_local_owner_desk()");
+                break;
+            }
             if should_halt_uma() {
                 #[cfg(debug_assertions)]
                 debug_log!(
@@ -34876,10 +34926,20 @@ fn handle_local_owner_desk(
             debug_log!("HLOD: Intray socket created.");
 
             // --- 3.5 in-tray Send-File Event ---
+            let should_stop_clone_for_sendfile_intray = should_stop_all_threads.clone();
+
             // "Listener"?
             // 3.5.1 Receive in-tray Send-File packet
             let mut buf = [0; 65536]; // Maximum UDP datagram size
             loop { // In-Tray-Loop
+
+                // Check Arc shutdown flag
+                if should_stop_clone_for_sendfile_intray.load(Ordering::Relaxed) {
+                    #[cfg(debug_assertions)]
+                    debug_log!("HLOD should_stop_clone_for_sendfile_intray should_stop_all_threads detected, exiting Uma in handle_local_owner_desk()");
+                    break;
+                }
+
                 // Check for halt signal at the beginning of the loop
                 if should_halt_uma() {
                     #[cfg(debug_assertions)]
@@ -34887,7 +34947,6 @@ fn handle_local_owner_desk(
                         "HLOD-InTray: Halt signal received. Exiting. ({} thread)",
                         &remote_collaborator_name
                     );
-
                     break;
                 }
 
@@ -34901,6 +34960,13 @@ fn handle_local_owner_desk(
                         amt,
                         _src
                     );
+
+                    // Check Arc shutdown flag
+                    if should_stop_clone_for_sendfile_intray.load(Ordering::Relaxed) {
+                        #[cfg(debug_assertions)]
+                        debug_log!("HLOD should_stop_clone_for_sendfile_intray should_stop_all_threads detected, exiting Uma in handle_local_owner_desk()");
+                        break;
+                    }
 
                     // Check for exit-signal:
                     if should_halt_uma() {
@@ -38595,6 +38661,7 @@ fn receive_ready_signal_with_timeout( // Hash and timestamp checks moved HERE!
 /// TODO add  "workflow" steps: handle_remote_collaborator_meetingroom_desk()
 fn handle_remote_collaborator_meetingroom_desk(
     room_sync_input: &ForRemoteCollaboratorDeskThread,
+    should_stop_all_threads: Arc<AtomicBool>,
 ) -> Result<(), ThisProjectError> {
     /*
     TODO:
@@ -39855,7 +39922,10 @@ fn get_current_team_channel_name_from_nav_path() -> Option<String> {
 ///  Note current node members are not the same as channel members
 ///  a node may have narrower scope, but not broader.
 ///  this may especially apply to tasks only shared with relevant members
-fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
+fn you_love_the_sync_team_office(
+    should_stop_all_threads: Arc<AtomicBool>,
+// ) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), ThisProjectError> {
     /*
     "It's all fun and games until someone syncs a file."
 
@@ -39936,7 +40006,8 @@ fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
         },
         Err(e) => {
             debug_log!("YLTSTO Error creating room_config_datasets: {}", e);
-            return Err(Box::new(e)); // Return the error early
+            // return Err(Box::new(e)); // Return the error early
+            return Err(ThisProjectError::from(e));
         }
     };
 
@@ -40036,16 +40107,31 @@ fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
         // e.g. after N (2-10) min of no ready-signal received
         // for a thread-specific remote collaborator
 
+        // ═════════════════════════════════════════════════════════════════
+        // Spawn Local Owner Desk Thread (HLOD)
+        // ═════════════════════════════════════════════════════════════════
+        let should_stop_clone_for_hlod = should_stop_all_threads.clone();
 
         // Create the two "meeting room desks" for each collaborator pair:
         // Your Desk
         let owner_desk_thread = thread::spawn(move || {
-            let _ = handle_local_owner_desk(data_baggy_for_owner_desk);
+            let _ = handle_local_owner_desk(
+                data_baggy_for_owner_desk,
+                should_stop_clone_for_hlod
+            );
 
         });
+
+        // ═════════════════════════════════════════════════════════════════
+        // Spawn Remote Collaborator Desk Thread (HRCD)
+        // ═════════════════════════════════════════════════════════════════
+        let should_stop_clone_for_hrcd = should_stop_all_threads.clone();
         // Their Desk
         let collaborator_desk_thread = thread::spawn(move || {
-            let _ = handle_remote_collaborator_meetingroom_desk(&data_baggy_for_collaborator_desk);
+            let _ = handle_remote_collaborator_meetingroom_desk(
+                &data_baggy_for_collaborator_desk,
+                should_stop_clone_for_hrcd
+            );
         });
         collaborator_threads.push(owner_desk_thread);
         collaborator_threads.push(collaborator_desk_thread);
@@ -40062,7 +40148,9 @@ fn you_love_the_sync_team_office() -> Result<(), Box<dyn std::error::Error>> {
 
 // TODO extensive doc string needed
 /// Proverbial Main()
-fn we_love_projects_loop() -> Result<(), io::Error> {
+fn we_love_projects_loop(
+    should_stop_all_threads: Arc<AtomicBool>,
+) -> Result<(), io::Error> {
     /*
 
     setup and bootstrap
@@ -40353,6 +40441,8 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         &app.current_path,
     );
 
+
+
     // Start
     loop { // not a thread-spawn-loop (I think)
         // // Read the 'continue_uma.txt' file
@@ -40453,11 +40543,17 @@ fn we_love_projects_loop() -> Result<(), io::Error> {
         // 1. get input/command
         let input = tiny_tui::get_input()?;
 
+        let should_stop_clone = should_stop_all_threads.clone();
+
         // 2. handle input/command
         // If in main command mode, handle main commands:
         // ?. Update directory list (only in MainCommand mode) - MOVE THIS
         if app.input_mode == InputMode::MainCommand {
-            if handle_command_main_mode(&input, &mut app)? {
+            if handle_command_main_mode(
+                &input,
+                &mut app,
+                should_stop_clone,
+            )? {
                 return Ok(());
             }
             app.update_directory_list()?;
@@ -42205,28 +42301,65 @@ fn handle_args() -> bool {
     false
 }
 
+
 /*
 An Appropriately Svelt Mainland:
 */
-/// update...
+/// Application Entry Point
+///
+/// ### Project Context
+/// UMA (Universal Meeting Assistant) coordinates file synchronization across
+/// multiple remote collaborators via UDP. The application runs two primary
+/// subsystems:
+/// 1. **User Interface Thread** (`we_love_projects_loop`): Handles terminal
+///    input, displays status, processes user commands including shutdown.
+/// 2. **Network Coordination Thread** (`you_love_the_sync_team_office`): Spawns
+///    desk-pair threads for each remote collaborator, managing UDP handshakes,
+///    signal sending/receiving, and file transfers.
+///
+/// ### Lifecycle Management
+/// This function establishes a shared shutdown flag (`should_stop_all_threads`)
+/// that enables **graceful coordinated shutdown** across all threads. When a
+/// user issues a quit command in the UI thread, or when a critical error
+/// requires shutdown, this flag propagates the signal throughout the
+/// application hierarchy without relying on panics or abrupt termination.
+///
+/// ### Orderly Shutdown Flow
+/// 1. User types quit command (or critical error detected)
+/// 2. `should_stop_all_threads` flag set to `true`
+/// 3. All threads check flag periodically (including blocking UDP listeners)
+/// 4. Threads exit their loops cleanly
+/// 5. `main()` joins threads to confirm clean exit
+/// 6. Application terminates without resource leaks
+///
+/// # Error Handling
+/// - Thread spawn failures: Logged and propagated as `ThisProjectError`
+/// - Join failures: Handled without panic, logged for diagnostics
+/// - Both threads must complete (or fail) before `main()` exits
+///
+/// Note:
 /// Initializes the UMA continue/halt signal by creating or resetting the
 /// `continue_uma.txt` file and setting its value to "1" (continue).
 /// set to hault by quit_set_continue_uma_to_false()
 ///
-/// There is NO practical advantage
-/// to using Arc<AtomicBool> over writing a "1" or "0" to a file.
-/// The file method is simpler, more efficient,
-/// and just as reliable in this context.
-///
-/// This also allows the user to manually set the halt signal.
-fn main() {
+fn main() -> Result<(), ThisProjectError> {
+// fn main() {
+    // ═══════════════════════════════════════════════════════════════════════
+    // Create Global Shutdown Flag
+    // ═══════════════════════════════════════════════════════════════════════
+    // This Arc<AtomicBool> is the single source of truth for "should we stop?"
+    // - Arc: Allows safe sharing across thread boundaries
+    // - AtomicBool: Allows lock-free reads/writes from multiple threads
+    // - Initially false: Application starts in "running" state
+    // ═══════════════════════════════════════════════════════════════════════
+    let should_stop_all_threads = Arc::new(AtomicBool::new(false));
 
     if handle_args() {
-        return;
+        return Ok(());
     };
 
     if optional_passive_mode() {
-        return;
+        return Ok(());
     };
 
     let _ = initialize_continue_uma_signal(); // set boolean flag for loops to hault
@@ -42235,6 +42368,19 @@ fn main() {
     let mut online_mode: bool;
 
     loop { // Main loop: let it fail, and try again
+
+        // // TODO check should_stop_all_threads
+        // if should_stop_all_threads {
+        //     break;
+        // }
+
+        /*
+        One clone per loop-thread:
+        */
+        // Clone for we_love_projects_loop
+        let should_stop_clone_for_projects_ui = should_stop_all_threads.clone();
+        // Clone for sync network ('desks')
+        let should_stop_clone_for_uma_network = should_stop_all_threads.clone();
 
         if should_not_hard_restart() { // Check for restart or quit...
             // safe log(s)
@@ -42276,23 +42422,92 @@ fn main() {
         debug_log("Start! in main()");
 
         // Thread 1: Executes the thread1_loop function
-        let we_love_projects_loop = thread::spawn(move || {
-            let _ = we_love_projects_loop();
-        });
+        // let we_love_projects_loop = thread::spawn(move || {
+        //     let _ = we_love_projects_loop();
+        // });
+
+        let we_love_projects_loop_handle = thread::Builder::new()
+            .name("ui_loop".to_string())
+            .spawn(move || {
+                we_love_projects_loop(should_stop_clone_for_projects_ui)
+            })
+            .map_err(|e| {
+                #[cfg(debug_assertions)]
+                debug_log!("MAIN: Failed to spawn UI thread: {}", e);
+
+                ThisProjectError::StringError(
+                    format!("Failed to spawn UI thread: {}", e)
+                )
+            })?;
 
         // Thread 2: Executes the thread2_loop function
         if online_mode {
-            let you_love_the_sync_team_office = thread::spawn(move || {
-                let _ = you_love_the_sync_team_office();
-            });
-            you_love_the_sync_team_office.join().unwrap(); // Wait for finish TODO NO UNWRAP!
+
+            // let you_love_the_sync_team_office = thread::spawn(move || {
+            //     let _ = you_love_the_sync_team_office();
+            // });
+            let you_love_the_sync_team_office_handle = thread::Builder::new()
+                .name("network_coordinator".to_string())
+                .spawn(move || {
+                    you_love_the_sync_team_office(should_stop_clone_for_uma_network)
+                })
+                .map_err(|e| {
+                    #[cfg(debug_assertions)]
+                    debug_log!("MAIN: Failed to spawn network coordinator thread: {}", e);
+
+                    ThisProjectError::StringError(
+                        format!("Failed to spawn network coordinator thread: {}", e)
+                    )
+                })?;
+
+            // you_love_the_sync_team_office.join().unwrap(); // Wait for finish TODO NO UNWRAP!
+            // ═══════════════════════════════════════════════════════════════════════
+            // Orderly Join: Wait for Both Threads to Complete
+            // ═══════════════════════════════════════════════════════════════════════
+            // Join order: Network thread first (it has child threads), then UI thread
+            // This ensures all network operations cease before UI exits
+            // ═══════════════════════════════════════════════════════════════════════
+
+            // Join network thread
+            match you_love_the_sync_team_office_handle.join() {
+                Ok(result) => {
+                    if let Err(e) = result {
+                        #[cfg(debug_assertions)]
+                        debug_log!("MAIN: Network coordinator thread returned error: {}", e);
+
+                        // Don't return early - still need to join UI thread
+                    }
+                }
+                Err(e) => {
+                    #[cfg(debug_assertions)]
+                    debug_log!("MAIN: Network coordinator thread panicked: {:?}", e);
+
+                    // Thread panicked - log but continue to join UI thread
+                }
+            }
         };
 
-        we_love_projects_loop.join().unwrap(); // Wait for finish TODO NO UNWRAP!
+        // Join UI thread
+        match we_love_projects_loop_handle.join() {
+            Ok(result) => {
+                if let Err(e) = result {
+                    #[cfg(debug_assertions)]
+                    debug_log!("MAIN: UI thread returned error: {}", e);
+                }
+            }
+            Err(e) => {
+                #[cfg(debug_assertions)]
+                debug_log!("MAIN: UI thread panicked: {:?}", e);
+            }
+        }
+        // we_love_projects_loop.join().unwrap(); // Wait for finish TODO NO UNWRAP!
     }
     // safe log(s)
     println!("All threads completed. The Uma says fare well and strive.");
     debug_log("All threads completed. The Uma says fare well and strive.");
+
+    // Return
+    Ok(())
 }
 
 /*
