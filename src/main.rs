@@ -344,6 +344,7 @@ use std::path::{
     PathBuf,
 };
 use std::time::{
+    Instant,
     SystemTime,
     UNIX_EPOCH,
 };
@@ -38392,6 +38393,7 @@ fn get_or_create_send_queue(
 ///
 fn handshake_get_rc_bands_socketaddrses_for_hrcd(
     room_sync_input: &ForRemoteCollaboratorDeskThread,
+    should_stop_all_threads: &Arc<AtomicBool>,  // shutdown flag
 ) -> Result<(SocketAddr, SocketAddr), ThisProjectError> {
     let timeout_duration = Duration::from_secs(15);
     let mut buf = [0; 1024];
@@ -38429,13 +38431,24 @@ fn handshake_get_rc_bands_socketaddrses_for_hrcd(
     // --- 4. Bind Socket (outside the loop) ---
     #[cfg(debug_assertions)]
     debug_log("get_rc_band...HRCD: 4. create_rc_udp_socket(ready_socket_addr)");
-    let socket = create_rc_udp_socket(ready_socket_addr)?;
-
+    // let socket = create_rc_udp_socket(ready_socket_addr)?;
+    let socket = create_rc_timeout_udp_socket(
+        ready_socket_addr,
+        timeout_duration, // set above
+    )?;
     // --- 5. Enter Loop to Continuously Listen ---
     #[cfg(debug_assertions)]
     debug_log("get_rc_band...HRCD: 5. loop");
     loop { // Main listening loop
         // 5.1 Check for UMA shutdown
+        if should_stop_all_threads.load(Ordering::Relaxed) {
+            #[cfg(debug_assertions)]
+            debug_log!("get_rc_band...HRCD: Shutdown flag detected during handshake");
+
+            return Err(ThisProjectError::NetworkError(
+                "Handshake interrupted by shutdown signal".into()
+            ));
+        }
         if should_halt_uma() {
             return Err(ThisProjectError::NetworkError("get_rc_band_..._hrcd UMA halt signal received during band handshake".into()));
         }
@@ -38443,7 +38456,7 @@ fn handshake_get_rc_bands_socketaddrses_for_hrcd(
         debug_log!("get_rc_band...HRCD: 5.1 Listening for ReadySignal on: {:?}", ready_socket_addr);
 
         // 5.2 Set Timeout (inside loop, in case it's reset by recv)
-        socket.set_read_timeout(Some(timeout_duration))?;
+        // socket.set_read_timeout(Some(timeout_duration))?;
 
         // 5.3 Receive and Process
         match receive_ready_signal_with_timeout(&socket, &mut buf, &room_sync_input.remote_collaborator_salt_list) {
@@ -38533,6 +38546,17 @@ fn handshake_get_rc_bands_socketaddrses_for_hrcd(
                 // 5.5 Handle timeout (Ok(None) from receive_ready_signal_with_timeout) - Just continue listening
                 #[cfg(debug_assertions)]
                 debug_log!("get_rc_band_..._hrcd Timeout waiting for ReadySignal. Continuing to listen.");
+
+                // Check halt flag after timeout (loop will check again at top)
+                if should_stop_all_threads.load(Ordering::Relaxed) {
+                    #[cfg(debug_assertions)]
+                    debug_log!("get_rc_band...HRCD: Shutdown flag detected after timeout");
+
+                    return Err(ThisProjectError::NetworkError(
+                        "Handshake interrupted by shutdown signal".into()
+                    ));
+                }
+
                 continue; // Continue listening. The loop handles the timeout. No explicit error.
             },
             Err(e) => {
@@ -38670,11 +38694,31 @@ fn handle_remote_collaborator_meetingroom_desk(
     e.g. 2-10,
     then
     the main loop restarts and rebootstraps
-
     */
+    // ═════════════════════════════════════════════════════════════════
+    // PHASE 3A: Stale Connection Detection Configuration
+    // ═════════════════════════════════════════════════════════════════
+    // STALE_TIMEOUT: If no ready signal received for this duration,
+    //                assume remote disconnected/reconnected from new IP
+    //                and trigger desk restart (new handshake)
+    //
+    // Note: Socket timeout (2s) is SHORT - enables frequent checking
+    //       Stale timeout (5 min) is LONG - business logic threshold
+    // ═════════════════════════════════════════════════════════════════
+    const STALE_TIMEOUT: Duration = Duration::from_secs(5 * 60);  // 5 minutes
+
     loop { // 1. start overall loop to restart whole desk
         // --- 1. overall loop to restart handler in case of failure ---
         //  1.1 Check for halt signal.
+        if should_stop_all_threads.load(Ordering::Relaxed) {
+            #[cfg(debug_assertions)]
+            debug_log!(
+                "HRCD: Shutdown flag detected before starting desk for '{}'",
+                room_sync_input.remote_collaborator_name
+            );
+
+            return Ok(());
+        }
         if should_halt_uma() {
             #[cfg(debug_assertions)]
             debug_log!(
@@ -38686,7 +38730,7 @@ fn handle_remote_collaborator_meetingroom_desk(
 
         #[cfg(debug_assertions)]
         debug_log!(
-            "\n Started HRCD the handle_remote_collaborator_meetingroom_desk() for->{}",
+            "\n (re)Started HRCD the handle_remote_collaborator_meetingroom_desk() for->{}",
             room_sync_input.remote_collaborator_name
         );
 
@@ -38710,7 +38754,10 @@ fn handle_remote_collaborator_meetingroom_desk(
         debug_log("HRCD starting search for Remote Collaborator's IP");
 
         let (ready_socket_addr, gotit_socket_addr) =
-            match handshake_get_rc_bands_socketaddrses_for_hrcd(room_sync_input) {
+            match handshake_get_rc_bands_socketaddrses_for_hrcd(
+                room_sync_input,
+                &should_stop_all_threads, // &Arc
+            ) {
                 Ok(addrs) => addrs,
                 Err(e) => {
                     debug_log!("HRCD: Error getting SocketAddrs: {}", e);
@@ -38771,6 +38818,21 @@ fn handle_remote_collaborator_meetingroom_desk(
 
         // Clone shutdown flag for gotit thread
         let should_stop_clone_for_gotit = should_stop_all_threads.clone();
+
+        // ═════════════════════════════════════════════════════════════════
+        // Initialize Stale Detection Timer
+        // ═════════════════════════════════════════════════════════════════
+        // Start counting from NOW (handshake just completed)
+        // This will be reset every time a ready signal is received
+        // ═════════════════════════════════════════════════════════════════
+        let mut last_ready_signal = Instant::now();
+
+        #[cfg(debug_assertions)]
+        debug_log!(
+            "HRCD: Stale detection armed - will restart if no signal for {} seconds (to {})",
+            STALE_TIMEOUT.as_secs(),
+            room_sync_input.remote_collaborator_name
+        );
 
         // --- HRCD 1.5 Spawn a thread to handle recieving GotItSignal(s) and SendFile prefail-flag removal ---
         // let gotit_thread
@@ -39009,12 +39071,37 @@ fn handle_remote_collaborator_meetingroom_desk(
                 break;
             }
 
+            // ═════════════════════════════════════════════════════════════════
+            // Check Stale Timeout
+            // ═════════════════════════════════════════════════════════════════
+            // If no ready signal received within STALE_TIMEOUT, assume remote
+            // has disconnected/reconnected from new IP → restart desk
+            // ═════════════════════════════════════════════════════════════════
+            if last_ready_signal.elapsed() > STALE_TIMEOUT {
+                #[cfg(debug_assertions)]
+                debug_log!(
+                    "HRCD: No ready signal from '{}' for {} minutes - connection stale, restarting desk",
+                    room_sync_input.remote_collaborator_name,
+                    STALE_TIMEOUT.as_secs() / 60
+                );
+
+                // Break to outer restart loop → re-do handshake
+                break;  // ← EXIT INNER LOOP, STAY IN OUTER LOOP
+            }
+
             // --- 2.2. Handle Ready Signal:  ---
             // "Listener"?
             // 2.2.1 Receive Ready Signal
             let mut buf = [0; 1024]; // TODO size?
             match ready_socket.recv_from(&mut buf) {
                 Ok((amt, src)) => {
+
+                    // ═════════════════════════════════════════════════════════════════
+                    //  Reset Stale Timer
+                    // ═════════════════════════════════════════════════════════════════
+                    //  Valid signal received → reset the stale detection timer
+                    // ═════════════════════════════════════════════════════════════════
+                    last_ready_signal = Instant::now();
 
                     #[cfg(debug_assertions)]
                     {
@@ -39815,13 +39902,13 @@ fn handle_remote_collaborator_meetingroom_desk(
                         // ═════════════════════════════════════════════════════════════
                         // PHASE 2A: Handle real socket errors
                         // ═════════════════════════════════════════════════════════════
-                        Err(e) => {
+                        Err(_e) => {
                             // ✗ Real error: Network issue, bad packet, etc.
 
                             #[cfg(debug_assertions)]
                             debug_log!(
                                 "HRCD Main Loop: Recv error: {} (to {}), continuing",
-                                e,
+                                _e,
                                 room_sync_input.remote_collaborator_name
                             );
 
@@ -39832,6 +39919,35 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                     } // match ready_socket.recv_from(&mut buf)
                 } // closes main loop
+                // ═════════════════════════════════════════════════════════════════
+                // Cleanup Before Restart
+                // ═════════════════════════════════════════════════════════════════
+                // Inner loop exited (stale timeout) - clean up resources before
+                // outer loop restarts the desk
+                // ═════════════════════════════════════════════════════════════════
+
+                #[cfg(debug_assertions)]
+                debug_log!(
+                    "HRCD: Cleaning up desk resources before restart for '{}'",
+                    room_sync_input.remote_collaborator_name
+                );
+
+                // Explicitly drop sockets to free ports for re-binding
+                drop(ready_socket);
+
+                // Note: gotit_socket is owned by spawned thread, will be cleaned
+                // up when that thread exits (it checks should_stop_all_threads)
+
+                // Brief pause before restart to avoid rapid restart loops on persistent issues
+                thread::sleep(Duration::from_secs(2));
+
+                #[cfg(debug_assertions)]
+                debug_log!(
+                    "HRCD: Restarting desk for '{}' (will re-do handshake)",
+                    room_sync_input.remote_collaborator_name
+                );
+
+                // Loop back to outer loop → re-enters handshake
 
         //         Err(e) if e.kind() == ErrorKind::WouldBlock => {
         //             // TODO What is all this then?
@@ -39870,28 +39986,28 @@ fn handle_remote_collaborator_meetingroom_desk(
         //     } // match ready_socket.recv_from(&mut buf) {
         // } // closes main loop
         debug_log!("\nHRCD: bottom of main loop.\n");
-    }
+    } // closes outer restart-loop
     debug_log!("\nending HRCD\n");
     Ok(())
 }
 
-/// Creates a UDP socket bound to the specified address and port.
-///
-/// Simplifies socket creation by taking a SocketAddr directly.
-/// Does one thing well.
-///
-/// # Arguments
-///
-/// * `socket_addr`: The address and port to bind to.
-///
-/// # Returns
-///
-/// * `Result<UdpSocket, ThisProjectError>`: The bound socket or an error if binding fails.
-fn create_rc_udp_socket(socket_addr: SocketAddr) -> Result<UdpSocket, ThisProjectError> {
-    UdpSocket::bind(socket_addr).map_err(|e| {
-        ThisProjectError::NetworkError(format!("Failed to bind to UDP socket: {}", e))
-    })
-}
+// /// Creates a UDP socket bound to the specified address and port.
+// ///
+// /// Simplifies socket creation by taking a SocketAddr directly.
+// /// Does one thing well.
+// ///
+// /// # Arguments
+// ///
+// /// * `socket_addr`: The address and port to bind to.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<UdpSocket, ThisProjectError>`: The bound socket or an error if binding fails.
+// fn create_rc_udp_socket(socket_addr: SocketAddr) -> Result<UdpSocket, ThisProjectError> {
+//     UdpSocket::bind(socket_addr).map_err(|e| {
+//         ThisProjectError::NetworkError(format!("Failed to bind to UDP socket: {}", e))
+//     })
+// }
 
 /// Creates a UDP socket bound to the specified address with read timeout.
 ///
@@ -42659,16 +42775,16 @@ fn main() -> Result<(), ThisProjectError> {
             // Join network thread
             match you_love_the_sync_team_office_handle.join() {
                 Ok(result) => {
-                    if let Err(e) = result {
+                    if let Err(_e) = result {
                         #[cfg(debug_assertions)]
-                        debug_log!("MAIN: Network coordinator thread returned error: {}", e);
+                        debug_log!("MAIN: Network coordinator thread returned error: {}", _e);
 
                         // Don't return early - still need to join UI thread
                     }
                 }
-                Err(e) => {
+                Err(_e) => {
                     #[cfg(debug_assertions)]
-                    debug_log!("MAIN: Network coordinator thread panicked: {:?}", e);
+                    debug_log!("MAIN: Network coordinator thread panicked: {:?}", _e);
 
                     // Thread panicked - log but continue to join UI thread
                 }
@@ -42678,14 +42794,14 @@ fn main() -> Result<(), ThisProjectError> {
         // Join UI thread
         match we_love_projects_loop_handle.join() {
             Ok(result) => {
-                if let Err(e) = result {
+                if let Err(_e) = result {
                     #[cfg(debug_assertions)]
-                    debug_log!("MAIN: UI thread returned error: {}", e);
+                    debug_log!("MAIN: UI thread returned error: {}", _e);
                 }
             }
-            Err(e) => {
+            Err(_e) => {
                 #[cfg(debug_assertions)]
-                debug_log!("MAIN: UI thread panicked: {:?}", e);
+                debug_log!("MAIN: UI thread panicked: {:?}", _e);
             }
         }
         // we_love_projects_loop.join().unwrap(); // Wait for finish TODO NO UNWRAP!
