@@ -38730,13 +38730,27 @@ fn handle_remote_collaborator_meetingroom_desk(
         // hrcd_udp_handshake(&room_sync_input);
 
         // --- 1.3 Create two UDP Sockets for Ready and GotIt Signals ---`
-        // #[cfg(debug_assertions)]
+        #[cfg(debug_assertions)]
         debug_log("HRCD 1.3 Making ready_port listening UDP socket...");
-        let ready_socket = create_rc_udp_socket(ready_socket_addr)?;
+        // ═════════════════════════════════════════════════════════════════════════
+        // Create ready/gotit sockets WITH timeout
+        // ═════════════════════════════════════════════════════════════════════════
+        // Timeout allows periodic halt-checking without missing signals
+        // 2 seconds: Unblocks every 2s to check should_stop_all_threads
+        // ═════════════════════════════════════════════════════════════════════════
+        let ready_socket = create_rc_timeout_udp_socket(
+            ready_socket_addr,
+            Duration::from_secs(2), // Check halt flag every 2 seconds
+        )?;
+        // let ready_socket = create_rc_udp_socket(ready_socket_addr)?;
 
-        // #[cfg(debug_assertions)]
+        #[cfg(debug_assertions)]
         debug_log("HRCD 1.3 Making gotit_port listening UDP socket...");
-        let gotit_socket = create_rc_udp_socket(gotit_socket_addr)?;
+        let gotit_socket = create_rc_timeout_udp_socket(
+            gotit_socket_addr,
+            Duration::from_secs(2), // Check halt flag every 2 seconds
+        )?;
+        // let gotit_socket = create_rc_udp_socket(gotit_socket_addr)?;
 
         // --- 1.4 Initialize (empty for starting) Send Queue ---
         // let mut session_send_queue: Option<SendQueue> = None;
@@ -38755,6 +38769,9 @@ fn handle_remote_collaborator_meetingroom_desk(
 
         let remote_collaborator_name_clone = room_sync_input.remote_collaborator_name.clone();
 
+        // Clone shutdown flag for gotit thread
+        let should_stop_clone_for_gotit = should_stop_all_threads.clone();
+
         // --- HRCD 1.5 Spawn a thread to handle recieving GotItSignal(s) and SendFile prefail-flag removal ---
         // let gotit_thread
         let _ = thread::spawn(move || {
@@ -38771,6 +38788,14 @@ fn handle_remote_collaborator_meetingroom_desk(
                 );
 
                 // 1.5.1 Check for halt-uma signal
+                if should_stop_clone_for_gotit.load(Ordering::Relaxed) {
+                    #[cfg(debug_assertions)]
+                    debug_log!(
+                        "HRCD GotItloop: Arc should_stop_all_threads detected, exiting (from {})",
+                        remote_collaborator_name_clone
+                    );
+                    break; // Exit the loop
+                }
                 if should_halt_uma() {
                     #[cfg(debug_assertions)]
                     debug_log!("HRCD 1.5.1 GotItloop Got It loop: Halt signal received. Exiting. in handle_remote_collaborator_meetingroom_desk (from {})",
@@ -38786,6 +38811,14 @@ fn handle_remote_collaborator_meetingroom_desk(
                     Ok((amt, _src)) => {
 
                         // Check for exit-signal:
+                        if should_stop_clone_for_gotit.load(Ordering::Relaxed) {
+                            #[cfg(debug_assertions)]
+                            debug_log!(
+                                "(from {}) HRCD GotItloop: should_stop_all_threads detected after recv, exiting",
+                                remote_collaborator_name_clone
+                            );
+                            break;
+                        }
                         if should_halt_uma() {
                             #[cfg(debug_assertions)]
                             debug_log!(
@@ -38872,23 +38905,65 @@ fn handle_remote_collaborator_meetingroom_desk(
                         );
                         // 1.5.6 update ~timestamp_of_latest_received_file_that_i_sent
 
-                    // // 1.5.7 Sleep for a short duration (e.g., 100ms)
-                    // thread::sleep(Duration::from_millis(1000));
+                    } // End Ok case
 
-                    },
+                    // ═════════════════════════════════════════════════════════════
+                    // Handle socket timeout (NOT an error)
+                    // ═════════════════════════════════════════════════════════════
+                    Err(e) if e.kind() == io::ErrorKind::WouldBlock
+                           || e.kind() == io::ErrorKind::TimedOut => {
+                        // ✓ Normal: 2 seconds elapsed, no gotit signal received
+
+                        #[cfg(debug_assertions)]
+                        debug_log!(
+                            "HRCD GotItloop: Socket timeout (normal), looping (from {})",
+                            remote_collaborator_name_clone
+                        );
+
+                        continue; // Loop back to check halt flag
+                    }
+
+                    // ═════════════════════════════════════════════════════════════
+                    // Handle socket Errors
+                    // ═════════════════════════════════════════════════════════════
                     Err(_e) => {
                         #[cfg(debug_assertions)]
-                        debug_log!("HRCD 1.5 GotItloop Error receiving data on gotit_port: {} (from {})",
+                        debug_log!("HRCD GotItloop: Error receiving data on gotit_port: {} (from {})",
                             _e,
                             remote_collaborator_name_clone
                         );
-                        // You might want to handle the error more specifically here (e.g., retry, break the loop, etc.)
-                        // For now, we'll just log the error and continue listening.
+
+                        // Brief backoff before retry
+                        thread::sleep(Duration::from_millis(100));
                         continue;
                     }
-                }
-            }
-        }); // End of GotIt Loooooop
+                } // End match gotit_socket.recv_from
+            } // End gotit loop
+
+            #[cfg(debug_assertions)]
+            debug_log!(
+                "HRCD GotItloop: Exited cleanly (from {})",
+                remote_collaborator_name_clone
+            );
+
+        }); // End of GotIt Thread spawn
+        //             // // 1.5.7 Sleep for a short duration (e.g., 100ms)
+        //             // thread::sleep(Duration::from_millis(1000));
+
+        //             },
+        //             Err(_e) => {
+        //                 #[cfg(debug_assertions)]
+        //                 debug_log!("HRCD 1.5 GotItloop Error receiving data on gotit_port: {} (from {})",
+        //                     _e,
+        //                     remote_collaborator_name_clone
+        //                 );
+        //                 // You might want to handle the error more specifically here (e.g., retry, break the loop, etc.)
+        //                 // For now, we'll just log the error and continue listening.
+        //                 continue;
+        //             }
+        //         }
+        //     }
+        // }); // End of GotIt Loooooop
 
         // 1.6.1 zero_timestamp_counter = 0 for ready signal send-at timestamps
         let mut zero_timestamp_counter = 0;
@@ -38911,6 +38986,15 @@ fn handle_remote_collaborator_meetingroom_desk(
             );
 
             // --- 2.1 Check for 'should_halt_uma' Signal ---
+            if should_stop_all_threads.load(Ordering::Relaxed) {
+                #[cfg(debug_assertions)]
+                debug_log!(
+                    "HRCD Main Loop: should_stop_all_threads detected, exiting ('to' {} thread)",
+                    room_sync_input.remote_collaborator_name
+                );
+
+                return Ok(()); // break?
+            }
             if should_halt_uma() {
                 // safe log
                 debug_log!(
@@ -39707,43 +39791,84 @@ fn handle_remote_collaborator_meetingroom_desk(
                     debug_log!("\n({} thread) HRCD: end of inner match.\n",
                         &room_sync_input.remote_collaborator_name,
                     );
-                }, // end of the Ok inside the match: Ok((amt, src)) => {
-                Err(e) if e.kind() == ErrorKind::WouldBlock => {
-                    // TODO What is all this then?
-                    // // --- 3.6 No Ready Signal, Log Periodically ---
-                    // terrible idea: most people are simply not online most of the time
-                    // this is not an error!!
-                    // if last_debug_log_time.elapsed() >= Duration::from_secs(5) {
-                    //     debug_log!("HRCD 3.6 {}: Listening for ReadySignal on port {}",
-                    //                room_sync_input.remote_collaborator_name,
-                    //                room_sync_input.remote_collab_ready_port_theirdesk_youlisten_bind_yourlocal_ip);
-                    //     last_debug_log_time = Instant::now();
-                    // }
 
-                    // safe log
-                    debug_log!("HRCD error Err(e) if e.kind() == ErrorKind::WouldBlock =>");
+                // }, // end of the Ok inside the match: Ok((amt, src)) => {
+                } // End Ok case
 
-                    #[cfg(debug_assertions)]
-                    debug_log!("({} thread) HRCD error Err(e) if e.kind() == ErrorKind::WouldBlock =>",
-                        &room_sync_input.remote_collaborator_name,
-                    );
+                        // ═════════════════════════════════════════════════════════════
+                        // PHASE 2A: Handle socket timeout (NOT an error)
+                        // ═════════════════════════════════════════════════════════════
+                        Err(e) if e.kind() == io::ErrorKind::WouldBlock
+                               || e.kind() == io::ErrorKind::TimedOut => {
+                            // ✓ Normal: 2 seconds elapsed, no signal received
+                            // This is EXPECTED and allows us to check halt flag
 
-                },
-                Err(e) => {
-                    // --- 3.7 Handle Other Errors ---
-                    #[cfg(debug_assertions)]
-                    debug_log!(
-                        "({} thread) HRCD #?: Error receiving data on ready_port: {} ({:?})",
-                            room_sync_input.remote_collaborator_name,
-                            e,
-                            e.kind()
-                    );
+                            #[cfg(debug_assertions)]
+                            debug_log!(
+                                "HRCD Main Loop: Socket timeout (normal), looping (to {})",
+                                room_sync_input.remote_collaborator_name
+                            );
 
-                    return Err(ThisProjectError::NetworkError(e.to_string()));
-                }
-            // thread::sleep(Duration::from_millis(100));
-            } // match ready_socket.recv_from(&mut buf) {
-        } // closes main loop
+                            continue; // Loop back to check halt flag
+                        }
+
+                        // ═════════════════════════════════════════════════════════════
+                        // PHASE 2A: Handle real socket errors
+                        // ═════════════════════════════════════════════════════════════
+                        Err(e) => {
+                            // ✗ Real error: Network issue, bad packet, etc.
+
+                            #[cfg(debug_assertions)]
+                            debug_log!(
+                                "HRCD Main Loop: Recv error: {} (to {}), continuing",
+                                e,
+                                room_sync_input.remote_collaborator_name
+                            );
+
+                            // Brief backoff before retry
+                            thread::sleep(Duration::from_millis(100));
+                            continue;
+                        }
+
+                    } // match ready_socket.recv_from(&mut buf)
+                } // closes main loop
+
+        //         Err(e) if e.kind() == ErrorKind::WouldBlock => {
+        //             // TODO What is all this then?
+        //             // // --- 3.6 No Ready Signal, Log Periodically ---
+        //             // terrible idea: most people are simply not online most of the time
+        //             // this is not an error!!
+        //             // if last_debug_log_time.elapsed() >= Duration::from_secs(5) {
+        //             //     debug_log!("HRCD 3.6 {}: Listening for ReadySignal on port {}",
+        //             //                room_sync_input.remote_collaborator_name,
+        //             //                room_sync_input.remote_collab_ready_port_theirdesk_youlisten_bind_yourlocal_ip);
+        //             //     last_debug_log_time = Instant::now();
+        //             // }
+
+        //             // safe log
+        //             debug_log!("HRCD error Err(e) if e.kind() == ErrorKind::WouldBlock =>");
+
+        //             #[cfg(debug_assertions)]
+        //             debug_log!("({} thread) HRCD error Err(e) if e.kind() == ErrorKind::WouldBlock =>",
+        //                 &room_sync_input.remote_collaborator_name,
+        //             );
+
+        //         },
+        //         Err(e) => {
+        //             // --- 3.7 Handle Other Errors ---
+        //             #[cfg(debug_assertions)]
+        //             debug_log!(
+        //                 "({} thread) HRCD #?: Error receiving data on ready_port: {} ({:?})",
+        //                     room_sync_input.remote_collaborator_name,
+        //                     e,
+        //                     e.kind()
+        //             );
+
+        //             return Err(ThisProjectError::NetworkError(e.to_string()));
+        //         }
+        //     // thread::sleep(Duration::from_millis(100));
+        //     } // match ready_socket.recv_from(&mut buf) {
+        // } // closes main loop
         debug_log!("\nHRCD: bottom of main loop.\n");
     }
     debug_log!("\nending HRCD\n");
@@ -39766,6 +39891,69 @@ fn create_rc_udp_socket(socket_addr: SocketAddr) -> Result<UdpSocket, ThisProjec
     UdpSocket::bind(socket_addr).map_err(|e| {
         ThisProjectError::NetworkError(format!("Failed to bind to UDP socket: {}", e))
     })
+}
+
+/// Creates a UDP socket bound to the specified address with read timeout.
+///
+/// ### Project Context
+/// In the UMA synchronization system, UDP listeners must periodically check
+/// shutdown flags even when no packets are arriving. Without a timeout,
+/// `recv_from()` blocks indefinitely, preventing graceful shutdown.
+///
+/// ### Timeout Strategy
+/// The timeout duration (typically 2 seconds) creates an "escape hatch" -
+/// the socket unblocks every N seconds to allow the thread to:
+/// 1. Check the `should_stop_all_threads` flag
+/// 2. Check application-level timeouts (e.g., stale connection detection)
+/// 3. Log status for debugging
+///
+/// This does NOT miss signals - if a packet arrives before the timeout,
+/// `recv_from()` returns immediately with the packet.
+///
+/// # Arguments
+/// * `socket_addr` - The address and port to bind to
+/// * `timeout_duration` - How long `recv_from()` waits before unblocking
+///
+/// # Returns
+/// * `Ok(UdpSocket)` - Socket bound and configured with timeout
+/// * `Err(ThisProjectError)` - Binding failed or timeout setting failed
+///
+/// # Error Handling
+/// - Bind failure: Network interface unavailable, port in use
+/// - Timeout setting failure: OS does not support timeouts (rare)
+fn create_rc_timeout_udp_socket(
+    socket_addr: SocketAddr,
+    timeout_duration: Duration,
+) -> Result<UdpSocket, ThisProjectError> {
+
+    // Step 1: Bind the socket
+    let socket = UdpSocket::bind(socket_addr).map_err(|e| {
+        #[cfg(debug_assertions)]
+        debug_log!("Failed to bind UDP socket to {}: {}", socket_addr, e);
+
+        ThisProjectError::NetworkError(
+            format!("Failed to bind to UDP socket {}: {}", socket_addr, e)
+        )
+    })?;
+
+    // Step 2: Set read timeout
+    socket.set_read_timeout(Some(timeout_duration)).map_err(|e| {
+        #[cfg(debug_assertions)]
+        debug_log!("Failed to set read timeout on socket {}: {}", socket_addr, e);
+
+        ThisProjectError::NetworkError(
+            format!("Failed to set socket timeout: {}", e)
+        )
+    })?;
+
+    #[cfg(debug_assertions)]
+    debug_log!(
+        "Created UDP socket at {} with {}s timeout",
+        socket_addr,
+        timeout_duration.as_secs()
+    );
+
+    Ok(socket)
 }
 
 /// Creates a UDP socket bound to a locally chosen IP address and port based on the network band configuration.
