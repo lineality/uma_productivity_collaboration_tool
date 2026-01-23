@@ -152,6 +152,42 @@ If you don't want the additional security of gpg, then you choose during setup n
 
 It is all your choices about your files.
 
+## Local GPG Settings
+#### For Linux:
+To see how long the current memory for the gpg key is, run:
+```bash
+gpgconf --list-options gpg-agent
+```
+E.g. the printout may say (among other lines):
+```text
+default-cache-ttl:24:0:expire cached PINs after N seconds:3:3:N:600::
+max-cache-ttl:24:2:set maximum PIN cache lifetime to N seconds:3:3:N:7200::
+```
+
+#### About: the names are not entirely clear
+- default-cache-ttl counts from the last reset time when you last used GPG (activity-based)
+- max-cache-ttl is the total (not counting resets) time limit, never exceeds this value (absolute maximum)
+
+### Custom GPG Timeout Values
+To modify these numbers, make a config file and enter the values:
+```bash
+mkdir -p ~/.gnupg
+```
+Using vi or vim or helix (hx) or nano, etc.:
+```bash
+hx ~/.gnupg/gpg-agent.conf
+```
+
+Paste in your values, e.g. 24 hours is 86400 seconds, 1800 is 30 min.
+```text
+default-cache-ttl 86400
+max-cache-ttl 86400
+```
+
+Reload gpg agent:
+```bash
+gpgconf --reload gpg-agent
+```
 
 
 ## Scope and Goals:
