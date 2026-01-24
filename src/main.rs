@@ -35042,6 +35042,7 @@ fn handle_local_owner_desk(
                 &band_local_user_ipv4_address,
                 &band_local_user_ipv6_address,
                 local_owner_desk_setup_data.localuser_intray_port_yourdesk_youlisten_bind_yourlocal_ip,
+                2,  // 2-second timeout for halt-checking
             )?;
 
             #[cfg(debug_assertions)]
@@ -35059,7 +35060,7 @@ fn handle_local_owner_desk(
                 if should_stop_clone_for_sendfile_intray.load(Ordering::Relaxed) {
                     #[cfg(debug_assertions)]
                     debug_log!("HLOD should_stop_clone_for_sendfile_intray should_stop_all_threads detected, exiting Uma in handle_local_owner_desk()");
-                    break;
+                    break; // Exit in-tray loop
                 }
 
                 // Check for halt signal at the beginning of the loop
@@ -35069,774 +35070,741 @@ fn handle_local_owner_desk(
                         "HLOD-InTray: Halt signal received. Exiting. ({} thread)",
                         &remote_collaborator_name
                     );
-                    break;
+                    break; // Exit in-tray loop
                 }
 
                 match intray_socket.recv_from(&mut buf) {
                     Ok((amt, _src)) => {
 
-                    #[cfg(debug_assertions)]
-                    debug_log!(
-                        "(from {}) HLOD-InTray match intray_socket.recv_from(&mut buf) Ok((amt, src)) {:?} {:?}",
-                        &remote_collaborator_name,
-                        amt,
-                        _src
-                    );
-
-                    // Check Arc shutdown flag
-                    if should_stop_clone_for_sendfile_intray.load(Ordering::Relaxed) {
-                        #[cfg(debug_assertions)]
-                        debug_log!("HLOD should_stop_clone_for_sendfile_intray should_stop_all_threads detected, exiting Uma in handle_local_owner_desk()");
-                        break;
-                    }
-
-                    // Check for exit-signal:
-                    if should_halt_uma() {
                         #[cfg(debug_assertions)]
                         debug_log!(
-                            "(from {}) HLOD-InTray 3.5.2 main loop Check for halt signal. Halting handle_local_owner_desk()",
-                            &remote_collaborator_name
-                        );
-                        break;
-                    }
-
-                    #[cfg(debug_assertions)]
-                    debug_log!(
-                        "(from {}) HLOD-InTray 3.5.2.1 Ok((amt, src)) Intray socket file Received {} bytes from {}",
-                        &remote_collaborator_name,
-                        amt,
-                        _src,
-
-                    );
-
-                    // --- Inspect Raw Bytes ---
-                    #[cfg(debug_assertions)]
-                    {
-                        debug_log!(
-                            "(from {}) HLOD-InTray 3.5.2.2 Intray: Sent-File Raw bytes received: {:?}",
+                            "(from {}) HLOD-InTray match intray_socket.recv_from(&mut buf) Ok((amt, src)) {:?} {:?}",
                             &remote_collaborator_name,
-                            &buf[..amt]
+                            amt,
+                            _src
                         );
 
-                        // --- Inspect Bytes as Hex ---
-                        let hex_string = buf[..amt].iter()
-                            .map(|b| format!("{:02X}", b))
-                            .collect::<String>();
+                        // Check Arc shutdown flag
+                        if should_stop_clone_for_sendfile_intray.load(Ordering::Relaxed) {
+                            #[cfg(debug_assertions)]
+                            debug_log!("HLOD should_stop_clone_for_sendfile_intray should_stop_all_threads detected, exiting Uma in handle_local_owner_desk()");
+                            break;
+                        }
 
+                        // Check for exit-signal:
+                        if should_halt_uma() {
+                            #[cfg(debug_assertions)]
+                            debug_log!(
+                                "(from {}) HLOD-InTray 3.5.2 main loop Check for halt signal. Halting handle_local_owner_desk()",
+                                &remote_collaborator_name
+                            );
+                            break;
+                        }
+
+                        #[cfg(debug_assertions)]
                         debug_log!(
-                            "(from {}) HLOD-InTray 3.5.2.3 Intray: Sent-File Raw bytes as hex: {}",
+                            "(from {}) HLOD-InTray 3.5.2.1 Ok((amt, src)) Intray socket file Received {} bytes from {}",
                             &remote_collaborator_name,
-                            hex_string
+                            amt,
+                            _src,
+
                         );
-                    }
 
-                    // --- 3.5.3 Deserialize the SendFile signal ---
-                    let use_padnet_flag = &local_owner_desk_setup_data.use_padnet;
+                        // --- Inspect Raw Bytes ---
+                        #[cfg(debug_assertions)]
+                        {
+                            debug_log!(
+                                "(from {}) HLOD-InTray 3.5.2.2 Intray: Sent-File Raw bytes received: {:?}",
+                                &remote_collaborator_name,
+                                &buf[..amt]
+                            );
 
-                    // If Padnet
-                    let incoming_intray_file_struct: SendFile = if *use_padnet_flag {
+                            // --- Inspect Bytes as Hex ---
+                            let hex_string = buf[..amt].iter()
+                                .map(|b| format!("{:02X}", b))
+                                .collect::<String>();
 
-                        // Padnet
-                        // let incoming_intray_file_struct: SendFile = match padnet_deserialize_intray_sendfile_struct(
-                        match padnet_deserialize_intray_sendfile_struct(
+                            debug_log!(
+                                "(from {}) HLOD-InTray 3.5.2.3 Intray: Sent-File Raw bytes as hex: {}",
+                                &remote_collaborator_name,
+                                hex_string
+                            );
+                        }
 
-                            &buf[..amt],
-                        ) {
-                            Ok(incoming_intray_file_struct) => {
+                        // --- 3.5.3 Deserialize the SendFile signal ---
+                        let use_padnet_flag = &local_owner_desk_setup_data.use_padnet;
 
-                                // safe log
-                                debug_log("HLOD-InTray 2.3 SendFile listener: Receive File Data...do you copy, gold leader... >*<");
+                        // If Padnet
+                        let incoming_intray_file_struct: SendFile = if *use_padnet_flag {
 
-                                #[cfg(debug_assertions)] {
+                            // Padnet
+                            // let incoming_intray_file_struct: SendFile = match padnet_deserialize_intray_sendfile_struct(
+                            match padnet_deserialize_intray_sendfile_struct(
+
+                                &buf[..amt],
+                            ) {
+                                Ok(incoming_intray_file_struct) => {
+
+                                    // safe log
+                                    debug_log("HLOD-InTray 2.3 SendFile listener: Receive File Data...do you copy, gold leader... >*<");
+
+                                    #[cfg(debug_assertions)] {
+                                        debug_log!("(from {}) HLOD-InTray 2.3 Deserialize Ok(incoming_intray_file_struct): Received SendFile: {:?}",
+                                            &remote_collaborator_name,
+                                            incoming_intray_file_struct
+                                        ); // Log the signal
+                                    }
+
+                                    incoming_intray_file_struct
+                                },
+                                Err(_e) => {
+                                    #[cfg(debug_assertions)]
+                                    debug_log!("(from {}) HLOD-InTray 2.3 Deserialize Err Receive data Failed to parse ready signal: {}",
+                                        &remote_collaborator_name,
+                                        _e,
+                                    );
+                                    continue; // Continue to the next iteration of the loop
+                                }
+                            } // no semicolon, to pass value
+
+                        } else {
+
+                            // let incoming_intray_file_struct: SendFile = match deserialize_intray_send_file_struct(
+                            match deserialize_intray_send_file_struct(
+                                &buf[..amt],
+                            ) {
+                                Ok(incoming_intray_file_struct) => {
+                                    debug_log("HLOD-InTray 2.3 SendFile listener: Receive File Data...do you copy, gold leader... >*<");
+
+                                    #[cfg(debug_assertions)]
                                     debug_log!("(from {}) HLOD-InTray 2.3 Deserialize Ok(incoming_intray_file_struct): Received SendFile: {:?}",
                                         &remote_collaborator_name,
                                         incoming_intray_file_struct
                                     ); // Log the signal
-                                }
 
-                                incoming_intray_file_struct
-                            },
-                            Err(_e) => {
-                                #[cfg(debug_assertions)]
-                                debug_log!("(from {}) HLOD-InTray 2.3 Deserialize Err Receive data Failed to parse ready signal: {}",
-                                    &remote_collaborator_name,
-                                    _e,
-                                );
-                                continue; // Continue to the next iteration of the loop
-                            }
-                        } // no semicolon, to pass value
-
-                    } else {
-
-                        // let incoming_intray_file_struct: SendFile = match deserialize_intray_send_file_struct(
-                        match deserialize_intray_send_file_struct(
-                            &buf[..amt],
-                        ) {
-                            Ok(incoming_intray_file_struct) => {
-                                debug_log("HLOD-InTray 2.3 SendFile listener: Receive File Data...do you copy, gold leader... >*<");
-
-                                #[cfg(debug_assertions)]
-                                debug_log!("(from {}) HLOD-InTray 2.3 Deserialize Ok(incoming_intray_file_struct): Received SendFile: {:?}",
-                                    &remote_collaborator_name,
                                     incoming_intray_file_struct
-                                ); // Log the signal
+                                },
+                                Err(_e) => {
+                                    #[cfg(debug_assertions)]
+                                    debug_log!("(from {}) HLOD-InTray 2.3 Deserialize Err Receive data Failed to parse ready signal: {}",
+                                        &remote_collaborator_name,
+                                        _e
+                                    );
+                                    continue; // Continue to the next iteration of the loop
+                                }
+                            } // no semicolon, to pass value
 
-                                incoming_intray_file_struct
-                            },
-                            Err(_e) => {
-                                #[cfg(debug_assertions)]
-                                debug_log!("(from {}) HLOD-InTray 2.3 Deserialize Err Receive data Failed to parse ready signal: {}",
-                                    &remote_collaborator_name,
-                                    _e
-                                );
-                                continue; // Continue to the next iteration of the loop
-                            }
-                        } // no semicolon, to pass value
-
-                    };
-
-                    #[cfg(debug_assertions)]
-                    debug_log("##HLOD-InTray## starting checks (hound's tooth) 2.4");
-
-                    // ////////////////////////////////////////
-                    //  --- 3.2 timestamp freshness checks ---
-                    // ////////////////////////////////////////
-                    let current_timestamp = get_current_unix_timestamp();
-
-                    #[cfg(debug_assertions)]
-                    debug_log!(
-                        "(from {}) HLOD 2.4.1 check timestamp freshness checks: current_timestamp -> {:?}",
-                        &remote_collaborator_name,
-                        current_timestamp
-                    );
-
-
-                    // 3.2.1 No Future Dated Requests
-                    if incoming_intray_file_struct.intray_send_time > Some(current_timestamp + 5) { // Allow for some clock skew (5 seconds)
-                        #[cfg(debug_assertions)]
-                        debug_log!(
-                            "(from {}) HLOD 2.4.2 check: Received future-dated timestamp. Discarding.",
-                            &remote_collaborator_name,
-                        );
-
-                        // safe log
-                        debug_log(
-                            "Warning: HLOD 2.4.2 check: Received future-dated timestamp. Discarding.",
-                        );
-                        continue;
-                    }
-
-                    // 3.2.2 No Requests Older Than ~10 sec
-                    if current_timestamp - 10 > incoming_intray_file_struct.intray_send_time.expect("REASON") {
-                        #[cfg(debug_assertions)]
-                        debug_log!(
-                            "(from {}) HLOD 2.4.3 check: Received outdated timestamp (older than 10 seconds). Discarding.",
-                            &remote_collaborator_name,
-                        );
-
-                        // safe log
-                        debug_log(
-                            "Warning: HLOD 2.4.3 check: Received outdated timestamp (older than 10 seconds). Discarding.",
-                        );
-                        continue;
-                    }
-
-                    // 3.2.3 Check .intray_hash_list hash
-                    if incoming_intray_file_struct.intray_hash_list.is_none() {
-                        #[cfg(debug_assertions)]
-                        debug_log!(
-                            "(from {}) HLOD 2.4.4 Check: intray_hash_list hash field is empty. Drop packet and keep going.",
-                            &remote_collaborator_name,
-                        );
-
-                        // safe log
-                        debug_log(
-                            "Warning: HLOD 2.4.4 Check: intray_hash_list hash field is empty. Drop packet and keep going.",
-                        );
-                        continue; // Drop packet: Restart the loop to listen for the next signal
-                    }
-
-                    // 3.2.4 Check .intray_send_time timestamp
-                    if incoming_intray_file_struct.intray_send_time.is_none() {
-                        #[cfg(debug_assertions)]
-                        debug_log!(
-                            "(from {}) HLOD 2.4.5 Check: intray_send_time ready signal sent-at timestamp field is empty. Drop packet and keep going.",
-                            &remote_collaborator_name,
-                        );
-
-                        // safe log
-                        debug_log(
-                            "Warning: HLOD 2.4.5 Check: intray_send_time ready signal sent-at timestamp field is empty. Drop packet and keep going.",
-                        );
-                        continue; // Drop packet: Restart the loop to listen for the next signal
-                    }
-
-                    // --- 4 Check / Add Hash-Nonce for per-session ready-signals ---
-                    // ...e.g. guarding against the few seconds of expiration-gap
-                    // HLOD 4.1 Hashes
-                    let incoming_intray_file_struct_hash_vec = incoming_intray_file_struct.intray_hash_list.clone().expect("intray_hash_list is none");
-
-                    // 4.2
-                    if !incoming_intray_file_struct_hash_vec.is_empty() {
-                        if intrystruct_hash_set_session_nonce.contains(&incoming_intray_file_struct_hash_vec) {
-                            #[cfg(debug_assertions)]
-                            debug_log!(
-                                "(from {}) HLOD 4.2 quasi nonce check: Duplicate SendFile received (hash match). Discarding.",
-                                &remote_collaborator_name,
-                            );
-                            // safe log
-                            debug_log(
-                                "HLOD 4.2 quasi nonce check: Duplicate SendFile received (hash match). Discarding.",
-                            );
-                            continue; // Discard the duplicate signal
-                        }
-                        intrystruct_hash_set_session_nonce.insert(incoming_intray_file_struct_hash_vec); // Add hash to the set
-                    } else {
-                        #[cfg(debug_assertions)]
-                        debug_log!(
-                            "(from {}) HLOD 4.2 quasi nonce check: SendFile received without hashes. Discarding.",
-                             &remote_collaborator_name
-                        ); // Or handle differently
-
-                        // safe log
-                        debug_log(
-                        "HLOD 4.2 quasi nonce check: SendFile received without hashes. Discarding.",
-                        );
-                        continue;
-                    }
-
-                    // --- 5.0 Hash-Check for SendFile Struct ---
-                    // HLOD 5.0 Drop packet when fail check
-                    // Check the hash of the incoming file against the provided list of salts
-                    if !hash_checker_for_sendfile_struct(
-                        &local_owner_desk_setup_data.remote_collaborator_salt_list, // Use remote collaborator's salts
-                        incoming_intray_file_struct.intray_send_time.expect("Missing intray_send_time"), // Safe unwrap, checked earlier
-                        incoming_intray_file_struct.gpg_encrypted_intray_file.as_deref().expect("Missing encrypted file"), // Safe unwrap, checked earlier
-                        incoming_intray_file_struct.intray_hash_list.as_deref().expect("Missing hash list")  //Safe unwrap, checked earlier
-
-                    ) {
-                        #[cfg(debug_assertions)]
-                        debug_log!(
-                            "(from {}) failed HLOD 5.0: SendFile Struct hash verification failed. Discarding signal.",
-                             &remote_collaborator_name
-                        );
-
-                        // safe log
-                        debug_log!("failed HLOD 5.0: SendFile Struct hash verification failed. Discarding signal.");
-                        continue; // Discard the signal and continue listening
-                    }
-
-                    #[cfg(debug_assertions)]
-                    debug_log!(
-                        "(from {}) Passed! HLOD 5.0: SendFile Struct hash verified.",
-                        &remote_collaborator_name
-                    );
-
-                    /*
-                    TODO?
-
-                    If message file:
-                    look in Navigation-State for Messages requires gpg-encrypted
-                    if not: look in file for flag
-
-                    if node-file
-                    look in file for flag
-
-                    add steps to
-
-                    (if not a message file or no mssage-file nav-state:  Messages requires gpg-encrypted)
-                    A. save as a temp file (no os-temp, uma-data temp)
-                    B. make read-copy
-                    C. look for flag
-                    */
-
-
-                    // --- 6. HLOD decypt ---
-                    /*
-                    For padnet:
-                    - get blob
-                    - get array
-                    - run read
-                    - turn file into new blob
-
-                    /// # Returns
-                    /// * `Ok(usize)` - Number of bytes processed
-                    /// * `Err(PadnetError)` - Operation failed, no output created
-                    pub fn padnet_reader_xor_file(
-                        path_to_target_file: &Path, // `path_to_target_file` - Absolute path to file to XOR
-                        result_path: &Path,         // `result_path` - Absolute path for output file
-                        path_to_padset: &Path,      // `path_to_padset` - Absolute path to padset root
-                        pad_index: &PadIndex,       // `pad_index` - Starting line index for XOR operation
-                    ) -> Result<usize, PadnetError> {
-                    */
-
-                    // 6.1  Handle the Option<Vec<u8>> for gpg_encrypted_intray_file
-                    let still_encrypted_file_blob = match &incoming_intray_file_struct.gpg_encrypted_intray_file {
-
-                        Some(data) => data,  // Extract the Vec<u8> if Some
-                        None => {
-
-                            #[cfg(debug_assertions)]
-                            debug_log!(
-                            "(from {}) HLOD 6.1: gpg_encrypted_intray_file is None. Skipping.",
-                            &remote_collaborator_name
-                            );
-
-                            // safe log
-                            debug_log!("HLOD 6.1: gpg_encrypted_intray_file is None. Skipping.");
-                            continue; // Or handle the None case differently (e.g., return an error)
-                        }
-                    };
-
-                    #[cfg(debug_assertions)]
-                    {
-                        debug_log!(
-                            "(from {}) HLOD 6.1 still_encrypted_file_blob (raw OTP or raw GPG)-> {:?}",
-                            &remote_collaborator_name,
-                            still_encrypted_file_blob,
-                        );
-
-                        debug_log!(
-                            "HLOD 6.1.2 use_padnet_flag -> {:?}",
-                            use_padnet_flag
-                        );
-                    }
-
-                    let decrypted_clearsignfile_data = if *use_padnet_flag {
-                        /*
-                        return: vec<u8> bytes
-
-                        1. still OTP layer, get blob
-                        2. make paths; 1. to write OTP blob to, 2. to write gpg blob to
-                        3. write OTP blob
-                        4. get padnet_directory_path
-                        5. read OTP file, make gpg file
-                        6. get bytes from file
-                        */
-                        #[cfg(debug_assertions)]
-                        debug_log!(
-                            "(from {}) HLOD-Padnet: use_padnet_flag: 6.2: GPG decryption...",
-                            &remote_collaborator_name,
-                        );
-
-                        // =========================================================================
-                        // Setup: Initialize cleanup guard for this packet
-                        // =========================================================================
-                        let mut cleanup_guard = TempFileCleanupGuard::new();
-
-                        // 1. Extract OTP-encrypted blob
-                        let still_otp_encrypted_file_blob = match &incoming_intray_file_struct.gpg_encrypted_intray_file {
-                            Some(data) => data,
-                            None => {
-                                #[cfg(debug_assertions)]
-                                debug_log!(
-                                    "(from {}) HLOD-Padnet: gpg_encrypted_intray_file is None. Skipping.",
-                                    &remote_collaborator_name,
-                                );
-
-                                // safe log
-                                debug_log!("HLOD-Padnet: gpg_encrypted_intray_file is None. Skipping.");
-                                continue;
-                            }
                         };
 
-                        // =========================================================================
-                        // 2. Write OTP blob to temp file
-                        // =========================================================================
-                        let otp_blob_file_path = write_bytes_to_unique_temp_file(
-                            still_otp_encrypted_file_blob,
-                            &std::env::temp_dir(),
-                            "uma_intray_otp",
-                            TEMP_FILE_CREATION_RETRY_ATTEMPTS,
-                            TEMP_FILE_RETRY_DELAY_MS,
-                        ).map_err(|e| {
-                            ThisProjectError::IoError(std::io::Error::new(
-                                e.kind(),
-                                format!(
-                                    "(from {}) HLOD: error failed to create OTP temp file: {}",
-                                    &remote_collaborator_name,
-                                    e,
-                                ),
-                            ))
-                        })?;
+                        #[cfg(debug_assertions)]
+                        debug_log("##HLOD-InTray## starting checks (hound's tooth) 2.4");
 
-                        // ✅ Register for cleanup immediately
-                        cleanup_guard.add(otp_blob_file_path.clone());
+                        // ////////////////////////////////////////
+                        //  --- 3.2 timestamp freshness checks ---
+                        // ////////////////////////////////////////
+                        let current_timestamp = get_current_unix_timestamp();
 
                         #[cfg(debug_assertions)]
                         debug_log!(
-                            "(from {}) HLOD-Padnet: Created OTP temp file: {:?}",
+                            "(from {}) HLOD 2.4.1 check timestamp freshness checks: current_timestamp -> {:?}",
                             &remote_collaborator_name,
-                            otp_blob_file_path,
+                            current_timestamp
                         );
 
-                        // =========================================================================
-                        // 3. Create empty file for XOR result (GPG-encrypted data)
-                        // =========================================================================
-                        let gpg_blob_file_path = create_unique_temp_filepathbuf(
-                            &std::env::temp_dir(),
-                            "uma_intray_gpg",
-                            TEMP_FILE_CREATION_RETRY_ATTEMPTS,
-                            TEMP_FILE_RETRY_DELAY_MS,
-                        ).map_err(|e| {
-                            ThisProjectError::IoError(std::io::Error::new(
-                                e.kind(),
-                                format!(
-                                    "(from {}) HLOD-Padnet: failed to create GPG result temp file: {}",
-                                    &remote_collaborator_name,
-                                    e
-                                ),
-                            ))
-                        })?;
 
-                        // ✅ Register for cleanup immediately
-                        cleanup_guard.add(gpg_blob_file_path.clone());
+                        // 3.2.1 No Future Dated Requests
+                        if incoming_intray_file_struct.intray_send_time > Some(current_timestamp + 5) { // Allow for some clock skew (5 seconds)
+                            #[cfg(debug_assertions)]
+                            debug_log!(
+                                "(from {}) HLOD 2.4.2 check: Received future-dated timestamp. Discarding.",
+                                &remote_collaborator_name,
+                            );
 
-                        #[cfg(debug_assertions)]
-                        debug_log!(
-                            "(from {}) HLOD-Padnet: Created GPG result temp file: {:?}",
-                            &remote_collaborator_name,
-                            gpg_blob_file_path,
-                        );
+                            // safe log
+                            debug_log(
+                                "Warning: HLOD 2.4.2 check: Received future-dated timestamp. Discarding.",
+                            );
+                            continue;
+                        }
 
-                        // =========================================================================
-                        // 4. Get padnet directory path
-                        // =========================================================================
-                        let team_channel_name = match get_current_team_channel_name_from_nav_path() {
-                            Some(name) => name,
-                            None => {
+                        // 3.2.2 No Requests Older Than ~10 sec
+                        if current_timestamp - 10 > incoming_intray_file_struct.intray_send_time.expect("REASON") {
+                            #[cfg(debug_assertions)]
+                            debug_log!(
+                                "(from {}) HLOD 2.4.3 check: Received outdated timestamp (older than 10 seconds). Discarding.",
+                                &remote_collaborator_name,
+                            );
+
+                            // safe log
+                            debug_log(
+                                "Warning: HLOD 2.4.3 check: Received outdated timestamp (older than 10 seconds). Discarding.",
+                            );
+                            continue;
+                        }
+
+                        // 3.2.3 Check .intray_hash_list hash
+                        if incoming_intray_file_struct.intray_hash_list.is_none() {
+                            #[cfg(debug_assertions)]
+                            debug_log!(
+                                "(from {}) HLOD 2.4.4 Check: intray_hash_list hash field is empty. Drop packet and keep going.",
+                                &remote_collaborator_name,
+                            );
+
+                            // safe log
+                            debug_log(
+                                "Warning: HLOD 2.4.4 Check: intray_hash_list hash field is empty. Drop packet and keep going.",
+                            );
+                            continue; // Drop packet: Restart the loop to listen for the next signal
+                        }
+
+                        // 3.2.4 Check .intray_send_time timestamp
+                        if incoming_intray_file_struct.intray_send_time.is_none() {
+                            #[cfg(debug_assertions)]
+                            debug_log!(
+                                "(from {}) HLOD 2.4.5 Check: intray_send_time ready signal sent-at timestamp field is empty. Drop packet and keep going.",
+                                &remote_collaborator_name,
+                            );
+
+                            // safe log
+                            debug_log(
+                                "Warning: HLOD 2.4.5 Check: intray_send_time ready signal sent-at timestamp field is empty. Drop packet and keep going.",
+                            );
+                            continue; // Drop packet: Restart the loop to listen for the next signal
+                        }
+
+                        // --- 4 Check / Add Hash-Nonce for per-session ready-signals ---
+                        // ...e.g. guarding against the few seconds of expiration-gap
+                        // HLOD 4.1 Hashes
+                        let incoming_intray_file_struct_hash_vec = incoming_intray_file_struct.intray_hash_list.clone().expect("intray_hash_list is none");
+
+                        // 4.2
+                        if !incoming_intray_file_struct_hash_vec.is_empty() {
+                            if intrystruct_hash_set_session_nonce.contains(&incoming_intray_file_struct_hash_vec) {
                                 #[cfg(debug_assertions)]
                                 debug_log!(
-                                    "(from {}) HLOD: Error: Could not get current channel name.",
+                                    "(from {}) HLOD 4.2 quasi nonce check: Duplicate SendFile received (hash match). Discarding.",
                                     &remote_collaborator_name,
                                 );
-
                                 // safe log
                                 debug_log(
-                                    "HLOD: Error: Could not get current channel name.",
+                                    "HLOD 4.2 quasi nonce check: Duplicate SendFile received (hash match). Discarding.",
                                 );
+                                continue; // Discard the duplicate signal
+                            }
+                            intrystruct_hash_set_session_nonce.insert(incoming_intray_file_struct_hash_vec); // Add hash to the set
+                        } else {
+                            #[cfg(debug_assertions)]
+                            debug_log!(
+                                "(from {}) HLOD 4.2 quasi nonce check: SendFile received without hashes. Discarding.",
+                                &remote_collaborator_name
+                            ); // Or handle differently
 
-                                // cleanup_guard will auto-cleanup on return
-                                return Err(ThisProjectError::InvalidData(
-                                    "Could not get team channel name".into()
-                                ));
-                            },
-                        };
+                            // safe log
+                            debug_log(
+                            "HLOD 4.2 quasi nonce check: SendFile received without hashes. Discarding.",
+                            );
+                            continue;
+                        }
 
-                        let rc_key_id = &local_owner_desk_setup_data.remote_collaborator_gpg_publickey_id;
-                        let mut padnet_directory_path = get_reader_from_padnet_directory_path()?;
-                        padnet_directory_path.push(&team_channel_name);
-                        padnet_directory_path.push(rc_key_id);
+                        // --- 5.0 Hash-Check for SendFile Struct ---
+                        // HLOD 5.0 Drop packet when fail check
+                        // Check the hash of the incoming file against the provided list of salts
+                        if !hash_checker_for_sendfile_struct(
+                            &local_owner_desk_setup_data.remote_collaborator_salt_list, // Use remote collaborator's salts
+                            incoming_intray_file_struct.intray_send_time.expect("Missing intray_send_time"), // Safe unwrap, checked earlier
+                            incoming_intray_file_struct.gpg_encrypted_intray_file.as_deref().expect("Missing encrypted file"), // Safe unwrap, checked earlier
+                            incoming_intray_file_struct.intray_hash_list.as_deref().expect("Missing hash list")  //Safe unwrap, checked earlier
 
-                        // =========================================================================
-                        // 5. XOR decrypt: OTP file → GPG file
-                        // =========================================================================
-                        let padnet_index_array = match &incoming_intray_file_struct.padnet_index_array {
-                            Some(data) => data,
+                        ) {
+                            #[cfg(debug_assertions)]
+                            debug_log!(
+                                "(from {}) failed HLOD 5.0: SendFile Struct hash verification failed. Discarding signal.",
+                                &remote_collaborator_name
+                            );
+
+                            // safe log
+                            debug_log!("failed HLOD 5.0: SendFile Struct hash verification failed. Discarding signal.");
+                            continue; // Discard the signal and continue listening
+                        }
+
+                        #[cfg(debug_assertions)]
+                        debug_log!(
+                            "(from {}) Passed! HLOD 5.0: SendFile Struct hash verified.",
+                            &remote_collaborator_name
+                        );
+
+                        /*
+                        TODO?
+
+                        If message file:
+                        look in Navigation-State for Messages requires gpg-encrypted
+                        if not: look in file for flag
+
+                        if node-file
+                        look in file for flag
+
+                        add steps to
+
+                        (if not a message file or no mssage-file nav-state:  Messages requires gpg-encrypted)
+                        A. save as a temp file (no os-temp, uma-data temp)
+                        B. make read-copy
+                        C. look for flag
+                        */
+
+
+                        // --- 6. HLOD decypt ---
+                        /*
+                        For padnet:
+                        - get blob
+                        - get array
+                        - run read
+                        - turn file into new blob
+
+                        /// # Returns
+                        /// * `Ok(usize)` - Number of bytes processed
+                        /// * `Err(PadnetError)` - Operation failed, no output created
+                        pub fn padnet_reader_xor_file(
+                            path_to_target_file: &Path, // `path_to_target_file` - Absolute path to file to XOR
+                            result_path: &Path,         // `result_path` - Absolute path for output file
+                            path_to_padset: &Path,      // `path_to_padset` - Absolute path to padset root
+                            pad_index: &PadIndex,       // `pad_index` - Starting line index for XOR operation
+                        ) -> Result<usize, PadnetError> {
+                        */
+
+                        // 6.1  Handle the Option<Vec<u8>> for gpg_encrypted_intray_file
+                        let still_encrypted_file_blob = match &incoming_intray_file_struct.gpg_encrypted_intray_file {
+
+                            Some(data) => data,  // Extract the Vec<u8> if Some
                             None => {
 
                                 #[cfg(debug_assertions)]
                                 debug_log!(
-                                    "(from {}) HLOD-Padnet: padnet_index_array is None. Skipping.",
-                                    &remote_collaborator_name,
+                                "(from {}) HLOD 6.1: gpg_encrypted_intray_file is None. Skipping.",
+                                &remote_collaborator_name
                                 );
 
                                 // safe log
-                                debug_log!("HLOD-Padnet: padnet_index_array is None. Skipping.");
-
-                                // cleanup_guard will auto-cleanup on continue
-                                continue;
+                                debug_log!("HLOD 6.1: gpg_encrypted_intray_file is None. Skipping.");
+                                continue; // Or handle the None case differently (e.g., return an error)
                             }
                         };
 
-                        let _bytes_processed = padnet_reader_xor_file(
-                            &otp_blob_file_path,        // Input: OTP-encrypted file
-                            &gpg_blob_file_path,         // Output: GPG-encrypted file
-                            &padnet_directory_path,      // Padset directory
-                            padnet_index_array,          // Pad index
-                        ).map_err(|e| {
+                        #[cfg(debug_assertions)]
+                        {
+                            debug_log!(
+                                "(from {}) HLOD 6.1 still_encrypted_file_blob (raw OTP or raw GPG)-> {:?}",
+                                &remote_collaborator_name,
+                                still_encrypted_file_blob,
+                            );
+
+                            debug_log!(
+                                "HLOD 6.1.2 use_padnet_flag -> {:?}",
+                                use_padnet_flag
+                            );
+                        }
+
+                        let decrypted_clearsignfile_data = if *use_padnet_flag {
+                            /*
+                            return: vec<u8> bytes
+
+                            1. still OTP layer, get blob
+                            2. make paths; 1. to write OTP blob to, 2. to write gpg blob to
+                            3. write OTP blob
+                            4. get padnet_directory_path
+                            5. read OTP file, make gpg file
+                            6. get bytes from file
+                            */
+                            #[cfg(debug_assertions)]
+                            debug_log!(
+                                "(from {}) HLOD-Padnet: use_padnet_flag: 6.2: GPG decryption...",
+                                &remote_collaborator_name,
+                            );
+
+                            // =========================================================================
+                            // Setup: Initialize cleanup guard for this packet
+                            // =========================================================================
+                            let mut cleanup_guard = TempFileCleanupGuard::new();
+
+                            // 1. Extract OTP-encrypted blob
+                            let still_otp_encrypted_file_blob = match &incoming_intray_file_struct.gpg_encrypted_intray_file {
+                                Some(data) => data,
+                                None => {
+                                    #[cfg(debug_assertions)]
+                                    debug_log!(
+                                        "(from {}) HLOD-Padnet: gpg_encrypted_intray_file is None. Skipping.",
+                                        &remote_collaborator_name,
+                                    );
+
+                                    // safe log
+                                    debug_log!("HLOD-Padnet: gpg_encrypted_intray_file is None. Skipping.");
+                                    continue;
+                                }
+                            };
+
+                            // =========================================================================
+                            // 2. Write OTP blob to temp file
+                            // =========================================================================
+                            let otp_blob_file_path = write_bytes_to_unique_temp_file(
+                                still_otp_encrypted_file_blob,
+                                &std::env::temp_dir(),
+                                "uma_intray_otp",
+                                TEMP_FILE_CREATION_RETRY_ATTEMPTS,
+                                TEMP_FILE_RETRY_DELAY_MS,
+                            ).map_err(|e| {
+                                ThisProjectError::IoError(std::io::Error::new(
+                                    e.kind(),
+                                    format!(
+                                        "(from {}) HLOD: error failed to create OTP temp file: {}",
+                                        &remote_collaborator_name,
+                                        e,
+                                    ),
+                                ))
+                            })?;
+
+                            // ✅ Register for cleanup immediately
+                            cleanup_guard.add(otp_blob_file_path.clone());
 
                             #[cfg(debug_assertions)]
                             debug_log!(
-                                "(from {}) HLOD-Padnet: XOR decryption failed: {:?}",
+                                "(from {}) HLOD-Padnet: Created OTP temp file: {:?}",
                                 &remote_collaborator_name,
-                                e,
+                                otp_blob_file_path,
                             );
 
-                            // cleanup_guard will auto-cleanup on error
-                            ThisProjectError::PadnetError(format!("XOR decryption failed: {:?}", e))
-                        })?;
+                            // =========================================================================
+                            // 3. Create empty file for XOR result (GPG-encrypted data)
+                            // =========================================================================
+                            let gpg_blob_file_path = create_unique_temp_filepathbuf(
+                                &std::env::temp_dir(),
+                                "uma_intray_gpg",
+                                TEMP_FILE_CREATION_RETRY_ATTEMPTS,
+                                TEMP_FILE_RETRY_DELAY_MS,
+                            ).map_err(|e| {
+                                ThisProjectError::IoError(std::io::Error::new(
+                                    e.kind(),
+                                    format!(
+                                        "(from {}) HLOD-Padnet: failed to create GPG result temp file: {}",
+                                        &remote_collaborator_name,
+                                        e
+                                    ),
+                                ))
+                            })?;
 
-                        #[cfg(debug_assertions)]
-                        debug_log!("HLOD-Padnet: XOR decryption complete");
+                            // ✅ Register for cleanup immediately
+                            cleanup_guard.add(gpg_blob_file_path.clone());
 
-                        // =========================================================================
-                        // 6. Read GPG-encrypted bytes from result file
-                        // =========================================================================
-                        let gpg_encrypted_bytes = match read_file_to_bytes(&gpg_blob_file_path) {
-                            Ok(bytes) => {
-                                #[cfg(debug_assertions)]
-                                debug_log!("HLOD-Padnet: Read {} bytes from GPG file", bytes.len());
-
-                                bytes
-                            },
-                            Err(_e) => {
-                                #[cfg(debug_assertions)]
-                                debug_log!("HLOD-Padnet: Failed to read GPG file: {}. Skipping.", _e);
-
-                                // cleanup_guard will auto-cleanup on continue
-                                continue;
-                            }
-                        };
-
-                        #[cfg(debug_assertions)]
-                        debug_log!(
-                            "(from {}) HLOD-Padnet: gpg_encrypted_bytes {:?}",
-                            &remote_collaborator_name,
-                            gpg_encrypted_bytes
-                        );
-
-                        // =========================================================================
-                        // 7. Cleanup temp files (explicit for logging, Drop handles it too)
-                        // =========================================================================
-                        if let Err(_errors) = cleanup_guard.cleanup() {
-                            // Log warnings but don't fail (we got the data successfully)
                             #[cfg(debug_assertions)]
-                            for error_msg in _errors {
-                                debug_log!(
-                                    "(from {}) HLOD-Padnet: cleanup warning: {}",
-                                    &remote_collaborator_name,
-                                    error_msg
-                                );
-                            }
-
-                            // Safe Log
-                            debug_log(
-                                "HLOD-Padnet: cleanup warning",
+                            debug_log!(
+                                "(from {}) HLOD-Padnet: Created GPG result temp file: {:?}",
+                                &remote_collaborator_name,
+                                gpg_blob_file_path,
                             );
 
-                        }
+                            // =========================================================================
+                            // 4. Get padnet directory path
+                            // =========================================================================
+                            let team_channel_name = match get_current_team_channel_name_from_nav_path() {
+                                Some(name) => name,
+                                None => {
+                                    #[cfg(debug_assertions)]
+                                    debug_log!(
+                                        "(from {}) HLOD: Error: Could not get current channel name.",
+                                        &remote_collaborator_name,
+                                    );
 
-                        #[cfg(debug_assertions)]
-                        debug_log!(
-                            "(from {}) HLOD-Padnet: Padnet decryption complete, temp files cleaned up",
-                            &remote_collaborator_name,
-                        );
+                                    // safe log
+                                    debug_log(
+                                        "HLOD: Error: Could not get current channel name.",
+                                    );
 
-                        // let decrypted_clearsignfile_data = match gpg_decrypt_from_bytes(
-                        match gpg_decrypt_from_bytes(
-                            &gpg_encrypted_bytes,
-                            &local_owner_desk_setup_data.local_user_gpg_publickey_id
-                        ) { // Pass the extracted data
-                            Ok(data) => data,
-                            Err(_e) => {
+                                    // cleanup_guard will auto-cleanup on return
+                                    return Err(ThisProjectError::InvalidData(
+                                        "Could not get team channel name".into()
+                                    ));
+                                },
+                            };
+
+                            let rc_key_id = &local_owner_desk_setup_data.remote_collaborator_gpg_publickey_id;
+                            let mut padnet_directory_path = get_reader_from_padnet_directory_path()?;
+                            padnet_directory_path.push(&team_channel_name);
+                            padnet_directory_path.push(rc_key_id);
+
+                            // =========================================================================
+                            // 5. XOR decrypt: OTP file → GPG file
+                            // =========================================================================
+                            let padnet_index_array = match &incoming_intray_file_struct.padnet_index_array {
+                                Some(data) => data,
+                                None => {
+
+                                    #[cfg(debug_assertions)]
+                                    debug_log!(
+                                        "(from {}) HLOD-Padnet: padnet_index_array is None. Skipping.",
+                                        &remote_collaborator_name,
+                                    );
+
+                                    // safe log
+                                    debug_log!("HLOD-Padnet: padnet_index_array is None. Skipping.");
+
+                                    // cleanup_guard will auto-cleanup on continue
+                                    continue;
+                                }
+                            };
+
+                            let _bytes_processed = padnet_reader_xor_file(
+                                &otp_blob_file_path,        // Input: OTP-encrypted file
+                                &gpg_blob_file_path,         // Output: GPG-encrypted file
+                                &padnet_directory_path,      // Padset directory
+                                padnet_index_array,          // Pad index
+                            ).map_err(|e| {
+
                                 #[cfg(debug_assertions)]
                                 debug_log!(
-                                    "(from {}) HLOD NOT*use_padnet_flag: 6.2: GPG decryption failed: {}. Skipping.",
-                                     &remote_collaborator_name,
-                                    _e
-
+                                    "(from {}) HLOD-Padnet: XOR decryption failed: {:?}",
+                                    &remote_collaborator_name,
+                                    e,
                                 );
+
+                                // cleanup_guard will auto-cleanup on error
+                                ThisProjectError::PadnetError(format!("XOR decryption failed: {:?}", e))
+                            })?;
+
+                            #[cfg(debug_assertions)]
+                            debug_log!("HLOD-Padnet: XOR decryption complete");
+
+                            // =========================================================================
+                            // 6. Read GPG-encrypted bytes from result file
+                            // =========================================================================
+                            let gpg_encrypted_bytes = match read_file_to_bytes(&gpg_blob_file_path) {
+                                Ok(bytes) => {
+                                    #[cfg(debug_assertions)]
+                                    debug_log!("HLOD-Padnet: Read {} bytes from GPG file", bytes.len());
+
+                                    bytes
+                                },
+                                Err(_e) => {
+                                    #[cfg(debug_assertions)]
+                                    debug_log!("HLOD-Padnet: Failed to read GPG file: {}. Skipping.", _e);
+
+                                    // cleanup_guard will auto-cleanup on continue
+                                    continue;
+                                }
+                            };
+
+                            #[cfg(debug_assertions)]
+                            debug_log!(
+                                "(from {}) HLOD-Padnet: gpg_encrypted_bytes {:?}",
+                                &remote_collaborator_name,
+                                gpg_encrypted_bytes
+                            );
+
+                            // =========================================================================
+                            // 7. Cleanup temp files (explicit for logging, Drop handles it too)
+                            // =========================================================================
+                            if let Err(_errors) = cleanup_guard.cleanup() {
+                                // Log warnings but don't fail (we got the data successfully)
+                                #[cfg(debug_assertions)]
+                                for error_msg in _errors {
+                                    debug_log!(
+                                        "(from {}) HLOD-Padnet: cleanup warning: {}",
+                                        &remote_collaborator_name,
+                                        error_msg
+                                    );
+                                }
 
                                 // Safe Log
-                                debug_log!(
-                                    "HLOD NOT*use_padnet_flag: 6.2: GPG decryption failed:. Skipping.",
+                                debug_log(
+                                    "HLOD-Padnet: cleanup warning",
                                 );
 
-                                continue; // Skip to the next packet if decryption fails
                             }
-                        }
 
-                    } else {
-                        #[cfg(debug_assertions)]
-                        debug_log("HLOD NOT*use_padnet_flag: 6.2: GPG decryption...");
-                        // 6.2 *Now* decrypt the data
-                        // let decrypted_clearsignfile_data = match gpg_decrypt_from_bytes(
-                        match gpg_decrypt_from_bytes(
-                            still_encrypted_file_blob,
-                            &local_owner_desk_setup_data.local_user_gpg_publickey_id
-                        ) { // Pass the extracted data
-                            Ok(data) => data,
-                            Err(_e) => {
-                                #[cfg(debug_assertions)]
-                                {
+                            #[cfg(debug_assertions)]
+                            debug_log!(
+                                "(from {}) HLOD-Padnet: Padnet decryption complete, temp files cleaned up",
+                                &remote_collaborator_name,
+                            );
+
+                            // let decrypted_clearsignfile_data = match gpg_decrypt_from_bytes(
+                            match gpg_decrypt_from_bytes(
+                                &gpg_encrypted_bytes,
+                                &local_owner_desk_setup_data.local_user_gpg_publickey_id
+                            ) { // Pass the extracted data
+                                Ok(data) => data,
+                                Err(_e) => {
+                                    #[cfg(debug_assertions)]
                                     debug_log!(
                                         "(from {}) HLOD NOT*use_padnet_flag: 6.2: GPG decryption failed: {}. Skipping.",
                                         &remote_collaborator_name,
-                                        _e,
+                                        _e
+
                                     );
+
+                                    // Safe Log
                                     debug_log!(
-                                        "(from {}) still_encrypted_file_blob {:?}",
-                                        &remote_collaborator_name,
-                                        still_encrypted_file_blob,
+                                        "HLOD NOT*use_padnet_flag: 6.2: GPG decryption failed:. Skipping.",
                                     );
+
+                                    continue; // Skip to the next packet if decryption fails
                                 }
-
-                                // Safe Log
-                                debug_log!(
-                                    "HLOD NOT*use_padnet_flag: 6.2: GPG decryption failed. Skipping.",
-                                );
-                                continue; // Skip to the next packet if decryption fails
                             }
-                        }
 
-                    };
-
-                    // TODO clean up gpg_blob_file_path?
-
-                    #[cfg(debug_assertions)]
-                    debug_log!(
-                        "(from {}) HLOD 6.2 decrypt the data decrypted_clearsignfile_data -> {:?}",
-                        &remote_collaborator_name,
-                        decrypted_clearsignfile_data,
-                    );
-
-                    /*
-                    // 6.3 Extract the clearsigned data
-                    let extracted_clearsigned_file_data = match extract_clearsign_data(&decrypted_clearsignfile_data) {
-                        Ok(data) => data,
-                        Err(e) => {
-                            debug_log!("HLOD 6.3: Clearsign extraction failed: {}. Skipping.", e);
-                            continue;
-                        }
-                    };
-                    debug_log!(
-                        "HLOD 6.3 extracted_clearsigned_file_data -> {:?}",
-                        extracted_clearsigned_file_data
-                    );
-
-                    */
-
-                    // 6.3 Extract the clearsigned data
-                    let extracted_clearsigned_file_data = match extract_clearsign_data(&decrypted_clearsignfile_data) {
-                        Ok(data) => data,
-                        Err(_e) => {
+                        } else {
                             #[cfg(debug_assertions)]
-                            debug_log!(
-                                "(from {}) HLOD 6.3: Clearsign extraction failed: {}. Skipping.",
-                                &remote_collaborator_name,
-                                _e,
-                            );
-                            continue;
-                        }
-                    };
+                            debug_log("HLOD NOT*use_padnet_flag: 6.2: GPG decryption...");
+                            // 6.2 *Now* decrypt the data
+                            // let decrypted_clearsignfile_data = match gpg_decrypt_from_bytes(
+                            match gpg_decrypt_from_bytes(
+                                still_encrypted_file_blob,
+                                &local_owner_desk_setup_data.local_user_gpg_publickey_id
+                            ) { // Pass the extracted data
+                                Ok(data) => data,
+                                Err(_e) => {
+                                    #[cfg(debug_assertions)]
+                                    {
+                                        debug_log!(
+                                            "(from {}) HLOD NOT*use_padnet_flag: 6.2: GPG decryption failed: {}. Skipping.",
+                                            &remote_collaborator_name,
+                                            _e,
+                                        );
+                                        debug_log!(
+                                            "(from {}) still_encrypted_file_blob {:?}",
+                                            &remote_collaborator_name,
+                                            still_encrypted_file_blob,
+                                        );
+                                    }
 
-                    #[cfg(debug_assertions)]
-                    debug_log!(
-                        "(from {}) HLOD 6.3 extracted_clearsigned_file_data -> {:?}",
-                        &remote_collaborator_name,
-                        extracted_clearsigned_file_data
-                    );
+                                    // Safe Log
+                                    debug_log!(
+                                        "HLOD NOT*use_padnet_flag: 6.2: GPG decryption failed. Skipping.",
+                                    );
+                                    continue; // Skip to the next packet if decryption fails
+                                }
+                            }
 
-                    // Section 6.4 - Extract flag - for clearsigned .toml / .gpgtoml
-                    let file_str = std::str::from_utf8(&extracted_clearsigned_file_data)
-                        .map_err(|_| ThisProjectError::InvalidData("Invalid UTF-8 in file content".into()))?;
+                        };
 
-                    // todo?
-                    let save_as_gpgtoml = file_str.contains("\nmessagepost_gpgtoml = true\n")
-                        || file_str.contains("\ncorenode_gpgtoml = true\n");
-
-                    #[cfg(debug_assertions)]
-                    debug_log!(
-                        "(from {}) HLOD 6.4: save_as_gpgtoml flag = {}",
-                        &remote_collaborator_name,
-                        save_as_gpgtoml
-                    );
-
-                    // 7 Save File into Uma Folder Structure
-                    // let received_toml: Value = toml::from_slice(&extracted_clearsigned_file_data)?;
-                    /*
-                    1. if X then save in A place
-                    2. if Y then save in B place
-                    for a message file,
-                    filepath_in_node = "/message_posts_browser"
-                    for MVP: just add it the same way you add any message, next available number.
-
-                    current_path = project_graph_data/team_channels/{}/message_posts_browser/
-
-                    let incoming_file_path = get_next_message_file_path(current_path, local_owner_user);
-                    */
-                    // 7.1 1. Identifying Instant Message Files
-                    let file_str = std::str::from_utf8(&extracted_clearsigned_file_data).map_err(|_| {
-                        ThisProjectError::InvalidData("Invalid UTF-8 in file content".into())
-                    })?;
-
-                    #[cfg(debug_assertions)]
-                    debug_log!(
-                        "(from {}) HLOD 7.1 found message file, file_str -> {:?}",
-                        &remote_collaborator_name,
-                        file_str,
-                    );
-
-                    // let mut incoming_file_path: PathBuf = PathBuf::from("project_graph_data/team_channels");
-                    let mut incoming_file_path: PathBuf; // = PathBuf::new();
-
-                    let team_channel_name = get_current_team_channel_name_from_nav_path()
-                        .ok_or(ThisProjectError::InvalidData(
-                            "HLOD error Unable to get team channel name, get_current_team_channel_name_from_nav_path()".into())
-                        )?;
-
-                    // =====================================
-                    // File Type Processing 1. message Posts
-                    // =====================================
-
-                    // build look up table
-                    let hashtable_node_id_to_path = create_node_id_to_path_lookup(&team_channel_path)?;
-
-                    #[cfg(debug_assertions)]
-                    debug_log!(
-                        "(from {}) HLOD loop 1.2 paths: hashtable_node_id_to_path {:?}",
-                        &remote_collaborator_name,
-                        hashtable_node_id_to_path,
-                    );
-
-                    /*
-                    optional but maybe not needed?
-                    read_u8_array_from_clearsigntoml_without_publicgpgkey
-
-                    lighter:
-                    pub fn read_u8_array_field_from_toml(
-                        path: &str,
-                        name_of_toml_field_key_to_read: &str,
-                    )
-                    */
-
-                    // =================
-                    // Make Save-To Path
-                    // =================
-                    /*
-                    1. re-make node_id:path lookup table
-                    2. get parent node_id from node
-                    3. get path for parent node_id from lookup table
-                    4. get path-in-node from node
-                    5. add path-in-node to parent-path
-                    */
-
-                    // TODO handling:
-                    // 1. message Posts <-
-                    // 2. 0toml config for message posts
-                    // 3. Nodes
-                    // future
-                    // 4. Uma Data
-                    // if file_str.contains("filepath_in_node = \"/message_posts_browser\"") {
-                    if file_str.contains("filepath_in_node = \"message_posts_browser\"") {
+                        // TODO clean up gpg_blob_file_path?
 
                         #[cfg(debug_assertions)]
                         debug_log!(
-                            "(from {}) HLOD-InTray: an instant message file.",
+                            "(from {}) HLOD 6.2 decrypt the data decrypted_clearsignfile_data -> {:?}",
                             &remote_collaborator_name,
+                            decrypted_clearsignfile_data,
                         );
 
-                        let messagepost_node_id = read_u8_array_field_from_string(
-                            file_str,
-                            "node_id"
-                        )?;
+                        /*
+                        // 6.3 Extract the clearsigned data
+                        let extracted_clearsigned_file_data = match extract_clearsign_data(&decrypted_clearsignfile_data) {
+                            Ok(data) => data,
+                            Err(e) => {
+                                debug_log!("HLOD 6.3: Clearsign extraction failed: {}. Skipping.", e);
+                                continue;
+                            }
+                        };
+                        debug_log!(
+                            "HLOD 6.3 extracted_clearsigned_file_data -> {:?}",
+                            extracted_clearsigned_file_data
+                        );
 
-                        // Generating File Path
+                        */
+
+                        // 6.3 Extract the clearsigned data
+                        let extracted_clearsigned_file_data = match extract_clearsign_data(&decrypted_clearsignfile_data) {
+                            Ok(data) => data,
+                            Err(_e) => {
+                                #[cfg(debug_assertions)]
+                                debug_log!(
+                                    "(from {}) HLOD 6.3: Clearsign extraction failed: {}. Skipping.",
+                                    &remote_collaborator_name,
+                                    _e,
+                                );
+                                continue;
+                            }
+                        };
+
+                        #[cfg(debug_assertions)]
+                        debug_log!(
+                            "(from {}) HLOD 6.3 extracted_clearsigned_file_data -> {:?}",
+                            &remote_collaborator_name,
+                            extracted_clearsigned_file_data
+                        );
+
+                        // Section 6.4 - Extract flag - for clearsigned .toml / .gpgtoml
+                        let file_str = std::str::from_utf8(&extracted_clearsigned_file_data)
+                            .map_err(|_| ThisProjectError::InvalidData("Invalid UTF-8 in file content".into()))?;
+
+                        // todo?
+                        let save_as_gpgtoml = file_str.contains("\nmessagepost_gpgtoml = true\n")
+                            || file_str.contains("\ncorenode_gpgtoml = true\n");
+
+                        #[cfg(debug_assertions)]
+                        debug_log!(
+                            "(from {}) HLOD 6.4: save_as_gpgtoml flag = {}",
+                            &remote_collaborator_name,
+                            save_as_gpgtoml
+                        );
+
+                        // 7 Save File into Uma Folder Structure
+                        // let received_toml: Value = toml::from_slice(&extracted_clearsigned_file_data)?;
+                        /*
+                        1. if X then save in A place
+                        2. if Y then save in B place
+                        for a message file,
+                        filepath_in_node = "/message_posts_browser"
+                        for MVP: just add it the same way you add any message, next available number.
+
+                        current_path = project_graph_data/team_channels/{}/message_posts_browser/
+
+                        let incoming_file_path = get_next_message_file_path(current_path, local_owner_user);
+                        */
+                        // 7.1 1. Identifying Instant Message Files
+                        let file_str = std::str::from_utf8(&extracted_clearsigned_file_data).map_err(|_| {
+                            ThisProjectError::InvalidData("Invalid UTF-8 in file content".into())
+                        })?;
+
+                        #[cfg(debug_assertions)]
+                        debug_log!(
+                            "(from {}) HLOD 7.1 found message file, file_str -> {:?}",
+                            &remote_collaborator_name,
+                            file_str,
+                        );
+
+                        // let mut incoming_file_path: PathBuf = PathBuf::from("project_graph_data/team_channels");
+                        let mut incoming_file_path: PathBuf; // = PathBuf::new();
+
+                        let team_channel_name = get_current_team_channel_name_from_nav_path()
+                            .ok_or(ThisProjectError::InvalidData(
+                                "HLOD error Unable to get team channel name, get_current_team_channel_name_from_nav_path()".into())
+                            )?;
+
+                        // =====================================
+                        // File Type Processing 1. message Posts
+                        // =====================================
+
+                        // build look up table
+                        let hashtable_node_id_to_path = create_node_id_to_path_lookup(&team_channel_path)?;
+
+                        #[cfg(debug_assertions)]
+                        debug_log!(
+                            "(from {}) HLOD loop 1.2 paths: hashtable_node_id_to_path {:?}",
+                            &remote_collaborator_name,
+                            hashtable_node_id_to_path,
+                        );
+
+                        /*
+                        optional but maybe not needed?
+                        read_u8_array_from_clearsigntoml_without_publicgpgkey
+
+                        lighter:
+                        pub fn read_u8_array_field_from_toml(
+                            path: &str,
+                            name_of_toml_field_key_to_read: &str,
+                        )
+                        */
+
                         // =================
                         // Make Save-To Path
                         // =================
-
                         /*
                         1. re-make node_id:path lookup table
                         2. get parent node_id from node
@@ -35844,220 +35812,449 @@ fn handle_local_owner_desk(
                         4. get path-in-node from node
                         5. add path-in-node to parent-path
                         */
-                        // recheck
 
-
-                        // Get existing node.toml file path (if exists)
-                        if let Some(msgpost_existing_node_directory_path) = hashtable_node_id_to_path.get(&messagepost_node_id) {
-
-                            // make old directory path
-                            let mut msgpost_node_abs_directory_path = PathBuf::from(msgpost_existing_node_directory_path);
-
-                            #[cfg(debug_assertions)]
-                            debug_log!(
-                                "(from {}) HLOD 7.2 got-made msgpost_abs_node_directory_path -> {:?}",
-                                &remote_collaborator_name,
-                                &msgpost_node_abs_directory_path
-                            );
-
-                            // For this edge case, the path-in-node is already known:
-                            // a node's standard messages are by definition in the same place:
-                            // -> "message_posts_browser"
-                            // add message post directory to node path
-                            msgpost_node_abs_directory_path.push("message_posts_browser");
-
-                            // get message TUI name
-                            incoming_file_path = get_next_message_file_path(
-                                &msgpost_node_abs_directory_path,
-                                &local_owner_desk_setup_data.remote_collaborator_name // local user name
-                            );
-
-                            // Adjust extension based on flag
-                            if save_as_gpgtoml {
-                                incoming_file_path.set_extension("gpgtoml");
-                            }
+                        // TODO handling:
+                        // 1. message Posts <-
+                        // 2. 0toml config for message posts
+                        // 3. Nodes
+                        // future
+                        // 4. Uma Data
+                        // if file_str.contains("filepath_in_node = \"/message_posts_browser\"") {
+                        if file_str.contains("filepath_in_node = \"message_posts_browser\"") {
 
                             #[cfg(debug_assertions)]
                             debug_log!(
-                                "(from {}) HLOD 7.2 got-made incoming_file_path -> {:?}",
+                                "(from {}) HLOD-InTray: an instant message file.",
                                 &remote_collaborator_name,
-                                incoming_file_path
                             );
 
-                            // check: see if this same file was already saved
-                            // 1. Calculate the hash of the received file content using the *local* user's salts and the *raw bytes*:
-                            let received_file_hash_result = calculate_pearson_hashlist_for_string( // Use a byte-oriented hash function
-                                &file_str,  // Hash the raw bytes
-                                &local_owner_desk_setup_data.local_user_salt_list, // Use *local* user's salts
-                            );
+                            let messagepost_node_id = read_u8_array_field_from_string(
+                                file_str,
+                                "node_id"
+                            )?;
 
-                            // extract from result
-                            let received_file_hash = match received_file_hash_result {
-                                Ok(hash) => hash,
-                                Err(_e) => {
-                                    #[cfg(debug_assertions)]
-                                    debug_log!(
-                                        "(from {}) HLOD-InTray Error calculating hash for received file: {}",
-                                        &remote_collaborator_name,
-                                        _e
-                                    );
-                                    continue; // Skip to next file if hashing fails
+                            // Generating File Path
+                            // =================
+                            // Make Save-To Path
+                            // =================
+
+                            /*
+                            1. re-make node_id:path lookup table
+                            2. get parent node_id from node
+                            3. get path for parent node_id from lookup table
+                            4. get path-in-node from node
+                            5. add path-in-node to parent-path
+                            */
+                            // recheck
+
+
+                            // Get existing node.toml file path (if exists)
+                            if let Some(msgpost_existing_node_directory_path) = hashtable_node_id_to_path.get(&messagepost_node_id) {
+
+                                // make old directory path
+                                let mut msgpost_node_abs_directory_path = PathBuf::from(msgpost_existing_node_directory_path);
+
+                                #[cfg(debug_assertions)]
+                                debug_log!(
+                                    "(from {}) HLOD 7.2 got-made msgpost_abs_node_directory_path -> {:?}",
+                                    &remote_collaborator_name,
+                                    &msgpost_node_abs_directory_path
+                                );
+
+                                // For this edge case, the path-in-node is already known:
+                                // a node's standard messages are by definition in the same place:
+                                // -> "message_posts_browser"
+                                // add message post directory to node path
+                                msgpost_node_abs_directory_path.push("message_posts_browser");
+
+                                // get message TUI name
+                                incoming_file_path = get_next_message_file_path(
+                                    &msgpost_node_abs_directory_path,
+                                    &local_owner_desk_setup_data.remote_collaborator_name // local user name
+                                );
+
+                                // Adjust extension based on flag
+                                if save_as_gpgtoml {
+                                    incoming_file_path.set_extension("gpgtoml");
                                 }
-                            };
 
-                            // 2. Check for duplicates and insert the hash (as before)
-                            if file_hash_set_session_nonce.contains(&received_file_hash) {
-                                debug_log!("Duplicate file received (hash match). Discarding.");
-                                continue; // Discard the duplicate file
-                            }
-                            file_hash_set_session_nonce.insert(received_file_hash); // Insert BEFORE saving
+                                #[cfg(debug_assertions)]
+                                debug_log!(
+                                    "(from {}) HLOD 7.2 got-made incoming_file_path -> {:?}",
+                                    &remote_collaborator_name,
+                                    incoming_file_path
+                                );
 
-                            // 3. Saving the File
-                            // MODIFIED: Choose what filetype to save to
-                            let data_to_save = if save_as_gpgtoml {
-                                still_encrypted_file_blob  // Save encrypted version
-                            } else {
-                                &decrypted_clearsignfile_data  // Save clearsigned version
-                            };
+                                // check: see if this same file was already saved
+                                // 1. Calculate the hash of the received file content using the *local* user's salts and the *raw bytes*:
+                                let received_file_hash_result = calculate_pearson_hashlist_for_string( // Use a byte-oriented hash function
+                                    &file_str,  // Hash the raw bytes
+                                    &local_owner_desk_setup_data.local_user_salt_list, // Use *local* user's salts
+                                );
 
-                            // 3. Saving the File
+                                // extract from result
+                                let received_file_hash = match received_file_hash_result {
+                                    Ok(hash) => hash,
+                                    Err(_e) => {
+                                        #[cfg(debug_assertions)]
+                                        debug_log!(
+                                            "(from {}) HLOD-InTray Error calculating hash for received file: {}",
+                                            &remote_collaborator_name,
+                                            _e
+                                        );
+                                        continue; // Skip to next file if hashing fails
+                                    }
+                                };
 
-                            // Create parent directories if they don't exist
-                            if let Some(parent) = Path::new(&incoming_file_path).parent() {
-                                if let Err(e) = fs::create_dir_all(parent) {
+                                // 2. Check for duplicates and insert the hash (as before)
+                                if file_hash_set_session_nonce.contains(&received_file_hash) {
+                                    debug_log!("Duplicate file received (hash match). Discarding.");
+                                    continue; // Discard the duplicate file
+                                }
+                                file_hash_set_session_nonce.insert(received_file_hash); // Insert BEFORE saving
+
+                                // 3. Saving the File
+                                // MODIFIED: Choose what filetype to save to
+                                let data_to_save = if save_as_gpgtoml {
+                                    still_encrypted_file_blob  // Save encrypted version
+                                } else {
+                                    &decrypted_clearsignfile_data  // Save clearsigned version
+                                };
+
+                                // 3. Saving the File
+
+                                // Create parent directories if they don't exist
+                                if let Some(parent) = Path::new(&incoming_file_path).parent() {
+                                    if let Err(e) = fs::create_dir_all(parent) {
+                                        #[cfg(debug_assertions)]
+                                        debug_log!(
+                                            "(from {}) HLOD-InTray error: Failed to create directories: {:?}",
+                                            &remote_collaborator_name,
+                                            e,
+                                        );
+                                        return Err(ThisProjectError::from(e));
+                                    }
+                                }
+
+                                // 3. Saving the File
+                                if let Err(e) = fs::write(&incoming_file_path, data_to_save) {
                                     #[cfg(debug_assertions)]
                                     debug_log!(
-                                        "(from {}) HLOD-InTray error: Failed to create directories: {:?}",
+                                        "(from {}) HLOD-InTray: Failed to write message file: {:?}",
                                         &remote_collaborator_name,
                                         e,
                                     );
                                     return Err(ThisProjectError::from(e));
                                 }
-                            }
 
-                            // 3. Saving the File
-                            if let Err(e) = fs::write(&incoming_file_path, data_to_save) {
                                 #[cfg(debug_assertions)]
                                 debug_log!(
-                                    "(from {}) HLOD-InTray: Failed to write message file: {:?}",
+                                    "(from {}) 7.3 HLOD-InTray: IM message file saved to: {:?}",
                                     &remote_collaborator_name,
-                                    e,
+                                    incoming_file_path,
                                 );
-                                return Err(ThisProjectError::from(e));
                             }
-
-                            #[cfg(debug_assertions)]
-                            debug_log!(
-                                "(from {}) 7.3 HLOD-InTray: IM message file saved to: {:?}",
-                                &remote_collaborator_name,
-                                incoming_file_path,
-                            );
                         }
-                    }
 
-                    // ================
-                    // 0.toml ZERO toml
-                    // ================
-                    // ======================================================
-                    // File Type Processing 2: 0toml config for message posts
-                    // ======================================================
-                    /*
-                    The 'path' for message files are more relative
-                    than for node files,
-                    so that moving a node can more simply
-                    directly move all messages...(I think)
+                        // ================
+                        // 0.toml ZERO toml
+                        // ================
+                        // ======================================================
+                        // File Type Processing 2: 0toml config for message posts
+                        // ======================================================
+                        /*
+                        The 'path' for message files are more relative
+                        than for node files,
+                        so that moving a node can more simply
+                        directly move all messages...(I think)
 
-                    use get team channel from node path
+                        use get team channel from node path
 
-                    add team_channel_name
-                    get node-name from message file
+                        add team_channel_name
+                        get node-name from message file
 
-                    maybe new function for read single
-                    value from file string...
+                        maybe new function for read single
+                        value from file string...
 
-                    e.g.
-                    node_name = "alicetown"
+                        e.g.
+                        node_name = "alicetown"
 
-                    from get_current...
+                        from get_current...
 
-                    search for path to nodename
-                    */
+                        search for path to nodename
+                        */
 
-                    // =================
-                    // Make Save-To Path
-                    // =================
-                    /*
-                    1. re-make node_id:path lookup table
-                    2. get parent node_id from node
-                    3. get path for parent node_id from lookup table
-                    4. get path-in-node from node
-                    5. add path-in-node to parent-path
-                    */
+                        // =================
+                        // Make Save-To Path
+                        // =================
+                        /*
+                        1. re-make node_id:path lookup table
+                        2. get parent node_id from node
+                        3. get path for parent node_id from lookup table
+                        4. get path-in-node from node
+                        5. add path-in-node to parent-path
+                        */
 
-                    // TODO handling:
-                    // 1. message Posts
-                    // 2. 0toml config for message posts <-
-                    // 3. Nodes
-                    // future
-                    // 4. Uma Data
-                    if file_str.contains("messageposts_expire_after_n_min =") {
+                        // TODO handling:
+                        // 1. message Posts
+                        // 2. 0toml config for message posts <-
+                        // 3. Nodes
+                        // future
+                        // 4. Uma Data
+                        if file_str.contains("messageposts_expire_after_n_min =") {
 
-
-                        #[cfg(debug_assertions)]
-                        debug_log!(
-                            "(from {}) HLOD-InTray: an instant message file.",
-                            &remote_collaborator_name,
-                        );
-
-                        // 7.2.2
-                        // 2. Generating File Path
-
-                        let messagepost_parent_node_id = read_u8_array_field_from_string(
-                            file_str,
-                            "node_id"
-                        )?;
-
-                        #[cfg(debug_assertions)]
-                        debug_log!(
-                            "(from {}) HLOD 7.2.2 messagepost_parent_node_id -> {:?}",
-                            &remote_collaborator_name,
-                            &messagepost_parent_node_id
-                        );
-
-                        // Get existing node.toml file path (if exists)
-                        if let Some(zero_msgpost_existing_node_directory_path) = hashtable_node_id_to_path.get(&messagepost_parent_node_id) {
-
-                            // make old directory path
-                            let mut zero_msgpost_node_abs_directory_path = PathBuf::from(zero_msgpost_existing_node_directory_path);
 
                             #[cfg(debug_assertions)]
                             debug_log!(
-                                "(from {}) HLOD 7.2.2 got-made zero_msgpost_node_abs_directory_path -> {:?}",
+                                "(from {}) HLOD-InTray: an instant message file.",
                                 &remote_collaborator_name,
-                                &zero_msgpost_node_abs_directory_path
                             );
 
-                            // For this edge case, the path-in-node is already known:
-                            // a node's standard messages are by definition in the same place:
-                            // -> "message_posts_browser"
-                            // add message post directory to node path
-                            zero_msgpost_node_abs_directory_path.push("message_posts_browser");
+                            // 7.2.2
+                            // 2. Generating File Path
 
-                            // current_path.push("message_posts_browser");
+                            let messagepost_parent_node_id = read_u8_array_field_from_string(
+                                file_str,
+                                "node_id"
+                            )?;
 
-                            // "Always"
-                            zero_msgpost_node_abs_directory_path.push("0.toml");
+                            #[cfg(debug_assertions)]
+                            debug_log!(
+                                "(from {}) HLOD 7.2.2 messagepost_parent_node_id -> {:?}",
+                                &remote_collaborator_name,
+                                &messagepost_parent_node_id
+                            );
 
-                            // NEW: Adjust extension based on flag
-                            if save_as_gpgtoml {
-                                zero_msgpost_node_abs_directory_path.set_extension("gpgtoml");
+                            // Get existing node.toml file path (if exists)
+                            if let Some(zero_msgpost_existing_node_directory_path) = hashtable_node_id_to_path.get(&messagepost_parent_node_id) {
+
+                                // make old directory path
+                                let mut zero_msgpost_node_abs_directory_path = PathBuf::from(zero_msgpost_existing_node_directory_path);
+
+                                #[cfg(debug_assertions)]
+                                debug_log!(
+                                    "(from {}) HLOD 7.2.2 got-made zero_msgpost_node_abs_directory_path -> {:?}",
+                                    &remote_collaborator_name,
+                                    &zero_msgpost_node_abs_directory_path
+                                );
+
+                                // For this edge case, the path-in-node is already known:
+                                // a node's standard messages are by definition in the same place:
+                                // -> "message_posts_browser"
+                                // add message post directory to node path
+                                zero_msgpost_node_abs_directory_path.push("message_posts_browser");
+
+                                // current_path.push("message_posts_browser");
+
+                                // "Always"
+                                zero_msgpost_node_abs_directory_path.push("0.toml");
+
+                                // NEW: Adjust extension based on flag
+                                if save_as_gpgtoml {
+                                    zero_msgpost_node_abs_directory_path.set_extension("gpgtoml");
+                                }
+
+                                #[cfg(debug_assertions)]
+                                debug_log!(
+                                    "(from {}) HLOD 7.2 got-made incoming_file_path -> {:?}",
+                                    &remote_collaborator_name,
+                                    zero_msgpost_node_abs_directory_path
+                                );
+
+                                // check: see if this same file was already saved
+                                // 1. Calculate the hash of the received file content using the *local* user's salts and the *raw bytes*:
+                                let received_file_hash_result = calculate_pearson_hashlist_for_string( // Use a byte-oriented hash function
+                                    &file_str,  // Hash the raw bytes
+                                    &local_owner_desk_setup_data.local_user_salt_list, // Use *local* user's salts
+                                );
+
+                                let received_file_hash = match received_file_hash_result {
+                                    Ok(hash) => hash,
+                                    Err(_e) => {
+                                        #[cfg(debug_assertions)]
+                                        debug_log!(
+                                            "(from {}) Error calculating hash for received file: {}",
+                                            &remote_collaborator_name,
+                                            _e
+                                        );
+                                        continue; // Skip to next file if hashing fails
+                                    }
+                                };
+
+                                // 2. Check for duplicates and insert the hash (as before)
+                                if file_hash_set_session_nonce.contains(&received_file_hash) {
+                                    // safe log
+                                    debug_log!("Duplicate file received (hash match). Discarding.");
+                                    continue; // Discard the duplicate file
+                                }
+                                file_hash_set_session_nonce.insert(received_file_hash); // Insert BEFORE saving
+
+                                // 3. Saving the File
+                                // MODIFIED: Choose what to save
+                                let data_to_save = if save_as_gpgtoml {
+                                    still_encrypted_file_blob  // Save encrypted version
+                                } else {
+                                    &decrypted_clearsignfile_data  // Save clearsigned version
+                                };
+
+                                // 3. Saving the File
+
+                                // Create parent directories if they don't exist
+                                if let Some(parent) = Path::new(&zero_msgpost_node_abs_directory_path).parent() {
+                                    if let Err(e) = fs::create_dir_all(parent) {
+                                        #[cfg(debug_assertions)]
+                                        debug_log!("HLOD-InTray: Failed to create directories: {:?}", e);
+                                        return Err(ThisProjectError::from(e));
+                                    }
+                                }
+
+                                // 3. Saving the File
+                                if let Err(e) = fs::write(&zero_msgpost_node_abs_directory_path, data_to_save) {
+                                    #[cfg(debug_assertions)]
+                                    debug_log!("HLOD-InTray: Failed to write message file: {:?}", e);
+                                    return Err(ThisProjectError::from(e));
+                                }
+
+                                #[cfg(debug_assertions)]
+                                debug_log!("7.3 HLOD-InTray: IM message file saved to: {:?}", zero_msgpost_node_abs_directory_path);
+
+                            }
+                        }
+
+                        // ==================================
+                        // File Type Processing 3. Node files
+                        // ==================================
+
+                        // For now only handling:
+                        // 1. message-post files
+                        // 2. 0toml message-post config files
+                        // 3. Node files <-
+                        // Future:
+                        // 4. Uma Data
+                        // For nodes, rebuild lookup table
+                        //
+                        // TODO, don't load whole file...
+                        if file_str.contains("node_unique_id = [") {
+
+                            #[cfg(debug_assertions)]
+                            debug_log!(
+                                "(from {}) HLOD-InTray: File Type Processing 3. Node files (Grecian Urn)",
+                                &remote_collaborator_name,
+                            );
+
+                            // 7.2
+                            // 2. Generating File Path
+                            // attach to absolute path: TODO
+
+                            // Extract path_in_parentnode:
+                            let new_node_directory_path_result = file_str
+                                .lines()  // Iterate over lines
+                                .find_map(|line| { // Use find_map to extract and parse in one step
+                                    if line.starts_with("path_in_parentnode = \"") && line.ends_with("\"") {
+                                        let path_str = &line["path_in_parentnode = \"".len()..line.len() - 1];
+                                        Some(PathBuf::from(path_str))
+                                    } else {
+                                        // checks each line
+                                        None
+                                    }
+                                });
+
+                            if new_node_directory_path_result.is_none() {
+                                // safe log
+                                debug_log!("HLOD Extract path_in_parentnode failed, warning.error?");
+
+                                // dangermouse log
+                                #[cfg(debug_assertions)]
+                                debug_log!(
+                                    "(from {}) HLOD oopsy file: file_str {:?}",
+                                    &remote_collaborator_name,
+                                    file_str
+                                );
+
+                                debug_log!("HLOD Extract path_in_parentnode failed, warning.error?");
+
+                                #[cfg(debug_assertions)]
+                                debug_log!("HLOD oopsy file: file_str {:?}", file_str);
                             }
 
                             #[cfg(debug_assertions)]
                             debug_log!(
-                                "(from {}) HLOD 7.2 got-made incoming_file_path -> {:?}",
+                                "(from {}) HLOD nodes: new_node_directory_path_result {:?}",
                                 &remote_collaborator_name,
-                                zero_msgpost_node_abs_directory_path
+                                new_node_directory_path_result
+                            );
+
+                            let node_file_path_in_parent = match new_node_directory_path_result {
+                                Some(path) => path,
+                                None => {
+                                    // safe log
+                                    debug_log!("'directory_path' not found or invalid format in node.toml");
+                                    continue; // Or handle error as you see fit
+                                }
+                            };
+
+                            #[cfg(debug_assertions)]
+                            debug_log!(
+                                "(from {}) HLOD nodes: node_file_path_in_parent {:?}",
+                                &remote_collaborator_name,
+                                node_file_path_in_parent
+                            );
+
+                            // =========
+                            // node name
+                            // =========
+                            // Extract path_in_parentnode:
+                            let new_node_name_result = file_str
+                                .lines()  // Iterate over lines
+                                .find_map(|line| { // Use find_map to extract and parse in one step
+                                    if line.starts_with("node_name = \"") && line.ends_with("\"") {
+                                        let path_str = &line["node_name = \"".len()..line.len() - 1];
+                                        Some(String::from(path_str))
+                                    } else {
+                                        // checks each line
+                                        None
+                                    }
+                                });
+
+                            if new_node_name_result.is_none() {
+                                // safe log
+                                debug_log!("HLOD Extract new_node_name_result failed, warning.error?");
+
+                                // dangermouse log
+                                #[cfg(debug_assertions)]
+                                debug_log!(
+                                    "(from {}) HLOD oopsy file: file_str {:?}",
+                                    &remote_collaborator_name,
+                                    file_str
+                                );
+
+                                debug_log!("HLOD Extract new_node_name_result failed, warning.error?");
+
+                                #[cfg(debug_assertions)]
+                                debug_log!("HLOD oopsy file: file_str {:?}", file_str);
+                            }
+
+                            #[cfg(debug_assertions)]
+                            debug_log!(
+                                "(from {}) HLOD nodes: new_node_name_result {:?}",
+                                &remote_collaborator_name,
+                                new_node_name_result
+                            );
+
+                            let incoming_node_name = match new_node_name_result {
+                                Some(path) => path,
+                                None => {
+                                    // safe log
+                                    debug_log!("'node_name' not found or invalid format in node.toml");
+                                    continue; // Or handle error as you see fit
+                                }
+                            };
+
+                            #[cfg(debug_assertions)]
+                            debug_log!(
+                                "(from {}) HLOD nodes: incoming_node_name {:?}",
+                                &remote_collaborator_name,
+                                incoming_node_name
                             );
 
                             // check: see if this same file was already saved
@@ -36072,7 +36269,7 @@ fn handle_local_owner_desk(
                                 Err(_e) => {
                                     #[cfg(debug_assertions)]
                                     debug_log!(
-                                        "(from {}) Error calculating hash for received file: {}",
+                                        "(from {}) HLOD 7.2.1 Error calculating hash for received file: {}",
                                         &remote_collaborator_name,
                                         _e
                                     );
@@ -36083,347 +36280,341 @@ fn handle_local_owner_desk(
                             // 2. Check for duplicates and insert the hash (as before)
                             if file_hash_set_session_nonce.contains(&received_file_hash) {
                                 // safe log
-                                debug_log!("Duplicate file received (hash match). Discarding.");
+                                debug_log!("HLOD 7.2.2 Duplicate file received (hash match). Discarding.");
                                 continue; // Discard the duplicate file
                             }
                             file_hash_set_session_nonce.insert(received_file_hash); // Insert BEFORE saving
 
-                            // 3. Saving the File
-                            // MODIFIED: Choose what to save
-                            let data_to_save = if save_as_gpgtoml {
-                                still_encrypted_file_blob  // Save encrypted version
-                            } else {
-                                &decrypted_clearsignfile_data  // Save clearsigned version
-                            };
+                            /////////////////
+                            // Move or Save
+                            ////////////////
+                            /*
+                            1. Make a hash-table of node files' unique ID in session/team-channel: id: path lookup
+                            2. check this node uniqeu ID
+                            3. if this node is an existing node:
+                            4. remove the old path
+                            5. (re)save at the new path
+                            */
 
-                            // 3. Saving the File
-
-                            // Create parent directories if they don't exist
-                            if let Some(parent) = Path::new(&zero_msgpost_node_abs_directory_path).parent() {
-                                if let Err(e) = fs::create_dir_all(parent) {
-                                    #[cfg(debug_assertions)]
-                                    debug_log!("HLOD-InTray: Failed to create directories: {:?}", e);
-                                    return Err(ThisProjectError::from(e));
-                                }
-                            }
-
-                            // 3. Saving the File
-                            if let Err(e) = fs::write(&zero_msgpost_node_abs_directory_path, data_to_save) {
-                                #[cfg(debug_assertions)]
-                                debug_log!("HLOD-InTray: Failed to write message file: {:?}", e);
-                                return Err(ThisProjectError::from(e));
-                            }
-
-                            #[cfg(debug_assertions)]
-                            debug_log!("7.3 HLOD-InTray: IM message file saved to: {:?}", zero_msgpost_node_abs_directory_path);
-
-                        }
-                    }
-
-                    // ==================================
-                    // File Type Processing 3. Node files
-                    // ==================================
-
-                    // For now only handling:
-                    // 1. message-post files
-                    // 2. 0toml message-post config files
-                    // 3. Node files <-
-                    // Future:
-                    // 4. Uma Data
-                    // For nodes, rebuild lookup table
-                    //
-                    // TODO, don't load whole file...
-                    if file_str.contains("node_unique_id = [") {
-
-                        #[cfg(debug_assertions)]
-                        debug_log!(
-                            "(from {}) HLOD-InTray: File Type Processing 3. Node files (Grecian Urn)",
-                            &remote_collaborator_name,
-                        );
-
-                        // 7.2
-                        // 2. Generating File Path
-                        // attach to absolute path: TODO
-
-                        // Extract path_in_parentnode:
-                        let new_node_directory_path_result = file_str
-                            .lines()  // Iterate over lines
-                            .find_map(|line| { // Use find_map to extract and parse in one step
-                                if line.starts_with("path_in_parentnode = \"") && line.ends_with("\"") {
-                                    let path_str = &line["path_in_parentnode = \"".len()..line.len() - 1];
-                                    Some(PathBuf::from(path_str))
-                                } else {
-                                    // checks each line
-                                    None
-                                }
-                            });
-
-                        if new_node_directory_path_result.is_none() {
-                            // safe log
-                            debug_log!("HLOD Extract path_in_parentnode failed, warning.error?");
-
-                            // dangermouse log
-                            #[cfg(debug_assertions)]
-                            debug_log!(
-                                "(from {}) HLOD oopsy file: file_str {:?}",
-                                &remote_collaborator_name,
-                                file_str
+                            // 2. Access node data (must match `node_unique_id_str` from `create_node_id_to_path_lookup`):
+                            let node_unique_id_vec_result = read_u8_array_field_from_string(
+                                file_str,
+                                "node_unique_id"
                             );
 
-                            debug_log!("HLOD Extract path_in_parentnode failed, warning.error?");
-
-                            #[cfg(debug_assertions)]
-                            debug_log!("HLOD oopsy file: file_str {:?}", file_str);
-                        }
-
-                        #[cfg(debug_assertions)]
-                        debug_log!(
-                            "(from {}) HLOD nodes: new_node_directory_path_result {:?}",
-                            &remote_collaborator_name,
-                            new_node_directory_path_result
-                        );
-
-                        let node_file_path_in_parent = match new_node_directory_path_result {
-                            Some(path) => path,
-                            None => {
-                                // safe log
-                                debug_log!("'directory_path' not found or invalid format in node.toml");
-                                continue; // Or handle error as you see fit
-                            }
-                        };
-
-                        #[cfg(debug_assertions)]
-                        debug_log!(
-                            "(from {}) HLOD nodes: node_file_path_in_parent {:?}",
-                            &remote_collaborator_name,
-                            node_file_path_in_parent
-                        );
-
-                        // =========
-                        // node name
-                        // =========
-                        // Extract path_in_parentnode:
-                        let new_node_name_result = file_str
-                            .lines()  // Iterate over lines
-                            .find_map(|line| { // Use find_map to extract and parse in one step
-                                if line.starts_with("node_name = \"") && line.ends_with("\"") {
-                                    let path_str = &line["node_name = \"".len()..line.len() - 1];
-                                    Some(String::from(path_str))
-                                } else {
-                                    // checks each line
-                                    None
-                                }
-                            });
-
-                        if new_node_name_result.is_none() {
-                            // safe log
-                            debug_log!("HLOD Extract new_node_name_result failed, warning.error?");
-
-                            // dangermouse log
                             #[cfg(debug_assertions)]
                             debug_log!(
-                                "(from {}) HLOD oopsy file: file_str {:?}",
+                                "(from {}) HLOD nodes: node_unique_id_vec_result {:?}",
                                 &remote_collaborator_name,
-                                file_str
+                                &node_unique_id_vec_result
                             );
 
-                            debug_log!("HLOD Extract new_node_name_result failed, warning.error?");
+                            match node_unique_id_vec_result {
+                                Ok(node_unique_id_vec) => {
 
-                            #[cfg(debug_assertions)]
-                            debug_log!("HLOD oopsy file: file_str {:?}", file_str);
-                        }
+                                    /*
+                                    Establish Variables
+                                    1. new node directory path (get) - Done Above
+                                        new_full_abs_node_directory_path
 
-                        #[cfg(debug_assertions)]
-                        debug_log!(
-                            "(from {}) HLOD nodes: new_node_name_result {:?}",
-                            &remote_collaborator_name,
-                            new_node_name_result
-                        );
+                                    2. new node file path (matke) - Done Above
+                                        new_node_toml_file_path
 
-                        let incoming_node_name = match new_node_name_result {
-                            Some(path) => path,
-                            None => {
-                                // safe log
-                                debug_log!("'node_name' not found or invalid format in node.toml");
-                                continue; // Or handle error as you see fit
-                            }
-                        };
+                                    Look for (opposite make/get order from above):
+                                    3. Old node file path (get)
+                                    4. old node directory path (make)
 
-                        #[cfg(debug_assertions)]
-                        debug_log!(
-                            "(from {}) HLOD nodes: incoming_node_name {:?}",
-                            &remote_collaborator_name,
-                            incoming_node_name
-                        );
+                                    If no old path:
+                                    5A. make new directory,
+                                    6A. save new file
 
-                        // check: see if this same file was already saved
-                        // 1. Calculate the hash of the received file content using the *local* user's salts and the *raw bytes*:
-                        let received_file_hash_result = calculate_pearson_hashlist_for_string( // Use a byte-oriented hash function
-                            &file_str,  // Hash the raw bytes
-                            &local_owner_desk_setup_data.local_user_salt_list, // Use *local* user's salts
-                        );
+                                    If old path exists:
+                                    5B. archive OLD node FILE (just the file, not the directory)
+                                    6B. save (relace) new node file in old directory
+                                    7. recoursively move the old directory to the NEW directory path
 
-                        let received_file_hash = match received_file_hash_result {
-                            Ok(hash) => hash,
-                            Err(_e) => {
-                                #[cfg(debug_assertions)]
-                                debug_log!(
-                                    "(from {}) HLOD 7.2.1 Error calculating hash for received file: {}",
-                                    &remote_collaborator_name,
-                                    _e
-                                );
-                                continue; // Skip to next file if hashing fails
-                            }
-                        };
+                                    */
 
-                        // 2. Check for duplicates and insert the hash (as before)
-                        if file_hash_set_session_nonce.contains(&received_file_hash) {
-                            // safe log
-                            debug_log!("HLOD 7.2.2 Duplicate file received (hash match). Discarding.");
-                            continue; // Discard the duplicate file
-                        }
-                        file_hash_set_session_nonce.insert(received_file_hash); // Insert BEFORE saving
+                                    // Get old node.toml file path (if exists)
+                                    if let Some(base_olddir_existing_node_directory_path) = hashtable_node_id_to_path.get(&node_unique_id_vec) {
 
-                        /////////////////
-                        // Move or Save
-                        ////////////////
-                        /*
-                        1. Make a hash-table of node files' unique ID in session/team-channel: id: path lookup
-                        2. check this node uniqeu ID
-                        3. if this node is an existing node:
-                        4. remove the old path
-                        5. (re)save at the new path
-                        */
+                                        // ====
+                                        // Move
+                                        // ====
+                                        // 1. construct hybrid path to new destination
+                                        // 2. get old domicile
+                                        // 3. move/replace node.toml/gpgtoml at current old locaction
+                                        // 3. move all dir to new location
+                                        //
+                                        //  see fn move_task_q_and_a_wrapper() for start of process by sender
+                                        // and fn move_node_directory()
+                                        // Node exists, handle move/replace:
+                                        // If old path exists:
+                                        //
+                                        // get old and new base-path directory path
+                                        // get old and new full file path
+                                        //
+                                        // Old path (easy)
+                                        // 5B. archive OLD node FILE w/ timestamp (just the file, not the directory)
+                                        // 6B. save (relace) new node file in old directory
+                                        //
+                                        // New Path (see below to make)
+                                        // 7. recoursively move the old directory to the NEW directory path
 
-                        // 2. Access node data (must match `node_unique_id_str` from `create_node_id_to_path_lookup`):
-                        let node_unique_id_vec_result = read_u8_array_field_from_string(
-                            file_str,
-                            "node_unique_id"
-                        );
+                                        #[cfg(debug_assertions)]
+                                        debug_log!(
+                                            "(from {}) HLOD Node-Moving:",
+                                            &remote_collaborator_name,
+                                        );
 
-                        #[cfg(debug_assertions)]
-                        debug_log!(
-                            "(from {}) HLOD nodes: node_unique_id_vec_result {:?}",
-                            &remote_collaborator_name,
-                            &node_unique_id_vec_result
-                        );
+                                        // get parent node_id
+                                        let parent_node_uniqueid_vec_result = read_u8_array_field_from_string(
+                                            file_str,
+                                            "parent_node_uniqueid"
+                                        );
+                                        match parent_node_uniqueid_vec_result {
+                                            Ok(parent_node_uniqueid_vec) => { // Node exists, handle move/replace:
 
-                        match node_unique_id_vec_result {
-                            Ok(node_unique_id_vec) => {
+                                                if let Some(existing_parent_node_directory_path) = hashtable_node_id_to_path.get(&parent_node_uniqueid_vec) {
 
-                                /*
-                                Establish Variables
-                                1. new node directory path (get) - Done Above
-                                    new_full_abs_node_directory_path
+                                                    #[cfg(debug_assertions)]
+                                                    debug_log!(
+                                                        "(from {}) HLOD Node exists, handle move/replace: node-type got existing_parent_node_directory_path -> {:?}",
+                                                        &remote_collaborator_name,
+                                                        &existing_parent_node_directory_path
+                                                    );
 
-                                2. new node file path (matke) - Done Above
-                                    new_node_toml_file_path
+                                                    // 3. saving node as clearsigned .toml or .gpgtoml
 
-                                Look for (opposite make/get order from above):
-                                3. Old node file path (get)
-                                4. old node directory path (make)
+                                                    // =================
+                                                    // Make Save-To Path
+                                                    // =================
+                                                    /*
+                                                    1. re-make node_id:path lookup table
+                                                    2. get parent node_id from node
+                                                    3. get path for parent node_id from lookup table
+                                                    4. add node_name to path in parent
+                                                    5. get path-in-node from node
+                                                    6. add path-in-node to parent-path
+                                                    */
 
-                                If no old path:
-                                5A. make new directory,
-                                6A. save new file
+                                                    // new base is local real parent path plus abstract 'in-parent' path from node
+                                                    let base_node_path_new = existing_parent_node_directory_path.join(node_file_path_in_parent);
 
-                                If old path exists:
-                                5B. archive OLD node FILE (just the file, not the directory)
-                                6B. save (relace) new node file in old directory
-                                7. recoursively move the old directory to the NEW directory path
+                                                    #[cfg(debug_assertions)]
+                                                    debug_log!(
 
-                                */
+                                                        "(from {}) HLOD 7.2.1 Node exists, handle move/replace: got-made base_node_path_new, existing_parent_node_directory_path.join(node_file_path_in_parent) -> {:?}",
+                                                        &remote_collaborator_name,
+                                                        &base_node_path_new
+                                                    );
 
-                                // Get old node.toml file path (if exists)
-                                if let Some(base_olddir_existing_node_directory_path) = hashtable_node_id_to_path.get(&node_unique_id_vec) {
+                                                    // new base is local real parent path plus abstract 'in-parent' path from node
+                                                    let new_node_dir_path = base_node_path_new.join(incoming_node_name);
 
-                                    // ====
-                                    // Move
-                                    // ====
-                                    // 1. construct hybrid path to new destination
-                                    // 2. get old domicile
-                                    // 3. move/replace node.toml/gpgtoml at current old locaction
-                                    // 3. move all dir to new location
-                                    //
-                                    //  see fn move_task_q_and_a_wrapper() for start of process by sender
-                                    // and fn move_node_directory()
-                                    // Node exists, handle move/replace:
-                                    // If old path exists:
-                                    //
-                                    // get old and new base-path directory path
-                                    // get old and new full file path
-                                    //
-                                    // Old path (easy)
-                                    // 5B. archive OLD node FILE w/ timestamp (just the file, not the directory)
-                                    // 6B. save (relace) new node file in old directory
-                                    //
-                                    // New Path (see below to make)
-                                    // 7. recoursively move the old directory to the NEW directory path
+                                                    #[cfg(debug_assertions)]
+                                                    debug_log!(
+                                                        "(from {}) HLOD 7.2.2 Moving, new_node_dir_path -> {:?}",
+                                                        &remote_collaborator_name,
+                                                        &new_node_dir_path
+                                                    );
 
-                                    #[cfg(debug_assertions)]
-                                    debug_log!(
-                                        "(from {}) HLOD Node-Moving:",
-                                        &remote_collaborator_name,
-                                    );
+                                                    // Create directory path (if not already there)
+                                                    fs::create_dir_all(&new_node_dir_path)?;
 
-                                    // get parent node_id
-                                    let parent_node_uniqueid_vec_result = read_u8_array_field_from_string(
-                                        file_str,
-                                        "parent_node_uniqueid"
-                                    );
-                                    match parent_node_uniqueid_vec_result {
-                                        Ok(parent_node_uniqueid_vec) => { // Node exists, handle move/replace:
+                                                    #[cfg(debug_assertions)]
+                                                    {
+                                                        // inspection
 
-                                            if let Some(existing_parent_node_directory_path) = hashtable_node_id_to_path.get(&parent_node_uniqueid_vec) {
+                                                        // Determine filename based on flag
+                                                        let node_filename = if save_as_gpgtoml {
+                                                            "node.gpgtoml"
+                                                        } else {
+                                                            "node.toml"
+                                                        };
 
-                                                #[cfg(debug_assertions)]
-                                                debug_log!(
-                                                    "(from {}) HLOD Node exists, handle move/replace: node-type got existing_parent_node_directory_path -> {:?}",
-                                                    &remote_collaborator_name,
-                                                    &existing_parent_node_directory_path
-                                                );
+                                                        // add name and extention to path (node.toml or node.gpgtoml)
+                                                        // though only to make path
+                                                        let new_node_file_path = new_node_dir_path.join(node_filename);
 
-                                                // 3. saving node as clearsigned .toml or .gpgtoml
+                                                        debug_log!(
+                                                            "(from {}) HLOD 7.2.3 Node exists, handle move/replace: got-made new_node_toml_file_path -> {:?}",
+                                                            &remote_collaborator_name,
+                                                            &new_node_file_path
+                                                        );
 
-                                                // =================
-                                                // Make Save-To Path
-                                                // =================
-                                                /*
-                                                1. re-make node_id:path lookup table
-                                                2. get parent node_id from node
-                                                3. get path for parent node_id from lookup table
-                                                4. add node_name to path in parent
-                                                5. get path-in-node from node
-                                                6. add path-in-node to parent-path
-                                                */
+                                                        debug_log!(
+                                                            "(from {}) HLOD 7.2.3.4 save_as_gpgtoml -> {:?}",
+                                                            &remote_collaborator_name,
+                                                            &save_as_gpgtoml
+                                                        );
+                                                    }
 
-                                                // new base is local real parent path plus abstract 'in-parent' path from node
-                                                let base_node_path_new = existing_parent_node_directory_path.join(node_file_path_in_parent);
+                                                    // Choose what to save
+                                                    let move_data_to_save = if save_as_gpgtoml {
+                                                        still_encrypted_file_blob  // Save encrypted version
+                                                    } else {
+                                                        &decrypted_clearsignfile_data  // Save clearsigned version
+                                                    };
 
-                                                #[cfg(debug_assertions)]
-                                                debug_log!(
+                                                    #[cfg(debug_assertions)]
+                                                    debug_log!(
+                                                        "(from {}) HLOD 7.2.5 Node exists, handle move/replace: got-made base_olddir_existing_node_directory_path -> {:?}",
+                                                        &remote_collaborator_name,
+                                                        &base_olddir_existing_node_directory_path
+                                                    );
 
-                                                    "(from {}) HLOD 7.2.1 Node exists, handle move/replace: got-made base_node_path_new, existing_parent_node_directory_path.join(node_file_path_in_parent) -> {:?}",
-                                                    &remote_collaborator_name,
-                                                    &base_node_path_new
-                                                );
+                                                    // for clearsigned .toml and .gpgtoml
+                                                    // Determine filename based on flag
+                                                    let node_filename = if save_as_gpgtoml {
+                                                        "node.gpgtoml"
+                                                    } else {
+                                                        "node.toml"
+                                                    };
 
-                                                // new base is local real parent path plus abstract 'in-parent' path from node
-                                                let new_node_dir_path = base_node_path_new.join(incoming_node_name);
+                                                    let oldfile_node_file_path = base_olddir_existing_node_directory_path.join(node_filename);
 
-                                                #[cfg(debug_assertions)]
-                                                debug_log!(
-                                                    "(from {}) HLOD 7.2.2 Moving, new_node_dir_path -> {:?}",
-                                                    &remote_collaborator_name,
-                                                    &new_node_dir_path
-                                                );
+                                                    // Canonicalize the paths
+                                                    let canonical_path1 = match fs::canonicalize(base_olddir_existing_node_directory_path) {
+                                                        Ok(canonical) => canonical,
+                                                        Err(e) => {
+                                                            debug_log!(
+                                                                "(from {}) HLOD Error canonicalizing path1: {}",
+                                                                &remote_collaborator_name,
+                                                                e
+                                                            );
+                                                            return Err(ThisProjectError::from(e));
+                                                        }
+                                                    };
 
-                                                // Create directory path (if not already there)
-                                                fs::create_dir_all(&new_node_dir_path)?;
+                                                    let canonical_path2 = match fs::canonicalize(base_node_path_new.clone()) {
+                                                        Ok(canonical) => canonical,
+                                                        Err(e) => {
+                                                            debug_log!(
+                                                                "(from {}) HLOD Error canonicalizing path2: {}",
+                                                                &remote_collaborator_name,
+                                                                e
+                                                            );
+                                                            return Err(ThisProjectError::from(e));
+                                                        }
+                                                    };
 
-                                                #[cfg(debug_assertions)]
-                                                {
-                                                    // inspection
+                                                    #[cfg(debug_assertions)]
+                                                    {
+                                                        debug_log!("7.3.1 HLOD-InTray canonical_path1 {:?}", canonical_path1);
+                                                        debug_log!("7.3.2 HLOD-InTray canonical_path2 {:?}", canonical_path2);
+                                                    }
+
+                                                    if canonical_path1 == canonical_path2 {
+                                                        #[cfg(debug_assertions)]
+                                                        debug_log!(
+                                                            "(from {}) 7.4.b paths ARE the same, so -> only updating node toml",
+                                                            &remote_collaborator_name,
+                                                        );
+
+                                                        // 3.2 replace (delete the old) node file
+                                                        if let Err(e) = fs::write(&oldfile_node_file_path, move_data_to_save) {
+                                                            #[cfg(debug_assertions)]
+                                                            debug_log!(
+                                                                "(from {}) HLOD Node exists, handle move/replace: Error writing node file: {:?}; e={}",
+                                                                &remote_collaborator_name,
+                                                                &oldfile_node_file_path,
+                                                                e
+                                                            );
+
+                                                            // should this skip not error?
+                                                            return Err(ThisProjectError::from(e));
+                                                        }
+
+                                                        #[cfg(debug_assertions)]
+                                                        debug_log!("7.4.a -- HLOD-InTray: updated,  not moved");
+
+                                                    } else {
+                                                        #[cfg(debug_assertions)]
+                                                        debug_log!("7.4.b paths not the same, so -> moving node");
+
+
+                                                        // 3.2 replace (delete the old) node file
+                                                        if let Err(e) = fs::write(&oldfile_node_file_path, move_data_to_save) {
+                                                            #[cfg(debug_assertions)]
+                                                            debug_log!(
+                                                                "(from {}) HLOD Node exists, handle move/replace: Error writing node file: {:?}; e={}",
+                                                                &remote_collaborator_name,
+                                                                &oldfile_node_file_path,
+                                                                e
+                                                            );
+
+                                                            // should this skip not error?
+                                                            return Err(ThisProjectError::from(e));
+                                                        }
+
+                                                        // Recursive Move Whole Directory
+                                                        // 3.3 Move old node directory (not remove/delete) (directory, not file)
+                                                        // from olddir_abs_node_directory_path to new_full_abs_node_directory_path
+                                                        if let Err(_error) = move_directory_tree_to_new_path(&base_olddir_existing_node_directory_path, &base_node_path_new) {
+                                                            #[cfg(debug_assertions)]
+                                                            debug_log!(
+                                                                "(from {}) HLOD An error occurred: {}",
+                                                                &remote_collaborator_name,
+                                                                _error
+                                                            );
+                                                        }
+
+                                                        #[cfg(debug_assertions)]
+                                                        {
+                                                            debug_log!(
+                                                                "(from {}) 7.3.4 HLOD-InTray: moved file moved from: {:?}",
+                                                                &remote_collaborator_name,
+                                                                &base_olddir_existing_node_directory_path
+                                                            );
+                                                            debug_log!(
+                                                                "(from {}) 7.3.5 HLOD-InTray: moved-new file saved to: {:?}",
+                                                                &remote_collaborator_name,
+                                                                &base_node_path_new
+                                                            );
+                                                            debug_log!(
+                                                                "(from {}) 7.4.b -- HLOD-InTray -> moved",
+                                                                &remote_collaborator_name,
+                                                            );
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            Err(_) => {
+                                                // error in parent_node_uniqueid_vec_result
+                                                continue;
+                                            }
+                                        }
+
+                                    } else {
+                                        // =======================s
+                                        // Not-Moving, Just Saving
+                                        // =======================
+
+                                        #[cfg(debug_assertions)]
+                                        debug_log!(
+                                            "(from {}) HLOD Not-Moving, Just Saving node-type",
+                                            &remote_collaborator_name,
+                                        );
+
+                                        // get parent node_id
+                                        let parent_node_uniqueid_vec_result = read_u8_array_field_from_string(
+                                            file_str,
+                                            "parent_node_uniqueid"
+                                        );
+                                        match parent_node_uniqueid_vec_result {
+                                            Ok(parent_node_uniqueid_vec) => { // Node exists, handle move/replace:
+
+                                                if let Some(existing_parent_node_directory_path) = hashtable_node_id_to_path.get(&parent_node_uniqueid_vec) {
+
+                                                    #[cfg(debug_assertions)]
+                                                    debug_log!(
+                                                        "(from {}) HLOD Not-Moving, Just Saving node-type got existing_parent_node_directory_path -> {:?}",
+                                                        &remote_collaborator_name,
+                                                        &existing_parent_node_directory_path
+                                                    );
+
+                                                    // 3. saving node as clearsigned .toml or .gpgtoml
 
                                                     // Determine filename based on flag
                                                     let node_filename = if save_as_gpgtoml {
@@ -36432,419 +36623,243 @@ fn handle_local_owner_desk(
                                                         "node.toml"
                                                     };
 
+                                                    // =================
+                                                    // Make Save-To Path
+                                                    // =================
+                                                    /*
+                                                    1. re-make node_id:path lookup table
+                                                    2. get parent node_id from node
+                                                    3. get path for parent node_id from lookup table
+                                                    4. add node_name to path in parent
+                                                    5. get path-in-node from node
+                                                    6. add path-in-node to parent-path
+                                                    */
+
+                                                    // New base is local real parent path plus abstract 'in-parent' path from node
+                                                    let base_node_path = existing_parent_node_directory_path.join(node_file_path_in_parent);
+
+                                                    #[cfg(debug_assertions)]
+                                                    debug_log!(
+                                                        "(from {}) HLOD 7.2 Not-Moving, Just Saving got-made base_node_path, existing_parent_node_directory_path.join(node_file_path_in_parent) -> {:?}",
+                                                        &remote_collaborator_name,
+                                                        &base_node_path
+                                                    );
+
+                                                    // new base is local real parent path plus abstract 'in-parent' path from node
+                                                    let new_node_dir_path = base_node_path.join(incoming_node_name);
+
+                                                    #[cfg(debug_assertions)]
+                                                    debug_log!(
+                                                        "(from {}) HLOD 7.2 Not-Moving, Just Saving new_node_dir_path -> {:?}",
+                                                        &remote_collaborator_name,
+                                                        &new_node_dir_path
+                                                    );
+
+                                                    // // make sure path exists
+                                                    fs::create_dir_all(&new_node_dir_path)?;
+
                                                     // add name and extention to path (node.toml or node.gpgtoml)
-                                                    // though only to make path
                                                     let new_node_file_path = new_node_dir_path.join(node_filename);
 
+                                                    // old
+                                                    // let new_node_toml_file_path = new_full_abs_node_directory_path.join("node.toml"); // Path to the new node.toml
+
+                                                    #[cfg(debug_assertions)]
                                                     debug_log!(
-                                                        "(from {}) HLOD 7.2.3 Node exists, handle move/replace: got-made new_node_toml_file_path -> {:?}",
+                                                        "(from {}) HLOD 7.2 Not-Moving, Just Saving got-made new_node_toml_file_path -> {:?}",
                                                         &remote_collaborator_name,
                                                         &new_node_file_path
                                                     );
 
-                                                    debug_log!(
-                                                        "(from {}) HLOD 7.2.3.4 save_as_gpgtoml -> {:?}",
-                                                        &remote_collaborator_name,
-                                                        &save_as_gpgtoml
-                                                    );
-                                                }
+                                                    // Choose what to save
+                                                    let data_to_save = if save_as_gpgtoml {
+                                                        still_encrypted_file_blob  // Save encrypted version
+                                                    } else {
+                                                        &decrypted_clearsignfile_data  // Save clearsigned version
+                                                    };
 
-                                                // Choose what to save
-                                                let move_data_to_save = if save_as_gpgtoml {
-                                                    still_encrypted_file_blob  // Save encrypted version
-                                                } else {
-                                                    &decrypted_clearsignfile_data  // Save clearsigned version
-                                                };
+                                                    // Node is new, save it:
+                                                    // no unpacking because only existing files are sent
 
-                                                #[cfg(debug_assertions)]
-                                                debug_log!(
-                                                    "(from {}) HLOD 7.2.5 Node exists, handle move/replace: got-made base_olddir_existing_node_directory_path -> {:?}",
-                                                    &remote_collaborator_name,
-                                                    &base_olddir_existing_node_directory_path
-                                                );
+                                                    // TODO: more optimal way to make/skip zero-toml file?
 
-                                                // for clearsigned .toml and .gpgtoml
-                                                // Determine filename based on flag
-                                                let node_filename = if save_as_gpgtoml {
-                                                    "node.gpgtoml"
-                                                } else {
-                                                    "node.toml"
-                                                };
-
-                                                let oldfile_node_file_path = base_olddir_existing_node_directory_path.join(node_filename);
-
-                                                // Canonicalize the paths
-                                                let canonical_path1 = match fs::canonicalize(base_olddir_existing_node_directory_path) {
-                                                    Ok(canonical) => canonical,
-                                                    Err(e) => {
+                                                    // Save file
+                                                    if let Err(e) = fs::write(&new_node_file_path, data_to_save) {
+                                                        #[cfg(debug_assertions)]
                                                         debug_log!(
-                                                            "(from {}) HLOD Error canonicalizing path1: {}",
+                                                            "(from {}) HLOD Not-Moving, Just Saving Error writing node file: {:?} - {}",
                                                             &remote_collaborator_name,
+                                                            &new_node_file_path,
                                                             e
                                                         );
                                                         return Err(ThisProjectError::from(e));
                                                     }
-                                                };
 
-                                                let canonical_path2 = match fs::canonicalize(base_node_path_new.clone()) {
-                                                    Ok(canonical) => canonical,
-                                                    Err(e) => {
-                                                        debug_log!(
-                                                            "(from {}) HLOD Error canonicalizing path2: {}",
-                                                            &remote_collaborator_name,
-                                                            e
-                                                        );
-                                                        return Err(ThisProjectError::from(e));
-                                                    }
-                                                };
-
-                                                #[cfg(debug_assertions)]
-                                                {
-                                                    debug_log!("7.3.1 HLOD-InTray canonical_path1 {:?}", canonical_path1);
-                                                    debug_log!("7.3.2 HLOD-InTray canonical_path2 {:?}", canonical_path2);
-                                                }
-
-                                                if canonical_path1 == canonical_path2 {
                                                     #[cfg(debug_assertions)]
                                                     debug_log!(
-                                                        "(from {}) 7.4.b paths ARE the same, so -> only updating node toml",
+                                                        "(from {}) 7.3 Not-Moving, Just Saving HLOD-InTray: new file saved to: {:?}",
                                                         &remote_collaborator_name,
+                                                        new_node_file_path
                                                     );
-
-                                                    // 3.2 replace (delete the old) node file
-                                                    if let Err(e) = fs::write(&oldfile_node_file_path, move_data_to_save) {
-                                                        #[cfg(debug_assertions)]
-                                                        debug_log!(
-                                                            "(from {}) HLOD Node exists, handle move/replace: Error writing node file: {:?}; e={}",
-                                                            &remote_collaborator_name,
-                                                            &oldfile_node_file_path,
-                                                            e
-                                                        );
-
-                                                        // should this skip not error?
-                                                        return Err(ThisProjectError::from(e));
-                                                    }
-
-                                                    #[cfg(debug_assertions)]
-                                                    debug_log!("7.4.a -- HLOD-InTray: updated,  not moved");
-
-                                                } else {
-                                                    #[cfg(debug_assertions)]
-                                                    debug_log!("7.4.b paths not the same, so -> moving node");
-
-
-                                                    // 3.2 replace (delete the old) node file
-                                                    if let Err(e) = fs::write(&oldfile_node_file_path, move_data_to_save) {
-                                                        #[cfg(debug_assertions)]
-                                                        debug_log!(
-                                                            "(from {}) HLOD Node exists, handle move/replace: Error writing node file: {:?}; e={}",
-                                                            &remote_collaborator_name,
-                                                            &oldfile_node_file_path,
-                                                            e
-                                                        );
-
-                                                        // should this skip not error?
-                                                        return Err(ThisProjectError::from(e));
-                                                    }
-
-                                                    // Recursive Move Whole Directory
-                                                    // 3.3 Move old node directory (not remove/delete) (directory, not file)
-                                                    // from olddir_abs_node_directory_path to new_full_abs_node_directory_path
-                                                    if let Err(_error) = move_directory_tree_to_new_path(&base_olddir_existing_node_directory_path, &base_node_path_new) {
-                                                        #[cfg(debug_assertions)]
-                                                        debug_log!(
-                                                            "(from {}) HLOD An error occurred: {}",
-                                                            &remote_collaborator_name,
-                                                            _error
-                                                        );
-                                                    }
-
-                                                    #[cfg(debug_assertions)]
-                                                    {
-                                                        debug_log!(
-                                                            "(from {}) 7.3.4 HLOD-InTray: moved file moved from: {:?}",
-                                                            &remote_collaborator_name,
-                                                            &base_olddir_existing_node_directory_path
-                                                        );
-                                                        debug_log!(
-                                                            "(from {}) 7.3.5 HLOD-InTray: moved-new file saved to: {:?}",
-                                                            &remote_collaborator_name,
-                                                            &base_node_path_new
-                                                        );
-                                                        debug_log!(
-                                                            "(from {}) 7.4.b -- HLOD-InTray -> moved",
-                                                            &remote_collaborator_name,
-                                                        );
-                                                    }
                                                 }
                                             }
-                                        }
-                                        Err(_) => {
-                                            // error in parent_node_uniqueid_vec_result
-                                            continue;
-                                        }
-                                    }
-
-                                } else {
-                                    // =======================s
-                                    // Not-Moving, Just Saving
-                                    // =======================
-
-                                    #[cfg(debug_assertions)]
-                                    debug_log!(
-                                        "(from {}) HLOD Not-Moving, Just Saving node-type",
-                                        &remote_collaborator_name,
-                                    );
-
-                                    // get parent node_id
-                                    let parent_node_uniqueid_vec_result = read_u8_array_field_from_string(
-                                        file_str,
-                                        "parent_node_uniqueid"
-                                    );
-                                    match parent_node_uniqueid_vec_result {
-                                        Ok(parent_node_uniqueid_vec) => { // Node exists, handle move/replace:
-
-                                            if let Some(existing_parent_node_directory_path) = hashtable_node_id_to_path.get(&parent_node_uniqueid_vec) {
-
-                                                #[cfg(debug_assertions)]
-                                                debug_log!(
-                                                    "(from {}) HLOD Not-Moving, Just Saving node-type got existing_parent_node_directory_path -> {:?}",
-                                                    &remote_collaborator_name,
-                                                    &existing_parent_node_directory_path
-                                                );
-
-                                                // 3. saving node as clearsigned .toml or .gpgtoml
-
-                                                // Determine filename based on flag
-                                                let node_filename = if save_as_gpgtoml {
-                                                    "node.gpgtoml"
-                                                } else {
-                                                    "node.toml"
-                                                };
-
-                                                // =================
-                                                // Make Save-To Path
-                                                // =================
-                                                /*
-                                                1. re-make node_id:path lookup table
-                                                2. get parent node_id from node
-                                                3. get path for parent node_id from lookup table
-                                                4. add node_name to path in parent
-                                                5. get path-in-node from node
-                                                6. add path-in-node to parent-path
-                                                */
-
-                                                // New base is local real parent path plus abstract 'in-parent' path from node
-                                                let base_node_path = existing_parent_node_directory_path.join(node_file_path_in_parent);
-
-                                                #[cfg(debug_assertions)]
-                                                debug_log!(
-                                                    "(from {}) HLOD 7.2 Not-Moving, Just Saving got-made base_node_path, existing_parent_node_directory_path.join(node_file_path_in_parent) -> {:?}",
-                                                    &remote_collaborator_name,
-                                                    &base_node_path
-                                                );
-
-                                                // new base is local real parent path plus abstract 'in-parent' path from node
-                                                let new_node_dir_path = base_node_path.join(incoming_node_name);
-
-                                                #[cfg(debug_assertions)]
-                                                debug_log!(
-                                                    "(from {}) HLOD 7.2 Not-Moving, Just Saving new_node_dir_path -> {:?}",
-                                                    &remote_collaborator_name,
-                                                    &new_node_dir_path
-                                                );
-
-                                                // // make sure path exists
-                                                fs::create_dir_all(&new_node_dir_path)?;
-
-                                                // add name and extention to path (node.toml or node.gpgtoml)
-                                                let new_node_file_path = new_node_dir_path.join(node_filename);
-
-                                                // old
-                                                // let new_node_toml_file_path = new_full_abs_node_directory_path.join("node.toml"); // Path to the new node.toml
-
-                                                #[cfg(debug_assertions)]
-                                                debug_log!(
-                                                    "(from {}) HLOD 7.2 Not-Moving, Just Saving got-made new_node_toml_file_path -> {:?}",
-                                                    &remote_collaborator_name,
-                                                    &new_node_file_path
-                                                );
-
-                                                // Choose what to save
-                                                let data_to_save = if save_as_gpgtoml {
-                                                    still_encrypted_file_blob  // Save encrypted version
-                                                } else {
-                                                    &decrypted_clearsignfile_data  // Save clearsigned version
-                                                };
-
-                                                // Node is new, save it:
-                                                // no unpacking because only existing files are sent
-
-                                                // TODO: more optimal way to make/skip zero-toml file?
-
-                                                // Save file
-                                                if let Err(e) = fs::write(&new_node_file_path, data_to_save) {
-                                                    #[cfg(debug_assertions)]
-                                                    debug_log!(
-                                                        "(from {}) HLOD Not-Moving, Just Saving Error writing node file: {:?} - {}",
-                                                        &remote_collaborator_name,
-                                                        &new_node_file_path,
-                                                        e
-                                                    );
-                                                    return Err(ThisProjectError::from(e));
-                                                }
-
-                                                #[cfg(debug_assertions)]
-                                                debug_log!(
-                                                    "(from {}) 7.3 Not-Moving, Just Saving HLOD-InTray: new file saved to: {:?}",
-                                                    &remote_collaborator_name,
-                                                    new_node_file_path
-                                                );
+                                            Err(_) => {
+                                                // error in parent_node_uniqueid_vec_result
+                                                continue;
                                             }
-                                        }
-                                        Err(_) => {
-                                            // error in parent_node_uniqueid_vec_result
-                                            continue;
                                         }
                                     }
                                 }
+                                Err(_) => {
+                                    // Handle error
+                                    continue;
+                                }
                             }
-                            Err(_) => {
-                                // Handle error
+                        }
+
+                        /////////////
+                        // Echo Base
+                        /////////////
+                        /*
+                        After a file is received and saved
+                        a miniature ReadySignal is sent out
+                        using the timestamp of the 'current file' as the latest file
+                        and saving that in state
+                        so that the drone-loop (above) sending ready signals will also know
+                        there is a new latest-date
+                        */
+
+                        // Extract timestamp
+                        let received_file_updatedat_timestamp = match extract_updated_at_timestamp(
+                            &extracted_clearsigned_file_data
+                        ) {
+                            Ok(temp_extraction_timestamp) => temp_extraction_timestamp,
+                            Err(_e) => {
+                                #[cfg(debug_assertions)]
+                                debug_log!(
+                                    "(from {}) HLOD-InTray: Error extracting timestamp: {}. Skipping.",
+                                    &remote_collaborator_name,
+                                    _e
+                                );
+
+
                                 continue;
                             }
-                        }
-                    }
+                        };
 
-                      /////////////
-                     // Echo Base
-                    /////////////
-                    /*
-                    After a file is received and saved
-                    a miniature ReadySignal is sent out
-                    using the timestamp of the 'current file' as the latest file
-                    and saving that in state
-                    so that the drone-loop (above) sending ready signals will also know
-                    there is a new latest-date
-                    */
+                        // update state: latest received timestamp
+                        let _ = write_save_latest_received_from_rc_file_timestamp_plaintext(
+                            &team_channel_name, // for team_channel_name
+                            &local_owner_desk_setup_data.remote_collaborator_name, // for collaborator_name
+                            received_file_updatedat_timestamp, // for timestamp
+                        );
 
-                    // Extract timestamp
-                    let received_file_updatedat_timestamp = match extract_updated_at_timestamp(
-                        &extracted_clearsigned_file_data
-                    ) {
-                        Ok(temp_extraction_timestamp) => temp_extraction_timestamp,
-                        Err(_e) => {
-                            #[cfg(debug_assertions)]
-                            debug_log!(
-                                "(from {}) HLOD-InTray: Error extracting timestamp: {}. Skipping.",
-                                &remote_collaborator_name,
-                                _e
-                            );
-
-
-                            continue;
-                        }
-                    };
-
-                    // update state: latest received timestamp
-                    let _ = write_save_latest_received_from_rc_file_timestamp_plaintext(
-                        &team_channel_name, // for team_channel_name
-                        &local_owner_desk_setup_data.remote_collaborator_name, // for collaborator_name
-                        received_file_updatedat_timestamp, // for timestamp
-                    );
-
-                    // Now you have the received_file_updatedat_timestamp timestamp
-                    #[cfg(debug_assertions)]
-                    debug_log!(
-                        "(from {}) 7.3 HLOD-InTray: Received file was updated_at: {}",
-                        &remote_collaborator_name,
-                        received_file_updatedat_timestamp
-                    );
-                    // println!("Received file updated at: {}", received_file_updatedat_timestamp);
-
-                    // 1.4 Send Echo Ready Signal (using a function)
-                    /*
-                    struct GotItSignal {
-                        gst: Option<u64>, // send-time:
-                            generate_terse_timestamp_freshness_proxy(); for replay-attack protection
-                        di: Option<u64>, // the 'id' is updated_at file timestamp
-                            (because context= filesync timeline ID)
-                        gh: Option<Vec<u8>>, // N hashes of rt + re
-                    */
-                    #[cfg(debug_assertions)]
-                    debug_log!(
-                        "(from/to {}) 7.3 HLOD-InTray: send_gotit_signal",
-                        &remote_collaborator_name,
-                    );
-
-                    let _ = send_gotit_signal(
-                        &local_owner_desk_setup_data.local_user_salt_list,
-                        &band_local_user_ipv4_address, // local_user_ipv4_address: &Ipv4Addr,
-                        &band_local_user_ipv6_address, // local_user_ipv6_address: &Ipv6Addr,
-                        &band_local_network_type, // network_type: String, // for nt
-                        localowner_gotit_port,
-                        received_file_updatedat_timestamp, // as di
-                    );
-
-
-                    // 1.4 Send Echo Ready Signal (using a function)
-                    // 2nd copy for other threads
-                    let rc_network_type_string_2 = rc_network_type_string.clone();
-                    let rc_ip_addr_string_2 = rc_ip_addr_string.clone();
-
-                    // TODO: how long?
-                    // This lets last item run
-                    thread::sleep(Duration::from_secs(5));
-                    thread::sleep(Duration::from_secs(3));
-
-                    let _ready_signal_result = send_ready_signal(
-                        &local_owner_desk_setup_data.local_user_salt_list, // local_user_salt_list: &[u128],
-                        rc_network_type_string_2, // Remote collaborator's network type (ipv4, ipv6
-                        rc_ip_addr_string_2,  // Remote collaborator's IP string
-                        local_owner_desk_setup_data.local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip,
-                        received_file_updatedat_timestamp, // last_received_timestamp: u64, // for rst
-                        &band_local_network_type, // network_type: String, // for nt
-                        band_local_network_index, //network_index: u8, // for ni
-                    )?;
-
-                    #[cfg(debug_assertions)]
-                    debug_log!(
-                        "(to {}) HLOD-InTray, (post-file-followup) ready_signal_result = send_ready_signal()->{:?}",
-                        &remote_collaborator_name,
-                        _ready_signal_result,
-                    );
-
-                }
-                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                    // No data available yet.  Don't treat this as an error.
-
-                    #[cfg(debug_assertions)]
-                    debug_log!(
-                        "(from {}) HLOD-InTray: No data available yet...WouldBlock",
-                        &remote_collaborator_name,
-                    );
-
-                    // Safe Log
-                    debug_log!("HLOD-InTray: No data available yet...WouldBlock");
-                    std::thread::sleep(std::time::Duration::from_millis(100));
-                    continue; // Continue to the next loop iteration
-                }
-                    Err(e) => {
-                        // A real error occurred. Log and handle it.
+                        // Now you have the received_file_updatedat_timestamp timestamp
                         #[cfg(debug_assertions)]
                         debug_log!(
-                            "(from {}) HLOD-InTray: Error receiving data: {}",
+                            "(from {}) 7.3 HLOD-InTray: Received file was updated_at: {}",
                             &remote_collaborator_name,
-                            e,
+                            received_file_updatedat_timestamp
+                        );
+                        // println!("Received file updated at: {}", received_file_updatedat_timestamp);
+
+                        // 1.4 Send Echo Ready Signal (using a function)
+                        /*
+                        struct GotItSignal {
+                            gst: Option<u64>, // send-time:
+                                generate_terse_timestamp_freshness_proxy(); for replay-attack protection
+                            di: Option<u64>, // the 'id' is updated_at file timestamp
+                                (because context= filesync timeline ID)
+                            gh: Option<Vec<u8>>, // N hashes of rt + re
+                        */
+                        #[cfg(debug_assertions)]
+                        debug_log!(
+                            "(from/to {}) 7.3 HLOD-InTray: send_gotit_signal",
+                            &remote_collaborator_name,
+                        );
+
+                        let _ = send_gotit_signal(
+                            &local_owner_desk_setup_data.local_user_salt_list,
+                            &band_local_user_ipv4_address, // local_user_ipv4_address: &Ipv4Addr,
+                            &band_local_user_ipv6_address, // local_user_ipv6_address: &Ipv6Addr,
+                            &band_local_network_type, // network_type: String, // for nt
+                            localowner_gotit_port,
+                            received_file_updatedat_timestamp, // as di
+                        );
+
+
+                        // 1.4 Send Echo Ready Signal (using a function)
+                        // 2nd copy for other threads
+                        let rc_network_type_string_2 = rc_network_type_string.clone();
+                        let rc_ip_addr_string_2 = rc_ip_addr_string.clone();
+
+                        // TODO: how long?
+                        // This lets last item run
+                        thread::sleep(Duration::from_secs(5));
+                        thread::sleep(Duration::from_secs(3));
+
+                        let _ready_signal_result = send_ready_signal(
+                            &local_owner_desk_setup_data.local_user_salt_list, // local_user_salt_list: &[u128],
+                            rc_network_type_string_2, // Remote collaborator's network type (ipv4, ipv6
+                            rc_ip_addr_string_2,  // Remote collaborator's IP string
+                            local_owner_desk_setup_data.local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip,
+                            received_file_updatedat_timestamp, // last_received_timestamp: u64, // for rst
+                            &band_local_network_type, // network_type: String, // for nt
+                            band_local_network_index, //network_index: u8, // for ni
+                        )?;
+
+                        #[cfg(debug_assertions)]
+                        debug_log!(
+                            "(to {}) HLOD-InTray, (post-file-followup) ready_signal_result = send_ready_signal()->{:?}",
+                            &remote_collaborator_name,
+                            _ready_signal_result,
+                        );
+
+                    } // End Ok case
+
+                    // ═════════════════════════════════════════════════════════════════
+                    //  Handle socket timeout (NOT an error)
+                    // ═════════════════════════════════════════════════════════════════
+                    Err(e) if e.kind() == io::ErrorKind::WouldBlock
+                           || e.kind() == io::ErrorKind::TimedOut => {
+                        // ✓ Normal: 2 seconds elapsed, no file received
+                        // This is EXPECTED and allows us to check halt flag
+                    // Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                        // No data available yet.  Don't treat this as an error.
+
+                        #[cfg(debug_assertions)]
+                        debug_log!(
+                            "(from {}) HLOD-InTray: No data available yet...WouldBlock",
+                            &remote_collaborator_name,
                         );
 
                         // Safe Log
-                        debug_log!("HLOD-InTray: Error receiving data");
+                        debug_log!("HLOD-InTray: No data available yet...WouldBlock");
+                        std::thread::sleep(std::time::Duration::from_millis(100));
+                        continue; // Continue to the next loop iteration
+                    }
+                        Err(_e) => {
+                            // A real error occurred. Log and handle it.
+                            #[cfg(debug_assertions)]
+                            debug_log!(
+                                "(from {}) HLOD-InTray: Error receiving data: {}",
+                                &remote_collaborator_name,
+                                _e,
+                            );
 
-                        return Err(ThisProjectError::NetworkError(format!(
-                            "Error receiving data: {}",
-                            e,
-                        )));  // Or choose another way to handle this
+                            // Safe Log
+                            debug_log!("HLOD-InTray: Error receiving data");
+
+                            // return Err(ThisProjectError::NetworkError(format!(
+                            //     "Error receiving data: {}",
+                            //     e,
+                            // )));  // Or choose another way to handle this
+                            #[cfg(debug_assertions)]
+                            debug_log!("HLOD In-Tray: Recv error: {}, continuing", _e);
+
+                            // Brief backoff before retry
+                            thread::sleep(Duration::from_millis(100));
+                            continue;
                     }
                 }
             } // end match ready_socket.recv_from(&mut buf) {
@@ -38553,7 +38568,7 @@ fn handshake_get_rc_bands_socketaddrses_for_hrcd(
     #[cfg(debug_assertions)]
     debug_log("get_rc_band...HRCD: 4. create_rc_udp_socket(ready_socket_addr)");
     // let socket = create_rc_udp_socket(ready_socket_addr)?;
-    let socket = create_rc_timeout_udp_socket(
+    let handshake_socket = create_rc_timeout_udp_socket(
         ready_socket_addr,
         timeout_duration, // set above
     )?;
@@ -38580,7 +38595,7 @@ fn handshake_get_rc_bands_socketaddrses_for_hrcd(
         // socket.set_read_timeout(Some(timeout_duration))?;
 
         // 5.3 Receive and Process
-        match receive_ready_signal_with_timeout(&socket, &mut buf, &room_sync_input.remote_collaborator_salt_list) {
+        match receive_ready_signal_no_timer(&handshake_socket, &mut buf, &room_sync_input.remote_collaborator_salt_list) {
             Ok(Some((_, ready_signal))) => {
 
                 #[cfg(debug_assertions)]
@@ -38719,30 +38734,117 @@ fn get_ip_from_index_and_type(
     }
 }
 
-/// Receives a ReadySignal with a timeout, performing hash and timestamp verification.
-/// Goal purpose and scope: screening valid packets to verify a live-ip
+// // needed later?
+//
+// /// Receives a ReadySignal with a timeout, performing hash and timestamp verification.
+// /// Goal purpose and scope: screening valid packets to verify a live-ip
+// ///
+// /// This function now includes both hash verification and timestamp freshness checks.
+// ///
+// /// # Arguments
+// ///
+// /// * `socket`: The UDP socket to receive data on.
+// /// * `buf`: A mutable buffer to store the received data.
+// /// * `salt_list`: The salt list for hash verification.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<Option<SocketAddr>, ThisProjectError>`: The sender's `SocketAddr` on success, an error, or `Ok(None)` on timeout.
+// fn receive_ready_signal_with_timeout_seconds( // Hash and timestamp checks moved HERE!
+//     duration_in_seconds: u64,
+//     socket: &UdpSocket,
+//     buf: &mut [u8],
+//     senders_salt_list: &[u128],
+// ) -> Result<Option<(SocketAddr, ReadySignal)>, ThisProjectError> { // Changed to return the signal
+//     debug_log!("receive_ready_signal_with_timeout(): Starting...");
+
+//     let timeout_duration = Duration::from_secs(duration_in_seconds);
+
+//     socket.set_read_timeout(Some(timeout_duration))?;
+
+//     match socket.recv_from(buf) {
+//         Ok((amt, src)) => {
+//             debug_log!("receive_ready_signal_with_timeout(): Received {} bytes from {}", amt, src);
+
+//             // 1. Deserialize
+//             let ready_signal = match deserialize_ready_signal(&buf[..amt], senders_salt_list) { // Deserialize first.  Use the passed-in senders_salt_list
+//                 Ok(signal) => signal,
+//                 Err(e) => {
+//                     debug_log!("receive_ready_signal_with_timeout():  Failed to deserialize ReadySignal: {}", e);
+//                     return Err(e);  // Or continue to listen for the next signal
+//                 },
+//             };
+
+//             // 2. Hash Verification: PERFORM HASH CHECK HERE!
+//             if !verify_readysignal_hashes(&ready_signal, senders_salt_list) { // Hash verification alongside timestamp check
+//                 debug_log!("receive_ready_signal_with_timeout(): ReadySignal hash verification failed. Discarding.");
+//                 return Ok(None); // Or continue to listen, but return nothing.
+//             };
+//             debug_log!("receive_ready_signal_with_timeout(): ReadySignal hashes verified.");
+
+//             // 3. Timestamp Freshness Check: PERFORM TIMESTAMP CHECK HERE!
+//             let current_timestamp = get_current_unix_timestamp();
+//             if ready_signal.rst > current_timestamp + 5 || current_timestamp - 10 > ready_signal.rst {  // Freshness check, combined
+//                 debug_log!("receive_ready_signal_with_timeout(): Received outdated or future-dated ReadySignal.  Discarding.");
+//                 return Ok(None); // Indicate invalid signal without returning an Error.
+//             };
+//             debug_log!("receive_ready_signal_with_timeout():  ReadySignal timestamp verified.");
+
+//             // 4. Return the source address and ReadySignal if all checks pass.
+//             Ok(Some((src, ready_signal))) // Include ReadySignal
+//         },
+
+//         Err(e) if e.kind() == ErrorKind::WouldBlock => {
+//             debug_log!("receive_ready_signal_with_timeout(): Timeout");
+//             Ok(None) // Correct handling of timeout, not returning an error!
+//         }
+//         Err(e) => {
+//             debug_log!("receive_ready_signal_with_timeout(): Error receiving data: {}", e);
+//             Err(ThisProjectError::NetworkError(e.to_string()))
+//         },
+//     }
+// }
+
+
+/// Receives a ReadySignal from a socket that ALREADY HAS a timeout configured.
 ///
-/// This function now includes both hash verification and timestamp freshness checks.
+/// ### Project Context
+/// This is the "assume socket is pre-configured" version of the ready signal
+/// receiver. Use this when the socket was created via `create_rc_timeout_udp_socket()`
+/// or otherwise has `set_read_timeout()` already called on it.
+///
+/// ### Design Rationale
+/// Separating timeout-setting from signal-receiving follows the "do one thing well"
+/// principle and avoids redundantly setting timeouts multiple times on the same socket.
+///
+/// ### Verification Performed
+/// 1. Deserializes ReadySignal from raw bytes
+/// 2. Verifies hash using sender's salt list
+/// 3. Verifies timestamp freshness (within 5s future, 10s past)
 ///
 /// # Arguments
-///
-/// * `socket`: The UDP socket to receive data on.
-/// * `buf`: A mutable buffer to store the received data.
-/// * `salt_list`: The salt list for hash verification.
+/// * `socket` - UDP socket with timeout ALREADY configured
+/// * `buf` - Mutable buffer for received data
+/// * `senders_salt_list` - Salt list for hash verification
 ///
 /// # Returns
+/// * `Ok(Some((SocketAddr, ReadySignal)))` - Valid signal received
+/// * `Ok(None)` - Timeout occurred OR invalid signal (hash/timestamp failed)
+/// * `Err(ThisProjectError)` - Network error or deserialization failure
+///
+/// # Error Handling
+/// - Timeout: Returns `Ok(None)` (not an error, allows caller to check halt flags)
+/// - Invalid hash: Returns `Ok(None)` (discard invalid signal, keep listening)
+/// - Invalid timestamp: Returns `Ok(None)` (discard stale signal, keep listening)
+/// - Network errors: Returns `Err` (caller decides whether to retry)
 ///
 /// * `Result<Option<SocketAddr>, ThisProjectError>`: The sender's `SocketAddr` on success, an error, or `Ok(None)` on timeout.
-fn receive_ready_signal_with_timeout( // Hash and timestamp checks moved HERE!
+fn receive_ready_signal_no_timer( // Hash and timestamp checks moved HERE!
     socket: &UdpSocket,
     buf: &mut [u8],
     senders_salt_list: &[u128],
 ) -> Result<Option<(SocketAddr, ReadySignal)>, ThisProjectError> { // Changed to return the signal
     debug_log!("receive_ready_signal_with_timeout(): Starting...");
-
-    let timeout_duration = Duration::from_secs(15);
-
-    socket.set_read_timeout(Some(timeout_duration))?;
 
     match socket.recv_from(buf) {
         Ok((amt, src)) => {
@@ -38786,6 +38888,7 @@ fn receive_ready_signal_with_timeout( // Hash and timestamp checks moved HERE!
         },
     }
 }
+
 
 /// handle_remote_collaborator_meetingroom_desk (send files here)
 /// very brief overview:
@@ -38987,7 +39090,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                     break; // Exit the loop
                 }
 
-                // TODO is this a loop that isn't ending?
+                // TODO is this a loop that isn't ending? fixed?
                 // 1.5.2 Receive and handle "Got It" signals // under construction TODO
                 let mut buf = [0; 1024];
                 match gotit_socket.recv_from(&mut buf) {
@@ -40195,6 +40298,9 @@ fn create_rc_timeout_udp_socket(
 
 /// Creates a UDP socket bound to a locally chosen IP address and port based on the network band configuration.
 ///
+/// ### PHASE 2D UPDATE
+/// Now includes read timeout configuration to enable periodic halt-checking in blocking recv loops.
+///
 /// This function uses the provided `band_local_network_type`, `band_local_user_ipv4_address`, and `band_local_user_ipv6_address`
 /// to determine the appropriate IP address to bind to.
 /// if type says ivp6 or ipv4, this function then attempts to bind
@@ -40206,6 +40312,7 @@ fn create_rc_timeout_udp_socket(
 /// * `band_local_user_ipv4_address`: The local user's IPv4 address (used if `band_local_network_type` is "ipv4").
 /// * `band_local_user_ipv6_address`: The local user's IPv6 address (used if `band_local_network_type` is "ipv6").
 /// * `port`: The port number.
+/// * `timeout_duration_seconds_u64`: Read timeout in seconds (enables periodic halt-checking)
 ///
 /// # Returns
 ///
@@ -40215,6 +40322,7 @@ fn create_local_udp_socket(
     band_local_user_ipv4_address: &Ipv4Addr,
     band_local_user_ipv6_address: &Ipv6Addr,
     port: u16,
+    timeout_duration_seconds_u64: u64,  // ← PHASE 2D: Add timeout parameter
 ) -> Result<UdpSocket, ThisProjectError> {
     let socket_addr = match band_local_network_type {
         "ipv6" => SocketAddr::new(IpAddr::V6(*band_local_user_ipv6_address), port),
@@ -40222,10 +40330,67 @@ fn create_local_udp_socket(
         _ => return Err(ThisProjectError::NetworkError("Unsupported network type".into())),
     };
 
-    UdpSocket::bind(socket_addr).map_err(|e| {
+    let socket = UdpSocket::bind(socket_addr).map_err(|e| {
         ThisProjectError::NetworkError(format!("Failed to bind to {} address: {}", band_local_network_type, e))
-    })
+    })?;
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // PHASE 2D: Set read timeout on socket
+    // ═════════════════════════════════════════════════════════════════════════
+    socket.set_read_timeout(Some(Duration::from_secs(timeout_duration_seconds_u64)))
+        .map_err(|e| {
+            #[cfg(debug_assertions)]
+            debug_log!("Failed to set read timeout on socket: {}", e);
+
+            ThisProjectError::NetworkError(
+                format!("Failed to set socket timeout: {}", e)
+            )
+        })?;
+
+    #[cfg(debug_assertions)]
+    debug_log!(
+        "Created UDP socket at {} with {}s timeout",
+        socket_addr,
+        timeout_duration_seconds_u64
+    );
+
+    Ok(socket)
 }
+
+// /// Creates a UDP socket bound to a locally chosen IP address and port based on the network band configuration.
+// ///
+// /// This function uses the provided `band_local_network_type`, `band_local_user_ipv4_address`, and `band_local_user_ipv6_address`
+// /// to determine the appropriate IP address to bind to.
+// /// if type says ivp6 or ipv4, this function then attempts to bind
+// /// a UDP socket to that ip address and the specified port.
+// ///
+// /// # Arguments
+// ///
+// /// * `band_local_network_type`: A string slice indicating the network type ("ipv4" or "ipv6").
+// /// * `band_local_user_ipv4_address`: The local user's IPv4 address (used if `band_local_network_type` is "ipv4").
+// /// * `band_local_user_ipv6_address`: The local user's IPv6 address (used if `band_local_network_type` is "ipv6").
+// /// * `port`: The port number.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<UdpSocket, ThisProjectError>`:  The created and bound UDP socket on success, or a `ThisProjectError` on failure (invalid IP, binding error, unsupported network type).
+// fn create_local_udp_socket(
+//     band_local_network_type: &str,
+//     band_local_user_ipv4_address: &Ipv4Addr,
+//     band_local_user_ipv6_address: &Ipv6Addr,
+//     port: u16,
+//     timeout_duration_seconds_u64: u64,  // timeout parameter
+// ) -> Result<UdpSocket, ThisProjectError> {
+//     let socket_addr = match band_local_network_type {
+//         "ipv6" => SocketAddr::new(IpAddr::V6(*band_local_user_ipv6_address), port),
+//         "ipv4" => SocketAddr::new(IpAddr::V4(*band_local_user_ipv4_address), port),
+//         _ => return Err(ThisProjectError::NetworkError("Unsupported network type".into())),
+//     };
+
+//     UdpSocket::bind(socket_addr).map_err(|e| {
+//         ThisProjectError::NetworkError(format!("Failed to bind to {} address: {}", band_local_network_type, e))
+//     })
+// }
 
 // TODO likely need to be updated to abs-exe-parent-relative paths
 /// Extracts the team channel name from the current working directory path.
