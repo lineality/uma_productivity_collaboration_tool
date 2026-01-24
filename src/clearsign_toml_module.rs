@@ -2308,44 +2308,44 @@ pub fn verify_clearsign(
     Ok(output.status.success())
 }
 
-/// Verifies a clearsigned file's signature.
-///
-/// # Arguments
-/// - `clearsigned_file_path` - Path to the clearsigned file
-/// - `validator_key_id` - GPG key ID to use for validation
-///
-/// # Returns
-/// - `Ok(())` - If signature validation succeeds
-/// - `Err(GpgError)` - If validation fails or any other operation fails
-///
-/// # Notes
-/// This function first checks if the validator key exists in the keyring
-/// before attempting to verify the signature.
-fn verify_clearsign_signature(
-    clearsigned_file_path: &Path,
-    validator_key_id: &str,
-) -> Result<(), GpgError> {
-    // First check if the validator key exists
-    if !validate_gpg_key(validator_key_id)? {
-        return Err(GpgError::ValidationError(format!(
-            "Validator key '{}' not found in keyring",
-            validator_key_id
-        )));
-    }
+// /// Verifies a clearsigned file's signature.
+// ///
+// /// # Arguments
+// /// - `clearsigned_file_path` - Path to the clearsigned file
+// /// - `validator_key_id` - GPG key ID to use for validation
+// ///
+// /// # Returns
+// /// - `Ok(())` - If signature validation succeeds
+// /// - `Err(GpgError)` - If validation fails or any other operation fails
+// ///
+// /// # Notes
+// /// This function first checks if the validator key exists in the keyring
+// /// before attempting to verify the signature.
+// fn verify_clearsign_signature(
+//     clearsigned_file_path: &Path,
+//     validator_key_id: &str,
+// ) -> Result<(), GpgError> {
+//     // First check if the validator key exists
+//     if !validate_gpg_key(validator_key_id)? {
+//         return Err(GpgError::ValidationError(format!(
+//             "Validator key '{}' not found in keyring",
+//             validator_key_id
+//         )));
+//     }
 
-    let verify_output = Command::new("gpg")
-        .arg("--verify")
-        .arg(clearsigned_file_path)
-        .output()
-        .map_err(|e| GpgError::ValidationError(e.to_string()))?;
+//     let verify_output = Command::new("gpg")
+//         .arg("--verify")
+//         .arg(clearsigned_file_path)
+//         .output()
+//         .map_err(|e| GpgError::ValidationError(e.to_string()))?;
 
-    if !verify_output.status.success() {
-        let error_message = String::from_utf8_lossy(&verify_output.stderr);
-        return Err(GpgError::ValidationError(error_message.to_string()));
-    }
+//     if !verify_output.status.success() {
+//         let error_message = String::from_utf8_lossy(&verify_output.stderr);
+//         return Err(GpgError::ValidationError(error_message.to_string()));
+//     }
 
-    Ok(())
-}
+//     Ok(())
+// }
 
 /// Reads a single-line string field from a clearsigned TOML file.
 ///
@@ -2910,8 +2910,22 @@ pub fn cleanup_temp_clearsign_toml(temp_path_option: Option<PathBuf>) {
 // gpg code
 ////////////
 
-// use std::error::Error as StdError;
-// use std::fmt;
+/// Custom error type for GPG operations
+#[derive(Debug)]
+pub enum GpgError {
+    /// Errors related to file system operations
+    FileSystemError(std::io::Error),
+    /// Errors related to GPG operations
+    GpgOperationError(String),
+    /// Errors related to temporary file management
+    TempFileError(String),
+    /// Errors related to path manipulation
+    PathError(String),
+    /// Errors related to signature validation
+    ValidationError(String),
+    /// Errors related to decryption
+    DecryptionError(String),
+}
 
 // First, implement Display trait for GpgError (if not already implemented)
 impl fmt::Display for GpgError {
@@ -2928,6 +2942,13 @@ impl StdError for GpgError {
             GpgError::FileSystemError(e) => Some(e),
             _ => None,
         }
+    }
+}
+
+// Add this implementation after your GpgError enum definition
+impl From<String> for GpgError {
+    fn from(error: String) -> Self {
+        GpgError::ValidationError(error)
     }
 }
 
@@ -3214,23 +3235,6 @@ pub fn validate_gpg_secret_key(key_id: &str) -> Result<bool, GpgError> {
     }
 }
 
-/// Custom error type for GPG operations
-#[derive(Debug)]
-pub enum GpgError {
-    /// Errors related to file system operations
-    FileSystemError(std::io::Error),
-    /// Errors related to GPG operations
-    GpgOperationError(String),
-    /// Errors related to temporary file management
-    TempFileError(String),
-    /// Errors related to path manipulation
-    PathError(String),
-    /// Errors related to signature validation
-    ValidationError(String),
-    /// Errors related to decryption
-    DecryptionError(String),
-}
-
 /// Generates a current Unix timestamp for unique file naming.
 ///
 /// # Returns
@@ -3331,7 +3335,7 @@ fn encrypt_file_with_public_key(
     output_file_path: &Path,
     recipient_public_key_path: &Path,
 ) -> Result<(), GpgError> {
-    // First, import the recipient's public key for this operation
+    // Encrypt using recipient's public key file (does NOT import to keyring)
     let encrypt_output = Command::new("gpg")
         .arg("--encrypt")
         .arg("--trust-model")
@@ -3807,13 +3811,75 @@ pub fn gpg_abs_executable_directory_relative_exists_boolean_check<P: AsRef<Path>
     Ok(path.exists())
 }
 
+// broken!!
+// /// Store the entire clearsigned file (still in clearsigned format with all signatures intact) to the output path
+// /// Decrypts a GPG-encrypted file containing a clearsigned document, verifies the signature,
+// /// and stores the entire clearsigned file (still clearsigned) to the output path.
+// ///
+// /// # Arguments
+// /// - `incoming_gpg_encrypted_path` - Path to the GPG-encrypted file
+// /// - `gpg_key_id` - GPG key ID to verify the clearsign signature
+// /// - `output_verified_clearsign_path` - Path where to store the verified clearsigned file
+// ///
+// /// # Returns
+// /// - `Result<(), GpgError>` - Success or failure
+// ///
+// /// # Description
+// /// This function:
+// /// 1. Decrypts the GPG-encrypted file
+// /// 2. Verifies the clearsign signature within the decrypted content
+// /// 3. Stores the entire verified clearsigned document (with signatures intact)
+// ///    to the specified output path
+// ///
+// /// Unlike other functions that extract content from clearsigned files,
+// /// this function preserves the entire clearsigned structure including
+// /// signature blocks.
+// pub fn extract_verify_store_gpg_encrypted_clearsign_toml(
+//     incoming_gpg_encrypted_path: &Path,
+//     gpg_key_id: &str,
+//     output_verified_clearsign_path: &Path,
+// ) -> Result<(), GpgError> {
+//     // Step 1: Create a temporary path for the decrypted file
+//     let decrypted_temp_path = create_temp_file_path("decrypted_clearsign")?;
+
+//     // Step 2: Decrypt the GPG file
+//     decrypt_gpg_file(incoming_gpg_encrypted_path, &decrypted_temp_path)?;
+
+//     // Step 3: Verify the clearsign signature
+//     verify_clearsign_signature(&decrypted_temp_path, gpg_key_id)?;
+
+//     // Step 4: If verification succeeded, ensure the output directory exists
+//     if let Some(parent) = output_verified_clearsign_path.parent() {
+//         fs::create_dir_all(parent).map_err(|e| GpgError::FileSystemError(e))?;
+//     }
+
+//     // Step 5: Copy the entire clearsigned file to the output location
+//     fs::copy(&decrypted_temp_path, output_verified_clearsign_path)
+//         .map_err(|e| GpgError::FileSystemError(e))?;
+
+//     // Step 6: Clean up the temporary file
+//     if decrypted_temp_path.exists() {
+//         fs::remove_file(&decrypted_temp_path)
+//             .map_err(|e| GpgError::TempFileError(e.to_string()))?;
+//     }
+
+//     // Success - the verified clearsigned file has been stored to the output path
+//     println!(
+//         "Successfully verified and stored clearsigned file to: {}",
+//         output_verified_clearsign_path.display()
+//     );
+
+//     Ok(())
+// }
+
 /// Store the entire clearsigned file (still in clearsigned format with all signatures intact) to the output path
-/// Decrypts a GPG-encrypted file containing a clearsigned document, verifies the signature,
-/// and stores the entire clearsigned file (still clearsigned) to the output path.
+/// Decrypt, verify, and store a GPG-encrypted clearsigned address-book file
+///
+/// This function handles the special case where the signing key is contained
+/// within the encrypted file itself (e.g., a collaborator's address-book).
 ///
 /// # Arguments
 /// - `incoming_gpg_encrypted_path` - Path to the GPG-encrypted file
-/// - `gpg_key_id` - GPG key ID to verify the clearsign signature
 /// - `output_verified_clearsign_path` - Path where to store the verified clearsigned file
 ///
 /// # Returns
@@ -3821,9 +3887,14 @@ pub fn gpg_abs_executable_directory_relative_exists_boolean_check<P: AsRef<Path>
 ///
 /// # Description
 /// This function:
-/// 1. Decrypts the GPG-encrypted file
-/// 2. Verifies the clearsign signature within the decrypted content
-/// 3. Stores the entire verified clearsigned document (with signatures intact)
+/// 1. Decrypts the GPG-encrypted file (encrypted with local
+///     owner user's public key, decrypted with LOU private key, via
+///     the ID of the local owner users key-pair)
+/// 2. Extracts the incoming GPG public key
+///     from within the incoming decrypted content
+/// 3. Verifies the incoming clearsign signature using
+///     the extracted incoming key
+/// 4. Stores the entire verified clearsigned document (with signatures intact)
 ///    to the specified output path
 ///
 /// Unlike other functions that extract content from clearsigned files,
@@ -3831,7 +3902,7 @@ pub fn gpg_abs_executable_directory_relative_exists_boolean_check<P: AsRef<Path>
 /// signature blocks.
 pub fn extract_verify_store_gpg_encrypted_clearsign_toml(
     incoming_gpg_encrypted_path: &Path,
-    gpg_key_id: &str,
+    // gpg_key_id: &str,
     output_verified_clearsign_path: &Path,
 ) -> Result<(), GpgError> {
     // Step 1: Create a temporary path for the decrypted file
@@ -3840,10 +3911,25 @@ pub fn extract_verify_store_gpg_encrypted_clearsign_toml(
     // Step 2: Decrypt the GPG file
     decrypt_gpg_file(incoming_gpg_encrypted_path, &decrypted_temp_path)?;
 
-    // Step 3: Verify the clearsign signature
-    verify_clearsign_signature(&decrypted_temp_path, gpg_key_id)?;
+    // Step 3: Extract the GPG public key from the decrypted content
+    // This key will be used to verify the signature
+    let collaborator_public_key = extract_gpg_key_from_clearsigntoml(
+        decrypted_temp_path
+            .to_str()
+            .ok_or_else(|| GpgError::ValidationError("Invalid path encoding".to_string()))?,
+        "gpg_key_public",
+    )?;
 
-    // Step 4: If verification succeeded, ensure the output directory exists
+    // Step 4: Verify the clearsign signature using the extracted key
+    // Note: This uses the key FROM the file, not from the keyring
+    verify_clearsign(
+        decrypted_temp_path
+            .to_str()
+            .ok_or_else(|| GpgError::ValidationError("Invalid path encoding".to_string()))?,
+        &collaborator_public_key,
+    )?;
+
+    // Step 5: If verification succeeded, ensure the output directory exists
     if let Some(parent) = output_verified_clearsign_path.parent() {
         fs::create_dir_all(parent).map_err(|e| GpgError::FileSystemError(e))?;
     }

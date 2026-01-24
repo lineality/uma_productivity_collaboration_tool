@@ -15415,39 +15415,32 @@ fn add_new_messagepost_message(
 
     // Production-Catch: Handle empty owner
     if owner.is_empty() {
+        debug_log!("ANMPM: owner.is_empty()");
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            "ANMPM: Owner must not be empty"
+            "ANMPM: error must have owner"
         ));
+
     }
 
-    // Debug-Assert: Text must not be empty
-    #[cfg(all(debug_assertions, not(test)))]
-    debug_assert!(
-        !text.is_empty(),
-        "ANMPM: Message text must not be empty"
-    );
-
-    // Production-Catch: Handle empty text
+    // Empty message?
     if text.is_empty() {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "ANMPM: Message text must not be empty"
-        ));
+        debug_log!("ANMPM: text.is_empty()");
+        return Ok(());
     }
 
     // Debug-Assert: File path must have a filename
     #[cfg(all(debug_assertions, not(test)))]
     debug_assert!(
         incoming_file_path.file_name().is_some(),
-        "ANMPM: File path must have a filename"
+        "ANMPM: error File path must have a filename"
     );
 
     // Production-Catch: Handle missing filename
     if incoming_file_path.file_name().is_none() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            "ANMPM: File path must have a filename"
+            "ANMPM: error File path must have a filename"
         ));
     }
 
@@ -22257,7 +22250,7 @@ fn get_gpg_armored_public_key_via_key_id(key_id: &str) -> io::Result<String> {
     }
 }
 
-
+// todo: docstring needed
 fn gpg_clearsign_file_to_sendbytes(
     file_path: &Path,
 ) -> Result<Vec<u8>, ThisProjectError> {
@@ -22591,6 +22584,119 @@ const TEMP_FILE_CREATION_RETRY_ATTEMPTS: u32 = 5;
 /// - Minimal impact on operation latency (max 5ms total delay)
 /// - Prevents tight busy-loop if filesystem is slow to update
 const TEMP_FILE_RETRY_DELAY_MS: u64 = 1;
+
+/// Prints lines from start to end (1-indexed, inclusive)
+///
+/// Project Context: Shows file contents for debugging. Line numbers match
+/// what developers see in editors (first line is 1, not 0).
+///
+/// # Arguments
+/// * `file_path` - Absolute or relative path to file
+/// * `start_line` - First line to print (1-indexed, must be >= 1)
+/// * `end_line` - Last line to print (must be >= start_line)
+///
+/// # Returns
+/// * `Ok(())` - Success
+/// * `Err(String)` - Error with "PLR:" prefix for Print Line Range
+///
+/// e.g.
+///
+/// // Print lines 5-10
+/// if let Err(error_message) = debug_print_line_range(file_path, 5, 10) {
+///     eprintln!("Error: {}", error_message);
+/// }
+///
+/// Print first 10 lines
+/// if let Err(error_message) = debug_print_line_range(file_path, 1, 10) {
+///     eprintln!("Error: {}", error_message);
+/// }
+pub fn debug_print_line_range(
+    file_path: &str,
+    start_line: usize,
+    end_line: usize,
+) -> Result<(), String> {
+    use std::fs::File;
+    use std::io::{BufRead, BufReader};
+
+    // Validate inputs
+    if file_path.is_empty() {
+        return Err("PLR: empty path".to_string());
+    }
+    if start_line == 0 || end_line == 0 || start_line > end_line {
+        return Err("PLR: invalid range".to_string());
+    }
+
+    // Open file from path
+    let file = File::open(file_path)
+        .map_err(|_| "PLR: cannot open file".to_string())?;
+
+    let reader = BufReader::new(file);
+    let mut current_line_number: usize = 0;
+
+    // Process lines (bounded by end_line)
+    for line_result in reader.lines() {
+        current_line_number = current_line_number.checked_add(1)
+            .ok_or_else(|| "PLR: line overflow".to_string())?;
+
+        if current_line_number < start_line {
+            continue;
+        }
+        if current_line_number > end_line {
+            break;
+        }
+
+        match line_result {
+            Ok(line_content) => {
+                #[cfg(debug_assertions)]
+                println!("Line {}: {}", current_line_number, line_content);
+
+                #[cfg(not(debug_assertions))]
+                println!("{}", line_content);
+            }
+            Err(_) => continue, // Skip corrupted lines
+        }
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod debug_file_print_tests {
+    use super::*;
+    use std::io::Write;
+    use std::fs;
+
+    fn create_test_file() -> String {
+        let test_file_path = format!("test_{}.txt", std::process::id());
+        let mut file = File::create(&test_file_path).unwrap();
+        file.write_all(b"Line 1\nLine 2\nLine 3\nLine 4\nLine 5\n").unwrap();
+        test_file_path
+    }
+
+    #[test]
+    fn test_valid_range() {
+        let test_path = create_test_file();
+        assert!(debug_print_line_range(&test_path, 2, 4).is_ok());
+        let _ = fs::remove_file(test_path);
+    }
+
+    #[test]
+    fn test_invalid_range_zero() {
+        assert!(debug_print_line_range("any.txt", 0, 5).is_err());
+    }
+
+    #[test]
+    fn test_invalid_range_reversed() {
+        assert!(debug_print_line_range("any.txt", 5, 2).is_err());
+    }
+
+    #[test]
+    fn test_missing_file() {
+        assert!(debug_print_line_range("nonexistent.txt", 1, 5).is_err());
+    }
+}
+
+
 
 /// Processes a file through the complete secure transmission pipeline with OTP encryption.
 ///
@@ -26499,6 +26605,8 @@ fn prompt_user_for_save_format_choice() -> Result<bool, GpgError> {
         println!("Press empty-Enter for fully-encrypted (default),");
         println!("or type 'clearsigned' to clearly authorized only-clearsigning:");
         println!();
+        println!("'clearsigned' or Enter -> default gpg encrypted),");
+        println!();
         print!(" > ");
 
         // Read user input
@@ -26917,7 +27025,7 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
     // This uses the LOCAL OWNER USER's key ID to identify which private key to use
     let decrypt_result = extract_verify_store_gpg_encrypted_clearsign_toml(
         &encrypted_file_path,
-        &local_owner_gpg_key_id,
+        // &local_owner_gpg_key_id,
         &temp_clearsigned_path
     );
 
@@ -27001,10 +27109,14 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
         })?;
 
     // Read the username from the clearsigned TOML
+    // since this is a temp-folder pre-read
+    // of the out-of-band candidate file
+    // this just reads the file
+    // after previous steps double verified/validated it
     // This is the remote collaborator whose addressbook we just received
-    let remote_collaborator_username = read_singleline_string_from_clearsigntoml(
+    let remote_collaborator_username = read_single_line_string_field_from_toml(
         temp_clearsigned_path_str,
-        "user_name"
+        "user_name",
     ).map_err(|e| {
         let error_msg = format!("PIECA Failed to read remote collaborator's username: {}", e);
         println!("Error: {}", error_msg);
@@ -28300,6 +28412,7 @@ pub fn invite_wizard() -> Result<(), GpgError> {
         },
 
         2 => {
+            let _ = clear_terminal_screen();
             println!("\n\n-- Option 2: Sharing an Address-Book-File --");
             println!("\nFROM you, TO them, <-outgoing->");
             println!("Are you sharing your address book file with...");
@@ -34651,6 +34764,13 @@ fn handle_local_owner_desk(
 
     loop { // 1. start overall loop to (re)start whole desk
 
+        // Check Arc shutdown flag
+        if should_stop_all_threads.load(Ordering::Relaxed) {
+            #[cfg(debug_assertions)]
+            debug_log!("HLOD loop-1.0 should_stop_all_threads should_stop_all_threads detected, exiting Uma in handle_local_owner_desk()");
+            break Ok(());
+        }
+
         let loop_remote_collaborator_name = local_owner_desk_setup_data.remote_collaborator_name.clone();
 
         #[cfg(debug_assertions)]
@@ -34658,7 +34778,7 @@ fn handle_local_owner_desk(
 
         // 1. Create lookup table:
         let channel_dir_path_str = read_state_string("current_node_directory_path.txt")?; // read as string first
-        #[cfg(all(debug_assertions, not(test)))]
+        #[cfg(debug_assertions)]
         debug_log!(
             "HLOD loop-1.1 Channel directory path (from session state): {} {}",
             channel_dir_path_str,
@@ -34667,7 +34787,7 @@ fn handle_local_owner_desk(
 
         // use absolute file path
         let team_channel_path = PathBuf::from(channel_dir_path_str);
-        #[cfg(all(debug_assertions, not(test)))]
+        #[cfg(debug_assertions)]
         debug_log!(
             "HLOD loop 1.1.1 paths: team_channel_path {:?} {}",
             team_channel_path,
@@ -34679,6 +34799,7 @@ fn handle_local_owner_desk(
 
         // 1.1 check for halt/quit uma signal
         if should_halt_uma() {
+
             debug_log!(
                 "HLOD loop should_halt_uma(), exiting Uma in handle_local_owner_desk() {}",
                 remote_collaborator_name
