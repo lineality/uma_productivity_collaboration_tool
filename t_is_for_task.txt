@@ -178,7 +178,6 @@ Each node has message-post functionality.
 Using the basic module-units in uma (described here as "task-nodes," but you can call them whatever you want) it is easy to create and organize main and sub 'channels' or 'rooms' (or however you want to describe them), and to configure them for the functionality you need them to have: open, private, everyone, some people, ephemeral, encrypted, structured as questionnaires or votes/polls, etc.
 
 
-
 ### Project-Areas
 
 There are six main areas where projects most often fall apart and fail, and where projects fail repeatedly for the same reasons that are effectively invisible. So even though Uma aims to be minimal, these six Project Areas are a core part of tasks and nodes. When you make a new task-node, you are Q&A guided through each Project Area to add a definition to that task-node. Even where elaborate software exists to plan and manage and track various parts of projects, these simple six failure areas somehow manage to slip through the cracks and prevent projects from running smoothly while remaining off people's radar. Uma aims to do everything it can to help people to focus on aligning and communicating about these critical areas.
@@ -210,19 +209,24 @@ There are a number of related functionalities that task management and messaging
 #### Uma Is
 Uma aims to be a do-one-thing-well distributed-multipoint-conferencing-unit (d-MCU) for type-strict task and message structures (not general data transfer) in the form of a distributed graph-database for project/product planning and management, alignment, and coordinated decisions.
 
+
 ## 4. Tutorial: Messages & Tasks in Uma
 - Note: Uma's top-legend will tell you what the commands are.
 
-1. Launch Uma
+### Walkthrough of Steps for Basic Uma Use
+
+1. Launch Uma (in a command-line terminal)
 - Type:
 ```bash
 uma
 ```
 - Press enter.
 
+
 2. Pick a Team-Channel from the list
 - Enter a number.
 - Press enter.
+
 
 3. Go to the Instant-Messenger:
 - Type:
@@ -235,6 +239,7 @@ messages
 ```
 - Press enter.
 
+
 4. Type a message
 - Press enter to toggle between 'messages-refresh' view and 'input text' modes.
 - Type something:
@@ -242,6 +247,7 @@ messages
 Hi, Bob!
 ```
 - Press enter.
+
 
 5. Go back (leaving the message-post area) out to the main team-channel area.
 - Type:
@@ -254,6 +260,7 @@ back
 ```
 - Press enter.
 
+
 6. Go to the Task-Board:
 - Type:
 ```bash
@@ -265,7 +272,8 @@ tasks
 ```
 - Press enter.
 
-6. Move a task from 'Planning' to 'Started'
+
+7. Move a task from 'Planning' to 'Started'
 - Type:
 ```bash
 move
@@ -276,7 +284,7 @@ move
 - Type a number and press enter.
 
 
-6. Add a new task into the 'Planning' columns
+8. Add a new task into the 'Planning' columns
 - Go to the 'Planning' column: Type the number of the planning column (often '1') and press enter.
 - Type:
 ```bash
@@ -284,14 +292,14 @@ add
 ```
 - Follow the Q&A to define each part of that new Task "Node". This will include Project Areas, Custom-Message-Posts (if you want), and other settings (e.g. if you want the file to stay GPG-encrypted).
 
-7. Go to the help-menu to read instructions about something.
+9. Go to the help-menu to read instructions about something.
 - Type:
 ```bash
 help
 ```
 - Press enter.
 
-8. Leave (Quit/Exit Uma)
+10. Leave (Quit/Exit Uma)
 - Type:
 ```bash
 q
@@ -302,10 +310,12 @@ quit
 ```
 - Press enter.
 
+
 ### Recap:
 - Launch: 'uma'
 - 'm'/'messages'
 - Toggle refresh-view / insert-message-text modes with empty enter
+- Type a message and hit enter.
 - 't'/'tasks'
 - Move Task on Board: 1. 'move'  2. What  3. Where
 - Add task node: 'add'
@@ -320,8 +330,6 @@ quit
 - First Setup: There is a setup-wizard to guide you with Q&A to set up your address-book file and your first team-channel
 - Invite-Update Wizard: The 'invite' command will start a Q&A Wizard that will guide you through team-setup with team-mates and other configuration tasks.
 - Your files on your system: These helper-tools (which can no doubt can be further improved upon) are an optional convenience. Uma is a system of your files on your local computer system. There are no hidden-mysterious files in hidden-mysterious formats. There is no hidden-mysterious program-state. There is no hidden-mysterious software needed to make or read a file. Your project files are your plain text files on your system that you can look at, read, modify, encrypt, gpg-sign, OTP-envelope, etc. You can create or change those files with a text editor or any plain-text-file-tool you want. You can remove them any time by deleting them.
-
-
 
 
 
@@ -342,15 +350,15 @@ As with flute-making, a 'simple' physical analogue process (a physical tube or a
 
 2. What are the features needed to manage Project Areas, and what are the needs of different groups who need to manage project areas?
 
-3. What are tech-stacks and the tools (that you need for the features (that you need for the Project Area management (that you need to complete the projects)))?
+3. What are the tech-stacks and the tools (that you need for the features (that you need for the Project Area management (that you need to complete the projects)))?
 
 
 We can break this into two areas to outline:
 
-1. Conceptual, Process & Policy aspects of 'moving-parts and details'
+1. Conceptual, Process & Policy (aspects of 'moving-parts and details')
 - project/product management and coordination more broadly
 
-2. Software Design aspects of 'moving-parts and details'
+2. Software Design (aspects of 'moving-parts and details')
 
 
 
@@ -395,7 +403,7 @@ More abstractly, categories of processes may look like this:
 5. Do not repeat mistakes.
 6. Iterate(Repeat/Loop)
 
-While the focus of Uma aims to be deliberately constrained to a few highly structured modular-combinant 'task' and 'message' features, the dynamics of the system-space in which and for which this is happening should inform both the design and the use of these tool features. Specific areas of articulation and coordination are the scope we should focus on, especially the 'project areas' where mismanagement most often causes projects to fail.
+While the focus of Uma aims to be deliberately constrained to a few highly structured modular-combinant 'task' and 'message' features, the dynamics of the system-space in which (and for which) this is happening should inform both the design and the use of these tool features. Specific areas of articulation and coordination are the scope we should focus on, especially the 'project areas' where mismanagement most often causes projects to fail.
 
 
 The term "project areas" here refers to these specific ~Agile-project-management focused areas:
@@ -407,7 +415,6 @@ The term "project areas" here refers to these specific ~Agile-project-management
 4. Features, Needs & Goals (e.g. What are they?)
 5. MVP (e.g. What is the first Minimum Viable Product to build?)
 6. Feedback, Communication, Learning (e.g. using stakeholder feedback and identifying and acquiring needed skills)
-
 
 
 ### Balancing Deeper Details
@@ -462,7 +469,7 @@ The above link is an essay-walk-through-narative of a step-frame-work-process th
 - For further depth if desired into topics such as externalization of project data and modeling project-spaces and system architectures designed to operate on project-object databases statefully, see Object Relationship Spaces, various sections of which are also available as separate Medium/Blog articles and github repositories.
 
 
-This is just a starting set of examples. There are other clearly relevant areas that are still too young to have clear conclusive models of, such as network design decisions where the "designs" of parts of the internet have been clearly shown to be lacking or problematic, but often there is not clear consensus (or even any serious suggestion) about what would have been sufficient (if not ideal).
+This is just a starting set of examples. There are other clearly relevant areas that are still too young to have clear conclusive models of, such as network design decisions where the "designs" of parts of the internet have been clearly shown to be lacking or problematic, but often there is no clear consensus (or even any serious suggestion) about what may be a sufficient (if not ideal) solution.
 
 Hopefully in the future there will be something more coherent that what we have today for:
 - 'socially non-destructive networks' and
@@ -473,8 +480,7 @@ Striking a balance between task/message high level coordination vs. project plan
 
 ## 6. Software Design
 
-
-### Three Questions on Collaboration Tools.
+### Three Questions on Collaboration Tools
 1. What are the project-areas we need to manage?
 
 2. Features: What User-Features/Functionalities are needed for a project to use best-practice satisfying the standards of (if not using all methods of) Agile Agile-Khaneman-Tversky-Decision Project-Product Management?
@@ -565,7 +571,7 @@ Going to school on these design mistakes (or attempting to), Uma is designed to 
 - no separate servers (uma runs on the device you are using)
 - no load balancing backend or kubernetes devops
 - no signing-certificate renewal
-- no dns configuration
+- no dns: configurations, updates, lookups, etc.
 - no web-hosting/domain-configuration,etc. (uma is not website/server-bloatware)
 - no service-hosting third-party companies
 - no required api configurations
@@ -1081,3 +1087,6 @@ https://www.grc.com/sn/sn-1054.txt
 - According to the wikipedia on Rust, Rust creator Graydon Hoare '...described the language as "technology from the past come to save the future..."'
 
 - The Uma, うま, is horse. 44444
+
+
+- otter.ai
