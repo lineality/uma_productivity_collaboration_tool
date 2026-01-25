@@ -15367,7 +15367,7 @@ fn add_new_messagepost_message(
     graph_navigation_instance_state: &GraphNavigationInstanceState,
 ) -> Result<(), io::Error> {
 
-    #[cfg(all(debug_assertions, not(test)))]
+    #[cfg(debug_assertions)]
     {
         debug_log!("ANMPM graph_navigation_instance_state->{:?}", graph_navigation_instance_state);
         debug_log!("ANMPM: Starting add_new_messagepost_message");
@@ -15389,7 +15389,7 @@ fn add_new_messagepost_message(
 
     let current_node_owner = graph_navigation_instance_state.current_node_owner.clone(); //;: String
 
-    #[cfg(all(debug_assertions, not(test)))]
+    #[cfg(debug_assertions)]
     {
     debug_log!("ANMPM: integer_ranges: {:?}", integer_ranges);
     debug_log!("ANMPM: integer_string_ranges: {:?}", integer_string_ranges);
@@ -15458,12 +15458,14 @@ fn add_new_messagepost_message(
         return Ok(());
     }
 
+    #[cfg(debug_assertions)]
     debug_log!("ANMPM: Time window check passed");
 
     // =================================================
     // Step 2: Check for Structured Format & Run Q&A
     // =================================================
 
+    #[cfg(debug_assertions)]
     debug_log!("ANMPM: Checking for structured format configuration");
 
 
@@ -15474,9 +15476,11 @@ fn add_new_messagepost_message(
         _ => false,
     };
 
+    #[cfg(debug_assertions)]
     debug_log!("ANMPM: Structured format active: {}", structured_format_active);
 
     let final_text = if structured_format_active {
+        #[cfg(debug_assertions)]
         debug_log!("ANMPM: Running structured format Q&A");
 
         match structured_format_qa_interactive(
@@ -15486,16 +15490,19 @@ fn add_new_messagepost_message(
             max_string_length,
         )? {
             Some(formatted_text) => {
+                #[cfg(debug_assertions)]
                 debug_log!("ANMPM: Structured Q&A completed: {}", formatted_text);
                 formatted_text
             }
             None => {
+                #[cfg(debug_assertions)]
                 debug_log!("ANMPM: Structured Q&A cancelled - skipping message creation");
                 return Ok(());
             }
         }
     } else {
         // No structured format - use original text
+        #[cfg(debug_assertions)]
         debug_log!("ANMPM: No structured format - using original text");
         text.to_string()
     };
@@ -15504,6 +15511,7 @@ fn add_new_messagepost_message(
     // Step 3: Max Length Truncation (if not already handled)
     // =================================================
 
+    #[cfg(debug_assertions)]
     debug_log!("ANMPM: Applying max length truncation if configured");
 
     // Note: For structured format, max_length was already applied to write-in text
@@ -15515,12 +15523,14 @@ fn add_new_messagepost_message(
         final_text
     };
 
+    #[cfg(debug_assertions)]
     debug_log!("ANMPM: Final text length: {}", final_text_truncated.len());
 
     // =================================================
     // Step 4: Determine Recipients List
     // =================================================
 
+    #[cfg(debug_assertions)]
     debug_log!("ANMPM: Determining recipients list");
 
     // Start with default collaborators list
@@ -15530,6 +15540,7 @@ fn add_new_messagepost_message(
 
     // Check for privacy mode override
     if is_public == Some(false) {
+        #[cfg(debug_assertions)]
         debug_log!("ANMPM: Privacy mode active - restricting to owner and node owner");
         recipients_list.clear();
         recipients_list.push(owner.to_string());
@@ -15542,6 +15553,7 @@ fn add_new_messagepost_message(
             if let Some(end_brace) = final_text_truncated[to_clause..].find('}') {
                 let recipient_name = final_text_truncated[to_clause + 4..to_clause + end_brace].trim();
 
+                #[cfg(debug_assertions)]
                 debug_log!("ANMPM: Found clause for recipient: {}", recipient_name);
 
                 recipients_list.clear(); // Clear default list
@@ -15553,8 +15565,10 @@ fn add_new_messagepost_message(
                     && recipient_name != owner
                 {
                     recipients_list.push(recipient_name.to_string());
+                    #[cfg(debug_assertions)]
                     debug_log!("ANMPM: Recipient validated and added: {}", recipient_name);
                 } else {
+                    #[cfg(debug_assertions)]
                     debug_log!(
                         "ANMPM: 'to:' clause but recipient '{}' not found in channel or is sender.",
                         recipient_name
@@ -15564,6 +15578,7 @@ fn add_new_messagepost_message(
         }
     }
 
+    #[cfg(debug_assertions)]
     debug_log!("ANMPM: Final recipients list: {:?}", recipients_list);
 
     // =================================================
@@ -15571,6 +15586,7 @@ fn add_new_messagepost_message(
     // =================================================
 
     if user_confirms == Some(true) {
+        #[cfg(debug_assertions)]
         debug_log!("ANMPM: User confirmation required - showing preview");
 
         // Clear stdin buffer by prompting for explicit Enter
@@ -15612,16 +15628,20 @@ fn add_new_messagepost_message(
         io::stdin().read_line(&mut confirmation)?;
         let confirmation = confirmation.trim().to_lowercase();
 
+        #[cfg(debug_assertions)]
         debug_log!("ANMPM: confirmation {}", confirmation);
+
         println!("ANMPM: confirmation {}", confirmation);
 
 
         if confirmation != "y" && confirmation != "yes" {
             println!("\n✗ Message creation cancelled by user.\n");
+            #[cfg(debug_assertions)]
             debug_log!("ANMPM: User did not confirm - skipping message creation");
             return Ok(());
         }
 
+        #[cfg(debug_assertions)]
         debug_log!("ANMPM: User confirmed message");
     }
 
@@ -15629,6 +15649,7 @@ fn add_new_messagepost_message(
     // Step 6: Get Parent Directory and Read Metadata
     // =================================================
 
+    #[cfg(debug_assertions)]
     debug_log!("ANMPM: Extracting parent directory");
 
     let parent_dir = incoming_file_path.parent()
@@ -15652,12 +15673,15 @@ fn add_new_messagepost_message(
         ));
     }
 
+    #[cfg(debug_assertions)]
     debug_log!("ANMPM: Parent directory: {:?}", parent_dir);
 
     // Read 0.toml to get message browser metadata
+    #[cfg(debug_assertions)]
     debug_log!("ANMPM: Reading metadata from 0.toml");
 
     let metadata_path = parent_dir.join("0.toml");
+    #[cfg(debug_assertions)]
     debug_log!("ANMPM: let metadata_path -> {:?}", metadata_path);
 
     let metadata_path_string = metadata_path.to_string_lossy();
@@ -15674,6 +15698,7 @@ fn add_new_messagepost_message(
     )
     .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("ANMPM: path_in_node read error: {}", e)))?;
 
+    #[cfg(debug_assertions)]
     debug_log!("ANMPM: Metadata loaded - node: {}, path: {}",
         node_name,
         filepath_in_node
@@ -15682,7 +15707,7 @@ fn add_new_messagepost_message(
     // =================================================
     // Step 7: Create MessagePostFile struct
     // =================================================
-
+    #[cfg(debug_assertions)]
     debug_log!("ANMPM: Creating MessagePostFile");
 
     let ping: Vec<String> = Vec::new();
@@ -15717,21 +15742,25 @@ fn add_new_messagepost_message(
 
     // Apply gpgtoml_required override
     if let Some(true) = gpgtoml_required {
+        #[cfg(debug_assertions)]
         debug_log!("ANMPM: Applying gpgtoml_required override");
         message.messagepost_gpgtoml = true;
     }
 
+    #[cfg(debug_assertions)]
     debug_log!("ANMPM: MessagePostFile created, gpgtoml: {}", message.messagepost_gpgtoml);
 
     // =================================================
     // Step 8: Serialize message to TOML
     // =================================================
 
+    #[cfg(debug_assertions)]
     debug_log!("ANMPM: Serializing message to TOML");
 
     // TODO
     let toml_data = match serialize_messagepost_toml(&message) {
         Ok(toml_string) => {
+            #[cfg(debug_assertions)]
             debug_log!("ANMPM: TOML serialization successful, {} bytes", toml_string.len());
             toml_string
         }
@@ -36370,7 +36399,7 @@ fn handle_local_owner_desk(
                                         // get parent node_id
                                         let parent_node_uniqueid_vec_result = read_u8_array_field_from_string(
                                             file_str,
-                                            "parent_node_uniqueid"
+                                            "parent_node_uniqueid" // "node_unique_id" //
                                         );
                                         match parent_node_uniqueid_vec_result {
                                             Ok(parent_node_uniqueid_vec) => { // Node exists, handle move/replace:
