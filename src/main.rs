@@ -8775,8 +8775,6 @@ impl GraphNavigationInstanceState {
             self.active_team_channel.clone(),
         );
 
-        // TODO check for node.toml or .gpgtoml
-
         // Construct path to node.toml or node.gpgtoml
         // Find the configuration file (could be either node.toml OR node.gpgtoml)
         let node_toml_path = match find_node_toml_or_gpgtoml_file(
@@ -8829,97 +8827,7 @@ impl GraphNavigationInstanceState {
             return;
         }
 
-        // // Try to read the file metadata
-        // match fs::metadata(&node_toml_path) {
-        //     Ok(metadata) => {
-        //         debug_log!("File metadata found: is_file={}, size={}", metadata.is_file(), metadata.len());
-        //     },
-        //     Err(e) => {
-        //         debug_log!("\n\n nav_graph_look_read_node_toml() Error reading file metadata: {}", e);
-        //     }
-        // }
-
         debug_log("NGLRNT In nav_graph_look_read_node_toml(), next calling: deseri_get_core_node_struct_from_toml_file(file_path: &Path) -> Result<CoreNode");
-        // Try to open and read the file
-        // match fs::read_to_string(&node_toml_path) {
-        //     Ok(contents) => {
-        //         debug_log!("Successfully read file, content length: {}", contents.len());
-
-
-
-        // // A. Check for either node.toml or node.gpgtoml
-        // let node_toml_path = channel_dir_path.join("node.toml");
-        // let node_gpgtoml_path = channel_dir_path.join("node.gpgtoml");
-
-        // let raw_channelnodetoml_path = if node_toml_path.exists() {
-        //     debug_log!("TCS: Found node.toml");
-        //     node_toml_path
-        // } else if node_gpgtoml_path.exists() {
-        //     debug_log!("TCS: Found node.gpgtoml");
-        //     node_gpgtoml_path
-        // } else {
-        //     return Err(MyCustomError::from(
-        //         "TCS: Neither node.toml nor node.gpgtoml found in team channel directory".to_string()
-        //     ));
-        // };
-
-        // // Get GPG fingerprint (could move this outside the loop if same for all)
-        // let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
-        //     Ok(fingerprint) => fingerprint,
-        //     Err(e) => {
-        //         #[cfg(debug_assertions)]
-        //         debug_log!(
-        //             "NGLRNT error Failed to read GPG fingerprint for {:?}:  (skipping)",
-        //             e
-        //         );
-        //         // continue; // Skip this directory, continue with next
-        //         return
-        //     }
-        // };
-
-        // // Get temp directory path (could move this outside the loop if same for all)
-        // let base_uma_temp_directory_path = match get_base_uma_temp_directory_path() {
-        //     Ok(path) => path,
-        //     Err(e) => {
-        //         #[cfg(debug_assertions)]
-        //         debug_log!(
-        //             "NGLRNT error Failed to get temp directory path for {:?}: (skipping)",
-        //             e
-        //         );
-        //         // continue; // Skip this directory, continue with next
-        //         return
-        //     }
-        // };
-
-        // // Get readable copy
-        // // Get readable copy
-        // let node_readcopy_path_string = match get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
-        //     &node_toml_path,
-        //     &gpg_full_fingerprint_key_id_string,
-        //     &base_uma_temp_directory_path,
-        // ) {
-        //     Ok(path) => path,
-        //     Err(e) => {
-        //         #[cfg(debug_assertions)]
-        //         debug_log!(
-        //             "NGLRNT error Failed to get read copy for {:?}: {:?} (skipping)",
-        //             node_toml_path,
-        //             e
-        //         );
-        //         // continue; // Skip this directory, continue with next
-        //         return
-        //     }
-        // };
-
-        // debug_log!("NGLRNT: channel_node_tomlpath_string
-        //     : {}", node_readcopy_path_string
-        // );
-
-        // let path_node_readcopy_path = Path::new(&node_readcopy_path_string);
-
-        // debug_log!("NGLRNT: path_node_readcopy_path
-        //     : {:?}", path_node_readcopy_path
-        // );
 
         // Load and parse the node.toml file
         let this_node = match deseri_get_core_node_struct_from_toml_file(&node_toml_path) {
@@ -8933,9 +8841,7 @@ impl GraphNavigationInstanceState {
         debug_log!("NGLRNT nav_graph_look_read_node_toml(), this_node -> {:?}", this_node);
 
         // // Check if this is a Team Channel Node using path components
-        // let is_team_channel = self.current_full_file_path
-        //     .components()
-        //     .any(|component| component.as_os_str() == "team_channels");
+
         debug_log(&format!("NGLRNT self.current_full_file_path {:?}", self.current_full_file_path));
 
 
@@ -8963,8 +8869,6 @@ impl GraphNavigationInstanceState {
             is_team_channel = false;
         }
 
-
-
         if is_team_channel {
             debug_log!("nav_graph_look_read_node_toml(), IS team channel node");
             // Update state for team channel node
@@ -8978,7 +8882,6 @@ impl GraphNavigationInstanceState {
             /*
             set current_node_directory_path to the full
             absolute canonicalied path
-
             */
 
             let base_teamchannel_path = match get_team_channels_homebase_directory_path() {
@@ -9002,7 +8905,7 @@ impl GraphNavigationInstanceState {
             // self.current_node_directory_path = this_node.directory_path.clone();
             self.current_node_directory_path = full_node_path;
 
-            //team channel is its won base parent
+            // team channel is its won base parent
             self.parent_node_uniqueid = this_node.node_unique_id.clone();
 
             self.current_node_unique_id = this_node.node_unique_id;
@@ -9034,9 +8937,7 @@ impl GraphNavigationInstanceState {
             /*
             current_node_directory_path
             this should be parent path + path_in_parentnode
-
             */
-
 
             /*
             current_node_directory_path should be:
@@ -9048,60 +8949,7 @@ impl GraphNavigationInstanceState {
             path to parent node...(by name? by id?)
             +
             path from parent node...
-
             */
-            // // 1. Create lookup table:
-            // let channel_dir_path_str = match read_state_string("current_node_directory_path.txt") {
-            //     Ok(path) => path,
-            //     Err(_e) => {
-            //         #[cfg(debug_assertions)]
-            //         debug_log!("HLOD Failed to get absolute path: {}", _e);
-            //         "".to_string()
-            //     }
-            // };
-            // #[cfg(all(debug_assertions, not(test)))]
-            // debug_log!("HLOD loop-1.1 Channel directory path (from session state): {}", channel_dir_path_str);
-
-            // // use absolute file path
-            // let team_channel_path = PathBuf::from(channel_dir_path_str);
-            // #[cfg(all(debug_assertions, not(test)))]
-            // debug_log!("HLOD loop 1.1.1 paths: team_channel_path {:?}", team_channel_path);
-
-            // // let mut hashtable_node_id_to_path = create_node_id_to_path_lookup(&team_channel_path)?;
-            // let mut hashtable_node_id_to_path = match create_node_id_to_path_lookup(&team_channel_path) {
-            //     Ok(path) => path,
-            //     Err(_e) => {
-            //         #[cfg(debug_assertions)]
-            //         debug_log!("HLOD Failed to get absolute path: {}", _e);
-            //         HashMap::new() // Return an empty HashMap<Vec<u8>, PathBuf>
-            //     }
-            // };
-
-            // // Get local_abs_path_to_parent
-            // // let Some(local_abs_path_to_parent) = hashtable_node_id_to_path.get(&node_unique_id_vec)...
-
-            // let mut current_node_directory_path: PathBuf;
-
-            // // Get old node.toml file path (if exists)
-            // if let Some(node_directory_path) = hashtable_node_id_to_path.get(&node_unique_id_vec) {
-
-            //     // make old directory path
-            //     current_node_directory_path = PathBuf::from(node_directory_path);
-
-
-
-            //     debug_log!(
-            //         "NGLRNT 7.2 current_node_directory_path -> {:?}",
-            //         &current_node_directory_path
-            //     );
-            // }
-
-            // // for node
-            // let node_relative_channel_pathbuf = extract_relative_node_path_after_known_segments(&this_node.parent_node_uniqueid.clone())?;
-
-            // #[cfg(debug_assertions)]
-            // debug_log!("CCN: node_relative_channel_pathbuf {:?}", node_relative_channel_pathbuf);
-
 
             // Update state for non-team-channel nodes
             // These fields should be updated for ANY node type
@@ -9109,12 +8957,31 @@ impl GraphNavigationInstanceState {
             self.current_node_name = this_node.node_name.clone();
             self.current_node_owner = this_node.owner.clone();
             self.current_node_description_for_tui = this_node.description_for_tui.clone();
+
+            // setting the current node id, and the parent-node of this node
+            // e.g. for nodes and moving nodes, 'parents' is what the node is
+            // for files in a node, current node is where that file is
+
+
+            // TODO
+            /*
+
+            find_parentnode_toml_path()
+            read id from file?
+            */
+            // should this be set to the previous current node? or not... bidirectional?
+            // moving forward or backward?
+            // self.parent_node_uniqueid = this_node.parent_node_uniqueid;
+            self.parent_node_uniqueid = self.current_node_unique_id.clone();
+
+
+            //
             self.current_node_unique_id = this_node.node_unique_id;
-            self.parent_node_uniqueid = this_node.parent_node_uniqueid;
+
+
 
             // current path?
             self.current_node_directory_path = self.current_full_file_path.clone();
-            // self.current_node_directory_path = this_node.parent_node_uniqueid.clone();
 
             // self.current_node_members = this_node.members.clone();
             self.home_square_one = false;
