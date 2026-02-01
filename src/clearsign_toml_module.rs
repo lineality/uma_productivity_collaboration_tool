@@ -1936,36 +1936,195 @@ fn parse_abstract_port_assignments(
     Ok(result)
 }
 
+// /// Verifies a clearsigned file using ONLY the provided GPG public key.
+// ///
+// /// # Project Context
+// /// This function verifies cryptographic signatures on configuration files
+// /// or inter-process messages. It uses an isolated keyring to ensure
+// /// verification is performed against ONLY the provided key.
+// ///
+// /// # Security Model
+// /// - Uses `--no-default-keyring` to block system keyring access
+// /// - Creates a new keyring file containing ONLY the provided key
+// /// - Verification succeeds ONLY if signature matches this specific key
+// ///
+// /// # Difference from --homedir Approach
+// /// This approach:
+// /// - Still uses system GPG configuration (gpg.conf, agent settings)
+// /// - Only isolates the keyring, not the entire GPG environment
+// /// - May be faster (no need to initialize fresh GPG home)
+// /// - Less isolated (shares config with system GPG)
+// ///
+// /// Use this when: System GPG config is trusted and speed matters
+// /// Use --homedir when: Complete isolation is required
+// ///
+// /// # Arguments
+// /// - `path` - Absolute path to the clearsigned file to verify
+// /// - `public_key` - ASCII-armored GPG public key of the expected signer
+// ///
+// /// # Returns
+// /// - `Ok(true)` - Signature valid AND made by the provided key
+// /// - `Ok(false)` - Signature invalid OR not made by the provided key
+// /// - `Err(String)` - System error (file I/O, GPG execution failure)
+// pub fn verify_clearsign_using_isolated_keyring(
+//     path: &str,
+//     public_key: &str,
+// ) -> Result<bool, String> {
+//     use std::fs;
+//     use std::path::Path;
+//     use std::process::Command;
+//     // =========================================================
+//     // Input Validation
+//     // =========================================================
+
+//     #[cfg(all(debug_assertions, not(test)))]
+//     {
+//         debug_assert!(!path.is_empty(), "VCIK: path must not be empty");
+//         debug_assert!(!public_key.is_empty(), "VCIK: public_key must not be empty");
+//     }
+
+//     if path.is_empty() {
+//         return Err("VCIK error: path argument empty".to_string());
+//     }
+
+//     if public_key.is_empty() {
+//         return Err("VCIK error: public_key argument empty".to_string());
+//     }
+
+//     if !Path::new(path).exists() {
+//         return Err("VCIK error: clearsigned file does not exist".to_string());
+//     }
+
+//     if !public_key.contains("-----BEGIN PGP PUBLIC KEY BLOCK-----") {
+//         return Err("VCIK error: key does not appear to be ASCII-armored PGP".to_string());
+//     }
+
+//     // =========================================================
+//     // Create Temporary Files for Isolated Keyring
+//     // =========================================================
+
+//     let temp_base = format!(
+//         "/tmp/gpg_keyring_{}_{}",
+//         std::process::id(),
+//         std::time::SystemTime::now()
+//             .duration_since(std::time::UNIX_EPOCH)
+//             .map(|d| d.as_nanos())
+//             .unwrap_or(0)
+//     );
+
+//     let keyring_path = format!("{}.gpg", temp_base);
+//     let key_file_path = format!("{}.asc", temp_base);
+
+//     // Write public key to temporary file for import
+//     fs::write(&key_file_path, public_key)
+//         .map_err(|e| format!("VCIK error: failed to write key file: {}", e))?;
+
+//     // =========================================================
+//     // Import Key into New Isolated Keyring
+//     // =========================================================
+
+//     // Note: GPG will create the keyring file during import
+//     let import_result = Command::new("gpg")
+//         .arg("--no-default-keyring") // Do NOT use ~/.gnupg/pubring.gpg
+//         .arg("--keyring")
+//         .arg(&keyring_path) // Use this new keyring instead
+//         .arg("--batch")
+//         .arg("--no-tty")
+//         .arg("--yes")
+//         .arg("--import")
+//         .arg(&key_file_path)
+//         .output();
+
+//     // Cleanup helper closure
+//     let cleanup = || {
+//         let _ = fs::remove_file(&keyring_path);
+//         let _ = fs::remove_file(format!("{}~", keyring_path)); // GPG backup file
+//         let _ = fs::remove_file(&key_file_path);
+//     };
+
+//     let import_output = match import_result {
+//         Ok(output) => output,
+//         Err(e) => {
+//             cleanup();
+//             return Err(format!("VCIK error: failed to execute gpg import: {}", e));
+//         }
+//     };
+
+//     if !import_output.status.success() {
+//         cleanup();
+//         return Err("VCIK error: gpg key import failed".to_string());
+//     }
+
+//     // =========================================================
+//     // Verify Against Isolated Keyring
+//     // =========================================================
+
+//     let verify_result = Command::new("gpg")
+//         .arg("--no-default-keyring") // Do NOT use system keyring
+//         .arg("--keyring")
+//         .arg(&keyring_path) // Use ONLY our imported key
+//         .arg("--batch")
+//         .arg("--no-tty")
+//         .arg("--verify")
+//         .arg(path)
+//         .output();
+
+//     let verification_succeeded = match verify_result {
+//         Ok(output) => output.status.success(),
+//         Err(e) => {
+//             cleanup();
+//             return Err(format!("VCIK error: failed to execute gpg verify: {}", e));
+//         }
+//     };
+
+//     // =========================================================
+//     // Cleanup
+//     // =========================================================
+
+//     cleanup();
+
+//     Ok(verification_succeeded)
+// }
+
 /// Verifies a clearsigned file using ONLY the provided GPG public key.
 ///
 /// # Project Context
-/// This function verifies cryptographic signatures on configuration files
-/// or inter-process messages. It uses an isolated keyring to ensure
-/// verification is performed against ONLY the provided key.
+/// This function validates that a specific clearsigned file was signed
+/// by a specific sender whose public key is provided. This is used to
+/// authenticate configuration files, messages, or other data where the
+/// identity of the signer matters.
+///
+/// # Why Complete Isolation Is Required
+/// GPG maintains a system keyring at ~/.gnupg/ containing all keys the
+/// user has ever imported. Without isolation, GPG verification would
+/// succeed if the signature matches ANY key in this keyring - defeating
+/// the purpose of verifying against a SPECIFIC provided key.
+///
+/// This function creates a completely isolated GPG environment using
+/// `--homedir` pointed at a temporary directory. This temporary GPG
+/// home has:
+/// - Its own empty keyring (until we import the provided key)
+/// - Its own trustdb
+/// - Its own configuration
+/// - NO access to ~/.gnupg/ whatsoever
 ///
 /// # Security Model
-/// - Uses `--no-default-keyring` to block system keyring access
-/// - Creates a new keyring file containing ONLY the provided key
-/// - Verification succeeds ONLY if signature matches this specific key
-///
-/// # Difference from --homedir Approach
-/// This approach:
-/// - Still uses system GPG configuration (gpg.conf, agent settings)
-/// - Only isolates the keyring, not the entire GPG environment
-/// - May be faster (no need to initialize fresh GPG home)
-/// - Less isolated (shares config with system GPG)
-///
-/// Use this when: System GPG config is trusted and speed matters
-/// Use --homedir when: Complete isolation is required
+/// - Signature is verified ONLY against the provided public key
+/// - System keyring is completely inaccessible during verification
+/// - Temporary GPG home is deleted after verification
+/// - Returns false if signature does not match the specific provided key
 ///
 /// # Arguments
 /// - `path` - Absolute path to the clearsigned file to verify
 /// - `public_key` - ASCII-armored GPG public key of the expected signer
 ///
 /// # Returns
-/// - `Ok(true)` - Signature valid AND made by the provided key
-/// - `Ok(false)` - Signature invalid OR not made by the provided key
+/// - `Ok(true)` - Signature valid AND made by the provided key specifically
+/// - `Ok(false)` - Signature invalid OR made by a different key
 /// - `Err(String)` - System error (file I/O, GPG execution failure)
+///
+/// # Error Prefix
+/// All errors from this function are prefixed with "VCIH" for tracing.
 pub fn verify_clearsign_using_isolated_keyring(
     path: &str,
     public_key: &str,
@@ -1974,60 +2133,97 @@ pub fn verify_clearsign_using_isolated_keyring(
     use std::path::Path;
     use std::process::Command;
     // =========================================================
-    // Input Validation
+    // Debug-Assert, Test-Assert, Production-Catch-Handle
     // =========================================================
 
+    // Debug-only assertions (not in test builds, not in production)
     #[cfg(all(debug_assertions, not(test)))]
     {
-        debug_assert!(!path.is_empty(), "VCIK: path must not be empty");
-        debug_assert!(!public_key.is_empty(), "VCIK: public_key must not be empty");
+        debug_assert!(!path.is_empty(), "VCIH debug: path must not be empty");
+        debug_assert!(
+            !public_key.is_empty(),
+            "VCIH debug: public_key must not be empty"
+        );
+        debug_assert!(
+            public_key.contains("-----BEGIN PGP PUBLIC KEY BLOCK-----"),
+            "VCIH debug: key should be ASCII-armored"
+        );
     }
 
+    // Production catch: empty path
     if path.is_empty() {
-        return Err("VCIK error: path argument empty".to_string());
+        return Err("VCIH error: path empty".to_string());
     }
 
+    // Production catch: empty key
     if public_key.is_empty() {
-        return Err("VCIK error: public_key argument empty".to_string());
+        return Err("VCIH error: key empty".to_string());
     }
 
+    // Production catch: file must exist before we create temp resources
     if !Path::new(path).exists() {
-        return Err("VCIK error: clearsigned file does not exist".to_string());
+        return Err("VCIH error: file not found".to_string());
     }
 
+    // Production catch: basic key format validation
+    // Avoids creating temp directory for obviously invalid input
     if !public_key.contains("-----BEGIN PGP PUBLIC KEY BLOCK-----") {
-        return Err("VCIK error: key does not appear to be ASCII-armored PGP".to_string());
+        return Err("VCIH error: invalid key format".to_string());
     }
 
     // =========================================================
-    // Create Temporary Files for Isolated Keyring
+    // Create Isolated GPG Home Directory
     // =========================================================
 
-    let temp_base = format!(
-        "/tmp/gpg_keyring_{}_{}",
+    // Generate unique directory path using process ID and timestamp
+    // No external crates - using std only per project rules
+    let timestamp_nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+
+    let temp_gpg_home = format!(
+        "/tmp/gpg_isolated_{}_{}",
         std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_nanos())
-            .unwrap_or(0)
+        timestamp_nanos
     );
 
-    let keyring_path = format!("{}.gpg", temp_base);
-    let key_file_path = format!("{}.asc", temp_base);
+    // Create the isolated GPG home directory
+    if let Err(e) = fs::create_dir_all(&temp_gpg_home) {
+        return Err(format!("VCIH error: temp dir creation failed: {}", e));
+    }
 
-    // Write public key to temporary file for import
-    fs::write(&key_file_path, public_key)
-        .map_err(|e| format!("VCIK error: failed to write key file: {}", e))?;
+    // GPG requires home directory permissions to be 700 (owner only)
+    // Without this, GPG will warn or refuse to operate
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let permissions = fs::Permissions::from_mode(0o700);
+        if let Err(e) = fs::set_permissions(&temp_gpg_home, permissions) {
+            let _ = fs::remove_dir_all(&temp_gpg_home);
+            return Err(format!("VCIH error: permission set failed: {}", e));
+        }
+    }
+
+    // Write the public key to a file for GPG import
+    let key_file_path = format!("{}/key_to_import.asc", temp_gpg_home);
+    if let Err(e) = fs::write(&key_file_path, public_key) {
+        let _ = fs::remove_dir_all(&temp_gpg_home);
+        return Err(format!("VCIH error: key file write failed: {}", e));
+    }
 
     // =========================================================
-    // Import Key into New Isolated Keyring
+    // Import Provided Key into Isolated Keyring
     // =========================================================
 
-    // Note: GPG will create the keyring file during import
+    // --homedir: Use our temporary directory instead of ~/.gnupg/
+    // --batch: Non-interactive mode
+    // --no-tty: No terminal output
+    // --yes: Auto-confirm prompts
+    // --import: Import the key from file
     let import_result = Command::new("gpg")
-        .arg("--no-default-keyring") // Do NOT use ~/.gnupg/pubring.gpg
-        .arg("--keyring")
-        .arg(&keyring_path) // Use this new keyring instead
+        .arg("--homedir")
+        .arg(&temp_gpg_home)
         .arg("--batch")
         .arg("--no-tty")
         .arg("--yes")
@@ -2035,55 +2231,63 @@ pub fn verify_clearsign_using_isolated_keyring(
         .arg(&key_file_path)
         .output();
 
-    // Cleanup helper closure
-    let cleanup = || {
-        let _ = fs::remove_file(&keyring_path);
-        let _ = fs::remove_file(format!("{}~", keyring_path)); // GPG backup file
-        let _ = fs::remove_file(&key_file_path);
-    };
-
     let import_output = match import_result {
         Ok(output) => output,
         Err(e) => {
-            cleanup();
-            return Err(format!("VCIK error: failed to execute gpg import: {}", e));
+            let _ = fs::remove_dir_all(&temp_gpg_home);
+            return Err(format!("VCIH error: gpg import exec failed: {}", e));
         }
     };
 
+    // Check import succeeded
     if !import_output.status.success() {
-        cleanup();
-        return Err("VCIK error: gpg key import failed".to_string());
+        let _ = fs::remove_dir_all(&temp_gpg_home);
+        // Note: NOT exposing stderr content in production (security)
+        return Err("VCIH error: gpg import failed".to_string());
     }
 
     // =========================================================
-    // Verify Against Isolated Keyring
+    // Verify Clearsigned File Against Isolated Keyring
     // =========================================================
 
+    // --homedir: Same isolated directory - contains ONLY our imported key
+    // --verify: Verify the signature in the clearsigned file
+    //
+    // GPG will:
+    // 1. Extract the signature from the clearsigned file
+    // 2. Look up the signing key ID in the isolated keyring
+    // 3. Return success (0) ONLY if key found AND signature valid
     let verify_result = Command::new("gpg")
-        .arg("--no-default-keyring") // Do NOT use system keyring
-        .arg("--keyring")
-        .arg(&keyring_path) // Use ONLY our imported key
+        .arg("--homedir")
+        .arg(&temp_gpg_home)
         .arg("--batch")
         .arg("--no-tty")
         .arg("--verify")
         .arg(path)
         .output();
 
-    let verification_succeeded = match verify_result {
+    let verification_success = match verify_result {
         Ok(output) => output.status.success(),
         Err(e) => {
-            cleanup();
-            return Err(format!("VCIK error: failed to execute gpg verify: {}", e));
+            let _ = fs::remove_dir_all(&temp_gpg_home);
+            return Err(format!("VCIH error: gpg verify exec failed: {}", e));
         }
     };
 
     // =========================================================
-    // Cleanup
+    // Cleanup Temporary Directory
     // =========================================================
 
-    cleanup();
+    // Remove entire isolated GPG home
+    // Contains: keyring, trustdb, config, imported key file
+    // Ignoring cleanup errors - verification result is primary concern
+    let _ = fs::remove_dir_all(&temp_gpg_home);
 
-    Ok(verification_succeeded)
+    // =========================================================
+    // Return Verification Result
+    // =========================================================
+
+    Ok(verification_success)
 }
 
 // /// Verifies a clearsigned file's signature.
