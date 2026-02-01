@@ -42971,8 +42971,8 @@ const FF_SOURCE_FILES: &[SourcedFile] = &[
         include_str!("../project_areas.txt"),
     ),
     SourcedFile::new(
-        "t_is_for_task.txt",
-        include_str!("../t_is_for_task.txt"),
+        "t_is_for_task.md",
+        include_str!("../t_is_for_task.md"),
     ),
     SourcedFile::new(".gitignore", include_str!("../.gitignore")),
 ];
