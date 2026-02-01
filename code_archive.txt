@@ -13298,3 +13298,448 @@ fn move_directory_from_path_to_path<SourceDirectory: AsRef<Path>, DestinationDir
         //         continue; // Skip this directory, continue with next
         //     }
         // };
+
+
+
+// fn parse_abstract_port_assignments(
+//     path: &str,
+// ) -> Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, String> {
+//     #[cfg(all(debug_assertions, not(test)))]
+//     debug_log!(
+//         "PAPA: Starting parse_abstract_port_assignments for file: {}",
+//         path
+//     );
+
+//     // Open the file for line-by-line reading
+//     let file = File::open(path).map_err(|e| format!("PAPA: err open file"))?;
+
+//     let reader = io::BufReader::new(file);
+
+//     // Result HashMap to store all pair assignments
+//     let mut result: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>> = HashMap::new();
+
+//     // State tracking for parsing
+//     let mut current_pair_name: Option<String> = None;
+//     let mut in_collaborator_ports_section = false;
+
+//     // Temporary storage for current collaborator being parsed
+//     let mut current_user_name: Option<String> = None;
+//     let mut current_ready_port: Option<u16> = None;
+//     let mut current_intray_port: Option<u16> = None;
+//     let mut current_gotit_port: Option<u16> = None;
+
+//     // Process each line
+//     for line_result in reader.lines() {
+//         let line = line_result.map_err(|e| format!("PAPA: err read line"))?;
+
+//         let trimmed = line.trim();
+
+//         // Skip empty lines and comments
+//         if trimmed.is_empty() || trimmed.starts_with('#') {
+//             continue;
+//         }
+
+//         // Skip GPG signature blocks
+//         if trimmed.starts_with("-----BEGIN PGP")
+//             || trimmed.starts_with("-----END PGP")
+//             || trimmed.starts_with("Hash:")
+//         {
+//             continue;
+//         }
+
+//         // Check for collaborator_ports section header
+//         // Format: [[abstract_collaborator_port_assignments.PAIRNAME.collaborator_ports]]
+//         // If we encounter a different [[ header, we're done with current section
+//         if trimmed.starts_with("[[") && in_collaborator_ports_section {
+//             // Save any pending collaborator data before leaving section
+//             if let (Some(pair), Some(user), Some(ready), Some(intray), Some(gotit)) = (
+//                 &current_pair_name,
+//                 current_user_name.take(),
+//                 current_ready_port.take(),
+//                 current_intray_port.take(),
+//                 current_gotit_port.take(),
+//             ) {
+//                 let port_data = AbstractTeamchannelNodeTomlPortsData {
+//                     user_name: user,
+//                     ready_port: ready,
+//                     intray_port: intray,
+//                     gotit_port: gotit,
+//                 };
+
+//                 let wrapped_data = ReadTeamchannelCollaboratorPortsToml {
+//                     collaborator_ports: vec![port_data],
+//                 };
+
+//                 result
+//                     .entry(pair.clone())
+//                     .or_insert_with(Vec::new)
+//                     .push(wrapped_data);
+//             }
+
+//             // Extract pair name from header
+//             // Remove "[[abstract_collaborator_port_assignments." prefix
+//             let prefix = "[[abstract_collaborator_port_assignments.";
+//             let after_prefix = &trimmed[prefix.len()..]; // Use actual length instead of hardcoded 41
+
+//             // Find the next dot to get pair name
+//             if let Some(dot_pos) = after_prefix.find('.') {
+//                 let pair_name = &after_prefix[..dot_pos];
+//                 current_pair_name = Some(pair_name.to_string());
+//                 in_collaborator_ports_section = true;
+
+//                 #[cfg(all(debug_assertions, not(test)))]
+//                 debug_log!("PAPA: Extracted pair name: {}", pair_name);
+//             } else {
+//                 return Err(format!("PAPA: err malformed header"));
+//             }
+
+//             continue;
+//         }
+
+//         // Check for outer section headers (we skip these)
+//         // Format: [[abstract_collaborator_port_assignments.PAIRNAME]]
+//         if trimmed.starts_with("[[abstract_collaborator_port_assignments.")
+//             && trimmed.ends_with("]]")
+//             && !trimmed.contains(".collaborator_ports]]")
+//         {
+//             #[cfg(all(debug_assertions, not(test)))]
+//             debug_log!("PAPA: Skipping outer header: {}", trimmed);
+
+//             continue;
+//         }
+
+//         // If we encounter a different [[ header, we're done with current section
+//         if trimmed.starts_with("[[") && in_collaborator_ports_section {
+//             // Save any pending collaborator data before leaving section
+//             if let (Some(pair), Some(user), Some(ready), Some(intray), Some(gotit)) = (
+//                 &current_pair_name,
+//                 current_user_name.take(),
+//                 current_ready_port.take(),
+//                 current_intray_port.take(),
+//                 current_gotit_port.take(),
+//             ) {
+//                 let port_data = AbstractTeamchannelNodeTomlPortsData {
+//                     user_name: user,
+//                     ready_port: ready,
+//                     intray_port: intray,
+//                     gotit_port: gotit,
+//                 };
+
+//                 let wrapped_data = ReadTeamchannelCollaboratorPortsToml {
+//                     collaborator_ports: vec![port_data],
+//                 };
+
+//                 result
+//                     .entry(pair.clone())
+//                     .or_insert_with(Vec::new)
+//                     .push(wrapped_data);
+//             }
+
+//             // Check if this is another collaborator_ports section
+//             if !trimmed.contains("abstract_collaborator_port_assignments") {
+//                 in_collaborator_ports_section = false;
+//             }
+//         }
+
+//         // Parse field assignments if we're in a collaborator_ports section
+//         if in_collaborator_ports_section && current_pair_name.is_some() {
+//             // Parse user_name field
+//             if trimmed.starts_with("user_name = ") {
+//                 let value_part = &trimmed[12..].trim(); // Skip "user_name = "
+//                 let cleaned = value_part.trim_matches('"');
+//                 current_user_name = Some(cleaned.to_string());
+
+//                 #[cfg(all(debug_assertions, not(test)))]
+//                 debug_log!("PAPA: Parsed user_name: {}", cleaned);
+
+//                 continue;
+//             }
+
+//             // Parse ready_port field
+//             if trimmed.starts_with("ready_port = ") {
+//                 let value_part = &trimmed[13..].trim(); // Skip "ready_port = "
+//                 let port = value_part
+//                     .parse::<u16>()
+//                     .map_err(|_| format!("PAPA: err invalid ready_port"))?;
+//                 current_ready_port = Some(port);
+
+//                 #[cfg(all(debug_assertions, not(test)))]
+//                 debug_log!("PAPA: Parsed ready_port: {}", port);
+
+//                 continue;
+//             }
+
+//             // Parse intray_port field
+//             if trimmed.starts_with("intray_port = ") {
+//                 let value_part = &trimmed[14..].trim(); // Skip "intray_port = "
+//                 let port = value_part
+//                     .parse::<u16>()
+//                     .map_err(|_| format!("PAPA: err invalid intray_port"))?;
+//                 current_intray_port = Some(port);
+
+//                 #[cfg(all(debug_assertions, not(test)))]
+//                 debug_log!("PAPA: Parsed intray_port: {}", port);
+
+//                 continue;
+//             }
+
+//             // Parse gotit_port field
+//             if trimmed.starts_with("gotit_port = ") {
+//                 let value_part = &trimmed[13..].trim(); // Skip "gotit_port = "
+//                 let port = value_part
+//                     .parse::<u16>()
+//                     .map_err(|_| format!("PAPA: err invalid gotit_port"))?;
+//                 current_gotit_port = Some(port);
+
+//                 #[cfg(all(debug_assertions, not(test)))]
+//                 debug_log!("PAPA: Parsed gotit_port: {}", port);
+
+//                 // When we have all 4 fields, save the collaborator data
+//                 if let (Some(pair), Some(user), Some(ready), Some(intray), Some(gotit)) = (
+//                     &current_pair_name,
+//                     current_user_name.take(),
+//                     current_ready_port.take(),
+//                     current_intray_port.take(),
+//                     current_gotit_port.take(),
+//                 ) {
+//                     let port_data = AbstractTeamchannelNodeTomlPortsData {
+//                         user_name: user,
+//                         ready_port: ready,
+//                         intray_port: intray,
+//                         gotit_port: gotit,
+//                     };
+
+//                     let wrapped_data = ReadTeamchannelCollaboratorPortsToml {
+//                         collaborator_ports: vec![port_data],
+//                     };
+
+//                     result
+//                         .entry(pair.clone())
+//                         .or_insert_with(Vec::new)
+//                         .push(wrapped_data);
+
+//                     #[cfg(all(debug_assertions, not(test)))]
+//                     debug_log!("PAPA: Saved collaborator data for pair: {}", pair);
+//                 }
+
+//                 continue;
+//             }
+//         }
+//     }
+
+//     // Handle any remaining data after file ends
+//     if let (Some(pair), Some(user), Some(ready), Some(intray), Some(gotit)) = (
+//         current_pair_name,
+//         current_user_name,
+//         current_ready_port,
+//         current_intray_port,
+//         current_gotit_port,
+//     ) {
+//         let port_data = AbstractTeamchannelNodeTomlPortsData {
+//             user_name: user,
+//             ready_port: ready,
+//             intray_port: intray,
+//             gotit_port: gotit,
+//         };
+
+//         let wrapped_data = ReadTeamchannelCollaboratorPortsToml {
+//             collaborator_ports: vec![port_data],
+//         };
+
+//         result
+//             .entry(pair.clone())
+//             .or_insert_with(Vec::new)
+//             .push(wrapped_data);
+//     }
+
+//     #[cfg(all(debug_assertions, not(test)))]
+//     debug_log!("PAPA: Completed parsing. Found {} pairs", result.len());
+
+//     Ok(result)
+// }
+
+// /// Verifies a clearsigned TOML file using GPG.
+// ///
+// /// # Arguments
+// /// - `path` - Path to the TOML file
+// /// - `key` - The GPG key to use for verification
+// ///
+// /// # Returns
+// /// - `Result<(), String>` - Success or error message
+// fn verify_clearsign(path: &str, key: &str) -> Result<(), String> {
+//     // Create a temporary file to hold the key
+//     let temp_key_path = format!("{}.key", path);
+//     std::fs::write(&temp_key_path, key)
+//         .map_err(|e| format!("Failed to write temporary key file: {}", e))?;
+
+//     // Use gpg to verify the file
+//     let output = Command::new("gpg")
+//         .arg("--verify")
+//         .arg("--batch")
+//         .arg("--no-tty")
+//         .arg("--keyring")
+//         .arg(&temp_key_path)
+//         .arg(path)
+//         .output()
+//         .map_err(|e| format!("Failed to execute GPG: {}", e))?;
+
+//     // Clean up the temporary key file
+//     let _ = std::fs::remove_file(temp_key_path);
+
+//     if !output.status.success() {
+//         let stderr = String::from_utf8_lossy(&output.stderr);
+//         return Err(format!("GPG verification failed: {}", stderr));
+//     }
+
+//     Ok(())
+// }
+
+// /// TODO: check this in various tests,
+// /// may need to work differently, e.g. temporary keychain
+// ///
+// /// Verifies a clearsigned TOML file using GPG with a provided public key.
+// ///
+// /// This function performs GPG signature verification by:
+// /// 1. Writing the provided public key to a temporary file named `{path}.key`
+// /// 2. Invoking GPG with `--keyring` pointing to this temporary file
+// /// 3. GPG verifies the signature in the clearsigned file against the provided key
+// /// 4. Removing the temporary key file
+// /// 5. Returning true if GPG's exit status is 0 (successful verification)
+// ///
+// /// # How GPG Verification Works
+// /// - The `--keyring` flag tells GPG to use the specified file as its keyring
+// /// - GPG reads the clearsigned file and extracts the signature
+// /// - GPG checks if the signature was made by the key in the provided keyring
+// /// - Returns success (exit 0) only if the signature matches the key
+// ///
+// /// # Arguments
+// /// - `path` - Path to the clearsigned TOML file to verify
+// /// - `key` - The GPG public key as a string (ASCII-armored or binary format)
+// ///
+// /// # Returns
+// /// - `Ok(true)` - The signature in the file was made by the provided key
+// /// - `Ok(false)` - The signature does not match the provided key or is invalid
+// /// - `Err(String)` - Failed to write temporary file or execute GPG
+// ///
+// /// # Example
+// /// ```rust
+// /// let clearsigned_file = "/path/to/signed_document.toml";
+// /// let sender_public_key = "-----BEGIN PGP PUBLIC KEY BLOCK-----\n...\n-----END PGP PUBLIC KEY BLOCK-----";
+// ///
+// /// match verify_clearsign(clearsigned_file, sender_public_key) {
+// ///     Ok(true) => println!("Document was signed by the expected sender"),
+// ///     Ok(false) => println!("Document signature does not match the sender's key"),
+// ///     Err(e) => eprintln!("Verification error: {}", e),
+// /// }
+// /// ```
+// ///
+// /// # Technical Details
+// /// - Uses `--batch` and `--no-tty` for non-interactive operation
+// /// - The temporary key file (`{path}.key`) exists only during verification
+// /// - Requires `gpg` command available in system PATH
+// ///
+// /// TODO above section may be wrong
+// ///
+// /// Verifies a clearsigned TOML file using GPG.
+// ///
+// /// # Arguments
+// /// - `path` - Path to the TOML file
+// /// - `key` - The GPG key to use for verification
+// ///
+// /// # Returns
+// /// - `Result<bool, String>` - True if verification succeeds, false if it fails, or an error message
+// pub fn verify_clearsign(
+//     path: &str, // path to clearsigned file
+//     key: &str,  // e.g. gpg-public-key of 'sender'
+// ) -> Result<bool, String> {
+//     // Create a temporary file to hold the key
+//     let temp_key_path = format!("{}.key", path);
+//     std::fs::write(&temp_key_path, key)
+//         .map_err(|e| format!("Failed to write temporary key file: {}", e))?;
+
+//     // Use gpg to verify the file
+//     let output = Command::new("gpg")
+//         .arg("--verify")
+//         .arg("--batch")
+//         .arg("--no-tty")
+//         .arg("--keyring")
+//         .arg(&temp_key_path)
+//         .arg(path)
+//         .output()
+//         .map_err(|e| format!("Failed to execute GPG: {}", e))?;
+
+//     // Clean up the temporary key file
+//     let _ = std::fs::remove_file(temp_key_path);
+
+//     // // Inspection: You don't like green eggs and ham?
+//     // println!(
+//     //     "verify_clearsign -> {:?}, output.status.success() -> {:?}",
+//     //     path,
+//     //     output.status.success(),
+//     // );
+
+//     // Return the verification result
+//     Ok(output.status.success())
+// }
+
+
+// broken!!
+// /// Store the entire clearsigned file (still in clearsigned format with all signatures intact) to the output path
+// /// Decrypts a GPG-encrypted file containing a clearsigned document, verifies the signature,
+// /// and stores the entire clearsigned file (still clearsigned) to the output path.
+// ///
+// /// # Arguments
+// /// - `incoming_gpg_encrypted_path` - Path to the GPG-encrypted file
+// /// - `gpg_key_id` - GPG key ID to verify the clearsign signature
+// /// - `output_verified_clearsign_path` - Path where to store the verified clearsigned file
+// ///
+// /// # Returns
+// /// - `Result<(), GpgError>` - Success or failure
+// ///
+// /// # Description
+// /// This function:
+// /// 1. Decrypts the GPG-encrypted file
+// /// 2. Verifies the clearsign signature within the decrypted content
+// /// 3. Stores the entire verified clearsigned document (with signatures intact)
+// ///    to the specified output path
+// ///
+// /// Unlike other functions that extract content from clearsigned files,
+// /// this function preserves the entire clearsigned structure including
+// /// signature blocks.
+// pub fn extract_verify_store_gpg_encrypted_clearsign_toml(
+//     incoming_gpg_encrypted_path: &Path,
+//     gpg_key_id: &str,
+//     output_verified_clearsign_path: &Path,
+// ) -> Result<(), GpgError> {
+//     // Step 1: Create a temporary path for the decrypted file
+//     let decrypted_temp_path = create_temp_file_path("decrypted_clearsign")?;
+
+//     // Step 2: Decrypt the GPG file
+//     decrypt_gpg_file(incoming_gpg_encrypted_path, &decrypted_temp_path)?;
+
+//     // Step 3: Verify the clearsign signature
+//     verify_clearsign_signature(&decrypted_temp_path, gpg_key_id)?;
+
+//     // Step 4: If verification succeeded, ensure the output directory exists
+//     if let Some(parent) = output_verified_clearsign_path.parent() {
+//         fs::create_dir_all(parent).map_err(|e| GpgError::FileSystemError(e))?;
+//     }
+
+//     // Step 5: Copy the entire clearsigned file to the output location
+//     fs::copy(&decrypted_temp_path, output_verified_clearsign_path)
+//         .map_err(|e| GpgError::FileSystemError(e))?;
+
+//     // Step 6: Clean up the temporary file
+//     if decrypted_temp_path.exists() {
+//         fs::remove_file(&decrypted_temp_path)
+//             .map_err(|e| GpgError::TempFileError(e.to_string()))?;
+//     }
+
+//     // Success - the verified clearsigned file has been stored to the output path
+//     println!(
+//         "Successfully verified and stored clearsigned file to: {}",
+//         output_verified_clearsign_path.display()
+//     );
+
+//     Ok(())
+// }

@@ -36948,7 +36948,8 @@ fn handle_local_owner_desk(
                         let rc_network_type_string_2 = rc_network_type_string.clone();
                         let rc_ip_addr_string_2 = rc_ip_addr_string.clone();
 
-                        // TODO: how long?
+                        // TODO: how long should wait be?
+                        // if too short... re-sends same item? (or risk of rhat?) Or not?
                         // This lets last item run
                         thread::sleep(Duration::from_secs(5));
                         thread::sleep(Duration::from_secs(3));
@@ -36979,7 +36980,7 @@ fn handle_local_owner_desk(
                            || e.kind() == io::ErrorKind::TimedOut => {
                         // ✓ Normal: 2 seconds elapsed, no file received
                         // This is EXPECTED and allows us to check halt flag
-                    // Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                        // Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                         // No data available yet.  Don't treat this as an error.
 
                         #[cfg(debug_assertions)]
