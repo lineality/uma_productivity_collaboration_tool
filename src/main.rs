@@ -436,7 +436,7 @@ use crate::clearsign_toml_module::{
     read_u64_array_from_clearsigntoml_without_publicgpgkey,
     read_u64_field_from_toml,
     read_u64_from_clearsigntoml_without_publicgpgkey,
-    verify_clearsign,
+    verify_clearsign_using_isolated_keyring,
     verify_clearsigned_file_and_extract_content_to_output,
 };
 
@@ -3893,7 +3893,7 @@ pub fn global_ports_exclusion_list_generator() -> Result<HashSet<u16>, ThisProje
 
         // 2. Paths & Reading-Copies Part 2: addressbook path and read-copy
         // Verify the addressbook file's clearsign signature
-        let verify_addressbook_file_result = match verify_clearsign(
+        let verify_addressbook_file_result = match verify_clearsign_using_isolated_keyring(
             &addressbook_readcopy_path_string,
             &node_owners_public_gpg_key,
         ) {
@@ -3914,7 +3914,7 @@ pub fn global_ports_exclusion_list_generator() -> Result<HashSet<u16>, ThisProje
 
         // 4. Validation Part 2: validate Node (clearsign validation of .toml)
         // Verify the node file's clearsign signature
-        let verify_node_file_result = match verify_clearsign(
+        let verify_node_file_result = match verify_clearsign_using_isolated_keyring(
             &node_readcopy_path,
             &node_owners_public_gpg_key,
         ) {
@@ -7741,8 +7741,10 @@ fn prompt_user_for_collaborator_file_format() -> bool {
     println!("\n=== Collaborator File Format Selection ===");
     println!("Do you want to save this as a read-able clearsigned .toml, not encrypted .gpgtoml (also clearsigned)?");
     println!("The default (recommended) is GPG protected (.gpgtoml).");
-    println!("Type 'clearsigned' to choose clearsign only, anything else (or empty enter) for default (recommended) GPG encrypted.");
-    print!("\nEnter your choice: ");
+    println!("Type \"clearsigned\" to choose clearsign only, anything else (or empty enter) for default (recommended) GPG encrypted.");
+    print!("");
+    print!("(\"clearsigned\" / Empty-Enter for default gpg-encyption)");
+    print!("Enter your choice: ");
 
     // Ensure the prompt is displayed immediately
     let _ = io::stdout().flush();
@@ -8827,7 +8829,7 @@ impl GraphNavigationInstanceState {
             return;
         }
 
-        debug_log("NGLRNT In nav_graph_look_read_node_toml(), next calling: deseri_get_core_node_struct_from_toml_file(file_path: &Path) -> Result<CoreNode");
+        debug_log("NGLRNT In nav_graph_look_read_node_toml(), next calling: 'deseri_get_core_node_struct_from_toml_file(file_path: &Path) -> Result<CoreNode'");
 
         // Load and parse the node.toml file
         let this_node = match deseri_get_core_node_struct_from_toml_file(&node_toml_path) {
@@ -8878,7 +8880,6 @@ impl GraphNavigationInstanceState {
             self.current_node_owner = this_node.owner.clone();
             self.current_node_description_for_tui = this_node.description_for_tui.clone();
 
-
             /*
             set current_node_directory_path to the full
             absolute canonicalied path
@@ -8905,7 +8906,7 @@ impl GraphNavigationInstanceState {
             // self.current_node_directory_path = this_node.directory_path.clone();
             self.current_node_directory_path = full_node_path;
 
-            // team channel is its won base parent
+            // team channel is its won base parent: this edge case is simple
             self.parent_node_uniqueid = this_node.node_unique_id.clone();
 
             self.current_node_unique_id = this_node.node_unique_id;
@@ -8972,15 +8973,32 @@ impl GraphNavigationInstanceState {
             // should this be set to the previous current node? or not... bidirectional?
             // moving forward or backward?
             // self.parent_node_uniqueid = this_node.parent_node_uniqueid;
-            self.parent_node_uniqueid = self.current_node_unique_id.clone();
+            // self.parent_node_uniqueid = self.current_node_unique_id.clone();
 
+            // self.parent_node_uniqueid = get_parentnode_id(&self.current_full_file_path)?;
+
+            self.parent_node_uniqueid = match get_parentnode_id(&self.current_full_file_path) {
+                Ok(node_id) => node_id,
+                Err(_e) => {
+
+                    #[cfg(debug_assertions)]
+                    debug_log!("NGLRNT get_parentnode_id Failed to get path: {}", _e);
+
+                    // safe log
+                    debug_log!("NGLRNT get_parentnode_id Failed ");
+
+                    // use this as default, won't work, proxy error
+                    let empty_vec: Vec<u8> = Vec::new();
+
+                    // return empty vec as error-state
+                    empty_vec
+                }
+            };
 
             //
             self.current_node_unique_id = this_node.node_unique_id;
 
-
-
-            // current path?
+            // TODO: check current path?
             self.current_node_directory_path = self.current_full_file_path.clone();
 
             // self.current_node_members = this_node.members.clone();
@@ -9027,16 +9045,21 @@ impl GraphNavigationInstanceState {
                     #[cfg(debug_assertions)]
                     debug_log!("NGLRNT Failed to write file: {}", _e);
                     // Optionally log the error or handle it in another way
+
+                    //safe log
+                    debug_log!("NGLRNT Failed to write file, if let Ok(session_path) = get_sessionstateitems_path()");
                 }
             }
         } else {
+            //safe log
             debug_log!("NGLRNT Failed to get session state items path");
-            // Optionally log the error or handle it in another way
+            // or handle error in another way
         }
 
         #[cfg(debug_assertions)]
         debug_log!("NGLRNT struct {:?}", self);
 
+        #[cfg(debug_assertions)]
         debug_log!("NGLRNT Done: ending: nav_graph_look_read_node_toml()");
     }
 }  // end of impl GraphNav...
@@ -11099,6 +11122,7 @@ fn deseri_get_core_node_struct_from_toml_file(
         }
     };
     // println!("DGCNSFTF: File owner: '{}'", file_owner_username);
+    #[cfg(debug_assertions)]
     debug_log!("DGCNSFTF: File owner: '{}'", file_owner_username);
 
     // TODO returns full response not just string
@@ -11156,7 +11180,7 @@ fn deseri_get_core_node_struct_from_toml_file(
 
     // 2. Paths & Reading-Copies Part 2: addressbook path and read-copy
     // Verify the addressbook file's clearsign signature
-    let verify_addressbook_file_result = match verify_clearsign(
+    let verify_addressbook_file_result = match verify_clearsign_using_isolated_keyring(
         &addressbook_readcopy_path_string,
         &node_owners_public_gpg_key,
     ) {
@@ -11177,7 +11201,7 @@ fn deseri_get_core_node_struct_from_toml_file(
 
     // 4. Validation Part 2: validate Node (clearsign validation of .toml)
     // Verify the node file's clearsign signature
-    let verify_node_file_result = match verify_clearsign(
+    let verify_node_file_result = match verify_clearsign_using_isolated_keyring(
         &node_readcopy_path,
         &node_owners_public_gpg_key,
     ) {
@@ -17333,7 +17357,7 @@ fn create_new_team_channel(
         },
         _ => {
             // Invalid input = use default with warning
-            println!("Invalid input '{}'. Using default: GPG encrypted clearsigned format (node.gpgtoml)", choice);
+            println!("CNTC Invalid input '{}'. Using default: GPG encrypted clearsigned format (node.gpgtoml)", choice);
             true
         }
     };
@@ -17363,9 +17387,9 @@ fn create_new_team_channel(
     );
 
     match save_clearsigned_messagepost_config_0toml(&zerotoml_metadata, &zerotoml_metadata_path) {
-        Ok(_) => debug_log!("CTC: Saved clearsigned metadata to 0.toml"),
+        Ok(_) => debug_log!("CNTC : Saved clearsigned metadata to 0.toml"),
         Err(e) => {
-            debug_log!("CTC: Error saving metadata: {}", e);
+            debug_log!("CNTC : Error saving metadata: {}", e);
             return Err(ThisProjectError::IoError(e));
         }
     }
@@ -17375,33 +17399,33 @@ fn create_new_team_channel(
         Ok(new_node) => {
             if use_encrypted {
                 // Save as GPG encrypted clearsigned file (node.gpgtoml)
-                debug_log!("CoreNode created successfully, saving as encrypted file... -> new_node.save_node_as_gpgtoml()");
+                debug_log!("CNTC CoreNode created successfully, saving as encrypted file... -> new_node.save_node_as_gpgtoml()");
                 match new_node.save_node_as_gpgtoml(
                     &new_channel_path.clone()
                 ) {
                     Ok(_) => {
-                        debug_log!("save_node_as_gpgtoml: CoreNode saved successfully as node.gpgtoml");
-                        println!("\n✓ Node successfully saved as encrypted file: {}/node.gpgtoml; new_channel_path,{:?}",
+                        debug_log!("CNTC save_node_as_gpgtoml: CoreNode saved successfully as node.gpgtoml");
+                        println!("\n✓ CNTC Node successfully saved as encrypted file: {}/node.gpgtoml; new_channel_path,{:?}",
                                 new_node.path_in_parentnode.display(),
                                 new_channel_path
                         );
                         Ok(())
                     },
                     Err(e) => {
-                        debug_log!("save_node_as_gpgtoml: Error saving CoreNode: {}", e);
-                        eprintln!("\n✗ Error saving node as encrypted file: {}", e);
+                        debug_log!("CNTC save_node_as_gpgtoml: Error saving CoreNode: {}", e);
+                        eprintln!("\n✗ CNTC Error saving node as encrypted file: {}", e);
                         Err(ThisProjectError::IoError(e))
                     }
                 }
             } else {
                 // Save as clearsigned only file (node.toml)
-                debug_log!("CoreNode created successfully, saving as clearsigned file... -> new_node.save_node_to_clearsigned_file()");
+                debug_log!("CNTC CoreNode created successfully, saving as clearsigned file... -> new_node.save_node_to_clearsigned_file()");
                 match new_node.save_node_to_clearsigned_file(
                     &new_channel_path.clone()
                 ) {
                     Ok(_) => {
-                        debug_log!("save_node_to_clearsigned_file: CoreNode saved successfully as node.toml");
-                        println!("\n✓ Node successfully saved as clearsigned file: {}/node.toml, new_channel_path {:?}",
+                        debug_log!("CNTC save_node_to_clearsigned_file: CoreNode saved successfully as node.toml");
+                        println!("\n✓ CNTC Node successfully saved as clearsigned file: {}/node.toml, new_channel_path {:?}",
                                 new_node.path_in_parentnode.display(),
                                 new_channel_path
                         );
@@ -17409,14 +17433,20 @@ fn create_new_team_channel(
                         Ok(())
                     },
                     Err(e) => {
+                        #[cfg(debug_assertions)]
                         debug_log!("save_node_to_clearsigned_file: Error saving CoreNode: {}", e);
-                        eprintln!("\n✗ Error saving node as clearsigned file: {}", e);
+                        #[cfg(debug_assertions)]
+                        eprintln!("\n✗ CNTC Error saving node as clearsigned file: {}", e);
+                        // safe log
+                        eprintln!("\n✗ CNTC Error saving node as clearsigned file");
+                        debug_log!("\n✗ CNTC Error saving node as clearsigned file");
                         Err(ThisProjectError::IoError(e))
                     }
                 }
             }
         },
         Err(e) => {
+            #[cfg(debug_assertions)]
             debug_log!("Error creating CoreNode: {}", e);
             eprintln!("\n✗ Error creating CoreNode: {}", e);
             Err(e)
@@ -18472,8 +18502,11 @@ fn create_corenode_q_and_a(
 
     // pub fn subtract_path(current_path: PathBuf, parent_path: PathBuf) -> PathBuf
     // TODO: should take &path?
+    // note: 'current_node_path' is the path TO the node
+    // not the path OF the node
+    // "node_specific_path" is the one we want, including the node name
     let path_in_parentnode = subtract_path(
-        current_node_path.clone(), // current node path
+        node_specific_path.clone(), // current node path (note: include name of node)
         current_node_uniqueid_path.clone(), // parent_path
     );
 
@@ -30536,6 +30569,247 @@ fn get_addressbook_file_by_username(
     }
 }
 
+
+/// use find_parentnode_toml_path () to get path to node
+/// plus
+/// reduced form of deseri_get_core_node_struct_from_toml_file ()
+///
+/// Input here is input_current_nav_path,
+/// as this function is desgined to be used in
+/// fn nav_graph_look_read_node_toml(&mut self) {
+/// full_node_path: PathBuf
+/// is the variable to used
+///
+fn get_parentnode_id(input_current_nav_path: &Path) -> Result<Vec<u8>, String> {
+
+    /*
+     *
+    fn find_parentnode_toml_path(start_path: &Path) -> Result<PathBuf, ThisProjectError> {
+
+    */
+
+    #[cfg(debug_assertions)]
+    debug_log!(
+        "GPI: Starting: get_parentnode_id(), input_current_nav_path -> {:?}",
+        input_current_nav_path,
+    );
+
+    let file_path = find_parentnode_toml_path(input_current_nav_path).map_err(|e| e.to_string())?;
+
+
+    #[cfg(debug_assertions)]
+    debug_log!(
+        "GPI: file_path -> {:?}",
+        file_path,
+    );
+
+    // Get armored public key, using key-id (full fingerprint in)
+    let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+        Ok(fingerprint) => fingerprint,
+        Err(e) => {
+            // Since the function returns Result<CoreNode, String>, we need to return a String error
+            return Err(format!(
+                "GPI: implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}",
+                e
+            ));
+        }
+    };
+
+    // // 1. Paths & Reading-Copies Part 1: node.toml path and read-copy
+
+    // Get the UME temp directory path with explicit String conversion
+    let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
+        .map_err(|io_err| {
+            let gpg_error = GpgError::ValidationError(
+                format!("GPI: Failed to get UME temp directory path: {}", io_err)
+            );
+            // Convert GpgError to String for the function's return type
+            format!("GPI: {:?}", gpg_error)
+        })?;
+
+    // Using Debug trait for more detailed error information
+    let node_readcopy_path = get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
+        &file_path,
+        &gpg_full_fingerprint_key_id_string,
+        &base_uma_temp_directory_path,
+    ).map_err(|e| format!("GPI: Failed to get temporary read copy of TOML file: {:?}", e))?;
+
+    // //    // simple read string to get owner name
+    // //    // not for extraction and return, just part of validation
+
+    #[cfg(debug_assertions)]
+    debug_log!("GPI: node_readcopy_path: {:?}", node_readcopy_path);
+
+
+    ////////////////////////////////
+    // Extract Owner for Key Lookup
+    ////////////////////////////////
+    let owner_name_of_toml_field_key_to_read = "owner";
+    #[cfg(debug_assertions)]
+    debug_log!(
+        "GPI: Reading file owner from field '{}' for security validation",
+        owner_name_of_toml_field_key_to_read
+    );
+
+    // get node_owners_public_gpg_key
+
+    let file_owner_username = match read_single_line_string_field_from_toml(
+        &node_readcopy_path,  // TODO convert to string?
+        owner_name_of_toml_field_key_to_read,
+    ) {
+        Ok(username) => {
+            if username.is_empty() {
+                // Convert to String error instead of GpgError
+                return Err(format!(
+                    "GPI error: Field '{}' is empty in TOML file. File owner is required for security validation.",
+                    owner_name_of_toml_field_key_to_read
+                ));
+            }
+            username
+        }
+        Err(e) => {
+            // Convert to String error instead of GpgError
+            return Err(format!(
+                "GPI error: Failed to read file owner from field '{}': {}",
+                owner_name_of_toml_field_key_to_read, e
+            ));
+        }
+    };
+    // println!("GPI: File owner: '{}'", file_owner_username);
+    #[cfg(debug_assertions)]
+    debug_log!("GPI: File owner: '{}'", file_owner_username);
+
+    // TODO returns full response not just string
+    // because the filepath needs to be constructed
+    // this is a separate function
+    	// let addressbook_readcopy_path_string = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
+    //        &file_owner_username,
+    //        COLLABORATOR_ADDRESSBOOK_PATH_STR,
+    //        &gpg_full_fingerprint_key_id_string,
+    //    );
+
+    // Get the UME temp directory path with error handling
+    let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
+        .map_err(|io_err| format!(
+            "GPI error: Failed to get UME temp directory path: {:?}",
+            io_err
+        ))?;
+
+    // Extract the addressbook path string with inline error conversion
+    let addressbook_readcopy_path_string = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
+        &file_owner_username,
+        COLLABORATOR_ADDRESSBOOK_PATH_STR,
+        &gpg_full_fingerprint_key_id_string,
+        &base_uma_temp_directory_path,
+    ).map_err(|e| format!(
+        "GPI error: Failed to get addressbook path for user '{}': {:?}",
+        file_owner_username,
+        e
+    ))?;
+
+    // Define cleanup closure
+    let cleanup_closure = || {
+        let _ = cleanup_collaborator_temp_file(
+            &node_readcopy_path,
+            &base_uma_temp_directory_path,
+            );
+        let _ = cleanup_collaborator_temp_file(
+            &addressbook_readcopy_path_string,
+            &base_uma_temp_directory_path,
+            );
+    };
+
+    // use function for general .toml or .gpgtoml readcopy
+    // let node_owners_public_gpg_key = read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml(
+    //     &addressbook_readcopy_path_string,
+    // );
+
+    let node_owners_public_gpg_key = read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml(
+        &addressbook_readcopy_path_string,
+    ).map_err(|e| format!(
+        "GPI error: Failed to get addressbook path for user '{}': {:?}",
+        file_owner_username,
+        e
+    ))?;
+
+    // 2. Paths & Reading-Copies Part 2: addressbook path and read-copy
+    // Verify the addressbook file's clearsign signature
+    let verify_addressbook_file_result = match verify_clearsign_using_isolated_keyring(
+        &addressbook_readcopy_path_string,
+        &node_owners_public_gpg_key,
+    ) {
+        Ok(is_valid) => is_valid,
+        Err(e) => {
+            // Clean up temporary files before returning error
+            cleanup_closure();
+            return Err(format!(
+                "GPI error: Failed to verify addressbook clearsign signature for user '{}': {:?}",
+                file_owner_username,
+                e
+            ));
+        }
+    };
+
+    // 3. Validate Part 1: validate addressbook file and get node-owner's public gpg
+    // (This section would go here if needed)
+
+    // 4. Validation Part 2: validate Node (clearsign validation of .toml)
+    // Verify the node file's clearsign signature
+    let verify_node_file_result = match verify_clearsign_using_isolated_keyring(
+        &node_readcopy_path,
+        &node_owners_public_gpg_key,
+    ) {
+        Ok(is_valid) => is_valid,
+        Err(e) => {
+            // Clean up temporary files before returning error
+            cleanup_closure();
+            return Err(format!(
+                "GPI error: Failed to verify node file clearsign signature for user '{}': {:?}",
+                file_owner_username,
+                e
+            ));
+        }
+    };
+
+    // Check if both verification results are valid
+    // If either verification failed, clean up and return error
+    if !verify_addressbook_file_result || !verify_node_file_result {
+
+        debug_log("GPI: Whoops, something faileded... (error)");
+
+        // Clean up temporary files
+        cleanup_closure();
+
+        // Provide detailed error message about which verification failed
+        let mut error_details = Vec::new();
+        if !verify_addressbook_file_result {
+            error_details.push("GPI: addressbook file signature verification failed");
+        }
+        if !verify_node_file_result {
+            error_details.push("GPI: node file signature verification failed");
+        }
+
+        return Err(format!(
+            "GPI: Clearsign validation failed for user '{}': {}",
+            file_owner_username,
+            error_details.join(" and ")
+        ));
+    }
+
+    // Example: Read _ from the clearsigned TOML file
+    let node_unique_id = read_u8_array_from_clearsigntoml_without_publicgpgkey(
+        &addressbook_readcopy_path_string,  // Config file containing GPG key
+        &node_readcopy_path,           // Target clearsigned file
+        "node_unique_id"                // Field to read
+    ).map_err(|e| {
+        cleanup_closure(); // Run cleanup on error
+        format!("GPI: node_unique_id, read_u8_array_from_clearsigntoml_without_publicgpgkey Failed to read node_unique_id: {}", e)
+    })?;
+
+
+    Ok(node_unique_id)
+}
+
 /// Finds the path to either `node.toml` or `node.gpgtoml` file starting from `start_path`.
 ///
 /// This function searches for the specified files in the `start_path` and its parent directories.
@@ -36541,24 +36815,12 @@ fn handle_local_owner_desk(
                                                         &base_node_path
                                                     );
 
-                                                    // new base is local real parent path plus abstract 'in-parent' path from node
-                                                    let new_node_dir_path = base_node_path.join(incoming_node_name);
-
-                                                    #[cfg(debug_assertions)]
-                                                    debug_log!(
-                                                        "(from {}) HLOD 7.2 Not-Moving, Just Saving new_node_dir_path -> {:?}",
-                                                        &remote_collaborator_name,
-                                                        &new_node_dir_path
-                                                    );
-
                                                     // // make sure path exists
-                                                    fs::create_dir_all(&new_node_dir_path)?;
+                                                    fs::create_dir_all(&base_node_path)?;
 
                                                     // add name and extention to path (node.toml or node.gpgtoml)
-                                                    let new_node_file_path = new_node_dir_path.join(node_filename);
+                                                    let new_node_file_path = base_node_path.join(node_filename);
 
-                                                    // old
-                                                    // let new_node_toml_file_path = new_full_abs_node_directory_path.join("node.toml"); // Path to the new node.toml
 
                                                     #[cfg(debug_assertions)]
                                                     debug_log!(
@@ -36576,8 +36838,6 @@ fn handle_local_owner_desk(
 
                                                     // Node is new, save it:
                                                     // no unpacking because only existing files are sent
-
-                                                    // TODO: more optimal way to make/skip zero-toml file?
 
                                                     // Save file
                                                     if let Err(e) = fs::write(&new_node_file_path, data_to_save) {
@@ -36682,7 +36942,6 @@ fn handle_local_owner_desk(
                             localowner_gotit_port,
                             received_file_updatedat_timestamp, // as di
                         );
-
 
                         // 1.4 Send Echo Ready Signal (using a function)
                         // 2nd copy for other threads

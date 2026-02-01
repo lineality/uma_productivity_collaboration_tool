@@ -1114,12 +1114,14 @@ pub fn read_u64_from_clearsigntoml_without_publicgpgkey(
 
     // Step 2: Verify the target file using the extracted key
     let verification_result =
-        verify_clearsign(pathstr_to_target_clearsigned_file, &key).map_err(|e| {
-            format!(
-                "Failed during verification process for target file '{}': {}",
-                pathstr_to_target_clearsigned_file, e
-            )
-        })?;
+        verify_clearsign_using_isolated_keyring(pathstr_to_target_clearsigned_file, &key).map_err(
+            |e| {
+                format!(
+                    "Failed during verification process for target file '{}': {}",
+                    pathstr_to_target_clearsigned_file, e
+                )
+            },
+        )?;
 
     // Step 3: Check verification result
     if !verification_result {
@@ -1605,8 +1607,9 @@ pub fn read_abstract_ports_from_clearsigntoml_without_publicgpgkey(
     })?;
 
     // Step 2: Verify the target file using the extracted key
-    let verification_result = verify_clearsign(pathstr_to_target_clearsigned_file, &key)
-        .map_err(|e| format!("RAPFCT: Failed during verification process: {}", e))?;
+    let verification_result =
+        verify_clearsign_using_isolated_keyring(pathstr_to_target_clearsigned_file, &key)
+            .map_err(|e| format!("RAPFCT: Failed during verification process: {}", e))?;
 
     // Step 3: Check verification result
     if !verification_result {
@@ -2222,90 +2225,242 @@ fn parse_abstract_port_assignments(
 //     Ok(())
 // }
 
-/// TODO: check this in various tests
-/// Verifies a clearsigned TOML file using GPG with a provided public key.
-///
-/// This function performs GPG signature verification by:
-/// 1. Writing the provided public key to a temporary file named `{path}.key`
-/// 2. Invoking GPG with `--keyring` pointing to this temporary file
-/// 3. GPG verifies the signature in the clearsigned file against the provided key
-/// 4. Removing the temporary key file
-/// 5. Returning true if GPG's exit status is 0 (successful verification)
-///
-/// # How GPG Verification Works
-/// - The `--keyring` flag tells GPG to use the specified file as its keyring
-/// - GPG reads the clearsigned file and extracts the signature
-/// - GPG checks if the signature was made by the key in the provided keyring
-/// - Returns success (exit 0) only if the signature matches the key
-///
-/// # Arguments
-/// - `path` - Path to the clearsigned TOML file to verify
-/// - `key` - The GPG public key as a string (ASCII-armored or binary format)
-///
-/// # Returns
-/// - `Ok(true)` - The signature in the file was made by the provided key
-/// - `Ok(false)` - The signature does not match the provided key or is invalid
-/// - `Err(String)` - Failed to write temporary file or execute GPG
-///
-/// # Example
-/// ```rust
-/// let clearsigned_file = "/path/to/signed_document.toml";
-/// let sender_public_key = "-----BEGIN PGP PUBLIC KEY BLOCK-----\n...\n-----END PGP PUBLIC KEY BLOCK-----";
-///
-/// match verify_clearsign(clearsigned_file, sender_public_key) {
-///     Ok(true) => println!("Document was signed by the expected sender"),
-///     Ok(false) => println!("Document signature does not match the sender's key"),
-///     Err(e) => eprintln!("Verification error: {}", e),
-/// }
-/// ```
-///
-/// # Technical Details
-/// - Uses `--batch` and `--no-tty` for non-interactive operation
-/// - The temporary key file (`{path}.key`) exists only during verification
-/// - Requires `gpg` command available in system PATH
-///
-/// TODO above section may be wrong
-///
-/// Verifies a clearsigned TOML file using GPG.
-///
-/// # Arguments
-/// - `path` - Path to the TOML file
-/// - `key` - The GPG key to use for verification
-///
-/// # Returns
-/// - `Result<bool, String>` - True if verification succeeds, false if it fails, or an error message
-pub fn verify_clearsign(
-    path: &str, // path to clearsigned file
-    key: &str,  // e.g. gpg-public-key of 'sender'
-) -> Result<bool, String> {
-    // Create a temporary file to hold the key
-    let temp_key_path = format!("{}.key", path);
-    std::fs::write(&temp_key_path, key)
-        .map_err(|e| format!("Failed to write temporary key file: {}", e))?;
+// /// TODO: check this in various tests,
+// /// may need to work differently, e.g. temporary keychain
+// ///
+// /// Verifies a clearsigned TOML file using GPG with a provided public key.
+// ///
+// /// This function performs GPG signature verification by:
+// /// 1. Writing the provided public key to a temporary file named `{path}.key`
+// /// 2. Invoking GPG with `--keyring` pointing to this temporary file
+// /// 3. GPG verifies the signature in the clearsigned file against the provided key
+// /// 4. Removing the temporary key file
+// /// 5. Returning true if GPG's exit status is 0 (successful verification)
+// ///
+// /// # How GPG Verification Works
+// /// - The `--keyring` flag tells GPG to use the specified file as its keyring
+// /// - GPG reads the clearsigned file and extracts the signature
+// /// - GPG checks if the signature was made by the key in the provided keyring
+// /// - Returns success (exit 0) only if the signature matches the key
+// ///
+// /// # Arguments
+// /// - `path` - Path to the clearsigned TOML file to verify
+// /// - `key` - The GPG public key as a string (ASCII-armored or binary format)
+// ///
+// /// # Returns
+// /// - `Ok(true)` - The signature in the file was made by the provided key
+// /// - `Ok(false)` - The signature does not match the provided key or is invalid
+// /// - `Err(String)` - Failed to write temporary file or execute GPG
+// ///
+// /// # Example
+// /// ```rust
+// /// let clearsigned_file = "/path/to/signed_document.toml";
+// /// let sender_public_key = "-----BEGIN PGP PUBLIC KEY BLOCK-----\n...\n-----END PGP PUBLIC KEY BLOCK-----";
+// ///
+// /// match verify_clearsign(clearsigned_file, sender_public_key) {
+// ///     Ok(true) => println!("Document was signed by the expected sender"),
+// ///     Ok(false) => println!("Document signature does not match the sender's key"),
+// ///     Err(e) => eprintln!("Verification error: {}", e),
+// /// }
+// /// ```
+// ///
+// /// # Technical Details
+// /// - Uses `--batch` and `--no-tty` for non-interactive operation
+// /// - The temporary key file (`{path}.key`) exists only during verification
+// /// - Requires `gpg` command available in system PATH
+// ///
+// /// TODO above section may be wrong
+// ///
+// /// Verifies a clearsigned TOML file using GPG.
+// ///
+// /// # Arguments
+// /// - `path` - Path to the TOML file
+// /// - `key` - The GPG key to use for verification
+// ///
+// /// # Returns
+// /// - `Result<bool, String>` - True if verification succeeds, false if it fails, or an error message
+// pub fn verify_clearsign(
+//     path: &str, // path to clearsigned file
+//     key: &str,  // e.g. gpg-public-key of 'sender'
+// ) -> Result<bool, String> {
+//     // Create a temporary file to hold the key
+//     let temp_key_path = format!("{}.key", path);
+//     std::fs::write(&temp_key_path, key)
+//         .map_err(|e| format!("Failed to write temporary key file: {}", e))?;
 
-    // Use gpg to verify the file
-    let output = Command::new("gpg")
-        .arg("--verify")
+//     // Use gpg to verify the file
+//     let output = Command::new("gpg")
+//         .arg("--verify")
+//         .arg("--batch")
+//         .arg("--no-tty")
+//         .arg("--keyring")
+//         .arg(&temp_key_path)
+//         .arg(path)
+//         .output()
+//         .map_err(|e| format!("Failed to execute GPG: {}", e))?;
+
+//     // Clean up the temporary key file
+//     let _ = std::fs::remove_file(temp_key_path);
+
+//     // // Inspection: You don't like green eggs and ham?
+//     // println!(
+//     //     "verify_clearsign -> {:?}, output.status.success() -> {:?}",
+//     //     path,
+//     //     output.status.success(),
+//     // );
+
+//     // Return the verification result
+//     Ok(output.status.success())
+// }
+
+/// Verifies a clearsigned file using ONLY the provided GPG public key.
+///
+/// # Project Context
+/// This function verifies cryptographic signatures on configuration files
+/// or inter-process messages. It uses an isolated keyring to ensure
+/// verification is performed against ONLY the provided key.
+///
+/// # Security Model
+/// - Uses `--no-default-keyring` to block system keyring access
+/// - Creates a new keyring file containing ONLY the provided key
+/// - Verification succeeds ONLY if signature matches this specific key
+///
+/// # Difference from --homedir Approach
+/// This approach:
+/// - Still uses system GPG configuration (gpg.conf, agent settings)
+/// - Only isolates the keyring, not the entire GPG environment
+/// - May be faster (no need to initialize fresh GPG home)
+/// - Less isolated (shares config with system GPG)
+///
+/// Use this when: System GPG config is trusted and speed matters
+/// Use --homedir when: Complete isolation is required
+///
+/// # Arguments
+/// - `path` - Absolute path to the clearsigned file to verify
+/// - `public_key` - ASCII-armored GPG public key of the expected signer
+///
+/// # Returns
+/// - `Ok(true)` - Signature valid AND made by the provided key
+/// - `Ok(false)` - Signature invalid OR not made by the provided key
+/// - `Err(String)` - System error (file I/O, GPG execution failure)
+pub fn verify_clearsign_using_isolated_keyring(
+    path: &str,
+    public_key: &str,
+) -> Result<bool, String> {
+    use std::fs;
+    use std::path::Path;
+    use std::process::Command;
+    // =========================================================
+    // Input Validation
+    // =========================================================
+
+    #[cfg(all(debug_assertions, not(test)))]
+    {
+        debug_assert!(!path.is_empty(), "VCIK: path must not be empty");
+        debug_assert!(!public_key.is_empty(), "VCIK: public_key must not be empty");
+    }
+
+    if path.is_empty() {
+        return Err("VCIK error: path argument empty".to_string());
+    }
+
+    if public_key.is_empty() {
+        return Err("VCIK error: public_key argument empty".to_string());
+    }
+
+    if !Path::new(path).exists() {
+        return Err("VCIK error: clearsigned file does not exist".to_string());
+    }
+
+    if !public_key.contains("-----BEGIN PGP PUBLIC KEY BLOCK-----") {
+        return Err("VCIK error: key does not appear to be ASCII-armored PGP".to_string());
+    }
+
+    // =========================================================
+    // Create Temporary Files for Isolated Keyring
+    // =========================================================
+
+    let temp_base = format!(
+        "/tmp/gpg_keyring_{}_{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0)
+    );
+
+    let keyring_path = format!("{}.gpg", temp_base);
+    let key_file_path = format!("{}.asc", temp_base);
+
+    // Write public key to temporary file for import
+    fs::write(&key_file_path, public_key)
+        .map_err(|e| format!("VCIK error: failed to write key file: {}", e))?;
+
+    // =========================================================
+    // Import Key into New Isolated Keyring
+    // =========================================================
+
+    // Note: GPG will create the keyring file during import
+    let import_result = Command::new("gpg")
+        .arg("--no-default-keyring") // Do NOT use ~/.gnupg/pubring.gpg
+        .arg("--keyring")
+        .arg(&keyring_path) // Use this new keyring instead
         .arg("--batch")
         .arg("--no-tty")
+        .arg("--yes")
+        .arg("--import")
+        .arg(&key_file_path)
+        .output();
+
+    // Cleanup helper closure
+    let cleanup = || {
+        let _ = fs::remove_file(&keyring_path);
+        let _ = fs::remove_file(format!("{}~", keyring_path)); // GPG backup file
+        let _ = fs::remove_file(&key_file_path);
+    };
+
+    let import_output = match import_result {
+        Ok(output) => output,
+        Err(e) => {
+            cleanup();
+            return Err(format!("VCIK error: failed to execute gpg import: {}", e));
+        }
+    };
+
+    if !import_output.status.success() {
+        cleanup();
+        return Err("VCIK error: gpg key import failed".to_string());
+    }
+
+    // =========================================================
+    // Verify Against Isolated Keyring
+    // =========================================================
+
+    let verify_result = Command::new("gpg")
+        .arg("--no-default-keyring") // Do NOT use system keyring
         .arg("--keyring")
-        .arg(&temp_key_path)
+        .arg(&keyring_path) // Use ONLY our imported key
+        .arg("--batch")
+        .arg("--no-tty")
+        .arg("--verify")
         .arg(path)
-        .output()
-        .map_err(|e| format!("Failed to execute GPG: {}", e))?;
+        .output();
 
-    // Clean up the temporary key file
-    let _ = std::fs::remove_file(temp_key_path);
+    let verification_succeeded = match verify_result {
+        Ok(output) => output.status.success(),
+        Err(e) => {
+            cleanup();
+            return Err(format!("VCIK error: failed to execute gpg verify: {}", e));
+        }
+    };
 
-    // // Inspection: You don't like green eggs and ham?
-    // println!(
-    //     "verify_clearsign -> {:?}, output.status.success() -> {:?}",
-    //     path,
-    //     output.status.success(),
-    // );
+    // =========================================================
+    // Cleanup
+    // =========================================================
 
-    // Return the verification result
-    Ok(output.status.success())
+    cleanup();
+
+    Ok(verification_succeeded)
 }
 
 // /// Verifies a clearsigned file's signature.
@@ -2359,8 +2514,9 @@ pub fn read_singleline_string_from_clearsigntoml(
     path_to_clearsigntoml_with_gpgkey: &str,
     name_of_toml_field_key_to_read: &str,
 ) -> Result<String, String> {
+    #[cfg(debug_assertions)]
     debug_log!(
-        "read_singleline_string_from_clearsigntoml: path_to_clearsigntoml_with_gpgkey->{:?},name_of_toml_field_key_to_read->{:?}",
+        "RSSFC read_singleline_string_from_clearsigntoml: path_to_clearsigntoml_with_gpgkey->{:?},name_of_toml_field_key_to_read->{:?}",
         path_to_clearsigntoml_with_gpgkey,
         name_of_toml_field_key_to_read,
     );
@@ -2368,12 +2524,20 @@ pub fn read_singleline_string_from_clearsigntoml(
     let key =
         extract_gpg_key_from_clearsigntoml(path_to_clearsigntoml_with_gpgkey, "gpg_key_public")?;
 
+    #[cfg(debug_assertions)]
+    debug_log!("RSSFC key->{:?}", key);
+
+    // TODO not using...the correct key?
     // Verify the file and only proceed if verification succeeds
-    let verification_result = verify_clearsign(path_to_clearsigntoml_with_gpgkey, &key)?;
+    let verification_result =
+        verify_clearsign_using_isolated_keyring(path_to_clearsigntoml_with_gpgkey, &key)?;
+
+    #[cfg(debug_assertions)]
+    debug_log!("RSSFC verification_result->{:?}", verification_result);
 
     if !verification_result {
         return Err(format!(
-            "GPG verification failed for file: {}",
+            "RSSFC GPG verification failed for file: {}",
             path_to_clearsigntoml_with_gpgkey
         ));
     }
@@ -2466,7 +2630,7 @@ pub fn read_singleline_string_from_clearsigntoml_without_publicgpgkey(
         .map_err(|e| format!("read_singleline_string_from_clearsigntoml_without_publicgpgkey() -> Failed to extract GPG key from config file pathstr_to_config_file_that_contains_gpg_key->'{}': e->{}", pathstr_to_config_file_that_contains_gpg_key, e))?;
 
     // Step 2: Verify the target file using the extracted key
-    let verification_result = verify_clearsign(pathstr_to_target_clearsigned_file, &key)
+    let verification_result = verify_clearsign_using_isolated_keyring(pathstr_to_target_clearsigned_file, &key)
         .map_err(|e| format!("read_singleline_string_from_clearsigntoml_without_publicgpgkey() -> Failed during verification process: {}", e))?;
 
     // Step 3: Check verification result
@@ -2526,10 +2690,13 @@ pub fn read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntom
     let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")?;
 
     // Verify the file and only proceed if verification succeeds
-    let verification_result = verify_clearsign(path, &key)?;
+    let verification_result = verify_clearsign_using_isolated_keyring(path, &key)?;
 
     if !verification_result {
-        return Err(format!("GPG verification failed for file: {}", path));
+        return Err(format!(
+            "RCGKPMSFC GPG verification failed for file: {}",
+            path
+        ));
     }
 
     // Only read the field if verification succeeded
@@ -2552,10 +2719,13 @@ pub fn read_multiline_string_from_clearsigntoml(
     let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")?;
 
     // Verify the file and only proceed if verification succeeds
-    let verification_result = verify_clearsign(path, &key)?;
+    let verification_result = verify_clearsign_using_isolated_keyring(path, &key)?;
 
     if !verification_result {
-        return Err(format!("GPG verification failed for file: {}", path));
+        return Err(format!(
+            "read_multiline_string_from_clearsigntoml - GPG verification failed for file: {}",
+            path
+        ));
     }
 
     // Only read the field if verification succeeded
@@ -2579,10 +2749,13 @@ pub fn read_integerarray_clearsigntoml(
     let key = extract_gpg_key_from_clearsigntoml(path, "gpg_key_public")?;
 
     // Verify the file and only proceed if verification succeeds
-    let verification_result = verify_clearsign(path, &key)?;
+    let verification_result = verify_clearsign_using_isolated_keyring(path, &key)?;
 
     if !verification_result {
-        return Err(format!("GPG verification failed for file: {}", path));
+        return Err(format!(
+            "read_integerarray_clearsigntoml GPG verification failed for file: {}",
+            path
+        ));
     }
 
     // Only read the field if verification succeeded
@@ -3922,7 +4095,7 @@ pub fn extract_verify_store_gpg_encrypted_clearsign_toml(
 
     // Step 4: Verify the clearsign signature using the extracted key
     // Note: This uses the key FROM the file, not from the keyring
-    verify_clearsign(
+    verify_clearsign_using_isolated_keyring(
         decrypted_temp_path
             .to_str()
             .ok_or_else(|| GpgError::ValidationError("Invalid path encoding".to_string()))?,
@@ -4366,7 +4539,7 @@ pub fn read_str_array_field_clearsigntoml(
     })?;
 
     // Step 2: Verify the file's clearsign signature
-    let verification_result = verify_clearsign(path, &key)
+    let verification_result = verify_clearsign_using_isolated_keyring(path, &key)
         .map_err(|e| format!("in read_str_array_field_clearsigntoml()  Error during signature verification of file '{}': {}", path, e))?;
 
     // Step 3: Check if verification was successful
@@ -4434,8 +4607,9 @@ pub fn read_stringarray_from_clearsigntoml_without_publicgpgkey(
     })?;
 
     // Step 2: Verify the target file using the extracted key
-    let verification_result = verify_clearsign(pathstr_to_target_clearsigned_file, &key)
-        .map_err(|e| format!("Failed during verification process: {}", e))?;
+    let verification_result =
+        verify_clearsign_using_isolated_keyring(pathstr_to_target_clearsigned_file, &key)
+            .map_err(|e| format!("Failed during verification process: {}", e))?;
 
     // Step 3: Check verification result
     if !verification_result {
@@ -4532,9 +4706,9 @@ pub fn verify_clearsigned_file_and_extract_content_to_output(
     // STEP 4: Verify the signature using the existing verify_clearsign function
     debug_log("Verifying clearsigned file signature");
     let verification_result =
-        verify_clearsign(clearsigned_input_path_str, &public_key).map_err(|e| {
-            GpgError::GpgOperationError(format!("Failed to verify clearsigned file: {}", e))
-        })?;
+        verify_clearsign_using_isolated_keyring(clearsigned_input_path_str, &public_key).map_err(
+            |e| GpgError::GpgOperationError(format!("Failed to verify clearsigned file: {}", e)),
+        )?;
 
     // STEP 5: Check verification result, abort if verification failed
     if !verification_result {
@@ -10472,8 +10646,9 @@ pub fn read_u8_array_from_clearsigntoml_without_publicgpgkey(
     })?;
 
     // Step 2: Verify the target file using the extracted key
-    let verification_result = verify_clearsign(pathstr_to_target_clearsigned_file, &key)
-        .map_err(|e| format!("Failed during verification process: {}", e))?;
+    let verification_result =
+        verify_clearsign_using_isolated_keyring(pathstr_to_target_clearsigned_file, &key)
+            .map_err(|e| format!("Failed during verification process: {}", e))?;
 
     // Step 3: Check verification result
     if !verification_result {
@@ -10748,8 +10923,9 @@ pub fn read_u64_array_from_clearsigntoml_without_publicgpgkey(
     })?;
 
     // Step 2: Verify the target file using the extracted key
-    let verification_result = verify_clearsign(pathstr_to_target_clearsigned_file, &key)
-        .map_err(|e| format!("Failed during verification process: {}", e))?;
+    let verification_result =
+        verify_clearsign_using_isolated_keyring(pathstr_to_target_clearsigned_file, &key)
+            .map_err(|e| format!("Failed during verification process: {}", e))?;
 
     // Step 3: Check verification result
     if !verification_result {
@@ -11455,8 +11631,9 @@ pub fn read_pathbuf_from_clearsigntoml_without_publicgpgkey(
     })?;
 
     // Step 2: Verify the target file using the extracted key
-    let verification_result = verify_clearsign(pathstr_to_target_clearsigned_file, &key)
-        .map_err(|e| format!("Failed during verification process: {}", e))?;
+    let verification_result =
+        verify_clearsign_using_isolated_keyring(pathstr_to_target_clearsigned_file, &key)
+            .map_err(|e| format!("Failed during verification process: {}", e))?;
 
     // Step 3: Check verification result
     if !verification_result {
@@ -12634,8 +12811,9 @@ pub fn read_bool_from_clearsigntoml_without_publicgpgkey(
     })?;
 
     // Step 2: Verify the target file using the extracted key
-    let verification_result = verify_clearsign(pathstr_to_target_clearsigned_file, &key)
-        .map_err(|e| format!("Failed during verification process: {}", e))?;
+    let verification_result =
+        verify_clearsign_using_isolated_keyring(pathstr_to_target_clearsigned_file, &key)
+            .map_err(|e| format!("Failed during verification process: {}", e))?;
 
     // Step 3: Check verification result
     if !verification_result {
@@ -12710,8 +12888,9 @@ pub fn read_option_bool_from_clearsigntoml_without_publicgpgkey(
     })?;
 
     // Step 2: Verify the target file using the extracted key
-    let verification_result = verify_clearsign(pathstr_to_target_clearsigned_file, &key)
-        .map_err(|e| format!("Failed during verification process: {}", e))?;
+    let verification_result =
+        verify_clearsign_using_isolated_keyring(pathstr_to_target_clearsigned_file, &key)
+            .map_err(|e| format!("Failed during verification process: {}", e))?;
 
     // Step 3: Check verification result
     if !verification_result {
@@ -13121,8 +13300,9 @@ pub fn read_option_usize_from_clearsigntoml_without_publicgpgkey(
     })?;
 
     // Step 2: Verify the target file using the extracted key
-    let verification_result = verify_clearsign(pathstr_to_target_clearsigned_file, &key)
-        .map_err(|e| format!("Failed during verification process: {}", e))?;
+    let verification_result =
+        verify_clearsign_using_isolated_keyring(pathstr_to_target_clearsigned_file, &key)
+            .map_err(|e| format!("Failed during verification process: {}", e))?;
 
     // Step 3: Check verification result
     if !verification_result {
@@ -13786,8 +13966,9 @@ pub fn read_option_i64_from_clearsigntoml_without_publicgpgkey(
     })?;
 
     // Step 2: Verify the target file using the extracted key
-    let verification_result = verify_clearsign(pathstr_to_target_clearsigned_file, &key)
-        .map_err(|e| format!("Failed during verification process: {}", e))?;
+    let verification_result =
+        verify_clearsign_using_isolated_keyring(pathstr_to_target_clearsigned_file, &key)
+            .map_err(|e| format!("Failed during verification process: {}", e))?;
 
     // Step 3: Check verification result
     if !verification_result {
@@ -14424,8 +14605,9 @@ pub fn read_option_i32_tuple_array_from_clearsigntoml_without_publicgpgkey(
     })?;
 
     // Step 2: Verify the target file using the extracted key
-    let verification_result = verify_clearsign(pathstr_to_target_clearsigned_file, &key)
-        .map_err(|e| format!("Failed during verification process: {}", e))?;
+    let verification_result =
+        verify_clearsign_using_isolated_keyring(pathstr_to_target_clearsigned_file, &key)
+            .map_err(|e| format!("Failed during verification process: {}", e))?;
 
     // Step 3: Check verification result
     if !verification_result {
