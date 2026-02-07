@@ -11536,7 +11536,7 @@ fn deseri_get_core_node_struct_from_toml_file(
             #[cfg(debug_assertions)]
             {
                 debug_log!("LCNFTF read_teamchannel_collaborator_ports_clearsigntoml_without_keyid file_path {:?}", file_path);
-                debug_log!("LCNFTF: No existing abstract_collaborator_port_assignments found at {:?} (this should happen for non-team-channels): e->{}", file_path, _e);
+                debug_log!("LCNFTF: maybe NOT an error, this IS expected if not a team-channel-node: No existing abstract_collaborator_port_assignments found at {:?} (this should happen for non-team-channels): e->{}", file_path, _e);
             }
             HashMap::new()
         });
