@@ -3850,11 +3850,20 @@ pub fn extract_verify_store_gpg_encrypted_clearsign_toml(
     // gpg_key_id: &str,
     output_verified_clearsign_path: &Path,
 ) -> Result<(), GpgError> {
+    #[cfg(debug_assertions)]
+    debug_log!(
+        "EVSGECT: starting extract_verify_store_gpg_encrypted_clearsign_toml, incoming_gpg_encrypted_path -> {:?}",
+        incoming_gpg_encrypted_path
+    );
+
     // Step 1: Create a temporary path for the decrypted file
     let decrypted_temp_path = create_temp_file_path("decrypted_clearsign")?;
 
     // Step 2: Decrypt the GPG file
     decrypt_gpg_file(incoming_gpg_encrypted_path, &decrypted_temp_path)?;
+
+    #[cfg(debug_assertions)]
+    debug_log!("EVSGECT: ran decrypt_gpg_file()");
 
     // Step 3: Extract the GPG public key from the decrypted content
     // This key will be used to verify the signature
@@ -3864,6 +3873,9 @@ pub fn extract_verify_store_gpg_encrypted_clearsign_toml(
             .ok_or_else(|| GpgError::ValidationError("Invalid path encoding".to_string()))?,
         "gpg_key_public",
     )?;
+
+    #[cfg(debug_assertions)]
+    debug_log!("EVSGECT: found gpg_key_public in file");
 
     // Step 4: Verify the clearsign signature using the extracted key
     // Note: This uses the key FROM the file, not from the keyring
