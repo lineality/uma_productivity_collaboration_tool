@@ -2115,8 +2115,8 @@ fn parse_abstract_port_assignments(
 /// - Returns false if signature does not match the specific provided key
 ///
 /// # Arguments
-/// - `path` - Absolute path to the clearsigned file to verify
-/// - `public_key` - ASCII-armored GPG public key of the expected signer
+/// - `pathstr_to_target_clearsigned_file` - Absolute path to the clearsigned file to verify
+/// - `gpg_public_key` - ASCII-armored GPG public key of the expected signer
 ///
 /// # Returns
 /// - `Ok(true)` - Signature valid AND made by the provided key specifically
@@ -2126,8 +2126,8 @@ fn parse_abstract_port_assignments(
 /// # Error Prefix
 /// All errors from this function are prefixed with "VCIH" for tracing.
 pub fn verify_clearsign_using_isolated_keyring(
-    path: &str,
-    public_key: &str,
+    pathstr_to_target_clearsigned_file: &str,
+    gpg_public_key: &str,
 ) -> Result<bool, String> {
     use std::fs;
     use std::path::Path;
@@ -2136,38 +2136,44 @@ pub fn verify_clearsign_using_isolated_keyring(
     // Debug-Assert, Test-Assert, Production-Catch-Handle
     // =========================================================
 
+    #[cfg(debug_assertions)]
+    debug_log("VCUIK starting verify_clearsign_using_isolated_keyring()");
+
     // Debug-only assertions (not in test builds, not in production)
     #[cfg(all(debug_assertions, not(test)))]
     {
-        debug_assert!(!path.is_empty(), "VCIH debug: path must not be empty");
         debug_assert!(
-            !public_key.is_empty(),
+            !pathstr_to_target_clearsigned_file.is_empty(),
+            "VCIH debug: path must not be empty"
+        );
+        debug_assert!(
+            !gpg_public_key.is_empty(),
             "VCIH debug: public_key must not be empty"
         );
         debug_assert!(
-            public_key.contains("-----BEGIN PGP PUBLIC KEY BLOCK-----"),
+            gpg_public_key.contains("-----BEGIN PGP PUBLIC KEY BLOCK-----"),
             "VCIH debug: key should be ASCII-armored"
         );
     }
 
     // Production catch: empty path
-    if path.is_empty() {
+    if pathstr_to_target_clearsigned_file.is_empty() {
         return Err("VCIH error: path empty".to_string());
     }
 
     // Production catch: empty key
-    if public_key.is_empty() {
+    if gpg_public_key.is_empty() {
         return Err("VCIH error: key empty".to_string());
     }
 
     // Production catch: file must exist before we create temp resources
-    if !Path::new(path).exists() {
+    if !Path::new(pathstr_to_target_clearsigned_file).exists() {
         return Err("VCIH error: file not found".to_string());
     }
 
     // Production catch: basic key format validation
     // Avoids creating temp directory for obviously invalid input
-    if !public_key.contains("-----BEGIN PGP PUBLIC KEY BLOCK-----") {
+    if !gpg_public_key.contains("-----BEGIN PGP PUBLIC KEY BLOCK-----") {
         return Err("VCIH error: invalid key format".to_string());
     }
 
@@ -2207,7 +2213,7 @@ pub fn verify_clearsign_using_isolated_keyring(
 
     // Write the public key to a file for GPG import
     let key_file_path = format!("{}/key_to_import.asc", temp_gpg_home);
-    if let Err(e) = fs::write(&key_file_path, public_key) {
+    if let Err(e) = fs::write(&key_file_path, gpg_public_key) {
         let _ = fs::remove_dir_all(&temp_gpg_home);
         return Err(format!("VCIH error: key file write failed: {}", e));
     }
@@ -2263,7 +2269,7 @@ pub fn verify_clearsign_using_isolated_keyring(
         .arg("--batch")
         .arg("--no-tty")
         .arg("--verify")
-        .arg(path)
+        .arg(pathstr_to_target_clearsigned_file)
         .output();
 
     let verification_success = match verify_result {
@@ -17658,18 +17664,22 @@ pub fn get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
 /// ```
 pub fn get_pathstring_to_temp_plaintoml_verified_extracted(
     input_toml_absolute_path: &Path,
-    gpg_full_fingerprint_key_id_string: &str, // COLLABORATOR_ADDRESSBOOK_PATH_STR
+    gpg_full_fingerprint_key_id_string: &str, // local owner user gpg-id
     base_uma_temp_directory_path: &Path,
+    full_ascii_armored_public_gpg_key_string: &str,
 ) -> Result<String, GpgError> {
-    debug_log(
-        "starting gpttpve() 1 -> get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml",
-    );
-
     #[cfg(debug_assertions)]
-    debug_log!(
-        "gpttpve input_toml_absolute_path {:?}",
-        input_toml_absolute_path
-    );
+    {
+        debug_log(
+            "starting gpttpve() 1 -> get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml",
+        );
+
+        #[cfg(debug_assertions)]
+        debug_log!(
+            "gpttpve input_toml_absolute_path {:?}",
+            input_toml_absolute_path
+        );
+    }
 
     // Validate input parameters before proceeding
     if gpg_full_fingerprint_key_id_string.is_empty() {
@@ -17730,23 +17740,27 @@ pub fn get_pathstring_to_temp_plaintoml_verified_extracted(
         // Create temporary filename with source filename stem and timestamp for uniqueness
         // Always use .toml extension for temp file regardless of source type for consistency
         let temp_filename = format!("temp_toml_copy_{}_{}.toml", filename_stem, timestamp_nanos);
+
         // let temp_file_path = std::env::temp_dir().join(&temp_filename);
         // Use the provided UME temp directory path instead of system temp directory
         let temp_file_path = base_uma_temp_directory_path.join(&temp_filename);
 
-        debug_log!(
-            "gpttpve() 2 : Creating temporary file for TOML content: {:?}",
-            temp_file_path
-        );
-        debug_log!(
-            "gpttpve() 3 : Source file: {:?} (type: .{})",
-            input_toml_absolute_path,
-            extension
-        );
-
+        #[cfg(debug_assertions)]
+        {
+            debug_log!(
+                "gpttpve() 2 : Creating temporary file for TOML content: {:?}",
+                temp_file_path
+            );
+            debug_log!(
+                "gpttpve() 3 : Source file: {:?} (type: .{})",
+                input_toml_absolute_path,
+                extension
+            );
+        }
         // Handle based on file extension
         if extension == "toml" {
             // Case 1: Plain .toml file - create a temporary copy
+            #[cfg(debug_assertions)]
             debug_log!(
                 "gpttpve() 4 : Processing plain .toml file: {:?}",
                 input_toml_absolute_path
@@ -17761,6 +17775,7 @@ pub fn get_pathstring_to_temp_plaintoml_verified_extracted(
             let mut last_read_error = None;
 
             for attempt in 1..=max_retry_attempts {
+                #[cfg(debug_assertions)]
                 debug_log!(
                     "gpttpve() 6: Attempting to read original file (attempt {} of {})",
                     attempt,
@@ -17771,6 +17786,7 @@ pub fn get_pathstring_to_temp_plaintoml_verified_extracted(
                     Ok(content) => {
                         // Successfully read the file
                         original_content = content;
+                        #[cfg(debug_assertions)]
                         debug_log!(
                             "gpttpve() 7: Successfully read original file on attempt {}",
                             attempt
@@ -17783,6 +17799,7 @@ pub fn get_pathstring_to_temp_plaintoml_verified_extracted(
 
                         if attempt < max_retry_attempts {
                             // Not the last attempt, wait and retry
+                            #[cfg(debug_assertions)]
                             debug_log!(
                                 "gpttpve() : Failed to read file on attempt {}: {}. Waiting {}ms before retry...",
                                 attempt,
@@ -17794,6 +17811,7 @@ pub fn get_pathstring_to_temp_plaintoml_verified_extracted(
                             ));
                         } else {
                             // Final attempt failed
+                            #[cfg(debug_assertions)]
                             debug_log!(
                                 "gpttpve() : Failed to read file after {} attempts",
                                 max_retry_attempts
@@ -17828,6 +17846,7 @@ pub fn get_pathstring_to_temp_plaintoml_verified_extracted(
                 let mut last_write_error = None;
 
                 for attempt in 1..=max_retry_attempts {
+                    #[cfg(debug_assertions)]
                     debug_log!(
                         "gpttpve() 8: Attempting to write to temporary file (attempt {} of {})",
                         attempt,
@@ -17862,6 +17881,7 @@ pub fn get_pathstring_to_temp_plaintoml_verified_extracted(
                         Ok(()) => {
                             // Successfully wrote the file
                             write_success = true;
+                            #[cfg(debug_assertions)]
                             debug_log!(
                                 "gpttpve() 9: Successfully wrote temporary file on attempt {}",
                                 attempt
@@ -17874,6 +17894,7 @@ pub fn get_pathstring_to_temp_plaintoml_verified_extracted(
 
                             if attempt < max_retry_attempts {
                                 // Not the last attempt, wait and retry
+                                #[cfg(debug_assertions)]
                                 debug_log!(
                                     "gpttpve() : Failed to write temporary file on attempt {}: {}. Waiting {}ms before retry...",
                                     attempt,
@@ -17888,6 +17909,7 @@ pub fn get_pathstring_to_temp_plaintoml_verified_extracted(
                                 let _ = std::fs::remove_file(&temp_file_path);
                             } else {
                                 // Final attempt failed
+                                #[cfg(debug_assertions)]
                                 debug_log!(
                                     "gpttpve() : Failed to write temporary file after {} attempts",
                                     max_retry_attempts
@@ -17914,6 +17936,7 @@ pub fn get_pathstring_to_temp_plaintoml_verified_extracted(
                 let mut last_write_error = None;
 
                 for attempt in 1..=max_retry_attempts {
+                    #[cfg(debug_assertions)]
                     debug_log!(
                         "gpttpve() : Attempting to write to temporary file (attempt {} of {})",
                         attempt,
@@ -17927,6 +17950,7 @@ pub fn get_pathstring_to_temp_plaintoml_verified_extracted(
                             if attempt == 1 {
                                 temp_file_created = Some(temp_file_path.clone());
                             }
+                            #[cfg(debug_assertions)]
                             debug_log!(
                                 "gpttpve() : Successfully wrote temporary file on attempt {}",
                                 attempt
@@ -17939,6 +17963,7 @@ pub fn get_pathstring_to_temp_plaintoml_verified_extracted(
 
                             if attempt < max_retry_attempts {
                                 // Not the last attempt, wait and retry
+                                #[cfg(debug_assertions)]
                                 debug_log!(
                                     "gpttpve() : Failed to write temporary file on attempt {}: {}. Waiting {}ms before retry...",
                                     attempt,
@@ -17953,10 +17978,13 @@ pub fn get_pathstring_to_temp_plaintoml_verified_extracted(
                                 let _ = std::fs::remove_file(&temp_file_path);
                             } else {
                                 // Final attempt failed
+                                #[cfg(debug_assertions)]
                                 debug_log!(
                                     "gpttpve() : Failed to write temporary file after {} attempts",
                                     max_retry_attempts
                                 );
+                                // Safe log
+                                debug_log!("gpttpve() : Failed to write temporary file ");
                             }
                         }
                     }
@@ -17972,10 +18000,11 @@ pub fn get_pathstring_to_temp_plaintoml_verified_extracted(
                     )));
                 }
             }
-
+            #[cfg(debug_assertions)]
             debug_log!("gpttpve() 11: Successfully created temporary copy of .toml file");
         } else {
             // Case 2: Encrypted .gpgtoml file - decrypt to temporary file
+            #[cfg(debug_assertions)]
             debug_log!(
                 "gpttpve() 12: Processing encrypted .gpgtoml file: {:?}",
                 input_toml_absolute_path
@@ -18019,6 +18048,7 @@ pub fn get_pathstring_to_temp_plaintoml_verified_extracted(
 
             // Execute GPG to decrypt the .gpgtoml file into our temporary file
             // Note: GPG operations are not retried as they typically either work or fail definitively
+            #[cfg(debug_assertions)]
             debug_log!(
                 "gpttpve() 13: Executing GPG to decrypt {} to temporary file {}",
                 input_toml_absolute_path.display(),
@@ -18062,13 +18092,19 @@ pub fn get_pathstring_to_temp_plaintoml_verified_extracted(
                 return Err(GpgError::GpgOperationError(error_msg));
             }
 
+            #[cfg(debug_assertions)]
             debug_log!("gpttpve() : Successfully decrypted .gpgtoml file to temporary file");
         } // <-- This is the closing brace of the else block for .gpgtoml handling
 
         // ================================================
         // Extract plain content from clearsigned temp file
         // ================================================
-        debug_log!("gpttpve() 14: Extracting clearsigned content to plain TOML");
+        // TDOD needed workflow
+        // get owner from file
+        // get owner addressbook
+        // get gpg-key from addressbook
+        #[cfg(debug_assertions)]
+        debug_log!("gpttpve() 14.1: Extracting clearsigned content to plain TOML");
 
         // Create second temporary file for extracted plain content
         let final_temp_filename =
@@ -18103,49 +18139,274 @@ pub fn get_pathstring_to_temp_plaintoml_verified_extracted(
             })?;
         }
 
-        // Extract and verify clearsigned content with GPG
-        let extract_output = std::process::Command::new("gpg")
-            .arg("--quiet")
-            .arg("--batch")
-            .arg("--yes")
-            .arg("--decrypt")
-            .arg("--output")
-            .arg(&final_temp_file_path)
-            .arg(&temp_file_path)
-            .output()
-            .map_err(|e| {
-                let error_msg = format!("gpttpve() error  Failed to execute GPG extract: let extract_output = std::process::Command::new {}", e);
-                eprintln!("\nERROR: {}", error_msg);
-                debug_log!("\nERROR: {}", error_msg);
-                eprintln!("error Press Enter to continue...(gpttpve) let extract_output = std::process::Command::new");
-                let _ = std::io::stdin().read_line(&mut String::new());
-                GpgError::GpgOperationError(error_msg)
-            })?;
+        // // Extract and verify clearsigned content with GPG
+        // let extract_output_result = std::process::Command::new("gpg")
+        //     .arg("--quiet")
+        //     .arg("--batch")
+        //     .arg("--yes")
+        //     .arg("--decrypt")
+        //     .arg("--output")
+        //     .arg(&final_temp_file_path)
+        //     .arg(&temp_file_path)
+        //     .output()
+        //     .map_err(|e| {
+        //         let error_msg = format!("gpttpve() error  Failed to execute GPG extract: let extract_output_result = std::process::Command::new {}", e);
+        //         eprintln!("\nERROR: {}", error_msg);
+        //         debug_log!("\nERROR: {}", error_msg);
+        //         eprintln!("error Press Enter to continue...(gpttpve) let extract_output_result = std::process::Command::new");
+        //         let _ = std::io::stdin().read_line(&mut String::new());
+        //         GpgError::GpgOperationError(error_msg)
+        //     })?;
 
-        if !extract_output.status.success() {
-            let stderr_text = String::from_utf8_lossy(&extract_output.stderr);
-            let error_msg = format!(
-                "error  gpttpve() GPG clearsign extraction failed !extract_output.status.success(): {}",
-                stderr_text
-            );
-            debug_log!(
-                "gpttpve ERROR !extract_output.status.success(): {}",
-                error_msg
-            );
-            debug_log!(
-                "gpttpve ERROR temp_file_path {:?} ...Press Enter to continue... (gpttpve)",
-                temp_file_path
-            );
+        // =========================================================
+        // Create Isolated GPG Home Directory
+        // =========================================================
 
-            eprintln!(
-                "\n gpttpve ERROR !extract_output.status.success(): {}",
-                error_msg
-            );
-            eprintln!("Press Enter to continue... (gpttpve)");
-            let _ = std::io::stdin().read_line(&mut String::new());
-            return Err(GpgError::GpgOperationError(error_msg));
+        #[cfg(debug_assertions)]
+        debug_log!("gpttpve() 14.2: Create Isolated GPG Home Directory");
+
+        // Generate unique directory path using process ID and timestamp
+        // No external crates - using std only per project rules
+        let timestamp_nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+
+        let temp_gpg_home = format!(
+            "/tmp/gpg_isolated_{}_{}",
+            std::process::id(),
+            timestamp_nanos
+        );
+
+        // Create the isolated GPG home directory
+        if let Err(e) = fs::create_dir_all(&temp_gpg_home) {
+            return Err(GpgError::GpgOperationError(format!(
+                "GPTTPVE error: temp dir creation failed: {}",
+                e
+            )));
         }
 
+        // GPG requires home directory permissions to be 700 (owner only)
+        // Without this, GPG will warn or refuse to operate
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let permissions = fs::Permissions::from_mode(0o700);
+            if let Err(e) = fs::set_permissions(&temp_gpg_home, permissions) {
+                let _ = fs::remove_dir_all(&temp_gpg_home);
+                return Err(GpgError::GpgOperationError(format!(
+                    "GPTTPVE error: permission set failed: {}",
+                    e
+                )));
+            }
+        }
+
+        // Write the public key to a file for GPG import
+        let key_file_path = format!("{}/key_to_import.asc", temp_gpg_home);
+        if let Err(e) = fs::write(&key_file_path, full_ascii_armored_public_gpg_key_string) {
+            let _ = fs::remove_dir_all(&temp_gpg_home);
+            return Err(GpgError::GpgOperationError(format!(
+                "GPTTPVE error: key file write failed: {}",
+                e
+            )));
+        }
+
+        // =========================================================
+        // Import Provided Key into Isolated Keyring
+        // =========================================================
+
+        #[cfg(debug_assertions)]
+        {
+            debug_log!("gpttpve() 14.3: Import Provided Key into Isolated Keyring");
+            // debug_log!("gpttpve() 14.3: {}", gpg_full_fingerprint_key_id_string);
+            // debug_log!("gpttpve() 14.3: {}",);
+        }
+
+        // =========================================================
+        // Import Collaborator's Public Key into Isolated Keyring
+        // =========================================================
+        // The isolated GPG home directory was created in section 14.2.
+        // The collaborator's ASCII-armored public key was written to
+        // key_file_path in section 14.2.
+        // This import step adds that key to the isolated keyring so
+        // that the subsequent extraction step (--decrypt) can verify
+        // the clearsigned file was signed by this specific collaborator.
+        // Without this import, the isolated keyring is empty and
+        // extraction will fail because GPG cannot find any matching key.
+        // --homedir: Use isolated directory instead of ~/.gnupg/
+        // --batch: Non-interactive mode
+        // --no-tty: No terminal output
+        // --yes: Auto-confirm prompts
+        // --import: Import the key from the file written in section 14.2
+
+        #[cfg(debug_assertions)]
+        debug_log!("gpttpve() 14.3: Import Provided Key into Isolated Keyring");
+
+        let import_key_into_isolated_keyring_result = Command::new("gpg")
+            .arg("--homedir")
+            .arg(&temp_gpg_home)
+            .arg("--batch")
+            .arg("--no-tty")
+            .arg("--yes")
+            .arg("--import")
+            .arg(&key_file_path)
+            .output();
+
+        let import_key_into_isolated_keyring_output = match import_key_into_isolated_keyring_result
+        {
+            Ok(output) => output,
+            Err(e) => {
+                let _ = fs::remove_dir_all(&temp_gpg_home);
+                return Err(GpgError::GpgOperationError(format!(
+                    "GPTTPVE error: gpg key import into isolated keyring exec failed: {}",
+                    e
+                )));
+            }
+        };
+
+        // Verify the key import succeeded before attempting extraction
+        if !import_key_into_isolated_keyring_output.status.success() {
+            let _ = fs::remove_dir_all(&temp_gpg_home);
+            return Err(GpgError::GpgOperationError(
+                "GPTTPVE error: gpg key import into isolated keyring failed".to_string(),
+            ));
+        }
+
+        // =========================================================
+        // extract_output_result
+        // =========================================================
+        #[cfg(debug_assertions)]
+        {
+            debug_log!("gpttpve() 14.4: extract_output_result");
+            // debug_log!("gpttpve() 14.3: {}", gpg_full_fingerprint_key_id_string);
+            // debug_log!("gpttpve() 14.3: {}",);
+        }
+        // // --homedir: Use our temporary directory instead of ~/.gnupg/
+        // // --batch: Non-interactive mode
+        // // --no-tty: No terminal output
+        // // --yes: Auto-confirm prompts
+        // // --import: Import the key from file
+        // let import_result = Command::new("gpg")
+        //     .arg("--homedir")
+        //     .arg(&temp_gpg_home)
+        //     .arg("--batch")
+        //     .arg("--no-tty")
+        //     .arg("--yes")
+        //     .arg("--import")
+        //     .arg(&key_file_path)
+        //     .output();
+
+        let extract_output_result = Command::new("gpg")
+            .arg("--homedir")
+            .arg(&temp_gpg_home)
+            .arg("--batch")
+            .arg("--no-tty")
+            .arg("--yes") // ← auto-confirm
+            .arg("--decrypt") // ← extract content
+            .arg("--output") // ← specify output file
+            .arg(&final_temp_file_path) // ← where to write extracted content: output
+            .arg(&temp_file_path) // ← clearsigned file: input
+            .output();
+
+        let extract_output = match extract_output_result {
+            Ok(output) => output,
+            Err(e) => {
+                let _ = fs::remove_dir_all(&temp_gpg_home);
+                return Err(GpgError::GpgOperationError(format!(
+                    "GPTTPVE error: extract_output_result gpg extract exec failed: {}",
+                    e
+                )));
+            }
+        };
+
+        // Check extract succeeded
+        if !extract_output.status.success() {
+            let _ = fs::remove_dir_all(&temp_gpg_home);
+            // Note: NOT exposing stderr content in production (security)
+            return Err(GpgError::GpgOperationError(
+                "GPTTPVE error: extract_output_result gpg import failed".to_string(),
+            ));
+        }
+
+        // =========================================================
+        // Verify Clearsigned File Against Isolated Keyring
+        // =========================================================
+
+        #[cfg(debug_assertions)]
+        debug_log!("gpttpve() 14.5: Verify Clearsigned File Against Isolated Keyring");
+
+        // --homedir: Same isolated directory - contains ONLY our imported key
+        // --verify: Verify the signature in the clearsigned file
+        //
+        // GPG will:
+        // 1. Extract the signature from the clearsigned file
+        // 2. Look up the signing key ID in the isolated keyring
+        // 3. Return success (0) ONLY if key found AND signature valid
+        let extract_output_result = Command::new("gpg")
+            .arg("--homedir")
+            .arg(&temp_gpg_home)
+            .arg("--batch")
+            .arg("--no-tty")
+            .arg("--verify")
+            .arg(&temp_file_path)
+            .output();
+
+        let extract_output = match extract_output_result {
+            Ok(output) => output,
+            Err(e) => {
+                let _ = fs::remove_dir_all(&temp_gpg_home);
+                return Err(GpgError::GpgOperationError(format!(
+                    "GPTTPVE error: gpg extract exec failed: {}",
+                    e
+                )));
+            }
+        };
+
+        // Check extraction succeeded
+        if !extract_output.status.success() {
+            let _ = fs::remove_dir_all(&temp_gpg_home);
+            return Err(GpgError::GpgOperationError(
+                "GPTTPVE error: gpg extraction failed".to_string(),
+            ));
+        }
+
+        // // verification_success
+        // let _ = match extract_output_result {
+        //     Ok(output) => output.status.success(),
+        //     Err(e) => {
+        //         let _ = fs::remove_dir_all(&temp_gpg_home);
+        //         return Err(GpgError::GpgOperationError(format!(
+        //             "VCIH error: gpg verify exec failed: {}",
+        //             e
+        //         )));
+        //     }
+        // };
+
+        // if !extract_output_result.status.success() {
+        //     let stderr_text = String::from_utf8_lossy(&extract_output_result.stderr);
+        //     let error_msg = format!(
+        //         "error  gpttpve() GPG clearsign extraction failed !extract_output.status.success(): {}",
+        //         stderr_text
+        //     );
+        //     debug_log!(
+        //         "gpttpve ERROR !extract_output.status.success(): {}",
+        //         error_msg
+        //     );
+        //     debug_log!(
+        //         "gpttpve ERROR temp_file_path {:?} ...Press Enter to continue... (gpttpve)",
+        //         temp_file_path
+        //     );
+
+        //     eprintln!(
+        //         "\n gpttpve ERROR !extract_output.status.success(): {}",
+        //         error_msg
+        //     );
+        //     eprintln!("Press Enter to continue... (gpttpve)");
+        //     let _ = std::io::stdin().read_line(&mut String::new());
+        //     return Err(GpgError::GpgOperationError(error_msg));
+        // }
+
+        #[cfg(debug_assertions)]
         debug_log!("gpttpve() 16: Successfully extracted plain TOML from clearsigned content");
 
         // Clean up intermediate clearsigned temp file
@@ -18163,6 +18424,7 @@ pub fn get_pathstring_to_temp_plaintoml_verified_extracted(
     // If any error occurred and we created a temp file, clean it up before propagating error
     match create_temp_result {
         Ok(result) => {
+            #[cfg(debug_assertions)]
             debug_log!(
                 "gpttpve() : Successfully prepared temporary TOML file: {:?}",
                 result
@@ -18181,6 +18443,7 @@ pub fn get_pathstring_to_temp_plaintoml_verified_extracted(
         Err(e) => {
             // Clean up temporary file if it was created
             if let Some(temp_path) = temp_file_created {
+                #[cfg(debug_assertions)]
                 debug_log!(
                     "gpttpve() : Error occurred, cleaning up temporary file: {:?}",
                     temp_path

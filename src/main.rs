@@ -25435,7 +25435,7 @@ fn initialize_uma_application() -> Result<bool, Box<dyn std::error::Error>> {
     let should_create_channel: bool;
 
     if number_of_team_channels == 0 {
-        println!("There are no existing team channels. Would you like to create one? (yes/no)");
+        println!("\n\nThere are no existing team channels. Would you like to create one? (yes/no)");
         let mut input = String::new();
         std::io::stdin().read_line(&mut input).expect("Failed to read input");
 
@@ -25964,6 +25964,7 @@ fn share_team_channel_with_existing_collaborator_converts_to_abs(
     };
 
     // B. Get readable temp copy (handles decryption if .gpgtoml)
+    #[cfg(debug_assertions)]
     debug_log!("TCS: Getting readable copy of node file, node_file_path {:?}", node_file_path);
 
     // Get GPG fingerprint
@@ -25978,24 +25979,168 @@ fn share_team_channel_with_existing_collaborator_converts_to_abs(
             format!("TCS: Failed to get temp directory path: {}", e)
         ))?;
 
+    // ===============================
+    //  Get Armored Public Key (start)
+    // ===============================
+
+    // To Get armored public key, using key-id (use full fingerprint id)
+    let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+        Ok(fingerprint) => fingerprint,
+        Err(e) => {
+            // Since the function returns Result<CoreNode, String>, we need to return a String error
+            return Err(GpgError::ValidationError(format!(
+                "TCS: implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}",
+                e
+            )));
+        }
+    };
+
+    // // 1. Paths & Reading-Copies Part 1: node.toml path and read-copy
+
+    // Get the UME temp directory path with explicit String conversion
+    let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
+        .map_err(|io_err| {
+            let gpg_error = GpgError::ValidationError(
+                format!("TCS: Failed to get UME temp directory path: {}", io_err)
+            );
+            // Convert GpgError to String for the function's return type
+            format!("TCS: {:?}", gpg_error)
+        })?;
+
+    // Using Debug trait for more detailed error information
+    let node_readcopy_path = get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
+        &node_file_path,
+        &gpg_full_fingerprint_key_id_string,
+        &base_uma_temp_directory_path,
+    ).map_err(|e| format!("TCS: Failed to get temporary read copy of TOML file: {:?}", e))?;
+
+    // //    // simple read string to get owner name
+    // //    // not for extraction and return, just part of validation
+
+    #[cfg(debug_assertions)]
+    debug_log!("TCS: node_readcopy_path: {:?}", node_readcopy_path);
+
+
+    ////////////////////////////////
+    // Extract Owner for Key Lookup
+    ////////////////////////////////
+    let owner_name_of_toml_field_key_to_read = "owner";
+    #[cfg(debug_assertions)]
+    debug_log!(
+        "TCS: Reading file owner from field '{}' for security validation",
+        owner_name_of_toml_field_key_to_read
+    );
+
+    // get node_owners_public_gpg_key
+
+    let file_owner_username = match read_single_line_string_field_from_toml(
+        &node_readcopy_path,  // TODO convert to string?
+        owner_name_of_toml_field_key_to_read,
+    ) {
+        Ok(username) => {
+            if username.is_empty() {
+                // Convert to String error instead of GpgError
+                return Err(GpgError::ValidationError(format!(
+                    "TCS error: Field '{}' is empty in TOML file. File owner is required for security validation.",
+                    owner_name_of_toml_field_key_to_read
+                )));
+            }
+            username
+        }
+        Err(e) => {
+            // Convert to String error instead of GpgError
+            return Err(GpgError::ValidationError(format!(
+                "TCS error: Failed to read file owner from field '{}': {}",
+                owner_name_of_toml_field_key_to_read, e
+            )));
+        }
+    };
+    // println!("GPI: File owner: '{}'", file_owner_username);
+    #[cfg(debug_assertions)]
+    debug_log!("TCS: File owner: '{}'", file_owner_username);
+
+    // TODO returns full response not just string
+    // because the filepath needs to be constructed
+    // this is a separate function
+       	// let addressbook_readcopy_path_string = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
+    //        &file_owner_username,
+    //        COLLABORATOR_ADDRESSBOOK_PATH_STR,
+    //        &gpg_full_fingerprint_key_id_string,
+    //    );
+
+    // Get the UME temp directory path with error handling
+    let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
+        .map_err(|io_err| format!(
+            "TCS error: Failed to get UME temp directory path: {:?}",
+            io_err
+        ))?;
+
+    // Extract the addressbook path string with inline error conversion
+    let addressbook_readcopy_path_string = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
+        &file_owner_username,
+        COLLABORATOR_ADDRESSBOOK_PATH_STR,
+        &gpg_full_fingerprint_key_id_string,
+        &base_uma_temp_directory_path,
+    ).map_err(|e| format!(
+        "TCS error: Failed to get addressbook path for user '{}': {:?}",
+        file_owner_username,
+        e
+    ))?;
+
+    // Define cleanup closure
+    let cleanup_closure = || {
+        let _ = cleanup_collaborator_temp_file(
+            &node_readcopy_path,
+            &base_uma_temp_directory_path,
+            );
+        let _ = cleanup_collaborator_temp_file(
+            &addressbook_readcopy_path_string,
+            &base_uma_temp_directory_path,
+            );
+    };
+
+    // use function for general .toml or .gpgtoml readcopy
+    // let node_owners_public_gpg_key = read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml(
+    //     &addressbook_readcopy_path_string,
+    // );
+
+    let node_owners_public_gpg_key = read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml(
+        &addressbook_readcopy_path_string,
+    ).map_err(|e| format!(
+        "TCS error: Failed to get addressbook path for user '{}': {:?}",
+        file_owner_username,
+        e
+    ))?;
+
+    cleanup_closure();
+
+    // ============================
+    //  END get Armored Public Key
+    // ============================
+
+
     // Get readable copy
     let absolute_team_channel_node_toml_path = get_pathstring_to_temp_plaintoml_verified_extracted(
         &node_file_path,
         &gpg_fingerprint,
         &temp_dir,
+        &node_owners_public_gpg_key,
     ).map_err(|e| GpgError::PathError(
         format!("TCS: Failed to get readable copy of node file: {:?}", e)
     ))?;
 
+    #[cfg(debug_assertions)]
     debug_log!("TCS: Node readcopy path: {}", absolute_team_channel_node_toml_path);
 
     // Now use node_readcopy_path to read fields...
 
     // ///////////////////
 
+    #[cfg(debug_assertions)]
     debug_log!("TCS: Successfully verified team channel node.toml file exists");
 
     // ======== STEP 2: Get local owner username from uma.toml ========
+    #[cfg(debug_assertions)]
     debug_log!(
         "TCS: STEP 2 - Reading local owner username from {}",
         UMA_TOML_CONFIGFILE_PATH_STR,
@@ -29037,7 +29182,7 @@ fn handle_command_main_mode(
                 }
             }
 
-            "invite" | "update" => {
+            "invite" | "update" | "import" => {
                 debug_log("invite / update wizard");
                 /*
                 */
@@ -30603,7 +30748,7 @@ fn get_parentnode_id(input_current_nav_path: &Path) -> Result<Vec<u8>, String> {
         file_path,
     );
 
-    // Get armored public key, using key-id (full fingerprint in)
+    // To Get armored public key, using key-id (use full fingerprint id)
     let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
         Ok(fingerprint) => fingerprint,
         Err(e) => {
@@ -30617,7 +30762,7 @@ fn get_parentnode_id(input_current_nav_path: &Path) -> Result<Vec<u8>, String> {
 
     // // 1. Paths & Reading-Copies Part 1: node.toml path and read-copy
 
-    // Get the UME temp directory path with explicit String conversion
+    // Get the Uma temp directory path with explicit String conversion
     let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
         .map_err(|io_err| {
             let gpg_error = GpgError::ValidationError(
@@ -31111,42 +31256,181 @@ fn move_node_directory(
             // 1 make readcopy
             // 2 read
 
-            // Get armored public key, using key-id (full fingerprint in)
+            // // Get armored public key, using key-id (full fingerprint in)
+            // let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+            //     Ok(fingerprint) => fingerprint,
+            //     // Err(e) => {
+            //     //     // Since the function returns Result<CoreNode, String>, we need to return a String error
+            //     //     return Err(format!(
+            //     //         "LCNFTF: implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}",
+            //     //         e
+            //     //     ));
+            //     // }
+            //     Err(_e) => {
+            //         #[cfg(debug_assertions)]
+            //         debug_log(&format!(
+            //             "{}: MND: error ",
+            //             _e
+            //         ));
+            //         return Err(ThisProjectError::from(
+            //             "MND: error gpg_full_fingerprint_key_id_string".to_string()
+            //         ));
+            //     }
+            // };
+
+            // // Get the UME temp directory path with explicit String conversion
+            // let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
+            //     .map_err(|io_err| {
+            //         let gpg_error = GpgError::ValidationError(
+            //             format!("MND: Failed to get UME temp directory path: {}", io_err)
+            //         );
+            //         // Convert GpgError to String for the function's return type
+            //         format!("MND: {:?}", gpg_error)
+            //     })?;
+
+
+
+            // ===============================
+            //  Get Armored Public Key (start)
+            // ===============================
+
+            // To Get armored public key, using key-id (use full fingerprint id)
             let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
                 Ok(fingerprint) => fingerprint,
-                // Err(e) => {
-                //     // Since the function returns Result<CoreNode, String>, we need to return a String error
-                //     return Err(format!(
-                //         "LCNFTF: implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}",
-                //         e
-                //     ));
-                // }
-                Err(_e) => {
-                    #[cfg(debug_assertions)]
-                    debug_log(&format!(
-                        "{}: MND: error ",
-                        _e
-                    ));
-                    return Err(ThisProjectError::from(
-                        "MND: error gpg_full_fingerprint_key_id_string".to_string()
-                    ));
+                Err(e) => {
+                    // Since the function returns Result<CoreNode, String>, we need to return a String error
+                    return Err(ThisProjectError::from(format!(
+                        "GPI: implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}",
+                        e
+                    )));
                 }
             };
+
+            // // 1. Paths & Reading-Copies Part 1: node.toml path and read-copy
 
             // Get the UME temp directory path with explicit String conversion
             let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
                 .map_err(|io_err| {
                     let gpg_error = GpgError::ValidationError(
-                        format!("MND: Failed to get UME temp directory path: {}", io_err)
+                        format!("GPI: Failed to get UME temp directory path: {}", io_err)
                     );
                     // Convert GpgError to String for the function's return type
-                    format!("MND: {:?}", gpg_error)
+                    format!("GPI: {:?}", gpg_error)
                 })?;
+
+            // Using Debug trait for more detailed error information
+            let node_readcopy_path = get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
+                &destination_parent_node_file_path,
+                &gpg_full_fingerprint_key_id_string,
+                &base_uma_temp_directory_path,
+            ).map_err(|e| format!("GPI: Failed to get temporary read copy of TOML file: {:?}", e))?;
+
+            // //    // simple read string to get owner name
+            // //    // not for extraction and return, just part of validation
+
+            #[cfg(debug_assertions)]
+            debug_log!("GPI: node_readcopy_path: {:?}", node_readcopy_path);
+
+            // Extract Owner for Key Lookup
+            let owner_name_of_toml_field_key_to_read = "owner";
+            #[cfg(debug_assertions)]
+            debug_log!(
+                "GPI: Reading file owner from field '{}' for security validation",
+                owner_name_of_toml_field_key_to_read
+            );
+
+            // get node_owners_public_gpg_key
+            let file_owner_username = match read_single_line_string_field_from_toml(
+                &node_readcopy_path,  // TODO convert to string?
+                owner_name_of_toml_field_key_to_read,
+            ) {
+                Ok(username) => {
+                    if username.is_empty() {
+                        // Convert to String error instead of GpgError
+                        return Err(ThisProjectError::from(format!(
+                            "TCS error: Field '{}' is empty in TOML file. File owner is required for security validation.",
+                            owner_name_of_toml_field_key_to_read
+                        )));
+                    }
+                    username
+                }
+                Err(e) => {
+                    // Convert to String error instead of GpgError
+                    return Err(ThisProjectError::from(format!(
+                        "TCS error: Failed to read file owner from field '{}': {}",
+                        owner_name_of_toml_field_key_to_read, e
+                    )));
+                }
+            };
+            // println!("GPI: File owner: '{}'", file_owner_username);
+            #[cfg(debug_assertions)]
+            debug_log!("GPI: File owner: '{}'", file_owner_username);
+
+            // TODO returns full response not just string
+            // because the filepath needs to be constructed
+            // this is a separate function
+               	// let addressbook_readcopy_path_string = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
+            //        &file_owner_username,
+            //        COLLABORATOR_ADDRESSBOOK_PATH_STR,
+            //        &gpg_full_fingerprint_key_id_string,
+            //    );
+
+            // Get the UME temp directory path with error handling
+            let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
+                .map_err(|io_err| format!(
+                    "TCS error: Failed to get UME temp directory path: {:?}",
+                    io_err
+                ))?;
+
+            // Extract the addressbook path string with inline error conversion
+            let addressbook_readcopy_path_string = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
+                &file_owner_username,
+                COLLABORATOR_ADDRESSBOOK_PATH_STR,
+                &gpg_full_fingerprint_key_id_string,
+                &base_uma_temp_directory_path,
+            ).map_err(|e| format!(
+                "TCS error: Failed to get addressbook path for user '{}': {:?}",
+                file_owner_username,
+                e
+            ))?;
+
+            // Define cleanup closure
+            let cleanup_closure = || {
+                let _ = cleanup_collaborator_temp_file(
+                    &node_readcopy_path,
+                    &base_uma_temp_directory_path,
+                    );
+                let _ = cleanup_collaborator_temp_file(
+                    &addressbook_readcopy_path_string,
+                    &base_uma_temp_directory_path,
+                    );
+            };
+
+            // use function for general .toml or .gpgtoml readcopy
+            // let node_owners_public_gpg_key = read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml(
+            //     &addressbook_readcopy_path_string,
+            // );
+
+            let node_owners_public_gpg_key1 = read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml(
+                &addressbook_readcopy_path_string,
+            ).map_err(|e| format!(
+                "TCS error: Failed to get addressbook path for user '{}': {:?}",
+                file_owner_username,
+                e
+            ))?;
+
+            cleanup_closure();
+
+            // ============================
+            //  END get Armored Public Key
+            // ============================
+
 
             let temp_dest_path_string = get_pathstring_to_temp_plaintoml_verified_extracted(
                 &destination_parent_node_file_path, // input_toml_absolute_path: &Path,
                 &gpg_full_fingerprint_key_id_string, // gpg_full_fingerprint_key_id_string: &str, // COLLABORATOR_ADDRESSBOOK_PATH_STR
                 &base_uma_temp_directory_path, // base_uma_temp_directory_path: &Path,
+                &node_owners_public_gpg_key1,
             )
             .map_err(|e| format!("MND: GPG decryption failed: {:?}", e))?;
 
@@ -31189,12 +31473,148 @@ fn move_node_directory(
             };
 
 
+            // ===============================
+            //  Get Armored Public Key (start)
+            // ===============================
+
+            // To Get armored public key, using key-id (use full fingerprint id)
+            let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+                Ok(fingerprint) => fingerprint,
+                Err(e) => {
+                    // Since the function returns Result<CoreNode, String>, we need to return a String error
+                    return Err(ThisProjectError::from(format!(
+                        "GPI: implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}",
+                        e
+                    )));
+                }
+            };
+
+            // // 1. Paths & Reading-Copies Part 1: node.toml path and read-copy
+
+            // Get the UME temp directory path with explicit String conversion
+            let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
+                .map_err(|io_err| {
+                    let gpg_error = GpgError::ValidationError(
+                        format!("GPI: Failed to get UME temp directory path: {}", io_err)
+                    );
+                    // Convert GpgError to String for the function's return type
+                    format!("GPI: {:?}", gpg_error)
+                })?;
+
+            // Using Debug trait for more detailed error information
+            let node_readcopy_path = get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
+                &source_path_with_file_name_and_extension,
+                &gpg_full_fingerprint_key_id_string,
+                &base_uma_temp_directory_path,
+            ).map_err(|e| format!("GPI: Failed to get temporary read copy of TOML file: {:?}", e))?;
+
+            // //    // simple read string to get owner name
+            // //    // not for extraction and return, just part of validation
+
+            #[cfg(debug_assertions)]
+            debug_log!("GPI: node_readcopy_path: {:?}", node_readcopy_path);
+
+            // Extract Owner for Key Lookup
+            let owner_name_of_toml_field_key_to_read = "owner";
+            #[cfg(debug_assertions)]
+            debug_log!(
+                "GPI: Reading file owner from field '{}' for security validation",
+                owner_name_of_toml_field_key_to_read
+            );
+
+            // get node_owners_public_gpg_key
+            let file_owner_username = match read_single_line_string_field_from_toml(
+                &node_readcopy_path,  // TODO convert to string?
+                owner_name_of_toml_field_key_to_read,
+            ) {
+                Ok(username) => {
+                    if username.is_empty() {
+                        // Convert to String error instead of GpgError
+                        return Err(ThisProjectError::from(format!(
+                            "TCS error: Field '{}' is empty in TOML file. File owner is required for security validation.",
+                            owner_name_of_toml_field_key_to_read
+                        )));
+                    }
+                    username
+                }
+                Err(e) => {
+                    // Convert to String error instead of GpgError
+                    return Err(ThisProjectError::from(format!(
+                        "TCS error: Failed to read file owner from field '{}': {}",
+                        owner_name_of_toml_field_key_to_read, e
+                    )));
+                }
+            };
+            // println!("GPI: File owner: '{}'", file_owner_username);
+            #[cfg(debug_assertions)]
+            debug_log!("GPI: File owner: '{}'", file_owner_username);
+
+            // TODO returns full response not just string
+            // because the filepath needs to be constructed
+            // this is a separate function
+               	// let addressbook_readcopy_path_string = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
+            //        &file_owner_username,
+            //        COLLABORATOR_ADDRESSBOOK_PATH_STR,
+            //        &gpg_full_fingerprint_key_id_string,
+            //    );
+
+            // Get the UME temp directory path with error handling
+            let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
+                .map_err(|io_err| format!(
+                    "TCS error: Failed to get UME temp directory path: {:?}",
+                    io_err
+                ))?;
+
+            // Extract the addressbook path string with inline error conversion
+            let addressbook_readcopy_path_string = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
+                &file_owner_username,
+                COLLABORATOR_ADDRESSBOOK_PATH_STR,
+                &gpg_full_fingerprint_key_id_string,
+                &base_uma_temp_directory_path,
+            ).map_err(|e| format!(
+                "TCS error: Failed to get addressbook path for user '{}': {:?}",
+                file_owner_username,
+                e
+            ))?;
+
+            // Define cleanup closure
+            let cleanup_closure = || {
+                let _ = cleanup_collaborator_temp_file(
+                    &node_readcopy_path,
+                    &base_uma_temp_directory_path,
+                    );
+                let _ = cleanup_collaborator_temp_file(
+                    &addressbook_readcopy_path_string,
+                    &base_uma_temp_directory_path,
+                    );
+            };
+
+            // use function for general .toml or .gpgtoml readcopy
+            // let node_owners_public_gpg_key = read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml(
+            //     &addressbook_readcopy_path_string,
+            // );
+
+            let node_owners_public_gpg_key = read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml(
+                &addressbook_readcopy_path_string,
+            ).map_err(|e| format!(
+                "TCS error: Failed to get addressbook path for user '{}': {:?}",
+                file_owner_username,
+                e
+            ))?;
+
+            cleanup_closure();
+
+            // ============================
+            //  END get Armored Public Key
+            // ============================
+
 
             // node name
             let temp_source_path_string = get_pathstring_to_temp_plaintoml_verified_extracted(
                 &source_path_with_file_name_and_extension, // input_toml_absolute_path: &Path,
                 &gpg_full_fingerprint_key_id_string, // gpg_full_fingerprint_key_id_string: &str, // COLLABORATOR_ADDRESSBOOK_PATH_STR
                 &base_uma_temp_directory_path, // base_uma_temp_directory_path: &Path,
+                &node_owners_public_gpg_key,
             )
             .map_err(|e| format!("MND: GPG decryption failed: {:?}", e))?;
             // get name
@@ -34413,12 +34833,151 @@ fn prepare_readable_toml_path(
             Ok(file_path.to_path_buf())
         }
         "gpgtoml" => {
+
+
+            // ===============================
+            //  Get Armored Public Key (start)
+            // ===============================
+
+            // To Get armored public key, using key-id (use full fingerprint id)
+            let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+                Ok(fingerprint) => fingerprint,
+                Err(e) => {
+                    // Since the function returns Result<CoreNode, String>, we need to return a String error
+                    return Err(format!(
+                        "GPI: implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}",
+                        e
+                    ));
+                }
+            };
+
+            // // 1. Paths & Reading-Copies Part 1: node.toml path and read-copy
+
+            // Get the UME temp directory path with explicit String conversion
+            let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
+                .map_err(|io_err| {
+                    let gpg_error = GpgError::ValidationError(
+                        format!("GPI: Failed to get UME temp directory path: {}", io_err)
+                    );
+                    // Convert GpgError to String for the function's return type
+                    format!("GPI: {:?}", gpg_error)
+                })?;
+
+            // Using Debug trait for more detailed error information
+            let node_readcopy_path = get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
+                &file_path,
+                &gpg_full_fingerprint_key_id_string,
+                &base_uma_temp_directory_path,
+            ).map_err(|e| format!("GPI: Failed to get temporary read copy of TOML file: {:?}", e))?;
+
+            // //    // simple read string to get owner name
+            // //    // not for extraction and return, just part of validation
+
+            #[cfg(debug_assertions)]
+            debug_log!("GPI: node_readcopy_path: {:?}", node_readcopy_path);
+
+            // Extract Owner for Key Lookup
+            let owner_name_of_toml_field_key_to_read = "owner";
+            #[cfg(debug_assertions)]
+            debug_log!(
+                "GPI: Reading file owner from field '{}' for security validation",
+                owner_name_of_toml_field_key_to_read
+            );
+
+            // get node_owners_public_gpg_key
+            let file_owner_username = match read_single_line_string_field_from_toml(
+                &node_readcopy_path,  // TODO convert to string?
+                owner_name_of_toml_field_key_to_read,
+            ) {
+                Ok(username) => {
+                    if username.is_empty() {
+                        // Convert to String error instead of GpgError
+                        return Err(format!(
+                            "TCS error: Field '{}' is empty in TOML file. File owner is required for security validation.",
+                            owner_name_of_toml_field_key_to_read
+                        ));
+                    }
+                    username
+                }
+                Err(e) => {
+                    // Convert to String error instead of GpgError
+                    return Err(format!(
+                        "TCS error: Failed to read file owner from field '{}': {}",
+                        owner_name_of_toml_field_key_to_read, e
+                    ));
+                }
+            };
+            // println!("GPI: File owner: '{}'", file_owner_username);
+            #[cfg(debug_assertions)]
+            debug_log!("GPI: File owner: '{}'", file_owner_username);
+
+            // TODO returns full response not just string
+            // because the filepath needs to be constructed
+            // this is a separate function
+               	// let addressbook_readcopy_path_string = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
+            //        &file_owner_username,
+            //        COLLABORATOR_ADDRESSBOOK_PATH_STR,
+            //        &gpg_full_fingerprint_key_id_string,
+            //    );
+
+            // Get the UME temp directory path with error handling
+            let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
+                .map_err(|io_err| format!(
+                    "TCS error: Failed to get UME temp directory path: {:?}",
+                    io_err
+                ))?;
+
+            // Extract the addressbook path string with inline error conversion
+            let addressbook_readcopy_path_string = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
+                &file_owner_username,
+                COLLABORATOR_ADDRESSBOOK_PATH_STR,
+                &gpg_full_fingerprint_key_id_string,
+                &base_uma_temp_directory_path,
+            ).map_err(|e| format!(
+                "TCS error: Failed to get addressbook path for user '{}': {:?}",
+                file_owner_username,
+                e
+            ))?;
+
+            // Define cleanup closure
+            let cleanup_closure = || {
+                let _ = cleanup_collaborator_temp_file(
+                    &node_readcopy_path,
+                    &base_uma_temp_directory_path,
+                    );
+                let _ = cleanup_collaborator_temp_file(
+                    &addressbook_readcopy_path_string,
+                    &base_uma_temp_directory_path,
+                    );
+            };
+
+            // use function for general .toml or .gpgtoml readcopy
+            // let node_owners_public_gpg_key = read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml(
+            //     &addressbook_readcopy_path_string,
+            // );
+
+            let node_owners_public_gpg_key = read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml(
+                &addressbook_readcopy_path_string,
+            ).map_err(|e| format!(
+                "TCS error: Failed to get addressbook path for user '{}': {:?}",
+                file_owner_username,
+                e
+            ))?;
+
+            cleanup_closure();
+
+            // ============================
+            //  END get Armored Public Key
+            // ============================
+
+
             // Encrypted file - decrypt to temp directory
             // Returns Result<String, _>, convert to PathBuf
             let temp_path_string = get_pathstring_to_temp_plaintoml_verified_extracted(
                 file_path,
                 gpg_fingerprint,
                 temp_dir,
+                &node_owners_public_gpg_key,
             )
             .map_err(|e| format!("PRTEP: GPG decryption failed: {:?}", e))?;
 
@@ -39869,7 +40428,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                             Err(e) => {
 
                                 // safe log
-                                debug_log!("LCNFTF: implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}", e);
+                                debug_log!("HRCD: implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}", e);
 
                                 continue; // Skip to the next file if hashing fails
                             }
@@ -39880,17 +40439,155 @@ fn handle_remote_collaborator_meetingroom_desk(
                         let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
                             .map_err(|io_err| {
                                 let gpg_error = GpgError::ValidationError(
-                                    format!("LCNFTF: Failed to get UME temp directory path: {}", io_err)
+                                    format!("HRCD: Failed to get UME temp directory path: {}", io_err)
                                 );
                                 // Convert GpgError to String for the function's return type
-                                format!("LCNFTF: {:?}", gpg_error)
+                                format!("HRCD: {:?}", gpg_error)
                             })?;
+
+
+                        // ===============================
+                        //  Get Armored Public Key (start)
+                        // ===============================
+
+                        // // To Get armored public key, using key-id (use full fingerprint id)
+                        // let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+                        //     Ok(fingerprint) => fingerprint,
+                        //     Err(e) => {
+                        //         // Since the function returns Result<CoreNode, String>, we need to return a String error
+                        //         return Err(ThisProjectError::from(format!(
+                        //             "GPI: implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}",
+                        //             e
+                        //         )));
+                        //     }
+                        // };
+
+                        // // // 1. Paths & Reading-Copies Part 1: node.toml path and read-copy
+
+                        // // Get the UME temp directory path with explicit String conversion
+                        // let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
+                        //     .map_err(|io_err| {
+                        //         let gpg_error = GpgError::ValidationError(
+                        //             format!("GPI: Failed to get UME temp directory path: {}", io_err)
+                        //         );
+                        //         // Convert GpgError to String for the function's return type
+                        //         format!("GPI: {:?}", gpg_error)
+                        //     })?;
+
+                        // Using Debug trait for more detailed error information
+                        let target_readcopy_path = get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
+                            &file_path,
+                            &gpg_full_fingerprint_key_id_string,
+                            &base_uma_temp_directory_path,
+                        ).map_err(|e| format!("HRCD: Failed to get temporary read copy of TOML file: {:?}", e))?;
+
+                        // //    // simple read string to get owner name
+                        // //    // not for extraction and return, just part of validation
+
+                        #[cfg(debug_assertions)]
+                        debug_log!("HRCD: target_readcopy_path: {:?}", target_readcopy_path);
+
+                        // Extract Owner for Key Lookup
+                        let owner_name_of_toml_field_key_to_read = "owner";
+                        #[cfg(debug_assertions)]
+                        debug_log!(
+                            "HRCD: Reading file owner from field '{}' for security validation",
+                            owner_name_of_toml_field_key_to_read
+                        );
+
+                        // get node_owners_public_gpg_key
+                        let file_owner_username = match read_single_line_string_field_from_toml(
+                            &target_readcopy_path,  // TODO convert to string?
+                            owner_name_of_toml_field_key_to_read,
+                        ) {
+                            Ok(username) => {
+                                if username.is_empty() {
+                                    // Convert to String error instead of GpgError
+                                    return Err(ThisProjectError::from(format!(
+                                        "HRCD error: Field '{}' is empty in TOML file. File owner is required for security validation.",
+                                        owner_name_of_toml_field_key_to_read
+                                    )));
+                                }
+                                username
+                            }
+                            Err(e) => {
+                                // Convert to String error instead of GpgError
+                                return Err(ThisProjectError::from(format!(
+                                    "HRCD error: Failed to read file owner from field '{}': {}",
+                                    owner_name_of_toml_field_key_to_read, e
+                                )));
+                            }
+                        };
+                        // println!("GPI: File owner: '{}'", file_owner_username);
+                        #[cfg(debug_assertions)]
+                        debug_log!("HRCD: File owner: '{}'", file_owner_username);
+
+                        // TODO returns full response not just string
+                        // because the filepath needs to be constructed
+                        // this is a separate function
+                           	// let addressbook_readcopy_path_string = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
+                        //        &file_owner_username,
+                        //        COLLABORATOR_ADDRESSBOOK_PATH_STR,
+                        //        &gpg_full_fingerprint_key_id_string,
+                        //    );
+
+                        // Get the UME temp directory path with error handling
+                        let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
+                            .map_err(|io_err| format!(
+                                "HRCD error: Failed to get UME temp directory path: {:?}",
+                                io_err
+                            ))?;
+
+                        // Extract the addressbook path string with inline error conversion
+                        let addressbook_readcopy_path_string = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
+                            &file_owner_username,
+                            COLLABORATOR_ADDRESSBOOK_PATH_STR,
+                            &gpg_full_fingerprint_key_id_string,
+                            &base_uma_temp_directory_path,
+                        ).map_err(|e| format!(
+                            "HRCD error: Failed to get addressbook path for user '{}': {:?}",
+                            file_owner_username,
+                            e
+                        ))?;
+
+                        // Define cleanup closure
+                        let cleanup_closure = || {
+                            let _ = cleanup_collaborator_temp_file(
+                                &target_readcopy_path,
+                                &base_uma_temp_directory_path,
+                                );
+                            let _ = cleanup_collaborator_temp_file(
+                                &addressbook_readcopy_path_string,
+                                &base_uma_temp_directory_path,
+                                );
+                        };
+
+                        // use function for general .toml or .gpgtoml readcopy
+                        // let node_owners_public_gpg_key = read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml(
+                        //     &addressbook_readcopy_path_string,
+                        // );
+
+                        let node_owners_public_gpg_key = read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml(
+                            &addressbook_readcopy_path_string,
+                        ).map_err(|e| format!(
+                            "HRCD error: Failed to get addressbook path for user '{}': {:?}",
+                            file_owner_username,
+                            e
+                        ))?;
+
+                        cleanup_closure();
+
+                        // ============================
+                        //  END get Armored Public Key
+                        // ============================
+
 
                         // base file to send is clearsigned
                         let sendfile_readcopy_pathstring = get_pathstring_to_temp_plaintoml_verified_extracted(
                             &file_path,
                             &gpg_full_fingerprint_key_id_string,
                             &base_uma_temp_directory_path,
+                            &node_owners_public_gpg_key,
                         ).map_err(|e| format!(
                             "(to {}) hrcmd: Failed to get temporary read copy of TOML file: {:?}",
                             &room_sync_input.remote_collaborator_name,
