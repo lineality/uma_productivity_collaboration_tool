@@ -35546,79 +35546,247 @@ fn send_ready_signal(
     Ok(())
 }
 
-// draft based on 'send ready signal' function
-/// Sends a Gotit to the specified target address.
+// // draft based on 'send ready signal' function
+// /// Sends a Gotit to the specified target address.
+// fn send_gotit_signal(
+//     local_user_salt_list: &[u128],
+//     local_user_ipv4_address: &Ipv4Addr,
+//     local_user_ipv6_address: &Ipv6Addr,
+//     network_type: &str,  // Add network type
+//     local_user_gotit_port_yourdesk_yousend_aimat_their_rmtclb_ip: u16,
+//     received_file_updatedat_timestamp: u64,
+// ) -> Result<(), ThisProjectError> {
+//     /*
+//     struct GotItSignal {
+//         gst: Option<u64>, // send-time:
+//             generate_terse_timestamp_freshness_proxy(); for replay-attack protection
+//         di: Option<u64>, // the 'id' is updated_at file timestamp
+//             (because context= filesync timeline ID)
+//         gh: Option<Vec<u8>>, // N hashes of rt + re
+//     */
+
+//     let timestamp_for_gst = get_current_unix_timestamp();
+
+//     // Make hashes of gotit_signal fields:
+//     let gh_hashes = calculate_gotitsignal_hashlist(
+//         timestamp_for_gst,
+//         received_file_updatedat_timestamp, // as di
+//         local_user_salt_list,
+//     );
+
+//     // Create the GotItSignal struct:
+//     let gotit_struct = GotItSignal {
+//         gst: timestamp_for_gst,
+//         di: received_file_updatedat_timestamp,
+//         gh: gh_hashes?, // Include calculated hashes
+//     };
+
+//     // 5. Serialize the ReadySignal
+//     let serialized_gotitsignal_data = serialize_gotit_signal(
+//         &gotit_struct
+//     ).expect("inHLOD send_gotit_signal() err Failed to serialize ReadySignal, gotit_signal_to_send_from_this_loop");
+
+//     // --- Inspect Serialized Data ---
+//     debug_log!("inHLOD send_gotit_signal() serialized_gotitsignal_data: {:?}", serialized_gotitsignal_data);
+
+//     // Determine target IP based on network_type
+//     let detected_lou_ip_addr = match network_type {
+//         "ipv6" => IpAddr::V6(*local_user_ipv6_address),
+//         "ipv4" => IpAddr::V4(*local_user_ipv4_address),
+//         _ => return Err(ThisProjectError::NetworkError("Invalid network type in send_gotit_signal".into())),
+//     };
+
+//     let target_addr = SocketAddr::new(
+//         detected_lou_ip_addr,
+//         local_user_gotit_port_yourdesk_yousend_aimat_their_rmtclb_ip,
+//     );
+
+//     // Log before sending
+//     debug_log!(
+//         "inHLOD send_gotit_signal() Attempting to send ReadySignal to {}: {:?}",
+//         target_addr,
+//         local_user_gotit_port_yourdesk_yousend_aimat_their_rmtclb_ip
+//     );
+
+//     // // If sending to the first address succeeds, no need to iterate further
+
+//     if send_data(&serialized_gotitsignal_data, target_addr).is_ok() {
+//         debug_log("inHLOD send_gotit_signal() 6. Successfully sent GotIt to {} (first address)");
+//         // Exit the thread below
+//     } else {
+//         debug_log("inHLOD send_gotit_signal() err 6. Failed to send GotIt to {} (first address)");
+//         return Err(ThisProjectError::NetworkError("Failed to send ReadySignal".to_string())); // Return an error
+//     }
+
+//     Ok(())
+// }
+
+/// Sends a GotItSignal ("I received your file, ACK") packet to the REMOTE
+/// collaborator's HRCD got-it listener over UDP.
+///
+/// ### Project context
+/// Part of the UMA sync-team-office protocol. When a HLOD (local owner desk)
+/// successfully receives, verifies, decrypts, and saves an in-tray file sent
+/// by a remote collaborator's HRCD, HLOD must send a "got-it" acknowledgement
+/// so the remote HRCD can:
+///   1. Clear the pre-fail flag for the acknowledged document-id.
+///   2. Advance its send queue.
+///
+/// ### Why this signature (and why the previous signature was a bug source)
+/// The previous signature took `&Ipv4Addr` + `&Ipv6Addr` representing the
+/// LOCAL user's addresses, then selected one based on `network_type`. That
+/// resulted in the packet being aimed at the local machine's own IP instead
+/// of the remote collaborator. This silently broke sync for any N > 2
+/// collaborator pairs because got-it packets were never delivered.
+///
+/// This version takes the REMOTE collaborator's network type string and IP
+/// string, exactly matching the convention already used by
+/// `send_ready_signal`, eliminating the class of "wrong side" bugs.
+///
+/// ### Arguments
+/// * `local_user_salt_list` - Salts for the LOCAL user. The got-it hashes
+///   (`gh`) are computed with the local user's salts because the remote
+///   collaborator's HRCD verifies them using the local user's salt list
+///   (symmetry: each side verifies the OTHER party using that party's
+///   published salts).
+/// * `remote_network_type` - Either `"ipv4"` or `"ipv6"`. This is the
+///   network type learned during the HLOD handshake with the remote
+///   collaborator (same value used for send_ready_signal).
+/// * `remote_ip_addr_string` - The remote collaborator's IP address in
+///   string form (learned during handshake).
+/// * `remote_gotit_port` - The UDP port the REMOTE collaborator's HRCD is
+///   bound to for receiving got-it signals. (Despite the field name
+///   `local_user_gotit_port_yourdesk_yousend_aimat_their_rmtclb_ip`, the
+///   numeric value IS the port the RC listens on.)
+/// * `received_file_updatedat_timestamp` - Serves as `di` (document-id),
+///   i.e. the `updated_at_timestamp` of the file we are acknowledging.
+///
+/// ### Returns
+/// * `Ok(())` on successful send.
+/// * `Err(ThisProjectError)` on serialization, address parsing, or send
+///   failure. Callers should log-and-continue (never halt).
+///
+/// ### Failure handling policy
+/// Production build: returns terse error; caller continues the loop. No
+/// panics, no heap-leaking diagnostic text in release builds.
 fn send_gotit_signal(
     local_user_salt_list: &[u128],
-    local_user_ipv4_address: &Ipv4Addr,
-    local_user_ipv6_address: &Ipv6Addr,
-    network_type: &str,  // Add network type
-    local_user_gotit_port_yourdesk_yousend_aimat_their_rmtclb_ip: u16,
+    remote_network_type: String,
+    remote_ip_addr_string: String,
+    remote_gotit_port: u16,
     received_file_updatedat_timestamp: u64,
 ) -> Result<(), ThisProjectError> {
-    /*
-    struct GotItSignal {
-        gst: Option<u64>, // send-time:
-            generate_terse_timestamp_freshness_proxy(); for replay-attack protection
-        di: Option<u64>, // the 'id' is updated_at file timestamp
-            (because context= filesync timeline ID)
-        gh: Option<Vec<u8>>, // N hashes of rt + re
-    */
-
+    // -------------------------------------------------------------
+    // 1. Build the GotItSignal struct.
+    //    gst = send-time (freshness / anti-replay window proxy)
+    //    di  = document id (the file's updated_at timestamp)
+    //    gh  = hash list over (gst, di) salted with local user salts
+    // -------------------------------------------------------------
     let timestamp_for_gst = get_current_unix_timestamp();
 
-    // Make hashes of gotit_signal fields:
     let gh_hashes = calculate_gotitsignal_hashlist(
         timestamp_for_gst,
-        received_file_updatedat_timestamp, // as di
+        received_file_updatedat_timestamp,
         local_user_salt_list,
-    );
+    )?;
 
-    // Create the GotItSignal struct:
     let gotit_struct = GotItSignal {
         gst: timestamp_for_gst,
         di: received_file_updatedat_timestamp,
-        gh: gh_hashes?, // Include calculated hashes
+        gh: gh_hashes,
     };
 
-    // 5. Serialize the ReadySignal
-    let serialized_gotitsignal_data = serialize_gotit_signal(
-        &gotit_struct
-    ).expect("inHLOD send_gotit_signal() err Failed to serialize ReadySignal, gotit_signal_to_send_from_this_loop");
+    // -------------------------------------------------------------
+    // 2. Serialize for the wire.
+    // -------------------------------------------------------------
+    let serialized_gotitsignal_data = serialize_gotit_signal(&gotit_struct)
+        .map_err(|e| {
+            #[cfg(debug_assertions)]
+            debug_log!("send_gotit_signal: serialize failed: {:?}", e);
+            ThisProjectError::NetworkError(
+                "GOTIT: serialize failed".to_string()
+            )
+        })?;
 
-    // --- Inspect Serialized Data ---
-    debug_log!("inHLOD send_gotit_signal() serialized_gotitsignal_data: {:?}", serialized_gotitsignal_data);
-
-    // Determine target IP based on network_type
-    let detected_lou_ip_addr = match network_type {
-        "ipv6" => IpAddr::V6(*local_user_ipv6_address),
-        "ipv4" => IpAddr::V4(*local_user_ipv4_address),
-        _ => return Err(ThisProjectError::NetworkError("Invalid network type in send_gotit_signal".into())),
-    };
-
-    let target_addr = SocketAddr::new(
-        detected_lou_ip_addr,
-        local_user_gotit_port_yourdesk_yousend_aimat_their_rmtclb_ip,
-    );
-
-    // Log before sending
+    #[cfg(debug_assertions)]
     debug_log!(
-        "inHLOD send_gotit_signal() Attempting to send ReadySignal to {}: {:?}",
-        target_addr,
-        local_user_gotit_port_yourdesk_yousend_aimat_their_rmtclb_ip
+        "send_gotit_signal: serialized_gotitsignal_data ({} bytes)",
+        serialized_gotitsignal_data.len()
     );
 
-    // // If sending to the first address succeeds, no need to iterate further
+    // -------------------------------------------------------------
+    // 3. Resolve the REMOTE collaborator's socket address.
+    //    This is the critical fix: we aim at THEIR IP, not OURS.
+    // -------------------------------------------------------------
+    let remote_ip: IpAddr = match remote_network_type.as_str() {
+        "ipv6" => {
+            let parsed: Ipv6Addr = remote_ip_addr_string.parse().map_err(|_e| {
+                #[cfg(debug_assertions)]
+                debug_log!(
+                    "send_gotit_signal: bad ipv6 string '{}': {:?}",
+                    remote_ip_addr_string,
+                    _e
+                );
+                ThisProjectError::NetworkError("GOTIT: bad ipv6".into())
+            })?;
+            IpAddr::V6(parsed)
+        }
+        "ipv4" => {
+            let parsed: Ipv4Addr = remote_ip_addr_string.parse().map_err(|_e| {
+                #[cfg(debug_assertions)]
+                debug_log!(
+                    "send_gotit_signal: bad ipv4 string '{}': {:?}",
+                    remote_ip_addr_string,
+                    _e
+                );
+                ThisProjectError::NetworkError("GOTIT: bad ipv4".into())
+            })?;
+            IpAddr::V4(parsed)
+        }
+        _ => {
+            #[cfg(debug_assertions)]
+            debug_log!(
+                "send_gotit_signal: invalid network type '{}'",
+                remote_network_type
+            );
+            return Err(ThisProjectError::NetworkError(
+                "GOTIT: bad net type".into(),
+            ));
+        }
+    };
 
-    if send_data(&serialized_gotitsignal_data, target_addr).is_ok() {
-        debug_log("inHLOD send_gotit_signal() 6. Successfully sent GotIt to {} (first address)");
-        // Exit the thread below
-    } else {
-        debug_log("inHLOD send_gotit_signal() err 6. Failed to send GotIt to {} (first address)");
-        return Err(ThisProjectError::NetworkError("Failed to send ReadySignal".to_string())); // Return an error
+    let target_addr = SocketAddr::new(remote_ip, remote_gotit_port);
+
+    #[cfg(debug_assertions)]
+    debug_log!(
+        "send_gotit_signal: sending GotIt to remote {} (di={}, gst={})",
+        target_addr,
+        received_file_updatedat_timestamp,
+        timestamp_for_gst
+    );
+
+    // -------------------------------------------------------------
+    // 4. Transmit. Any send failure is returned so the caller can
+    //    log-and-continue. We do NOT panic.
+    // -------------------------------------------------------------
+    match send_data(&serialized_gotitsignal_data, target_addr) {
+        Ok(_) => {
+            #[cfg(debug_assertions)]
+            debug_log!("send_gotit_signal: delivered to {}", target_addr);
+            Ok(())
+        }
+        Err(_e) => {
+            #[cfg(debug_assertions)]
+            debug_log!(
+                "send_gotit_signal: send_data failed to {}: {:?}",
+                target_addr,
+                _e
+            );
+            Err(ThisProjectError::NetworkError(
+                "GOTIT: send failed".into(),
+            ))
+        }
     }
-
-    Ok(())
 }
 
 /*
@@ -37741,13 +37909,35 @@ fn handle_local_owner_desk(
                             &remote_collaborator_name,
                         );
 
+                        // let _ = send_gotit_signal(
+                        //     &local_owner_desk_setup_data.local_user_salt_list,
+                        //     &band_local_user_ipv4_address, // local_user_ipv4_address: &Ipv4Addr,
+                        //     &band_local_user_ipv6_address, // local_user_ipv6_address: &Ipv6Addr,
+                        //     &band_local_network_type, // network_type: String, // for nt
+                        //     localowner_gotit_port,
+                        //     received_file_updatedat_timestamp, // as di
+                        // );
+
+                        // ═════════════════════════════════════════════════════════════════
+                        // Send got-it signal to the REMOTE COLLABORATOR's IP,
+                        // not to our own local IP.
+                        //
+                        // The got-it "echo" is the acknowledgement that a file arrived.
+                        // It must travel from us (HLOD) TO the remote collaborator (their
+                        // HRCD got-it listener). Previously this was aimed at our own
+                        // local_user IP, which either black-holed or collided, causing
+                        // only 2 collaborators to appear to work.
+                        //
+                        // `rc_network_type_string` and `rc_ip_addr_string` were obtained
+                        // during hlod_udp_handshake_rc_network_type_rc_ip_addr() above,
+                        // and are the same values used for send_ready_signal().
+                        // ═════════════════════════════════════════════════════════════════
                         let _ = send_gotit_signal(
                             &local_owner_desk_setup_data.local_user_salt_list,
-                            &band_local_user_ipv4_address, // local_user_ipv4_address: &Ipv4Addr,
-                            &band_local_user_ipv6_address, // local_user_ipv6_address: &Ipv6Addr,
-                            &band_local_network_type, // network_type: String, // for nt
-                            localowner_gotit_port,
-                            received_file_updatedat_timestamp, // as di
+                            rc_network_type_string.clone(), // remote collaborator's network type
+                            rc_ip_addr_string.clone(),      // remote collaborator's IP (string form)
+                            localowner_gotit_port,          // port RC binds on their machine
+                            received_file_updatedat_timestamp, // file-id for this got-it (di)
                         );
 
                         // 1.4 Send Echo Ready Signal (using a function)
@@ -44001,214 +44191,6 @@ fn handle_args() -> bool {
 
 
 /*
-An Appropriately Svelt Mainland:
-*/
-/// Application Entry Point
-///
-/// ### Project Context
-/// UMA (Universal Meeting Assistant) coordinates file synchronization across
-/// multiple remote collaborators via UDP. The application runs two primary
-/// subsystems:
-/// 1. **User Interface Thread** (`we_love_projects_loop`): Handles terminal
-///    input, displays status, processes user commands including shutdown.
-/// 2. **Network Coordination Thread** (`you_love_the_sync_team_office`): Spawns
-///    desk-pair threads for each remote collaborator, managing UDP handshakes,
-///    signal sending/receiving, and file transfers.
-///
-/// ### Lifecycle Management
-/// This function establishes a shared shutdown flag (`should_stop_all_threads`)
-/// that enables **graceful coordinated shutdown** across all threads. When a
-/// user issues a quit command in the UI thread, or when a critical error
-/// requires shutdown, this flag propagates the signal throughout the
-/// application hierarchy without relying on panics or abrupt termination.
-///
-/// ### Orderly Shutdown Flow
-/// 1. User types quit command (or critical error detected)
-/// 2. `should_stop_all_threads` flag set to `true`
-/// 3. All threads check flag periodically (including blocking UDP listeners)
-/// 4. Threads exit their loops cleanly
-/// 5. `main()` joins threads to confirm clean exit
-/// 6. Application terminates without resource leaks
-///
-/// # Error Handling
-/// - Thread spawn failures: Logged and propagated as `ThisProjectError`
-/// - Join failures: Handled without panic, logged for diagnostics
-/// - Both threads must complete (or fail) before `main()` exits
-///
-/// Note:
-/// Initializes the UMA continue/halt signal by creating or resetting the
-/// `continue_uma.txt` file and setting its value to "1" (continue).
-/// set to hault by quit_set_continue_uma_to_false()
-///
-fn main() -> Result<(), ThisProjectError> {
-// fn main() {
-    // ═══════════════════════════════════════════════════════════════════════
-    // Create Global Shutdown Flag
-    // ═══════════════════════════════════════════════════════════════════════
-    // This Arc<AtomicBool> is the single source of truth for "should we stop?"
-    // - Arc: Allows safe sharing across thread boundaries
-    // - AtomicBool: Allows lock-free reads/writes from multiple threads
-    // - Initially false: Application starts in "running" state
-    // ═══════════════════════════════════════════════════════════════════════
-    let should_stop_all_threads = Arc::new(AtomicBool::new(false));
-
-    if handle_args() {
-        return Ok(());
-    };
-
-    if optional_passive_mode() {
-        return Ok(());
-    };
-
-    let _ = initialize_continue_uma_signal(); // set boolean flag for loops to hault
-    let _ = initialize_hard_restart_signal(); // set boolean flag for uma restart
-
-    let mut online_mode: bool;
-
-    loop { // Main loop: let it fail, and try again
-
-        // // TODO check should_stop_all_threads
-        // if should_stop_all_threads {
-        //     break;
-        // }
-
-        /*
-        One clone per loop-thread:
-        */
-        // Clone for we_love_projects_loop
-        let should_stop_clone_for_projects_ui = should_stop_all_threads.clone();
-        // Clone for sync network ('desks')
-        let should_stop_clone_for_uma_network = should_stop_all_threads.clone();
-
-        if should_not_hard_restart() { // Check for restart or quit...
-            // safe log(s)
-            debug_log("should_halt_uma(), exiting Uma in main()");
-            debug_log(">*< Halt signal received. Exiting The Uma. Closing... main() |o|");
-            break; // only break upon user-command
-        }
-
-        #[cfg(debug_assertions)]
-        debug_log("uma boot...");
-        match initialize_uma_application() {
-            Ok(temp_online_val) => {
-                online_mode = temp_online_val;
-                if online_mode {
-                    // safe log
-                    debug_log!("UMA initialized in online mode.");
-                } else {
-                    // safe log
-                    debug_log!("UMA initialized in offline mode.")
-                }
-            }
-            Err(_e) => {
-                #[cfg(debug_assertions)]
-                {
-                    eprintln!("Uma Initialization failed in main(): {}", _e);
-                    debug_log!("Uma Initialization failed in main(): {}", _e);
-                }
-
-                // safe log(s)
-                eprintln!("Uma Initialization failed in main()");
-                debug_log!("Uma Initialization failed in main()");
-
-                // if we cannot Initialize, then exit with exit_code=1 (error)
-                std::process::exit(1);
-            }
-        }
-
-        #[cfg(debug_assertions)]
-        debug_log("Start! in main()");
-
-        // Thread 1: Executes the thread1_loop function
-        // let we_love_projects_loop = thread::spawn(move || {
-        //     let _ = we_love_projects_loop();
-        // });
-
-        let we_love_projects_loop_handle = thread::Builder::new()
-            .name("ui_loop".to_string())
-            .spawn(move || {
-                we_love_projects_loop(should_stop_clone_for_projects_ui)
-            })
-            .map_err(|e| {
-                #[cfg(debug_assertions)]
-                debug_log!("MAIN: Failed to spawn UI thread: {}", e);
-
-                ThisProjectError::StringError(
-                    format!("Failed to spawn UI thread: {}", e)
-                )
-            })?;
-
-        // Thread 2: Executes the thread2_loop function
-        if online_mode {
-
-            // let you_love_the_sync_team_office = thread::spawn(move || {
-            //     let _ = you_love_the_sync_team_office();
-            // });
-            let you_love_the_sync_team_office_handle = thread::Builder::new()
-                .name("network_coordinator".to_string())
-                .spawn(move || {
-                    you_love_the_sync_team_office(should_stop_clone_for_uma_network)
-                })
-                .map_err(|e| {
-                    #[cfg(debug_assertions)]
-                    debug_log!("MAIN: Failed to spawn network coordinator thread: {}", e);
-
-                    ThisProjectError::StringError(
-                        format!("Failed to spawn network coordinator thread: {}", e)
-                    )
-                })?;
-
-            // you_love_the_sync_team_office.join().unwrap(); // Wait for finish TODO NO UNWRAP!
-            // ═══════════════════════════════════════════════════════════════════════
-            // Orderly Join: Wait for Both Threads to Complete
-            // ═══════════════════════════════════════════════════════════════════════
-            // Join order: Network thread first (it has child threads), then UI thread
-            // This ensures all network operations cease before UI exits
-            // ═══════════════════════════════════════════════════════════════════════
-
-            // Join network thread
-            match you_love_the_sync_team_office_handle.join() {
-                Ok(result) => {
-                    if let Err(_e) = result {
-                        #[cfg(debug_assertions)]
-                        debug_log!("MAIN: Network coordinator thread returned error: {}", _e);
-
-                        // Don't return early - still need to join UI thread
-                    }
-                }
-                Err(_e) => {
-                    #[cfg(debug_assertions)]
-                    debug_log!("MAIN: Network coordinator thread panicked: {:?}", _e);
-
-                    // Thread panicked - log but continue to join UI thread
-                }
-            }
-        };
-
-        // Join UI thread
-        match we_love_projects_loop_handle.join() {
-            Ok(result) => {
-                if let Err(_e) = result {
-                    #[cfg(debug_assertions)]
-                    debug_log!("MAIN: UI thread returned error: {}", _e);
-                }
-            }
-            Err(_e) => {
-                #[cfg(debug_assertions)]
-                debug_log!("MAIN: UI thread panicked: {:?}", _e);
-            }
-        }
-        // we_love_projects_loop.join().unwrap(); // Wait for finish TODO NO UNWRAP!
-    }
-    // safe log(s)
-    println!("All threads completed. The Uma says fare well and strive.");
-    debug_log("All threads completed. The Uma says fare well and strive.");
-
-    // Return
-    Ok(())
-}
-
-/*
 Help Section
 */
 
@@ -44995,5 +44977,213 @@ fn open_complete_help_in_editor() -> Result<(), ThisProjectError> {
     // Note: We don't delete the temp file immediately in case user wants to reference it
     // OS will clean up temp directory eventually
 
+    Ok(())
+}
+
+/*
+An Appropriately Svelt Mainland:
+*/
+/// Application Entry Point
+///
+/// ### Project Context
+/// UMA (Universal Meeting Assistant) coordinates file synchronization across
+/// multiple remote collaborators via UDP. The application runs two primary
+/// subsystems:
+/// 1. **User Interface Thread** (`we_love_projects_loop`): Handles terminal
+///    input, displays status, processes user commands including shutdown.
+/// 2. **Network Coordination Thread** (`you_love_the_sync_team_office`): Spawns
+///    desk-pair threads for each remote collaborator, managing UDP handshakes,
+///    signal sending/receiving, and file transfers.
+///
+/// ### Lifecycle Management
+/// This function establishes a shared shutdown flag (`should_stop_all_threads`)
+/// that enables **graceful coordinated shutdown** across all threads. When a
+/// user issues a quit command in the UI thread, or when a critical error
+/// requires shutdown, this flag propagates the signal throughout the
+/// application hierarchy without relying on panics or abrupt termination.
+///
+/// ### Orderly Shutdown Flow
+/// 1. User types quit command (or critical error detected)
+/// 2. `should_stop_all_threads` flag set to `true`
+/// 3. All threads check flag periodically (including blocking UDP listeners)
+/// 4. Threads exit their loops cleanly
+/// 5. `main()` joins threads to confirm clean exit
+/// 6. Application terminates without resource leaks
+///
+/// # Error Handling
+/// - Thread spawn failures: Logged and propagated as `ThisProjectError`
+/// - Join failures: Handled without panic, logged for diagnostics
+/// - Both threads must complete (or fail) before `main()` exits
+///
+/// Note:
+/// Initializes the UMA continue/halt signal by creating or resetting the
+/// `continue_uma.txt` file and setting its value to "1" (continue).
+/// set to hault by quit_set_continue_uma_to_false()
+///
+fn main() -> Result<(), ThisProjectError> {
+// fn main() {
+    // ═══════════════════════════════════════════════════════════════════════
+    // Create Global Shutdown Flag
+    // ═══════════════════════════════════════════════════════════════════════
+    // This Arc<AtomicBool> is the single source of truth for "should we stop?"
+    // - Arc: Allows safe sharing across thread boundaries
+    // - AtomicBool: Allows lock-free reads/writes from multiple threads
+    // - Initially false: Application starts in "running" state
+    // ═══════════════════════════════════════════════════════════════════════
+    let should_stop_all_threads = Arc::new(AtomicBool::new(false));
+
+    if handle_args() {
+        return Ok(());
+    };
+
+    if optional_passive_mode() {
+        return Ok(());
+    };
+
+    let _ = initialize_continue_uma_signal(); // set boolean flag for loops to hault
+    let _ = initialize_hard_restart_signal(); // set boolean flag for uma restart
+
+    let mut online_mode: bool;
+
+    loop { // Main loop: let it fail, and try again
+
+        // // TODO check should_stop_all_threads
+        // if should_stop_all_threads {
+        //     break;
+        // }
+
+        /*
+        One clone per loop-thread:
+        */
+        // Clone for we_love_projects_loop
+        let should_stop_clone_for_projects_ui = should_stop_all_threads.clone();
+        // Clone for sync network ('desks')
+        let should_stop_clone_for_uma_network = should_stop_all_threads.clone();
+
+        if should_not_hard_restart() { // Check for restart or quit...
+            // safe log(s)
+            debug_log("should_halt_uma(), exiting Uma in main()");
+            debug_log(">*< Halt signal received. Exiting The Uma. Closing... main() |o|");
+            break; // only break upon user-command
+        }
+
+        #[cfg(debug_assertions)]
+        debug_log("uma boot...");
+        match initialize_uma_application() {
+            Ok(temp_online_val) => {
+                online_mode = temp_online_val;
+                if online_mode {
+                    // safe log
+                    debug_log!("UMA initialized in online mode.");
+                } else {
+                    // safe log
+                    debug_log!("UMA initialized in offline mode.")
+                }
+            }
+            Err(_e) => {
+                #[cfg(debug_assertions)]
+                {
+                    eprintln!("Uma Initialization failed in main(): {}", _e);
+                    debug_log!("Uma Initialization failed in main(): {}", _e);
+                }
+
+                // safe log(s)
+                eprintln!("Uma Initialization failed in main()");
+                debug_log!("Uma Initialization failed in main()");
+
+                // if we cannot Initialize, then exit with exit_code=1 (error)
+                std::process::exit(1);
+            }
+        }
+
+        #[cfg(debug_assertions)]
+        debug_log("Start! in main()");
+
+        // Thread 1: Executes the thread1_loop function
+        // let we_love_projects_loop = thread::spawn(move || {
+        //     let _ = we_love_projects_loop();
+        // });
+
+        let we_love_projects_loop_handle = thread::Builder::new()
+            .name("ui_loop".to_string())
+            .spawn(move || {
+                we_love_projects_loop(should_stop_clone_for_projects_ui)
+            })
+            .map_err(|e| {
+                #[cfg(debug_assertions)]
+                debug_log!("MAIN: Failed to spawn UI thread: {}", e);
+
+                ThisProjectError::StringError(
+                    format!("Failed to spawn UI thread: {}", e)
+                )
+            })?;
+
+        // Thread 2: Executes the thread2_loop function
+        if online_mode {
+
+            // let you_love_the_sync_team_office = thread::spawn(move || {
+            //     let _ = you_love_the_sync_team_office();
+            // });
+            let you_love_the_sync_team_office_handle = thread::Builder::new()
+                .name("network_coordinator".to_string())
+                .spawn(move || {
+                    you_love_the_sync_team_office(should_stop_clone_for_uma_network)
+                })
+                .map_err(|e| {
+                    #[cfg(debug_assertions)]
+                    debug_log!("MAIN: Failed to spawn network coordinator thread: {}", e);
+
+                    ThisProjectError::StringError(
+                        format!("Failed to spawn network coordinator thread: {}", e)
+                    )
+                })?;
+
+            // you_love_the_sync_team_office.join().unwrap(); // Wait for finish TODO NO UNWRAP!
+            // ═══════════════════════════════════════════════════════════════════════
+            // Orderly Join: Wait for Both Threads to Complete
+            // ═══════════════════════════════════════════════════════════════════════
+            // Join order: Network thread first (it has child threads), then UI thread
+            // This ensures all network operations cease before UI exits
+            // ═══════════════════════════════════════════════════════════════════════
+
+            // Join network thread
+            match you_love_the_sync_team_office_handle.join() {
+                Ok(result) => {
+                    if let Err(_e) = result {
+                        #[cfg(debug_assertions)]
+                        debug_log!("MAIN: Network coordinator thread returned error: {}", _e);
+
+                        // Don't return early - still need to join UI thread
+                    }
+                }
+                Err(_e) => {
+                    #[cfg(debug_assertions)]
+                    debug_log!("MAIN: Network coordinator thread panicked: {:?}", _e);
+
+                    // Thread panicked - log but continue to join UI thread
+                }
+            }
+        };
+
+        // Join UI thread
+        match we_love_projects_loop_handle.join() {
+            Ok(result) => {
+                if let Err(_e) = result {
+                    #[cfg(debug_assertions)]
+                    debug_log!("MAIN: UI thread returned error: {}", _e);
+                }
+            }
+            Err(_e) => {
+                #[cfg(debug_assertions)]
+                debug_log!("MAIN: UI thread panicked: {:?}", _e);
+            }
+        }
+        // we_love_projects_loop.join().unwrap(); // Wait for finish TODO NO UNWRAP!
+    }
+    // safe log(s)
+    println!("All threads completed. The Uma says fare well and strive.");
+    debug_log("All threads completed. The Uma says fare well and strive.");
+
+    // Return
     Ok(())
 }
