@@ -3,6 +3,15 @@ Uma
 2024.09-11
 RUST_BACKTRACE=full cargo run
 
+#### For smallest size, build (~1 mb)
+```bash
+cargo build --profile release-small
+```
+#### or for optimal performance (~10 mb)
+```bash
+cargo build --profile release-performance
+```
+
 # Uma: Coordination, Productivity, Hygiene
 ```
 4_|
@@ -3562,6 +3571,7 @@ pub fn make_exclusionlist_from_single_team_channel(
 
     // Extract channel name for diagnostic logging only. Parent dir name is the
     // channel name by project convention: .../team_channels/<channel>/node.toml
+    #[cfg(debug_assertions)]
     let channel_name = node_readcopy_path
         .parent()
         .and_then(|p| p.file_name())
@@ -3605,10 +3615,10 @@ pub fn make_exclusionlist_from_single_team_channel(
             // where each wrapper contains:
             //   .collaborator_ports: Vec<AbstractTeamchannelNodeTomlPortsData>
             // So we need three levels of iteration: pair → wrapper → port-entry.
-            for (pair_name, wrapper_entries) in port_assignments {
+            for (_debug_pair_name, wrapper_entries) in port_assignments {
                 #[cfg(debug_assertions)]
                 debug_log!("MEFSTC: pair '{}' has {} wrapper(s)",
-                    pair_name, wrapper_entries.len());
+                    _debug_pair_name, wrapper_entries.len());
 
                 for wrapper in wrapper_entries {
                     for assignment in wrapper.collaborator_ports {
@@ -3620,7 +3630,7 @@ pub fn make_exclusionlist_from_single_team_channel(
                         #[cfg(debug_assertions)]
                         debug_log!(
                             "MEFSTC: pair '{}' user '{}' ports ready={}, intray={}, gotit={}",
-                            pair_name,
+                            _debug_pair_name,
                             assignment.user_name,
                             assignment.ready_port,
                             assignment.intray_port,
@@ -33037,6 +33047,149 @@ fn safe_update_for_moving_node_toml_fields(
     }
 }
 
+/*
+
+Uma ready signal notes:
+
+Ready-Signal Sending & Ready Signal Listening in the Uma- Distributed Multipoint Conferencing Unit Protocol:
+
+The Rules for Ports:
+
+- local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip: u16, // locally: 'you' send a signal through your-port to their IP address
+
+- remote_collab_ready_port_theirdesk_youlisten_bind_yourlocal_ip: u16, // locally: 'you' listen to their-port on your IP address
+
+
+## User Story 1: Alice and Bob, at the office!
+"Do one thing well, and pace yourself."
+
+Imagine an office, a team office. if you will. In the office are meeting rooms. In each meeting room are two desks, one for each of two team-members or collaborators as we will call them. In this example we will only be looking at the desks of two collaborators: Alice and Bob.
+
+Both Alice's desk and Bob's desk in this somewhat spacious meeting room have sitting on top a classic wireframe in-tray to put documents in. But, if less classically, there are two incandescent light bulbs, one to either side of that tray. On Alice's desk, in front of one bulb there is a sign that says: "I'm Ready, Bob." Inside the wire tray there is a sign that says, surprisingly, "In Tray (Things from Bob)." In front of the other bulb on the other side of the tray is a sign that says "I got it, Bob." Over on Bob's desk things look remarkably similar, except that the names on the sign refers to Alice: "I'm ready, Alice." "Things from Alice." and "I got it, Alice."
+
+
+
+To review: Each pair of collaborators have a meeting room. In the meeting room are two desks. On each collaborator's desk there are three things. By using these three things the collaborators can be very clear about the steps of getting documents from the other person.
+
+There are also two other things in this meeting room: there are two marble dispensers: like wire shoots where you put marbles in the top, one by one they stack up. You can pull the next one from the bottom, over and over until it is empty like a classic gravity-feed dispenser. Each of these marble dispensers also has a sign under it. The one sign says: "Marbles for Alice." The other sign says, you guessed it, "Marbles for Bob." And yes, for the analogy, we will be putting marbles in the trays instead of pieces of paper.
+
+The procedure or protocol works like this:
+If the bulb by the "I'm ready," sign lights up, you take the next marble from the marble-queue-dispenser and put that marble in the tray. If the light by the "I got it." sign goes on, you can then carefully remove the marble from the tray and toss it out the window. But if the light by the "I got it," sign does not light up, then you need to try again (so don't lose that marble). If you wanted a second and the "I got it" light doesn't go on, you can grab the marble and push it back in the bottom of the dispenser and wait for the 'ready' light to sound again.
+
+That's about it.
+
+This team is a marble-collecting-fan-club team, so everyone's job is to keep track of what kinds of marbles everyone else has collected.
+
+Alice was away volunteering for a local election the previous day, so when she starts work today, and joins the team, where Bob is her collaborator, she has a 'vacation-backlog' of things to catch up on. Bob has a few new marbles that she missed out on when she was away.
+
+So Alice comes in, after her day away, and, feeling ready, switches on the ready light. Bob, who was so busy preparing to add a new marble to his collection and did not see Alice come in, now sees the ready-light: Bob knows Alice is in the office and actively marbling away. Alice being here today, Bob checks his ledger and gets out all the marbles he hasn't told Alice about yet (all the ones from yesterday).
+
+Bob grabs the oldest marble and puts it in the in-tray. Alice notes it down in her records and turns on the "I got it!" light. Then, being ready for the next marble if there is one, she turns on the "I'm ready light again." Bob puts in the next marble. Alice notes it and hits the "I got it," light, and then the "I'm ready" light...and on and exactly the same way until Bob doesn't have anything new to show her. Now and then Alice turns the 'ready' light on to keep up during the day with anything new. And Bob does the same. Maybe Alice for her part found some marbles while she was off tallying poles, and now has to bring Bob up to speed as well.
+
+To bring this analogy back to Uma:
+The collaborator's marbles are their owned .toml files.
+The team-office is the team-channel.
+The items on the desks (the in tray and lights) and sets of 3-ports.
+The desks are threads.
+The 'I'm ready" light is either a timestamp or something like a json containing a timestamp.
+The "I got it" light is probably a single 'zero' bit.
+The in-tray is where you seen the next item in the send_queue.
+THe marble-dispenser is the list of .toml files you own that are timestamped AFTER the timestamp your collaborator just gave you.
+The meeting room is...a total fiction. Sorry, the meeting room isn't real.
+
+### Three Desk Items + A Calendar
+One item that was not super clear in the analogy is that the send-queue (the marble dispenser) is based on a ~shared timestamp. To extend the analogy, the marble-dispenser is next to a calendar on the wall, each marble has a date on it. There is a big X on the calendar and every marble in the dispenser (which is in chronological order from oldest at the bottom to youngest at the top) has a date AFTER the big x on the calendar. If Alice walks up to Bob's 'marbles for Alice' calendar and wipes off the big X and picks a different date...then Bob needs to re-do his marble dispenser so that the dispenser contains all (and only) the marbles dates after the X date.
+
+
+### One Direction of Activity-Traffic: events or units of sync.
+The sequence of the use of the three items on each proverbial in-try-desk is also important. For example, if Bob sees the "I'm ready light" and puts a marble in the box, waits three seconds, and sees the I'm ready light go on again without the "I got it!" light ever having lit up: What does that mean and what should he do? It means that Alice didn't get that marble, so Bob should try to send that marble again (assuming the time and queue were not updated). (Aside to be explained more later: if the 'I'm ready light' comes on with a garbage time-stamp, Bob can back up to a known-last-confirmed queue and get things back on track.) Also, if Bob did not see that Alice got it (even though she lit the "I got it bulb" for whatever reason Bob did not see it, then Bob simply retries even though it worked the last time. Then Alice processes that re-send like any other send as normal with no interruption or exceptions at all on her end.
+
+(TODO: I'm ready vs. send-q item timestamp? Drop item if old?)
+
+This directionality suggests a few things:
+1. Alice should be handling her "desk" (probably) in a loop repeating every ~3 sec (or whatever she chooses). A thread for the "desk" may keep repeating a loop that dies (or is ignored) and retries/repeats every 3 seconds. (let it fail and try again). A desk-loop that repeats an 'in-tray' loop?
+
+2. Bob needs to keep an eye on which light is blinking in what order. He is not only waiting for the "I got it!" light; he is waiting for the I got it light to go off before the "I'm ready" light restarts the next event. Should be Do-able. Also, Bob does not need to know how long Alice's loop is (I don't think): every time "I'm ready" lights up, Bob ignores or kills his last 'sync-event' process and starts a new one. 'Let it fail and try again.'
+
+
+It is important to note, speaking of Alice's interactions with Bob, that both collaborators need to see all 6 things across the two desks (the two in-tray and all the lights). So in a sense the meeting room that you visualized one collaborator's meeting room. In other words both collaborators need to have six 'ports' to coordinate with each other collaborator.
+
+On the one hand, this may seem like a lot of ports. On the other hand, there are as many ports and threads as you want and it is easier to set up a new completely separate port that only ever does one unique thing than it is to manage one port in one thread somehow alternating between many different tasks (with a large number of edge cases). The concreteness of Uma's .toml files helps too: files have one owner; only a file's owner sends them; files are only sent to one specific collaborator encrypted with the recipient's gpg key. And most cross-functional teams have fewer than 10 people.
+
+
+...
+
+
+...
+
+
+...
+
+## Terminal output of port data:
+```text
+...@fedora:~/.../uma_testing/alice/target/debug/project_graph_data/team_channels/aliceland$ gpg --decrypt node.gpgtoml
+gpg: encrypted with ... key, ID ..., created ....
+      "... (Key expires ...) <...@....com>"
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA512
+
+node_name = "aliceland"
+corenode_gpgtoml = true
+description_for_tui = "aliceland"
+node_unique_id = [184, 0, 223, 23]
+path_in_parentnode = "aliceland"
+parent_node_uniqueid = []
+owner = "alice"
+updated_at_timestamp = 1778532172
+expires_at = 12889643283
+teamchannel_collaborators_with_access = ["alice", "bob", "cat"]
+
+[[abstract_collaborator_port_assignments.alice_bob]]
+[[abstract_collaborator_port_assignments.alice_bob.collaborator_ports]]
+user_name = "alice"
+ready_port = 62004
+intray_port = 50664
+gotit_port = 55737
+
+[[abstract_collaborator_port_assignments.alice_bob.collaborator_ports]]
+user_name = "bob"
+ready_port = 52429
+intray_port = 61288
+gotit_port = 62228
+
+[[abstract_collaborator_port_assignments.alice_cat]]
+[[abstract_collaborator_port_assignments.alice_cat.collaborator_ports]]
+user_name = "alice"
+ready_port = 51675
+intray_port = 55112
+gotit_port = 64529
+
+[[abstract_collaborator_port_assignments.alice_cat.collaborator_ports]]
+user_name = "cat"
+ready_port = 60625
+intray_port = 55134
+gotit_port = 56422
+
+[[abstract_collaborator_port_assignments.bob_cat]]
+[[abstract_collaborator_port_assignments.bob_cat.collaborator_ports]]
+user_name = "bob"
+ready_port = 64741
+intray_port = 55484
+gotit_port = 50168
+
+[[abstract_collaborator_port_assignments.bob_cat.collaborator_ports]]
+user_name = "cat"
+ready_port = 50702
+intray_port = 62680
+gotit_port = 57538
+
+-----BEGIN PGP SIGNATURE-----
+...
+-----END PGP SIGNATURE-----
+
+
+*/
+
 /// Loads connection data for members of the currently active team channel.
 /// On success, returns a `HashSet` of `MeetingRoomSyncDataset` structs,
 /// each containing connection
@@ -33122,6 +33275,7 @@ fn safe_update_for_moving_node_toml_fields(
 /// excluding those who collide with senior members
 /// or returning an error if found.
 fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<HashSet<MeetingRoomSyncDataset>, MyCustomError> {
+    #[cfg(debug_assertions)]
     debug_log!("MSMD Entering the make_sync_meetingroomconfig_datasets() function...");
 
     // --- 1. find node.toml ---
@@ -33138,10 +33292,12 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
     // get path, derive name from path
     let channel_dir_path_str = match read_state_string("current_node_directory_path.txt") {
         Ok(path) => {
+            #[cfg(debug_assertions)]
             debug_log!("MSMD 1. Channel directory path (from session state): {:?}", path);
             path
         }
         Err(e) => {
+            #[cfg(debug_assertions)]
             debug_log!(
                 "MSMD ERROR: Failed to read 'current_node_directory_path.txt': {}. \
                  This may be due to missing file, permission issues, or malformed content.",
@@ -33194,14 +33350,19 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
         ));
     };
 
-    // Get GPG fingerprint
-    let gpg_fingerprint = LocalUserUma::read_gpg_fingerprint_from_file()
-        .map_err(|e| MyCustomError::from(
-            format!("TCS: Failed to read GPG fingerprint from uma.toml: {}", e)
-        ))?;
-        // .map_err(|e| Err(MyCustomError::from(
-        //     format!("TCS: Failed to read GPG fingerprint from uma.toml: {}", e)
-        // ))?;
+    // Get armored public key, using key-id (full fingerprint in)
+    let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+        Ok(fingerprint) => fingerprint,
+        Err(e) => {
+            #[cfg(debug_assertions)]{
+                eprintln!("MSMD Failed to read GPG fingerprint from uma.toml: {}", e);
+                debug_log!("MSMD Failed to read GPG fingerprint from uma.toml: {}", e);
+            }
+            return Err(MyCustomError::from(format!(
+                "MSMD Failed to read GPG fingerprint from uma.toml: {}", e
+            )));
+        }
+    };
 
     // Get temp directory
     let temp_dir = get_base_uma_temp_directory_path()
@@ -33216,7 +33377,7 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
     let channel_node_tomlpath_string
         = get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
         &raw_channelnodetoml_path,
-        &gpg_fingerprint,
+        &gpg_full_fingerprint_key_id_string,
         &temp_dir,
     ).map_err(|e| MyCustomError::from(
         format!("TCS: Failed to get readable copy of node file: {:?}", e)
@@ -33224,7 +33385,7 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
     // ).map_err(|e| GpgError::PathError(
     //     format!("TCS: Failed to get readable copy of node file: {:?}", e)
     // ))?;
-
+    #[cfg(debug_assertions)]
     debug_log!("TCS: channel_node_tomlpath_string
         : {}", channel_node_tomlpath_string
     );
@@ -33232,7 +33393,7 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
     // Construct the path to node.toml
     // let channel_node_tomlpath_string
     //  = channel_dir_path.join("node.toml");
-
+    #[cfg(debug_assertions)]
     debug_log!("MSMD 1. Channel node.toml path: {:?}", channel_node_tomlpath_string
     );
 
@@ -33246,27 +33407,31 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
         Err(e) => debug_log!("MSMD Error 1. getting absolute path of channel_dir_path node.toml: {}", e),
     }
 
-    // --- 2. Load/Read node.toml ---
-    // Read that (node toml) data into an organized 'struct' of variables
-    // Read node.toml data with deseri_get_core_node_struct_from_toml_file()
-    // loading the fields into an organized struct with datatypes
-    let teamchannel_nodetoml_data: CoreNode = match deseri_get_core_node_struct_from_toml_file(&channel_node_toml_path) {
-        Ok(node) => {
-            debug_log!("MSMD 2. Successfully read channel node.toml");
-            node // ???
-        },
-        Err(e) => {
-            debug_log!("MSMD Error 2. reading channel node.toml: {:?}", channel_node_toml_path);
-            debug_log!("MSMD Error 2. details: {}", e);
-            return Err(MyCustomError::from(io::Error::new(io::ErrorKind::Other, e))); // Convert the error
-        }
-    };
-    debug_log!("MSMD 2. teamchannel_nodetoml_data->{:?}", teamchannel_nodetoml_data);
+    // // --- 2. Load/Read node.toml ---
+    // // Read that (node toml) data into an organized 'struct' of variables
+    // // Read node.toml data with deseri_get_core_node_struct_from_toml_file()
+    // // loading the fields into an organized struct with datatypes
+    // let teamchannel_nodetoml_data: CoreNode = match deseri_get_core_node_struct_from_toml_file(&channel_node_toml_path) {
+    //     Ok(node) => {
+    //         debug_log!("MSMD 2. Successfully read channel node.toml");
+    //         node // ???
+    //     },
+    //     Err(e) => {
+    //         #[cfg(debug_assertions)]{
+    //             debug_log!("MSMD Error 2. reading channel node.toml: {:?}", channel_node_toml_path);
+    //             debug_log!("MSMD Error 2. details: {}", e);
+    //         }
+    //         return Err(MyCustomError::from(io::Error::new(io::ErrorKind::Other, e))); // Convert the error
+    //     }
+    // };
+    // #[cfg(debug_assertions)]
+    // debug_log!("MSMD 2. teamchannel_nodetoml_data->{:?}", teamchannel_nodetoml_data);
 
     // --- 3. Empty Table for Later ---
     // Create an (empty) lookup-table (hash-set) to put all the meeting-room-data-sets in.
     // This will contain the local-port-assignments for each desk.
     let mut sync_config_data_set: HashSet<MeetingRoomSyncDataset> = HashSet::new();
+    #[cfg(debug_assertions)]
     debug_log!("MSMD 3. sync_config_data_set->{:?} <should be empty, ok>", &sync_config_data_set);
 
     // --- 4. Team-Channel Memebers ---
@@ -33283,6 +33448,7 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
             return Err(MyCustomError::from(io::Error::new(io::ErrorKind::Other, e)));
         }
     };
+    #[cfg(debug_assertions)]
     debug_log!("MSMD 4. collaborators_names_array->{:?}", collaborators_names_array);
 
     // --- 5. raw-abstract port-assignments ---
@@ -33299,6 +33465,7 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
     // Extract Owner for Key Lookup
     ////////////////////////////////
     let owner_name_of_toml_field_key_to_read = "owner";
+    #[cfg(debug_assertions)]
     debug_log!(
         "LCNFTF: Reading file owner from field '{}' for security validation",
         owner_name_of_toml_field_key_to_read
@@ -33336,17 +33503,8 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
         }
     };
     // println!("MSMD: File owner: '{}'", file_owner_username);
+    #[cfg(debug_assertions)]
     debug_log!("MSMD: File owner: '{}'", file_owner_username);
-
-    // Get armored public key, using key-id (full fingerprint in)
-    let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
-        Ok(fingerprint) => fingerprint,
-        Err(e) => {
-            debug_log!("MSMD Error 5. getting abstract_collaborator_port_assignments: {}", e);
-            return Err(MyCustomError::from(io::Error::new(io::ErrorKind::Other, e)));
-        }
-    };
-
 
     // Get the UME temp directory path with error handling
     let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
@@ -33403,11 +33561,13 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
         Err(e) => {
             // Clean up temporary files before returning error
             cleanup_closure();
+            #[cfg(debug_assertions)]
             debug_log!("MSMD Error 5. getting abstract_collaborator_port_assignments: {}", e);
             return Err(MyCustomError::from(io::Error::new(io::ErrorKind::Other, e)));
         }
     };
 
+    #[cfg(debug_assertions)]
     debug_log!(
         "MSMD 5. abstract_collaborator_port_assignments->{:?}",
         &abstract_collaborator_port_assignments
@@ -33453,68 +33613,55 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
     });
 
 
-
+    #[cfg(debug_assertions)]
     debug_log!(
         "MSMD 6. filtered_collaboratorsarray->{:?}",
         &filtered_collaboratorsarray
     );
 
-    // // TODO this perhaps shou be a parameter for this functions
-    // // maybe in uma.toml
-    // // Get armored public key, using key-id (full fingerprint in)
-    // let mut full_fingerprint_key_id_string = String::new();
-    // match q_and_a_user_selects_gpg_key_full_fingerprint() {
-    //     Ok(temp_fullfingerprint_key_idstring) => {
-
-    //         println!("Selected key id (full fingerprint in): {}", temp_fullfingerprint_key_idstring);
-    //         full_fingerprint_key_id_string = temp_fullfingerprint_key_idstring;
-    // }
-    //     Err(e) => eprintln!("Error selecting full_fingerprint_key_id_string: {}", e.to_string()),
-    // }
-
-
-    // // Get armored public key, using key-id (full fingerprint in)
-    // let mut full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
-    //     Ok(fingerprint) => fingerprint,
+    // // --- Get local user's salt list ---
+    // let local_user_salt_list = match get_addressbook_file_by_username(
+    //     uma_local_owner_user,
+    //     &gpg_full_fingerprint_key_id_string,
+    //     ) {
+    //     Ok(data) => data.user_salt_list,
     //     Err(e) => {
-    //         eprintln!("Failed to read GPG fingerprint from uma.toml: {}", e);
-    //         return Ok(false);
+    //         // Clean up temporary files before returning error
+    //         cleanup_closure();
+    //         #[cfg(debug_assertions)]
+    //         debug_log!("MSMD Error loading local user's salt list: {}", e);
+    //         // return Err(e);
+    //         return Err(e.into()); // Convert ThisProjectError to MyCustomError
     //     }
     // };
 
-    // Get armored public key, using key-id (full fingerprint in)
-    let full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
-        Ok(fingerprint) => fingerprint,
-        Err(e) => {
-            // Clean up temporary files before returning error
-            cleanup_closure();
-            eprintln!("MSMD Failed to read GPG fingerprint from uma.toml: {}", e);
-            debug_log!("MSMD Failed to read GPG fingerprint from uma.toml: {}", e);
-            return Err(MyCustomError::from(format!(
-                "MSMD Failed to read GPG fingerprint from uma.toml: {}", e
-            )));
-        }
-    };
-
-    // --- Get local user's salt list ---
-    let local_user_salt_list = match get_addressbook_file_by_username(
+    // --- Get local user's addressbook data (IP addresses, GPG, sync interval) ---
+    // Some fields need to use the local user's information
+    let local_owner_user_addressbook_data = match get_addressbook_file_by_username(
         uma_local_owner_user,
-        &full_fingerprint_key_id_string,
-        ) {
-        Ok(data) => data.user_salt_list,
+        &gpg_full_fingerprint_key_id_string,
+    ) {
+        Ok(data) => data,
         Err(e) => {
-            // Clean up temporary files before returning error
             cleanup_closure();
-            debug_log!("MSMD Error loading local user's salt list: {}", e);
-            // return Err(e);
-            return Err(e.into()); // Convert ThisProjectError to MyCustomError
+            #[cfg(debug_assertions)]
+            debug_log!("MSMD Error loading local user's addressbook data: {}", e);
+            return Err(e.into());
         }
     };
+    #[cfg(debug_assertions)]
+    debug_log!(
+        "MSMD 8. Collaborator data local_owner_user_addressbook_data: {:?}",
+        &local_owner_user_addressbook_data
+    );
 
     // --- 7. Iterate through the filtered address-book-name-list ---
     // Go through the list make a set of meeting room information for each team-member,
     // so that you (e.g. Alice) can sync with other team members.
-    for collaborator_name in filtered_collaboratorsarray { // collaborator_data is now a String
+    // for collaborator_name in filtered_collaboratorsarray { // collaborator_data is now a String
+    const MAX_COLLABORATORS_PER_CHANNEL: usize = 5000;
+    for collaborator_name in filtered_collaboratorsarray.iter().take(MAX_COLLABORATORS_PER_CHANNEL) { // collaborator_data is now a String
+        #[cfg(debug_assertions)]
         debug_log!("MSMD 7. Processing collaborator: {}", collaborator_name);
 
         // --- 8. get (that team member's) addressbook file by (their) username ---
@@ -33523,54 +33670,59 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
         // (owned by that collaborator, it is their own gpg signed data)
         let these_collaboratorfiles_toml_data = match get_addressbook_file_by_username(
             &collaborator_name,
-            &full_fingerprint_key_id_string,
+            &gpg_full_fingerprint_key_id_string,
             ) {
             Ok(these_collaboratorfiles_toml_data) => these_collaboratorfiles_toml_data,
             Err(e) => {
                 // Clean up temporary files before returning error
                 cleanup_closure();
                 // This is where you'll most likely get the "No such file or directory" error
+                #[cfg(debug_assertions)]
                 debug_log!("MSMD Error 8. loading collaborator {}. File might be missing. Error: {}", collaborator_name, e);
                 return Err(e.into()); // Convert ThisProjectError to MyCustomError
             }
         };
+        #[cfg(debug_assertions)]
         debug_log!(
             "MSMD 8. Collaborator data these_collaboratorfiles_toml_data: {:?}",
             &these_collaboratorfiles_toml_data
         );
 
-        // --- 9. extract data or drop collaborator from list ---
-        // TODO addresses plural?
-        /*
-        what are all the fields of information to get?
-        ipv6
-        ipv4
-        (is there some other type of address too?)
-        gpg
-        sync rate?
-        */
-        // IPvX...what else?
-        // (If not available, drop this person from the list)
-        let ipv6_address = match these_collaboratorfiles_toml_data
-            .ipv6_addresses.clone()
-            .and_then(|v| v.first().cloned())
-        {
-            Some(addr) => {
-                debug_log!(
-                    "MSMD 9. IPv6 address for {}: {}",
-                    collaborator_name, addr
-                );
-                addr // ?
-            },
-            None => {
-                debug_log!("MSMD WARNING: 9. No IPv6 address found for {}. Skipping this collaborator.", collaborator_name);
-                continue; // Skip to the next collaborator in the loop
-            }
-        };
-        debug_log!(
-            "MSMD 9. ipv6_address {:?}->",
-            &ipv6_address
-        );
+        // // --- 9. extract data or drop collaborator from list ---
+        // // TODO addresses plural?
+        // /*
+        // what are all the fields of information to get?
+        // ipv6
+        // ipv4
+        // (is there some other type of address too?)
+        // gpg
+        // sync rate?
+        // */
+        // // IPvX...what else?
+        // // (If not available, drop this person from the list)
+        // let ipv6_address = match these_collaboratorfiles_toml_data
+        //     .ipv6_addresses.clone()
+        //     .and_then(|v| v.first().cloned())
+        // {
+        //     Some(addr) => {
+        //         #[cfg(debug_assertions)]
+        //         debug_log!(
+        //             "MSMD 9. IPv6 address for {}: {}",
+        //             collaborator_name, addr
+        //         );
+        //         addr // ?
+        //     },
+        //     None => {
+        //         #[cfg(debug_assertions)]
+        //         debug_log!("MSMD WARNING: 9. No IPv6 address found for {}. Skipping this collaborator.", collaborator_name);
+        //         continue; // Skip to the next collaborator in the loop
+        //     }
+        // };
+        // #[cfg(debug_assertions)]
+        // debug_log!(
+        //     "MSMD 9. ipv6_address {:?}->",
+        //     &ipv6_address
+        // );
 
         // TODO Alpha under construction
         // --- 10. Translate abstract port assignments to local role-specific structs ---
@@ -33589,12 +33741,16 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
         instance roles set of port assignments, namely,
         local_user_role, remote_collaborator_role
         */
+        #[cfg(debug_assertions)]
         debug_log("MSMD 10. Starting translate_port_assignments()");
+
         let role_based_ports = translate_port_assignments(
             uma_local_owner_user,
             &collaborator_name,
             abstract_collaborator_port_assignments.clone(), // Clone to avoid ownership issues
         )?;
+
+        #[cfg(debug_assertions)]
         debug_log!(
             "MSMD 10. role_based_ports {:?}->",
             &role_based_ports
@@ -33609,21 +33765,22 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
         ]
         */
 
-        // --- Get remote collaborator's salt list ---
-        // let remote_collaborator_salt_list = match get_addressbook_file_by_username(collaborator_name.clone()) {
-        let remote_collaborator_salt_list = match get_addressbook_file_by_username(
-            &collaborator_name.clone(),
-            &full_fingerprint_key_id_string,
-            ) {
-            Ok(data) => data.user_salt_list,
-            Err(e) => {
-                // Clean up temporary files before returning error
-                cleanup_closure();
-                debug_log!("MSMD Error loading remote_collaborator_salt_list user's salt list: {}", e);
-                // return Err(e);
-                return Err(e.into()); // Convert ThisProjectError to MyCustomError
-            }
-        };
+        // // --- Get remote collaborator's salt list ---
+        // // let remote_collaborator_salt_list = match get_addressbook_file_by_username(collaborator_name.clone()) {
+        // let remote_collaborator_salt_list = match get_addressbook_file_by_username(
+        //     &collaborator_name.clone(),
+        //     &gpg_full_fingerprint_key_id_string,
+        //     ) {
+        //     Ok(data) => data.user_salt_list,
+        //     Err(e) => {
+        //         // Clean up temporary files before returning error
+        //         cleanup_closure();
+        //         #[cfg(debug_assertions)]
+        //         debug_log!("MSMD Error loading remote_collaborator_salt_list user's salt list: {}", e);
+        //         // return Err(e);
+        //         return Err(e.into()); // Convert ThisProjectError to MyCustomError
+        //     }
+        // };
 
         // --- 11. Construct MeetingRoomSyncDataset (struct) ---
         // Assemble this one meeting room data-bundle from multiple sources
@@ -33632,21 +33789,21 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
         // - from Instance-Role-Specific Local-Meeting-Room-Struct
         let meeting_room_sync_data = MeetingRoomSyncDataset {
             local_user_name: uma_local_owner_user.to_string(),  // TODO source?
-            local_user_salt_list: local_user_salt_list.clone(), // Include the local salt list
-            local_user_ipv6_addr_list: these_collaboratorfiles_toml_data.ipv6_addresses.clone().unwrap_or_default(), // Assuming you want to use the first IPv6 address for the local user
-            // local_user_ipv6_addr_list: these_collaboratorfiles_toml_data.ipv6_addresses.expect("REASON"), // Assuming you want to use the first IPv6 address for the local user
-            local_user_ipv4_addr_list: these_collaboratorfiles_toml_data.ipv4_addresses.clone().unwrap_or_default(), // Get IPv4 addresses or an empty vector
-            // local_user_ipv4_addr_list: these_collaboratorfiles_toml_data.ipv4_addresses.expect("REASON"), // Assuming you want to use the first
-            local_user_gpg_publickey_id: these_collaboratorfiles_toml_data.gpg_publickey_id.clone(),
-            local_user_public_gpg: these_collaboratorfiles_toml_data.gpg_key_public.clone(),
-            local_user_sync_interval: these_collaboratorfiles_toml_data.sync_interval,
+            local_user_salt_list: local_owner_user_addressbook_data.user_salt_list.clone(), // Include the local salt list
+            local_user_ipv6_addr_list: local_owner_user_addressbook_data.ipv6_addresses.clone().unwrap_or_default(), // Assuming you want to use the first IPv6 address for the local user
+            // local_user_ipv6_addr_list: local_owner_user_addressbook_data.ipv6_addresses.expect("REASON"), // Assuming you want to use the first IPv6 address for the local user
+            local_user_ipv4_addr_list: local_owner_user_addressbook_data.ipv4_addresses.clone().unwrap_or_default(), // Get IPv4 addresses or an empty vector
+            // local_user_ipv4_addr_list: local_owner_user_addressbook_data.ipv4_addresses.expect("REASON"), // Assuming you want to use the first
+            local_user_gpg_publickey_id: local_owner_user_addressbook_data.gpg_publickey_id.clone(),
+            local_user_public_gpg: local_owner_user_addressbook_data.gpg_key_public.clone(),
+            local_user_sync_interval: local_owner_user_addressbook_data.sync_interval,
 
             local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip: role_based_ports.local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip,
             localuser_intray_port_yourdesk_youlisten_bind_yourlocal_ip: role_based_ports.localuser_intray_port_yourdesk_youlisten_bind_yourlocal_ip,
             local_user_gotit_port_yourdesk_yousend_aimat_their_rmtclb_ip: role_based_ports.local_user_gotit_port_yourdesk_yousend_aimat_their_rmtclb_ip,
 
             remote_collaborator_name: collaborator_name.clone(), // TODO source?
-            remote_collaborator_salt_list: remote_collaborator_salt_list,
+            remote_collaborator_salt_list: these_collaboratorfiles_toml_data.user_salt_list.clone(),
             remote_collaborator_ipv6_addr_list: these_collaboratorfiles_toml_data.ipv6_addresses.unwrap_or_default(), // Get ip addresses or empty vector
             remote_collaborator_ipv4_addr_list: these_collaboratorfiles_toml_data.ipv4_addresses.unwrap_or_default(), // Get IP addresses or empty vector
             // remote_collaborator_ipv6_addr_list: these_collaboratorfiles_toml_data.ipv6_addresses.expect("REASON"), // Get ip addresses or empty vector
@@ -33664,6 +33821,8 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
         // --- 12. add meeting room to set-of-rooms-table ---
         // add this one meeting room data-bundle to the larger set
         sync_config_data_set.insert(meeting_room_sync_data.clone());
+
+        #[cfg(debug_assertions)]
         debug_log!(
             "MSMD 12. Created MeetingRoomSyncDataset: {:?}",
             meeting_room_sync_data
@@ -33671,7 +33830,11 @@ fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<Ha
 
     } // End of collaborator loop
 
+    #[cfg(debug_assertions)]
     debug_log!("MSMD Done: 12,13: sync_config_data_set created: {:?}", sync_config_data_set);
+
+    // Cleanup at end of function.
+    cleanup_closure();
 
     // 13. after iterating, return full set of meeting-rooms
     Ok(sync_config_data_set)
@@ -35955,9 +36118,9 @@ fn send_gotit_signal(
     // 2. Serialize for the wire.
     // -------------------------------------------------------------
     let serialized_gotitsignal_data = serialize_gotit_signal(&gotit_struct)
-        .map_err(|e| {
+        .map_err(|_e| {
             #[cfg(debug_assertions)]
-            debug_log!("send_gotit_signal: serialize failed: {:?}", e);
+            debug_log!("send_gotit_signal: serialize failed: {:?}", _e);
             ThisProjectError::NetworkError(
                 "GOTIT: serialize failed".to_string()
             )
