@@ -412,7 +412,7 @@ use crate::clearsign_toml_module::{
     get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml,
     gpg_make_input_path_name_abs_executabledirectoryrelative_nocheck,
     q_and_a_user_selects_gpg_key_full_fingerprint,
-    read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyid,
+    // read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyid,
     read_abstract_ports_from_clearsigntoml_without_publicgpgkey,
     read_bool_field_from_toml,
     read_bool_from_clearsigntoml_without_publicgpgkey,
@@ -2994,6 +2994,28 @@ The global function would internally call the single-channel function for each `
 /// - Uses owner-based GPG key validation via the collaborator addressbook system
 /// - Skips any files that fail signature validation
 ///
+/// # Signature Verification Mechanism
+/// As of the migration away from `read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyid()`,
+/// this function uses `read_abstract_ports_from_clearsigntoml_without_publicgpgkey()`, which in turn
+/// calls `verify_clearsign_using_isolated_keyring()`. The verification process is:
+///
+/// 1. The full ASCII-armored public key (`gpg_key_public`) is extracted from the
+///    channel owner's addressbook entry (itself a clearsigned file).
+/// 2. A temporary, isolated GPG home directory is created (NOT the system `~/.gnupg/`).
+/// 3. ONLY that one extracted key is imported into the isolated keyring.
+/// 4. The node.toml signature is verified against that isolated keyring.
+/// 5. The temporary GPG home is deleted.
+///
+/// This means the owner's key does NOT need to be pre-imported into the local user's
+/// system keyring, and verification cannot accidentally succeed against an unrelated
+/// key that happens to be present in `~/.gnupg/`. The addressbook is the sole authority
+/// for which key authenticates which channel owner.
+///
+/// # Deprecation Note
+/// The previous implementation used `gpg --decrypt` against the system keyring with only
+/// a key-ID lookup; this produced "no public key" failures whenever the owner's key was
+/// not already imported. That pathway is now removed from this function.
+///
 /// # Error Handling
 /// The function provides detailed error information and interactive warnings:
 /// - Port collisions trigger a warning with user confirmation to continue
@@ -3271,56 +3293,94 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
             }
         };
 
-        match read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyid(
-            &specific_readcopy_addressbook_path, // addressbook_readcopy_path_string
-            &node_readcopy_path_string // path_to_clearsigned_toml
+        // --- Stage 4: Validate signature & extract port assignments ---
+        //
+        // Uses isolated-keyring verification (via read_abstract_ports_from_clearsigntoml_without_publicgpgkey)
+        // which extracts the full armored public key from the addressbook and verifies
+        // the node.toml against ONLY that key in a temporary isolated GPG home.
+        //
+        // This replaces the deprecated read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyid(),
+        // which relied on the system keyring (~/.gnupg/) and failed when the owner's key
+        // was not pre-imported into the local user's keyring.
+        match read_abstract_ports_from_clearsigntoml_without_publicgpgkey(
+            &specific_readcopy_addressbook_path, // config file containing gpg_key_public
+            &node_readcopy_path_string,          // target clearsigned file to verify
         ) {
             Ok(port_assignments) => {
-                println!("CAPITCCV  ✓ Signature validated successfully");
+                println!("CAPITCCV  ✓ Signature validated successfully (isolated keyring)");
                 println!("CAPITCCV  Found {} collaborator pairs", port_assignments.len());
+                debug_log!(
+                    "CAPITCCV  ✓ Isolated-keyring validation OK; {} pairs in '{}'",
+                    port_assignments.len(),
+                    channel_name
+                );
 
                 // --- Stage 5: Process Port Assignments ---
-                for (pair_name, assignments) in port_assignments {
-                    for assignment in assignments {
-                        // Track each port with its context
-                        let port_contexts = [
-                            (assignment.ready_port, "ready"),
-                            (assignment.intray_port, "intray"),
-                            (assignment.gotit_port, "gotit"),
-                        ];
+                // NOTE: New return type adds one extra layer:
+                //   HashMap<pair_name, Vec<ReadTeamchannelCollaboratorPortsToml>>
+                //   where each ReadTeamchannelCollaboratorPortsToml wraps
+                //   `collaborator_ports: Vec<AbstractTeamchannelNodeTomlPortsData>`.
+                // We therefore iterate: pair -> wrapper entries -> individual port assignments.
+                for (pair_name, wrapper_entries) in port_assignments {
+                    for wrapper in wrapper_entries {
+                        for assignment in wrapper.collaborator_ports {
+                            // Track each port with its context
+                            let port_contexts = [
+                                (assignment.ready_port, "ready"),
+                                (assignment.intray_port, "intray"),
+                                (assignment.gotit_port, "gotit"),
+                            ];
 
-                        for (port, port_type) in port_contexts {
-                            total_port_assignments += 1;
+                            for (port, port_type) in port_contexts {
+                                total_port_assignments += 1;
 
-                            let context = PortAssignmentContext {
-                                channel_name: channel_name.clone(),
-                                pair_name: pair_name.clone(),
-                                user_name: assignment.user_name.clone(),
-                                port_type: port_type.to_string(),
-                            };
+                                let context = PortAssignmentContext {
+                                    channel_name: channel_name.clone(),
+                                    pair_name: pair_name.clone(),
+                                    user_name: assignment.user_name.clone(),
+                                    port_type: port_type.to_string(),
+                                };
 
-                            // Add to registry
-                            port_registry
-                                .entry(port)
-                                .or_insert_with(Vec::new)
-                                .push(context);
+                                // Add to registry
+                                port_registry
+                                    .entry(port)
+                                    .or_insert_with(Vec::new)
+                                    .push(context);
+                            }
                         }
                     }
                 }
             }
             Err(_e) => {
+                // Note: new function returns String, not GpgError.
+                // In production we do NOT leak the message contents.
                 validation_failures += 1;
                 #[cfg(debug_assertions)]
                 {
-                    println!("Validation node_readcopy_path_string: {}", node_readcopy_path_string);
-                    debug_log!("CAPITCCV Validation node_readcopy_path_string: {}", node_readcopy_path_string);
-                    debug_log!("CAPITCCV Validation raw_addressbook_path: {:?}", raw_addressbook_path);
+                    println!(
+                        "Validation node_readcopy_path_string: {}",
+                        node_readcopy_path_string
+                    );
+                    debug_log!(
+                        "CAPITCCV Validation node_readcopy_path_string: {}",
+                        node_readcopy_path_string
+                    );
+                    debug_log!(
+                        "CAPITCCV Validation raw_addressbook_path: {:?}",
+                        raw_addressbook_path
+                    );
 
-                    eprintln!("  ✗ Validation FAILED cuz: {}", _e.to_string());
-                    debug_log!("CAPITCCV Validation FAILED cuz: {}", _e.to_string());
+                    eprintln!("  ✗ Validation FAILED cuz: {}", _e);
+                    debug_log!("CAPITCCV Validation FAILED cuz: {}", _e);
 
-                    debug_log!("CAPITCCV  Skipping this channel {} due to security validation failure", node_file_path.to_string_lossy());
-                    eprintln!("  Skipping this channel {} due to security validation failure", node_file_path.to_string_lossy());
+                    debug_log!(
+                        "CAPITCCV  Skipping channel {} due to security validation failure",
+                        node_file_path.to_string_lossy()
+                    );
+                    eprintln!(
+                        "  Skipping channel {} due to security validation failure",
+                        node_file_path.to_string_lossy()
+                    );
                 }
                 continue;
             }
@@ -3432,132 +3492,299 @@ pub fn check_all_ports_in_team_channels_clearsign_validated() -> Result<(), This
     }
 }
 
-/// Extracts all ports from a single team channel's node.toml file.
+/// Extracts all ports from a single team channel's node.toml file into an exclusion set.
 ///
-/// # Purpose
-/// This function reads a clearsigned `node.toml` file from a team channel and extracts
-/// all configured network ports (ready, intray, and gotit ports) for all collaborator
-/// pairs. The extracted ports are returned as a HashSet for efficient lookup when
-/// checking for port collisions.
+/// # Project Context
+/// This function is part of the UMA port-collision audit subsystem. Each team channel
+/// has a clearsigned `node.toml` (or decrypted `node.gpgtoml` read-copy) declaring the
+/// network ports (ready/intray/gotit) used by every collaborator pair in that channel.
+/// To safely allocate new ports for a new channel or new collaborator pair, we must
+/// know which ports are already claimed across the project. This function produces the
+/// "already-claimed" set for one channel; callers union the results across channels.
+///
+/// # Security Model
+/// - Verification uses `read_abstract_ports_from_clearsigntoml_without_publicgpgkey`,
+///   which extracts the file owner's full armored public key from the supplied
+///   addressbook read-copy and verifies the node file against an **isolated** GPG
+///   keyring (not the user's system `~/.gnupg/` keyring). This guarantees the
+///   signature was made by the key specifically named in the addressbook, not just
+///   any key the user happens to have imported.
+/// - If verification or parsing fails, this function logs the failure (debug builds)
+///   and returns an EMPTY set rather than propagating the error. The audit caller
+///   accumulates results across many channels, and a single bad/unsigned channel
+///   must not abort the whole audit. Returning an empty set is safe: it cannot
+///   *cause* a false collision, it can only fail to *detect* one for that channel,
+///   which is already separately surfaced as a validation failure upstream.
+///
+/// # Deprecation Note
+/// This function previously called the deprecated
+/// `read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyid`,
+/// which extracted only a GPG key ID and verified against the user's system keyring.
+/// That approach failed with "no public key" whenever the file owner's key was not
+/// imported into the local user's `~/.gnupg/`. The current implementation uses the
+/// armored-key + isolated-keyring path, which works regardless of system keyring state.
 ///
 /// # Parameters
-/// * `node_toml_path` - The absolute path to the node.toml file to process
-/// * `collaborator_files_dir_relative` - The relative path to the collaborator files
-///   directory (typically COLLABORATOR_ADDRESSBOOK_PATH_STR)
-///
-/// # Security
-/// - Only processes clearsigned files that pass GPG validation
-/// - Uses the collaborator addressbook system for owner verification
-/// - Returns an empty set if validation fails (with appropriate logging)
+/// * `addressbook_readcopy_path_string` - Absolute path (as `&str`) to the file
+///   owner's clearsigned addressbook read-copy. Must contain a `gpg_key_public`
+///   field holding the full ASCII-armored public key.
+/// * `node_readcopy_path` - Absolute path to the clearsigned node read-copy whose
+///   port assignments are to be extracted.
 ///
 /// # Returns
-/// * `Ok(HashSet<u16>)` - A set of all ports found in the file
-/// * `Err(ThisProjectError)` - If critical errors occur (not validation failures)
+/// * `Ok(HashSet<u16>)` - The set of every distinct port (ready, intray, gotit)
+///   declared for every collaborator in every pair within the node file. Empty
+///   set if the file does not exist or fails validation.
+/// * `Err(ThisProjectError)` - Reserved for future critical I/O errors. The
+///   current implementation does not return Err; validation failures degrade to
+///   an empty set per the security model above.
 ///
-/// # Example
-/// let ports = make_exclusionlist_from_single_team_channel(
-///     Path::new("/path/to/team_channel/node.toml"),
-///     COLLABORATOR_ADDRESSBOOK_PATH_STR
-/// )?;
-/// println!("Found {} unique ports in use", ports.len());
-/// node_toml_path
+/// # Error Prefix
+/// Internal diagnostics use the prefix `MEFSTC` (Make Exclusionlist From Single
+/// Team Channel) for traceability in debug logs.
 pub fn make_exclusionlist_from_single_team_channel(
     addressbook_readcopy_path_string: &str,
-    node_readcopy_path: &Path,  // node_readcopy_path
+    node_readcopy_path: &Path,
 ) -> Result<HashSet<u16>, ThisProjectError> {
-    // Initialize the port set
+    // Accumulator: every port we discover gets inserted here.
     let mut port_set: HashSet<u16> = HashSet::new();
 
-    // Check if the file exists
+    // Defensive existence check. Missing file is not an error here — the audit
+    // walks many channels and a missing/empty channel directory is benign.
     if !node_readcopy_path.exists() {
+        #[cfg(debug_assertions)]
         debug_log!(
-            "make_exclusionlist_from_single_team_channel: File does not exist: {}",
+            "MEFSTC: node file does not exist: {} (returning empty set)",
             node_readcopy_path.display()
         );
-        // Return empty set for non-existent files
         return Ok(port_set);
     }
 
-    // Extract channel name for logging
+    // Extract channel name for diagnostic logging only. Parent dir name is the
+    // channel name by project convention: .../team_channels/<channel>/node.toml
     let channel_name = node_readcopy_path
         .parent()
         .and_then(|p| p.file_name())
         .and_then(|n| n.to_str())
         .unwrap_or("unknown");
 
-    debug_log!(
-        "make_exclusionlist_from_single_team_channel: Processing channel '{}'",
-        channel_name
-    );
+    #[cfg(debug_assertions)]
+    debug_log!("MEFSTC: processing channel '{}'", channel_name);
 
-    // TODO ? instead use read_teamchannel_collaborator_ports_clearsigntoml_without_keyid()
-
-    /*
-    addressbook_readcopy_path_string: &str,
-    path_to_clearsigned_toml: &str,
-
-    */
-    // Read and validate the clearsigned configuration
-    // match read_all_collaborator_port_assignments_clearsigntoml_optimized(
-    match read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyid(
-        &addressbook_readcopy_path_string, // addressbook_readcopy_path_string
-        &node_readcopy_path.display().to_string(), // path_to_clearsigned_toml
-    ) {
-        Ok(port_assignments) => {
+    // Convert Path → &str for the verification API. Non-UTF-8 paths are not
+    // supported by this project's clearsign tooling, so a lossy conversion
+    // failure is treated as a validation failure (empty set + log).
+    let node_path_str = match node_readcopy_path.to_str() {
+        Some(s) => s,
+        None => {
+            #[cfg(debug_assertions)]
             debug_log!(
-                "make_exclusionlist_from_single_team_channel: Successfully validated channel '{}'",
+                "MEFSTC: non-UTF-8 node path for channel '{}' (returning empty set)",
                 channel_name
             );
+            return Ok(port_set);
+        }
+    };
 
-            // Extract all ports from all collaborator pairs
-            for (pair_name, assignments) in port_assignments {
-                debug_log!(
-                    "make_exclusionlist_from_single_team_channel: Processing pair '{}'",
-                    pair_name
-                );
+    // Verify signature against the owner's armored key (isolated keyring) AND
+    // parse the abstract_collaborator_port_assignments section in one call.
+    match read_abstract_ports_from_clearsigntoml_without_publicgpgkey(
+        addressbook_readcopy_path_string,
+        node_path_str,
+    ) {
+        Ok(port_assignments) => {
+            #[cfg(debug_assertions)]
+            debug_log!(
+                "MEFSTC: validated channel '{}', {} pair(s) found",
+                channel_name,
+                port_assignments.len()
+            );
 
-                // Process each collaborator in the pair
-                for assignment in assignments {
-                    // Add all three port types to the set
-                    port_set.insert(assignment.ready_port);
-                    port_set.insert(assignment.intray_port);
-                    port_set.insert(assignment.gotit_port);
+            // The new return type is:
+            //   HashMap<pair_name, Vec<ReadTeamchannelCollaboratorPortsToml>>
+            // where each wrapper contains:
+            //   .collaborator_ports: Vec<AbstractTeamchannelNodeTomlPortsData>
+            // So we need three levels of iteration: pair → wrapper → port-entry.
+            for (pair_name, wrapper_entries) in port_assignments {
+                #[cfg(debug_assertions)]
+                debug_log!("MEFSTC: pair '{}' has {} wrapper(s)",
+                    pair_name, wrapper_entries.len());
 
-                    debug_log!(
-                        "make_exclusionlist_from_single_team_channel: Added ports for user '{}': \
-                         ready={}, intray={}, gotit={}",
-                        assignment.user_name,
-                        assignment.ready_port,
-                        assignment.intray_port,
-                        assignment.gotit_port
-                    );
+                for wrapper in wrapper_entries {
+                    for assignment in wrapper.collaborator_ports {
+                        // All three port slots are claimed; add each to the set.
+                        port_set.insert(assignment.ready_port);
+                        port_set.insert(assignment.intray_port);
+                        port_set.insert(assignment.gotit_port);
+
+                        #[cfg(debug_assertions)]
+                        debug_log!(
+                            "MEFSTC: pair '{}' user '{}' ports ready={}, intray={}, gotit={}",
+                            pair_name,
+                            assignment.user_name,
+                            assignment.ready_port,
+                            assignment.intray_port,
+                            assignment.gotit_port,
+                        );
+                    }
                 }
             }
 
+            #[cfg(debug_assertions)]
             debug_log!(
-                "make_exclusionlist_from_single_team_channel: Channel '{}' total unique ports: {}",
+                "MEFSTC: channel '{}' contributed {} unique port(s)",
                 channel_name,
                 port_set.len()
             );
         }
         Err(e) => {
-            // Log the validation failure but don't propagate the error
-            // Return empty set for files that fail validation
-            eprintln!(
-                "WARNING: Skipping channel '{}' due to validation failure: {}",
-                channel_name,
-                e.to_string()
-            );
-            debug_log!(
-                "make_exclusionlist_from_single_team_channel: Validation failed for channel '{}': {}",
-                channel_name,
-                e.to_string()
-            );
+            // Validation/parse failure: log (debug only — error string may
+            // contain paths) and return empty set. Do not abort the audit.
+            #[cfg(debug_assertions)]
+            {
+                eprintln!(
+                    "MEFSTC WARNING: skipping channel '{}' due to validation failure: {}",
+                    channel_name, e
+                );
+                debug_log!(
+                    "MEFSTC: validation failed for channel '{}': {}",
+                    channel_name, e
+                );
+            }
+            // Production: silent skip (no path/error leak), empty set returned.
+            let _ = e;
         }
     }
 
     Ok(port_set)
 }
+
+// /// Extracts all ports from a single team channel's node.toml file.
+// ///
+// /// # Purpose
+// /// This function reads a clearsigned `node.toml` file from a team channel and extracts
+// /// all configured network ports (ready, intray, and gotit ports) for all collaborator
+// /// pairs. The extracted ports are returned as a HashSet for efficient lookup when
+// /// checking for port collisions.
+// ///
+// /// # Parameters
+// /// * `node_toml_path` - The absolute path to the node.toml file to process
+// /// * `collaborator_files_dir_relative` - The relative path to the collaborator files
+// ///   directory (typically COLLABORATOR_ADDRESSBOOK_PATH_STR)
+// ///
+// /// # Security
+// /// - Only processes clearsigned files that pass GPG validation
+// /// - Uses the collaborator addressbook system for owner verification
+// /// - Returns an empty set if validation fails (with appropriate logging)
+// ///
+// /// # Returns
+// /// * `Ok(HashSet<u16>)` - A set of all ports found in the file
+// /// * `Err(ThisProjectError)` - If critical errors occur (not validation failures)
+// ///
+// /// # Example
+// /// let ports = make_exclusionlist_from_single_team_channel(
+// ///     Path::new("/path/to/team_channel/node.toml"),
+// ///     COLLABORATOR_ADDRESSBOOK_PATH_STR
+// /// )?;
+// /// println!("Found {} unique ports in use", ports.len());
+// /// node_toml_path
+// pub fn make_exclusionlist_from_single_team_channel(
+//     addressbook_readcopy_path_string: &str,
+//     node_readcopy_path: &Path,  // node_readcopy_path
+// ) -> Result<HashSet<u16>, ThisProjectError> {
+//     // Initialize the port set
+//     let mut port_set: HashSet<u16> = HashSet::new();
+
+//     // Check if the file exists
+//     if !node_readcopy_path.exists() {
+//         debug_log!(
+//             "make_exclusionlist_from_single_team_channel: File does not exist: {}",
+//             node_readcopy_path.display()
+//         );
+//         // Return empty set for non-existent files
+//         return Ok(port_set);
+//     }
+
+//     // Extract channel name for logging
+//     let channel_name = node_readcopy_path
+//         .parent()
+//         .and_then(|p| p.file_name())
+//         .and_then(|n| n.to_str())
+//         .unwrap_or("unknown");
+
+//     debug_log!(
+//         "make_exclusionlist_from_single_team_channel: Processing channel '{}'",
+//         channel_name
+//     );
+
+//     // TODO ? instead use read_teamchannel_collaborator_ports_clearsigntoml_without_keyid()
+
+//     /*
+//     addressbook_readcopy_path_string: &str,
+//     path_to_clearsigned_toml: &str,
+
+//     */
+//     // Read and validate the clearsigned configuration
+//     // match read_all_collaborator_port_assignments_clearsigntoml_optimized(
+//     match read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyid(
+//         &addressbook_readcopy_path_string, // addressbook_readcopy_path_string
+//         &node_readcopy_path.display().to_string(), // path_to_clearsigned_toml
+//     ) {
+//         Ok(port_assignments) => {
+//             debug_log!(
+//                 "make_exclusionlist_from_single_team_channel: Successfully validated channel '{}'",
+//                 channel_name
+//             );
+
+//             // Extract all ports from all collaborator pairs
+//             for (pair_name, assignments) in port_assignments {
+//                 debug_log!(
+//                     "make_exclusionlist_from_single_team_channel: Processing pair '{}'",
+//                     pair_name
+//                 );
+
+//                 // Process each collaborator in the pair
+//                 for assignment in assignments {
+//                     // Add all three port types to the set
+//                     port_set.insert(assignment.ready_port);
+//                     port_set.insert(assignment.intray_port);
+//                     port_set.insert(assignment.gotit_port);
+
+//                     debug_log!(
+//                         "make_exclusionlist_from_single_team_channel: Added ports for user '{}': \
+//                          ready={}, intray={}, gotit={}",
+//                         assignment.user_name,
+//                         assignment.ready_port,
+//                         assignment.intray_port,
+//                         assignment.gotit_port
+//                     );
+//                 }
+//             }
+
+//             debug_log!(
+//                 "make_exclusionlist_from_single_team_channel: Channel '{}' total unique ports: {}",
+//                 channel_name,
+//                 port_set.len()
+//             );
+//         }
+//         Err(e) => {
+//             // Log the validation failure but don't propagate the error
+//             // Return empty set for files that fail validation
+//             eprintln!(
+//                 "WARNING: Skipping channel '{}' due to validation failure: {}",
+//                 channel_name,
+//                 e.to_string()
+//             );
+//             debug_log!(
+//                 "make_exclusionlist_from_single_team_channel: Validation failed for channel '{}': {}",
+//                 channel_name,
+//                 e.to_string()
+//             );
+//         }
+//     }
+
+//     Ok(port_set)
+// }
 
 /// Searches for a node configuration file in the given directory.
 ///
