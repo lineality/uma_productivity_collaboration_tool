@@ -2097,6 +2097,104 @@ fn write_save_rc_bandnetwork_type_index(
     Ok(())
 }
 
+/// Sends a ReadySignal to the specified target address, selecting the IP address based on the network type.
+/// goes to: their_rmtclb_ip
+///     i.e. local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip
+///
+/// Handles hash calculation, serialization, and sending the signal via UDP.
+///
+/// Args:
+///     local_user_salt_list: A slice of `u128` salt values for hash calculation.
+///     local_user_ipv4_address: The local user's IPv4 address.
+///     local_user_ipv6_address: The local user's IPv6 address.
+///     target_port: The target port on the remote machine.
+///     last_received_timestamp: The timestamp of the last received file.
+///     network_type: A string slice representing the network type ("ipv6" or "ipv4").
+///     network_index: The index of the valid IP address in the local user's IP list (included in ReadySignal, but not used for IP selection).
+///
+/// Returns:
+///     Result<(), ThisProjectError>: `Ok(())` on success, or a `ThisProjectError` if an error occurred.
+fn send_ready_signal(
+    local_user_salt_list: &[u128], // to make hash
+    rc_network_type_string: String, // Remote collaborator's network type (ipv4, ipv6, etc.)
+    rc_ip_addr_string: String, // Remote collaborator's IP string
+    target_port: u16, // local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip
+    last_received_timestamp: u64, // last_received_timestamp
+    local_user_network_type: &str, // LOU needed for .b section
+    local_user_network_index: u8,  // LOU needed for .b section
+) -> Result<(), ThisProjectError> {
+    #[cfg(debug_assertions)]
+    debug_log!("send_ready_signal 1: Starting...");
+
+    // for ready_signal.b
+    let b_band_data = match compress_band_data_byte(
+        local_user_network_type,
+        local_user_network_index,
+    ) {
+        Ok(data) => data,
+        Err(_e) => {
+            // Handle the error here. You could print an error message, return from the function,
+            // or do something else depending on your specific needs.
+            #[cfg(debug_assertions)]
+            eprintln!("send_ready_signal 1.1 Error: Error compressing band data: {:?}", _e);
+            return Ok(());
+        }
+    };
+
+    // 1. Calculate hashes
+    let current_timestamp = get_current_unix_timestamp();
+    let hashes_result = calculate_ready_signal_hashes(
+        last_received_timestamp,
+        current_timestamp,
+        b_band_data,
+        local_user_salt_list,
+    );
+    let hashes = match hashes_result {
+        Ok(h) => h,
+        Err(e) => return Err(e),
+    };
+
+    // 2. Create ReadySignal
+    let ready_signal = ReadySignal {
+        rt: last_received_timestamp,
+        rst: current_timestamp,
+        b: b_band_data,
+        rh: hashes,
+    };
+    #[cfg(debug_assertions)]
+    debug_log!("send_ready_signal 2: ReadySignal created: {:?}", ready_signal);
+
+    // 3. Serialize
+    let serialized_signal = serialize_ready_signal(&ready_signal)?;
+    debug_log!("send_ready_signal 3: ReadySignal serialized.");
+
+    // 4. Determine target IP based on network_type:
+    let send_readysignal_ip_addr = match rc_network_type_string {
+        value if value == "ipv6".to_string() => {
+            let ipv6_addr: Ipv6Addr = rc_ip_addr_string.parse().map_err(|_| ThisProjectError::NetworkError("Invalid IPv6 address".into()))?; // Corrected: .parse()
+            IpAddr::V6(ipv6_addr)
+        },
+        value if value == "ipv4".to_string() => {
+            let ipv4_addr: Ipv4Addr = rc_ip_addr_string.parse().map_err(|_| ThisProjectError::NetworkError("Invalid IPv4 address".into()))?; // Corrected: .parse()
+            IpAddr::V4(ipv4_addr)
+        },
+        _ => return Err(ThisProjectError::NetworkError("send_ready_signal: 3.1 error Invalid network type".into())),
+    };
+
+    let target_addr = SocketAddr::new(send_readysignal_ip_addr, target_port);
+
+    // 5. Send the signal
+    #[cfg(debug_assertions)]
+    debug_log!("send_ready_signal 4: Sending ReadySignal to: {:?}", target_addr);
+
+    send_data(&serialized_signal, target_addr)?;
+
+    #[cfg(debug_assertions)]
+    debug_log!("send_ready_signal 5: ReadySignal sent successfully.");
+
+    Ok(())
+}
+
 // needs better doc string
 // TODO: maybe use a parameter in team-channel instead of hard-coding ~10 sec
 /// hlod_udp_handshake_rc_network_type_rc_ip_addr(): returns (rc_network_type, rc_ip_addr) as (String, String) loop until satisfied:
@@ -2140,7 +2238,7 @@ fn hlod_udp_handshake_rc_network_type_rc_ip_addr(
     debug_log!("HUHRNTRIA: team_channel_name {}", team_channel_name);
 
 
-    // --- Prepare ReadySignal ---
+    // --- Prepare ReadySignal ---, default to zero or reset-send-all
     let timestamp_for_rt = match get_latest_received_from_rc_file_timestamp(
         &team_channel_name,
         &local_owner_desk_setup_data.remote_collaborator_name,
@@ -2227,7 +2325,7 @@ fn hlod_udp_handshake_rc_network_type_rc_ip_addr(
         debug_log("HUHRNTRIA() \nSending Handshake ready signals!\n");
 
         /*
-        fn send_ready_signal(
+        fn send_ready_signal (
             local_user_salt_list: &[u128], // to make hash
             rc_network_type_string: String, // Remote collaborator's network type (ipv4, ipv6, etc.)
             rc_ip_addr_string: String, // Remote collaborator's IP string
@@ -2239,7 +2337,7 @@ fn hlod_udp_handshake_rc_network_type_rc_ip_addr(
         */
 
         for ipv6_addr_string in &local_owner_desk_setup_data.remote_collaborator_ipv6_addr_list {
-            send_ready_signal(
+            let _ready_signal_result_6 = send_ready_signal(
                 &local_owner_desk_setup_data.local_user_salt_list,  // local_user_salt_list
                 "ipv6".to_string(),                                 // rc_network_type_string: Always "ipv6" here
                 ipv6_addr_string.to_string(),                       // rc_ip_addr_string: Use remote IPv6 address
@@ -2251,15 +2349,16 @@ fn hlod_udp_handshake_rc_network_type_rc_ip_addr(
 
             #[cfg(debug_assertions)]
             debug_log!(
-                "handshake ReadySignal sent to IPv6: {}:{}",
+                "handshake ReadySignal sent to IPv6: {}:{}; status->{:?}",
                 ipv6_addr_string,
-                local_owner_desk_setup_data.local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip
+                local_owner_desk_setup_data.local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip,
+                _ready_signal_result_6,
             );
         }
 
         // Send to each IPv4 address in rc_ipv4_list
         for ipv4_addr_string in &local_owner_desk_setup_data.remote_collaborator_ipv4_addr_list {  // Iterate IPv4 list
-            send_ready_signal(
+            let _ready_signal_result_4 = send_ready_signal(
                 &local_owner_desk_setup_data.local_user_salt_list,  // local_user_salt_list
                 "ipv4".to_string(),                                 // rc_network_type_string: Always "ipv4" here
                 ipv4_addr_string.to_string(),                       // rc_ip_addr_string: Use remote IPv4 address
@@ -2271,9 +2370,10 @@ fn hlod_udp_handshake_rc_network_type_rc_ip_addr(
 
             #[cfg(debug_assertions)]
             debug_log!(
-                "handshake ReadySignal sent to IPv4: {}:{}",
+                "handshake ReadySignal sent to IPv4: {}:{}; status->{:?}",
                 ipv4_addr_string,
-                local_owner_desk_setup_data.local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip
+                local_owner_desk_setup_data.local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip,
+                _ready_signal_result_4,
             );
         }
 
@@ -36145,104 +36245,6 @@ fn decompress_banddata_byte(band_byte: u8) -> Result<(String, u8), Decompression
     Ok((network_type, network_index)) // Valid data: return Ok(data)
 }
 
-/// Sends a ReadySignal to the specified target address, selecting the IP address based on the network type.
-/// goes to: their_rmtclb_ip
-///     i.e. local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip
-///
-/// Handles hash calculation, serialization, and sending the signal via UDP.
-///
-/// Args:
-///     local_user_salt_list: A slice of `u128` salt values for hash calculation.
-///     local_user_ipv4_address: The local user's IPv4 address.
-///     local_user_ipv6_address: The local user's IPv6 address.
-///     target_port: The target port on the remote machine.
-///     last_received_timestamp: The timestamp of the last received file.
-///     network_type: A string slice representing the network type ("ipv6" or "ipv4").
-///     network_index: The index of the valid IP address in the local user's IP list (included in ReadySignal, but not used for IP selection).
-///
-/// Returns:
-///     Result<(), ThisProjectError>: `Ok(())` on success, or a `ThisProjectError` if an error occurred.
-fn send_ready_signal(
-    local_user_salt_list: &[u128], // to make hash
-    rc_network_type_string: String, // Remote collaborator's network type (ipv4, ipv6, etc.)
-    rc_ip_addr_string: String, // Remote collaborator's IP string
-    target_port: u16, // local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip
-    last_received_timestamp: u64, // last_received_timestamp
-    local_user_network_type: &str, // LOU needed for .b section
-    local_user_network_index: u8,  // LOU needed for .b section
-) -> Result<(), ThisProjectError> {
-    #[cfg(debug_assertions)]
-    debug_log!("send_ready_signal 1: Starting...");
-
-    // for ready_signal.b
-    let b_band_data = match compress_band_data_byte(
-        local_user_network_type,
-        local_user_network_index,
-    ) {
-        Ok(data) => data,
-        Err(_e) => {
-            // Handle the error here. You could print an error message, return from the function,
-            // or do something else depending on your specific needs.
-            #[cfg(debug_assertions)]
-            eprintln!("send_ready_signal 1.1 Error: Error compressing band data: {:?}", _e);
-            return Ok(());
-        }
-    };
-
-    // 1. Calculate hashes
-    let current_timestamp = get_current_unix_timestamp();
-    let hashes_result = calculate_ready_signal_hashes(
-        last_received_timestamp,
-        current_timestamp,
-        b_band_data,
-        local_user_salt_list,
-    );
-    let hashes = match hashes_result {
-        Ok(h) => h,
-        Err(e) => return Err(e),
-    };
-
-    // 2. Create ReadySignal
-    let ready_signal = ReadySignal {
-        rt: last_received_timestamp,
-        rst: current_timestamp,
-        b: b_band_data,
-        rh: hashes,
-    };
-    #[cfg(debug_assertions)]
-    debug_log!("send_ready_signal 2: ReadySignal created: {:?}", ready_signal);
-
-    // 3. Serialize
-    let serialized_signal = serialize_ready_signal(&ready_signal)?;
-    debug_log!("send_ready_signal 3: ReadySignal serialized.");
-
-    // 4. Determine target IP based on network_type:
-    let send_readysignal_ip_addr = match rc_network_type_string {
-        value if value == "ipv6".to_string() => {
-            let ipv6_addr: Ipv6Addr = rc_ip_addr_string.parse().map_err(|_| ThisProjectError::NetworkError("Invalid IPv6 address".into()))?; // Corrected: .parse()
-            IpAddr::V6(ipv6_addr)
-        },
-        value if value == "ipv4".to_string() => {
-            let ipv4_addr: Ipv4Addr = rc_ip_addr_string.parse().map_err(|_| ThisProjectError::NetworkError("Invalid IPv4 address".into()))?; // Corrected: .parse()
-            IpAddr::V4(ipv4_addr)
-        },
-        _ => return Err(ThisProjectError::NetworkError("send_ready_signal() 3.1 error Invalid network type".into())),
-    };
-
-    let target_addr = SocketAddr::new(send_readysignal_ip_addr, target_port);
-
-    // 5. Send the signal
-    #[cfg(debug_assertions)]
-    debug_log!("send_ready_signal 4: Sending ReadySignal to: {:?}", target_addr);
-
-    send_data(&serialized_signal, target_addr)?;
-
-    #[cfg(debug_assertions)]
-    debug_log!("send_ready_signal 5: ReadySignal sent successfully.");
-
-    Ok(())
-}
-
 // // draft based on 'send ready signal' function
 // /// Sends a Gotit to the specified target address.
 // fn send_gotit_signal(
@@ -36809,7 +36811,7 @@ fn handle_local_owner_desk(
                 );
 
                 /*
-                fn send_ready_signal(
+                fn send_ready_signal (
                     local_user_salt_list: &[u128], // to make hash
                     rc_network_type_string: String, // Remote collaborator's network type (ipv4, ipv6, etc.)
                     rc_ip_addr_string: String, // Remote collaborator's IP string
@@ -38642,7 +38644,7 @@ fn handle_local_owner_desk(
                         //
                         // `rc_network_type_string` and `rc_ip_addr_string` were obtained
                         // during hlod_udp_handshake_rc_network_type_rc_ip_addr() above,
-                        // and are the same values used for send_ready_signal().
+                        // and are the same values used for send_ready_signal ().
                         // ═════════════════════════════════════════════════════════════════
                         let _ = send_gotit_signal(
                             &local_owner_desk_setup_data.local_user_salt_list,
@@ -38675,7 +38677,7 @@ fn handle_local_owner_desk(
 
                         #[cfg(debug_assertions)]
                         debug_log!(
-                            "(to {}) HLOD-InTray, (post-file-followup) ready_signal_result = send_ready_signal()->{:?}",
+                            "(to {}) HLOD-InTray, (post-file-followup) ready_signal_result = send_ready_signal->{:?}",
                             &remote_collaborator_name,
                             _ready_signal_result,
                         );
