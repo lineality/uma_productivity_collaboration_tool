@@ -43,6 +43,18 @@ Bob grabs the oldest marble and puts it in the in-tray. Alice notes it down in h
 One item that was not super clear in the analogy is that the send-queue (the marble dispenser) is based on a ~shared timestamp. To extend the analogy, the marble-dispenser is next to a calendar on the wall, each marble has a date on it. There is a big X on the calendar and every marble in the dispenser (which is in chronological order from oldest at the bottom to youngest at the top) has a date AFTER the big x on the calendar. If Alice walks up to Bob's 'marbles for Alice' calendar and wipes off the big X and picks a different date...then Bob needs to re-do his marble dispenser so that the dispenser contains all (and only) the marbles dates after the X date. 
 
 
+## Rules for Desk, Port, IP; Local Owner User Role vs. Remote-Collaborator Role
+```
+##### local_user desk
+local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip: u16, // locally: You send a signal through your port to their-IP (your desk)
+localuser_intray_port_yourdesk_youlisten_bind_yourlocal_ip: u16, // locally: You listen for files sent by the other collaborator to your-port at your-IP (your desk)
+local_user_gotit_port_yourdesk_yousend_aimat_their_rmtclb_ip: u16, // locally: You send a signal through your port to their-IP (your desk)
+
+##### remote_collab desk
+remote_collab_ready_port_theirdesk_youlisten_bind_yourlocal_ip: u16, // locally: 'you' listen to their-port on your-IP (their desk)
+remote_collab_intray_port_theirdesk_yousend_aimat_their_rmtclb_ip: u16, // locally: 'you' add files to their-port on their-IP (their desk)
+remote_collab_gotit_port_theirdesk_youlisten_bind_yourlocal_ip: u16, // locally: 'you' listen to their-port on your-IP (their desk)
+```
 
 
 
