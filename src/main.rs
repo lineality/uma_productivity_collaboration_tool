@@ -17,6 +17,22 @@ cargo run --profile release-performance
 4_|
 / \
 ```
+
+# local_user desk
+local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip: u16, // locally: You send a signal through your port to their-IP (your desk)
+
+localuser_intray_port_yourdesk_youlisten_bind_yourlocal_ip: u16, // locally: You listen for files sent by the other collaborator to your-port at your-IP (your desk)
+
+local_user_gotit_port_yourdesk_yousend_aimat_their_rmtclb_ip: u16, // locally: You send a signal through your port to their-IP (your desk)
+
+# remote_collab desk
+remote_collab_ready_port_theirdesk_youlisten_bind_yourlocal_ip: u16, // locally: 'you' listen to their-port on your-IP (their desk)
+
+remote_collab_intray_port_theirdesk_yousend_aimat_their_rmtclb_ip: u16, // locally: 'you' add files to their-port on their-IP (their desk)
+
+remote_collab_gotit_port_theirdesk_youlisten_bind_yourlocal_ip: u16, // locally: 'you' listen to their-port on your-IP (their desk)
+
+
 A distributed project graph database MCU (Multipoint Conferencing Unit) with cli TUI, instant messenger, Kanban Task Manager, and other Agile Kahneman-Tversky project, productivity, coordination, collaboration features
 
 Uma Productivity Collaboration Tools for Project-Alignment
@@ -2014,7 +2030,7 @@ fn write_save_rc_bandnetwork_type_index(
     //    Missing file is not an error here.
     // -------------------------------------------------------------------------
     if stale_ip_path.exists() {
-        if let Err(e) = fs::remove_file(&stale_ip_path) {
+        if let Err(_e) = fs::remove_file(&stale_ip_path) {
             // Non-fatal: log and continue. The new files we are about to
             // write are the authoritative state; a leftover file of the
             // wrong type is undesirable but the reader keys off network_type.txt
@@ -2022,7 +2038,7 @@ fn write_save_rc_bandnetwork_type_index(
             debug_log!(
                 "write_save_rc_bandnetwork_type_index(): could not remove stale \
                  file {:?}: {}. Continuing.",
-                stale_ip_path, e,
+                stale_ip_path, _e,
             );
         } else {
             #[cfg(debug_assertions)]
@@ -36155,7 +36171,8 @@ fn send_ready_signal(
     local_user_network_type: &str, // LOU needed for .b section
     local_user_network_index: u8,  // LOU needed for .b section
 ) -> Result<(), ThisProjectError> {
-    debug_log!("send_ready_signal()1: Starting...");
+    #[cfg(debug_assertions)]
+    debug_log!("send_ready_signal 1: Starting...");
 
     // for ready_signal.b
     let b_band_data = match compress_band_data_byte(
@@ -36163,10 +36180,11 @@ fn send_ready_signal(
         local_user_network_index,
     ) {
         Ok(data) => data,
-        Err(e) => {
+        Err(_e) => {
             // Handle the error here. You could print an error message, return from the function,
             // or do something else depending on your specific needs.
-            eprintln!("send_ready_signal()2: Error compressing band data: {:?}", e);
+            #[cfg(debug_assertions)]
+            eprintln!("send_ready_signal 1.1 Error: Error compressing band data: {:?}", _e);
             return Ok(());
         }
     };
@@ -36191,11 +36209,12 @@ fn send_ready_signal(
         b: b_band_data,
         rh: hashes,
     };
-    debug_log!("send_ready_signal()3: ReadySignal created: {:?}", ready_signal);
+    #[cfg(debug_assertions)]
+    debug_log!("send_ready_signal 2: ReadySignal created: {:?}", ready_signal);
 
     // 3. Serialize
     let serialized_signal = serialize_ready_signal(&ready_signal)?;
-    debug_log!("send_ready_signal()4: ReadySignal serialized.");
+    debug_log!("send_ready_signal 3: ReadySignal serialized.");
 
     // 4. Determine target IP based on network_type:
     let send_readysignal_ip_addr = match rc_network_type_string {
@@ -36207,15 +36226,19 @@ fn send_ready_signal(
             let ipv4_addr: Ipv4Addr = rc_ip_addr_string.parse().map_err(|_| ThisProjectError::NetworkError("Invalid IPv4 address".into()))?; // Corrected: .parse()
             IpAddr::V4(ipv4_addr)
         },
-        _ => return Err(ThisProjectError::NetworkError("send_ready_signal() error Invalid network type".into())),
+        _ => return Err(ThisProjectError::NetworkError("send_ready_signal() 3.1 error Invalid network type".into())),
     };
 
     let target_addr = SocketAddr::new(send_readysignal_ip_addr, target_port);
 
     // 5. Send the signal
-    debug_log!("send_ready_signal()4: Sending ReadySignal to: {:?}", target_addr);
+    #[cfg(debug_assertions)]
+    debug_log!("send_ready_signal 4: Sending ReadySignal to: {:?}", target_addr);
+
     send_data(&serialized_signal, target_addr)?;
-    debug_log!("send_ready_signal()5: ReadySignal sent successfully.");
+
+    #[cfg(debug_assertions)]
+    debug_log!("send_ready_signal 5: ReadySignal sent successfully.");
 
     Ok(())
 }
@@ -40493,7 +40516,12 @@ fn handshake_get_rc_bands_socketaddrses_for_hrcd(
                         continue; // Continue listening for valid signal
                     }
                 };
-                let gotit_socket_addr = SocketAddr::new(rc_ip, room_sync_input.remote_collab_gotit_port_theirdesk_youlisten_bind_yourlocal_ip);  // Correct port from room_sync_input
+
+                // Listening (at your local IP)
+                let gotit_socket_addr = SocketAddr::new(
+                    local_ip, // same local_ip
+                    room_sync_input.remote_collab_gotit_port_theirdesk_youlisten_bind_yourlocal_ip
+                );
 
                 // --- Write/Save Received Band Data ---
                 let team_channel_name = match get_current_team_channel_name_from_nav_path() {
@@ -40795,7 +40823,7 @@ fn handle_remote_collaborator_meetingroom_desk(
 
         #[cfg(debug_assertions)]
         debug_log!(
-            "\n (re)Started HRCD the handle_remote_collaborator_meetingroom_desk() for->{}",
+            "\n\n (for {}) (re)Started HRCD the handle_remote_collaborator_meetingroom_desk()",
             room_sync_input.remote_collaborator_name
         );
 
@@ -40858,10 +40886,19 @@ fn handle_remote_collaborator_meetingroom_desk(
 
         #[cfg(debug_assertions)]
         debug_log("HRCD 1.3 Making gotit_port listening UDP socket...");
-        let gotit_socket = create_rc_timeout_udp_socket(
-            gotit_socket_addr,
-            Duration::from_secs(2), // Check halt flag every 2 seconds
-        )?;
+        let gotit_socket = match create_rc_timeout_udp_socket(gotit_socket_addr, Duration::from_secs(2)) {
+            Ok(s) => s,
+            Err(e) => {
+                debug_log!("HRCD: gotit bind failed at {:?}: {} — restarting handshake", gotit_socket_addr, e);
+                thread::sleep(Duration::from_secs(2));
+                continue;   // back to outer loop / re-handshake
+            }
+        };
+
+        // let gotit_socket = create_rc_timeout_udp_socket(
+        //     gotit_socket_addr,
+        //     Duration::from_secs(2), // Check halt flag every 2 seconds
+        // )?;
         // let gotit_socket = create_rc_udp_socket(gotit_socket_addr)?;
 
         // --- 1.4 Initialize (empty for starting) Send Queue ---
@@ -41171,7 +41208,8 @@ fn handle_remote_collaborator_meetingroom_desk(
                     #[cfg(debug_assertions)]
                     {
                         debug_log!(
-                            "(from {}) HRCD 2.2.1 Ok((amt, src)) ready_port Signal Received {} bytes from {}",
+                            // TODO: Why is this src-port different every time?
+                            "(from {}) HRCD 2.2.1 Ok((amt, src)) ready_port Signal Received amt->{} bytes, from src->{}",
                             room_sync_input.remote_collaborator_name,
                             amt,
                             src,
