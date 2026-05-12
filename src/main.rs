@@ -5,11 +5,11 @@ RUST_BACKTRACE=full cargo run
 
 #### For smallest size, build (~1 mb)
 ```bash
-cargo build --profile release-small
+cargo run --profile release-small
 ```
 #### or for optimal performance (~10 mb)
 ```bash
-cargo build --profile release-performance
+cargo run --profile release-performance
 ```
 
 # Uma: Coordination, Productivity, Hygiene
@@ -33271,7 +33271,7 @@ gotit_port = 57538
 ///     { name = "charlotte", ready_port = 50016, intray_port = 50017, gotit_port = 50018 },
 /// ]
 ///
-/// maybe detects any port collisions,
+/// maybe detects any port collisions,s
 /// excluding those who collide with senior members
 /// or returning an error if found.
 fn make_sync_meetingroomconfig_datasets(uma_local_owner_user: &str) -> Result<HashSet<MeetingRoomSyncDataset>, MyCustomError> {
