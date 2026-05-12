@@ -430,7 +430,7 @@ use crate::clearsign_toml_module::{
     read_str_array_field_clearsigntoml,
     read_string_array_field_from_toml,
     read_stringarray_from_clearsigntoml_without_publicgpgkey,
-    read_teamchannel_collaborator_ports_clearsigntoml_without_keyid,
+    // read_teamchannel_collaborator_ports_clearsigntoml_without_keyid,
     read_u8_array_from_clearsigntoml_without_publicgpgkey,
     read_u8_field_from_toml,
     read_u64_array_from_clearsigntoml_without_publicgpgkey,
@@ -11754,16 +11754,44 @@ fn deseri_get_core_node_struct_from_toml_file(
     //         Ok(HashMap::new())
     //     })?;
 
+    // let abstract_collaborator_port_assignments =
+    //     read_teamchannel_collaborator_ports_clearsigntoml_without_keyid(
+    //         &addressbook_readcopy_path_string,
+    //         &node_readcopy_path,
+    //     )
+    //     .unwrap_or_else(|_e| {
+    //         #[cfg(debug_assertions)]
+    //         {
+    //             debug_log!("LCNFTF read_teamchannel_collaborator_ports_clearsigntoml_without_keyid file_path {:?}", file_path);
+    //             debug_log!("LCNFTF: maybe NOT an error, this IS expected if not a team-channel-node: No existing abstract_collaborator_port_assignments found at {:?} (this should happen for non-team-channels): e->{}", file_path, _e);
+    //         }
+    //         HashMap::new()
+    //     });
+
+    // Uses isolated-keyring verification: extracts full armored public key
+    // (gpg_key_public) from addressbook, verifies against ONLY that key
+    // in a temporary GPG home. Replaces deprecated
+    // read_teamchannel_collaborator_ports_clearsigntoml_without_keyid()
+    // which relied on system keyring and failed when key not pre-imported.
     let abstract_collaborator_port_assignments =
-        read_teamchannel_collaborator_ports_clearsigntoml_without_keyid(
+        read_abstract_ports_from_clearsigntoml_without_publicgpgkey(
             &addressbook_readcopy_path_string,
             &node_readcopy_path,
         )
         .unwrap_or_else(|_e| {
             #[cfg(debug_assertions)]
             {
-                debug_log!("LCNFTF read_teamchannel_collaborator_ports_clearsigntoml_without_keyid file_path {:?}", file_path);
-                debug_log!("LCNFTF: maybe NOT an error, this IS expected if not a team-channel-node: No existing abstract_collaborator_port_assignments found at {:?} (this should happen for non-team-channels): e->{}", file_path, _e);
+                debug_log!(
+                    "LCNFTF read_abstract_ports_from_clearsigntoml_without_publicgpgkey file_path {:?}",
+                    file_path
+                );
+                debug_log!(
+                    "LCNFTF: maybe NOT an error, this IS expected if not a team-channel-node: \
+                        No existing abstract_collaborator_port_assignments found at {:?} \
+                        (this should happen for non-team-channels): e->{}",
+                    file_path,
+                    _e
+                );
             }
             HashMap::new()
         });
