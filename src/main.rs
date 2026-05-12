@@ -1770,74 +1770,318 @@ fn write_local_band_save_network_band_type_index(
     Ok(())
 }
 
-/// Saves the local user's network band config data
-/// to sync_data text files
-/// as this is done only once during startup, retry is likely not needed
+// // TODO warning about local user-ip vs rc-ip
+// /// Saves the local user's network band config data
+// /// to sync_data text files
+// /// as this is done only once during startup, retry is likely not needed
+// ///
+// fn write_save_rc_bandnetwork_type_index(
+//     remote_collaborator_name: String,
+//     team_channel_name: String,
+//     network_type: String,
+//     network_index: u8,
+//     rc_this_ipv4: Ipv4Addr,
+//     rc_this_ipv6: Ipv6Addr,
+// ) -> Result<(), ThisProjectError> {
+//     /* ?
+//     Wait random time in A to B range, N times
+//     FILE_READWRITE_N_RETRIES
+//     FILE_READWRITE_RETRY_SEC_PAUSE_MIN
+//     FILE_READWRITE_RETRY_SEC_PAUSE_max
+//     */
+//     #[cfg(debug_assertions)]
+//     debug_log("WSRBTI write_save_rc_bandnetwork_type_index(), starting");
+
+//     // 1. Construct Path:
+//     let mut base_path = make_input_path_name_abs_executabledirectoryrelative_nocheck(
+//         "sync_data"
+//     )?;
+//     base_path.push(team_channel_name);
+//     base_path.push("network_band");
+//     base_path.push(remote_collaborator_name);
+
+//     // Create directory structure if it doesn't exist
+//     create_dir_all(&base_path)?;
+
+//     #[cfg(debug_assertions)]
+//     debug_log!("WSRBTI(), base_path {:?}", base_path);
+
+//     // 3. Construct Absolute File Paths
+//     let type_path = base_path.join("network_type.txt");
+//     let index_path = base_path.join("network_index.txt");
+//     let ipv4_path = base_path.join("ipv4.txt");
+//     let ipv6_path = base_path.join("ipv6.txt");
+
+//     #[cfg(debug_assertions)]{
+//         debug_log!("WSRBTI(), type_path {:?}", type_path);
+//         debug_log!("WSRBTI(), index_path {:?}", index_path);
+//         debug_log!("WSRBTI(), ipv4_path {:?}", ipv4_path);
+//         debug_log!("WSRBTI(), ipv6_path {:?}", ipv6_path);
+//     }
+
+//     // 4.1 Write to Files (handling potential errors):
+//     let mut type_file = File::create(&type_path)?; // Note the & for borrowing
+//     writeln!(type_file, "{}", network_type)?;
+
+//     #[cfg(debug_assertions)]
+//     debug_log!("WSRBTI(), type_file {:?}", type_file);
+
+//     let mut index_file = File::create(&index_path)?;
+//     writeln!(index_file, "{}", network_index)?;
+
+//     #[cfg(debug_assertions)]
+//     debug_log!("WSRBTI(), index_file {:?}", index_file);
+
+//     // 4.2 Write to Files (handling potential errors):
+//     let mut ip4_file = File::create(&ipv4_path)?; // Note the & for borrowing
+//     writeln!(ip4_file, "{}", rc_this_ipv4.to_string())?;  // Write IP string
+
+//     #[cfg(debug_assertions)]
+//     debug_log!("WSRBTI(), ip4_file {:?}", ip4_file);
+
+//     let mut ip6_file = File::create(&ipv6_path)?;
+//     writeln!(ip6_file, "{}", rc_this_ipv6.to_string())?;  // Write IP string
+
+//     #[cfg(debug_assertions)]
+//     debug_log!("WSRBTI(), ip6_file {:?}", ip6_file);
+
+//     Ok(())
+// }
+
+/// Saves the remote collaborator's (RC's) verified network band information to disk.
 ///
+/// # Purpose
+///
+/// After a successful UDP handshake with a remote collaborator, this function persists
+/// the *single* network path that actually worked — namely, the RC's network type
+/// (ipv4 or ipv6), the RC's band index, and the specific RC IP address from which
+/// the verified `ReadySignal` was received (or which was resolved from the RC's
+/// announced band index against the RC's known IP list).
+///
+/// This data is later read by `read_rc_bandnetwork_type_index()` so that subsequent
+/// sync traffic can be directed to the correct RC endpoint without repeating the
+/// handshake discovery.
+///
+/// # What This Function Does NOT Save
+///
+/// - It does NOT save the local machine's IP addresses. The local user's own band
+///   config lives elsewhere (see `read_band_network_config_type_index_specs`).
+/// - It does NOT save every candidate IP the RC advertised. Only the one that
+///   succeeded in the handshake is recorded. The other candidates are irrelevant
+///   once one path is known to work.
+/// - It does NOT save both an ipv4.txt AND an ipv6.txt. Exactly one IP file is
+///   written, matching `rc_network_type`. The presence of that file is itself the
+///   unambiguous answer to "which network type is in use for this RC?"
+///
+/// # On-Disk Layout
+///
+/// Files are written under:
+///   sync_data/{team_channel_name}/network_band/{remote_collaborator_name}/
+///
+/// Files written (exactly three):
+///   - network_type.txt   contains "ipv4" or "ipv6"
+///   - network_index.txt  contains the RC's band index as a decimal u8
+///   - ipv4.txt OR ipv6.txt (one, not both)  contains the RC's IP as a string
+///
+/// Any pre-existing files at these paths are overwritten (File::create truncates).
+/// If a stale file of the *other* network type exists from a prior run, it is
+/// explicitly removed so the directory cannot present a contradictory state.
+///
+/// # Arguments
+///
+/// * `remote_collaborator_name` - Username of the RC. Used as a directory name.
+/// * `team_channel_name`        - Active team channel. Used as a directory name.
+/// * `rc_network_type`          - Must be "ipv4" or "ipv6". The network type the
+///                                RC announced in the successful ReadySignal.
+/// * `rc_network_index`         - The RC's band index (their position within their
+///                                own ip list of the announced type).
+/// * `rc_ip_addr`               - The RC's IP address from the successful handshake.
+///                                Its variant (V4/V6) MUST agree with `rc_network_type`;
+///                                a mismatch returns an error rather than writing
+///                                inconsistent data to disk.
+///
+/// # Returns
+///
+/// * `Ok(())` on successful write of all three files.
+/// * `Err(ThisProjectError)` if:
+///     - `rc_network_type` is neither "ipv4" nor "ipv6", or
+///     - `rc_network_type` disagrees with the variant of `rc_ip_addr`, or
+///     - any filesystem operation (mkdir, create, write, remove) fails.
+///
+/// # Idempotency / Retries
+///
+/// This is called once per successful handshake. It is not retried internally;
+/// the caller may retry by simply calling again. Each call fully rewrites the
+/// directory's contents for this RC.
+///
+/// # Example
+///
+/// ```ignore
+/// write_save_rc_bandnetwork_type_index(
+///     "alice".to_string(),
+///     "project_x".to_string(),
+///     "ipv6".to_string(),
+///     2,
+///     IpAddr::V6(rc_verified_ipv6),
+/// )?;
+/// ```
 fn write_save_rc_bandnetwork_type_index(
     remote_collaborator_name: String,
     team_channel_name: String,
-    network_type: String,
-    network_index: u8,
-    this_ipv4: Ipv4Addr,
-    this_ipv6: Ipv6Addr,
+    rc_network_type: String,
+    rc_network_index: u8,
+    rc_ip_addr: IpAddr,
 ) -> Result<(), ThisProjectError> {
-    /* ?
-    Wait random time in A to B range, N times
-    FILE_READWRITE_N_RETRIES
-    FILE_READWRITE_RETRY_SEC_PAUSE_MIN
-    FILE_READWRITE_RETRY_SEC_PAUSE_max
-    */
+    #[cfg(debug_assertions)]
+    debug_log!(
+        "write_save_rc_bandnetwork_type_index(): start. rc='{}' channel='{}' \
+         type='{}' index={} ip={}",
+        remote_collaborator_name,
+        team_channel_name,
+        rc_network_type,
+        rc_network_index,
+        rc_ip_addr,
+    );
 
-    debug_log("write_save_rc_bandnetwork_type_index(), starting");
+    // -------------------------------------------------------------------------
+    // 1. Validate inputs BEFORE touching the filesystem.
+    //    We refuse to write anything if the network_type string and the
+    //    IpAddr variant disagree. Writing inconsistent state is worse than
+    //    failing fast: the read side would silently return the wrong endpoint.
+    // -------------------------------------------------------------------------
+    match (rc_network_type.as_str(), &rc_ip_addr) {
+        ("ipv4", IpAddr::V4(_)) => { /* consistent, proceed */ }
+        ("ipv6", IpAddr::V6(_)) => { /* consistent, proceed */ }
+        ("ipv4", IpAddr::V6(_)) | ("ipv6", IpAddr::V4(_)) => {
+            return Err(ThisProjectError::NetworkError(format!(
+                "write_save_rc_bandnetwork_type_index: network_type '{}' does not \
+                 match IpAddr variant {:?}. Refusing to write inconsistent state.",
+                rc_network_type, rc_ip_addr
+            )));
+        }
+        (other, _) => {
+            return Err(ThisProjectError::NetworkError(format!(
+                "write_save_rc_bandnetwork_type_index: invalid network_type '{}'. \
+                 Expected 'ipv4' or 'ipv6'.",
+                other
+            )));
+        }
+    }
 
-    // 1. Construct Path:
+    // -------------------------------------------------------------------------
+    // 2. Build the absolute directory path for this RC's band data.
+    //    Layout: sync_data/{team_channel_name}/network_band/{remote_collaborator_name}/
+    // -------------------------------------------------------------------------
     let mut base_path = make_input_path_name_abs_executabledirectoryrelative_nocheck(
-        "sync_data"
+        "sync_data",
     )?;
-    base_path.push(team_channel_name);
+    base_path.push(&team_channel_name);
     base_path.push("network_band");
-    base_path.push(remote_collaborator_name);
+    base_path.push(&remote_collaborator_name);
 
-    // Create directory structure if it doesn't exist
+    // Create the directory tree if it doesn't already exist.
+    // create_dir_all is a no-op if the path already exists.
     create_dir_all(&base_path)?;
 
-    debug_log!("write_save_rc_bandnetwork_type_index(), base_path {:?}", base_path);
+    #[cfg(debug_assertions)]
+    debug_log!(
+        "write_save_rc_bandnetwork_type_index(): base_path = {:?}",
+        base_path,
+    );
 
-    // 3. Construct Absolute File Paths
-    let type_path = base_path.join("network_type.txt");
+    // -------------------------------------------------------------------------
+    // 3. Compose the three file paths.
+    //    We write exactly one IP file (matching rc_network_type) and we will
+    //    delete the *other* IP file if it exists, to prevent stale data from
+    //    a previous handshake on a different network type confusing the reader.
+    // -------------------------------------------------------------------------
+    let type_path  = base_path.join("network_type.txt");
     let index_path = base_path.join("network_index.txt");
-    let ipv4_path = base_path.join("ipv4.txt");
-    let ipv6_path = base_path.join("ipv6.txt");
 
-    debug_log!("write_save_rc_bandnetwork_type_index(), type_path {:?}", type_path);
-    debug_log!("write_save_rc_bandnetwork_type_index(), index_path {:?}", index_path);
-    debug_log!("write_save_rc_bandnetwork_type_index(), ipv4_path {:?}", ipv4_path);
-    debug_log!("write_save_rc_bandnetwork_type_index(), ipv6_path {:?}", ipv6_path);
+    let (ip_file_name, stale_ip_file_name) = match rc_network_type.as_str() {
+        "ipv4" => ("ipv4.txt", "ipv6.txt"),
+        "ipv6" => ("ipv6.txt", "ipv4.txt"),
+        // Already validated above; this arm is unreachable in practice.
+        _ => unreachable!("network_type already validated to be ipv4 or ipv6"),
+    };
+    let ip_path       = base_path.join(ip_file_name);
+    let stale_ip_path = base_path.join(stale_ip_file_name);
 
-    // 4.1 Write to Files (handling potential errors):
-    let mut type_file = File::create(&type_path)?; // Note the & for borrowing
-    writeln!(type_file, "{}", network_type)?;
+    // -------------------------------------------------------------------------
+    // 4. Remove any stale IP file of the *other* network type.
+    //    Example: last handshake stored ipv4.txt; this handshake succeeded on
+    //    ipv6. We must not leave ipv4.txt sitting around with obsolete data.
+    //    Missing file is not an error here.
+    // -------------------------------------------------------------------------
+    if stale_ip_path.exists() {
+        if let Err(e) = fs::remove_file(&stale_ip_path) {
+            // Non-fatal: log and continue. The new files we are about to
+            // write are the authoritative state; a leftover file of the
+            // wrong type is undesirable but the reader keys off network_type.txt
+            #[cfg(debug_assertions)]
+            debug_log!(
+                "write_save_rc_bandnetwork_type_index(): could not remove stale \
+                 file {:?}: {}. Continuing.",
+                stale_ip_path, e,
+            );
+        } else {
+            #[cfg(debug_assertions)]
+            debug_log!(
+                "write_save_rc_bandnetwork_type_index(): removed stale file {:?}",
+                stale_ip_path,
+            );
+        }
+    }
 
-    debug_log!("write_save_rc_bandnetwork_type_index(), type_file {:?}", type_file);
+    // -------------------------------------------------------------------------
+    // 5. Write the three authoritative files. File::create truncates any
+    //    existing file, so we always end up with fresh, complete contents.
+    //    Using writeln! adds a trailing newline; the read side trims whitespace.
+    // -------------------------------------------------------------------------
 
-    let mut index_file = File::create(&index_path)?;
-    writeln!(index_file, "{}", network_index)?;
+    // 5a. network_type.txt  -> "ipv4" or "ipv6"
+    {
+        let mut f = File::create(&type_path)?;
+        writeln!(f, "{}", rc_network_type)?;
+        #[cfg(debug_assertions)]
+        debug_log!(
+            "write_save_rc_bandnetwork_type_index(): wrote {:?} = {}",
+            type_path, rc_network_type,
+        );
+    }
 
-    debug_log!("write_save_rc_bandnetwork_type_index(), index_file {:?}", index_file);
+    // 5b. network_index.txt -> decimal u8
+    {
+        let mut f = File::create(&index_path)?;
+        writeln!(f, "{}", rc_network_index)?;
+        #[cfg(debug_assertions)]
+        debug_log!(
+            "write_save_rc_bandnetwork_type_index(): wrote {:?} = {}",
+            index_path, rc_network_index,
+        );
+    }
 
-    // 4.2 Write to Files (handling potential errors):
-    let mut ip4_file = File::create(&ipv4_path)?; // Note the & for borrowing
-    writeln!(ip4_file, "{}", this_ipv4.to_string())?;  // Write IP string
-    debug_log!("write_save_rc_bandnetwork_type_index(), ip4_file {:?}", ip4_file);
+    // 5c. ipv4.txt OR ipv6.txt -> the RC's IP address from the successful handshake
+    {
+        let mut f = File::create(&ip_path)?;
+        writeln!(f, "{}", rc_ip_addr)?;
+        #[cfg(debug_assertions)]
+        debug_log!(
+            "write_save_rc_bandnetwork_type_index(): wrote {:?} = {}",
+            ip_path, rc_ip_addr,
+        );
+    }
 
-    let mut ip6_file = File::create(&ipv6_path)?;
-    writeln!(ip6_file, "{}", this_ipv6.to_string())?;  // Write IP string
-    debug_log!("write_save_rc_bandnetwork_type_index(), ip6_file {:?}", ip6_file);
+    #[cfg(debug_assertions)]
+    debug_log!(
+        "write_save_rc_bandnetwork_type_index(): done. rc='{}' saved as {}@{}",
+        remote_collaborator_name, rc_network_type, rc_ip_addr,
+    );
 
     Ok(())
 }
 
+// needs better doc string
 // TODO: maybe use a parameter in team-channel instead of hard-coding ~10 sec
 /// hlod_udp_handshake_rc_network_type_rc_ip_addr(): returns (rc_network_type, rc_ip_addr) as (String, String) loop until satisfied:
 /// every 10-60 sec: (lite-weight is the goal, not expensive-brute-force)
@@ -1853,7 +2097,7 @@ fn hlod_udp_handshake_rc_network_type_rc_ip_addr(
 ) -> Result<(String, String), ThisProjectError> {
 
     #[cfg(debug_assertions)]
-    debug_log("inHLOD: Start hlod_udp_handshake_rc_network_type_rc_ip_addr()");
+    debug_log("inHLOD: Start HUHRNTRIA hlod_udp_handshake_rc_network_type_rc_ip_addr()");
 
     // let channel_dir_path_str = read_state_string("current_node_directory_path.txt")?; // read as string first
 
@@ -1861,7 +2105,7 @@ fn hlod_udp_handshake_rc_network_type_rc_ip_addr(
 
 
     // #[cfg(debug_assertions)]
-    // debug_log!("hlod_udp_handshake_rc_network_type_rc_ip_addr Channel directory path (from session state): {}", channel_dir_path_str);
+    // debug_log!("HUHRNTRIA Channel directory path (from session state): {}", channel_dir_path_str);
 
     // let team_channel_name = channel_dir_path_str;
     // was  get_latest_received_from_rc_in_teamchannel_file_timestamp_filecrawl
@@ -1877,7 +2121,7 @@ fn hlod_udp_handshake_rc_network_type_rc_ip_addr(
     };
 
     #[cfg(debug_assertions)]
-    debug_log!("hlod_udp_handshake_rc_network_type_rc_ip_addr team_channel_name {}", team_channel_name);
+    debug_log!("HUHRNTRIA: team_channel_name {}", team_channel_name);
 
 
     // --- Prepare ReadySignal ---
@@ -1888,7 +2132,7 @@ fn hlod_udp_handshake_rc_network_type_rc_ip_addr(
         Ok(timestamp) => timestamp,
         Err(_e) => {
             #[cfg(debug_assertions)]
-            debug_log!("error in hlod_udp_handshake_rc_network_type_rc_ip_addr(): Error getting timestamp: {}", _e);
+            debug_log!("error in HUHRNTRIA(): Error getting timestamp: {}", _e);
 
             0
         }
@@ -1905,7 +2149,7 @@ fn hlod_udp_handshake_rc_network_type_rc_ip_addr(
         Some(name) => name,
         None => {
             #[cfg(debug_assertions)]
-            debug_log!("error 2 none [ match get_current_team_channel_name_from_nav_path()] hlod_udp_handshake_rc_network_type_rc_ip_addr Error: Could not get current channel name in get_current_team_channel_name_from_nav_path. Skipping.");
+            debug_log!("error 2 none [ match get_current_team_channel_name_from_nav_path()] HUHRNTRIA Error: Could not get current channel name in get_current_team_channel_name_from_nav_path. Skipping.");
 
             return Err(ThisProjectError::InvalidData("Could not get team channel name".into()));
         },
@@ -1920,9 +2164,9 @@ fn hlod_udp_handshake_rc_network_type_rc_ip_addr(
     got_signal_check_base_path.push("network_band");
     got_signal_check_base_path.push(&local_owner_desk_setup_data.remote_collaborator_name);
 
-    loop { // hlod_udp_handshake_rc_network_type_rc_ip_addr() Main loop starts here
+    loop { // HUHRNTRIA() Main loop starts here
         #[cfg(debug_assertions)]
-        debug_log("hlod_udp_handshake_rc_network_type_rc_ip_addr() main loop (re)starting from the top...");
+        debug_log("HUHRNTRIA() main loop (re)starting from the top...");
 
         // 1. Check for Halt Signal and Team Channel Name (as before)
         if should_halt_uma() { // 1. check for halt-uma
@@ -1930,7 +2174,7 @@ fn hlod_udp_handshake_rc_network_type_rc_ip_addr(
         }
 
         // --- 2. Check for Received Ready Signal ---
-        // hlod_udp_handshake_rc_network_type_rc_ip_addr() Main loop starts here
+        // HUHRNTRIA() Main loop starts here
         if got_signal_check_base_path.exists() {
             // The path exists...
 
@@ -1941,7 +2185,7 @@ fn hlod_udp_handshake_rc_network_type_rc_ip_addr(
             ) {
                 #[cfg(debug_assertions)]
                 debug_log!(
-                    "hlod_udp_handshake_rc_network_type_rc_ip_addr(): Ready signal information found in sync_data for {}. rc_network_type: {}, rc_ip: {:?}",
+                    "HUHRNTRIA(): Ready signal information found in sync_data for {}. rc_network_type: {}, rc_ip: {:?}",
                     local_owner_desk_setup_data.remote_collaborator_name,
                     rc_network_type,
                     rc_ip_addr_string,
@@ -1964,17 +2208,29 @@ fn hlod_udp_handshake_rc_network_type_rc_ip_addr(
 
         // Send to each IPv6 address in rc_ipv6_list
         #[cfg(debug_assertions)]
-        debug_log("hlod_udp_handshake_rc_network_type_rc_ip_addr() \nSending Handshake ready signals!\n");
+        debug_log("HUHRNTRIA() \nSending Handshake ready signals!\n");
+
+        /*
+        fn send_ready_signal(
+            local_user_salt_list: &[u128], // to make hash
+            rc_network_type_string: String, // Remote collaborator's network type (ipv4, ipv6, etc.)
+            rc_ip_addr_string: String, // Remote collaborator's IP string
+            target_port: u16, // local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip
+            last_received_timestamp: u64, // last_received_timestamp
+            local_user_network_type: &str, // LOU needed for .b section
+            local_user_network_index: u8,  // LOU needed for .b section
+        ) -> Result<(), ThisProjectError> {
+        */
 
         for ipv6_addr_string in &local_owner_desk_setup_data.remote_collaborator_ipv6_addr_list {
             send_ready_signal(
-                &local_owner_desk_setup_data.local_user_salt_list,
-                "ipv6".to_string(),                            // Correct: Always "ipv6" here
-                ipv6_addr_string.to_string(),                  //Correct: Use remote IPv6 address
-                local_owner_desk_setup_data.local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip,  // Use provided port
-                timestamp_for_rt,                              // Use calculated timestamp
-                band_local_network_type,                       // band_local_network_type
-                band_local_network_index,                      // Use band index
+                &local_owner_desk_setup_data.local_user_salt_list,  // local_user_salt_list
+                "ipv6".to_string(),                                 // rc_network_type_string: Always "ipv6" here
+                ipv6_addr_string.to_string(),                       // rc_ip_addr_string: Use remote IPv6 address
+                local_owner_desk_setup_data.local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip,  // target_port
+                timestamp_for_rt,                                   // last_received_timestamp
+                band_local_network_type,                            // local_user_network_type, band_local_network_type
+                band_local_network_index,                           // local_user_network_index, Use band index
             )?;
 
             #[cfg(debug_assertions)]
@@ -1988,13 +2244,13 @@ fn hlod_udp_handshake_rc_network_type_rc_ip_addr(
         // Send to each IPv4 address in rc_ipv4_list
         for ipv4_addr_string in &local_owner_desk_setup_data.remote_collaborator_ipv4_addr_list {  // Iterate IPv4 list
             send_ready_signal(
-                &local_owner_desk_setup_data.local_user_salt_list,
-                "ipv4".to_string(),                           // Correct: Always "ipv4" here
-                ipv4_addr_string.to_string(),                   // Correct: Use remote IPv4 address
-                local_owner_desk_setup_data.local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip, // Use port number
-                timestamp_for_rt,                           // Use calculated timestamp // Correct: Consistent order
-                band_local_network_type,
-                band_local_network_index,                           // Use consistent type for band index. // Correct: Consistent order
+                &local_owner_desk_setup_data.local_user_salt_list,  // local_user_salt_list
+                "ipv4".to_string(),                                 // rc_network_type_string: Always "ipv4" here
+                ipv4_addr_string.to_string(),                       // rc_ip_addr_string: Use remote IPv4 address
+                local_owner_desk_setup_data.local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip, // target_port
+                timestamp_for_rt,                                   // last_received_timestamp
+                band_local_network_type,                            // local_user_network_type, band_local_network_type
+                band_local_network_index,                           // local_user_network_index, Use band index
             )?;
 
             #[cfg(debug_assertions)]
@@ -36312,6 +36568,8 @@ fn handle_local_owner_desk(
         their_rmtclb_ip -> local_user_gotit_port_yourdesk_yousend_aimat_their_rmtclb_ip: local_ports.gotit_port,
 
     ready and gotit are aimed at the RC ip.
+
+    Todo... restarting connection after n-minutes stale with no received signals
     */
     let Ok((rc_network_type_string, rc_ip_addr_string)) = hlod_udp_handshake_rc_network_type_rc_ip_addr(
         &local_owner_desk_setup_data, //: &ForLocalOwnerDeskThread,
@@ -36323,7 +36581,7 @@ fn handle_local_owner_desk(
     };
 
     #[cfg(debug_assertions)]
-    debug_log!("HLOD setup: hlod_udp_handshake_rc_network_type_rc_ip_addr() run, ({})", remote_collaborator_name);
+    debug_log!("HLOD setup: HUHRNTRIA() run, ({})", remote_collaborator_name);
 
     loop { // 1. start overall loop to (re)start whole desk
 
@@ -36527,21 +36785,34 @@ fn handle_local_owner_desk(
                     loop_remote_collaborator_name
                 );
 
+                /*
+                fn send_ready_signal(
+                    local_user_salt_list: &[u128], // to make hash
+                    rc_network_type_string: String, // Remote collaborator's network type (ipv4, ipv6, etc.)
+                    rc_ip_addr_string: String, // Remote collaborator's IP string
+                    target_port: u16, // local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip
+                    last_received_timestamp: u64, // last_received_timestamp
+                    local_user_network_type: &str, // LOU needed for .b section
+                    local_user_network_index: u8,  // LOU needed for .b section
+                ) -> Result<(), ThisProjectError> {
+                */
+
                 // 1.3 Send Ready Signal (using a function)
-                let _ = send_ready_signal(
+                let _sendreadysignal_result = send_ready_signal(
                     &salty_the_clone_list, // local_user_salt_list: &[u128],
-                    rc_network_type_string_1.clone(), // local_user_ipv4_address: &Ipv4Addr,
-                    rc_ip_addr_string_1.clone(), // local_user_ipv6_address: &Ipv6Addr,
-                    local_owner_desk_setup_data.local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip,
+                    rc_network_type_string_1.clone(), // Remote collaborator's network type (ipv4, ipv6, etc.)
+                    rc_ip_addr_string_1.clone(), // Remote collaborator's IP string
+                    local_owner_desk_setup_data.local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip,  // local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip
                     latest_received_from_rc_file_timestamp, // last_received_timestamp: u64, // for rst
-                    &band_local_network_type_clone, // network_type: String, // for nt
-                    band_local_network_index, //network_index: u8, // for ni
+                    &band_local_network_type_clone, // local_user_network_type: network_type: String, // for nt
+                    band_local_network_index, //local_user_network_index: network_index: u8, // for ni
                 );
 
                 #[cfg(debug_assertions)]
                 debug_log!(
-                    "HLOD drone loop send ready signal: latest_received_from_rc_file_timestamp sent -> (to {})",
-                    loop_remote_collaborator_name
+                    "HLOD drone loop send ready signal: latest_received_from_rc_file_timestamp sent -> (to {}), result: {:?}",
+                    loop_remote_collaborator_name,
+                    _sendreadysignal_result,
                 );
 
                 #[cfg(debug_assertions)]
@@ -40235,15 +40506,14 @@ fn handshake_get_rc_bands_socketaddrses_for_hrcd(
                 };
 
                 #[cfg(debug_assertions)]
-                debug_log("get_rc_band...HRCD: next: write_save_rc_bandnetwork_type_index");
+                debug_log("get_rc_band...HRCD: next: WSRBTI");
 
                 write_save_rc_bandnetwork_type_index(
-                    room_sync_input.remote_collaborator_name.clone(),
+                    room_sync_input.remote_collaborator_name.clone(), // remote_collaborator_name:
                     team_channel_name,
                     rc_network_type,
                     rc_network_index,
-                    local_ipv4,
-                    local_ipv6,
+                    rc_ip,
                 )?;
 
                 // --- 5.4 Return Socket Addresses (Valid Signal Received) ---
