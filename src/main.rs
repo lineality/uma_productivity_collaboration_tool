@@ -1,4 +1,4 @@
-/*
+/* #[cfg(debug_assertions)]
 Uma
 2024.09-11
 RUST_BACKTRACE=full cargo run
@@ -10,6 +10,10 @@ cargo run --profile release-small
 #### or for optimal performance (~10 mb)
 ```bash
 cargo run --profile release-performance
+```
+
+```bash
+cargo build --profile release-performance
 ```
 
 # Uma: Coordination, Productivity, Hygiene
@@ -11068,6 +11072,7 @@ impl CoreNode {
         debug_log!("SNAGTF: Temp file path: {:?}", temp_file_path);
 
         // 5. Write TOML data to temp file
+        #[cfg(debug_assertions)]
         debug_log!("SNAGTF: Writing TOML data to temp file...");
         fs::write(&temp_file_path, &toml_string)?;
 
@@ -11078,6 +11083,7 @@ impl CoreNode {
                 "SNAGTF: Failed to create temp file"
             ));
         }
+        #[cfg(debug_assertions)]
         debug_log!("SNAGTF: Successfully created temp file at: {:?}", temp_file_path);
 
         // 6. Get GPG fingerprint for the local user
@@ -11130,6 +11136,7 @@ impl CoreNode {
         }
 
         // 8. Extract public key from GPG keyring using fingerprint
+        #[cfg(debug_assertions)]
         debug_log!(
             "SNAGTF: Extracting public key from GPG for fingerprint: {}",
             gpg_full_fingerprint_key_id_string
@@ -11209,6 +11216,7 @@ impl CoreNode {
         }
 
         // 10. Encrypt the clearsigned temp file with the public key
+        #[cfg(debug_assertions)]
         debug_log!("SNAGTF: Starting encryption of clearsigned file");
         match encrypt_clearsigned_toml_with_public_key_content(
             &temp_file_path, // Path to the clearsigned TOML file to encrypt
@@ -11230,14 +11238,17 @@ impl CoreNode {
         }
 
         // 11. Clean up temp file (critical for production)
+        #[cfg(debug_assertions)]
         debug_log!("SNAGTF: Cleaning up temp file");
-        if let Err(e) = fs::remove_file(&temp_file_path) {
+        if let Err(_e) = fs::remove_file(&temp_file_path) {
             // Log warning but don't fail the operation since the main task succeeded
-            debug_log!("SNAGTF: Warning: Failed to remove temp file: {}", e);
+            #[cfg(debug_assertions)]
+            debug_log!("SNAGTF: Warning: Failed to remove temp file: {}", _e);
         }
 
         // 12. Verify final file exists
         if final_file_path.exists() {
+            #[cfg(debug_assertions)]
             debug_log!("SNAGTF: Success! node.gpgtoml created at: {:?}", final_file_path);
         } else {
             return Err(io::Error::new(
@@ -11246,6 +11257,7 @@ impl CoreNode {
             ));
         }
 
+        #[cfg(debug_assertions)]
         debug_log!("SNAGTF: save_node_as_gpgtoml completed successfully");
         Ok(())
     }
@@ -19956,6 +19968,7 @@ fn run_passive_message_mode(path: &Path) -> io::Result<()> {
 /// - "PDM: Failed to read text_message from [file]: [error] (skipping)"
 /// - "PDM: Successfully loaded N messages, M files skipped"
 pub fn passive_display_messages(path: &Path) -> io::Result<()> {
+    #[cfg(debug_assertions)]
     debug_log!("PDM: Starting passive message display for path: {:?}", path);
 
     // Initialize empty message list
@@ -19968,6 +19981,7 @@ pub fn passive_display_messages(path: &Path) -> io::Result<()> {
     // Get GPG fingerprint from uma.toml for decryption/verification
     let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
         Ok(fingerprint) => {
+            #[cfg(debug_assertions)]
             debug_log!("PDM: GPG fingerprint retrieved: {}", fingerprint);
             fingerprint
         }
@@ -19982,11 +19996,13 @@ pub fn passive_display_messages(path: &Path) -> io::Result<()> {
     // Get temp directory for creating readable copies
     let base_uma_temp_directory_path = match get_base_uma_temp_directory_path() {
         Ok(temp_path) => {
+            #[cfg(debug_assertions)]
             debug_log!("PDM: Temp directory path retrieved: {:?}", temp_path);
             temp_path
         }
-        Err(e) => {
-            debug_log!("PDM: Failed to get temp directory path: {} (showing empty display)", e);
+        Err(_e) => {
+            #[cfg(debug_assertions)]
+            debug_log!("PDM: Failed to get temp directory path: {} (showing empty display)", _e);
             // Show empty display and return - cannot create temp copies without temp dir
             tiny_tui::simple_render_list_passive(&message_list, path);
             return Ok(());
@@ -19997,6 +20013,7 @@ pub fn passive_display_messages(path: &Path) -> io::Result<()> {
     // COLLECTION PHASE: Gather and sort message files
     // ============================================================
 
+    #[cfg(debug_assertions)]
     debug_log!("PDM: Collecting file entries from directory");
 
     // Collect all file entries from directory (max depth 1)
@@ -20007,6 +20024,7 @@ pub fn passive_display_messages(path: &Path) -> io::Result<()> {
         .filter(|entry| entry.path().is_file())
         .collect();
 
+    #[cfg(debug_assertions)]
     debug_log!("PDM: Found {} file entries", entries.len());
 
     // Sort entries by numeric prefix in filename (1__, 2__, 3__, etc.)
@@ -20020,32 +20038,38 @@ pub fn passive_display_messages(path: &Path) -> io::Result<()> {
             .unwrap_or(u64::MAX) // Put unparseable names at end
     });
 
+    #[cfg(debug_assertions)]
     debug_log!("PDM: Entries sorted by numeric prefix");
 
     // ============================================================
     // PROCESSING PHASE: Read and process each message file
     // ============================================================
 
-    let mut loaded_count = 0;
-    let mut skipped_count = 0;
+    let mut _loaded_count = 0;
+    let mut _skipped_count = 0;
+
 
     for entry in entries {
         // Get filename for logging and filtering
         let file_name = match entry.path().file_name() {
             Some(name) => name.to_string_lossy().to_string(),
             None => {
-                debug_log!("PDM: Entry has no filename: {:?} (skipping)", entry.path());
-                skipped_count += 1;
+                #[cfg(debug_assertions)]{
+                    debug_log!("PDM: Entry has no filename: {:?} (skipping)", entry.path());
+                    _skipped_count += 1;
+                }
                 continue;
             }
         };
 
         // Skip metadata file (0.toml)
         if file_name == "0.toml" {
+            #[cfg(debug_assertions)]
             debug_log!("PDM: Skipping metadata file: {}", file_name);
             continue;
         }
 
+        #[cfg(debug_assertions)]
         debug_log!("PDM: Processing message file: {}", file_name);
 
         // ------------------------------------------------------------
@@ -20057,16 +20081,21 @@ pub fn passive_display_messages(path: &Path) -> io::Result<()> {
             &base_uma_temp_directory_path,
         ) {
             Ok(temp_path) => {
+                #[cfg(debug_assertions)]
                 debug_log!("PDM: Created temp readable copy at: {}", temp_path);
                 temp_path
             }
-            Err(e) => {
-                debug_log!(
-                    "PDM: Failed to get readable copy of {:?}: {:?} (skipping)",
-                    entry.path(),
-                    e
-                );
-                skipped_count += 1;
+            Err(_e) => {
+                #[cfg(debug_assertions)]{
+                    debug_log!(
+                        "PDM: Failed to get readable copy of {:?}: {:?} (skipping)",
+                        entry.path(),
+                        _e
+                    );
+
+                    _skipped_count += 1;
+                }
+
                 continue;
             }
         };
@@ -20081,8 +20110,10 @@ pub fn passive_display_messages(path: &Path) -> io::Result<()> {
             Ok(owner_value) => {
                 // Validate owner is not empty
                 if owner_value.is_empty() {
+                    #[cfg(debug_assertions)]{
                     debug_log!("PDM: Owner field is empty in {} (skipping)", file_name);
-                    skipped_count += 1;
+                    _skipped_count += 1;
+                    }
                     // Clean up temp file before continuing
                     let _ = cleanup_collaborator_temp_file(
                         &message_readcopy_path,
@@ -20092,13 +20123,15 @@ pub fn passive_display_messages(path: &Path) -> io::Result<()> {
                 }
                 owner_value
             }
-            Err(e) => {
+            Err(_e) => {
+                #[cfg(debug_assertions)]{
                 debug_log!(
                     "PDM: Failed to read owner field from {}: {} (skipping)",
                     file_name,
-                    e
+                    _e
                 );
-                skipped_count += 1;
+                _skipped_count += 1;
+                }
                 // Clean up temp file before continuing
                 let _ = cleanup_collaborator_temp_file(
                     &message_readcopy_path,
@@ -20118,8 +20151,12 @@ pub fn passive_display_messages(path: &Path) -> io::Result<()> {
             Ok(text_value) => {
                 // Validate text_message is not empty
                 if text_value.is_empty() {
+
+
+                    #[cfg(debug_assertions)]{
                     debug_log!("PDM: text_message field is empty in {} (skipping)", file_name);
-                    skipped_count += 1;
+                    _skipped_count += 1;
+                    }
                     // Clean up temp file before continuing
                     let _ = cleanup_collaborator_temp_file(
                         &message_readcopy_path,
@@ -20129,13 +20166,16 @@ pub fn passive_display_messages(path: &Path) -> io::Result<()> {
                 }
                 text_value
             }
-            Err(e) => {
-                debug_log!(
-                    "PDM: Failed to read text_message field from {}: {} (skipping)",
-                    file_name,
-                    e
-                );
-                skipped_count += 1;
+            Err(_e) => {
+                #[cfg(debug_assertions)]{
+                    debug_log!(
+                        "PDM: Failed to read text_message field from {}: {} (skipping)",
+                        file_name,
+                        _e
+                    );
+
+                    _skipped_count += 1;
+                }
                 // Clean up temp file before continuing
                 let _ = cleanup_collaborator_temp_file(
                     &message_readcopy_path,
@@ -20148,14 +20188,15 @@ pub fn passive_display_messages(path: &Path) -> io::Result<()> {
         // ------------------------------------------------------------
         // Clean up temp file (ignore cleanup errors)
         // ------------------------------------------------------------
-        if let Err(e) = cleanup_collaborator_temp_file(
+        if let Err(_e) = cleanup_collaborator_temp_file(
             &message_readcopy_path,
             &base_uma_temp_directory_path,
         ) {
+            #[cfg(debug_assertions)]
             debug_log!(
                 "PDM: Failed to cleanup temp file for {} (continuing): {}",
                 file_name,
-                e
+                _e
             );
             // Continue anyway - we already got the data we needed
         }
@@ -20163,25 +20204,27 @@ pub fn passive_display_messages(path: &Path) -> io::Result<()> {
         // ------------------------------------------------------------
         // Add formatted message to display list
         // ------------------------------------------------------------
-        debug_log!(
-            "PDM: Successfully loaded message from {}: owner={}, text_len={}",
-            file_name,
-            owner,
-            text_message.len()
-        );
-
+        #[cfg(debug_assertions)]{
+            debug_log!(
+                "PDM: Successfully loaded message from {}: owner={}, text_len={}",
+                file_name,
+                owner,
+                text_message.len()
+            );
+            _loaded_count += 1;
+        }
         message_list.push(format!("{}: {}", owner, text_message));
-        loaded_count += 1;
     }
 
     // ============================================================
     // DISPLAY PHASE: Render message list
     // ============================================================
 
+    #[cfg(debug_assertions)]
     debug_log!(
         "PDM: Finished processing. Loaded: {}, Skipped: {}",
-        loaded_count,
-        skipped_count
+        _loaded_count,
+        _skipped_count
     );
 
     // Display messages using passive renderer (handles scrolldown internally)
@@ -40346,7 +40389,7 @@ fn get_or_create_send_queue(
 
     #[cfg(debug_assertions)]
     {
-        debug_log("|| Extra Insepction || get_or_create_send_queue: end: Q");
+        debug_log("|| Extra Inspection || get_or_create_send_queue: end: Q");
         debug_log!(
             "inHRCD->get_or_create_send_queue 12: start;  ready_signal_rt_timestamp -> {:?}",
             ready_signal_rt_timestamp
@@ -40800,7 +40843,7 @@ fn handle_remote_collaborator_meetingroom_desk(
     // Note: Socket timeout (2s) is SHORT - enables frequent checking
     //       Stale timeout (5 min) is LONG - business logic threshold
     // ═════════════════════════════════════════════════════════════════
-    const STALE_TIMEOUT: Duration = Duration::from_secs(5 * 60);  // 5 minutes
+    const STALE_TIMEOUT: Duration = Duration::from_secs(3 * 60);  // 5 minutes
 
     loop { // 1. start overall loop to restart whole desk
         // --- 1. overall loop to restart handler in case of failure ---
