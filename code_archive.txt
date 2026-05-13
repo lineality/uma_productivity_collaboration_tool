@@ -14581,3 +14581,1526 @@ fn extract_port_value(line: &str, key: &str) -> Option<u16> {
     }
     None
 }
+
+// /// Creates a UDP socket bound to a locally chosen IP address and port based on the network band configuration.
+// ///
+// /// This function uses the provided `band_local_network_type`, `band_local_user_ipv4_address`, and `band_local_user_ipv6_address`
+// /// to determine the appropriate IP address to bind to.
+// /// if type says ivp6 or ipv4, this function then attempts to bind
+// /// a UDP socket to that ip address and the specified port.
+// ///
+// /// # Arguments
+// ///
+// /// * `band_local_network_type`: A string slice indicating the network type ("ipv4" or "ipv6").
+// /// * `band_local_user_ipv4_address`: The local user's IPv4 address (used if `band_local_network_type` is "ipv4").
+// /// * `band_local_user_ipv6_address`: The local user's IPv6 address (used if `band_local_network_type` is "ipv6").
+// /// * `port`: The port number.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<UdpSocket, ThisProjectError>`:  The created and bound UDP socket on success, or a `ThisProjectError` on failure (invalid IP, binding error, unsupported network type).
+// fn create_local_udp_socket(
+//     band_local_network_type: &str,
+//     band_local_user_ipv4_address: &Ipv4Addr,
+//     band_local_user_ipv6_address: &Ipv6Addr,
+//     port: u16,
+//     timeout_duration_seconds_u64: u64,  // timeout parameter
+// ) -> Result<UdpSocket, ThisProjectError> {
+//     let socket_addr = match band_local_network_type {
+//         "ipv6" => SocketAddr::new(IpAddr::V6(*band_local_user_ipv6_address), port),
+//         "ipv4" => SocketAddr::new(IpAddr::V4(*band_local_user_ipv4_address), port),
+//         _ => return Err(ThisProjectError::NetworkError("Unsupported network type".into())),
+//     };
+
+//     UdpSocket::bind(socket_addr).map_err(|e| {
+//         ThisProjectError::NetworkError(format!("Failed to bind to {} address: {}", band_local_network_type, e))
+//     })
+// }
+
+// /// signal for continuing or for stoping whole Uma program with all threads
+// /// Initializes the UMA continue/halt signal by creating or resetting the
+// /// `continue_uma.txt` file and setting its value to "1" (continue).
+// /// set to halt by `quit_set_continue_uma_to_false()`
+// fn initialize_continue_uma_signal() {
+//     // 1. Ensure the directory exists
+//     let directory_path = Path::new(CONTINUE_UMA_PATH_STR).parent().unwrap(); // Get the parent directory
+//     fs::create_dir_all(directory_path).expect("Failed to create directory for continue_uma.txt");
+
+//     // 2. Create or overwrite the file
+//     if fs::remove_file(CONTINUE_UMA_PATH_STR).is_ok() {
+//         debug_log("Old 'continue_uma.txt' file deleted."); // Optional log.
+//     }
+
+//     let mut file = fs::File::create(CONTINUE_UMA_PATH_STR)
+//         .expect("Failed to create 'continue_uma.txt' file.");
+
+//     file.write_all(b"1")
+//         .expect("Failed to write to 'continue_uma.txt' file.");
+// }
+
+// /// signal for continuing or for stoping whole Uma program with all threads
+// fn initialize_hard_restart_signal() {
+//     // 1. Ensure the directory exists
+//     let directory_path = Path::new(HARD_RESTART_FLAG_PATH_STR).parent().unwrap(); // Get the parent directory
+//     fs::create_dir_all(directory_path).expect("Failed to create directory for yes_hard_restart_flag.txt");
+
+//     // 2. Create or overwrite the file
+//     if fs::remove_file(HARD_RESTART_FLAG_PATH_STR).is_ok() {
+//         debug_log("Old 'yes_hard_restart_flag.txt' file deleted."); // Optional log.
+//     }
+
+//     let mut file = fs::File::create(HARD_RESTART_FLAG_PATH_STR)
+//         .expect("Failed to create 'yes_hard_restart_flag.txt' file.");
+
+//     file.write_all(b"1")
+//         .expect("Failed to write to 'yes_hard_restart_flag.txt' file.");
+// }
+
+// use std::fs::{self, File};
+// use std::io::{self, Write};
+// use std::path::PathBuf;
+
+// // TODO spin these two off into a function optional_passive_mode();
+// // if return true, return?
+// // Get command line arguments
+// let args: Vec<String> = env::args().collect();
+// // Check for passive message mode
+// if args.len() >= 3 && args[1] == "--passive_message_mode" {
+//     let path = Path::new(&args[2]);
+//     if let Err(e) = run_passive_message_mode(path) {
+//         eprintln!("Error in passive message mode: {}", e);
+//         process::exit(1);
+//     }
+//     return;
+// }
+// // Check for passive message mode
+// if args.len() >= 3 && args[1] == "--passive_task_mode" {
+//     let path = Path::new(&args[2]);
+//     if let Err(e) = run_passive_task_mode(path) {
+//         eprintln!("Error in passive message mode: {}", e);
+//         process::exit(1);
+//     }
+//     return;
+// }
+
+// /// Check for user input argument flag to launch int passive mode
+// /// - message mode passsive
+// /// or
+// /// - task mode passive
+// /// if so, return True (after running that mode)
+// /// else: return false
+// ///
+// /// use in main with:
+// /// ```
+// /// if optional_passive_mode() {
+// ///     return;
+// /// };
+// /// ```
+// ///
+// fn optional_passive_mode() -> bool {
+//     // TODO spin these two off into a function optional_passive_mode();
+//     // if return true, return?
+//     // Get command line arguments
+//     let args: Vec<String> = env::args().collect();
+//     // Check for passive message mode
+//     if args.len() >= 3 && args[1] == "--passive_message_mode" {
+//         let path = Path::new(&args[2]);
+//         if let Err(e) = run_passive_message_mode(path) {
+//             eprintln!("Error in passive message mode: {}", e);
+//             process::exit(1);
+//         }
+//         return true;
+//     }
+//     // Check for passive message mode
+//     if args.len() >= 3 && args[1] == "--passive_task_mode" {
+//         let path = Path::new(&args[2]);
+//         if let Err(e) = run_passive_task_mode(path) {
+//             eprintln!("Error in passive message mode: {}", e);
+//             process::exit(1);
+//         }
+//         return true;
+//     }
+
+//     return false;
+// }
+
+// /// File operations help section content
+// const HELP_SECTION_FILE_OPERATIONS: &str = r#"
+//  ═══ FILE OPERATIONS ═══    Press  Enter to return to help menu...
+//  Sometimes you will use a teminal and a GUI desktop.
+//  Sometimes you will use a headless environment (like with ssh).
+//  Maybe you use tmux or tiling/window managers.
+
+//  FILE OPENING:           (after entering the file number)
+//    Empty Enter	         Open file with default editor
+//    {editor}              Open file with chosen editor
+//    {editor} -h           Headless! Open in current terminal
+//                            Alternative: -- headless
+//    {editor} -vsplit      Open in tmux vertical split
+//                            Alternative: --vertical-split-tmux
+//    {editor} -hsplit      Open in tmux horizontal split
+//                            Alternative: --horizontal-split-tmux
+//  CSV ANALYSIS:
+//     [number] -rc         Analyzes a CSV file (rows, columns, stats)
+//                          Opens analysis in temporary file
+//                            Alternative: --rows-and-columns
+//  EXAMPLES:
+//   hx                    Open file with Helix editor, in a new window
+//   vi -h                 Headless: Open with vi editor in same terminal
+//   hx -hsplit            Headless Tmux: Open with Helix in a new split
+//   hx -rc -vsplit        Tmux split view of rows-cols .csv "#;
+
+// /// Get-Send Mode
+// const HELP_SECTION_GET_SEND_MODE: &str = r#"
+//  ═══ GET-SEND MODE ═══   Press Enter to return to help menu...
+
+//  Moving (or copying) a file using only a raw terminal can
+//  be tricky. In Get-Send mode you will find various features
+//  to ease this process of jumping between locations, and copying
+//  files or directories (stacks), or making time-stamped archives, and
+//  tracking where you are jumping around (pocket-dimensions)!
+//  To enter Get-Send mode, use any common 'copy paste yank' key.
+//  For safety, ff only copies or archives, no delete or move.
+
+//  GET-SEND MODE ACTIVATION:
+//    v, c, y, p, g         Enter Get-Send Mode
+//    a                     Archive mode shortcut (create zip archives)
+
+//  GET-SEND MODE OPERATIONS: no deleting, only copying/archiving
+//    1. Add item TO stack (file or dir)
+//    2. Get: Save item here, FROM stack
+//    3. Save current location as pocket dimension
+//    4. Go to pocket dimension
+//    5. View stacks & pocket dimensions
+//    6. Archive file/directory 'a': zip/timestamp
+//    7. Clear all stacks"#;
+
+// /// Get-Send Mode
+// const HELP_SECTION_VIEW_MODES: &str = r#"
+//   ═══ ROW-COUNTS & MODULAR VIEW-MODES ═══    Press Enter to return...
+
+//   COUNT ROWS / LINES: See how many rows the files in a directory have.
+//   Enter mode with '--row-counts' or '--line-counts'
+
+//   Commands: (n)ame sort, (c)ount sort, (h)eader, (Enter) reset, (b/q)uit
+//   Sort by name or count (toggle to reverse sort), and
+//   'h' removes the header from the row count: Count only data rows
+
+
+//   MAKE YOUR OWN DIRECTORY-VIEW MODULES:
+//     Make your own custom views and add them to FF.
+//     1. Modify line-count as an example:
+//         NavigationAction::GoToFileLineCountMode => {
+//             match show_minimal_linecount_tui(&path) <-(make your own fn)
+
+//     2. Add your new NavigationAction:
+//     match lowercase_input.as_str() {
+//         "vsplit" => return Ok(NavigationAction::VsplitTmux),
+//         "--help" => return Ok(NavigationAction::GoToHelpMenuMode),
+//    -> ->"--new-stuff" => return OK(NavigationAction::NewStuff),"#;
+
+// /// Terminal management help section content
+// const HELP_SECTION_TERMINAL: &str = r#"
+//  ═══ TERMINAL & DISPLAY MANAGEMENT ═══  Press Enter to return
+
+//  Your 'current working directory,' where you go, in ff, does not
+//  carry over to your terminal after you exit. But you will want
+//  to keep working where you are in ff:
+//  - you can open a new terminal or split IN your current ff location.
+//  - Note: Run tmux before you run ff to use the tmux splits.
+
+//  TERMINAL OPERATIONS:
+//    t                     Open new terminal in current directory
+//    vsplit                Create vertical tmux split (current directory)
+//    hsplit                Create horizontal tmux split (current directory)
+
+//  DISPLAY RESIZING:       'N' here is whatever number you enter.
+//    tall+N                Increase display height by N rows
+//    tall-N                Decrease display height by N rows
+//    wide+N                Increase display width by N chars
+//    wide-N                Decrease display width by N chars
+
+//  When ff exits, it will tell you where you last were,
+//  and the ~bash line to run to go back there in a terminal.
+//  e.g.   To continue from this location, run:
+//         cd /home/oops/code/ff_file_manager_minimal_rust"#;
+
+// /// Configuration help section content
+// const HELP_SECTION_CONFIGURATION: &str = r#"
+//  ═══ PARTNER PROGRAMS CONFIGURATION ═══
+
+//  You may want to call your own applications or other applications
+//  that are not fully 'installed' on your system. "Partner Programs"
+//  allows you to tell File Fantastic where these binary-executible
+//  files are, wherever they are. Just list each file-path in this file,
+//  which FF will create:
+
+//  CONFIGURATION FILE:
+//    ~/.ff_data/absolute_paths_to_local_partner_fileopening_executables.txt
+
+//  FILE FORMAT:
+//    - One program path per line
+//    - Use absolute paths
+//    - Comments with #, and blank lines, are ignored
+
+//  EXAMPLE CONFIGURATION:
+//    /usr/bin/emacs
+//    # This is a comment
+//    /home/user/bin/custom-editor
+
+//  Press Enter to return to help menu... "#;
+
+// use std::fs;
+// use std::io::{self, Write};
+// use std::path::{Path, PathBuf};
+// use crate::manage_absolute_executable_directory_relative_paths::{
+//     make_file_path_abs_executabledirectoryrelative_canonicalized_or_error,
+//     prepare_file_parent_directories_abs_executabledirectoryrelative,
+// };
+
+// /// optional
+// /// Gets the absolute path to the continue_uma.txt file, creating it with default content "1"
+// /// if it doesn't exist.
+// ///
+// /// # Returns
+// ///
+// /// * `io::Result<PathBuf>` - The absolute canonicalized path to the continue_uma.txt file
+// ///
+// /// # Errors
+// ///
+// /// This function will return an error if:
+// /// * The parent directory cannot be created
+// /// * The file cannot be created when it doesn't exist
+// /// * Path canonicalization fails for any reason
+// fn get_continue_uma_path() -> io::Result<PathBuf> {
+//     let relative_path = CONTINUE_UMA_PATH_STR;
+
+//     // First try to get the path if it already exists
+//     match make_file_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_path) {
+//         Ok(path) => {
+//             // File exists, return its canonicalized path
+//             println!("Continue UMA file found at: {:?}", path);
+//             Ok(path)
+//         },
+//         Err(_) => {
+//             // File doesn't exist or other error - create it with default content "1"
+//             println!("Continue UMA file not found, creating it with default value '1'");
+
+//             // Prepare the parent directories
+//             let path = prepare_file_parent_directories_abs_executabledirectoryrelative(relative_path)?;
+
+//             // Create the file with default content
+//             let mut file = fs::File::create(&path)?;
+//             file.write_all(b"1")?;
+
+//             // Return the canonicalized path
+//             let canonicalized = path.canonicalize()?;
+//             println!("Created continue UMA file at: {:?}", canonicalized);
+//             Ok(canonicalized)
+//         }
+//     }
+// }
+
+// /// Reads the content of the continue_uma.txt file, creating it with default value "1"
+// /// if it doesn't exist or there's an error reading it.
+// ///
+// /// # Returns
+// ///
+// /// * `String` - The content of the continue_uma.txt file ("0" or "1"), defaults to "1" on errors
+// fn read_continue_uma_file() -> String {
+//     // First get the path, which creates the file if needed
+//     let continue_path = match get_continue_uma_path() {
+//         Ok(path) => path,
+//         Err(e) => {
+//             eprintln!("Error ensuring continue_uma.txt path: {}", e);
+//             return "1".to_string(); // Default to "continue" on path resolution error
+//         }
+//     };
+
+//     // Then read the file content
+//     match fs::read_to_string(&continue_path) {
+//         Ok(content) => {
+//             let trimmed = content.trim().to_string();
+//             // Validate content - if not "0" or "1", default to "1"
+//             if trimmed != "0" && trimmed != "1" {
+//                 eprintln!("Invalid content in continue_uma.txt: '{}', defaulting to '1'", trimmed);
+//                 // Try to fix the file with correct content
+//                 let _ = fs::write(&continue_path, "1");
+//                 "1".to_string()
+//             } else {
+//                 trimmed
+//             }
+//         },
+//         Err(e) => {
+//             eprintln!("Error reading continue_uma.txt: {}", e);
+
+//             // Try to recreate the file with default content
+//             match fs::write(&continue_path, "1") {
+//                 Ok(_) => "1".to_string(),
+//                 Err(e2) => {
+//                     eprintln!("Error creating continue_uma.txt after read failed: {}", e2);
+//                     "1".to_string() // Default to "continue" on write error
+//                 }
+//             }
+//         }
+//     }
+// }
+
+// /// utility: Gets a list of all IPv4 and IPv6 addresses associated with the current system's network interfaces.
+// ///
+// /// Returns:
+// /// - `Ok(Vec<IpAddr>)`: A vector of IP addresses on success.
+// /// - `Err(io::Error)`: An error if obtaining network interface information fails.
+// /// From: https://docs.rs/getifaddrs/latest/getifaddrs/
+// /// use getifaddrs::{getifaddrs, InterfaceFlags};
+// fn get_local_ip_addresses() -> Result<Vec<IpAddr>, std::io::Error> {
+//     // https://docs.rs/getifaddrs/latest/getifaddrs/
+
+//     // Test Print in Debug Log
+//     for interface in getifaddrs()? {
+//         debug_log("fn get_local_ip_addresses() -> std::io::Result<()> {");
+//         debug_log!("Interface: {}", interface.name);
+//         debug_log!("  Address: {}", interface.address);
+//         if let Some(netmask) = interface.netmask {
+//             debug_log!("  Netmask: {}", netmask);
+//         }
+//         debug_log!("  Flags: {:?}", interface.flags);
+//         if interface.flags.contains(InterfaceFlags::UP) {
+//             debug_log!("  Status: Up");
+//         } else {
+//             debug_log!("  Status: Down");
+//         }
+//         debug_log!();
+//     }
+
+//     let mut addresses = Vec::new();
+
+//     for interface in getifaddrs()? {
+//         if interface.flags.contains(InterfaceFlags::UP) && // Interface is up
+//            !interface.flags.contains(InterfaceFlags::LOOPBACK) { // Not a loopback interface
+//                match interface.address {
+//                    IpAddr::V4(addr) => addresses.push(IpAddr::V4(addr)),
+//                    IpAddr::V6(addr) => addresses.push(IpAddr::V6(addr)),
+//                }
+//            }
+//     }
+
+
+
+//     Ok(addresses)
+// }
+
+
+// use getifaddrs::getifaddrs;
+// use std::net::IpAddr;
+
+// // TODO warning about local user-ip vs rc-ip
+// /// Saves the local user's network band config data
+// /// to sync_data text files
+// /// as this is done only once during startup, retry is likely not needed
+// ///
+// fn write_save_rc_bandnetwork_type_index(
+//     remote_collaborator_name: String,
+//     team_channel_name: String,
+//     network_type: String,
+//     network_index: u8,
+//     rc_this_ipv4: Ipv4Addr,
+//     rc_this_ipv6: Ipv6Addr,
+// ) -> Result<(), ThisProjectError> {
+//     /* ?
+//     Wait random time in A to B range, N times
+//     FILE_READWRITE_N_RETRIES
+//     FILE_READWRITE_RETRY_SEC_PAUSE_MIN
+//     FILE_READWRITE_RETRY_SEC_PAUSE_max
+//     */
+//     #[cfg(debug_assertions)]
+//     debug_log("WSRBTI write_save_rc_bandnetwork_type_index(), starting");
+
+//     // 1. Construct Path:
+//     let mut base_path = make_input_path_name_abs_executabledirectoryrelative_nocheck(
+//         "sync_data"
+//     )?;
+//     base_path.push(team_channel_name);
+//     base_path.push("network_band");
+//     base_path.push(remote_collaborator_name);
+
+//     // Create directory structure if it doesn't exist
+//     create_dir_all(&base_path)?;
+
+//     #[cfg(debug_assertions)]
+//     debug_log!("WSRBTI(), base_path {:?}", base_path);
+
+//     // 3. Construct Absolute File Paths
+//     let type_path = base_path.join("network_type.txt");
+//     let index_path = base_path.join("network_index.txt");
+//     let ipv4_path = base_path.join("ipv4.txt");
+//     let ipv6_path = base_path.join("ipv6.txt");
+
+//     #[cfg(debug_assertions)]{
+//         debug_log!("WSRBTI(), type_path {:?}", type_path);
+//         debug_log!("WSRBTI(), index_path {:?}", index_path);
+//         debug_log!("WSRBTI(), ipv4_path {:?}", ipv4_path);
+//         debug_log!("WSRBTI(), ipv6_path {:?}", ipv6_path);
+//     }
+
+//     // 4.1 Write to Files (handling potential errors):
+//     let mut type_file = File::create(&type_path)?; // Note the & for borrowing
+//     writeln!(type_file, "{}", network_type)?;
+
+//     #[cfg(debug_assertions)]
+//     debug_log!("WSRBTI(), type_file {:?}", type_file);
+
+//     let mut index_file = File::create(&index_path)?;
+//     writeln!(index_file, "{}", network_index)?;
+
+//     #[cfg(debug_assertions)]
+//     debug_log!("WSRBTI(), index_file {:?}", index_file);
+
+//     // 4.2 Write to Files (handling potential errors):
+//     let mut ip4_file = File::create(&ipv4_path)?; // Note the & for borrowing
+//     writeln!(ip4_file, "{}", rc_this_ipv4.to_string())?;  // Write IP string
+
+//     #[cfg(debug_assertions)]
+//     debug_log!("WSRBTI(), ip4_file {:?}", ip4_file);
+
+//     let mut ip6_file = File::create(&ipv6_path)?;
+//     writeln!(ip6_file, "{}", rc_this_ipv6.to_string())?;  // Write IP string
+
+//     #[cfg(debug_assertions)]
+//     debug_log!("WSRBTI(), ip6_file {:?}", ip6_file);
+
+//     Ok(())
+// }
+
+// /// Extracts all ports from a single team channel's node.toml file.
+// ///
+// /// # Purpose
+// /// This function reads a clearsigned `node.toml` file from a team channel and extracts
+// /// all configured network ports (ready, intray, and gotit ports) for all collaborator
+// /// pairs. The extracted ports are returned as a HashSet for efficient lookup when
+// /// checking for port collisions.
+// ///
+// /// # Parameters
+// /// * `node_toml_path` - The absolute path to the node.toml file to process
+// /// * `collaborator_files_dir_relative` - The relative path to the collaborator files
+// ///   directory (typically COLLABORATOR_ADDRESSBOOK_PATH_STR)
+// ///
+// /// # Security
+// /// - Only processes clearsigned files that pass GPG validation
+// /// - Uses the collaborator addressbook system for owner verification
+// /// - Returns an empty set if validation fails (with appropriate logging)
+// ///
+// /// # Returns
+// /// * `Ok(HashSet<u16>)` - A set of all ports found in the file
+// /// * `Err(ThisProjectError)` - If critical errors occur (not validation failures)
+// ///
+// /// # Example
+// /// let ports = make_exclusionlist_from_single_team_channel(
+// ///     Path::new("/path/to/team_channel/node.toml"),
+// ///     COLLABORATOR_ADDRESSBOOK_PATH_STR
+// /// )?;
+// /// println!("Found {} unique ports in use", ports.len());
+// /// node_toml_path
+// pub fn make_exclusionlist_from_single_team_channel(
+//     addressbook_readcopy_path_string: &str,
+//     node_readcopy_path: &Path,  // node_readcopy_path
+// ) -> Result<HashSet<u16>, ThisProjectError> {
+//     // Initialize the port set
+//     let mut port_set: HashSet<u16> = HashSet::new();
+
+//     // Check if the file exists
+//     if !node_readcopy_path.exists() {
+//         debug_log!(
+//             "make_exclusionlist_from_single_team_channel: File does not exist: {}",
+//             node_readcopy_path.display()
+//         );
+//         // Return empty set for non-existent files
+//         return Ok(port_set);
+//     }
+
+//     // Extract channel name for logging
+//     let channel_name = node_readcopy_path
+//         .parent()
+//         .and_then(|p| p.file_name())
+//         .and_then(|n| n.to_str())
+//         .unwrap_or("unknown");
+
+//     debug_log!(
+//         "make_exclusionlist_from_single_team_channel: Processing channel '{}'",
+//         channel_name
+//     );
+
+//     // TODO ? instead use read_teamchannel_collaborator_ports_clearsigntoml_without_keyid()
+
+//     /*
+//     addressbook_readcopy_path_string: &str,
+//     path_to_clearsigned_toml: &str,
+
+//     */
+//     // Read and validate the clearsigned configuration
+//     // match read_all_collaborator_port_assignments_clearsigntoml_optimized(
+//     match read_abstract_collaborator_portassignments_from_clearsigntoml_withoutkeyid(
+//         &addressbook_readcopy_path_string, // addressbook_readcopy_path_string
+//         &node_readcopy_path.display().to_string(), // path_to_clearsigned_toml
+//     ) {
+//         Ok(port_assignments) => {
+//             debug_log!(
+//                 "make_exclusionlist_from_single_team_channel: Successfully validated channel '{}'",
+//                 channel_name
+//             );
+
+//             // Extract all ports from all collaborator pairs
+//             for (pair_name, assignments) in port_assignments {
+//                 debug_log!(
+//                     "make_exclusionlist_from_single_team_channel: Processing pair '{}'",
+//                     pair_name
+//                 );
+
+//                 // Process each collaborator in the pair
+//                 for assignment in assignments {
+//                     // Add all three port types to the set
+//                     port_set.insert(assignment.ready_port);
+//                     port_set.insert(assignment.intray_port);
+//                     port_set.insert(assignment.gotit_port);
+
+//                     debug_log!(
+//                         "make_exclusionlist_from_single_team_channel: Added ports for user '{}': \
+//                          ready={}, intray={}, gotit={}",
+//                         assignment.user_name,
+//                         assignment.ready_port,
+//                         assignment.intray_port,
+//                         assignment.gotit_port
+//                     );
+//                 }
+//             }
+
+//             debug_log!(
+//                 "make_exclusionlist_from_single_team_channel: Channel '{}' total unique ports: {}",
+//                 channel_name,
+//                 port_set.len()
+//             );
+//         }
+//         Err(e) => {
+//             // Log the validation failure but don't propagate the error
+//             // Return empty set for files that fail validation
+//             eprintln!(
+//                 "WARNING: Skipping channel '{}' due to validation failure: {}",
+//                 channel_name,
+//                 e.to_string()
+//             );
+//             debug_log!(
+//                 "make_exclusionlist_from_single_team_channel: Validation failed for channel '{}': {}",
+//                 channel_name,
+//                 e.to_string()
+//             );
+//         }
+//     }
+
+//     Ok(port_set)
+// }
+
+// /// Extracts the abstract port assignments from a team channel's `node.toml` file.
+// ///
+// /// This function reads the `node.toml` file, parses the TOML data, and extracts the
+// /// `collaborator_port_assignments` table, returning it as a HashMap.
+// ///
+// /// # Arguments
+// ///
+// /// * `node_toml_path` - The path to the team channel's `node.toml` file.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, String>` - A `Result` containing a HashMap of
+// ///   collaborator pair names to their port assignments on success, or a `String` describing the error on failure.
+// fn get_abstract_port_assignments_from_node_toml(
+//     node_toml_path: &Path
+// ) -> Result<HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>>, String> {
+//     debug_log!("GAPAFNT 5. starting get_abstract_port_assignments_from_node_toml(): 1. Entering function with path: {:?}", node_toml_path);
+
+//     // 1. Read the node.toml file
+//     let toml_string = match std::fs::read_to_string(node_toml_path) {
+//         Ok(content) => {
+//             debug_log!("GAPAFNT: 2. Successfully read node.toml file.");
+//             content
+//         },
+//         Err(e) => {
+//             let error_message = format!("GAPAFNT: Error reading node.toml file: {}", e);
+//             debug_log!("{}", error_message);
+//             return Err(error_message);
+//         }
+//     };
+
+//     // 2. Parse the TOML data
+//     // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+//     let toml_value: Value = match toml::from_str(&toml_string) {
+//         Ok(value) => {
+//             debug_log!("GAPAFNT: 3. Successfully parsed TOML data.");
+//             value
+//         },
+//         Err(e) => {
+//             let error_message = format!("GAPAFNT: Error parsing node.toml data: {}", e);
+//             debug_log!("{}", error_message);
+//             return Err(error_message);
+//         }
+//     };
+
+//     // 3. Extract the abstract_collaborator_port_assignments table
+//     let mut abstract_port_assignments: HashMap<String, Vec<ReadTeamchannelCollaboratorPortsToml>> = HashMap::new();
+//     debug_log!("GAPAFNT: 4. Looking for 'abstract_collaborator_port_assignments' table.");
+//     if let Some(collaborator_assignments_table) = toml_value.get("abstract_collaborator_port_assignments").and_then(Value::as_table) {
+//         debug_log!("GAPAFNT: 5. Found 'abstract_collaborator_port_assignments' table.");
+//         for (pair_name, pair_data) in collaborator_assignments_table {
+//             debug_log!("GAPAFNT: 6. Processing pair: {}", pair_name);
+//             if let Some(ports_array) = pair_data.get("collaborator_ports").and_then(Value::as_array) {
+//                 debug_log!("GAPAFNT: 7. Found 'collaborator_ports' array for pair: {}", pair_name);
+//                 let mut ports_for_pair = Vec::new();
+//                 for port_data in ports_array {
+//                     debug_log!("GAPAFNT: 8. Processing port data: {:?}", port_data);
+//                     let port_data_str = toml::to_string(&port_data).unwrap();
+
+//                     // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+//                     // // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+//                     // // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+//                     // // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+//                     // // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+//                     // // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+//                     // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+//                     let collaborator_port: AbstractTeamchannelNodeTomlPortsData = toml::from_str(&port_data_str)
+//                         .map_err(|e| format!("GAPAFNT: Error deserializing collaborator port: {}", e))?;
+//                     debug_log!("GAPAFNT: 9. Deserialized port data: {:?}", collaborator_port);
+//                     ports_for_pair.push(ReadTeamchannelCollaboratorPortsToml {
+//                         collaborator_ports: vec![collaborator_port],
+//                     });
+//                 }
+//                 debug_log!("GAPAFNT: 10. Inserting ports for pair: {} into HashMap.", pair_name);
+//                 abstract_port_assignments.insert(pair_name.to_string(), ports_for_pair);
+//             } else {
+//                 debug_log!("GAPAFNT: 11. 'collaborator_ports' array not found for pair: {}", pair_name);
+//             }
+//         }
+//     } else {
+//         debug_log!("GAPAFNT: 12. 'abstract_collaborator_port_assignments' table not found.");
+//     }
+
+//     debug_log!("GAPAFNT: 13. Exiting function with port assignments: {:?}", abstract_port_assignments);
+//     // 4. Return the abstract_port_assignments HashMap
+//     Ok(abstract_port_assignments)
+// }
+// /// Extracts a string value associated with a given key from a TOML-formatted byte slice.
+// ///
+// /// This function manually parses the byte slice, looking for a line that matches the
+// /// format `key = "value"`.  It handles cases where the key is not found or the value is
+// /// not enclosed in double quotes. It does NOT handle TOML arrays or tables.
+// /// It does NOT depend on the serde or toml crate.
+// ///
+// /// # Arguments
+// ///
+// /// * `toml_bytes`: The TOML data as a byte slice.
+// /// * `key`: The key to search for.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<String, ThisProjectError>`: The extracted value or an error.
+// fn extract_string_from_toml_bytes(toml_bytes: &[u8], key: &str) -> Result<String, ThisProjectError> {
+//     let toml_str = std::str::from_utf8(toml_bytes).map_err(|_| ThisProjectError::InvalidData("Invalid UTF-8".into()))?;
+
+//     for line in toml_str.lines() {
+//         let line = line.trim();
+//         if line.starts_with(key) && line.contains('=') {
+//             let parts: Vec<&str> = line.split('=').map(|s| s.trim()).collect();
+//             if parts.len() == 2 {
+//                 let value = parts[1];
+//                 if value.starts_with('"') && value.ends_with('"') {
+//                     return Ok(value[1..value.len() - 1].to_string());
+//                 } else {
+//                     return Err(ThisProjectError::InvalidData("Value not in quotes".into()));
+//                 }
+//             }
+//         }
+//     }
+//     Err(ThisProjectError::InvalidData(format!("Key '{}' not found", key).into()))
+// }
+
+    // /// Test: Basic functionality with valid inputs
+    // ///
+    // /// This test requires GPG setup to run fully.
+    // #[test]
+    // #[ignore] // Requires GPG setup
+    // fn test_basic_clearsign_success() {
+    //     let test_dir = create_test_temp_dir().expect("Failed to create test directory");
+
+    //     let target_file = test_dir.join("test_message.toml");
+    //     let toml_content = "owner = \"testuser\"\ntext = \"Test message\"";
+
+    //     let result = save_message_as_clearsigned_toml(
+    //         &target_file,
+    //         toml_content,
+    //     );
+
+    //     // With proper GPG setup, this should succeed
+    //     // assert!(result.is_ok(), "Function should succeed with valid inputs");
+    //     // assert!(target_file.exists(), "Target file should exist");
+
+    //     cleanup_test_dir(&test_dir);
+    // }
+
+// /// Serialize MessagePostFile struct to TOML format string
+// ///
+// /// This function manually constructs a TOML-formatted string from a `MessagePostFile`
+// /// struct without using the `serde` or `toml` crates. This approach provides direct
+// /// control over the serialization process and avoids third-party dependencies.
+// ///
+// /// # Project Context
+// ///
+// /// This function is part of the instant messaging file persistence system. It converts
+// /// a message post data structure into TOML format for storage in the node's file system.
+// /// The TOML file represents a single message post with metadata including ownership,
+// /// recipients, timestamps, and encryption settings.
+// ///
+// /// The function is used when writing message posts to disk, replacing the deprecated
+// /// `toml::to_string()` approach with a manual serialization that gives full control
+// /// over the output format and error handling.
+// ///
+// /// # TOML Format
+// ///
+// /// The generated TOML has the following structure:
+// ///
+// /// ```toml
+// /// owner = "username"
+// /// node_name = "nodename"
+// /// filepath_in_node = "/path/to/file"
+// /// text_message = """message content"""
+// /// teamchannel_collaborators_with_access = [
+// ///     "user1",
+// ///     "user2",
+// /// ]
+// /// updated_at_timestamp = 1234567890
+// /// messagepost_gpgtoml = false
+// /// expires_at = 18446744073709551615
+// /// ```
+// ///
+// /// # String Handling
+// ///
+// /// - Simple string fields (owner, node_name, filepath_in_node) use basic TOML strings with escaping
+// /// - The text_message field uses multi-line string format (triple quotes) to safely handle
+// ///   message content that may contain newlines, quotes, and other special characters
+// /// - Array elements are individually escaped and formatted
+// ///
+// /// # Parameters
+// ///
+// /// - `message`: Reference to the `MessagePostFile` struct to serialize
+// ///
+// /// # Returns
+// ///
+// /// - `Ok(String)`: TOML-formatted string representation of the message post
+// /// - `Err(ThisProjectError)`: If serialization encounters an error
+// ///
+// /// # Error Handling
+// ///
+// /// Returns errors via Result type for consistency and future extensibility.
+// /// The function is designed to handle all valid `MessagePostFile` instances without
+// /// panicking.
+// ///
+// /// # Usage Example
+// ///
+// /// ```rust
+// /// let message = MessagePostFile::new(/*...*/);
+// /// match serialize_messagepost_config_0toml(&message) {
+// ///     Ok(toml_string) => {
+// ///         // Write to file or transmit
+// ///         write_to_file(&toml_string)?;
+// ///     }
+// ///     Err(e) => {
+// ///         // Handle serialization error with project-appropriate recovery
+// ///         log_error("SMPC0T: serialization failed");
+// ///         return Err(e);
+// ///     }
+// /// }
+// /// ```
+// fn serialize_messagepost_toml(message: &MessagePostFile) -> Result<String, ThisProjectError> {
+//     let mut toml_string = String::new();
+
+//     // Serialize owner field - identifies who created this message post
+//     toml_string.push_str(&format!("owner = \"{}\"\n", escape_toml_basic_string(&message.owner)));
+
+//     // Serialize node_name field - identifies which node this message belongs to
+//     toml_string.push_str(&format!("node_name = \"{}\"\n", escape_toml_basic_string(&message.node_name)));
+
+//     // Serialize filepath_in_node field - relative path within node directory structure
+//     toml_string.push_str(&format!("filepath_in_node = \"{}\"\n", escape_toml_basic_string(&message.filepath_in_node)));
+
+//     // Serialize text_message using multi-line string format
+//     // This is appropriate for message content which may be multi-line
+//     toml_string.push_str(&format!("text_message = \"{}\"\n", message.text_message));
+
+//     // Serialize the recipients list as a TOML array
+//     // This contains all users who have access to view this message post
+//     serialize_string_array_to_toml(&mut toml_string, "teamchannel_collaborators_with_access", &message.teamchannel_collaborators_with_access)?;
+//     serialize_string_array_to_toml(&mut toml_string, "ping", &message.ping)?;
+
+//     // Serialize updated_at_timestamp - POSIX UTC timestamp of last update
+//     toml_string.push_str(&format!("updated_at_timestamp = {}\n", message.updated_at_timestamp));
+
+//     // Serialize messagepost_gpgtoml - boolean indicating if file is GPG encrypted
+//     // TOML booleans are lowercase: true or false
+//     toml_string.push_str(&format!("messagepost_gpgtoml = {}\n", message.messagepost_gpgtoml));
+
+//     // Serialize expires_at - POSIX UTC timestamp when message expires (u64::MAX means no expiration)
+//     toml_string.push_str(&format!("expires_at = {}\n", message.expires_at));
+
+//     Ok(toml_string)
+// }
+
+// /// Gets user input for whether user confirmation is required before posting
+// ///
+// /// # Returns
+// /// * `Result<Option<bool>, ThisProjectError>` - Whether user confirmation is required or None
+// fn q_and_a_get_corenode_gpgtoml() -> Result<bool, ThisProjectError> {
+//     println!("This Node is gpgtoml encrypted?  -> (y)es / (n)o / Press-Enter to skip):");
+
+//     let mut input = String::new();
+//     io::stdout().flush()?;
+//     io::stdin().read_line(&mut input)?;
+
+//     let input = input.trim().to_lowercase();
+//     if input.is_empty() {
+//         return Ok(false);
+//     }
+
+//     match input.as_str() {
+//         "yes" | "y" | "true" | "1" => Ok(true),
+//         "no" | "n" | "false" | "0" => Ok(false),
+//         _ => Err(ThisProjectError::InvalidInput(format!("Invalid boolean value: {}. Use yes/no", input)))
+//     }
+// }
+
+// /// Creates a lookup table of node unique IDs to their full file paths.
+// ///
+// /// This function iterates through the team channel directory, identifies node directories (those containing a `node.toml` file),
+// /// extracts the node's unique ID from the `node.toml`, and stores the ID and full file path in a HashMap.
+// ///
+// /// # Arguments
+// ///
+// /// * `team_channel_path`: The path to the team channel directory.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<HashMap<String, PathBuf>, ThisProjectError>`:  A HashMap mapping node unique IDs to their paths, or a `ThisProjectError` if an error occurs.
+// fn create_node_id_to_path_lookup(
+//     team_channel_path: &Path,
+// ) -> Result<HashMap<String, PathBuf>, ThisProjectError> {
+
+//     debug_log("CNITPL: startng create_node_id_to_path_lookup");
+//     debug_log!("CNITPL team_channel_path {:?}", team_channel_path);
+
+//     let mut node_lookup: HashMap<String, PathBuf> = HashMap::new();
+
+
+//     // Get GPG fingerprint for decryption/verification
+//     debug_log!("LIM: Getting GPG fingerprint from uma.toml");
+//     let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+//         Ok(fingerprint) => {
+//             debug_log!("LIM: GPG fingerprint retrieved: {}", fingerprint);
+//             fingerprint
+//         }
+//         Err(e) => {
+//             debug_log!("LIM: Failed to read GPG fingerprint from uma.toml: {}", e);
+//             println!("Error: Cannot load messages without GPG fingerprint");
+//             return Err(ThisProjectError::from(e));
+//         }
+//     };
+
+//     // Get temp directory for read copies
+//     let base_uma_temp_directory_path = match get_base_uma_temp_directory_path() {
+//         Ok(path) => path,
+//         Err(e) => {
+//             debug_log!("LIM: Failed to get temp directory path: {}", e);
+//             println!("Error: Cannot create temp directory for message reading");
+//             return Err(ThisProjectError::from(e));
+//         }
+//     };
+
+
+//     for entry in WalkDir::new(team_channel_path) {
+//         let entry = entry?;
+//         let path = entry.path();
+
+//         if path.is_dir() { // A. Nodes only (directories)
+
+//             // let node_toml_path = path.join("node.toml");
+
+
+//             // Construct path to node.toml or node.gpgtoml
+//             // Find the configuration file (could be either node.toml OR node.gpgtoml)
+//             let node_toml_path = match find_node_toml_or_gpgtoml_file(
+//                 &path,
+//                 ) {
+//                 Ok(Some(found_path)) => {
+//                     // This is the path to whichever file was found (node.toml OR node.gpgtoml)
+//                     #[cfg(debug_assertions)]
+//                     debug_log!("CNITPL found configuration file at: {:?}", found_path);
+//                     found_path  // <-- This could be either file
+//                 },
+//                 Ok(None) => {
+//                     // No file found - handle the error properly
+//                     debug_log("CNITPL Neither node.toml nor node.gpgtoml found");
+//                     continue;
+//                 },
+//                 Err(_e) => {
+//                     // Error occurred - handle it properly
+//                     #[cfg(debug_assertions)]
+//                     debug_log!("CNITPL Neither node.toml nor node.gpgtoml found >> {}", _e);
+//                     continue;
+//                 }
+//             };
+
+
+//             if node_toml_path.exists() {
+
+//                 // Get readable temp copy (handles both .toml and .gpgtoml)
+//                 let node_toml_readcopy_path = match get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
+//                     &node_toml_path,
+//                     &gpg_full_fingerprint_key_id_string,
+//                     &base_uma_temp_directory_path,
+//                 ) {
+//                     Ok(path) => {
+//                         debug_log!("CNITPL: Got temp read copy at: {}", path);
+//                         path
+//                     }
+//                     Err(_e) => {
+//                         #[cfg(debug_assertions)]
+//                         debug_log!("CNITPL: Failed to get readable copy {:?}", _e);
+
+//                         continue;
+//                     }
+//                 };
+
+
+
+
+//                 // // Found a node directory
+//                 // let toml_string = std::fs::read_to_string(&node_toml_path)?;
+
+//                 // // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+//                 // let toml_value: Value = toml::from_str(&toml_string)?;
+
+//                 // // B. Extract node unique ID
+//                 // // let node_unique_id = toml_value.get("node_unique_id").and_then(Value::as_integer).unwrap_or(0) as u64;
+
+//                 // // Updated to get unique_id as hex_string:
+//                 // let node_unique_id_str = toml_value.get("node_unique_id").and_then(Value::as_str).map(|s| s.to_owned()).unwrap_or_default();
+
+
+//                 // if node_unique_id_str.is_empty() {
+//                 //     continue; // Skip this node if no valid ID
+//                 // }
+
+//                 // TODO: type string?
+//                 let node_unique_id_str = match read_single_line_string_field_from_toml(
+//                     &node_toml_readcopy_path,  // string
+//                     "node_unique_id", // string
+//                 ) {
+//                     Ok(username) => {
+//                         if username.is_empty() {
+//                             // Convert to String error instead of GpgError
+//                             continue;
+//                         }
+//                         username
+//                     }
+//                     Err(_e) => {
+
+//                         #[cfg(debug_assertions)]
+//                         debug_log!("CNITPL: Failed to get readable copy {:?}", _e);
+
+//                         // Convert to String error instead of GpgError
+//                         continue;
+//                     }
+//                 };
+
+//                 // C. Get full file path
+//                 let full_path = path.to_path_buf();
+
+//                 // Add to lookup table:
+//                 node_lookup.insert(node_unique_id_str, full_path);
+//             }
+//         }
+//     }
+
+//     debug_log("CNITPL: to end of end");
+
+//     Ok(node_lookup)
+// }
+
+// /// Creates a lookup table of node unique IDs to their full file paths.
+// ///
+// /// This function iterates through the team channel directory, identifies node directories (those containing a `node.toml` file),
+// /// extracts the node's unique ID from the `node.toml`, and stores the ID and full file path in a HashMap.
+// ///
+// /// # Arguments
+// ///
+// /// * `team_channel_path`: The path to the team channel directory.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<HashMap<String, PathBuf>, ThisProjectError>`:  A HashMap mapping node unique IDs to their paths, or a `ThisProjectError` if an error occurs.
+// fn create_node_id_to_path_lookup(
+//     team_channel_path: &Path,
+// ) -> Result<HashMap<String, PathBuf>, ThisProjectError> {
+
+//     debug_log("CNITPL: startng create_node_id_to_path_lookup");
+//     debug_log!("CNITPL team_channel_path {:?}", team_channel_path);
+
+//     let mut node_lookup: HashMap<String, PathBuf> = HashMap::new();
+
+//     for entry in WalkDir::new(team_channel_path) {
+//         let entry = entry?;
+//         let path = entry.path();
+
+//         if path.is_dir() { // A. Nodes only (directories)
+
+//             let node_toml_path = path.join("node.toml");
+
+
+//             // // Construct path to node.toml or node.gpgtoml
+//             // // Find the configuration file (could be either node.toml OR node.gpgtoml)
+//             // let node_toml_path = match find_node_toml_or_gpgtoml_file(
+//             //     &self.current_full_file_path,
+//             //     ) {
+//             //     Ok(Some(path)) => {
+//             //         // This is the path to whichever file was found (node.toml OR node.gpgtoml)
+//             //         debug_log!("CNITPL ound configuration file at: {:?}", path);
+//             //         path  // <-- This could be either file
+//             //     },
+//             //     Ok(None) => {
+//             //         // No file found - handle the error properly
+//             //         debug_log("CNITPL Neither node.toml nor node.gpgtoml found");
+//             //         continue;
+//             //     },
+//             //     Err(e) => {
+//             //         // Error occurred - handle it properly
+//             //         debug_log!("CNITPL Neither node.toml nor node.gpgtoml found >> {}", e);
+//             //         continue;
+//             //     }
+//             // };
+
+
+//             if node_toml_path.exists() {
+
+//                 // Found a node directory
+//                 let toml_string = std::fs::read_to_string(&node_toml_path)?;
+
+//                 // TODO NO 'toml::from_str' !!!!!!!!!!!!!!!!!
+//                 let toml_value: Value = toml::from_str(&toml_string)?;
+
+//                 // B. Extract node unique ID
+//                 // let node_unique_id = toml_value.get("node_unique_id").and_then(Value::as_integer).unwrap_or(0) as u64;
+
+//                 // Updated to get unique_id as hex_string:
+//                 let node_unique_id_str = toml_value.get("node_unique_id").and_then(Value::as_str).map(|s| s.to_owned()).unwrap_or_default();
+
+
+//                 if node_unique_id_str.is_empty() {
+//                     continue; // Skip this node if no valid ID
+//                 }
+
+//                 // let file_owner_username = match read_single_line_string_field_from_toml(
+//                 //     &node_unique_id_str,  //  string
+//                 //     "node_unique_id",
+//                 // ) {
+//                 //     Ok(username) => {
+//                 //         if username.is_empty() {
+//                 //             // Convert to String error instead of GpgError
+//                 //             continue;
+//                 //         }
+//                 //         username
+//                 //     }
+//                 //     Err(e) => {
+//                 //         // Convert to String error instead of GpgError
+//                 //         continue;
+//                 //     }
+//                 // };
+
+//                 // C. Get full file path
+//                 let full_path = path.to_path_buf();
+
+//                 // Add to lookup table:
+//                 node_lookup.insert(node_unique_id_str, full_path);
+//             }
+//         }
+//     }
+
+//     Ok(node_lookup)
+// }
+
+// /// Loads collaborator data from a TOML file based on the username.
+// ///
+// /// This function uses `read_one_collaborator_addressbook_toml` to deserialize the collaborator data.
+// ///
+// /// # Arguments
+// ///
+// /// * `username` - The username of the collaborator whose data needs to be loaded.
+// ///
+// /// # Errors
+// ///
+// /// This function returns a `Result<CollaboratorTomlData, ThisProjectError>` to handle potential errors:
+// ///  - `ThisProjectError::IoError`: If the collaborator file is not found or if there is an error reading the file.
+// ///  - `ThisProjectError::TomlDeserializationError`: If there is an error parsing the TOML data.
+// ///
+// /// # Example
+// ///
+// /// ```
+// /// let collaborator = get_addressbook_file_by_username("alice").unwrap(); // Assuming alice's data exists
+// /// println!("Collaborator: {:?}", collaborator);
+// /// ```
+// fn get_addressbook_file_by_username(username: &str) -> Result<CollaboratorTomlData, ThisProjectError> {
+//     debug_log!("Starting get_addressbook_file_by_username(username),  for -> '{}'", username);
+//     // debug_log!("Starting get_addressbook_file_by_username(username),  for -> '{}'", username);
+
+//     // Debug the directory structure
+//     let base_dir = Path::new(COLLABORATOR_ADDRESSBOOK_PATH_STR);
+//     debug_log!("Base directory path: {:?}", base_dir);
+//     debug_log!("Base directory exists: {}", base_dir.exists());
+
+//     // Check current working directory
+//     debug_log!("Current working directory: {:?}", std::env::current_dir()?);
+
+//     // Construct and check the specific file path
+//     let file_path = base_dir.join(format!("{}__collaborator.toml", username));
+//     debug_log!("Looking for file at: {:?}", file_path);
+//     debug_log!("File exists: {}", file_path.exists());
+
+//     // Try to list files in the directory if it exists
+//     if base_dir.exists() {
+//         debug_log!("Contents of collaborator_files_address_book directory:");
+//         match std::fs::read_dir(base_dir) {
+//             Ok(entries) => {
+//                 for entry in entries {
+//                     if let Ok(entry) = entry {
+//                         debug_log!("Found file: {:?}", entry.path());
+//                     }
+//                 }
+//             },
+//             Err(e) => debug_log!("Could not read directory contents: {}", e),
+//         }
+//     }
+//     // Use read_one_collaborator_addressbook_toml to read and deserialize the data
+//     match read_one_collaborator_addressbook_toml(username) {
+//         Ok(loaded_collaborator) => {
+//             debug_log!("Collaborator file found ok.");
+//             Ok(loaded_collaborator)
+//         }
+//         Err(e) => {
+//             debug_log!("Collaborator file not found: {:?}", e);
+//             Err(e) // Propagate the error from read_one_collaborator_addressbook_toml
+//         }
+//     }
+// }
+
+// // old deprecated
+// /// A safer wrapper function that includes additional error checking.
+// ///
+// /// # Arguments
+// ///
+// /// * `path` - A PathBuf containing the path to the TOML file
+// /// * `new_string` - A string slice containing the new value to be set
+// /// * `field` - A string slice containing the name of the field to update
+// ///
+// /// # Returns
+// ///
+// /// * `Result<(), String>` - Ok(()) on success, or an error message if the operation fails
+// ///
+// /// Example Use:
+// /// ```
+// /// use std::path::PathBuf;
+// /// let config_path = PathBuf::from("config.toml");
+// /// match safe_update_toml_field(&config_path, "alice", "user_name") {
+// ///     Ok(_) => println!("Successfully updated TOML file"),
+// ///     Err(e) => eprintln!("Error: {}", e)
+// /// }
+// /// ```
+// pub fn safe_update_moving_node_toml_fields(
+//     path: &PathBuf,
+//     new_string: &str,
+//     field: &str
+//     destination_parent_node_file_path: &Pathbuf,
+// ) -> Result<(), String> {
+//     /*
+//     fn safe_update_for_moving_node_toml_fields(
+
+//     read_from_path_to_node_file, // pathbuf readfile_path_to_source_node
+//     save_to_path, // &pathbuf, new_node_path with file name and extension
+//     new_parent_node_uniqueid, // vec<u8>
+//     new_path_in_parentnode, // string
+//     save_format_use_gpgtoml, // bool for node.toml or node.gpgtoml
+
+//     ) -> Result<(), String> {
+//     */
+//     debug_log("starting safe_update_toml_field()");
+
+//     debug_log!(
+//         "in safe_update_toml_field(\n{:?},\n{:?},\n{:?},\n)",
+//         &path,        // path to .toml
+//         &new_string,  // new value
+//         "field",      // name of field
+//     );
+
+//     // Validate inputs
+//     if field.is_empty() {
+//         return Err("Error: safe_update_toml_field() Field name cannot be empty".to_string());
+//     }
+
+//     if !path.exists() {
+//         return Err(format!("Error: safe_update_toml_field() File not found: {}", path.display()));
+//     }
+
+//     update_toml_field(path, new_string, field)
+//         .map_err(|e| format!("Error: safe_update_toml_field() Failed to update TOML file: {}", e))
+// }
+
+// /// Converts a vector of u8 hash values into a hexadecimal string representation.
+// ///
+// /// This function takes a slice of `u8` values (typically a hash) and converts it into a hexadecimal string,
+// /// with each byte represented by two hexadecimal characters.  The resulting string is suitable for use as a filename or identifier.
+// ///
+// /// # Arguments
+// ///
+// /// * `hash_array`: A slice of `u8` values representing the hash.
+// ///
+// /// # Returns
+// ///
+// /// * `String`: The hexadecimal string representation of the hash.
+// ///
+// /// # Example
+// ///
+// /// ```
+// /// let hash_array = [0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0];
+// /// let hex_string = hash_array_to_hex_string(&hash_array);
+// /// assert_eq!(hex_string, "123456789abcdef0");
+// /// ```
+// /// TODO Does this need error handling?
+// fn docid_hash_array_to_hex_string(hash_array: &[u8]) -> String {
+//     hash_array
+//         .iter()
+//         .map(|&h| format!("{:02x}", h))
+//         .collect::<String>()
+// }
+
+// /// Removes all pre-fail flag files for a remote collaborator.
+// ///
+// /// This function removes all files within the fail_retry_flags directory for the
+// /// given team channel and remote collaborator. The directory structure is as
+// /// follows:  `sync_data/{team_channel_name}/fail_retry_flags/{remote_collaborator_name}/`.
+// ///
+// /// # Arguments
+// ///
+// /// * `remote_collaborator_name`: The name of the remote collaborator.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<(), ThisProjectError>`: `Ok(())` if all files were removed
+// ///   successfully (or if the directory doesn't exist), or a
+// ///   `ThisProjectError` if an error occurs during directory access or file
+// ///   removal.
+// fn remove_prefail_flags__for_sendfile(
+//     remote_collaborator_name: &str,
+// ) -> Result<(), ThisProjectError> {
+//     let team_channel_name = get_current_team_channel_name_from_nav_path()
+//         .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
+
+//     let directory_base = make_input_path_name_abs_executabledirectoryrelative_nocheck(
+//         "sync_data"
+//     )?;
+
+//     let directory_path = directory_base
+//         .join(&team_channel_name)
+//         .join("fail_retry_flags")
+//         .join(remote_collaborator_name);
+
+//     if !directory_path.exists() { // Check for existance
+//         return Ok(()); // Or log a message: debug_log!("Directory_path not found: {:?}", directory_path);
+//     }
+
+//     for entry in fs::read_dir(&directory_path)? {  // Iterate through directory_path contents
+//         let entry = entry?;
+//         let path = entry.path();
+//         if path.is_file() { // Only remove files
+//             match fs::remove_file(&path) { // Use remove_file, not remove_dir_all
+//                 Ok(_) => debug_log!("Removed flag file: {:?}", path),
+//                 Err(e) => {
+//                     debug_log!("Error removing flag file: {:?} - {}", path, e);
+//                     // Either continue or return the error if you want to stop on the first error.
+//                     return Err(ThisProjectError::IoError(e));
+//                 }
+//             }
+//         }
+//     }
+//     Ok(())
+// }
+
+// // draft based on 'send ready signal' function
+// /// Sends a Gotit to the specified target address.
+// fn send_gotit_signal(
+//     local_user_salt_list: &[u128],
+//     local_user_ipv4_address: &Ipv4Addr,
+//     local_user_ipv6_address: &Ipv6Addr,
+//     network_type: &str,  // Add network type
+//     local_user_gotit_port_yourdesk_yousend_aimat_their_rmtclb_ip: u16,
+//     received_file_updatedat_timestamp: u64,
+// ) -> Result<(), ThisProjectError> {
+//     /*
+//     struct GotItSignal {
+//         gst: Option<u64>, // send-time:
+//             generate_terse_timestamp_freshness_proxy(); for replay-attack protection
+//         di: Option<u64>, // the 'id' is updated_at file timestamp
+//             (because context= filesync timeline ID)
+//         gh: Option<Vec<u8>>, // N hashes of rt + re
+//     */
+
+//     let timestamp_for_gst = get_current_unix_timestamp();
+
+//     // Make hashes of gotit_signal fields:
+//     let gh_hashes = calculate_gotitsignal_hashlist(
+//         timestamp_for_gst,
+//         received_file_updatedat_timestamp, // as di
+//         local_user_salt_list,
+//     );
+
+//     // Create the GotItSignal struct:
+//     let gotit_struct = GotItSignal {
+//         gst: timestamp_for_gst,
+//         di: received_file_updatedat_timestamp,
+//         gh: gh_hashes?, // Include calculated hashes
+//     };
+
+//     // 5. Serialize the ReadySignal
+//     let serialized_gotitsignal_data = serialize_gotit_signal(
+//         &gotit_struct
+//     ).expect("inHLOD send_gotit_signal() err Failed to serialize ReadySignal, gotit_signal_to_send_from_this_loop");
+
+//     // --- Inspect Serialized Data ---
+//     debug_log!("inHLOD send_gotit_signal() serialized_gotitsignal_data: {:?}", serialized_gotitsignal_data);
+
+//     // Determine target IP based on network_type
+//     let detected_lou_ip_addr = match network_type {
+//         "ipv6" => IpAddr::V6(*local_user_ipv6_address),
+//         "ipv4" => IpAddr::V4(*local_user_ipv4_address),
+//         _ => return Err(ThisProjectError::NetworkError("Invalid network type in send_gotit_signal".into())),
+//     };
+
+//     let target_addr = SocketAddr::new(
+//         detected_lou_ip_addr,
+//         local_user_gotit_port_yourdesk_yousend_aimat_their_rmtclb_ip,
+//     );
+
+//     // Log before sending
+//     debug_log!(
+//         "inHLOD send_gotit_signal() Attempting to send ReadySignal to {}: {:?}",
+//         target_addr,
+//         local_user_gotit_port_yourdesk_yousend_aimat_their_rmtclb_ip
+//     );
+
+//     // // If sending to the first address succeeds, no need to iterate further
+
+//     if send_data(&serialized_gotitsignal_data, target_addr).is_ok() {
+//         debug_log("inHLOD send_gotit_signal() 6. Successfully sent GotIt to {} (first address)");
+//         // Exit the thread below
+//     } else {
+//         debug_log("inHLOD send_gotit_signal() err 6. Failed to send GotIt to {} (first address)");
+//         return Err(ThisProjectError::NetworkError("Failed to send ReadySignal".to_string())); // Return an error
+//     }
+
+//     Ok(())
+// }
+
+// // needed later?
+//
+// /// Receives a ReadySignal with a timeout, performing hash and timestamp verification.
+// /// Goal purpose and scope: screening valid packets to verify a live-ip
+// ///
+// /// This function now includes both hash verification and timestamp freshness checks.
+// ///
+// /// # Arguments
+// ///
+// /// * `socket`: The UDP socket to receive data on.
+// /// * `buf`: A mutable buffer to store the received data.
+// /// * `salt_list`: The salt list for hash verification.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<Option<SocketAddr>, ThisProjectError>`: The sender's `SocketAddr` on success, an error, or `Ok(None)` on timeout.
+// fn receive_ready_signal_with_timeout_seconds( // Hash and timestamp checks moved HERE!
+//     duration_in_seconds: u64,
+//     socket: &UdpSocket,
+//     buf: &mut [u8],
+//     senders_salt_list: &[u128],
+// ) -> Result<Option<(SocketAddr, ReadySignal)>, ThisProjectError> { // Changed to return the signal
+//     debug_log!("receive_ready_signal_with_timeout(): Starting...");
+
+//     let timeout_duration = Duration::from_secs(duration_in_seconds);
+
+//     socket.set_read_timeout(Some(timeout_duration))?;
+
+//     match socket.recv_from(buf) {
+//         Ok((amt, src)) => {
+//             debug_log!("receive_ready_signal_with_timeout(): Received {} bytes from {}", amt, src);
+
+//             // 1. Deserialize
+//             let ready_signal = match deserialize_ready_signal(&buf[..amt], senders_salt_list) { // Deserialize first.  Use the passed-in senders_salt_list
+//                 Ok(signal) => signal,
+//                 Err(e) => {
+//                     debug_log!("receive_ready_signal_with_timeout():  Failed to deserialize ReadySignal: {}", e);
+//                     return Err(e);  // Or continue to listen for the next signal
+//                 },
+//             };
+
+//             // 2. Hash Verification: PERFORM HASH CHECK HERE!
+//             if !verify_readysignal_hashes(&ready_signal, senders_salt_list) { // Hash verification alongside timestamp check
+//                 debug_log!("receive_ready_signal_with_timeout(): ReadySignal hash verification failed. Discarding.");
+//                 return Ok(None); // Or continue to listen, but return nothing.
+//             };
+//             debug_log!("receive_ready_signal_with_timeout(): ReadySignal hashes verified.");
+
+//             // 3. Timestamp Freshness Check: PERFORM TIMESTAMP CHECK HERE!
+//             let current_timestamp = get_current_unix_timestamp();
+//             if ready_signal.rst > current_timestamp + 5 || current_timestamp - 10 > ready_signal.rst {  // Freshness check, combined
+//                 debug_log!("receive_ready_signal_with_timeout(): Received outdated or future-dated ReadySignal.  Discarding.");
+//                 return Ok(None); // Indicate invalid signal without returning an Error.
+//             };
+//             debug_log!("receive_ready_signal_with_timeout():  ReadySignal timestamp verified.");
+
+//             // 4. Return the source address and ReadySignal if all checks pass.
+//             Ok(Some((src, ready_signal))) // Include ReadySignal
+//         },
+
+//         Err(e) if e.kind() == ErrorKind::WouldBlock => {
+//             debug_log!("receive_ready_signal_with_timeout(): Timeout");
+//             Ok(None) // Correct handling of timeout, not returning an error!
+//         }
+//         Err(e) => {
+//             debug_log!("receive_ready_signal_with_timeout(): Error receiving data: {}", e);
+//             Err(ThisProjectError::NetworkError(e.to_string()))
+//         },
+//     }
+// }
+
+// /// Calculates Pearson hashes for a vector of byte slices.
+// ///
+// /// This function iterates through the input `data_sets` and calculates the Pearson hash for each slice,
+// /// returning a vector of the calculated hashes.
+// ///
+// /// # Arguments
+// ///
+// /// * `data_sets`: A vector of byte slices to hash.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<Vec<u8>, ThisProjectError>`: A `Result` containing a vector of the calculated Pearson hashes,
+// ///   or a `ThisProjectError` if an error occurs during hash calculation.
+// fn calculate_pearson_hashes(data_sets: &[&[u8]]) -> Result<Vec<u8>, ThisProjectError> {
+//     let mut hashes = Vec::new();
+//     for data in data_sets {
+//         let hash = pearson_hash_base(data)?;
+//         hashes.push(hash);
+//     }
+//     Ok(hashes)
+// }

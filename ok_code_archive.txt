@@ -176,3 +176,21 @@ fn move_directory_contents(
     }
     Ok(())
 }
+
+// /// Creates a UDP socket bound to the specified address and port.
+// ///
+// /// Simplifies socket creation by taking a SocketAddr directly.
+// /// Does one thing well.
+// ///
+// /// # Arguments
+// ///
+// /// * `socket_addr`: The address and port to bind to.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<UdpSocket, ThisProjectError>`: The bound socket or an error if binding fails.
+// fn create_rc_udp_socket(socket_addr: SocketAddr) -> Result<UdpSocket, ThisProjectError> {
+//     UdpSocket::bind(socket_addr).map_err(|e| {
+//         ThisProjectError::NetworkError(format!("Failed to bind to UDP socket: {}", e))
+//     })
+// }
