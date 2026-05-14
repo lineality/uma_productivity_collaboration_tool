@@ -2976,6 +2976,7 @@ let error_msg = format!(
 "Failed to ensure team_channels_dir exists: {}",
 io_error
 );
+#[cfg(debug_assertions)]
 eprintln!("ERROR: {}", error_msg);
 return Err(ThisProjectError::from(error_msg));
 }
@@ -3037,6 +3038,7 @@ let error_msg = format!(
 "Failed to ensure team_channels_dir exists: {}",
 io_error
 );
+#[cfg(debug_assertions)]
 eprintln!("ERROR: {}", error_msg);
 return Err(ThisProjectError::from(error_msg));
 }
@@ -4001,6 +4003,7 @@ pub fn global_ports_exclusion_list_generator() -> Result<HashSet<u16>, ThisProje
                 "Failed to access team_channels directory: {}",
                 io_error
             );
+            #[cfg(debug_assertions)]
             eprintln!("ERROR: {}", error_msg);
             return Err(ThisProjectError::from(error_msg));
         }
@@ -4358,6 +4361,7 @@ pub fn collect_and_validate_collaborators(
                 "Failed to access collaborator files directory: {}",
                 io_error
             );
+            #[cfg(debug_assertions)]
             eprintln!("ERROR: {}", error_msg);
             return Err(ThisProjectError::from(error_msg));
         }
@@ -8487,6 +8491,8 @@ pub fn make_new_collaborator_addressbook_toml_file(
     use crate::manage_absolute_executable_directory_relative_paths::make_input_path_name_abs_executabledirectoryrelative_nocheck;
     use crate::manage_absolute_executable_directory_relative_paths::prepare_file_parent_directories_abs_executabledirectoryrelative;
     */
+
+    // Debug Logs: this is likely an edge-case where users sees all logs:
     debug_log("Starting: fn make_new_collaborator_addressbook_toml_file");
 
     // Log function parameters for debugging
@@ -10309,7 +10315,10 @@ impl CoreNode {
         node_specific_path: &PathBuf, //  needs full path
     ) -> Result<(), io::Error> {
         // Debug logging for initial state
+        #[cfg(debug_assertions)]
         debug_log!("in imple CoreNode: SNCTF -> Starting save_node_to_clearsigned_file!");
+
+        #[cfg(debug_assertions)]
         debug_log!("SNCTF: Current working directory: {:?}", std::env::current_dir()?);
         // debug_log!("SNCTF: Target directory path: {:?}", self.directory_path);
 
@@ -10329,17 +10338,21 @@ impl CoreNode {
         //     ));
         // }
 
+        #[cfg(debug_assertions)]
         debug_log!("SNCTF: Target directory path node_specific_path: {:?}", node_specific_path);
 
         // 1. Verify and create directory structure
         if !node_specific_path.exists() {
+            #[cfg(debug_assertions)]
             debug_log!("SNCTF: warning node_specific_path Directory doesn't exist, creating it");
             fs::create_dir_all(&node_specific_path)?;
         }
+        #[cfg(debug_assertions)]
         debug_log!("SNCTF: Directory now exists node_specific_path: {}", node_specific_path.exists());
 
         // 2. Verify directory is actually a directory
         if !node_specific_path.is_dir() {
+            #[cfg(debug_assertions)]
             debug_log!("SNCTF: node_specific_path error Path exists but is not a directory!");
             return Err(io::Error::new(
                 io::ErrorKind::Other,
@@ -10366,7 +10379,7 @@ impl CoreNode {
                 ));
             }
         };
-
+        #[cfg(debug_assertions)]
         debug_log!("SNCTF: Successfully serialized CoreNode to TOML");
 
         // // 4. Construct and verify the file path
@@ -10376,24 +10389,29 @@ impl CoreNode {
 
         // // 4. Construct and verify the file path
         let file_path = node_specific_path.join("node.toml");
+        #[cfg(debug_assertions)]
         debug_log!("SNCTF: Full file path for node.toml: {:?}", file_path);
 
         // 5. Verify parent directory one more time
         if let Some(parent) = node_specific_path.parent() {
             if !parent.exists() {
+                #[cfg(debug_assertions)]
                 debug_log!("SNCTF: Parent directory missing, creating: {:?}", parent);
                 fs::create_dir_all(parent)?;
             }
         }
 
         // 6. Write the TOML data to the file
+        #[cfg(debug_assertions)]
         debug_log!("SNCTF: Writing TOML data to file...");
         fs::write(&file_path, &toml_string)?;
 
         // 7. Verify the file was created
         if file_path.exists() {
+            #[cfg(debug_assertions)]
             debug_log!("SNCTF: Successfully created node.toml at: {:?}", file_path);
         } else {
+            #[cfg(debug_assertions)]
             debug_log!("SNCTF: Warning: File write succeeded but file doesn't exist!");
         }
 
@@ -10509,6 +10527,7 @@ impl CoreNode {
         Addressbook file: Already clearsigned → Remains unchanged (read-only operation)
 
         */
+        #[cfg(debug_assertions)]
         debug_log!("SNCTF: Starting convert_tomlfile_without_keyid_using_gpgtomlkeyid_into_clearsigntoml_inplace()");
 
         // Get armored public key, using key-id (full fingerprint in)
@@ -10535,6 +10554,7 @@ impl CoreNode {
             )
         })?;
 
+        #[cfg(debug_assertions)]
         debug_log!("SNCTF: done");
 
 
@@ -10576,22 +10596,28 @@ impl CoreNode {
         node_specific_path: &PathBuf, //  needs full path
     ) -> Result<(), io::Error> {
         // Debug logging for initial state
+        #[cfg(debug_assertions)]
         debug_log!("SNAGTF in impl CoreNode: SNAGTF -> Starting save_node_as_gpgtoml!");
+
+        #[cfg(debug_assertions)]
         debug_log!("SNAGTF: Current working directory: {:?}", std::env::current_dir()?);
         // debug_log!("SNAGTF: Target directory path: {:?}", self.directory_path);
 
-
+        #[cfg(debug_assertions)]
         debug_log!("SNCTF: Target directory path node_specific_path: {:?}", node_specific_path);
 
         // 1. Verify and create directory structure
         if !node_specific_path.exists() {
+            #[cfg(debug_assertions)]
             debug_log!("SNCTF: warning node_specific_path Directory doesn't exist, creating it");
             fs::create_dir_all(&node_specific_path)?;
         }
+        #[cfg(debug_assertions)]
         debug_log!("SNCTF: Directory now exists node_specific_path: {}", node_specific_path.exists());
 
         // 2. Verify directory is actually a directory
         if !node_specific_path.is_dir() {
+            #[cfg(debug_assertions)]
             debug_log!("SNCTF: node_specific_path error Path exists but is not a directory!");
             return Err(io::Error::new(
                 io::ErrorKind::Other,
@@ -17107,6 +17133,7 @@ fn create_new_team_channel(
     use crate::manage_absolute_executable_directory_relative_paths::prepare_file_parent_directories_abs_executabledirectoryrelative;
 
     */
+    // Edge case where user sees all logs
     debug_log("Starting CTC create_new_team_channel()");
 
 
@@ -17212,6 +17239,7 @@ fn create_new_team_channel(
                 "CTC: Failed to create port assignments for team channel: {}",
                 e.to_string()
             );
+            #[cfg(debug_assertions)]
             eprintln!("ERROR: {}", error_msg);
             return Err(ThisProjectError::from(error_msg));
         }
@@ -17713,6 +17741,7 @@ fn update_core_node(
                             "UCN: Failed to regenerate port assignments: {}",
                             e.to_string()
                         );
+                        #[cfg(debug_assertions)]
                         eprintln!("ERROR: {}", error_msg);
                         return Err(ThisProjectError::from(error_msg));
                     }
@@ -17750,6 +17779,7 @@ fn update_core_node(
                             "UCN: Failed to regenerate port assignments: {}",
                             e.to_string()
                         );
+                        #[cfg(debug_assertions)]
                         eprintln!("ERROR: {}", error_msg);
                         return Err(ThisProjectError::from(error_msg));
                     }
@@ -17774,11 +17804,16 @@ fn update_core_node(
     if pa1_input.trim().to_lowercase() == "y" {
         existing_node.pa1_process = match q_and_a_get_pa1_process() {
             Ok(data) => {
+                #[cfg(debug_assertions)]
                 debug_log!("UCN: PA1 Process updated");
                 data
             }
             Err(e) => {
+                #[cfg(debug_assertions)]
                 debug_log!("UCN: Error updating PA1 Process: {}", e);
+                // safe log
+                debug_log!("UCN: Error updating PA1 Process");
+
                 return Err(e);
             }
         };
@@ -26530,6 +26565,7 @@ fn prompt_user_for_save_format_choice() -> Result<bool, GpgError> {
             .read_line(&mut user_input)
             .map_err(|e| {
                 let error_msg = format!("Failed to read user input for format choice: {}", e);
+                #[cfg(debug_assertions)]
                 println!("Error: {}", error_msg);
                 GpgError::ValidationError(error_msg)
             })?;
@@ -26616,10 +26652,12 @@ fn prompt_user_for_save_format_choice() -> Result<bool, GpgError> {
 /// - Moved original: {EXECUTABLE_DIR}/invites_updates/processed/{original_filename}
 pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgError> {
     // 'PIECA' is an acronym for this function to identify it in logs
+    #[cfg(debug_assertions)]
     debug_log("\nstarting -> PIECA fn process_incoming_encrypted_collaborator_addressbook()");
 
     // STEP 1: Get LOCAL OWNER USER's name from uma.toml
     // This identifies which addressbook file contains our GPG key ID
+    #[cfg(debug_assertions)]
     debug_log!(
         "PIECA Step 1: Reading LOCAL OWNER USER's name from {}",
         UMA_TOML_CONFIGFILE_PATH_STR
@@ -26630,7 +26668,10 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
     let absolute_uma_toml_path = make_file_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_uma_toml_path)
         .map_err(|e| {
             let error_msg = format!("PIECA Failed to locate uma.toml configuration file: {}", e);
-            println!("Error: {} PIECA", error_msg);
+            #[cfg(debug_assertions)]{
+            println!("Error: {}", error_msg);
+            debug_log!("Error: {}", error_msg);
+            }
             GpgError::PathError(error_msg)
         })?;
 
@@ -26639,7 +26680,10 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
         .to_str()
         .ok_or_else(|| {
             let error_msg = "PIECA Unable to convert UMA TOML path to string".to_string();
+            #[cfg(debug_assertions)]{
             println!("Error: {}", error_msg);
+            debug_log!("Error: {}", error_msg);
+            }
             GpgError::PathError(error_msg)
         })?;
 
@@ -26649,22 +26693,30 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
         "uma_local_owner_user"
     ).map_err(|e| {
         let error_msg = format!("PIECA Failed to read LOCAL OWNER USER's name: {}", e);
+        #[cfg(debug_assertions)]{
         println!("Error: {}", error_msg);
+        debug_log!("Error: {}", error_msg);
+        }
         GpgError::ValidationError(error_msg)
     })?;
 
-    debug_log!("PIECA LOCAL OWNER USER's name is: {}", local_owner_user_name);
-    println!("Processing as LOCAL OWNER USER: {}", local_owner_user_name);
+    #[cfg(debug_assertions)]{
+        debug_log!("PIECA LOCAL OWNER USER's name is: {}", local_owner_user_name);
+        println!("Processing as LOCAL OWNER USER: {}", local_owner_user_name);
 
-    // STEP 2: Locate the LOCAL OWNER USER's addressbook file and extract their GPG key ID
-    debug_log!("PIECA Step 2: Locating LOCAL OWNER USER's addressbook file to get GPG key ID");
+        // STEP 2: Locate the LOCAL OWNER USER's addressbook file and extract their GPG key ID
+        debug_log!("PIECA Step 2: Locating LOCAL OWNER USER's addressbook file to get GPG key ID");
+    }
 
     // Get absolute path to the collaborator files directory
     let relative_collab_dir = COLLABORATOR_ADDRESSBOOK_PATH_STR;
     let absolute_addressbook_directory_pathbuf = make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_collab_dir)
         .map_err(|e| {
             let error_msg = format!("PIECA Failed to locate collaborator files directory: {}", e);
+            #[cfg(debug_assertions)]{
             println!("Error: {}", error_msg);
+            debug_log!("Error: {}", error_msg);
+            }
             GpgError::PathError(error_msg)
         })?;
 
@@ -26706,24 +26758,14 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
             "PIECA LOCAL OWNER USER's addressbook file not found at: {}",
             raw_addressbook_path.display()
         );
+        #[cfg(debug_assertions)]{
         println!("Error: {}", error_msg);
+        debug_log!("Error: {}", error_msg);
+        }
         return Err(GpgError::PathError(error_msg));
     }
 
     debug_log!("PIECA LOCAL OWNER USER's addressbook file exists");
-
-    // // Convert the LOCAL OWNER USER's addressbook path to string for TOML reading
-    // let absolute_local_owner_address_book_path_str = raw_addressbook_path
-    //     .to_str()
-    //     .ok_or_else(|| {
-    //         let error_msg = format!(
-    //             "PIECA Unable to convert LOCAL OWNER USER's addressbook path to string: {}",
-    //             raw_addressbook_path.display()
-    //         );
-    //         println!("Error: {}", error_msg);
-    //         GpgError::PathError(error_msg)
-    //     })?;
-
 
     // Get GPG fingerprint (could move this outside the loop if same for all)
     let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
@@ -26782,8 +26824,10 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
         "gpg_publickey_id"
     ).map_err(|e| {
         let error_msg = format!("PIECA Failed to read LOCAL OWNER USER's GPG key ID: {}", e);
-        debug_log!("ERROR: {}", error_msg);
+        #[cfg(debug_assertions)]{
         println!("Error: {}", error_msg);
+        debug_log!("Error: {}", error_msg);
+        }
         GpgError::ValidationError(error_msg)
     })?;
 
@@ -26797,7 +26841,10 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
     let absolute_incoming_dir = make_input_path_name_abs_executabledirectoryrelative_nocheck(relative_incoming_dir)
         .map_err(|e| {
             let error_msg = format!("PIECA Failed to resolve incoming directory path: {}", e);
+            #[cfg(debug_assertions)]{
             println!("Error: {}", error_msg);
+            debug_log!("Error: {}", error_msg);
+            }
             GpgError::PathError(error_msg)
         })?;
 
@@ -26825,7 +26872,10 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
             },
             Err(e) => {
                 let error_msg = format!("PIECA Failed to read incoming directory: {}", e);
+                #[cfg(debug_assertions)]{
                 println!("Error: {}", error_msg);
+                debug_log!("Error: {}", error_msg);
+                }
                 return Err(GpgError::PathError(error_msg));
             }
         }
@@ -26840,7 +26890,10 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
                 let mut input = String::new();
                 if let Err(e) = io::stdin().read_line(&mut input) {
                     let error_msg = format!("PIECA Failed to read user input: {}", e);
+                    #[cfg(debug_assertions)]{
                     println!("Error: {}", error_msg);
+                    debug_log!("Error: {}", error_msg);
+                    }
                     return Err(GpgError::ValidationError(error_msg));
                 }
 
@@ -26867,7 +26920,10 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
                 let mut input = String::new();
                 if let Err(e) = io::stdin().read_line(&mut input) {
                     let error_msg = format!("PIECA Failed to read user input: {}", e);
+                    #[cfg(debug_assertions)]{
                     println!("Error: {}", error_msg);
+                    debug_log!("Error: {}", error_msg);
+                    }
                     return Err(GpgError::ValidationError(error_msg));
                 }
 
@@ -26884,7 +26940,10 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
     let encrypted_filename = encrypted_file_path.file_name()
         .ok_or_else(|| {
             let error_msg = "PIECA Failed to extract filename from encrypted file path".to_string();
+            #[cfg(debug_assertions)]{
             println!("Error: {}", error_msg);
+            debug_log!("Error: {}", error_msg);
+            }
             GpgError::PathError(error_msg)
         })?
         .to_string_lossy()
@@ -26899,7 +26958,10 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
     let absolute_processed_dir = make_input_path_name_abs_executabledirectoryrelative_nocheck(relative_processed_dir)
         .map_err(|e| {
             let error_msg = format!("PIECA Failed to resolve processed directory path: {}", e);
+            #[cfg(debug_assertions)]{
             println!("Error: {}", error_msg);
+            debug_log!("Error: {}", error_msg);
+            }
             GpgError::PathError(error_msg)
         })?;
 
@@ -26907,7 +26969,10 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
     fs::create_dir_all(&absolute_processed_dir)
         .map_err(|e| {
             let error_msg = format!("PIECA Failed to create processed directory: {}", e);
+            #[cfg(debug_assertions)]{
             println!("Error: {}", error_msg);
+            debug_log!("Error: {}", error_msg);
+            }
             GpgError::PathError(error_msg)
         })?;
 
@@ -26917,14 +26982,20 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
     let temp_dir = make_input_path_name_abs_executabledirectoryrelative_nocheck("temp_gpg_processing")
         .map_err(|e| {
             let error_msg = format!("PIECA Failed to create temp directory path: {}", e);
+            #[cfg(debug_assertions)]{
             println!("Error: {}", error_msg);
+            debug_log!("Error: {}", error_msg);
+            }
             GpgError::PathError(error_msg)
         })?;
 
     fs::create_dir_all(&temp_dir)
         .map_err(|e| {
             let error_msg = format!("PIECA Failed to create temp directory: {}", e);
+            #[cfg(debug_assertions)]{
             println!("Error: {}", error_msg);
+            debug_log!("Error: {}", error_msg);
+            }
             GpgError::PathError(error_msg)
         })?;
 
@@ -26932,10 +27003,10 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
     let temp_clearsigned_path = temp_dir.join("temp_clearsigned.toml");
 
     // STEP 6: Decrypt and verify the signature using the LOCAL OWNER USER's key
-    #[cfg(debug_assertions)]
+    #[cfg(debug_assertions)]{
     debug_log!("PIECA Step 6: Decrypting file and verifying signature");
     println!("Decrypting file using LOCAL OWNER USER's key ID (addressbook): {}", local_owner_gpg_key_id);
-
+    }
     // Call the function that does GPG decryption and verification
     // This uses the LOCAL OWNER USER's key ID to identify which private key to use
     let decrypt_result = extract_verify_store_gpg_encrypted_clearsign_toml(
@@ -26948,7 +27019,11 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
 
     if let Err(e) = &decrypt_result {
         let error_msg = format!("PIECA Failed to decrypt or verify file: {:?}", e);
+
+        #[cfg(debug_assertions)]
         println!("Error: {}", error_msg);
+
+        println!("PIECA Failed to decrypt or verify file");
         println!("This could mean:");
         println!("1. The file is not properly encrypted or signed");
         println!("2. The file wasn't encrypted for your GPG key");
@@ -26961,56 +27036,13 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
         return Err(GpgError::GpgOperationError(error_msg));
     }
 
+    #[cfg(debug_assertions)]
     println!("File successfully decrypted and signature verified!");
+    #[cfg(debug_assertions)]
     debug_log!("PIECA Successfully decrypted and verified file");
 
-    // // STEP 7: Extract collaborator username from the verified content
-    // debug_log!("PIECA Step 7: Extracting collaborator username from verified content");
-
-    // // Convert temporary file path to string for TOML reading
-    // let temp_clearsigned_path_str = temp_clearsigned_path
-    //     .to_str()
-    //     .ok_or_else(|| {
-    //         let error_msg = "PIECA Unable to convert temp file path to string".to_string();
-    //         println!("Error: {}", error_msg);
-    //         GpgError::PathError(error_msg)
-    //     })?;
-
-    // // Read the username from the clearsigned TOML
-    // // This is the remote collaborator whose addressbook we just received
-    // let remote_collaborator_username = read_singleline_string_from_clearsigntoml(
-    //     temp_clearsigned_path_str,
-    //     "user_name"
-    // ).map_err(|e| {
-    //     let error_msg = format!("PIECA Failed to read remote collaborator's username: {}", e);
-    //     println!("Error: {}", error_msg);
-    //     println!("The decrypted file doesn't contain a valid 'user_name' field.");
-    //     GpgError::ValidationError(error_msg)
-    // })?;
-
-    // debug_log!("PIECA Extracted remote collaborator's username: {}", remote_collaborator_username);
-    // println!("Received addressbook from collaborator: {}", remote_collaborator_username);
-
-    // // STEP 8: Save the verified clearsigned file to the collaborator directory
-    // debug_log!("PIECA Step 8: Saving verified clearsigned file to collaborator directory");
-
-    // // Create the output filename using the extracted username
-    // let output_filename = format!("{}__collaborator.toml", remote_collaborator_username);
-    // let output_file_path = absolute_collab_dir.join(&output_filename);
-
-    // debug_log!("PIECA Saving verified clearsigned file to: {}", output_file_path.display());
-
-    // // Copy the verified clearsigned file to the collaborator directory
-    // fs::copy(&temp_clearsigned_path, &output_file_path)
-    //     .map_err(|e| {
-    //         let error_msg = format!("PIECA Failed to save verified clearsigned file: {}", e);
-    //         println!("Error: {}", error_msg);
-    //         GpgError::GpgOperationError(error_msg)
-    //     })?;
-
-    // println!("Successfully saved collaborator addressbook to: {}", output_file_path.display());
-
     // STEP 7: Extract collaborator username from the verified content
+    #[cfg(debug_assertions)]
     debug_log!("PIECA Step 7: Extracting collaborator username from verified content");
 
     // Convert temporary file path to string for TOML reading
@@ -27018,6 +27050,7 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
         .to_str()
         .ok_or_else(|| {
             let error_msg = "PIECA Unable to convert temp file path to string".to_string();
+            #[cfg(debug_assertions)]
             println!("Error: {}", error_msg);
             GpgError::PathError(error_msg)
         })?;
@@ -27033,25 +27066,31 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
         "user_name",
     ).map_err(|e| {
         let error_msg = format!("PIECA Failed to read remote collaborator's username: {}", e);
-        println!("Error: {}", error_msg);
-        println!("The decrypted file doesn't contain a valid 'user_name' field.");
+        #[cfg(debug_assertions)]{
+            println!("Error: {}", error_msg);
+            println!("The decrypted file doesn't contain a valid 'user_name' field.");
+        }
         GpgError::ValidationError(error_msg)
     })?;
 
+    #[cfg(debug_assertions)]{
     debug_log!("PIECA Extracted remote collaborator's username: {}", remote_collaborator_username);
     println!("Received addressbook from collaborator: {}", remote_collaborator_username);
-
+    }
     // STEP 7.5: Ask user for preferred save format
+    #[cfg(debug_assertions)]
     debug_log!("PIECA Step 7.5: Prompting user for save format preference");
 
     let save_encrypted_format = prompt_user_for_save_format_choice()
-        .map_err(|e| {
-            let error_msg = format!("PIECA Failed to get user format choice: {}", e);
-            println!("Error: {}", error_msg);
-            e
+        .map_err(|_e| {
+            let _error_msg = format!("PIECA Failed to get user format choice: {}", _e);
+            #[cfg(debug_assertions)]
+            println!("Error: {}", _error_msg);
+            _e
         })?;
 
     // STEP 8: Save the file in the user's chosen format
+    #[cfg(debug_assertions)]
     debug_log!("PIECA Step 8: Saving file in {} format to collaborator directory",
               if save_encrypted_format { "encrypted .gpgtoml" } else { "clearsigned .toml" });
 
@@ -27066,6 +27105,7 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
 
     let output_file_path = absolute_addressbook_directory_pathbuf.join(&output_filename);
 
+    #[cfg(debug_assertions)]
     debug_log!("PIECA Saving file to: {}", output_file_path.display());
 
     // Save the file based on user's choice
@@ -27075,50 +27115,59 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
         fs::copy(&encrypted_file_path, &output_file_path)
             .map_err(|e| {
                 let error_msg = format!("PIECA Failed to save encrypted .gpgtoml file: {}", e);
-                println!("Error: {}", error_msg);
+                #[cfg(debug_assertions)]
+                debug_log!("Error: {}", error_msg);
                 GpgError::GpgOperationError(error_msg)
             })?;
         println!("Successfully saved encrypted collaborator addressbook to: {}", output_file_path.display());
     } else {
         // Copy the verified clearsigned file (original behavior)
+        #[cfg(debug_assertions)]
         debug_log!("PIECA Copying extracted clearsigned .toml file");
         fs::copy(&temp_clearsigned_path, &output_file_path)
             .map_err(|e| {
                 let error_msg = format!("PIECA Failed to save clearsigned .toml file: {}", e);
-                println!("Error: {}", error_msg);
+                #[cfg(debug_assertions)]
+                debug_log!("Error: {}", error_msg);
                 GpgError::GpgOperationError(error_msg)
             })?;
+        #[cfg(debug_assertions)]
         println!("Successfully saved clearsigned collaborator addressbook to: {}", output_file_path.display());
     }
 
     // STEP 9: Move the original encrypted file to the processed directory
+    #[cfg(debug_assertions)]
     debug_log!("PIECA Step 9: Moving original encrypted file to processed directory");
 
     let processed_file_path = absolute_processed_dir.join(&encrypted_filename);
 
+    #[cfg(debug_assertions)]
     debug_log!("PIECA Moving original encrypted file to: {}", processed_file_path.display());
 
     // Use fs::rename to move the file
     fs::rename(&encrypted_file_path, &processed_file_path)
         .map_err(|e| {
             let error_msg = format!("PIECA Failed to move original encrypted file: {}", e);
+            #[cfg(debug_assertions)]
             println!("Warning: {}", error_msg);
             GpgError::GpgOperationError(error_msg)
         })?;
-
+    #[cfg(debug_assertions)]
     println!("Original encrypted file moved to: {}", processed_file_path.display());
 
     // STEP 10: Clean up the temporary directory
+    #[cfg(debug_assertions)]
     debug_log!("PIECA Step 10: Cleaning up temporary directory");
 
-    if let Err(e) = fs::remove_dir_all(&temp_dir) {
-        debug_log!("PIECA Warning: Failed to remove temporary directory: {}", e);
+    if let Err(_e) = fs::remove_dir_all(&temp_dir) {
+        #[cfg(debug_assertions)]
+        debug_log!("PIECA Warning: Failed to remove temporary directory: {}", _e);
     }
-
+    #[cfg(debug_assertions)]{
     debug_log!("PIECA Successfully processed addressbook from collaborator: {}", remote_collaborator_username);
     println!("Successfully processed addressbook from collaborator: {}", remote_collaborator_username);
-
     println!("...Press Enter to continue...");
+    }
 
     // this does nothing, press enter to proceed.
     let mut input = String::new();
@@ -27127,6 +27176,7 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
         .map_err(|e| format!("Failed to read input: {:?}", e));
 
     // OK!
+    #[cfg(debug_assertions)]
     debug_log("PIECA PIECA!!");
 
     Ok(())
@@ -27184,22 +27234,27 @@ pub fn process_incoming_encrypted_collaborator_addressbook() -> Result<(), GpgEr
 ///   - read_singleline_string_from_clearsigntoml() for single-line fields
 ///   - read_multiline_string_from_clearsigntoml() for multi-line fields
 fn share_lou_addressbook_with_incomingkey() -> Result<(), GpgError> {
-    println!("\nSharing LOCAL OWNER USER'S address book with new collaborator.");
-    println!("Using their public key from incoming directory");
-    debug_log("\nstarting -> SLABIK fn share_lou_addressbook_with_incomingkey()");
+
+    #[cfg(debug_assertions)]{
+        println!("\nSharing LOCAL OWNER USER'S address book with new collaborator.");
+        println!("Using their public key from incoming directory");
+        debug_log("\nstarting -> SLABIK fn share_lou_addressbook_with_incomingkey()");
+    }
 
     // Create output directory using absolute path relative to executable
     let relative_output_dir = "invites_updates/outgoing";
     let absolute_output_dir = make_input_path_name_abs_executabledirectoryrelative_nocheck(relative_output_dir)
         .map_err(|e| GpgError::PathError(format!("SLABIK Failed to resolve output directory path: {}", e)))?;
 
-    debug_log!("SLABIK Output directory absolute path: {}", absolute_output_dir.display());
-    debug_log!("SLABIK Output directory exists? {}", absolute_output_dir.exists());
-
+    #[cfg(debug_assertions)]{
+        debug_log!("SLABIK Output directory absolute path: {}", absolute_output_dir.display());
+        debug_log!("SLABIK Output directory exists? {}", absolute_output_dir.exists());
+    }
     // Create the output directory if it doesn't exist
     fs::create_dir_all(&absolute_output_dir)
         .map_err(|e| GpgError::PathError(format!("Failed to create output directory: {}", e)))?;
 
+    #[cfg(debug_assertions)]
     debug_log!("SLABIK Output directory created successfully? {}", absolute_output_dir.exists());
 
     // Get absolute path to uma.toml configuration file
@@ -27207,8 +27262,10 @@ fn share_lou_addressbook_with_incomingkey() -> Result<(), GpgError> {
     let absolute_uma_toml_path = make_file_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_uma_toml_path)
         .map_err(|e| GpgError::PathError(format!("SLABIK Failed to locate uma.toml configuration file: {}", e)))?;
 
-    debug_log!("SLABIK UMA TOML absolute path: {}", absolute_uma_toml_path.display());
-    debug_log!("SLABIK UMA TOML file exists: {}", absolute_uma_toml_path.exists());
+    #[cfg(debug_assertions)]{
+        debug_log!("SLABIK UMA TOML absolute path: {}", absolute_uma_toml_path.display());
+        debug_log!("SLABIK UMA TOML file exists: {}", absolute_uma_toml_path.exists());
+    }
 
     // Get local owner username from configuration - REFACTORED FOR DEBUGGING
     // Convert PathBuf to string first
@@ -27217,6 +27274,7 @@ fn share_lou_addressbook_with_incomingkey() -> Result<(), GpgError> {
         .ok_or_else(|| GpgError::PathError("SLABIK Unable to convert UMA TOML path to string".to_string()))?;
 
     // Log the exact string that will be used by the TOML reader
+    #[cfg(debug_assertions)]
     debug_log!("SLABIK Attempting to read from UMA TOML file at path string: {}", absolute_uma_toml_path_str);
 
     // Now attempt to read the actual field value
@@ -27225,8 +27283,10 @@ fn share_lou_addressbook_with_incomingkey() -> Result<(), GpgError> {
         "uma_local_owner_user"
     ).map_err(|e| GpgError::ValidationError(format!("Failed to read local owner username: {}", e)))?;
 
-    debug_log!("SLABIK Successfully read local_owner_user_name: {}", &local_owner_user_name);
-    println!("Local owner username (whose address book we are sharing): {}", local_owner_user_name);
+    #[cfg(debug_assertions)]{
+        debug_log!("SLABIK Successfully read local_owner_user_name: {}", &local_owner_user_name);
+        println!("Local owner username (whose address book we are sharing): {}", local_owner_user_name);
+    }
 
     let absolute_addressbook_directory_pathbuf = match get_addressbook_directory_path() {
         Ok(path) => path,
@@ -27311,9 +27371,11 @@ fn share_lou_addressbook_with_incomingkey() -> Result<(), GpgError> {
         }
     };
 
+    #[cfg(debug_assertions)]
     debug_log!("SLABIK Absolute local owner address book path: {}", specific_readcopy_addressbook_path);
 
     // Log the exact path string being used for TOML reading
+    #[cfg(debug_assertions)]
     debug_log!("SLABIK Attempting to read GPG key ID from file at path: {}", specific_readcopy_addressbook_path);
 
     // Now attempt to read the GPG key ID field
@@ -27325,13 +27387,15 @@ fn share_lou_addressbook_with_incomingkey() -> Result<(), GpgError> {
         GpgError::ValidationError(format!("SLABIK Failed to read LOCAL OWNER USER'S GPG key ID: {}", e))
     })?;
 
+    #[cfg(debug_assertions)]
     debug_log!("SLABIK Successfully read owner_gpg_key_id: {}", &owner_gpg_key_id);
+    #[cfg(debug_assertions)]
     println!("LOCAL OWNER USER'S GPG key ID (for signing their address book): {}", owner_gpg_key_id);
 
     // Path to recipient's public key file in the incoming directory with absolute path
     let relative_incoming_key_path = INCOMING_PUBLICGPG_KEYASC_FILEPATH_STR;
+    #[cfg(debug_assertions)]
     println!("SLABIK relative_incoming_key_path {}", relative_incoming_key_path);
-
 
     let absolute_recipient_public_key_path = make_file_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_incoming_key_path)
         .map_err(|e| GpgError::PathError(format!(
@@ -27339,16 +27403,17 @@ fn share_lou_addressbook_with_incomingkey() -> Result<(), GpgError> {
             relative_incoming_key_path, e
         )))?;
 
-    debug_log!("SLABIK Absolute recipient public key path: {}", absolute_recipient_public_key_path.display());
-    debug_log!("SLABIK Recipient public key file exists: {}", absolute_recipient_public_key_path.exists());
+    #[cfg(debug_assertions)]{
+        debug_log!("SLABIK Absolute recipient public key path: {}", absolute_recipient_public_key_path.display());
+        debug_log!("SLABIK Recipient public key file exists: {}", absolute_recipient_public_key_path.exists());
 
-    println!("\nProcessing with:");
-    println!("LOCAL OWNER USER'S signing key ID: {}", owner_gpg_key_id);
-    println!("Recipient's public key file: {}", absolute_recipient_public_key_path.display());
-    println!("LOCAL OWNER USER'S address book file to be shared: {}", specific_readcopy_addressbook_path);
+        println!("\nProcessing with:");
+        println!("LOCAL OWNER USER'S signing key ID: {}", owner_gpg_key_id);
+        println!("Recipient's public key file: {}", absolute_recipient_public_key_path.display());
+        println!("LOCAL OWNER USER'S address book file to be shared: {}", specific_readcopy_addressbook_path);
+    }
 
     let path_addressbook_path = Path::new(&specific_readcopy_addressbook_path);
-
 
     // Use our existing function to clearsign and encrypt the LOCAL OWNER USER'S address book
     // We are:
@@ -27423,7 +27488,6 @@ fn share_lou_addressbook_with_incomingkey() -> Result<(), GpgError> {
 /// the default encrypted format for maximum security. Only one file format is saved
 /// based on the user's choice (unlike earlier versions that saved both).
 ///
-
 /// # Returns
 /// * `Ok(())` if the operation succeeds
 /// * `Err(GpgError)` if any operation fails
@@ -27479,45 +27543,6 @@ pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
     #[cfg(debug_assertions)]
     debug_log!("PIET Step 2: Locating LOCAL OWNER USER's addressbook file to get GPG key ID");
 
-    // // Get absolute path to the collaborator files directory
-    // let relative_collab_dir = COLLABORATOR_ADDRESSBOOK_PATH_STR;
-    // let absolute_collab_dir = make_dir_path_abs_executabledirectoryrelative_canonicalized_or_error(relative_collab_dir)
-    //     .map_err(|e| {
-    //         let error_msg = format!("PIET Failed to locate collaborator files directory: {}", e);
-    //         println!("Error: {}", error_msg);
-    //         GpgError::PathError(error_msg)
-    //     })?;
-
-    // // Path to the LOCAL OWNER USER's addressbook file (absolute path)
-    // let local_owner_address_book_filename = format!("{}__collaborator.toml", local_owner_user_name);
-    // let absolute_local_owner_address_book_path = absolute_collab_dir.join(&local_owner_address_book_filename);
-
-    // debug_log!("PIET LOCAL OWNER USER's addressbook path: {}", absolute_local_owner_address_book_path.display());
-
-    // // Verify the LOCAL OWNER USER's addressbook file exists
-    // if !absolute_local_owner_address_book_path.exists() {
-    //     let error_msg = format!(
-    //         "PIET LOCAL OWNER USER's addressbook file not found at: {}",
-    //         absolute_local_owner_address_book_path.display()
-    //     );
-    //     println!("Error: {}", error_msg);
-    //     return Err(GpgError::PathError(error_msg));
-    // }
-
-    // debug_log!("PIET LOCAL OWNER USER's addressbook file exists");
-
-    // // Convert the LOCAL OWNER USER's addressbook path to string for TOML reading
-    // let absolute_local_owner_address_book_path_str = absolute_local_owner_address_book_path
-    //     .to_str()
-    //     .ok_or_else(|| {
-    //         let error_msg = format!(
-    //             "PIET Unable to convert LOCAL OWNER USER's addressbook path to string: {}",
-    //             absolute_local_owner_address_book_path.display()
-    //         );
-    //         println!("Error: {}", error_msg);
-    //         GpgError::PathError(error_msg)
-    //     })?;
-
     let absolute_addressbook_directory_pathbuf = match get_addressbook_directory_path() {
         Ok(path) => path,
         Err(e) => {
@@ -27572,7 +27597,10 @@ pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
     let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
         .map_err(|e| {
             let error_msg = format!("PIET Failed to resolve incoming teamchannels directory path: {}", e);
-            println!("PIET Error: {}", error_msg);
+            #[cfg(debug_assertions)]{
+                println!("Error: {}", error_msg);
+                debug_log!("Error: {}", error_msg);
+            }
             GpgError::PathError(error_msg)
         })?;
 
@@ -27603,8 +27631,10 @@ pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
         "gpg_publickey_id"
     ).map_err(|e| {
         let error_msg = format!("PIET Failed to read LOCAL OWNER USER's GPG key ID: {}", e);
-        debug_log!("ERROR: {}", error_msg);
-        println!("Error: {}", error_msg);
+        #[cfg(debug_assertions)]{
+            println!("Error: {}", error_msg);
+            debug_log!("Error: {}", error_msg);
+        }
         GpgError::ValidationError(error_msg)
     })?;
 
@@ -27620,14 +27650,20 @@ pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
     let absolute_incoming_dir = make_input_path_name_abs_executabledirectoryrelative_nocheck(relative_incoming_dir)
         .map_err(|e| {
             let error_msg = format!("PIET Failed to resolve incoming teamchannels directory path: {}", e);
-            println!("Error: {}", error_msg);
+            #[cfg(debug_assertions)]{
+                println!("Error: {}", error_msg);
+                debug_log!("Error: {}", error_msg);
+            }
             GpgError::PathError(error_msg)
         })?;
 
     // Create the directory if it doesn't exist
     if let Err(e) = fs::create_dir_all(&absolute_incoming_dir) {
         let error_msg = format!("PIET Failed to create incoming teamchannels directory: {}", e);
-        println!("Error: {}", error_msg);
+        #[cfg(debug_assertions)]{
+            println!("Error: {}", error_msg);
+            debug_log!("Error: {}", error_msg);
+        }
         return Err(GpgError::GpgOperationError(error_msg));
     }
 
@@ -27656,7 +27692,10 @@ pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
             },
             Err(e) => {
                 let error_msg = format!("PIET Failed to read incoming teamchannels directory: {}", e);
-                println!("Error: {}", error_msg);
+                #[cfg(debug_assertions)]{
+                    println!("Error: {}", error_msg);
+                    debug_log!("Error: {}", error_msg);
+                }
                 return Err(GpgError::GpgOperationError(error_msg));
             }
         }
@@ -27671,7 +27710,10 @@ pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
                 let mut input = String::new();
                 if let Err(e) = io::stdin().read_line(&mut input) {
                     let error_msg = format!("PIET Failed to read user input: {}", e);
-                    println!("Error: {}", error_msg);
+                    #[cfg(debug_assertions)]{
+                        println!("Error: {}", error_msg);
+                        debug_log!("Error: {}", error_msg);
+                    }
                     return Err(GpgError::ValidationError(error_msg));
                 }
 
@@ -27699,7 +27741,10 @@ pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
                 let mut input = String::new();
                 if let Err(e) = io::stdin().read_line(&mut input) {
                     let error_msg = format!("PIET Failed to read user input: {}", e);
-                    println!("Error: {}", error_msg);
+                    #[cfg(debug_assertions)]{
+                        println!("Error: {}", error_msg);
+                        debug_log!("Error: {}", error_msg);
+                    }
                     return Err(GpgError::ValidationError(error_msg));
                 }
 
@@ -27716,7 +27761,10 @@ pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
     let encrypted_filename = encrypted_file_path.file_name()
         .ok_or_else(|| {
             let error_msg = "PIET Failed to extract filename from encrypted file path".to_string();
-            println!("Error: {}", error_msg);
+            #[cfg(debug_assertions)]{
+                println!("Error: {}", error_msg);
+                debug_log!("Error: {}", error_msg);
+            }
             GpgError::PathError(error_msg)
         })?
         .to_string_lossy()
@@ -27733,14 +27781,20 @@ pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
     let absolute_processed_dir = make_input_path_name_abs_executabledirectoryrelative_nocheck(relative_processed_dir)
         .map_err(|e| {
             let error_msg = format!("PIET Failed to resolve processed directory path: {}", e);
-            println!("Error: {}", error_msg);
+            #[cfg(debug_assertions)]{
+                println!("Error: {}", error_msg);
+                debug_log!("Error: {}", error_msg);
+            }
             GpgError::PathError(error_msg)
         })?;
 
     // Create the processed directory if it doesn't exist
     if let Err(e) = fs::create_dir_all(&absolute_processed_dir) {
         let error_msg = format!("PIET Failed to create processed directory: {}", e);
-        println!("Error: {}", error_msg);
+        #[cfg(debug_assertions)]{
+            println!("Error: {}", error_msg);
+            debug_log!("Error: {}", error_msg);
+        }
         return Err(GpgError::GpgOperationError(error_msg));
     }
 
@@ -27751,13 +27805,21 @@ pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
     let temp_dir = make_input_path_name_abs_executabledirectoryrelative_nocheck("temp_gpg_processing")
         .map_err(|e| {
             let error_msg = format!("PIET Failed to create temp directory path: {}", e);
-            println!("Error: {}", error_msg);
+            #[cfg(debug_assertions)]{
+                println!("Error: {}", error_msg);
+                debug_log!("Error: {}", error_msg);
+            }
+            // safe log
+            debug_log!("PIET Failed to create temp directory path");
             GpgError::PathError(error_msg)
         })?;
 
     if let Err(e) = fs::create_dir_all(&temp_dir) {
         let error_msg = format!("PIET Failed to create temp directory: {}", e);
-        println!("Error: {}", error_msg);
+        #[cfg(debug_assertions)]{
+            println!("Error: {}", error_msg);
+            debug_log!("Error: {}", error_msg);
+        }
         return Err(GpgError::GpgOperationError(error_msg));
     }
 
@@ -27779,7 +27841,13 @@ pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
 
     if let Err(e) = &decrypt_result {
         let error_msg = format!("PIET Failed to decrypt file: {:?}", e);
-        println!("Error: {}", error_msg);
+
+        #[cfg(debug_assertions)]{
+            println!("Error: {}", error_msg);
+            debug_log!("Error: {}", error_msg);
+        }
+
+        println!("PIET Failed to decrypt file");
         println!("This could mean:");
         println!("1. The file is not properly encrypted or signed");
         println!("2. The file wasn't encrypted for your GPG key");
@@ -27945,7 +28013,13 @@ pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
         "gpg_key_public"
     ).map_err(|e| {
         let error_msg = format!("PIET Failed to read team channel owner's public GPG key: {}", e);
-        println!("Error: {}", error_msg);
+        #[cfg(debug_assertions)]{
+            println!("Error: {}", error_msg);
+            debug_log!("Error: {}", error_msg);
+        }
+        // safe log
+        println!("PIET Failed to read team channel owner's public GPG key");
+        debug_log!("PIET Failed to read team channel owner's public GPG key");
 
         // Clean up temp directory before returning
         let _ = fs::remove_dir_all(&temp_dir);
@@ -27962,7 +28036,13 @@ pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
     // Write public key to temporary file
     if let Err(e) = fs::write(&temp_public_key_path, team_channel_owner_public_key) {
         let error_msg = format!("PIET Failed to write team channel owner's public key to temp file: {}", e);
-        println!("Error: {}", error_msg);
+        #[cfg(debug_assertions)]{
+            println!("Error: {}", error_msg);
+            debug_log!("Error: {}", error_msg);
+        }
+        // safe log
+        println!("PIET Failed to write team channel owner's public key to temp file");
+        debug_log!("PIET Failed to write team channel owner's public key to temp file");
 
         // Clean up temp directory before returning
         let _ = fs::remove_dir_all(&temp_dir);
@@ -27987,8 +28067,14 @@ pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
 
     if let Err(e) = &verify_result {
         let error_msg = format!("PIET Failed to verify clearsign signature: {:?}", e);
-        println!("Error: {}", error_msg);
-        println!("The signature could not be verified with the team channel owner's public key.");
+        #[cfg(debug_assertions)]{
+            println!("Error: {}", error_msg);
+            debug_log!("Error: {}", error_msg);
+        }
+        // safe log
+        println!("PIET Failed to read team channel name from verified content");
+        debug_log!("PIET Failed to read team channel name from verified content");
+        println!("PIET The signature could not be verified with the team channel owner's public key.");
 
         // Clean up temp directory before returning
         let _ = fs::remove_dir_all(&temp_dir);
@@ -28009,7 +28095,9 @@ pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
         .to_str()
         .ok_or_else(|| {
             let error_msg = "PIET Unable to convert verified file path to string".to_string();
+
             println!("Error: {}", error_msg);
+            debug_log!("Error: {}", error_msg);
 
             // Clean up temp directory before returning
             let _ = fs::remove_dir_all(&temp_dir);
@@ -28023,8 +28111,13 @@ pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
         "node_name"
     ).map_err(|e| {
         let error_msg = format!("PIET Failed to read team channel name from verified content: {}", e);
-        println!("Error: {}", error_msg);
-        println!("The verified file doesn't contain a valid 'team_channel_name' field.");
+        #[cfg(debug_assertions)]{
+            println!("Error: {}", error_msg);
+            debug_log!("Error: {}", error_msg);
+        }
+        // safe log
+        println!("PIET Failed to read team channel name from verified content");
+        debug_log!("PIET Failed to read team channel name from verified content");
 
         // Clean up temp directory before returning
         let _ = fs::remove_dir_all(&temp_dir);
@@ -28050,7 +28143,10 @@ pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
     let absolute_team_channels_dir = make_input_path_name_abs_executabledirectoryrelative_nocheck(relative_team_channels_dir)
         .map_err(|e| {
             let error_msg = format!("PIET Failed to resolve team channels directory path: {}", e);
-            println!("Error: {}", error_msg);
+            #[cfg(debug_assertions)]{
+                println!("Error: {}", error_msg);
+                debug_log!("Error: {}", error_msg);
+            }
 
             // Clean up temp directory before returning
             let _ = fs::remove_dir_all(&temp_dir);
@@ -28061,7 +28157,13 @@ pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
     // Create the team channels directory if it doesn't exist
     if let Err(e) = fs::create_dir_all(&absolute_team_channels_dir) {
         let error_msg = format!("PIET Failed to create team channels directory: {}", e);
-        println!("Error: {}", error_msg);
+        #[cfg(debug_assertions)]{
+            println!("Error: {}", error_msg);
+            debug_log!("Error: {}", error_msg);
+        }
+
+        // safe log
+        debug_log!("PIET Failed to create team channels directoryy");
 
         // Clean up temp directory before returning
         let _ = fs::remove_dir_all(&temp_dir);
@@ -28075,7 +28177,13 @@ pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
     // Create the specific team channel directory if it doesn't exist
     if let Err(e) = fs::create_dir_all(&absolute_specific_team_channel_dir) {
         let error_msg = format!("PIET Failed to create specific team channel directory: {}", e);
-        println!("Error: {}", error_msg);
+        #[cfg(debug_assertions)]{
+            println!("Error: {}", error_msg);
+            debug_log!("Error: {}", error_msg);
+        }
+
+        // safe log
+        debug_log!("PIET Failed to create specific team channel directory");
 
         // Clean up temp directory before returning
         let _ = fs::remove_dir_all(&temp_dir);
@@ -28086,51 +28194,18 @@ pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
     #[cfg(debug_assertions)]
     debug_log!("PIET Created team channel directory: {}", absolute_specific_team_channel_dir.display());
 
-    // // Create paths for node.toml and node.gpg in the team channel directory
-    // let node_toml_path = absolute_specific_team_channel_dir.join("node.toml");
-    // let node_gpg_path = absolute_specific_team_channel_dir.join("node.gpgtoml");
-
-    // // STEP 13: Save verified content as node.toml
-    // debug_log!("PIET Step 13: Saving verified content as node.toml");
-
-    // // Copy verified content to node.toml
-    // if let Err(e) = fs::copy(&temp_verified_path, &node_toml_path) {
-    //     let error_msg = format!("PIET Failed to save node.toml: {}", e);
-    //     println!("Error: {}", error_msg);
-
-    //     // Clean up temp directory before returning
-    //     let _ = fs::remove_dir_all(&temp_dir);
-
-    //     return Err(GpgError::GpgOperationError(error_msg));
-    // }
-
-    // debug_log!("PIET Saved node.toml to: {}", node_toml_path.display());
-
-    // // STEP 14: Save original encrypted file as node.gpg
-    // debug_log!("PIET Step 14: Saving original encrypted file as node.gpg");
-
-    // // Copy original encrypted file to node.gpg
-    // if let Err(e) = fs::copy(&encrypted_file_path, &node_gpg_path) {
-    //     let error_msg = format!("PIET Failed to save node.gpg: {}", e);
-    //     println!("Error: {}", error_msg);
-
-    //     // Clean up temp directory before returning
-    //     let _ = fs::remove_dir_all(&temp_dir);
-
-    //     return Err(GpgError::GpgOperationError(error_msg));
-    // }
-
-    // debug_log!("PIET Saved node.gpg to: {}", node_gpg_path.display());
-
     // STEP 12.5: Ask user for preferred save format
     #[cfg(debug_assertions)]
     debug_log!("PIET Step 12.5: Prompting user for save format preference");
 
     let save_encrypted_format = prompt_user_for_save_format_choice()
         .map_err(|e| {
-            let error_msg = format!("PIET Failed to get user format choice: {}", e);
-            println!("Error: {}", error_msg);
 
+            #[cfg(debug_assertions)]{
+                let error_msg = format!("PIET Failed to get user format choice: {}", e);
+                println!("Error: {}", error_msg);
+                debug_log!("Error: {}", error_msg);
+            }
             // Clean up temp directory before returning
             let _ = fs::remove_dir_all(&temp_dir);
 
@@ -28162,9 +28237,13 @@ pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
         #[cfg(debug_assertions)]
         debug_log!("PIET Copying original encrypted .gpgtoml file");
 
-        if let Err(e) = fs::copy(&encrypted_file_path, &node_file_path) {
-            let error_msg = format!("PIET Failed to save encrypted node.gpgtoml: {}", e);
-            println!("Error: {}", error_msg);
+        if let Err(_e) = fs::copy(&encrypted_file_path, &node_file_path) {
+            let error_msg = format!("PIET Failed to save encrypted node.gpgtoml: {}", _e);
+
+            #[cfg(debug_assertions)]{
+                println!("Error: {}", error_msg);
+                debug_log!("Error: {}", error_msg);
+            }
 
             // Clean up temp directory before returning
             let _ = fs::remove_dir_all(&temp_dir);
@@ -28182,9 +28261,16 @@ pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
 
         // First, we need to copy the clearsigned content (not just the extracted TOML)
         // The temp_decrypted_path contains the clearsigned version
-        if let Err(e) = fs::copy(&temp_decrypted_path, &node_file_path) {
-            let error_msg = format!("PIET Failed to save clearsigned node.toml: {}", e);
-            println!("Error: {}", error_msg);
+        if let Err(_e) = fs::copy(&temp_decrypted_path, &node_file_path) {
+            let error_msg = format!("PIET Failed to save clearsigned node.toml: {}", _e);
+
+            #[cfg(debug_assertions)]{
+                println!("Error: {}", error_msg);
+                debug_log!("Error: {}", error_msg);
+            }
+
+            // safe log
+            debug_log!("PIET Failed to save clearsigned node.toml");
 
             // Clean up temp directory before returning
             let _ = fs::remove_dir_all(&temp_dir);
@@ -28197,41 +28283,46 @@ pub fn process_incoming_encrypted_teamchannel() -> Result<(), GpgError> {
         debug_log!("PIET Saved node.toml to: {}", node_file_path.display());
     }
 
-    // STEP 14 is now removed - we no longer save both formats
-
-
-    // STEP 15: Move original encrypted file to processed directory
+    // STEP 14: Move original encrypted file to processed directory
     #[cfg(debug_assertions)]
-    debug_log!("PIET Step 15: Moving original encrypted file to processed directory");
+    debug_log!("PIET Step 14: Moving original encrypted file to processed directory");
 
     let processed_file_path = absolute_processed_dir.join(&encrypted_filename);
 
     // Move the original file to the processed directory
-    if let Err(e) = fs::rename(&encrypted_file_path, &processed_file_path) {
-        let error_msg = format!("PIET Failed to move original encrypted file: {}", e);
-        println!("Warning: {}", error_msg);
+    if let Err(_e) = fs::rename(&encrypted_file_path, &processed_file_path) {
 
-        // This is a non-critical error, so we'll just log it and continue
-        #[cfg(debug_assertions)]
-        debug_log!("PIET Warning: {}", error_msg);
+        // This is a non-critical error, so log and continue
+        #[cfg(debug_assertions)]{
+            let error_msg = format!("PIET Failed to move original encrypted file: {}", _e);
+            #[cfg(debug_assertions)]
+            println!("Warning: {}", error_msg);
+            debug_log!("PIET Warning: {}", error_msg);
+        }
+        // safe log
+        debug_log!("PIET Warning: Failed to move original encrypted file");
+        println!("PIET Warning: Failed to move original encrypted file");
+
     } else {
         #[cfg(debug_assertions)]
         debug_log!("PIET Moved original encrypted file to: {}", processed_file_path.display());
     }
 
-    // STEP 16: Clean up temporary directory
-    debug_log!("PIET Step 16: Cleaning up temporary directory");
+    // STEP 15: Clean up temporary directory
+    debug_log!("PIET Step 15: Cleaning up temporary directory");
 
-    if let Err(e) = fs::remove_dir_all(&temp_dir) {
+    if let Err(_e) = fs::remove_dir_all(&temp_dir) {
         #[cfg(debug_assertions)]
-        debug_log!("PIET Warning: Failed to remove temporary directory: {}", e);
-        println!("Warning: Failed to clean up temporary files: {}", e);
+        debug_log!("PIET Warning: Failed to remove temporary directory: {}", _e);
+
+        debug_log!("PIET Warning: Failed to remove temporary directory");
+        println!("Warning: Failed to clean up temporary files");
         // This is a non-critical error, so we'll just log it and continue
     }
 
-    // STEP 17: Report success to user
+    // STEP 16: Report success to user
     #[cfg(debug_assertions)]
-    debug_log!("PIET Step 17: Reporting success to user");
+    debug_log!("PIET Step 16: Reporting success to user");
 
     println!("\nTeam channel successfully imported!");
     println!("Team channel name: {}", team_channel_name);
@@ -33848,22 +33939,26 @@ fn get_sendq_update_flag_paths(
                             };
                             let queue_file_path = PathBuf::from(queue_file_path_str);
 
+                            #[cfg(debug_assertions)]
                             debug_log!("gsufp inHRCD: Removing update flag file: {:?}", path);
-                            if let Err(e) = remove_file(&path) {
-                                debug_log!("Error removing update flag file: {:?} - {}", path, e);
+
+                            if let Err(_e) = remove_file(&path) {
+                                #[cfg(debug_assertions)]
+                                debug_log!("failed: Error removing update flag file: {:?} - {}", path, _e);
                                 // Continue processing other files even if removal fails.
                                 continue; // or choose to handle error
                             }
 
                             // Add the file path from *inside* the queue file to the path_list
                             path_list.push(queue_file_path);
-
                         }
                     },
                     Err(_e) => {
                         #[cfg(debug_assertions)]
                         debug_log!("Error reading directory entry: {}", _e);
                         // Handle error as you see fit
+                        // save log
+                        debug_log!("Error reading directory entry in 2. Read Directory and Collect Paths");
                         return Err(ThisProjectError::IoError(_e));
                     }
                 }
@@ -34109,6 +34204,7 @@ fn set_prefail_flag_rt_timestamp_for_sendfile(
     // Write the .rt timestamp to the file
     fs::write(flag_file_path, rt_timestamp.to_string())?;
 
+    #[cfg(debug_assertions)]
     debug_log!(
         "Set pre-fail flag for file updated at {} with ReadySignal timestamp {}.",
         file_updated_at_time, rt_timestamp
@@ -34159,6 +34255,7 @@ fn remove_one_prefail_flag_for_sendfile(
 
     match remove_file(flag_file_path) {
         Ok(_) => {
+            #[cfg(debug_assertions)]
             debug_log!(
                 "remove_one_prefail_flag_for_sendfile(): Successfully removed flag with id: {}",
                 di_flag_id
@@ -34166,11 +34263,19 @@ fn remove_one_prefail_flag_for_sendfile(
             Ok(())
         }
         Err(e) if e.kind() == ErrorKind::NotFound => {
+            #[cfg(debug_assertions)]
             debug_log!("remove_one_prefail_flag_for_sendfile(): Flag file not found: {}", di_flag_id);
+
+            // safe log
+            debug_log!("remove_one_prefail_flag_for_sendfile(): Flag file not found",);
+
             Ok(()) // Not an error if the file isn't found.
         }
         Err(_e) => {
+            #[cfg(debug_assertions)]
             debug_log!("remove_one_prefail_flag_for_sendfile(): Error removing flag file: {}", _e);
+            // safe log
+            debug_log!("remove_one_prefail_flag_for_sendfile(): Error removing flag file");
             Err(ThisProjectError::IoError(_e))  // Return other errors
         }
     }
@@ -34227,6 +34332,9 @@ fn read_rc_latest_received_from_rc_filetimestamp_plaintextstatefile(
     collaborator_name: &str,
 ) -> Result<u64, ThisProjectError> {
 
+    #[cfg(debug_assertions)]
+    debug_log("Starting read_rc_latest_received_from_rc_filetimestamp_plaintextstatefile");
+
     let mut file_path = make_input_path_name_abs_executabledirectoryrelative_nocheck(
         "sync_data"
     )?;
@@ -34248,7 +34356,7 @@ fn read_rc_latest_received_from_rc_filetimestamp_plaintextstatefile(
                 match timestamp_str.trim().parse::<u64>() {
                     Ok(timestamp) => return Ok(timestamp), // Success!
                     Err(_e) => {
-                        #[cfg(all(debug_assertions, not(test)))]
+                        #[cfg(debug_assertions)]
                         debug_log!("Error parsing timestamp from file: {}. Retrying...", _e);
                     }
                 }
@@ -34263,16 +34371,18 @@ fn read_rc_latest_received_from_rc_filetimestamp_plaintextstatefile(
                     file.write_all(b"0")?;
                     return Ok(0);
                 } else {
-                    debug_log!("File not found. Retrying...");
+                    #[cfg(debug_assertions)]
+                    debug_log!("read_rc_latest_received_from_rc_filetimestamp_plaintextstatefile: File not found. Retrying...");
                 }
             }
             Err(_e) => {
-                #[cfg(all(debug_assertions, not(test)))]
+                #[cfg(debug_assertions)]
                 debug_log!("IO error reading timestamp file: {}. Retrying...", _e);
             }
         }
 
         if retries == 0 {
+            #[cfg(debug_assertions)]
             debug_log!("Failed to read timestamp after multiple retries. Using default value 0.");
             return Ok(0); // Or return an appropriate error
         }
@@ -34747,13 +34857,6 @@ fn get_latest_received_from_rc_file_timestamp(
         latest_timestamp
     );
 
-    // Production logging (minimal, no file paths)
-    #[cfg(not(debug_assertions))]
-    {
-        // Log to production system if needed
-        // Format: "GLRFRCFT: encountered=N skipped=N processed=N result=N"
-    }
-
     Ok(latest_timestamp)
 }
 
@@ -35177,6 +35280,7 @@ impl std::error::Error for DecompressionError {}
 /// * `Result<(String, u8), DecompressionError>`:  The network type and index, or a DecompressionError.
 fn decompress_banddata_byte(band_byte: u8) -> Result<(String, u8), DecompressionError> {
     if band_byte >= 200 {
+        #[cfg(debug_assertions)]
         debug_log!("decompress_banddata_byte(): Invalid band_byte: {} (must be 0-199).", band_byte);
         return Err(DecompressionError::InvalidBandByte);
     }
@@ -35185,6 +35289,7 @@ fn decompress_banddata_byte(band_byte: u8) -> Result<(String, u8), Decompression
     let network_index = band_byte % 100;
 
     if network_index > 99 { // Strict check as per the specification.
+        #[cfg(debug_assertions)]
         debug_log!("decompress_banddata_byte(): Invalid index: {} (must be from 0-99).", network_index);
         return Err(DecompressionError::InvalidIndex); // Specific error for easier handling
     }
@@ -35195,6 +35300,7 @@ fn decompress_banddata_byte(band_byte: u8) -> Result<(String, u8), Decompression
         "ipv4".to_string()
     };
 
+    #[cfg(debug_assertions)]
     debug_log!("decompress_banddata_byte(), band_byte: {}: (network_type, network_index) ({}, {})", band_byte, network_type, network_index);
     Ok((network_type, network_index)) // Valid data: return Ok(data)
 }
@@ -36858,7 +36964,7 @@ fn handle_local_owner_desk(
                                 if let Err(e) = fs::write(&incoming_file_path, data_to_save) {
                                     #[cfg(debug_assertions)]
                                     debug_log!(
-                                        "(from {}) HLOD-InTray: Failed to write message file: {:?}",
+                                        "(from {}) error HLOD-InTray: Failed to write message file: {:?}",
                                         &remote_collaborator_name,
                                         e,
                                     );
@@ -37021,7 +37127,7 @@ fn handle_local_owner_desk(
                                 if let Some(parent) = Path::new(&zero_msgpost_node_abs_directory_path).parent() {
                                     if let Err(e) = fs::create_dir_all(parent) {
                                         #[cfg(debug_assertions)]
-                                        debug_log!("HLOD-InTray: Failed to create directories: {:?}", e);
+                                        debug_log!("HLOD-InTray: error Failed to create directories: {:?}", e);
                                         return Err(ThisProjectError::from(e));
                                     }
                                 }
@@ -37029,7 +37135,7 @@ fn handle_local_owner_desk(
                                 // 3. Saving the File
                                 if let Err(e) = fs::write(&zero_msgpost_node_abs_directory_path, data_to_save) {
                                     #[cfg(debug_assertions)]
-                                    debug_log!("HLOD-InTray: Failed to write message file: {:?}", e);
+                                    debug_log!("HLOD-InTray: error Failed to write message file: {:?}", e);
                                     return Err(ThisProjectError::from(e));
                                 }
 
@@ -40488,7 +40594,7 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                 Ok((amt, src)) => {
 
-                    debug_log!("RSSFLL 01: start RSSFLL Ready-Signal & Send-File Listener Loop 'RSSFLL' (from {})",
+                    debug_log!("RSSFLL 01: (from {}) start RSSFLL Ready-Signal & Send-File Listener Loop 'RSSFLL'",
                         room_sync_input.remote_collaborator_name,
                     );
 
@@ -40551,9 +40657,9 @@ fn handle_remote_collaborator_meetingroom_desk(
                     {
                         // --- Inspect Raw Bytes ---
                         debug_log!(
-                            "RSSFLL 04: HRCD 2.2.1 Ready Signal Raw bytes received: {:?} (from {})",
+                            "RSSFLL 04: (from {}) HRCD 2.2.1 Ready Signal Raw bytes received: {:?}",
+                            room_sync_input.remote_collaborator_name,
                             &buf[..amt],
-                            room_sync_input.remote_collaborator_name
                         );
 
                         // --- Inspect Bytes as Hex ---
@@ -43496,16 +43602,20 @@ pub fn quit_set_continue_uma_to_false() -> Result<(), io::Error> {
 pub fn no_restart_set_hard_reset_flag_to_false() -> Result<(), io::Error> {
     // Get the executable-relative absolute path
     let abs_path = get_hard_restart_flag_path()?;
-
+    #[cfg(debug_assertions)]
     debug_log!("Setting hard restart flag to false (0) at: {:?}", abs_path);
 
     // Try to delete the existing file if it exists
     match fs::remove_file(&abs_path) {
-        Ok(_) => debug_log!("Old 'yes_hard_restart_flag.txt' file deleted."),
-        Err(e) => {
-            if e.kind() != io::ErrorKind::NotFound {
+        Ok(_) => {
+            #[cfg(debug_assertions)]
+            debug_log!("Old 'yes_hard_restart_flag.txt' file deleted.")
+        }
+        Err(_e) => {
+            if _e.kind() != io::ErrorKind::NotFound {
                 // Log error but continue - it's not fatal if we can't delete
-                debug_log!("Warning: Could not delete old yes_hard_restart_flag.txt file: {}", e);
+                #[cfg(debug_assertions)]
+                debug_log!("Warning: Could not delete old yes_hard_restart_flag.txt file: {}", _e);
             }
         }
     }
@@ -43519,6 +43629,7 @@ pub fn no_restart_set_hard_reset_flag_to_false() -> Result<(), io::Error> {
     let mut file = File::create(&abs_path)?;
     file.write_all(b"0")?;
 
+    #[cfg(debug_assertions)]
     debug_log!("Successfully set hard restart flag to false (0)");
     Ok(())
 }
