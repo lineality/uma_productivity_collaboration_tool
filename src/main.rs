@@ -7851,8 +7851,8 @@ impl App {
 
         // 3. Display mode info bar with clear instructions
         match message_view_mode {
-            MessageViewMode::Refresh => print!("\\|/  Refresh Mode "),
-            MessageViewMode::Insert => print!(">_  Insert Mode "),
+            MessageViewMode::Refresh => print!("\\|/  Refresh-Mode "),
+            MessageViewMode::Insert => print!(">_  Insert-Mode "),
         }
 
         // 4. Display input prompt with current buffer
@@ -7860,7 +7860,7 @@ impl App {
         // println!("Showing {}-{} of {} | ↑k ↓j | ↑↓:{} >",             start_idx + 1, end_idx, self.tui_textmessage_list.len(), self.tui_height);
 
         // TODO buffy formatting
-        print!("Showing {}-{} of {} | ↑k ↓j > ",
+        print!("-> {}-{} of {} | ↑k ↓j > ",
             start_idx + 1, end_idx, self.tui_textmessage_list.len());
         io::stdout().flush()
     }
