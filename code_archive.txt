@@ -16104,3 +16104,409 @@ fn extract_port_value(line: &str, key: &str) -> Option<u16> {
 //     }
 //     Ok(hashes)
 // }
+
+// // todo: docstring needed
+// fn gpg_clearsign_file_to_sendbytes(
+//     file_path: &Path,
+// ) -> Result<Vec<u8>, ThisProjectError> {
+
+
+//     debug_log("(in RSSFLL ~16) starting gpg_clearsign_file_to_sendbytes");
+
+//     // 1. Create a unique temporary file path in the OS temp directory.
+//     let mut temp_dir = std::env::temp_dir();
+//     let temp_file_name = format!("uma_temp_{}.toml", get_current_unix_timestamp()); // Or use a UUID for stronger uniqueness
+//     temp_dir.push(temp_file_name);
+
+//     // 2. Copy the original file to the temporary location.
+//     fs::copy(file_path, &temp_dir)?;
+
+//     // 3. Clearsign the temporary file, capturing the output.  Redirect stderr for error handling.
+//     let clearsign_output = StdCommand::new("gpg")
+//         .arg("--clearsign")
+//         .arg("--output")
+//         .arg("-") // Redirect to stdout
+//         .arg(&temp_dir)
+//         .stderr(std::process::Stdio::piped())
+//         .output()?;
+
+//     // Handle potential GPG errors.
+//     if !clearsign_output.status.success() {
+//         let stderr = String::from_utf8_lossy(&clearsign_output.stderr);
+//         return Err(ThisProjectError::GpgError(format!(
+//             "GPG clearsign failed: {}",
+//             stderr
+//         )));
+//     }
+//     let clearsigned_bytes = clearsign_output.stdout;
+
+//     // 4. Clean up the temporary file.
+//     fs::remove_file(&temp_dir)?; // TODO Handle potential error
+
+//     #[cfg(debug_assertions)]
+//     debug_log!(
+//         "(in RSSFLL ~16) (inHRCD)gpg_clearsign_file_to_sendbytes clearsigned_bytes {:?}",
+//         clearsigned_bytes
+//     );
+
+//     // 5. Return the encrypted, clearsigned bytes.
+//     Ok(clearsigned_bytes)
+// }
+
+// fn gpg_encrypt_to_bytes(data: &[u8], recipient_public_key: &str) -> Result<Vec<u8>, ThisProjectError> {
+
+//     #[cfg(debug_assertions)]
+//     debug_log!(
+//         "(in RSSFLL ~16) (inHRCD) STARTING @-|i|- gpg_encrypt_to_bytes() data {:?}",
+//         data
+//     );
+
+//     // 1. Create a temporary file for the public key.
+//     let mut temp_key_file = std::env::temp_dir();
+//     temp_key_file.push("uma_temp_key.asc");
+//     let mut file = File::create(&temp_key_file)?;
+//     file.write_all(recipient_public_key.as_bytes())?;
+
+//     #[cfg(debug_assertions)]
+//     debug_log!("(in RSSFLL ~16) (inHRCD) gpg_encrypt_to_bytes() temp_key_file path {:?}", temp_key_file);
+
+//     // 2. GPG encrypt, reading the recipient key from the temporary file.
+//     let mut gpg = StdCommand::new("gpg")
+//         .arg("--encrypt")
+//         .arg("--recipient-file")
+//         .arg(&temp_key_file)
+//         .stdin(Stdio::piped())       // Correct usage for stdin
+//         .stdout(Stdio::piped())
+//         .stderr(Stdio::piped())
+//         .spawn()?;
+
+
+//     // Write data to stdin.
+//     if let Some(mut stdin) = gpg.stdin.take() {
+//         stdin.write_all(data)?;
+//     } else {
+//         // Consider a better error type...
+//         debug_log!("(in RSSFLL ~16) (inHRCD) gpg_encrypt_to_bytes() error failed if let Some(mut stdin) = gpg.stdin.take()");
+
+//         return Err(ThisProjectError::GpgError("Failed to open GPG's stdin".into()));
+//     };
+
+//     let output = gpg.wait_with_output()?;
+
+//     #[cfg(debug_assertions)]
+//     debug_log!(
+//         "(inHRCD) gpg_encrypt_to_bytes() output {:?}",
+//         output
+//     );
+
+//     // 3. Clean up the temporary key file.
+//     remove_file(temp_key_file)?;
+
+//     if output.status.success() {
+//         Ok(output.stdout)
+//     } else {
+
+//         // safe log
+//         debug_log!("(in RSSFLL ~16) (inHRCD) gpg_encrypt_to_bytes() error failed ");
+
+//         let stderr = String::from_utf8_lossy(&output.stderr);
+//         Err(ThisProjectError::GpgError(format!("gpg_encrypt_to_bytes: GPG encryption failed: {}", stderr)))
+//     }
+// }
+
+// /// Clearsigns a file using GPG and returns the clearsigned bytes ready to send.
+// ///
+// /// # Project Context
+// /// Part of the RSSFLL (Read-Send-Sign-File-Local-Loop) signing pipeline.
+// /// The caller (a networking/messaging layer) needs an in-memory byte buffer
+// /// containing a GPG clearsigned representation of an on-disk TOML file so it
+// /// can be transmitted to a peer without leaving signed artifacts on disk.
+// ///
+// /// # Process
+// /// 1. Copies the source file to a unique path under the OS temp dir (so the
+// ///    original file is never modified or held open by `gpg`).
+// /// 2. Invokes `gpg --clearsign --output - <temp>` capturing stdout.
+// /// 3. Always attempts to remove the temp file, even on error (best-effort
+// ///    cleanup; cleanup failures are logged but do not mask the primary error).
+// /// 4. Returns the clearsigned bytes.
+// ///
+// /// # Errors
+// /// Returns `ThisProjectError::GpgError` with a terse, unique prefix
+// /// (`GCFSB:`) so production logs can trace the originating function without
+// /// leaking file paths, file contents, or other sensitive data.
+// ///
+// /// # Defensive Notes
+// /// - No `?`: every fallible call is matched explicitly so cleanup and logging
+// ///   can be performed.
+// /// - Production error strings are terse; verbose details only emitted under
+// ///   `#[cfg(debug_assertions)]`.
+// /// - No panic: every failure path returns an `Err`.
+// fn gpg_clearsign_file_to_sendbytes(
+//     file_path: &Path,
+// ) -> Result<Vec<u8>, ThisProjectError> {
+//     #[cfg(debug_assertions)]
+//     debug_log!("(GCFSB) starting gpg_clearsign_file_to_sendbytes");
+
+//     // 1. Build a unique temp file path. We avoid heavy uniqueness libs;
+//     //    a unix timestamp is sufficient for this use-case but we also append
+//     //    the process id to reduce collision risk under rapid succession.
+//     let mut temp_path = std::env::temp_dir();
+//     let temp_name = format!(
+//         "uma_temp_{}_{}.toml",
+//         get_current_unix_timestamp(),
+//         std::process::id()
+//     );
+//     temp_path.push(temp_name);
+
+//     // 2. Copy the source file to the temp path.
+//     match fs::copy(file_path, &temp_path) {
+//         Ok(_) => {}
+//         Err(copy_err) => {
+//             #[cfg(debug_assertions)]
+//             debug_log!("(GCFSB) fs::copy failed: {:?}", copy_err);
+//             // No temp file to clean up here (copy failed before create finalized,
+//             // but attempt removal just in case partial file exists).
+//             let _ = fs::remove_file(&temp_path);
+//             return Err(ThisProjectError::GpgError(
+//                 "GCFSB: copy to temp failed".into(),
+//             ));
+//         }
+//     }
+
+//     // 3. Run gpg --clearsign on the temp file, capturing stdout.
+//     let clearsign_result = StdCommand::new("gpg")
+//         .arg("--clearsign")
+//         .arg("--output")
+//         .arg("-")
+//         .arg(&temp_path)
+//         .stderr(std::process::Stdio::piped())
+//         .output();
+
+//     // 4. Always attempt cleanup of the temp file, regardless of gpg outcome.
+//     //    Capture the gpg outcome first, then clean up, then evaluate.
+//     let clearsign_output = match clearsign_result {
+//         Ok(out) => out,
+//         Err(spawn_err) => {
+//             #[cfg(debug_assertions)]
+//             debug_log!("(GCFSB) gpg spawn/output failed: {:?}", spawn_err);
+//             if let Err(rm_err) = fs::remove_file(&temp_path) {
+//                 #[cfg(debug_assertions)]
+//                 debug_log!("(GCFSB) temp cleanup failed: {:?}", rm_err);
+//             }
+//             return Err(ThisProjectError::GpgError(
+//                 "GCFSB: gpg invocation failed".into(),
+//             ));
+//         }
+//     };
+
+//     // Best-effort cleanup; do not mask the real error if any.
+//     if let Err(rm_err) = fs::remove_file(&temp_path) {
+//         #[cfg(debug_assertions)]
+//         debug_log!("(GCFSB) temp cleanup failed: {:?}", rm_err);
+//         // Continue: cleanup failure should not block returning the signed bytes.
+//     }
+
+//     // 5. Evaluate gpg's exit status.
+//     if !clearsign_output.status.success() {
+//         #[cfg(debug_assertions)]
+//         {
+//             let stderr = String::from_utf8_lossy(&clearsign_output.stderr);
+//             debug_log!("(GCFSB) gpg clearsign nonzero exit: {}", stderr);
+//         }
+//         return Err(ThisProjectError::GpgError(
+//             "GCFSB: gpg clearsign nonzero exit".into(),
+//         ));
+//     }
+
+//     let clearsigned_bytes = clearsign_output.stdout;
+
+//     // Defensive: gpg succeeded with empty stdout is unexpected.
+//     if clearsigned_bytes.is_empty() {
+//         #[cfg(debug_assertions)]
+//         debug_log!("(GCFSB) gpg returned empty stdout despite success status");
+//         return Err(ThisProjectError::GpgError(
+//             "GCFSB: empty signed output".into(),
+//         ));
+//     }
+
+//     #[cfg(debug_assertions)]
+//     debug_log!(
+//         "(GCFSB) clearsigned_bytes len={}",
+//         clearsigned_bytes.len()
+//     );
+
+//     Ok(clearsigned_bytes)
+// }
+
+
+// /// Encrypts a byte slice to a recipient using a provided armored public key.
+// ///
+// /// # Project Context
+// /// Companion to `gpg_clearsign_file_to_sendbytes`. After signing, the bytes
+// /// must be encrypted to the recipient's GPG public key before being sent over
+// /// the network. The public key is written to a temp file because
+// /// `gpg --recipient-file` accepts a path, and importing into the user's
+// /// permanent keyring is undesirable for one-shot recipients.
+// ///
+// /// # Process
+// /// 1. Writes the armored public key to a unique temp file.
+// /// 2. Spawns `gpg --encrypt --recipient-file <temp>` with piped stdio.
+// /// 3. Writes `data` to gpg's stdin, then waits for output.
+// /// 4. Always attempts to clean up the temp key file.
+// /// 5. Returns ciphertext bytes on success.
+// ///
+// /// # Errors
+// /// Returns `ThisProjectError::GpgError` with the unique prefix `GETB:`.
+// /// Production error strings are terse; verbose details only emitted under
+// /// `#[cfg(debug_assertions)]`.
+// fn gpg_encrypt_to_bytes(
+//     data: &[u8],
+//     recipient_public_key: &str,
+// ) -> Result<Vec<u8>, ThisProjectError> {
+//     #[cfg(debug_assertions)]
+//     debug_log!("(GETB) starting gpg_encrypt_to_bytes, data_len={}", data.len());
+
+//     // Defensive: an empty key cannot be valid.
+//     if recipient_public_key.trim().is_empty() {
+//         return Err(ThisProjectError::GpgError(
+//             "GETB: empty recipient key".into(),
+//         ));
+//     }
+
+//     // 1. Build a unique temp path for the public key.
+//     let mut temp_key_path = std::env::temp_dir();
+//     let temp_key_name = format!(
+//         "uma_temp_key_{}_{}.asc",
+//         get_current_unix_timestamp(),
+//         std::process::id()
+//     );
+//     temp_key_path.push(temp_key_name);
+
+//     // 2. Create the temp key file and write the armored key bytes.
+//     let mut key_file = match File::create(&temp_key_path) {
+//         Ok(f) => f,
+//         Err(create_err) => {
+//             #[cfg(debug_assertions)]
+//             debug_log!("(GETB) temp key create failed: {:?}", create_err);
+//             return Err(ThisProjectError::GpgError(
+//                 "GETB: temp key create failed".into(),
+//             ));
+//         }
+//     };
+
+//     if let Err(write_err) = key_file.write_all(recipient_public_key.as_bytes()) {
+//         #[cfg(debug_assertions)]
+//         debug_log!("(GETB) temp key write failed: {:?}", write_err);
+//         let _ = remove_file(&temp_key_path);
+//         return Err(ThisProjectError::GpgError(
+//             "GETB: temp key write failed".into(),
+//         ));
+//     }
+
+//     // Flush+drop the file handle so gpg can read it cleanly.
+//     if let Err(flush_err) = key_file.flush() {
+//         #[cfg(debug_assertions)]
+//         debug_log!("(GETB) temp key flush failed: {:?}", flush_err);
+//         let _ = remove_file(&temp_key_path);
+//         return Err(ThisProjectError::GpgError(
+//             "GETB: temp key flush failed".into(),
+//         ));
+//     }
+//     drop(key_file);
+
+//     // 3. Spawn gpg with piped stdio.
+//     let spawn_result = StdCommand::new("gpg")
+//         .arg("--encrypt")
+//         .arg("--recipient-file")
+//         .arg(&temp_key_path)
+//         .stdin(Stdio::piped())
+//         .stdout(Stdio::piped())
+//         .stderr(Stdio::piped())
+//         .spawn();
+
+//     let mut gpg_child = match spawn_result {
+//         Ok(child) => child,
+//         Err(spawn_err) => {
+//             #[cfg(debug_assertions)]
+//             debug_log!("(GETB) gpg spawn failed: {:?}", spawn_err);
+//             let _ = remove_file(&temp_key_path);
+//             return Err(ThisProjectError::GpgError(
+//                 "GETB: gpg spawn failed".into(),
+//             ));
+//         }
+//     };
+
+//     // 4. Write plaintext to gpg's stdin, then close stdin so gpg can finish.
+//     match gpg_child.stdin.take() {
+//         Some(mut stdin_handle) => {
+//             if let Err(write_err) = stdin_handle.write_all(data) {
+//                 #[cfg(debug_assertions)]
+//                 debug_log!("(GETB) stdin write failed: {:?}", write_err);
+//                 // Try to reap the child so we don't leave a zombie.
+//                 let _ = gpg_child.kill();
+//                 let _ = gpg_child.wait();
+//                 let _ = remove_file(&temp_key_path);
+//                 return Err(ThisProjectError::GpgError(
+//                     "GETB: stdin write failed".into(),
+//                 ));
+//             }
+//             // stdin_handle dropped here -> EOF to gpg.
+//         }
+//         None => {
+//             #[cfg(debug_assertions)]
+//             debug_log!("(GETB) gpg child had no stdin handle");
+//             let _ = gpg_child.kill();
+//             let _ = gpg_child.wait();
+//             let _ = remove_file(&temp_key_path);
+//             return Err(ThisProjectError::GpgError(
+//                 "GETB: no stdin handle".into(),
+//             ));
+//         }
+//     }
+
+//     // 5. Wait for gpg to finish and gather output.
+//     let output = match gpg_child.wait_with_output() {
+//         Ok(out) => out,
+//         Err(wait_err) => {
+//             #[cfg(debug_assertions)]
+//             debug_log!("(GETB) wait_with_output failed: {:?}", wait_err);
+//             let _ = remove_file(&temp_key_path);
+//             return Err(ThisProjectError::GpgError(
+//                 "GETB: wait failed".into(),
+//             ));
+//         }
+//     };
+
+//     // 6. Best-effort cleanup of the temp key file.
+//     if let Err(rm_err) = remove_file(&temp_key_path) {
+//         #[cfg(debug_assertions)]
+//         debug_log!("(GETB) temp key cleanup failed: {:?}", rm_err);
+//         // Continue evaluating the gpg result.
+//     }
+
+//     // 7. Evaluate gpg's status.
+//     if !output.status.success() {
+//         #[cfg(debug_assertions)]
+//         {
+//             let stderr = String::from_utf8_lossy(&output.stderr);
+//             debug_log!("(GETB) gpg encrypt nonzero exit: {}", stderr);
+//         }
+//         return Err(ThisProjectError::GpgError(
+//             "GETB: gpg encrypt nonzero exit".into(),
+//         ));
+//     }
+
+//     // Defensive: success with empty ciphertext is unexpected.
+//     if output.stdout.is_empty() {
+//         #[cfg(debug_assertions)]
+//         debug_log!("(GETB) gpg returned empty ciphertext despite success");
+//         return Err(ThisProjectError::GpgError(
+//             "GETB: empty ciphertext".into(),
+//         ));
+//     }
+
+//     #[cfg(debug_assertions)]
+//     debug_log!("(GETB) ciphertext len={}", output.stdout.len());
+
+//     Ok(output.stdout)
+// }

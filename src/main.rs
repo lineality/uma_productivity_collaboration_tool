@@ -410,7 +410,7 @@ use std::net::{
 use getifaddrs::{getifaddrs, InterfaceFlags};
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicBool, Ordering};
 use std::sync::mpsc::{self, Sender, Receiver, TryRecvError};
 
 /*
@@ -619,6 +619,178 @@ pub fn get_session_state_current_node_record_path() -> io::Result<PathBuf> {
     )
 }
 
+// ======================
+//  Temp Directory Tools
+// ======================
+
+/// Project-wide monotonic counter that hands out a stable, compact u64 to
+/// every thread the first time that thread asks for its ID. Used instead of
+/// `std::thread::ThreadId` (whose numeric form is unstable API) so we get a
+/// short, filesystem-safe component for temp paths and predictable values
+/// in logs.
+static UMA_THREAD_ID_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+thread_local! {
+    /// Lazily assigned per-thread numeric ID, drawn from
+    /// `UMA_THREAD_ID_COUNTER` on first access. Stable for the lifetime of
+    /// the thread. Cheap (one atomic increment per thread, never per call).
+    static UMA_THREAD_ID: u64 = UMA_THREAD_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
+}
+
+/// Returns this thread's stable numeric ID (assigning one on first call).
+///
+/// # Project Context
+/// Used to namespace per-thread temp sub-directories and to tag temp
+/// filenames so concurrent calls from different threads cannot collide on
+/// the same temp path (this was the root cause of the prior
+/// "gpg: can't open ..." race).
+pub fn uma_current_thread_id() -> u64 {
+    UMA_THREAD_ID.with(|id| *id)
+}
+
+/// Process-local monotonic counter used (together with nanos, PID, thread ID)
+/// to disambiguate temp filenames even within a single thread.
+static UMA_TEMP_FILE_SEQ: AtomicU64 = AtomicU64::new(0);
+
+/// Returns a best-effort nanosecond timestamp since UNIX epoch.
+/// Falls back to 0 on clock error rather than panicking; the atomic counter
+/// and thread/PID components still guarantee uniqueness.
+fn uma_nanos_since_epoch() -> u128 {
+    match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(d) => d.as_nanos(),
+        Err(_) => 0,
+    }
+}
+
+/// Returns (creating if needed) a per-thread sub-directory under the project's
+/// canonical UMA temp directory.
+///
+/// # Layout
+/// ```text
+/// <base_uma_temp>/uma_thread_<TID>/
+/// ```
+/// where `<base_uma_temp>` is whatever
+/// `get_base_uma_temp_directory_path()` returns and `<TID>` is
+/// `uma_current_thread_id()`. The sub-directory name is NOT dot-prefixed
+/// (no hidden directories), per project policy.
+///
+/// # Project Context
+/// Each thread writing temporary GPG inputs (clearsign source copies,
+/// recipient key files, etc.) must work in its own sub-directory so that
+/// one thread's cleanup never deletes another thread's in-flight file.
+///
+/// # Errors
+/// Returns `ThisProjectError::GpgError` with the prefix `UMATD:` if the
+/// base temp dir cannot be resolved or the per-thread sub-directory cannot
+/// be created. Production message is terse (no paths leaked).
+fn uma_get_or_create_thread_temp_subdir() -> Result<PathBuf, ThisProjectError> {
+    // 1. Resolve the project's canonical base temp dir.
+    let base_dir = match get_base_uma_temp_directory_path() {
+        Ok(p) => p,
+        Err(_resolve_err) => {
+            #[cfg(debug_assertions)]
+            debug_log!("(UMATD) base temp dir resolve failed: {:?}", _resolve_err);
+            return Err(ThisProjectError::GpgError(
+                "UMATD: base temp dir unavailable".into(),
+            ));
+        }
+    };
+
+    // 2. Compose the per-thread sub-directory (visible, not dot-prefixed).
+    let thread_subdir_name = format!("uma_thread_{}", uma_current_thread_id());
+    let thread_subdir = base_dir.join(thread_subdir_name);
+
+    // 3. Create it if it does not already exist. `create_dir_all` is
+    //    idempotent and tolerates the directory already existing.
+    if let Err(_mkdir_err) = std::fs::create_dir_all(&thread_subdir) {
+        #[cfg(debug_assertions)]
+        debug_log!("(UMATD) create_dir_all failed: {:?}", _mkdir_err);
+        return Err(ThisProjectError::GpgError(
+            "UMATD: thread subdir create failed".into(),
+        ));
+    }
+
+    // 4. Defensive verification: confirm it now exists and is a directory.
+    match std::fs::metadata(&thread_subdir) {
+        Ok(md) if md.is_dir() => {
+            #[cfg(debug_assertions)]
+            debug_log!("(UMATD) thread subdir ready: {:?}", thread_subdir);
+            Ok(thread_subdir)
+        }
+        Ok(_) => {
+            #[cfg(debug_assertions)]
+            debug_log!("(UMATD) thread subdir path exists but is not a directory");
+            Err(ThisProjectError::GpgError(
+                "UMATD: thread subdir not a dir".into(),
+            ))
+        }
+        Err(_meta_err) => {
+            #[cfg(debug_assertions)]
+            debug_log!("(UMATD) thread subdir metadata failed: {:?}", _meta_err);
+            Err(ThisProjectError::GpgError(
+                "UMATD: thread subdir verify failed".into(),
+            ))
+        }
+    }
+}
+
+/// Builds a strongly-unique temp filename inside the current thread's
+/// sub-directory.
+///
+/// Components:
+/// - tag         : caller-supplied short prefix (e.g. "gcfsb", "getb_key")
+/// - nanos       : nanoseconds since UNIX epoch
+/// - PID         : OS process id
+/// - thread id   : this process's per-thread numeric id
+/// - sequence    : process-local atomic counter
+/// - extension   : caller-supplied (e.g. "toml", "asc")
+///
+/// This combination is robust against:
+/// - same-second collisions (uses nanos)
+/// - multi-thread collisions (uses thread id + per-thread subdir)
+/// - same-nanosecond collisions (uses atomic seq)
+/// - multi-process collisions (uses PID)
+fn uma_build_unique_temp_path(
+    tag: &str,
+    extension: &str,
+) -> Result<PathBuf, ThisProjectError> {
+    let dir = match uma_get_or_create_thread_temp_subdir() {
+        Ok(d) => d,
+        Err(e) => return Err(e),
+    };
+    let seq = UMA_TEMP_FILE_SEQ.fetch_add(1, Ordering::Relaxed);
+    let filename = format!(
+        "{}_{}_{}_{}_{}.{}",
+        tag,
+        uma_nanos_since_epoch(),
+        std::process::id(),
+        uma_current_thread_id(),
+        seq,
+        extension
+    );
+    Ok(dir.join(filename))
+}
+
+/// Best-effort temp-file removal. `NotFound` is treated as success because
+/// it commonly means another part of the pipeline (or the OS) already
+/// cleaned the file; any other error is logged only in debug builds.
+fn uma_best_effort_remove(p: &Path) {
+    match std::fs::remove_file(p) {
+        Ok(_) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            // Benign; nothing to do.
+        }
+        Err(_other) => {
+            #[cfg(debug_assertions)]
+            debug_log!("(UMA) temp cleanup non-fatal err: {:?}", _other);
+        }
+    }
+}
+
+
+// ===================
+//  Sync / Halt Tools
+// ===================
 
 /// Determines if UMA should halt based on the continue_uma.txt file.
 ///
@@ -2642,6 +2814,8 @@ fn read_one_collaborator_addressbook_toml(
             .as_nanos();
 
         let temp_filename = format!("decrypt_collab_{}_{}.toml", collaborator_name, timestamp);
+
+        // TODO: WRONG!!! must use get_base_uma_temp_directory_path()
         let temp_path = std::env::temp_dir().join(&temp_filename);
 
         // Decrypt the .gpgtoml file
@@ -22289,176 +22463,119 @@ fn get_gpg_armored_public_key_via_key_id(key_id: &str) -> io::Result<String> {
     }
 }
 
-// // todo: docstring needed
-// fn gpg_clearsign_file_to_sendbytes(
-//     file_path: &Path,
-// ) -> Result<Vec<u8>, ThisProjectError> {
-
-
-//     debug_log("(in RSSFLL ~16) starting gpg_clearsign_file_to_sendbytes");
-
-//     // 1. Create a unique temporary file path in the OS temp directory.
-//     let mut temp_dir = std::env::temp_dir();
-//     let temp_file_name = format!("uma_temp_{}.toml", get_current_unix_timestamp()); // Or use a UUID for stronger uniqueness
-//     temp_dir.push(temp_file_name);
-
-//     // 2. Copy the original file to the temporary location.
-//     fs::copy(file_path, &temp_dir)?;
-
-//     // 3. Clearsign the temporary file, capturing the output.  Redirect stderr for error handling.
-//     let clearsign_output = StdCommand::new("gpg")
-//         .arg("--clearsign")
-//         .arg("--output")
-//         .arg("-") // Redirect to stdout
-//         .arg(&temp_dir)
-//         .stderr(std::process::Stdio::piped())
-//         .output()?;
-
-//     // Handle potential GPG errors.
-//     if !clearsign_output.status.success() {
-//         let stderr = String::from_utf8_lossy(&clearsign_output.stderr);
-//         return Err(ThisProjectError::GpgError(format!(
-//             "GPG clearsign failed: {}",
-//             stderr
-//         )));
-//     }
-//     let clearsigned_bytes = clearsign_output.stdout;
-
-//     // 4. Clean up the temporary file.
-//     fs::remove_file(&temp_dir)?; // TODO Handle potential error
-
-//     #[cfg(debug_assertions)]
-//     debug_log!(
-//         "(in RSSFLL ~16) (inHRCD)gpg_clearsign_file_to_sendbytes clearsigned_bytes {:?}",
-//         clearsigned_bytes
-//     );
-
-//     // 5. Return the encrypted, clearsigned bytes.
-//     Ok(clearsigned_bytes)
-// }
-
-// fn gpg_encrypt_to_bytes(data: &[u8], recipient_public_key: &str) -> Result<Vec<u8>, ThisProjectError> {
-
-//     #[cfg(debug_assertions)]
-//     debug_log!(
-//         "(in RSSFLL ~16) (inHRCD) STARTING @-|i|- gpg_encrypt_to_bytes() data {:?}",
-//         data
-//     );
-
-//     // 1. Create a temporary file for the public key.
-//     let mut temp_key_file = std::env::temp_dir();
-//     temp_key_file.push("uma_temp_key.asc");
-//     let mut file = File::create(&temp_key_file)?;
-//     file.write_all(recipient_public_key.as_bytes())?;
-
-//     #[cfg(debug_assertions)]
-//     debug_log!("(in RSSFLL ~16) (inHRCD) gpg_encrypt_to_bytes() temp_key_file path {:?}", temp_key_file);
-
-//     // 2. GPG encrypt, reading the recipient key from the temporary file.
-//     let mut gpg = StdCommand::new("gpg")
-//         .arg("--encrypt")
-//         .arg("--recipient-file")
-//         .arg(&temp_key_file)
-//         .stdin(Stdio::piped())       // Correct usage for stdin
-//         .stdout(Stdio::piped())
-//         .stderr(Stdio::piped())
-//         .spawn()?;
-
-
-//     // Write data to stdin.
-//     if let Some(mut stdin) = gpg.stdin.take() {
-//         stdin.write_all(data)?;
-//     } else {
-//         // Consider a better error type...
-//         debug_log!("(in RSSFLL ~16) (inHRCD) gpg_encrypt_to_bytes() error failed if let Some(mut stdin) = gpg.stdin.take()");
-
-//         return Err(ThisProjectError::GpgError("Failed to open GPG's stdin".into()));
-//     };
-
-//     let output = gpg.wait_with_output()?;
-
-//     #[cfg(debug_assertions)]
-//     debug_log!(
-//         "(inHRCD) gpg_encrypt_to_bytes() output {:?}",
-//         output
-//     );
-
-//     // 3. Clean up the temporary key file.
-//     remove_file(temp_key_file)?;
-
-//     if output.status.success() {
-//         Ok(output.stdout)
-//     } else {
-
-//         // safe log
-//         debug_log!("(in RSSFLL ~16) (inHRCD) gpg_encrypt_to_bytes() error failed ");
-
-//         let stderr = String::from_utf8_lossy(&output.stderr);
-//         Err(ThisProjectError::GpgError(format!("gpg_encrypt_to_bytes: GPG encryption failed: {}", stderr)))
-//     }
-// }
-
 /// Clearsigns a file using GPG and returns the clearsigned bytes ready to send.
 ///
 /// # Project Context
 /// Part of the RSSFLL (Read-Send-Sign-File-Local-Loop) signing pipeline.
-/// The caller (a networking/messaging layer) needs an in-memory byte buffer
-/// containing a GPG clearsigned representation of an on-disk TOML file so it
-/// can be transmitted to a peer without leaving signed artifacts on disk.
+/// Produces an in-memory clearsigned representation of an on-disk TOML file
+/// without leaving signed artifacts on disk.
 ///
-/// # Process
-/// 1. Copies the source file to a unique path under the OS temp dir (so the
-///    original file is never modified or held open by `gpg`).
-/// 2. Invokes `gpg --clearsign --output - <temp>` capturing stdout.
-/// 3. Always attempts to remove the temp file, even on error (best-effort
-///    cleanup; cleanup failures are logged but do not mask the primary error).
-/// 4. Returns the clearsigned bytes.
+/// # Temp-file Strategy
+/// - All temp files live under the project's canonical base temp dir
+///   returned by `get_base_uma_temp_directory_path()` (no hidden dirs).
+/// - Each thread works in its own sub-directory
+///   `<base>/uma_thread_<TID>/` so concurrent calls cannot delete each
+///   other's in-flight files.
+/// - Filenames are tagged with nanos + PID + thread id + atomic seq.
 ///
 /// # Errors
-/// Returns `ThisProjectError::GpgError` with a terse, unique prefix
-/// (`GCFSB:`) so production logs can trace the originating function without
-/// leaking file paths, file contents, or other sensitive data.
-///
-/// # Defensive Notes
-/// - No `?`: every fallible call is matched explicitly so cleanup and logging
-///   can be performed.
-/// - Production error strings are terse; verbose details only emitted under
-///   `#[cfg(debug_assertions)]`.
-/// - No panic: every failure path returns an `Err`.
+/// Returns `ThisProjectError::GpgError` with the unique prefix `GCFSB:`.
+/// Production messages are terse and reveal no paths or contents.
 fn gpg_clearsign_file_to_sendbytes(
     file_path: &Path,
 ) -> Result<Vec<u8>, ThisProjectError> {
     #[cfg(debug_assertions)]
-    debug_log!("(GCFSB) starting gpg_clearsign_file_to_sendbytes");
-
-    // 1. Build a unique temp file path. We avoid heavy uniqueness libs;
-    //    a unix timestamp is sufficient for this use-case but we also append
-    //    the process id to reduce collision risk under rapid succession.
-    let mut temp_path = std::env::temp_dir();
-    let temp_name = format!(
-        "uma_temp_{}_{}.toml",
-        get_current_unix_timestamp(),
-        std::process::id()
+    debug_log!(
+        "(GCFSB) start tid={} src={:?}",
+        uma_current_thread_id(),
+        file_path
     );
-    temp_path.push(temp_name);
 
-    // 2. Copy the source file to the temp path.
-    match fs::copy(file_path, &temp_path) {
-        Ok(_) => {}
-        Err(copy_err) => {
+    // 0. Pre-flight: source must exist, be a regular file, and be non-empty.
+    match std::fs::metadata(file_path) {
+        Ok(md) => {
+            if !md.is_file() {
+                #[cfg(debug_assertions)]
+                debug_log!("(GCFSB) source is not a regular file");
+                return Err(ThisProjectError::GpgError(
+                    "GCFSB: source not a file".into(),
+                ));
+            }
+            if md.len() == 0 {
+                #[cfg(debug_assertions)]
+                debug_log!("(GCFSB) source file is empty");
+                return Err(ThisProjectError::GpgError(
+                    "GCFSB: source empty".into(),
+                ));
+            }
+        }
+        Err(_meta_err) => {
             #[cfg(debug_assertions)]
-            debug_log!("(GCFSB) fs::copy failed: {:?}", copy_err);
-            // No temp file to clean up here (copy failed before create finalized,
-            // but attempt removal just in case partial file exists).
-            let _ = fs::remove_file(&temp_path);
+            debug_log!("(GCFSB) source metadata failed: {:?}", _meta_err);
+            return Err(ThisProjectError::GpgError(
+                "GCFSB: source missing".into(),
+            ));
+        }
+    }
+
+    // 1. Build a unique temp path inside this thread's sub-directory.
+    let temp_path = match uma_build_unique_temp_path("gcfsb", "toml") {
+        Ok(p) => p,
+        Err(e) => return Err(e),
+    };
+
+    #[cfg(debug_assertions)]
+    debug_log!("(GCFSB) temp_path={:?}", temp_path);
+
+    // 2. Copy source -> temp.
+    match std::fs::copy(file_path, &temp_path) {
+        Ok(bytes_copied) => {
+            #[cfg(debug_assertions)]
+            debug_log!("(GCFSB) copied {} bytes", bytes_copied);
+            if bytes_copied == 0 {
+                uma_best_effort_remove(&temp_path);
+                return Err(ThisProjectError::GpgError(
+                    "GCFSB: zero-byte copy".into(),
+                ));
+            }
+        }
+        Err(_copy_err) => {
+            #[cfg(debug_assertions)]
+            debug_log!("(GCFSB) fs::copy failed: {:?}", _copy_err);
+            uma_best_effort_remove(&temp_path);
             return Err(ThisProjectError::GpgError(
                 "GCFSB: copy to temp failed".into(),
             ));
         }
     }
 
-    // 3. Run gpg --clearsign on the temp file, capturing stdout.
+    // 3. Post-copy verification (defensive against external interference).
+    match std::fs::metadata(&temp_path) {
+        Ok(md) if md.is_file() && md.len() > 0 => {
+            #[cfg(debug_assertions)]
+            debug_log!("(GCFSB) temp verified, size={}", md.len());
+        }
+        Ok(_) => {
+            #[cfg(debug_assertions)]
+            debug_log!("(GCFSB) temp present but empty/non-file");
+            uma_best_effort_remove(&temp_path);
+            return Err(ThisProjectError::GpgError(
+                "GCFSB: temp invalid post-copy".into(),
+            ));
+        }
+        Err(_verify_err) => {
+            #[cfg(debug_assertions)]
+            debug_log!("(GCFSB) temp vanished post-copy: {:?}", _verify_err);
+            return Err(ThisProjectError::GpgError(
+                "GCFSB: temp vanished post-copy".into(),
+            ));
+        }
+    }
+
+    // 4. Invoke gpg --clearsign capturing stdout/stderr.
     let clearsign_result = StdCommand::new("gpg")
+        .arg("--batch")
+        .arg("--yes")
         .arg("--clearsign")
         .arg("--output")
         .arg("-")
@@ -22466,31 +22583,22 @@ fn gpg_clearsign_file_to_sendbytes(
         .stderr(std::process::Stdio::piped())
         .output();
 
-    // 4. Always attempt cleanup of the temp file, regardless of gpg outcome.
-    //    Capture the gpg outcome first, then clean up, then evaluate.
     let clearsign_output = match clearsign_result {
         Ok(out) => out,
-        Err(spawn_err) => {
+        Err(_spawn_err) => {
             #[cfg(debug_assertions)]
-            debug_log!("(GCFSB) gpg spawn/output failed: {:?}", spawn_err);
-            if let Err(rm_err) = fs::remove_file(&temp_path) {
-                #[cfg(debug_assertions)]
-                debug_log!("(GCFSB) temp cleanup failed: {:?}", rm_err);
-            }
+            debug_log!("(GCFSB) gpg spawn/output failed: {:?}", _spawn_err);
+            uma_best_effort_remove(&temp_path);
             return Err(ThisProjectError::GpgError(
                 "GCFSB: gpg invocation failed".into(),
             ));
         }
     };
 
-    // Best-effort cleanup; do not mask the real error if any.
-    if let Err(rm_err) = fs::remove_file(&temp_path) {
-        #[cfg(debug_assertions)]
-        debug_log!("(GCFSB) temp cleanup failed: {:?}", rm_err);
-        // Continue: cleanup failure should not block returning the signed bytes.
-    }
+    // 5. Best-effort cleanup; NotFound is benign and not logged loudly.
+    uma_best_effort_remove(&temp_path);
 
-    // 5. Evaluate gpg's exit status.
+    // 6. Evaluate gpg's status.
     if !clearsign_output.status.success() {
         #[cfg(debug_assertions)]
         {
@@ -22503,103 +22611,104 @@ fn gpg_clearsign_file_to_sendbytes(
     }
 
     let clearsigned_bytes = clearsign_output.stdout;
-
-    // Defensive: gpg succeeded with empty stdout is unexpected.
     if clearsigned_bytes.is_empty() {
         #[cfg(debug_assertions)]
-        debug_log!("(GCFSB) gpg returned empty stdout despite success status");
+        debug_log!("(GCFSB) empty stdout despite success status");
         return Err(ThisProjectError::GpgError(
             "GCFSB: empty signed output".into(),
         ));
     }
 
     #[cfg(debug_assertions)]
-    debug_log!(
-        "(GCFSB) clearsigned_bytes len={}",
-        clearsigned_bytes.len()
-    );
+    debug_log!("(GCFSB) ok signed_len={}", clearsigned_bytes.len());
 
     Ok(clearsigned_bytes)
 }
-
 
 /// Encrypts a byte slice to a recipient using a provided armored public key.
 ///
 /// # Project Context
 /// Companion to `gpg_clearsign_file_to_sendbytes`. After signing, the bytes
-/// must be encrypted to the recipient's GPG public key before being sent over
-/// the network. The public key is written to a temp file because
-/// `gpg --recipient-file` accepts a path, and importing into the user's
-/// permanent keyring is undesirable for one-shot recipients.
-///
-/// # Process
-/// 1. Writes the armored public key to a unique temp file.
-/// 2. Spawns `gpg --encrypt --recipient-file <temp>` with piped stdio.
-/// 3. Writes `data` to gpg's stdin, then waits for output.
-/// 4. Always attempts to clean up the temp key file.
-/// 5. Returns ciphertext bytes on success.
+/// must be encrypted to the recipient's GPG public key before being sent.
+/// The public key is written to a temp file (in this thread's sub-directory
+/// under the project's canonical base temp dir) because
+/// `gpg --recipient-file` accepts a path and we do not want one-shot
+/// recipients polluting the user's permanent keyring.
 ///
 /// # Errors
 /// Returns `ThisProjectError::GpgError` with the unique prefix `GETB:`.
-/// Production error strings are terse; verbose details only emitted under
-/// `#[cfg(debug_assertions)]`.
 fn gpg_encrypt_to_bytes(
     data: &[u8],
     recipient_public_key: &str,
 ) -> Result<Vec<u8>, ThisProjectError> {
     #[cfg(debug_assertions)]
-    debug_log!("(GETB) starting gpg_encrypt_to_bytes, data_len={}", data.len());
+    debug_log!(
+        "(GETB) start tid={} data_len={}",
+        uma_current_thread_id(),
+        data.len()
+    );
 
-    // Defensive: an empty key cannot be valid.
+    // Defensive input checks.
     if recipient_public_key.trim().is_empty() {
         return Err(ThisProjectError::GpgError(
             "GETB: empty recipient key".into(),
         ));
     }
+    if data.is_empty() {
+        return Err(ThisProjectError::GpgError(
+            "GETB: empty plaintext".into(),
+        ));
+    }
 
-    // 1. Build a unique temp path for the public key.
-    let mut temp_key_path = std::env::temp_dir();
-    let temp_key_name = format!(
-        "uma_temp_key_{}_{}.asc",
-        get_current_unix_timestamp(),
-        std::process::id()
-    );
-    temp_key_path.push(temp_key_name);
-
-    // 2. Create the temp key file and write the armored key bytes.
-    let mut key_file = match File::create(&temp_key_path) {
-        Ok(f) => f,
-        Err(create_err) => {
-            #[cfg(debug_assertions)]
-            debug_log!("(GETB) temp key create failed: {:?}", create_err);
-            return Err(ThisProjectError::GpgError(
-                "GETB: temp key create failed".into(),
-            ));
-        }
+    // 1. Build a unique temp key path inside this thread's sub-directory.
+    let temp_key_path = match uma_build_unique_temp_path("getb_key", "asc") {
+        Ok(p) => p,
+        Err(e) => return Err(e),
     };
 
-    if let Err(write_err) = key_file.write_all(recipient_public_key.as_bytes()) {
-        #[cfg(debug_assertions)]
-        debug_log!("(GETB) temp key write failed: {:?}", write_err);
-        let _ = remove_file(&temp_key_path);
-        return Err(ThisProjectError::GpgError(
-            "GETB: temp key write failed".into(),
-        ));
-    }
+    #[cfg(debug_assertions)]
+    debug_log!("(GETB) temp_key_path={:?}", temp_key_path);
 
-    // Flush+drop the file handle so gpg can read it cleanly.
-    if let Err(flush_err) = key_file.flush() {
-        #[cfg(debug_assertions)]
-        debug_log!("(GETB) temp key flush failed: {:?}", flush_err);
-        let _ = remove_file(&temp_key_path);
-        return Err(ThisProjectError::GpgError(
-            "GETB: temp key flush failed".into(),
-        ));
+    // 2. Write the armored key to the temp file, then flush+close.
+    {
+        let mut key_file = match File::create(&temp_key_path) {
+            Ok(f) => f,
+            Err(_create_err) => {
+                #[cfg(debug_assertions)]
+                debug_log!("(GETB) temp key create failed: {:?}", _create_err);
+                return Err(ThisProjectError::GpgError(
+                    "GETB: temp key create failed".into(),
+                ));
+            }
+        };
+
+        if let Err(_write_err) = key_file.write_all(recipient_public_key.as_bytes()) {
+            #[cfg(debug_assertions)]
+            debug_log!("(GETB) temp key write failed: {:?}", _write_err);
+            drop(key_file);
+            uma_best_effort_remove(&temp_key_path);
+            return Err(ThisProjectError::GpgError(
+                "GETB: temp key write failed".into(),
+            ));
+        }
+
+        if let Err(_flush_err) = key_file.flush() {
+            #[cfg(debug_assertions)]
+            debug_log!("(GETB) temp key flush failed: {:?}", _flush_err);
+            drop(key_file);
+            uma_best_effort_remove(&temp_key_path);
+            return Err(ThisProjectError::GpgError(
+                "GETB: temp key flush failed".into(),
+            ));
+        }
+        // key_file dropped here -> handle closed before gpg reads it.
     }
-    drop(key_file);
 
     // 3. Spawn gpg with piped stdio.
     let spawn_result = StdCommand::new("gpg")
+        .arg("--batch")
+        .arg("--yes")
+        .arg("--trust-model").arg("always") // one-shot recipient, no web-of-trust
         .arg("--encrypt")
         .arg("--recipient-file")
         .arg(&temp_key_path)
@@ -22610,10 +22719,10 @@ fn gpg_encrypt_to_bytes(
 
     let mut gpg_child = match spawn_result {
         Ok(child) => child,
-        Err(spawn_err) => {
+        Err(_spawn_err) => {
             #[cfg(debug_assertions)]
-            debug_log!("(GETB) gpg spawn failed: {:?}", spawn_err);
-            let _ = remove_file(&temp_key_path);
+            debug_log!("(GETB) gpg spawn failed: {:?}", _spawn_err);
+            uma_best_effort_remove(&temp_key_path);
             return Err(ThisProjectError::GpgError(
                 "GETB: gpg spawn failed".into(),
             ));
@@ -22623,13 +22732,12 @@ fn gpg_encrypt_to_bytes(
     // 4. Write plaintext to gpg's stdin, then close stdin so gpg can finish.
     match gpg_child.stdin.take() {
         Some(mut stdin_handle) => {
-            if let Err(write_err) = stdin_handle.write_all(data) {
+            if let Err(_write_err) = stdin_handle.write_all(data) {
                 #[cfg(debug_assertions)]
-                debug_log!("(GETB) stdin write failed: {:?}", write_err);
-                // Try to reap the child so we don't leave a zombie.
+                debug_log!("(GETB) stdin write failed: {:?}", _write_err);
                 let _ = gpg_child.kill();
                 let _ = gpg_child.wait();
-                let _ = remove_file(&temp_key_path);
+                uma_best_effort_remove(&temp_key_path);
                 return Err(ThisProjectError::GpgError(
                     "GETB: stdin write failed".into(),
                 ));
@@ -22641,7 +22749,7 @@ fn gpg_encrypt_to_bytes(
             debug_log!("(GETB) gpg child had no stdin handle");
             let _ = gpg_child.kill();
             let _ = gpg_child.wait();
-            let _ = remove_file(&temp_key_path);
+            uma_best_effort_remove(&temp_key_path);
             return Err(ThisProjectError::GpgError(
                 "GETB: no stdin handle".into(),
             ));
@@ -22651,22 +22759,18 @@ fn gpg_encrypt_to_bytes(
     // 5. Wait for gpg to finish and gather output.
     let output = match gpg_child.wait_with_output() {
         Ok(out) => out,
-        Err(wait_err) => {
+        Err(_wait_err) => {
             #[cfg(debug_assertions)]
-            debug_log!("(GETB) wait_with_output failed: {:?}", wait_err);
-            let _ = remove_file(&temp_key_path);
+            debug_log!("(GETB) wait_with_output failed: {:?}", _wait_err);
+            uma_best_effort_remove(&temp_key_path);
             return Err(ThisProjectError::GpgError(
                 "GETB: wait failed".into(),
             ));
         }
     };
 
-    // 6. Best-effort cleanup of the temp key file.
-    if let Err(rm_err) = remove_file(&temp_key_path) {
-        #[cfg(debug_assertions)]
-        debug_log!("(GETB) temp key cleanup failed: {:?}", rm_err);
-        // Continue evaluating the gpg result.
-    }
+    // 6. Always clean up the temp key file (sensitive data, do not leave it).
+    uma_best_effort_remove(&temp_key_path);
 
     // 7. Evaluate gpg's status.
     if !output.status.success() {
@@ -22680,19 +22784,154 @@ fn gpg_encrypt_to_bytes(
         ));
     }
 
-    // Defensive: success with empty ciphertext is unexpected.
     if output.stdout.is_empty() {
         #[cfg(debug_assertions)]
-        debug_log!("(GETB) gpg returned empty ciphertext despite success");
+        debug_log!("(GETB) empty ciphertext despite success");
         return Err(ThisProjectError::GpgError(
             "GETB: empty ciphertext".into(),
         ));
     }
 
     #[cfg(debug_assertions)]
-    debug_log!("(GETB) ciphertext len={}", output.stdout.len());
+    debug_log!("(GETB) ok ciphertext_len={}", output.stdout.len());
 
     Ok(output.stdout)
+}
+
+#[cfg(test)]
+mod uma_temp_path_tests {
+    use super::*;
+    use std::collections::HashSet;
+    use std::sync::{Arc, Mutex};
+    use std::thread;
+
+    /// Within a single thread, sequential builds must produce distinct paths.
+    #[test]
+    fn unique_temp_paths_within_one_thread() {
+        let mut seen: HashSet<PathBuf> = HashSet::new();
+        for _ in 0..2_000 {
+            match uma_build_unique_temp_path("test", "toml") {
+                Ok(p) => {
+                    assert!(seen.insert(p.clone()), "collision: {:?}", p);
+                }
+                Err(e) => panic!("unexpected build error: {:?}", e),
+            }
+        }
+    }
+
+    /// Across multiple threads, every path must still be unique AND each
+    /// thread's paths must live in its own sub-directory.
+    #[test]
+    fn unique_temp_paths_across_threads() {
+        let collected: Arc<Mutex<Vec<(u64, PathBuf)>>> =
+            Arc::new(Mutex::new(Vec::new()));
+        let mut handles = Vec::new();
+
+        for _ in 0..8 {
+            let collected_cl = Arc::clone(&collected);
+            handles.push(thread::spawn(move || {
+                let my_tid = uma_current_thread_id();
+                for _ in 0..500 {
+                    match uma_build_unique_temp_path("test", "toml") {
+                        Ok(p) => {
+                            if let Ok(mut guard) = collected_cl.lock() {
+                                guard.push((my_tid, p));
+                            }
+                        }
+                        Err(_) => {} // skip on rare env error
+                    }
+                }
+            }));
+        }
+        for h in handles {
+            let _ = h.join();
+        }
+
+        let guard = collected.lock().expect("lock poisoned");
+        let mut all_paths: HashSet<&PathBuf> = HashSet::new();
+        for (tid, p) in guard.iter() {
+            assert!(all_paths.insert(p), "duplicate path across threads: {:?}", p);
+            // Path must contain this thread's sub-directory tag.
+            let needle = format!("uma_thread_{}", tid);
+            let as_str = p.to_string_lossy();
+            assert!(
+                as_str.contains(&needle),
+                "path {:?} does not contain expected per-thread subdir {}",
+                p, needle
+            );
+        }
+    }
+
+    /// `uma_current_thread_id` must be stable across calls on the same thread.
+    #[test]
+    fn thread_id_is_stable_per_thread() {
+        let a = uma_current_thread_id();
+        let b = uma_current_thread_id();
+        assert_eq!(a, b, "thread id changed within the same thread");
+    }
+}
+
+#[cfg(test)]
+mod gcfsb_behavior_tests {
+    use super::*;
+
+    /// Missing source must produce a tagged GCFSB error, not a gpg-stderr
+    /// passthrough, and must not panic.
+    #[test]
+    fn gcfsb_missing_source_returns_tagged_error() {
+        let bogus = std::path::Path::new("/nonexistent/uma_does_not_exist.toml");
+        match gpg_clearsign_file_to_sendbytes(bogus) {
+            Err(ThisProjectError::GpgError(msg)) => {
+                assert!(
+                    msg.starts_with("GCFSB:"),
+                    "expected GCFSB-tagged error, got: {}",
+                    msg
+                );
+            }
+            Ok(_) => panic!("must not succeed on missing source"),
+            Err(other) => panic!("unexpected error variant: {:?}", other),
+        }
+    }
+}
+
+#[cfg(test)]
+mod getb_behavior_tests {
+    use super::*;
+
+    /// Empty recipient key must be rejected up-front with a GETB-tagged error.
+    #[test]
+    fn getb_rejects_empty_recipient_key() {
+        match gpg_encrypt_to_bytes(b"hello", "   ") {
+            Err(ThisProjectError::GpgError(msg)) => {
+                assert!(
+                    msg.starts_with("GETB:"),
+                    "expected GETB-tagged error, got: {}",
+                    msg
+                );
+            }
+            Ok(_) => panic!("must not succeed with empty key"),
+            Err(other) => panic!("unexpected error variant: {:?}", other),
+        }
+    }
+
+    /// Empty plaintext must be rejected up-front.
+    #[test]
+    fn getb_rejects_empty_plaintext() {
+        // Use a non-empty placeholder string for the key so the empty-key
+        // check is not what trips first.
+        let placeholder_key = "-----BEGIN PGP PUBLIC KEY BLOCK-----\nx\n-----END PGP PUBLIC KEY BLOCK-----\n";
+        match gpg_encrypt_to_bytes(&[], placeholder_key) {
+            Err(ThisProjectError::GpgError(msg)) => {
+                assert!(
+                    msg.starts_with("GETB:"),
+                    "expected GETB-tagged error, got: {}",
+                    msg
+                );
+            }
+            Ok(_) => panic!("must not succeed with empty plaintext"),
+            Err(other) => panic!("unexpected error variant: {:?}", other),
+        }
+    }
 }
 
 /// Decrypts GPG-encrypted data from a byte slice using a provided GPG private key.
