@@ -35403,7 +35403,7 @@ fn handle_local_owner_desk(
     //   hlod_to_hrcd_restart_flag: HLOD sets; HRCD reads + clears + restarts.
     // ─────────────────────────────────────────────────────────────────
     hrcd_to_hlod_restart_flag: Arc<AtomicBool>,
-    _hlod_to_hrcd_restart_flag: Arc<AtomicBool>,  // where triggered?
+    hlod_to_hrcd_restart_flag: Arc<AtomicBool>,  // where triggered?
 ) -> Result<(), ThisProjectError> {
     /*
     TODO:
@@ -35890,13 +35890,49 @@ fn handle_local_owner_desk(
             */
             #[cfg(debug_assertions)]
             debug_log("HLOD Creating intray socket listening UDP...");
-            let intray_socket = create_local_udp_socket(
+            let intray_socket_result = create_local_udp_socket(
                 &band_local_network_type,
                 &band_local_user_ipv4_address,
                 &band_local_user_ipv6_address,
                 local_owner_desk_setup_data.localuser_intray_port_yourdesk_youlisten_bind_yourlocal_ip,
                 2,  // 2-second timeout for halt-checking
-            )?;
+            );
+            let intray_socket = match intray_socket_result {
+                Ok(s) => s,
+                Err(_e) => {
+                    // ═════════════════════════════════════════════════
+                    // Cross-Desk Restart Trigger (HLOD → HRCD)
+                    // ═════════════════════════════════════════════════
+                    // In-tray socket bind failed. This typically
+                    // indicates local network state changed (interface
+                    // up/down, address change, port briefly held by OS
+                    // from a prior restart cycle, etc.) — conditions
+                    // that may also have invalidated HRCD's view of
+                    // our endpoint. Signal HRCD to also restart so
+                    // both sides re-handshake in lockstep, then break
+                    // the wrapper loop so HLOD's outer loop runs its
+                    // cleanup (drone join, sleep) and re-handshakes.
+                    //
+                    // HRCD is responsible for clearing this flag when
+                    // it acts on it. HLOD only ever sets it to `true`.
+                    // ═════════════════════════════════════════════════
+                    hlod_to_hrcd_restart_flag.store(true, Ordering::Relaxed);
+
+                    #[cfg(debug_assertions)]
+                    debug_log!(
+                        "HLOD: in-tray socket bind failed ({}) for '{}'. Set hlod_to_hrcd_restart_flag=true and breaking wrapper to restart desk.",
+                        _e,
+                        remote_collaborator_name
+                    );
+
+                    // Brief pause before restart to avoid tight loop
+                    // if the bind failure is persistent.
+                    thread::sleep(Duration::from_secs(2));
+
+                    break; // exit wrapper [B] -> outer cleanup -> re-handshake
+                }
+            };
+
 
             #[cfg(debug_assertions)]
             debug_log!("HLOD: Intray socket created.");
@@ -37646,15 +37682,6 @@ fn handle_local_owner_desk(
                             &remote_collaborator_name,
                         );
 
-                        // let _ = send_gotit_signal(
-                        //     &local_owner_desk_setup_data.local_user_salt_list,
-                        //     &band_local_user_ipv4_address, // local_user_ipv4_address: &Ipv4Addr,
-                        //     &band_local_user_ipv6_address, // local_user_ipv6_address: &Ipv6Addr,
-                        //     &band_local_network_type, // network_type: String, // for nt
-                        //     localowner_gotit_port,
-                        //     received_file_updatedat_timestamp, // as di
-                        // );
-
                         // ═════════════════════════════════════════════════════════════════
                         // Send got-it signal to the REMOTE COLLABORATOR's IP,
                         // not to our own local IP.
@@ -37847,70 +37874,7 @@ fn handle_local_owner_desk(
     } // end of outer desk loop [A]
     // finis: fn handle_local_owner_desk
 }
-//         // ═════════════════════════════════════════════════════════════
-//         // Outer-Loop Cleanup Before Restart
-//         // ═════════════════════════════════════════════════════════════
-//         // We reach here when the in-tray wrapper has broken (because the
-//         // recv loop broke for halt, shutdown, or hrcd_to_hlod_restart_flag).
-//         // If we are shutting down, the top-of-loop check will exit
-//         // cleanly on the next iteration. Otherwise we are restarting:
-//         // signal the drone to exit, join it so its resources are
-//         // released, and let the outer loop iterate (which re-runs the
-//         // handshake at its top).
-//         // ═════════════════════════════════════════════════════════════
-//         hlod_internal_restart_signal.store(true, Ordering::Relaxed);
 
-//         #[cfg(debug_assertions)]
-//         debug_log!(
-//             "HLOD: outer-loop cleanup for '{}' — hlod_internal_restart_signal set, joining drone...",
-//             &remote_collaborator_name
-//         );
-
-//         match drone_thread_handle.join() {
-//             Ok(()) => {
-//                 #[cfg(debug_assertions)]
-//                 debug_log!(
-//                     "HLOD: drone thread exited cleanly for '{}'",
-//                     &remote_collaborator_name
-//                 );
-//             }
-//             Err(_e) => {
-//                 // Drone panicked. Its owned resources (sleeps, no socket)
-//                 // are released regardless. Log and proceed.
-//                 debug_log!(
-//                     "HLOD: drone thread join returned error for '{}' — proceeding with restart-or-exit",
-//                     &remote_collaborator_name
-//                 );
-//             }
-//         }
-
-//         // Brief pause before next outer-loop iteration to avoid tight
-//         // restart loops on persistent issues.
-//         thread::sleep(Duration::from_secs(2));
-
-//         // TESTING ONLY wait, if only for testing, so thread debug prints do not ~overlap
-//         thread::sleep(Duration::from_millis(100)); // Avoid busy-waiting
-
-//         debug_log!(
-//             "({} thread) HLOD bottom of outer loop iteration; will check shutdown then restart handshake",
-//             &remote_collaborator_name,
-//         );
-//     } // end of HLOD outer loop
-//     // finis: fn handle_local_owner_desk
-// }
-
-//         // TESTING ONLY wait, if only for testing, so thread debug prints do not ~overlap
-//         thread::sleep(Duration::from_millis(100)); // Avoid busy-waiting
-
-//         debug_log!(
-//             "({} thread) HLOD Exiting handle_local_owner_desk()",
-//             &remote_collaborator_name,
-//         ); // Add collaborator name
-
-//         debug_log(">*< Halt signal received. Exiting The Uma. Closing... handle_local_owner_desk() |o|");
-//     }
-//     // finis: fn handle_local_owner_desk
-// }
 
 /// Vanilla Deserilize json signal
 /// The idea of the salt-hash or salt-checksum
