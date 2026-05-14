@@ -40033,7 +40033,7 @@ fn handle_remote_collaborator_meetingroom_desk(
     // Note: Socket timeout (2s) is SHORT - enables frequent checking
     //       Stale timeout (5 min) is LONG - business logic threshold
     // ═════════════════════════════════════════════════════════════════
-    const STALE_TIMEOUT: Duration = Duration::from_secs(3 * 60);  // 5 minutes
+    const STALE_TIMEOUT: Duration = Duration::from_secs(2 * 60);  // e.g. 2-5 minutes
 
     loop { // 1. start overall loop to restart whole desk
         // --- 1. overall loop to restart handler in case of failure ---
@@ -40482,9 +40482,15 @@ fn handle_remote_collaborator_meetingroom_desk(
             // --- 2.2. Handle Ready Signal:  ---
             // "Listener"?
             // 2.2.1 Receive Ready Signal
-            let mut buf = [0; 1024]; // TODO size?
+            let mut buf = [0; 1024]; // TODO should this listen to restart signal?
             match ready_socket.recv_from(&mut buf) {
+                // RSSFLL Ready-Signal & Send-File Listener Loop
+
                 Ok((amt, src)) => {
+
+                    debug_log!("RSSFLL 01: start RSSFLL Ready-Signal & Send-File Listener Loop 'RSSFLL' (from {})",
+                        room_sync_input.remote_collaborator_name,
+                    );
 
                     // ═════════════════════════════════════════════════════════════════
                     //  Reset Stale Timer
@@ -40497,14 +40503,14 @@ fn handle_remote_collaborator_meetingroom_desk(
                     {
                         debug_log!(
                             // TODO: Why is this src-port different every time?
-                            "(from {}) HRCD 2.2.1 Ok((amt, src)) ready_port Signal Received amt->{} bytes, from src->{}",
+                            "RSSFLL 02: (from {}) HRCD 2.2.1 Ok((amt, src)) ready_port Signal Received ReadySignal amt->{} bytes, from src->{}",
                             room_sync_input.remote_collaborator_name,
                             amt,
                             src,
                         );
 
                         debug_log!(
-                            "(from {}) HRCD 2.2.1 check queue {:?} (why here?)",
+                            "RSSFLL 03: (from {}) HRCD 2.2.1 check queue {:?} (why here?)",
                             room_sync_input.remote_collaborator_name,
                             session_send_queue.items,
                         );
@@ -40513,7 +40519,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                     if should_halt_uma() {
                         #[cfg(debug_assertions)]
                         debug_log!(
-                            "(from {}) HRCD Halting handle_local_owner_desk()",
+                            "RSSFLL (from {}) HRCD Halting handle_local_owner_desk() in match ready_socket.recv_from(&mut buf)",
                             room_sync_input.remote_collaborator_name
                         );
                         break;
@@ -40523,7 +40529,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                         if let Err(_e) = set_as_active(&room_sync_input.remote_collaborator_name) {
                             #[cfg(debug_assertions)]
                             debug_log!(
-                                "(from {}) Error setting collaborator as active: {} ",
+                                "RSSFLL (from {}) Error setting collaborator as active: {} ",
                                 room_sync_input.remote_collaborator_name,
                                 _e,
                             );
@@ -40535,7 +40541,7 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                         #[cfg(debug_assertions)]
                         debug_log!(
-                            "(from {}) HRCD rc_set_as_active = true",
+                            "RSSFLL (from {}) HRCD rc_set_as_active = true",
                             room_sync_input.remote_collaborator_name
                         );
                     }
@@ -40545,7 +40551,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                     {
                         // --- Inspect Raw Bytes ---
                         debug_log!(
-                            "HRCD 2.2.1 Ready Signal Raw bytes received: {:?} (from {})",
+                            "RSSFLL 04: HRCD 2.2.1 Ready Signal Raw bytes received: {:?} (from {})",
                             &buf[..amt],
                             room_sync_input.remote_collaborator_name
                         );
@@ -40556,7 +40562,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                             .collect::<String>();
 
                         debug_log!(
-                            "HRCD 2.2.1 Ready Signal Raw bytes as hex: {} (from {})",
+                            "RSSFLL 05: HRCD 2.2.1 Ready Signal Raw bytes as hex: {} (from {})",
                             hex_string,
                             room_sync_input.remote_collaborator_name
                         );
@@ -40571,7 +40577,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                             // ); // Print to console
 
                             #[cfg(debug_assertions)]
-                            debug_log!("HRCD 2.3 Deserialize Ok(ready_signal) (from {}): Received ReadySignal: {:?}",
+                            debug_log!("RSSFLL 06: HRCD 2.3 Deserialize Ok(ready_signal) (from {}): Received ReadySignal: {:?}",
                                 room_sync_input.remote_collaborator_name,
                                 ready_signal
                             ); // Log the signal
@@ -40581,7 +40587,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                         Err(_e) => {
                             #[cfg(debug_assertions)]
                             debug_log!(
-                                "(from {}) HRCD 2.3 Deserialize Err Receive data Failed to parse ready signal: {}, ",
+                                "RSSFLL err: (from {}) HRCD 2.3 Deserialize Err Receive data Failed to parse ready signal: {}, ",
                                 room_sync_input.remote_collaborator_name,
                                 _e,
                             );
@@ -40606,7 +40612,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                     */
 
                     #[cfg(debug_assertions)]
-                    debug_log("\n##HRCD## starting checks(plaid) 2.4");
+                    debug_log("\nRSLL 07: ##HRCD## starting checks(plaid) 2.4");
 
                     // --- 2.5 Hash-Check for ReadySignal ---
                     // Drop packet when fail check
@@ -40615,7 +40621,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                         &room_sync_input.remote_collaborator_salt_list,
                     ) {
                         #[cfg(debug_assertions)]
-                        debug_log!("(from {}) HRCD 2.5: ReadySignal hash verification failed. Discarding signal. ",
+                        debug_log!("RSSFLL 08: (from {}) HRCD 2.5: ReadySignal hash verification failed. Discarding signal. ",
                         room_sync_input.remote_collaborator_name
                         );
 
@@ -40631,7 +40637,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                         if intrystruct_hash_set_session_nonce.contains(&ready_signal_hash_vec) {
                             #[cfg(debug_assertions)]
                             debug_log!(
-                                "(from {}) HRCD 2.6 quasi nonce check: Duplicate ReadySignal received (hash match). Discarding.",
+                                "RSSFLL (from {}) HRCD 2.6 quasi nonce check: Duplicate ReadySignal received (hash match). Discarding.",
                                 room_sync_input.remote_collaborator_name
                             );
                             continue; // Discard the duplicate signal
@@ -40640,7 +40646,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                     } else {
                         #[cfg(debug_assertions)]
                         debug_log!(
-                            "(from {}) HRCD 2.6 quasi nonce check: ReadySignal received without hashes. Discarding.",
+                            "RSSFLL (from {}) HRCD 2.6 quasi nonce check: ReadySignal received without hashes. Discarding.",
                             room_sync_input.remote_collaborator_name
                         ); // Or handle differently
                         continue;
@@ -40653,13 +40659,13 @@ fn handle_remote_collaborator_meetingroom_desk(
                     #[cfg(debug_assertions)]
                     {
                         debug_log!(
-                            "({} thread) HRCD 3.1 check rst_sent_ready_signal_timestamp for send-queue: rst_sent_ready_signal_timestamp -> {:?}",
+                            "RSSFLL 09: ({} thread) HRCD 3.1 check rst_sent_ready_signal_timestamp for send-queue: rst_sent_ready_signal_timestamp -> {:?}",
                             room_sync_input.remote_collaborator_name,
                             rst_sent_ready_signal_timestamp,
                         );
 
                         debug_log!(
-                            "({} thread) HRCD 3.1 check rt: rc's last-file-received-from-you timestamp received in a readysignal. ready_signal.rt -> {:?}",
+                            "RSSFLL 10: ({} thread) HRCD 3.1 check rt: rc's last-file-received-from-you timestamp received in a readysignal. ready_signal.rt -> {:?}",
                             room_sync_input.remote_collaborator_name,
                             ready_signal.rt,
                         );
@@ -40670,7 +40676,7 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                     #[cfg(debug_assertions)]
                     debug_log!(
-                        "({} thread) HRCD 3.2 check timestamp freshness checks: current_timestamp -> {:?}",
+                        "RSSFLL 11: ({} thread) HRCD 3.2 check timestamp freshness checks: current_timestamp -> {:?}",
                         current_timestamp,
                         room_sync_input.remote_collaborator_name
                     );
@@ -40679,7 +40685,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                     if rst_sent_ready_signal_timestamp > current_timestamp + 5 {
                         // Allow for some clock skew (5 seconds)
                         #[cfg(debug_assertions)]
-                        debug_log!("({} thread) HRCD 3.2.1 check: Received future-dated timestamp. Discarding.",
+                        debug_log!("RSSFLL ({} thread) HRCD 3.2.1 check: Received future-dated timestamp. Discarding.",
                         room_sync_input.remote_collaborator_name);
                         continue;
                     }
@@ -40687,7 +40693,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                     // 3.2.2 No Requests Older Than ~10 sec
                     if current_timestamp - 10 > rst_sent_ready_signal_timestamp {
                         #[cfg(debug_assertions)]
-                        debug_log!("({} thread) HRCD 3.2.2 check: Received outdated timestamp (older than 10 seconds). Discarding.",
+                        debug_log!("RSSFLL ({} thread) HRCD 3.2.2 check: Received outdated timestamp (older than 10 seconds). Discarding.",
                         room_sync_input.remote_collaborator_name);
                         continue;
                     }
@@ -40696,7 +40702,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                     if rst_sent_ready_signal_timestamp == 0 {
                         if zero_timestamp_counter >= 5 {
                             #[cfg(debug_assertions)]
-                            debug_log!("({} thread) HRCD 3.2.3 check: Too many zero-timestamp requests. Discarding.s",
+                            debug_log!("RSSFLL ({} thread) HRCD 3.2.3 check: Too many zero-timestamp requests. Discarding.s",
                             room_sync_input.remote_collaborator_name);
                             continue;
                         }
@@ -40704,7 +40710,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                     }
 
                     #[cfg(debug_assertions)]
-                    debug_log("##HRCD## [Done] checks(plaid) 3.2.3\n");
+                    debug_log("RSSFLL 12: ##HRCD## [Done] checks(plaid) 3.2.3\n");
 
                     // 3.2.4 look for fail-flags:
 
@@ -40736,7 +40742,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                     );
 
                     #[cfg(debug_assertions)]
-                    debug_log!("(to {}) HRCD 3.3 get_or_create_send_queue ",
+                    debug_log!("RSSFLL 12: (to {}) HRCD 3.3: next -> get_or_create_send_queue() ",
                         &room_sync_input.remote_collaborator_name,);
 
                     session_send_queue = get_or_create_send_queue(
@@ -40753,7 +40759,7 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                     #[cfg(debug_assertions)]
                     debug_log!(
-                        "(to {}) HRCD ->[]<- 3.3 Get / Make session_send_queue, sendqueue send-queue {:?}",
+                        "RSSFLL 13: (to {}) HRCD ->[]<- 3.3 Get / Make session_send_queue, sendqueue send-queue {:?}",
                         &room_sync_input.remote_collaborator_name, // remote_collaborator_name
                         session_send_queue
                     );
@@ -40830,7 +40836,7 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                     #[cfg(debug_assertions)]
                     debug_log!(
-                        "(to {}) HRCD 4 before le pop, queue.items -> {:?}",
+                        "RSSFLL 14: (to {}) HRCD 4 before le pop, queue.items -> {:?}",
                         &room_sync_input.remote_collaborator_name, // remote_collaborator_name
                         session_send_queue.items
                     );
@@ -40839,14 +40845,14 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                         #[cfg(debug_assertions)]
                         debug_log!(
-                            "(to {}) HRCD 4 after le pop, queue.items -> {:?}",
+                            "RSSFLL 15: (to {}) HRCD 4 after le pop, queue.items -> {:?}",
                             &room_sync_input.remote_collaborator_name, // remote_collaborator_name
                             session_send_queue.items,
                         );
 
                         #[cfg(debug_assertions)]
                         debug_log!(
-                            "(to {}) HRCD 4.2 Send File: if/while let Some(file_path) = queue.items.pop() file_path {:?}",
+                            "RSSFLL 16: (to {}) HRCD 4.2 Send File: if/while let Some(file_path) = queue.items.pop() file_path {:?}",
                             &room_sync_input.remote_collaborator_name, // remote_collaborator_name
                             file_path,
                         );
@@ -40870,7 +40876,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                             Err(e) => {
 
                                 // safe log
-                                debug_log!("HRCD: implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}", e);
+                                debug_log!("RSSFLL err HRCD: implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}", e);
 
                                 continue; // Skip to the next file if hashing fails
                             }
@@ -40881,10 +40887,10 @@ fn handle_remote_collaborator_meetingroom_desk(
                         let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
                             .map_err(|io_err| {
                                 let gpg_error = GpgError::ValidationError(
-                                    format!("HRCD: Failed to get UME temp directory path: {}", io_err)
+                                    format!("RSSFLL err HRCD: Failed to get UME temp directory path: {}", io_err)
                                 );
                                 // Convert GpgError to String for the function's return type
-                                format!("HRCD: {:?}", gpg_error)
+                                format!("HRCD Failed: {:?}", gpg_error)
                             })?;
 
                         // ===============================
@@ -40902,7 +40908,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                             &base_uma_temp_directory_path,
                             &node_owners_public_gpg_key,
                         ).map_err(|e| format!(
-                            "(to {}) hrcmd: Failed to get temporary read copy of TOML file: {:?}",
+                            "(to {}) HRCD: Failed to get temporary read copy of TOML file: {:?}",
                             &room_sync_input.remote_collaborator_name,
                             e))?;
 
@@ -40955,7 +40961,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                                 Some(name) => name,
                                 None => {
                                     // safe log
-                                    debug_log!("Error: Could not get current channel name. Skipping set_as_active.");
+                                    debug_log!("RSSFLL err HRCD Error: Could not get current channel name. Skipping set_as_active.");
                                     return Err(ThisProjectError::InvalidData("Could not get team channel name".into()));
                                 },
                             };
@@ -40985,7 +40991,7 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                             #[cfg(debug_assertions)]
                             debug_log!(
-                                "(to {}) HRCD 4.5 send file: OTP XOred file_bytes2send {:?}",
+                                "RSSFLL 17: (to {}) HRCD 4.5 send file: OTP XOred file_bytes2send {:?}",
                                 &room_sync_input.remote_collaborator_name,
                                 file_bytes2send
                             );
@@ -41001,18 +41007,24 @@ fn handle_remote_collaborator_meetingroom_desk(
                             // Handle the Result from hash_sendfile_struct_fields
                             let calculated_hashes = match calculated_hrcd_sendfile_hashes_result {
                                 Ok(hashes) => hashes,
-                                Err(e) => {
+                                Err(_e) => {
+
+                                    #[cfg(debug_assertions)]
                                     debug_log!(
-                                        "(to {})HRCD 4.5 Error calculating hashes: {}",
+                                        "RSSFLL err failed (to {})HRCD 4.5 Error calculating hashes: {}",
                                         &room_sync_input.remote_collaborator_name,
-                                        e);
+                                        _e);
+
+                                    // safe log
+                                    debug_log!(
+                                        "RSSFLL err failed HRCD 4.5 Error calculating hashes");
                                     continue; // Skip to the next file if hashing fails
                                 }
                             };
 
                             #[cfg(debug_assertions)]
                             debug_log!(
-                                "(to {}) HRCD 4.5 send: calculated_hashes {:?}",
+                                "RSSFLL 18: (to {}) HRCD 4.5 send: calculated_hashes {:?}",
                                 &room_sync_input.remote_collaborator_name,
                                 calculated_hashes
                             );
@@ -41038,7 +41050,7 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                             #[cfg(debug_assertions)]
                             debug_log!(
-                                "(to {}) HRCD 4.2, 4.3.1, 4.3.2 send: done gpg wrapper",
+                                "RSSFLL 19: (to {}) HRCD 4.2, 4.3.1, 4.3.2 send: done gpg wrapper",
                                 &room_sync_input.remote_collaborator_name,
                             );
 
@@ -41057,12 +41069,12 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                                     // safe log
                                     debug_log(
-                                        "HRCD 4.5 Error calculating send hashes",
+                                        "RSSFLL failed HRCD 4.5 Error calculating send hashes",
                                     );
 
                                     #[cfg(debug_assertions)]
                                     debug_log!(
-                                        "(to {}) HRCD 4.5 Error calculating send hashes:e->{}",
+                                        "(to {}) failed HRCD 4.5 Error calculating send hashes:e->{}",
                                         &room_sync_input.remote_collaborator_name, // remote_collaborator_name
                                         _e
                                     );
@@ -41072,7 +41084,7 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                             #[cfg(debug_assertions)]
                             debug_log!(
-                                "(to {}) HRCD 4.5 calculated_hashes {:?}",
+                                "RSSFLL 20: (to {}) HRCD 4.5 calculated_hashes {:?}",
                                 &room_sync_input.remote_collaborator_name, // remote_collaborator_name
                                 calculated_hashes,
                             );
@@ -41089,7 +41101,7 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                         #[cfg(debug_assertions)]
                         debug_log!(
-                            "(to {}) HRCD 4.6 Create sendfile_struct {:?}",
+                            "RSSFLL 21: (to {}) HRCD 4.6 Create sendfile_struct {:?}",
                              &room_sync_input.remote_collaborator_name,
                             sendfile_struct,
                         );
@@ -41105,7 +41117,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                             &path_sendfile_readcopy_path.to_string_lossy(),
                             "updated_at_timestamp"
                         ).map_err(|e| {
-                            let error_msg = format!("WLPL Failed to read default_im_messages_expiration_days: {}", e);
+                            let error_msg = format!("RSSFLL HRCD WLPL Failed to read default_im_messages_expiration_days: {}", e);
                             println!("Error: {}", error_msg);
                             io::Error::new(io::ErrorKind::InvalidData, error_msg)
                         })?;
@@ -41123,7 +41135,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                             &room_sync_input.remote_collaborator_name,
                         ) {
                             #[cfg(debug_assertions)]
-                            debug_log!("(to {}) HRCD 4.7.2.e Error setting pre-fail flag: {}",
+                            debug_log!("(to {}) failed HRCD 4.7.2.e Error setting pre-fail flag: {}",
                                 &room_sync_input.remote_collaborator_name,
                                 _e
                             );
@@ -41160,15 +41172,18 @@ fn handle_remote_collaborator_meetingroom_desk(
                                         ) {
                                         Ok(_) => {
                                             #[cfg(debug_assertions)]
-                                            debug_log!("({} thread) HRCD 4.7 File sent successfully",
+                                            debug_log!("RSSFLL use_padnet_flag 22: ({} thread) HRCD 4.7 File sent successfully",
                                                 &room_sync_input.remote_collaborator_name,
                                             );
                                         }
                                         Err(_e) => {
                                             #[cfg(debug_assertions)]
-                                            debug_log!("({} thread) HRCD Error sending data: {} ",
+                                            debug_log!("failed use_padnet_flag ({} thread) HRCD Error sending data: {} ",
                                                 &room_sync_input.remote_collaborator_name,
                                                 _e,
+                                            );
+                                            // safe log
+                                            debug_log!("use_padnet_flag failed HRCD Error sending data",
                                             );
                                             // Handle the send error (e.g., log, retry, etc.)
                                         }
@@ -41176,11 +41191,14 @@ fn handle_remote_collaborator_meetingroom_desk(
                                 }
                                 Err(_e) => { // Serialization error
                                     #[cfg(debug_assertions)]
-                                    debug_log!("({} thread) HRCD Serialization error: {}",
+                                    debug_log!("failed use_padnet_flag ({} thread) HRCD Serialization error: {}",
                                         &room_sync_input.remote_collaborator_name,
                                         _e,
                                     );
                                     // Handle the serialization error (e.g., log, skip file)
+                                    // safe log
+                                    debug_log!("failed use_padnet_flag HRCD Serialization error",
+                                    );
                                 }
                             }
 
@@ -41200,26 +41218,30 @@ fn handle_remote_collaborator_meetingroom_desk(
                                         ) {
                                         Ok(_) => {
                                             #[cfg(debug_assertions)]
-                                            debug_log!("({} thread) HRCD 4.7 File sent successfully",
+                                            debug_log!("RSSFLL 22: ({} thread) HRCD 4.7 File sent successfully",
                                                 &room_sync_input.remote_collaborator_name,
                                             );
                                         }
                                         Err(_e) => {
                                             #[cfg(debug_assertions)]
-                                            debug_log!("({} thread) Error sending data: {}",
+                                            debug_log!("failed RSSFLL ({} thread) Error sending data: {}",
                                                 &room_sync_input.remote_collaborator_name,
                                                 _e
                                             );
                                             // Handle the send error (e.g., log, retry, etc.)
+                                            // safe log
+                                            debug_log!("failed RSSFLL Error sending data");
                                         }
                                     }
                                 }
                                 Err(_e) => { // Serialization error
                                     #[cfg(debug_assertions)]
-                                    debug_log!("({} thread) Serialization error: {}",
+                                    debug_log!("failed ({} thread) Serialization error: {}",
                                        &room_sync_input.remote_collaborator_name,
                                        _e
                                     );
+                                    // safe log
+                                    debug_log!("failed RSSFLL Serialization Error");
                                     // Handle the serialization error (e.g., log, skip file)
                                 }
                             }
@@ -41227,14 +41249,14 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                         // debugpause(30);
                         #[cfg(debug_assertions)]
-                        debug_log!("\n({} thread) HRCD: bottom of ready_signal listener. (maybe)\n",
+                        debug_log!("\n(RSSFLL 24: {} thread) HRCD: bottom of ready_signal listener. (maybe)\n",
                             &room_sync_input.remote_collaborator_name,
                         );
 
                     } // end of while
                     // } // end of 4.4: if let Some(ref mut queue) = session_send_queue {
                     #[cfg(debug_assertions)]
-                    debug_log!("\n({} thread) HRCD: end of inner match.\n",
+                    debug_log!("\n(RSSFLL End? {} thread) HRCD: end of inner match.\n",
                         &room_sync_input.remote_collaborator_name,
                     );
                 } // End Ok case inside the match: Ok((amt, src)) => {
