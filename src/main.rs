@@ -40988,6 +40988,14 @@ fn handle_remote_collaborator_meetingroom_desk(
                             }
                         };
 
+                        #[cfg(debug_assertions)]
+                        debug_log!(
+                            "RSSFLL 16.2: (to {}) gpg_full_fingerprint_key_id_string {:?}",
+                            &room_sync_input.remote_collaborator_name, // remote_collaborator_name
+                            gpg_full_fingerprint_key_id_string,
+                        );
+
+
                         // 1. Paths & Reading-Copies Part 1: node.toml path and read-copy
                         // Get the UME temp directory path with explicit String conversion
                         let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
@@ -40996,7 +41004,7 @@ fn handle_remote_collaborator_meetingroom_desk(
                                     format!("RSSFLL err HRCD: Failed to get UME temp directory path: {}", io_err)
                                 );
                                 // Convert GpgError to String for the function's return type
-                                format!("HRCD Failed: {:?}", gpg_error)
+                                format!("RSSFLL HRCD Failed: {:?}", gpg_error)
                             })?;
 
                         // ===============================
@@ -41014,12 +41022,19 @@ fn handle_remote_collaborator_meetingroom_desk(
                             &base_uma_temp_directory_path,
                             &node_owners_public_gpg_key,
                         ).map_err(|e| format!(
-                            "(to {}) HRCD: Failed to get temporary read copy of TOML file: {:?}",
+                            "(to {}) RSSFLL HRCD: Failed to get temporary read copy of TOML file: {:?}",
                             &room_sync_input.remote_collaborator_name,
                             e))?;
 
                         // converst from path-string to path-type path
                         let path_sendfile_readcopy_path = Path::new(&sendfile_readcopy_pathstring);
+
+                        #[cfg(debug_assertions)]
+                        debug_log!(
+                            "RSSFLL 16.3: (to {}) path_sendfile_readcopy_path {:?}",
+                            &room_sync_input.remote_collaborator_name, // remote_collaborator_name
+                            path_sendfile_readcopy_path,
+                        );
 
                         /*
                         /// ## Error Handling
@@ -41079,6 +41094,13 @@ fn handle_remote_collaborator_meetingroom_desk(
                             let mut padnet_directory_path = get_writer_to_padnet_directory_path()?;
                             padnet_directory_path.push(&team_channel_name);
                             padnet_directory_path.push(rc_key_id);
+
+                            #[cfg(debug_assertions)]
+                            debug_log!(
+                                "RSSFLL 16.4: (to {}) padnet_directory_path {:?}",
+                                &room_sync_input.remote_collaborator_name, // remote_collaborator_name
+                                padnet_directory_path,
+                            );
 
                             /*
                             fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
