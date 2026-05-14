@@ -996,6 +996,14 @@ https://openhub.net/p/vi
 - https://www.gnu.org/software/ed/manual/ed_manual.html
 
 
+Also see a related case-study in notepad++ (not to be confused with microsoft windows Notepad, though at the same time there was also a problem with microsoft-windows-notepad being broken by microsoft trying to integrate 'AI' into notepad):
+- 'low level' video: https://www.youtube.com/watch?v=C8wKomo4Wds
+- https://notepad-plus-plus.org/news/hijacked-incident-info-update/
+- https://www.rapid7.com/blog/post/tr-chrysalis-backdoor-dive-into-lotus-blossoms-toolkit/
+- https://www.bleepingcomputer.com/news/security/notepad-plus-plus-update-feature-hijacked-by-chinese-state-hackers-for-months/
+- https://techcrunch.com/2026/02/02/notepad-says-chinese-government-hackers-hijacked-its-software-updates-for-months/
+- https://www.reuters.com/technology/popular-open-source-coding-application-targeted-chinese-linked-supply-chain-2026-02-02/
+
 ## 'The Power of 10"
 In 2006, Gerard J. Holzmann with NASA published the now legendary paper 'The Power of 10' on the topic of best practice for sound production code, in the context of mission-critical C code for embedded systems for NASA.
 
@@ -1063,6 +1071,9 @@ For example, while the original context of C for embedded systems will rarely di
 https://twit.tv/shows/security-now/episodes/1054
 https://www.grc.com/sn/sn-1054.txt
 (And if this seems too remote, remember that large international companies are and will be indefinately scrambling to find hobbyist emulator kludges to fill the gap of DOS being made technically and legally inaccessible by microsoft.)
+
+- Topic: Cost-Liabilities of Software and Software-Problems:
+https://www.economist.com/business/2026/02/01/why-software-stocks-are-getting-pummelled
 
 
 ### Notes
