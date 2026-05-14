@@ -1983,6 +1983,13 @@ fn hlod_udp_handshake_rc_network_type_rc_ip_addr(
     local_owner_desk_setup_data: &ForLocalOwnerDeskThread,
     band_local_network_type: &str,
     band_local_network_index: u8,
+    // ─────────────────────────────────────────────────────────────────
+    // Global shutdown flag. Checked inside this function's main loop
+    // so a shutdown request mid-handshake exits cleanly. Restart flags
+    // are NOT passed: a restart that arrives mid-handshake is moot
+    // (we are already establishing fresh connection state).
+    // ─────────────────────────────────────────────────────────────────
+    should_stop_all_threads: Arc<AtomicBool>,
 ) -> Result<(String, String), ThisProjectError> {
 
     #[cfg(debug_assertions)]
@@ -2056,6 +2063,21 @@ fn hlod_udp_handshake_rc_network_type_rc_ip_addr(
     loop { // HUHRNTRIA() Main loop starts here
         #[cfg(debug_assertions)]
         debug_log("HUHRNTRIA() main loop (re)starting from the top...");
+
+        // ─── Global shutdown check ───
+        // Exits the handshake loop promptly when the overall sync
+        // shutdown flag is set, without waiting for the next
+        // should_halt_uma() file-based poll.
+        if should_stop_all_threads.load(Ordering::Relaxed) {
+            #[cfg(debug_assertions)]
+            debug_log!(
+                "HUHRNTRIA: should_stop_all_threads detected, exiting handshake for '{}'",
+                local_owner_desk_setup_data.remote_collaborator_name
+            );
+            return Err(ThisProjectError::NetworkError(
+                "shutdown during handshake (not an error)".into(),
+            ));
+        }
 
         // 1. Check for Halt Signal and Team Channel Name (as before)
         if should_halt_uma() { // 1. check for halt-uma
@@ -2154,6 +2176,14 @@ fn hlod_udp_handshake_rc_network_type_rc_ip_addr(
 
         // 1.1 Wait (and check for exit Uma)  this waits and checks N times: for i in 0..N {
         for _i in 0..5 {
+            // ─── Global shutdown check ───
+            if should_stop_all_threads.load(Ordering::Relaxed) {
+                #[cfg(debug_assertions)]
+                debug_log!(
+                    "HUHRNTRIA wait: should_stop_all_threads detected, breaking wait loop"
+                );
+                break;
+            }
             // break for loop ?
             if should_halt_uma() {
                 debug_log!("handshake hold_udp_handshake: should_halt_uma(), exiting Uma in handle_local_owner_desk()");
@@ -35365,6 +35395,15 @@ TODO:
 fn handle_local_owner_desk(
     local_owner_desk_setup_data: ForLocalOwnerDeskThread,
     should_stop_all_threads: Arc<AtomicBool>,
+    // ─────────────────────────────────────────────────────────────────
+    // Cross-desk restart flags (per HLOD/HRCD pair). Inert in this step;
+    // wired up in subsequent steps.
+    //
+    //   hrcd_to_hlod_restart_flag: HRCD sets; HLOD reads + clears + restarts.
+    //   hlod_to_hrcd_restart_flag: HLOD sets; HRCD reads + clears + restarts.
+    // ─────────────────────────────────────────────────────────────────
+    hrcd_to_hlod_restart_flag: Arc<AtomicBool>,
+    _hlod_to_hrcd_restart_flag: Arc<AtomicBool>,  // where triggered?
 ) -> Result<(), ThisProjectError> {
     /*
     TODO:
@@ -35445,17 +35484,18 @@ fn handle_local_owner_desk(
 
     Todo... restarting connection after n-minutes stale with no received signals
     */
-    let Ok((rc_network_type_string, rc_ip_addr_string)) = hlod_udp_handshake_rc_network_type_rc_ip_addr(
-        &local_owner_desk_setup_data, //: &ForLocalOwnerDeskThread,
-        &band_local_network_type, //: &str,
-        band_local_network_index, //: u8,
-    ) else {
-        // TODO, handled another way?
-        return Err(ThisProjectError::NetworkError("Handshake failed".into()));
-    };
+    // let Ok((rc_network_type_string, rc_ip_addr_string)) = hlod_udp_handshake_rc_network_type_rc_ip_addr(
+    //     &local_owner_desk_setup_data, //: &ForLocalOwnerDeskThread,
+    //     &band_local_network_type, //: &str,
+    //     band_local_network_index, //: u8,
+    //     should_stop_all_threads,
+    // ) else {
+    //     // TODO, handled another way?
+    //     return Err(ThisProjectError::NetworkError("Handshake failed".into()));
+    // };
 
-    #[cfg(debug_assertions)]
-    debug_log!("HLOD setup: HUHRNTRIA() run, ({})", remote_collaborator_name);
+    // #[cfg(debug_assertions)]
+    // debug_log!("HLOD setup: HUHRNTRIA() run, ({})", remote_collaborator_name);
 
     loop { // 1. start overall loop to (re)start whole desk
 
@@ -35465,6 +35505,42 @@ fn handle_local_owner_desk(
             debug_log!("HLOD loop-1.0 should_stop_all_threads should_stop_all_threads detected, exiting Uma in handle_local_owner_desk()");
             break Ok(());
         }
+
+        // ═════════════════════════════════════════════════════════════
+        // (Re-)Run Handshake at Top of Outer Loop
+        // ═════════════════════════════════════════════════════════════
+        // Mirrors HRCD's structure. On the first iteration this performs
+        // the initial handshake; on subsequent iterations (after a
+        // restart) it discovers any new remote collaborator IP / network
+        // type. Returns Err on shutdown-during-handshake, which we treat
+        // as a clean exit.
+        // ═════════════════════════════════════════════════════════════
+        let (rc_network_type_string, rc_ip_addr_string) =
+            match hlod_udp_handshake_rc_network_type_rc_ip_addr(
+                &local_owner_desk_setup_data,
+                &band_local_network_type,
+                band_local_network_index,
+                should_stop_all_threads.clone(),
+            ) {
+                Ok(pair) => pair,
+                Err(_e) => {
+                    #[cfg(debug_assertions)]
+                    debug_log!(
+                        "HLOD: handshake exited ({}). Treating as shutdown for '{}'; leaving outer loop.",
+                        _e,
+                        local_owner_desk_setup_data.remote_collaborator_name
+                    );
+                    return Ok(());
+                }
+            };
+
+        #[cfg(debug_assertions)]
+        debug_log!(
+            "HLOD outer loop: handshake complete, rc_network_type='{}' rc_ip='{}' (for '{}')",
+            rc_network_type_string,
+            rc_ip_addr_string,
+            local_owner_desk_setup_data.remote_collaborator_name
+        );
 
         let loop_remote_collaborator_name = local_owner_desk_setup_data.remote_collaborator_name.clone();
 
@@ -35580,23 +35656,53 @@ fn handle_local_owner_desk(
         let rc_ip_addr_string_1 = rc_ip_addr_string.clone();
         let rc_network_type_string_1 = rc_network_type_string.clone();
 
+        // // Clone the shutdown flag for this thread
+        // let should_stop_clone_for_readysignal_send_drone = should_stop_all_threads.clone();
+
+        // // --- 1.5 Drone Loop to Send ReadySignals ---
+        // let _ = thread::spawn(move || {
+        // ═════════════════════════════════════════════════════════════
+        // Intra-HLOD Restart Signal
+        // ═════════════════════════════════════════════════════════════
+        // Created fresh each outer-loop iteration. Shared with the
+        // ready-signal drone thread. Set to true in the outer-loop
+        // cleanup section so the drone exits its inner waits and the
+        // outer loop can join it before re-handshaking.
+        // (Mirrors HRCD's `should_restart_desk` pattern.)
+        // ═════════════════════════════════════════════════════════════
+        let hlod_internal_restart_signal: Arc<AtomicBool> =
+            Arc::new(AtomicBool::new(false));
+        let hlod_internal_restart_signal_clone_for_drone =
+            hlod_internal_restart_signal.clone();
+
         // Clone the shutdown flag for this thread
         let should_stop_clone_for_readysignal_send_drone = should_stop_all_threads.clone();
 
         // --- 1.5 Drone Loop to Send ReadySignals ---
-        let _ = thread::spawn(move || {
+        // Capture JoinHandle so cleanup can join() before re-handshake,
+        // mirroring HRCD's gotit-thread synchronization pattern.
+        let drone_thread_handle = thread::spawn(move || {
             // ===============================
             // Drone Loop to Send ReadySignals
             // ===============================
             loop {
 
                 // 1.1 Wait (and check for exit Uma)  this waits and checks N times: for i in 0..N {
-                for _ in 0..15 {
-
+                // for _ in 0..15 {
+                for _ in 0..5 {
                     // Check Arc shutdown flag
                     if should_stop_clone_for_readysignal_send_drone.load(Ordering::Relaxed) {
                         #[cfg(debug_assertions)]
                         debug_log!("HLOD Drone loop should_stop_all_threads detected, exiting Uma in handle_local_owner_desk()");
+                        break;
+                    }
+
+                    // ─── Intra-HLOD restart check ───
+                    if hlod_internal_restart_signal_clone_for_drone.load(Ordering::Relaxed) {
+                        #[cfg(debug_assertions)]
+                        debug_log!(
+                            "HLOD Drone loop: hlod_internal_restart_signal detected during wait, exiting drone"
+                        );
                         break;
                     }
 
@@ -35615,6 +35721,17 @@ fn handle_local_owner_desk(
                     debug_log!("HLOD Drone loop should_stop_all_threads detected, exiting Uma in handle_local_owner_desk()");
                     break;
                 }
+
+                // ─── Intra-HLOD restart check ───
+                if hlod_internal_restart_signal_clone_for_drone.load(Ordering::Relaxed) {
+                    #[cfg(debug_assertions)]
+                    debug_log!(
+                        "HLOD Drone loop: hlod_internal_restart_signal detected post-wait, exiting drone"
+                    );
+                    break;
+                }
+
+                // Check file-flag (TODO: maybe deprecated?)
                 if should_halt_uma() {
                     #[cfg(debug_assertions)]
                     debug_log!("HLOD Drone loop HLOD should_halt_uma(), exiting Uma in handle_local_owner_desk()");
@@ -35728,6 +35845,34 @@ fn handle_local_owner_desk(
                 debug_log!("HLOD intray loop should_stop_clone_for_intray_loop should_stop_all_threads detected, exiting Uma in handle_local_owner_desk()");
                 break;
             }
+
+            // ─── Cross-desk restart check (HRCD → HLOD) at wrapper level ───
+            // The inner recv loop breaks on this flag; without a check
+            // here the wrapper would just re-bind the socket and re-enter.
+            // Receiver-clears semantics: if the inner loop already cleared
+            // the flag we will see `false` and not break — that is correct,
+            // because the inner break already initiated the restart path
+            // via this wrapper exit on its first iteration. To make this
+            // robust, we re-check immediately after each inner-loop return.
+            // Concretely: if either we see the flag set OR the inner loop
+            // just exited intentionally, we break. We use a marker:
+            // the flag itself is the marker (since inner clears it just
+            // before breaking and nothing else in the wrapper sets/clears
+            // it). To avoid a missed wrapper-break when inner already
+            // cleared, we ALSO break unconditionally when the inner recv
+            // loop returns control here via natural fall-through after
+            // breaks: see the `break;` at the very end of this wrapper
+            // iteration just below.
+            if hrcd_to_hlod_restart_flag.load(Ordering::Relaxed) {
+                hrcd_to_hlod_restart_flag.store(false, Ordering::Relaxed);
+                #[cfg(debug_assertions)]
+                debug_log!(
+                    "HLOD In-Tray wrapper: hrcd_to_hlod_restart_flag detected (cleared) for '{}', breaking wrapper",
+                    remote_collaborator_name
+                );
+                break;
+            }
+
             if should_halt_uma() {
                 #[cfg(debug_assertions)]
                 debug_log!(
@@ -35769,6 +35914,35 @@ fn handle_local_owner_desk(
                     #[cfg(debug_assertions)]
                     debug_log!("HLOD should_stop_clone_for_sendfile_intray should_stop_all_threads detected, exiting Uma in handle_local_owner_desk()");
                     break; // Exit in-tray loop
+                }
+
+                // ═════════════════════════════════════════════════════
+                // Cross-Desk Restart Check (HRCD → HLOD)
+                // ═════════════════════════════════════════════════════
+                // If HRCD has requested HLOD restart, clear the flag
+                // immediately (receiver-clears semantics) and break out
+                // of the in-tray loop. Both loops above (in-tray outer
+                // wrapper and the outer-most desk loop) will then
+                // unwind back to the top of the outer-most loop, which
+                // re-runs the handshake.
+                //
+                // NOTE on loop structure: the existing HLOD body has an
+                // in-tray-creation loop wrapping this recv loop. The
+                // `break` here exits the recv loop; the outer wrapper
+                // currently has no exit point of its own, so a second
+                // identical check is required there (or below in the
+                // WouldBlock arm we re-check via continue+loop-top).
+                // ═════════════════════════════════════════════════════
+                if hrcd_to_hlod_restart_flag.load(Ordering::Relaxed) {
+                    hrcd_to_hlod_restart_flag.store(false, Ordering::Relaxed);
+
+                    #[cfg(debug_assertions)]
+                    debug_log!(
+                        "HLOD In-Tray: hrcd_to_hlod_restart_flag detected (cleared) for '{}', breaking to outer desk loop",
+                        &remote_collaborator_name
+                    );
+
+                    break; // exit recv loop -> will fall through to outer cleanup
                 }
 
                 // Check for halt signal at the beginning of the loop
@@ -37540,14 +37714,27 @@ fn handle_local_owner_desk(
                            || e.kind() == io::ErrorKind::TimedOut => {
                         // ✓ Normal: 2 seconds elapsed, no file received
                         // This is EXPECTED and allows us to check halt flag
-                        // Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                        // No data available yet.  Don't treat this as an error.
+                        // AND the cross-desk restart flag.
+                        // Don't treat this as an error.
 
                         #[cfg(debug_assertions)]
                         debug_log!(
                             "(from {}) HLOD-InTray: No data available yet...WouldBlock",
                             &remote_collaborator_name,
                         );
+
+                        // ─── Cross-desk restart check (HRCD → HLOD) ───
+                        if hrcd_to_hlod_restart_flag.load(Ordering::Relaxed) {
+                            hrcd_to_hlod_restart_flag.store(false, Ordering::Relaxed);
+
+                            #[cfg(debug_assertions)]
+                            debug_log!(
+                                "HLOD-InTray (WouldBlock): hrcd_to_hlod_restart_flag detected (cleared) for '{}', breaking to outer desk loop",
+                                &remote_collaborator_name
+                            );
+
+                            break; // exit recv loop -> outer cleanup will run
+                        }
 
                         // Safe Log
                         debug_log!("HLOD-InTray: No data available yet...WouldBlock");
@@ -37578,24 +37765,152 @@ fn handle_local_owner_desk(
                             continue;
                     }
                 }
-            } // end match ready_socket.recv_from(&mut buf) {
-        } // end In-Tray-Loop
-        ////////////////////////
-        // InTrayListerLoop End
-        ////////////////////////
+            } // end match ready_socket.recv_from(&mut buf) { (closes recv loop [C])
+            // ═════════════════════════════════════════════════════════════
+            // After the recv loop exits (halt, shutdown, or cross-desk
+            // restart), unconditionally exit the in-tray wrapper loop. The
+            // outer-most desk loop will then handle cleanup and restart-or-
+            // exit as appropriate.
+            // ═════════════════════════════════════════════════════════════
+            #[cfg(debug_assertions)]
+            debug_log!(
+                "HLOD: recv loop exited for '{}', breaking in-tray wrapper",
+                remote_collaborator_name
+            );
+            break; // break the wrapper "In-Tray-loop"
+        } // end In-Tray-Loop in-tray wrapper loop [B]
+
+        // ======================
+        //  InTrayListerLoop End
+        // ======================
+        // ═════════════════════════════════════════════════════════════
+        // Outer Desk Loop Cleanup Before Next Iteration (Restart)
+        // ═════════════════════════════════════════════════════════════
+        // Control reaches here when the in-tray wrapper has broken
+        // (because the recv loop broke for halt, shutdown, or
+        // hrcd_to_hlod_restart_flag).
+        //
+        // If a global shutdown is in progress, the top-of-outer-loop
+        // check will exit cleanly on the next iteration via
+        // `break Ok(())`. Otherwise we are restarting: signal the drone
+        // to exit, join it so its socket-less resources are released
+        // and no zombie thread accumulates, then fall through to the
+        // outer-loop closing brace which iterates [A] and re-runs the
+        // handshake at the top of the next iteration.
+        //
+        // We do NOT `break` here: falling through is restart;
+        // `break Ok(())` would mean shutdown, which is handled by the
+        // top-of-loop check, not here.
+        // ═════════════════════════════════════════════════════════════
+        hlod_internal_restart_signal.store(true, Ordering::Relaxed);
+
+        #[cfg(debug_assertions)]
+        debug_log!(
+            "HLOD: outer-loop cleanup for '{}' — hlod_internal_restart_signal set, joining drone...",
+            &remote_collaborator_name
+        );
+
+        match drone_thread_handle.join() {
+            Ok(()) => {
+                #[cfg(debug_assertions)]
+                debug_log!(
+                    "HLOD: drone thread exited cleanly for '{}'",
+                    &remote_collaborator_name
+                );
+            }
+            Err(_e) => {
+                // Drone panicked. The thread has terminated either way,
+                // so its (heap-only, no socket) resources are released.
+                // Log and proceed to next outer-loop iteration.
+                debug_log!(
+                    "HLOD: drone thread join returned error for '{}' — proceeding with restart-or-exit",
+                    &remote_collaborator_name
+                );
+            }
+        }
+
+        // Brief pause before next outer-loop iteration to avoid tight
+        // restart loops on persistent issues (e.g. handshake target
+        // permanently offline).
+        thread::sleep(Duration::from_secs(2));
 
         // TESTING ONLY wait, if only for testing, so thread debug prints do not ~overlap
         thread::sleep(Duration::from_millis(100)); // Avoid busy-waiting
 
+        #[cfg(debug_assertions)]
         debug_log!(
-            "({} thread) HLOD Exiting handle_local_owner_desk()",
+            "({} thread) HLOD bottom of outer-loop iteration; will check shutdown then restart handshake",
             &remote_collaborator_name,
-        ); // Add collaborator name
+        );
 
-        debug_log(">*< Halt signal received. Exiting The Uma. Closing... handle_local_owner_desk() |o|");
-    }
+        // Fall through to outer-loop closing brace -> iterates [A] -> restart.
+    } // end of outer desk loop [A]
     // finis: fn handle_local_owner_desk
 }
+//         // ═════════════════════════════════════════════════════════════
+//         // Outer-Loop Cleanup Before Restart
+//         // ═════════════════════════════════════════════════════════════
+//         // We reach here when the in-tray wrapper has broken (because the
+//         // recv loop broke for halt, shutdown, or hrcd_to_hlod_restart_flag).
+//         // If we are shutting down, the top-of-loop check will exit
+//         // cleanly on the next iteration. Otherwise we are restarting:
+//         // signal the drone to exit, join it so its resources are
+//         // released, and let the outer loop iterate (which re-runs the
+//         // handshake at its top).
+//         // ═════════════════════════════════════════════════════════════
+//         hlod_internal_restart_signal.store(true, Ordering::Relaxed);
+
+//         #[cfg(debug_assertions)]
+//         debug_log!(
+//             "HLOD: outer-loop cleanup for '{}' — hlod_internal_restart_signal set, joining drone...",
+//             &remote_collaborator_name
+//         );
+
+//         match drone_thread_handle.join() {
+//             Ok(()) => {
+//                 #[cfg(debug_assertions)]
+//                 debug_log!(
+//                     "HLOD: drone thread exited cleanly for '{}'",
+//                     &remote_collaborator_name
+//                 );
+//             }
+//             Err(_e) => {
+//                 // Drone panicked. Its owned resources (sleeps, no socket)
+//                 // are released regardless. Log and proceed.
+//                 debug_log!(
+//                     "HLOD: drone thread join returned error for '{}' — proceeding with restart-or-exit",
+//                     &remote_collaborator_name
+//                 );
+//             }
+//         }
+
+//         // Brief pause before next outer-loop iteration to avoid tight
+//         // restart loops on persistent issues.
+//         thread::sleep(Duration::from_secs(2));
+
+//         // TESTING ONLY wait, if only for testing, so thread debug prints do not ~overlap
+//         thread::sleep(Duration::from_millis(100)); // Avoid busy-waiting
+
+//         debug_log!(
+//             "({} thread) HLOD bottom of outer loop iteration; will check shutdown then restart handshake",
+//             &remote_collaborator_name,
+//         );
+//     } // end of HLOD outer loop
+//     // finis: fn handle_local_owner_desk
+// }
+
+//         // TESTING ONLY wait, if only for testing, so thread debug prints do not ~overlap
+//         thread::sleep(Duration::from_millis(100)); // Avoid busy-waiting
+
+//         debug_log!(
+//             "({} thread) HLOD Exiting handle_local_owner_desk()",
+//             &remote_collaborator_name,
+//         ); // Add collaborator name
+
+//         debug_log(">*< Halt signal received. Exiting The Uma. Closing... handle_local_owner_desk() |o|");
+//     }
+//     // finis: fn handle_local_owner_desk
+// }
 
 /// Vanilla Deserilize json signal
 /// The idea of the salt-hash or salt-checksum
@@ -39729,6 +40044,15 @@ fn receive_ready_signal_no_timer( // Hash and timestamp checks moved HERE!
 fn handle_remote_collaborator_meetingroom_desk(
     room_sync_input: &ForRemoteCollaboratorDeskThread,
     should_stop_all_threads: Arc<AtomicBool>,
+    // ─────────────────────────────────────────────────────────────────
+    // Cross-desk restart flags (per HLOD/HRCD pair). Inert in this step;
+    // wired up in subsequent steps.
+    //
+    //   hrcd_to_hlod_restart_flag: HRCD sets; HLOD reads + clears + restarts.
+    //   hlod_to_hrcd_restart_flag: HLOD sets; HRCD reads + clears + restarts.
+    // ─────────────────────────────────────────────────────────────────
+    hrcd_to_hlod_restart_flag: Arc<AtomicBool>,
+    hlod_to_hrcd_restart_flag: Arc<AtomicBool>,
 ) -> Result<(), ThisProjectError> {
     /*
     TODO:
@@ -40142,6 +40466,28 @@ fn handle_remote_collaborator_meetingroom_desk(
                     room_sync_input.remote_collaborator_name
                 );
                 break;
+            }
+
+            // ═════════════════════════════════════════════════════════════
+            // Cross-Desk Restart Check (HLOD → HRCD)
+            // ═════════════════════════════════════════════════════════════
+            // If HLOD has requested that HRCD restart, clear the flag
+            // immediately (receiver-clears semantics) and break to the
+            // outer loop so HRCD re-handshakes and rebuilds resources.
+            //
+            // Clearing BEFORE break ensures any subsequent set by HLOD
+            // (after this restart cycle begins) is not lost.
+            // ═════════════════════════════════════════════════════════════
+            if hlod_to_hrcd_restart_flag.load(Ordering::Relaxed) {
+                hlod_to_hrcd_restart_flag.store(false, Ordering::Relaxed);
+
+                #[cfg(debug_assertions)]
+                debug_log!(
+                    "HRCD: hlod_to_hrcd_restart_flag detected (cleared) for '{}', breaking to outer loop",
+                    room_sync_input.remote_collaborator_name
+                );
+
+                break; // exit inner loop -> outer loop will re-handshake
             }
 
             // ═════════════════════════════════════════════════════════════════
@@ -40932,10 +41278,26 @@ fn handle_remote_collaborator_meetingroom_desk(
                         // ═════════════════════════════════════════════════════════════
                         // PHASE 2A: Handle socket timeout (NOT an error)
                         // ═════════════════════════════════════════════════════════════
-                        Err(e) if e.kind() == io::ErrorKind::WouldBlock
-                               || e.kind() == io::ErrorKind::TimedOut => {
+                        // Err(e) if e.kind() == io::ErrorKind::WouldBlock
+                        //        || e.kind() == io::ErrorKind::TimedOut => {
+                        //     // ✓ Normal: 2 seconds elapsed, no signal received
+                        //     // This is EXPECTED and allows us to check halt flag
+
+                        //     #[cfg(debug_assertions)]
+                        //     debug_log!(
+                        //         "HRCD Main Loop: Socket timeout (normal), looping (to {})",
+                        //         room_sync_input.remote_collaborator_name
+                        //     );
+
+                        //     continue; // Loop back to check halt flag
+                        // }
+                        Err(e)
+                            if e.kind() == io::ErrorKind::WouldBlock
+                                || e.kind() == io::ErrorKind::TimedOut =>
+                        {
                             // ✓ Normal: 2 seconds elapsed, no signal received
                             // This is EXPECTED and allows us to check halt flag
+                            // AND the cross-desk restart flag.
 
                             #[cfg(debug_assertions)]
                             debug_log!(
@@ -40943,8 +41305,39 @@ fn handle_remote_collaborator_meetingroom_desk(
                                 room_sync_input.remote_collaborator_name
                             );
 
+                            // ─── Cross-desk restart check (HLOD → HRCD) ───
+                            // Same semantics as the loop-top check: clear
+                            // immediately, then break to outer loop. Checking
+                            // here too means HRCD reacts within one socket
+                            // timeout cycle (~2s) when idle.
+                            if hlod_to_hrcd_restart_flag.load(Ordering::Relaxed) {
+                                hlod_to_hrcd_restart_flag.store(false, Ordering::Relaxed);
+
+                                #[cfg(debug_assertions)]
+                                debug_log!(
+                                    "HRCD Main Loop: hlod_to_hrcd_restart_flag detected during timeout (cleared) for '{}', breaking to outer loop",
+                                    room_sync_input.remote_collaborator_name
+                                );
+
+                                break; // exit inner loop -> outer loop will re-handshake
+                            }
+
                             continue; // Loop back to check halt flag
                         }
+                        /*
+                        HRCD now sets hrcd_to_hlod_restart_flag every time it commits to
+                        restarting (currently triggered only by the stale-timeout break
+                        from the inner loop; the existing trigger is unchanged).
+                        HRCD now reads and clears hlod_to_hrcd_restart_flag at two points
+                        in the inner loop (top + idle timeout). When detected, it breaks
+                        to the outer loop, which re-runs the handshake — same restart path
+                        the stale-timeout already exercises.
+                        HLOD is still untouched in this step — it neither sets nor reads
+                        the flags yet. So end-to-end you will not yet observe a cross-desk
+                        restart in either direction; HRCD will set its outbound flag and
+                        nothing will consume it, and HRCD's inbound check has no producer.
+                        This is intentional for incremental testing.
+                        */
 
                         // ═════════════════════════════════════════════════════════════
                         // PHASE 2A: Handle real socket errors
@@ -40981,6 +41374,26 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                 // Explicitly drop ready socket to free its port for re-binding
                 drop(ready_socket);
+
+                // ═════════════════════════════════════════════════════════════════
+                // Signal HLOD (cross-desk) to Also Restart
+                // ═════════════════════════════════════════════════════════════════
+                // HRCD is restarting (e.g. stale connection timeout). HLOD for the
+                // same collaborator pair must also restart so that it re-runs its
+                // handshake and rebuilds its resources, rather than continuing to
+                // send ready signals to a stale IP/port.
+                //
+                // HLOD is responsible for clearing this flag when it acts on it
+                // (receiver-clears semantics). HRCD only ever sets it to `true`;
+                // HRCD never reads or clears `hrcd_to_hlod_restart_flag`.
+                // ═════════════════════════════════════════════════════════════════
+                hrcd_to_hlod_restart_flag.store(true, Ordering::Relaxed);
+
+                #[cfg(debug_assertions)]
+                debug_log!(
+                    "HRCD: Set hrcd_to_hlod_restart_flag=true for '{}' so HLOD also restarts",
+                    room_sync_input.remote_collaborator_name
+                );
 
                 // ═════════════════════════════════════════════════════════════════
                 // Signal Gotit Thread to Exit, Then Wait for Confirmation
@@ -41464,40 +41877,109 @@ fn you_love_the_sync_team_office(
 
         */
 
-
-        // TODO: maybe a 2nd shared end_desk_threads variable
-        // for allowing restart or sync team office
-        // e.g. after N (2-10) min of no ready-signal received
-        // for a thread-specific remote collaborator
+        // ═════════════════════════════════════════════════════════════════
+        // Per-Pair Cross-Desk Restart Flags
+        // ═════════════════════════════════════════════════════════════════
+        // These two AtomicBool flags coordinate restart between this one
+        // HLOD/HRCD pair (one pair per remote collaborator). They are NOT
+        // shared across collaborator pairs.
+        //
+        //   - hrcd_to_hlod_restart_flag:
+        //       HRCD sets it to request that HLOD also restart.
+        //       HLOD clears it immediately upon detecting it and then
+        //       breaks to its outer loop (re-handshake).
+        //
+        //   - hlod_to_hrcd_restart_flag:
+        //       HLOD sets it to request that HRCD also restart.
+        //       HRCD clears it immediately upon detecting it and then
+        //       breaks to its outer loop (re-handshake).
+        //
+        // Receiver-clears semantics prevent the setter from racing the
+        // receiver's check cycle (i.e. the receiver cannot miss a signal
+        // because the setter cleared it before the receiver looked).
+        //
+        // Both flags start `false`. Each function receives its own clones
+        // of the same underlying Arc<AtomicBool>.
+        // ═════════════════════════════════════════════════════════════════
+        let hrcd_to_hlod_restart_flag: Arc<AtomicBool> =
+            Arc::new(AtomicBool::new(false));
+        let hlod_to_hrcd_restart_flag: Arc<AtomicBool> =
+            Arc::new(AtomicBool::new(false));
 
         // ═════════════════════════════════════════════════════════════════
         // Spawn Local Owner Desk Thread (HLOD)
         // ═════════════════════════════════════════════════════════════════
         let should_stop_clone_for_hlod = should_stop_all_threads.clone();
+        let hrcd_to_hlod_restart_flag_clone_for_hlod =
+            hrcd_to_hlod_restart_flag.clone();
+        let hlod_to_hrcd_restart_flag_clone_for_hlod =
+            hlod_to_hrcd_restart_flag.clone();
 
         // Create the two "meeting room desks" for each collaborator pair:
         // Your Desk
         let owner_desk_thread = thread::spawn(move || {
             let _ = handle_local_owner_desk(
                 data_baggy_for_owner_desk,
-                should_stop_clone_for_hlod
+                should_stop_clone_for_hlod,
+                hrcd_to_hlod_restart_flag_clone_for_hlod,
+                hlod_to_hrcd_restart_flag_clone_for_hlod,
             );
-
         });
 
         // ═════════════════════════════════════════════════════════════════
         // Spawn Remote Collaborator Desk Thread (HRCD)
         // ═════════════════════════════════════════════════════════════════
         let should_stop_clone_for_hrcd = should_stop_all_threads.clone();
+        let hrcd_to_hlod_restart_flag_clone_for_hrcd =
+            hrcd_to_hlod_restart_flag.clone();
+        let hlod_to_hrcd_restart_flag_clone_for_hrcd =
+            hlod_to_hrcd_restart_flag.clone();
+
         // Their Desk
         let collaborator_desk_thread = thread::spawn(move || {
             let _ = handle_remote_collaborator_meetingroom_desk(
                 &data_baggy_for_collaborator_desk,
-                should_stop_clone_for_hrcd
+                should_stop_clone_for_hrcd,
+                hrcd_to_hlod_restart_flag_clone_for_hrcd,
+                hlod_to_hrcd_restart_flag_clone_for_hrcd,
             );
         });
         collaborator_threads.push(owner_desk_thread);
         collaborator_threads.push(collaborator_desk_thread);
+
+        // TODO: maybe a 2nd shared end_desk_threads variable
+        // for allowing restart or sync team office
+        // e.g. after N (2-10) min of no ready-signal received
+        // for a thread-specific remote collaborator
+
+        // // ═════════════════════════════════════════════════════════════════
+        // // Spawn Local Owner Desk Thread (HLOD)
+        // // ═════════════════════════════════════════════════════════════════
+        // let should_stop_clone_for_hlod = should_stop_all_threads.clone();
+
+        // // Create the two "meeting room desks" for each collaborator pair:
+        // // Your Desk
+        // let owner_desk_thread = thread::spawn(move || {
+        //     let _ = handle_local_owner_desk(
+        //         data_baggy_for_owner_desk,
+        //         should_stop_clone_for_hlod
+        //     );
+
+        // });
+
+        // // ═════════════════════════════════════════════════════════════════
+        // // Spawn Remote Collaborator Desk Thread (HRCD)
+        // // ═════════════════════════════════════════════════════════════════
+        // let should_stop_clone_for_hrcd = should_stop_all_threads.clone();
+        // // Their Desk
+        // let collaborator_desk_thread = thread::spawn(move || {
+        //     let _ = handle_remote_collaborator_meetingroom_desk(
+        //         &data_baggy_for_collaborator_desk,
+        //         should_stop_clone_for_hrcd
+        //     );
+        // });
+        // collaborator_threads.push(owner_desk_thread);
+        // collaborator_threads.push(collaborator_desk_thread);
     }
 
     // ... Handle join logic for your threads...
