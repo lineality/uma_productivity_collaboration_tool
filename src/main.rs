@@ -8289,17 +8289,17 @@ fn write_formatted_navigation_legend_to_tui() -> Result<(),Error> {
 
     write_red_green_hotkey("pt", "v", "/")?;
 
-    write_red_green_hotkey("pm", "v", " ")?;
+    write_red_green_hotkey("pm", "h", " ")?;
 
     // chagne name to refresh view?
     // write_red_hotkey("", "passive ")?;
-    write_red_hotkey("", "refresh ")?;
+    write_red_hotkey("", "passive HUD ")?;
     write_red_green_hotkey("", "tmux-split", "|")?;
 
 
 
-    write_red_hotkey("invite", "")?;
-    // write_red_hotkey("cvy", "|")?;
+    write_red_hotkey("invite", "|")?;
+    write_red_hotkey("help", "")?;
 
     // // Navigation group
     // write_red_hotkey("w", "rd,")?;
@@ -44372,7 +44372,7 @@ const HELP_SECTION_QUICK_START: &str = r#"
    9. q   -> quit"#;
 
 const HELP_SECTION_MAIN_TOPBAR_LEGEND: &str = r#"
-quit home back|task message|add node|ptv/pmv refresh tmux-split|invite
+quit home back|task message|add node|ptv/pmv refresh tmux-split|invite|help
 
  ═══ THE LEGEND OF TOP-BAR ═══
  quit home back...........'q' for quit, 'b' for go-back, 'home' restarts
