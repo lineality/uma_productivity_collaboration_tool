@@ -7860,7 +7860,7 @@ impl App {
         // println!("Showing {}-{} of {} | ↑k ↓j | ↑↓:{} >",             start_idx + 1, end_idx, self.tui_textmessage_list.len(), self.tui_height);
 
         // TODO buffy formatting
-        print!("-> {}-{} of {} | ↑k ↓j > ",
+        print!(" {}-{} of {}  ↑k ↓j > ",
             start_idx + 1, end_idx, self.tui_textmessage_list.len());
         io::stdout().flush()
     }
