@@ -40470,7 +40470,7 @@ fn handle_remote_collaborator_meetingroom_desk(
 
                 // TODO: use Buffy format
                 println!(
-                    "\n|o|No signal from '{}' in {} min: restart desk / handshake",
+                    "\n|o| No signal from '{}' in {} min: restart desk / handshake",
                     room_sync_input.remote_collaborator_name,
                     STALE_TIMEOUT.as_secs() / 60
                 );
