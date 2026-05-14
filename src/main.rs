@@ -1377,54 +1377,266 @@ fn find_valid_local_owner_ipv4_address(ipv4_addresses: &[Ipv4Addr]) -> Option<Ip
     None
 }
 
-/// Securely extracts a GPG-encrypted clearsigned TOML file to a temporary location.
+// /// Securely extracts a GPG-encrypted clearsigned TOML file to a temporary location.
+// ///
+// /// This function decrypts a GPG-encrypted file using the specified key fingerprint and
+// /// writes the decrypted content to a temporary file with restricted permissions. The
+// /// temporary file path is returned for further processing.
+// ///
+// /// # Security
+// /// - Creates temporary files with restricted permissions (owner-only access)
+// /// - Uses unique filenames to prevent race conditions
+// /// - Ensures cross-platform compatibility for file permissions
+// /// - Caller is responsible for deleting the temporary file
+// ///
+// /// # Arguments
+// /// * `gpg_encrypted_path` - Absolute path to the GPG-encrypted file
+// /// * `full_fingerprint_key_id_string` - Full GPG key fingerprint for decryption
+// /// * `owner` - Username for generating unique temp filename
+// ///
+// /// # Returns
+// /// * `Result<PathBuf, ThisProjectError>` - Path to the temporary decrypted file
+// fn decrypt_gpgtoml_to_temp_file_secure(
+//     gpg_encrypted_path: &str,
+//     full_fingerprint_key_id_string: &str,
+//     owner: &str,
+// ) -> Result<PathBuf, ThisProjectError> {
+//     // Verify the encrypted file exists
+//     if !Path::new(gpg_encrypted_path).exists() {
+//         return Err(ThisProjectError::IoError(
+//             io::Error::new(
+//                 io::ErrorKind::NotFound,
+//                 format!("GPG encrypted file not found: {}", gpg_encrypted_path)
+//             )
+//         ));
+//     }
+
+//     // Generate a unique temporary filename
+//     let timestamp = std::time::SystemTime::now()
+//         .duration_since(std::time::UNIX_EPOCH)
+//         .map_err(|e| ThisProjectError::IoError(
+//             io::Error::new(io::ErrorKind::Other, format!("Time error: {}", e))
+//         ))?
+//         .as_nanos();
+
+//     let temp_filename = format!("gpg_decrypt_{}_{}.toml", owner, timestamp);
+//     let temp_dir = std::env::temp_dir();
+//     let temp_path = temp_dir.join(&temp_filename);
+
+//     // Decrypt the GPG file using the gpg command
+//     let output = std::process::Command::new("gpg")
+//         .arg("--quiet")
+//         .arg("--batch")
+//         .arg("--yes")
+//         .arg("--local-user")
+//         .arg(full_fingerprint_key_id_string)
+//         .arg("--decrypt")
+//         .arg(gpg_encrypted_path)
+//         .output()
+//         .map_err(|e| ThisProjectError::GpgError(
+//             format!("Failed to execute GPG decrypt command: {}", e)
+//         ))?;
+
+//     if !output.status.success() {
+//         let stderr = String::from_utf8_lossy(&output.stderr);
+//         return Err(ThisProjectError::GpgError(
+//             format!("GPG decryption failed: {}", stderr)
+//         ));
+//     }
+
+//     // slimmer way to make /uma_temp/file?, e.g. for bare metal binary?
+//     // Create the temporary file with restricted permissions
+//     #[cfg(unix)]
+//     {
+//         use std::os::unix::fs::OpenOptionsExt;
+//         let mut file = std::fs::OpenOptions::new()
+//             .create(true)
+//             .write(true)
+//             .truncate(true)
+//             .mode(0o600) // Owner read/write only
+//             .open(&temp_path)
+//             .map_err(|e| ThisProjectError::IoError(
+//                 io::Error::new(
+//                     io::ErrorKind::Other,
+//                     format!("Failed to create secure temp file: {}", e)
+//                 )
+//             ))?;
+
+//         file.write_all(&output.stdout)
+//             .map_err(|e| ThisProjectError::IoError(
+//                 io::Error::new(
+//                     io::ErrorKind::Other,
+//                     format!("Failed to write decrypted content: {}", e)
+//                 )
+//             ))?;
+//     }
+
+//     #[cfg(not(unix))]
+//     {
+//         // On Windows, files in temp directory are typically user-restricted by default
+//         fs::write(&temp_path, &output.stdout)
+//             .map_err(|e| ThisProjectError::IoError(
+//                 io::Error::new(
+//                     io::ErrorKind::Other,
+//                     format!("Failed to write decrypted content: {}", e)
+//                 )
+//             ))?;
+//     }
+
+//     Ok(temp_path)
+// }
+
+/// Returns a filesystem-safe, length-bounded version of `raw` suitable for
+/// embedding in a temp filename component.
 ///
-/// This function decrypts a GPG-encrypted file using the specified key fingerprint and
-/// writes the decrypted content to a temporary file with restricted permissions. The
-/// temporary file path is returned for further processing.
+/// # Project Context
+/// User-supplied identifiers (e.g. an `owner` name) must never be inserted
+/// verbatim into a path. Characters such as `/`, `\`, `..`, control chars,
+/// or NUL could be used to escape the intended directory, collide with
+/// other files, or break the OS. This helper:
+/// - keeps only `[A-Za-z0-9_-]`
+/// - replaces anything else with `_`
+/// - truncates to a fixed max length to prevent pathologically long names
+/// - returns `"unknown"` if the input would otherwise be empty
+///
+/// This is **not** authentication or authorization — it is purely a path-
+/// safety filter.
+fn uma_sanitize_name_component(raw: &str) -> String {
+    const UMA_MAX_NAME_COMPONENT_LEN: usize = 32;
+    let mut out = String::with_capacity(UMA_MAX_NAME_COMPONENT_LEN);
+    for ch in raw.chars() {
+        if ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' {
+            out.push(ch);
+        } else {
+            out.push('_');
+        }
+        if out.len() >= UMA_MAX_NAME_COMPONENT_LEN {
+            break;
+        }
+    }
+    if out.is_empty() {
+        out.push_str("unknown");
+    }
+    out
+}
+
+/// Securely decrypts a GPG-encrypted (clearsigned) TOML file to a temporary
+/// file under the project's canonical UMA temp tree and returns its path.
+///
+/// # Project Context
+/// Used by the message-receive / state-load pipeline to materialize an
+/// encrypted on-disk artifact into a short-lived plaintext file that the
+/// caller can parse. The file is created inside this thread's sub-directory
+/// of the project base temp dir (see `uma_get_or_create_thread_temp_subdir`)
+/// so concurrent decrypt operations cannot collide. The caller owns the
+/// returned path and is responsible for deleting it once consumed.
 ///
 /// # Security
-/// - Creates temporary files with restricted permissions (owner-only access)
-/// - Uses unique filenames to prevent race conditions
-/// - Ensures cross-platform compatibility for file permissions
-/// - Caller is responsible for deleting the temporary file
+/// - Temp file is created with `O_CREAT | O_TRUNC | O_WRONLY` and mode
+///   `0o600` on Unix (owner read/write only), atomic with creation.
+/// - The plaintext is never written to a world-readable location.
+/// - Filenames are unique across threads, processes, and nanoseconds.
+/// - The user-controlled `owner` string is sanitized before being used as
+///   part of the filename (no path traversal, no exotic characters).
+/// - Production error strings carry the unique prefix `DGTFS:` and do not
+///   leak file paths, key material, or gpg stderr. Verbose details are
+///   only emitted under `#[cfg(debug_assertions)]`.
+///
+/// # Failure Behaviour
+/// On *any* error after the temp file has been created the function makes
+/// a best-effort removal of that temp file before returning, so partial
+/// plaintext is never left lying around. On success the caller owns the
+/// file and must remove it.
 ///
 /// # Arguments
-/// * `gpg_encrypted_path` - Absolute path to the GPG-encrypted file
-/// * `full_fingerprint_key_id_string` - Full GPG key fingerprint for decryption
-/// * `owner` - Username for generating unique temp filename
+/// * `gpg_encrypted_path` - Path to the GPG-encrypted source file.
+/// * `full_fingerprint_key_id_string` - Full GPG key fingerprint to use.
+/// * `owner` - User-controlled label used (after sanitization) only as a
+///   filename component to aid debugging; never used as a path or trust
+///   decision.
 ///
 /// # Returns
-/// * `Result<PathBuf, ThisProjectError>` - Path to the temporary decrypted file
+/// * `Ok(PathBuf)` - Absolute path to the decrypted temp file.
+/// * `Err(ThisProjectError::GpgError("DGTFS: ..."))` - terse, tagged error.
 fn decrypt_gpgtoml_to_temp_file_secure(
     gpg_encrypted_path: &str,
     full_fingerprint_key_id_string: &str,
     owner: &str,
 ) -> Result<PathBuf, ThisProjectError> {
-    // Verify the encrypted file exists
-    if !Path::new(gpg_encrypted_path).exists() {
-        return Err(ThisProjectError::IoError(
-            io::Error::new(
-                io::ErrorKind::NotFound,
-                format!("GPG encrypted file not found: {}", gpg_encrypted_path)
-            )
+    #[cfg(debug_assertions)]
+    debug_log!(
+        "(DGTFS) start tid={} src={:?} owner={:?}",
+        uma_current_thread_id(),
+        gpg_encrypted_path,
+        owner
+    );
+
+    // -----------------------------------------------------------------
+    // 0. Input validation (defensive, before touching disk or spawning gpg).
+    // -----------------------------------------------------------------
+    if gpg_encrypted_path.trim().is_empty() {
+        return Err(ThisProjectError::GpgError(
+            "DGTFS: empty source path".into(),
         ));
     }
+    if full_fingerprint_key_id_string.trim().is_empty() {
+        return Err(ThisProjectError::GpgError(
+            "DGTFS: empty fingerprint".into(),
+        ));
+    }
+    // We do not require `owner` to be non-empty — it is only a filename hint
+    // and the sanitizer falls back to "unknown" if it is empty.
 
-    // Generate a unique temporary filename
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_err(|e| ThisProjectError::IoError(
-            io::Error::new(io::ErrorKind::Other, format!("Time error: {}", e))
-        ))?
-        .as_nanos();
+    // Verify source exists, is a regular file, and is non-empty.
+    let source_path = Path::new(gpg_encrypted_path);
+    match std::fs::metadata(source_path) {
+        Ok(md) => {
+            if !md.is_file() {
+                #[cfg(debug_assertions)]
+                debug_log!("(DGTFS) source is not a regular file");
+                return Err(ThisProjectError::GpgError(
+                    "DGTFS: source not a file".into(),
+                ));
+            }
+            if md.len() == 0 {
+                #[cfg(debug_assertions)]
+                debug_log!("(DGTFS) source file is empty");
+                return Err(ThisProjectError::GpgError(
+                    "DGTFS: source empty".into(),
+                ));
+            }
+        }
+        Err(_meta_err) => {
+            #[cfg(debug_assertions)]
+            debug_log!("(DGTFS) source metadata failed: {:?}", _meta_err);
+            return Err(ThisProjectError::GpgError(
+                "DGTFS: source missing".into(),
+            ));
+        }
+    }
 
-    let temp_filename = format!("gpg_decrypt_{}_{}.toml", owner, timestamp);
-    let temp_dir = std::env::temp_dir();
-    let temp_path = temp_dir.join(&temp_filename);
+    // -----------------------------------------------------------------
+    // 1. Build a unique destination path inside this thread's sub-directory
+    //    of the project's canonical UMA temp tree.
+    //    Owner string is sanitized so it can never escape the intended dir.
+    // -----------------------------------------------------------------
+    let owner_safe = uma_sanitize_name_component(owner);
+    let tag = format!("dgtfs_{}", owner_safe);
+    let temp_path = match uma_build_unique_temp_path(&tag, "toml") {
+        Ok(p) => p,
+        Err(e) => return Err(e),
+    };
 
-    // Decrypt the GPG file using the gpg command
-    let output = std::process::Command::new("gpg")
+    #[cfg(debug_assertions)]
+    debug_log!("(DGTFS) temp_path={:?}", temp_path);
+
+    // -----------------------------------------------------------------
+    // 2. Run gpg --decrypt, capturing stdout (plaintext) and stderr.
+    //    --batch / --yes / --quiet: never block on a TTY prompt.
+    //    Note: --decrypt selects the key by the message itself; we keep
+    //    --local-user as a hint, matching the project's prior behaviour.
+    // -----------------------------------------------------------------
+    let gpg_result = std::process::Command::new("gpg")
         .arg("--quiet")
         .arg("--batch")
         .arg("--yes")
@@ -1432,58 +1644,227 @@ fn decrypt_gpgtoml_to_temp_file_secure(
         .arg(full_fingerprint_key_id_string)
         .arg("--decrypt")
         .arg(gpg_encrypted_path)
-        .output()
-        .map_err(|e| ThisProjectError::GpgError(
-            format!("Failed to execute GPG decrypt command: {}", e)
-        ))?;
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .output();
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
+    let gpg_output = match gpg_result {
+        Ok(out) => out,
+        Err(_spawn_err) => {
+            #[cfg(debug_assertions)]
+            debug_log!("(DGTFS) gpg spawn/output failed: {:?}", _spawn_err);
+            return Err(ThisProjectError::GpgError(
+                "DGTFS: gpg invocation failed".into(),
+            ));
+        }
+    };
+
+    if !gpg_output.status.success() {
+        #[cfg(debug_assertions)]
+        {
+            let stderr = String::from_utf8_lossy(&gpg_output.stderr);
+            debug_log!("(DGTFS) gpg decrypt nonzero exit: {}", stderr);
+        }
         return Err(ThisProjectError::GpgError(
-            format!("GPG decryption failed: {}", stderr)
+            "DGTFS: gpg decrypt nonzero exit".into(),
         ));
     }
 
-    // slimmer way to make /uma_temp/file?, e.g. for bare metal binary?
-    // Create the temporary file with restricted permissions
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        let mut file = std::fs::OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .mode(0o600) // Owner read/write only
-            .open(&temp_path)
-            .map_err(|e| ThisProjectError::IoError(
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("Failed to create secure temp file: {}", e)
-                )
-            ))?;
-
-        file.write_all(&output.stdout)
-            .map_err(|e| ThisProjectError::IoError(
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("Failed to write decrypted content: {}", e)
-                )
-            ))?;
+    // Defensive: success but no plaintext is anomalous.
+    if gpg_output.stdout.is_empty() {
+        #[cfg(debug_assertions)]
+        debug_log!("(DGTFS) gpg succeeded but produced empty plaintext");
+        return Err(ThisProjectError::GpgError(
+            "DGTFS: empty plaintext".into(),
+        ));
     }
 
+    // -----------------------------------------------------------------
+    // 3. Create the temp file with restrictive permissions, atomically,
+    //    THEN write the plaintext. The file never exists with looser
+    //    permissions even briefly.
+    // -----------------------------------------------------------------
+    #[cfg(unix)]
+    let create_result = {
+        use std::os::unix::fs::OpenOptionsExt;
+        std::fs::OpenOptions::new()
+            .create_new(true)        // fail if it somehow already exists
+            .write(true)
+            .truncate(true)
+            .mode(0o600)             // owner read/write only
+            .open(&temp_path)
+    };
+
     #[cfg(not(unix))]
-    {
-        // On Windows, files in temp directory are typically user-restricted by default
-        fs::write(&temp_path, &output.stdout)
-            .map_err(|e| ThisProjectError::IoError(
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("Failed to write decrypted content: {}", e)
-                )
-            ))?;
+    let create_result = std::fs::OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .truncate(true)
+        .open(&temp_path);
+
+    let mut temp_file = match create_result {
+        Ok(f) => f,
+        Err(_create_err) => {
+            #[cfg(debug_assertions)]
+            debug_log!("(DGTFS) temp file create failed: {:?}", _create_err);
+            // No file to clean up: create_new failed.
+            return Err(ThisProjectError::GpgError(
+                "DGTFS: temp create failed".into(),
+            ));
+        }
+    };
+
+    // -----------------------------------------------------------------
+    // 4. Write the plaintext. On any error here, best-effort remove the
+    //    partially-written file so we never leak plaintext.
+    // -----------------------------------------------------------------
+    if let Err(_write_err) = temp_file.write_all(&gpg_output.stdout) {
+        #[cfg(debug_assertions)]
+        debug_log!("(DGTFS) plaintext write failed: {:?}", _write_err);
+        drop(temp_file);
+        uma_best_effort_remove(&temp_path);
+        return Err(ThisProjectError::GpgError(
+            "DGTFS: plaintext write failed".into(),
+        ));
+    }
+
+    if let Err(_flush_err) = temp_file.flush() {
+        #[cfg(debug_assertions)]
+        debug_log!("(DGTFS) plaintext flush failed: {:?}", _flush_err);
+        drop(temp_file);
+        uma_best_effort_remove(&temp_path);
+        return Err(ThisProjectError::GpgError(
+            "DGTFS: plaintext flush failed".into(),
+        ));
+    }
+
+    // Explicit drop so the OS releases the handle before we return the path.
+    drop(temp_file);
+
+    // -----------------------------------------------------------------
+    // 5. Final verification: the file must exist and be non-empty.
+    // -----------------------------------------------------------------
+    match std::fs::metadata(&temp_path) {
+        Ok(md) if md.is_file() && md.len() > 0 => {
+            #[cfg(debug_assertions)]
+            debug_log!("(DGTFS) ok wrote {} bytes", md.len());
+        }
+        Ok(_) => {
+            #[cfg(debug_assertions)]
+            debug_log!("(DGTFS) post-write verify: file empty/non-file");
+            uma_best_effort_remove(&temp_path);
+            return Err(ThisProjectError::GpgError(
+                "DGTFS: post-write verify failed".into(),
+            ));
+        }
+        Err(_verify_err) => {
+            #[cfg(debug_assertions)]
+            debug_log!("(DGTFS) post-write metadata failed: {:?}", _verify_err);
+            uma_best_effort_remove(&temp_path);
+            return Err(ThisProjectError::GpgError(
+                "DGTFS: post-write metadata failed".into(),
+            ));
+        }
     }
 
     Ok(temp_path)
+}
+
+#[cfg(test)]
+mod dgtfs_behavior_tests {
+    use super::*;
+
+    /// Missing source path must produce a DGTFS-tagged error and not panic.
+    #[test]
+    fn dgtfs_missing_source_returns_tagged_error() {
+        match decrypt_gpgtoml_to_temp_file_secure(
+            "/nonexistent/dgtfs_no_such_file.gpg",
+            "DEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF",
+            "alice",
+        ) {
+            Err(ThisProjectError::GpgError(msg)) => {
+                assert!(
+                    msg.starts_with("DGTFS:"),
+                    "expected DGTFS-tagged error, got: {}",
+                    msg
+                );
+            }
+            Ok(_) => panic!("must not succeed on missing source"),
+            Err(other) => panic!("unexpected error variant: {:?}", other),
+        }
+    }
+
+    /// Empty source path is rejected up-front.
+    #[test]
+    fn dgtfs_empty_source_path_rejected() {
+        match decrypt_gpgtoml_to_temp_file_secure(
+            "",
+            "DEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF",
+            "alice",
+        ) {
+            Err(ThisProjectError::GpgError(msg)) => {
+                assert!(msg.starts_with("DGTFS:"), "got: {}", msg);
+            }
+            _ => panic!("must reject empty source path"),
+        }
+    }
+
+    /// Empty fingerprint is rejected up-front.
+    #[test]
+    fn dgtfs_empty_fingerprint_rejected() {
+        match decrypt_gpgtoml_to_temp_file_secure(
+            "/etc/hostname", // any existing file; we should fail before reading it
+            "   ",
+            "alice",
+        ) {
+            Err(ThisProjectError::GpgError(msg)) => {
+                assert!(msg.starts_with("DGTFS:"), "got: {}", msg);
+            }
+            _ => panic!("must reject empty fingerprint"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod uma_sanitize_tests {
+    use super::*;
+
+    #[test]
+    fn sanitize_rejects_path_separators() {
+        let dirty = "../../etc/passwd";
+        let clean = uma_sanitize_name_component(dirty);
+        assert!(!clean.contains('/'), "must strip '/': {}", clean);
+        assert!(!clean.contains('\\'), "must strip '\\': {}", clean);
+        assert!(!clean.contains(".."), "literal '..' may appear via underscores but no path sep: {}", clean);
+    }
+
+    #[test]
+    fn sanitize_keeps_safe_chars() {
+        let clean = uma_sanitize_name_component("alice_bob-42");
+        assert_eq!(clean, "alice_bob-42");
+    }
+
+    #[test]
+    fn sanitize_replaces_unsafe_chars() {
+        let clean = uma_sanitize_name_component("a/b\\c d:e");
+        // every unsafe char becomes '_'
+        assert!(!clean.contains('/'));
+        assert!(!clean.contains('\\'));
+        assert!(!clean.contains(' '));
+        assert!(!clean.contains(':'));
+    }
+
+    #[test]
+    fn sanitize_empty_becomes_unknown() {
+        assert_eq!(uma_sanitize_name_component(""), "unknown");
+    }
+
+    #[test]
+    fn sanitize_is_length_bounded() {
+        let huge = "a".repeat(10_000);
+        let clean = uma_sanitize_name_component(&huge);
+        assert!(clean.len() <= 32, "expected bound respected, got {}", clean.len());
+    }
 }
 
 /// Attempts to read IP addresses from a GPG-encrypted clearsigned TOML file.
@@ -2779,11 +3160,78 @@ Seri_Deseri Deserialize From .toml Start
 /// - Logs which file type was selected (.toml vs .gpgtoml)
 /// - Logs file paths being processed
 /// - Logs GPG operations and any errors encountered
+///
+/// # Revision Notes (added during hardening pass; existing docs above are authoritative)
+///
+/// ## Temp-file Strategy (replaces previous `std::env::temp_dir()` usage)
+/// When decrypting a `.gpgtoml` file, the plaintext is written to a temp
+/// path produced by `uma_build_unique_temp_path("decrypt_collab", "toml")`.
+/// That helper places the file in:
+/// ```text
+/// <get_base_uma_temp_directory_path()>/uma_thread_<TID>/decrypt_collab_<nanos>_<pid>_<tid>_<seq>.toml
+/// ```
+/// - Uses the project's canonical base temp dir (no `/tmp`).
+/// - No hidden (dot-prefixed) directories — per project policy.
+/// - Per-thread sub-directory prevents concurrent calls from deleting each
+///   other's in-flight files (this was the root cause of the prior
+///   `gpg: can't open ...` race observed in the RSSFLL pipeline).
+/// - Filename combines tag + nanos + PID + thread-id + atomic seq, so
+///   intra-thread, inter-thread, and inter-process collisions are all
+///   precluded.
+///
+/// ## Guaranteed Cleanup (resolves the function-level TODO at the top)
+/// A small inner guard struct `RocstTempGuard` owns an `Option<PathBuf>`
+/// and, on `Drop`, calls `uma_best_effort_remove` if a path is present.
+/// The guard is registered **immediately after** the temp path is built,
+/// **before** any subsequent fallible operation (gpg invocation, chmod,
+/// field reads, parses). This means:
+/// - Every `return Err(...)` triggers cleanup.
+/// - Even a panic (e.g. from an allocator failure in the field readers)
+///   triggers cleanup via Rust's unwinding.
+/// - There is exactly one cleanup path; nothing to forget.
+///
+/// ## Error-handling Policy
+/// - No `?` operator anywhere; every fallible call uses an explicit `match`
+///   so this function can apply its own unique error prefix (`ROCST:`) and
+///   make consistent cleanup/logging decisions.
+/// - Production error messages are terse and contain no paths, no field
+///   contents, and no collaborator names. Verbose detail (including the
+///   source error's `Display`/`Debug`) is emitted **only** under
+///   `#[cfg(debug_assertions)]`.
+/// - The function never panics on bad input; every parse and every IO
+///   operation is matched and converted to a tagged `ThisProjectError`.
+///
+/// ## Behavior Preserved
+/// - Public signature unchanged.
+/// - File-selection logic unchanged (prefer `.toml`, then `.gpgtoml`,
+///   then error).
+/// - On GPG decryption failure: still prints to stderr and still waits
+///   for Enter, matching the prior multi-threaded operator UX (the
+///   message text is now terse and does not leak collaborator name or
+///   gpg stderr; the verbose detail is in the debug log).
+/// - Field set and order in the returned `CollaboratorTomlData` unchanged.
 fn read_one_collaborator_addressbook_toml(
     collaborator_name: &str,
     full_fingerprint_key_id_string: &str,
-    ) -> Result<CollaboratorTomlData, ThisProjectError> {
+) -> Result<CollaboratorTomlData, ThisProjectError> {
     debug_log("Starting ROCST: read_one_collaborator_addressbook_toml()");
+
+    // ----------------------------------------------------------------
+    // RAII cleanup guard: implements the function-level TODO
+    // ("any error should delete the temp file") via Drop, so every
+    // return path — including panics — removes the temp file exactly once.
+    // ----------------------------------------------------------------
+    struct RocstTempGuard {
+        path: Option<PathBuf>,
+    }
+    impl Drop for RocstTempGuard {
+        fn drop(&mut self) {
+            if let Some(p) = self.path.take() {
+                uma_best_effort_remove(&p);
+            }
+        }
+    }
+    let mut temp_guard = RocstTempGuard { path: None };
 
     // 1. File Paths
     // Check for both .toml and .gpgtoml files
@@ -2792,34 +3240,59 @@ fn read_one_collaborator_addressbook_toml(
     let gpgtoml_relative = Path::new(COLLABORATOR_ADDRESSBOOK_PATH_STR)
         .join(format!("{}__collaborator.gpgtoml", collaborator_name));
 
-    // Get absolute paths
-    let toml_abs = make_input_path_name_abs_executabledirectoryrelative_nocheck(&toml_relative)?;
-    let gpgtoml_abs = make_input_path_name_abs_executabledirectoryrelative_nocheck(&gpgtoml_relative)?;
+    // Get absolute paths (executable-relative canonical)
+    let toml_abs = match make_input_path_name_abs_executabledirectoryrelative_nocheck(&toml_relative) {
+        Ok(p) => p,
+        Err(_resolve_err) => {
+            #[cfg(debug_assertions)]
+            debug_log!("ROCST: toml abs path resolve failed: {:?}", _resolve_err);
+            return Err(ThisProjectError::TomlVanillaDeserialStrError(
+                "ROCST: toml abs path resolve failed".into(),
+            ));
+        }
+    };
+    let gpgtoml_abs = match make_input_path_name_abs_executabledirectoryrelative_nocheck(&gpgtoml_relative) {
+        Ok(p) => p,
+        Err(_resolve_err) => {
+            #[cfg(debug_assertions)]
+            debug_log!("ROCST: gpgtoml abs path resolve failed: {:?}", _resolve_err);
+            return Err(ThisProjectError::TomlVanillaDeserialStrError(
+                "ROCST: gpgtoml abs path resolve failed".into(),
+            ));
+        }
+    };
 
     // Determine which file to use and prepare the path
-    let (abs_file_path, temp_file_to_cleanup) = if toml_abs.exists() {
+    let abs_file_path: PathBuf = if toml_abs.exists() {
         // Prefer .toml if it exists
-        debug_log!("ROCST: Using clearsigned .toml file for collaborator '{}'", collaborator_name);
-        (toml_abs, None)
+        debug_log!(
+            "ROCST: Using clearsigned .toml file for collaborator '{}'",
+            collaborator_name
+        );
+        toml_abs
     } else if gpgtoml_abs.exists() {
         // Use .gpgtoml and decrypt it
-        debug_log!("ROCST: Using GPG encrypted .gpgtoml file for collaborator '{}'", collaborator_name);
+        debug_log!(
+            "ROCST: Using GPG encrypted .gpgtoml file for collaborator '{}'",
+            collaborator_name
+        );
 
-        // Create secure temp file for decrypted content
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|e| ThisProjectError::IoError(
-                std::io::Error::new(std::io::ErrorKind::Other, format!("Time error: {}", e))
-            ))?
-            .as_nanos();
+        // Create secure temp file for decrypted content.
+        // Replaces the prior `std::env::temp_dir()` usage (flagged in-line
+        // in the original code) with the project's canonical, per-thread,
+        // collision-proof temp path.
+        let temp_path = match uma_build_unique_temp_path("decrypt_collab", "toml") {
+            Ok(p) => p,
+            Err(e) => return Err(e),
+        };
 
-        let temp_filename = format!("decrypt_collab_{}_{}.toml", collaborator_name, timestamp);
-
-        // TODO: WRONG!!! must use get_base_uma_temp_directory_path()
-        let temp_path = std::env::temp_dir().join(&temp_filename);
+        // Register temp file with the cleanup guard IMMEDIATELY — before
+        // any further fallible operation — so any subsequent failure (or
+        // panic) still removes the file.
+        temp_guard.path = Some(temp_path.clone());
 
         // Decrypt the .gpgtoml file
-        let output = std::process::Command::new("gpg")
+        let decrypt_result = std::process::Command::new("gpg")
             .arg("--quiet")
             .arg("--batch")
             .arg("--yes")
@@ -2829,58 +3302,96 @@ fn read_one_collaborator_addressbook_toml(
             .arg("--output")
             .arg(&temp_path)
             .arg(&gpgtoml_abs)
-            .output()
-            .map_err(|e| {
-                let error_msg = format!("Failed to execute GPG decrypt for collaborator '{}': {}", collaborator_name, e);
-                eprintln!("\nERROR: {}", error_msg);
+            .output();
+
+        let output = match decrypt_result {
+            Ok(o) => o,
+            Err(_spawn_err) => {
+                #[cfg(debug_assertions)]
+                debug_log!("ROCST: gpg decrypt spawn failed: {:?}", _spawn_err);
+                // Preserve prior user-facing behavior: print + wait for Enter
+                // so operators see decryption failures in multi-threaded runs.
+                // Message text is terse; verbose info is only in the debug log.
+                eprintln!("\nERROR: ROCST: GPG decrypt invocation failed");
                 eprintln!("...Press Enter to continue...");
                 let _ = std::io::stdin().read_line(&mut String::new());
-                ThisProjectError::GpgError(error_msg)
-            })?;
+                // temp_guard drops here on return -> file removed.
+                return Err(ThisProjectError::GpgError(
+                    "ROCST: gpg decrypt invocation failed".into(),
+                ));
+            }
+        };
 
         if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            let error_msg = format!("GPG decryption failed for collaborator '{}': {}", collaborator_name, stderr);
-            eprintln!("\nERROR: {}", error_msg);
+            #[cfg(debug_assertions)]
+            {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                debug_log!(
+                    "ROCST: gpg decrypt nonzero exit for '{}': {}",
+                    collaborator_name, stderr
+                );
+            }
+            eprintln!("\nERROR: ROCST: GPG decryption failed");
             eprintln!("...Press Enter to continue...");
             let _ = std::io::stdin().read_line(&mut String::new());
-            return Err(ThisProjectError::GpgError(error_msg));
+            return Err(ThisProjectError::GpgError(
+                "ROCST: gpg decryption nonzero exit".into(),
+            ));
         }
 
         // Set restricted permissions on temp file (Unix only)
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&temp_path, std::fs::Permissions::from_mode(0o600))
-                .map_err(|e| ThisProjectError::IoError(
-                    std::io::Error::new(std::io::ErrorKind::Other,
-                        format!("Failed to set temp file permissions: {}", e))
-                ))?;
+            if let Err(_perm_err) = std::fs::set_permissions(
+                &temp_path,
+                std::fs::Permissions::from_mode(0o600),
+            ) {
+                #[cfg(debug_assertions)]
+                debug_log!("ROCST: chmod 0600 on temp failed: {:?}", _perm_err);
+                return Err(ThisProjectError::IoError(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "ROCST: temp perms set failed",
+                )));
+            }
         }
 
-        (temp_path.clone(), Some(temp_path))
+        temp_path
     } else {
-        return Err(ThisProjectError::IoError(
-            std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                format!("No collaborator file found for '{}' (checked both .toml and .gpgtoml)", collaborator_name)
-            )
-        ));
+        #[cfg(debug_assertions)]
+        debug_log!(
+            "ROCST: neither .toml nor .gpgtoml exists for '{}'",
+            collaborator_name
+        );
+        return Err(ThisProjectError::IoError(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "ROCST: collaborator file not found",
+        )));
     };
 
-    debug_log!("ROCST: read_one_collaborator_addressbook_toml(), abs_file_path -> {:?}", abs_file_path);
-
+    debug_log!(
+        "ROCST: read_one_collaborator_addressbook_toml(), abs_file_path -> {:?}",
+        abs_file_path
+    );
 
     /////
 
-
-    debug_log!("ROCST: read_one_collaborator_addressbook_toml(), abs_file_path (executable-relative) -> {:?}", abs_file_path);
+    debug_log!(
+        "ROCST: read_one_collaborator_addressbook_toml(), abs_file_path (executable-relative) -> {:?}",
+        abs_file_path
+    );
 
     // Convert path to string for clearsign functions
-    let file_path_str = abs_file_path.to_str()
-        .ok_or_else(|| ThisProjectError::TomlVanillaDeserialStrError(
-            "Failed to convert file path to string".to_string()
-        ))?;
+    let file_path_str = match abs_file_path.to_str() {
+        Some(s) => s,
+        None => {
+            #[cfg(debug_assertions)]
+            debug_log!("ROCST: path is not valid UTF-8: {:?}", abs_file_path);
+            return Err(ThisProjectError::TomlVanillaDeserialStrError(
+                "ROCST: non-UTF8 path".into(),
+            ));
+        }
+    };
 
     // 2. Read and verify all fields from the clearsigned TOML file
     // Each read operation includes signature verification
@@ -2892,72 +3403,122 @@ fn read_one_collaborator_addressbook_toml(
     */
 
     // Extract user_name
-    let user_name = read_singleline_string_from_clearsigntoml(file_path_str, "user_name")
-        .map_err(|e| ThisProjectError::TomlVanillaDeserialStrError(
-            format!("Failed to read user_name: {}", e)
-        ))?;
+    let user_name = match read_singleline_string_from_clearsigntoml(file_path_str, "user_name") {
+        Ok(v) => v,
+        Err(_e) => {
+            #[cfg(debug_assertions)]
+            debug_log!("ROCST: read user_name failed: {}", _e);
+            return Err(ThisProjectError::TomlVanillaDeserialStrError(
+                "ROCST: read user_name failed".into(),
+            ));
+        }
+    };
 
     // Extract gpg_publickey_id
-    let gpg_publickey_id = read_singleline_string_from_clearsigntoml(file_path_str, "gpg_publickey_id")
-        .map_err(|e| ThisProjectError::TomlVanillaDeserialStrError(
-            format!("Failed to read gpg_publickey_id: {}", e)
-        ))?;
+    let gpg_publickey_id = match read_singleline_string_from_clearsigntoml(file_path_str, "gpg_publickey_id") {
+        Ok(v) => v,
+        Err(_e) => {
+            #[cfg(debug_assertions)]
+            debug_log!("ROCST: read gpg_publickey_id failed: {}", _e);
+            return Err(ThisProjectError::TomlVanillaDeserialStrError(
+                "ROCST: read gpg_publickey_id failed".into(),
+            ));
+        }
+    };
 
     // Extract gpg_key_public
-    let gpg_key_public = read_multiline_string_from_clearsigntoml(file_path_str, "gpg_key_public")
-        .map_err(|e| ThisProjectError::TomlVanillaDeserialStrError(
-            format!("Failed to read gpg_key_public: {}", e)
-        ))?;
+    let gpg_key_public = match read_multiline_string_from_clearsigntoml(file_path_str, "gpg_key_public") {
+        Ok(v) => v,
+        Err(_e) => {
+            #[cfg(debug_assertions)]
+            debug_log!("ROCST: read gpg_key_public failed: {}", _e);
+            return Err(ThisProjectError::TomlVanillaDeserialStrError(
+                "ROCST: read gpg_key_public failed".into(),
+            ));
+        }
+    };
 
     // Extract user_salt_list (array of hex strings that need to be converted to u128)
-    let salt_strings = read_str_array_field_clearsigntoml(file_path_str, "user_salt_list")
-        .map_err(|e| ThisProjectError::TomlVanillaDeserialStrError(
-            format!("Failed to read user_salt_list: {}", e)
-        ))?;
+    let salt_strings = match read_str_array_field_clearsigntoml(file_path_str, "user_salt_list") {
+        Ok(v) => v,
+        Err(_e) => {
+            #[cfg(debug_assertions)]
+            debug_log!("ROCST: read user_salt_list failed: {}", _e);
+            return Err(ThisProjectError::TomlVanillaDeserialStrError(
+                "ROCST: read user_salt_list failed".into(),
+            ));
+        }
+    };
 
-    // Convert hex strings to u128 values
-    let user_salt_list: Result<Vec<u128>, ThisProjectError> = salt_strings
-        .iter()
-        .map(|hex_str| {
-            // Remove "0x" prefix if present
-            let clean_hex = hex_str.trim_start_matches("0x");
-            u128::from_str_radix(clean_hex, 16)
-                .map_err(|e| ThisProjectError::ParseIntError(e))
-        })
-        .collect();
-    let user_salt_list = user_salt_list?;
+    // Convert hex strings to u128 values.
+    // Imperative loop (vs `collect::<Result<_,_>>`) lets us tag the error
+    // with the exact element index in debug logs without bubbling internals.
+    let mut user_salt_list: Vec<u128> = Vec::with_capacity(salt_strings.len());
+    for (idx, hex_str) in salt_strings.iter().enumerate() {
+        // Remove "0x" prefix if present
+        let clean_hex = hex_str.trim_start_matches("0x");
+        match u128::from_str_radix(clean_hex, 16) {
+            Ok(v) => user_salt_list.push(v),
+            Err(_parse_err) => {
+                #[cfg(debug_assertions)]
+                debug_log!("ROCST: salt parse failed at idx {}: {:?}", idx, _parse_err);
+                let _ = idx; // silence unused-var warning in release builds
+                return Err(ThisProjectError::TomlVanillaDeserialStrError(
+                    "ROCST: salt hex parse failed".into(),
+                ));
+            }
+        }
+    }
 
     // Extract IPv4 addresses (optional)
     let ipv4_addresses = match read_str_array_field_clearsigntoml(file_path_str, "ipv4_addresses") {
         Ok(addr_strings) => {
-            let parsed_addrs: Result<Vec<std::net::Ipv4Addr>, ThisProjectError> = addr_strings
-                .iter()
-                .map(|addr_str| {
-                    addr_str.parse::<std::net::Ipv4Addr>()
-                        .map_err(|e| ThisProjectError::TomlVanillaDeserialStrError(
-                            format!("Invalid IPv4 address '{}': {}", addr_str, e)
-                        ))
-                })
-                .collect();
-            Some(parsed_addrs?)
-        },
+            let mut parsed: Vec<std::net::Ipv4Addr> = Vec::with_capacity(addr_strings.len());
+            let mut had_parse_err = false;
+            for s in addr_strings.iter() {
+                match s.parse::<std::net::Ipv4Addr>() {
+                    Ok(a) => parsed.push(a),
+                    Err(_addr_err) => {
+                        #[cfg(debug_assertions)]
+                        debug_log!("ROCST: ipv4 parse failed for '{}': {:?}", s, _addr_err);
+                        had_parse_err = true;
+                        break;
+                    }
+                }
+            }
+            if had_parse_err {
+                return Err(ThisProjectError::TomlVanillaDeserialStrError(
+                    "ROCST: ipv4 parse failed".into(),
+                ));
+            }
+            Some(parsed)
+        }
         Err(_) => None, // Field is optional
     };
 
     // Extract IPv6 addresses (optional)
     let ipv6_addresses = match read_str_array_field_clearsigntoml(file_path_str, "ipv6_addresses") {
         Ok(addr_strings) => {
-            let parsed_addrs: Result<Vec<std::net::Ipv6Addr>, ThisProjectError> = addr_strings
-                .iter()
-                .map(|addr_str| {
-                    addr_str.parse::<std::net::Ipv6Addr>()
-                        .map_err(|e| ThisProjectError::TomlVanillaDeserialStrError(
-                            format!("Invalid IPv6 address '{}': {}", addr_str, e)
-                        ))
-                })
-                .collect();
-            Some(parsed_addrs?)
-        },
+            let mut parsed: Vec<std::net::Ipv6Addr> = Vec::with_capacity(addr_strings.len());
+            let mut had_parse_err = false;
+            for s in addr_strings.iter() {
+                match s.parse::<std::net::Ipv6Addr>() {
+                    Ok(a) => parsed.push(a),
+                    Err(_addr_err) => {
+                        #[cfg(debug_assertions)]
+                        debug_log!("ROCST: ipv6 parse failed for '{}': {:?}", s, _addr_err);
+                        had_parse_err = true;
+                        break;
+                    }
+                }
+            }
+            if had_parse_err {
+                return Err(ThisProjectError::TomlVanillaDeserialStrError(
+                    "ROCST: ipv6 parse failed".into(),
+                ));
+            }
+            Some(parsed)
+        }
         Err(_) => None, // Field is optional
     };
 
@@ -2965,28 +3526,60 @@ fn read_one_collaborator_addressbook_toml(
     // then parse them manually
 
     // Extract sync_interval
-    let sync_interval_str = read_singleline_string_from_clearsigntoml(file_path_str, "sync_interval")
-        .map_err(|e| ThisProjectError::TomlVanillaDeserialStrError(
-            format!("Failed to read sync_interval: {}", e)
-        ))?;
-    let sync_interval = sync_interval_str.parse::<u64>()
-        .map_err(|e| ThisProjectError::ParseIntError(e))?;
+    let sync_interval_str = match read_singleline_string_from_clearsigntoml(file_path_str, "sync_interval") {
+        Ok(v) => v,
+        Err(_e) => {
+            #[cfg(debug_assertions)]
+            debug_log!("ROCST: read sync_interval failed: {}", _e);
+            return Err(ThisProjectError::TomlVanillaDeserialStrError(
+                "ROCST: read sync_interval failed".into(),
+            ));
+        }
+    };
+    let sync_interval: u64 = match sync_interval_str.parse::<u64>() {
+        Ok(v) => v,
+        Err(_e) => {
+            #[cfg(debug_assertions)]
+            debug_log!("ROCST: parse sync_interval failed: {:?}", _e);
+            return Err(ThisProjectError::TomlVanillaDeserialStrError(
+                "ROCST: sync_interval parse failed".into(),
+            ));
+        }
+    };
 
     // Extract updated_at_timestamp
-    let timestamp_str = read_singleline_string_from_clearsigntoml(file_path_str, "updated_at_timestamp")
-        .map_err(|e| ThisProjectError::TomlVanillaDeserialStrError(
-            format!("Failed to read updated_at_timestamp: {}", e)
-        ))?;
-    let updated_at_timestamp = timestamp_str.parse::<u64>()
-        .map_err(|e| ThisProjectError::ParseIntError(e))?;
+    let timestamp_str = match read_singleline_string_from_clearsigntoml(file_path_str, "updated_at_timestamp") {
+        Ok(v) => v,
+        Err(_e) => {
+            #[cfg(debug_assertions)]
+            debug_log!("ROCST: read updated_at_timestamp failed: {}", _e);
+            return Err(ThisProjectError::TomlVanillaDeserialStrError(
+                "ROCST: read updated_at_timestamp failed".into(),
+            ));
+        }
+    };
+    let updated_at_timestamp: u64 = match timestamp_str.parse::<u64>() {
+        Ok(v) => v,
+        Err(_e) => {
+            #[cfg(debug_assertions)]
+            debug_log!("ROCST: parse updated_at_timestamp failed: {:?}", _e);
+            return Err(ThisProjectError::TomlVanillaDeserialStrError(
+                "ROCST: updated_at_timestamp parse failed".into(),
+            ));
+        }
+    };
 
     // remove temp file
-    // At the very end of the function, clean up temp file if we created one
-    if let Some(temp_path) = temp_file_to_cleanup {
-        if let Err(e) = std::fs::remove_file(&temp_path) {
-            eprintln!("Warning: Failed to remove temporary decrypted file {}: {}", temp_path.display(), e);
-        }
-    }
+    // At the very end of the function, clean up temp file if we created one.
+    //
+    // NOTE: the original manual cleanup block lived here. It has been
+    // replaced by the `RocstTempGuard` RAII guard declared at the top of
+    // the function, which removes the temp file on Drop. This means
+    // cleanup now also fires on every early `return Err(...)` above —
+    // implementing the function-level TODO. Dropping the guard explicitly
+    // here makes the cleanup point obvious in code review; it would
+    // happen automatically at function end either way.
+    drop(temp_guard);
 
     // 3. Construct and return the CollaboratorTomlData structure
     Ok(CollaboratorTomlData {
@@ -8140,94 +8733,349 @@ fn prompt_user_for_collaborator_file_format() -> bool {
 
 /// Encrypts a clearsigned TOML file using a provided GPG public key.
 ///
-/// This function takes a clearsigned TOML file and encrypts it using the provided
-/// public key content directly, without any keyring operations. The encrypted
-/// content is saved to a new file with the .gpgtoml extension.
+/// # Project Context
+/// Part of the UMA send pipeline. Takes a clearsigned TOML file already
+/// produced by the sign step and encrypts it for a specific recipient using
+/// only that recipient's armored public key content (no keyring touch, no
+/// web-of-trust prompts). The encrypted artifact is written directly to
+/// `output_gpgtoml_path` as ASCII-armored output (`.gpgtoml`).
+///
+/// # Temp-file Strategy
+/// - Public key is staged in a temp file under
+///   `<base_uma_temp>/uma_thread_<TID>/getb_pubkey_<...>.asc`, where
+///   `<base_uma_temp>` comes from `get_base_uma_temp_directory_path()`.
+/// - Filenames include nanos + PID + thread id + atomic seq to be unique
+///   even under heavy concurrency.
+/// - Sub-directory names are plain (no hidden dot-prefixed dirs), per
+///   project policy.
 ///
 /// # Security
-/// - Uses the public key content directly without keyring operations
-/// - Creates temporary files with restricted permissions
-/// - Ensures cleanup of all temporary files
-/// - Does not modify or access the GPG keyring
+/// - Uses the supplied public key content directly; never imports into the
+///   user's keyring.
+/// - Runs gpg with `--batch --yes --trust-model always` so the call is
+///   non-interactive and never blocks on prompts.
+/// - Always best-effort removes the temporary key file (sensitive surface);
+///   `NotFound` on removal is treated as benign.
+/// - Production error messages are terse and tagged `ECTPK:` — they
+///   never leak paths, key bytes, or gpg stderr to production logs.
+///   Verbose diagnostics are emitted only under `#[cfg(debug_assertions)]`.
 ///
 /// # Arguments
 /// * `clearsigned_toml_path` - Path to the clearsigned TOML file to encrypt
-/// * `gpg_key_public` - The GPG public key content to use for encryption
-/// * `output_gpgtoml_path` - Path where the encrypted file should be saved
+/// * `gpg_key_public`        - Armored GPG public key content of the recipient
+/// * `output_gpgtoml_path`   - Destination path for the encrypted output
 ///
 /// # Returns
-/// * `Result<(), std::io::Error>` - Ok(()) on success, or an error
+/// * `Ok(())` on success.
+/// * `Err(std::io::Error)` with `ErrorKind::Other` and a terse `ECTPK:`
+///   tagged message on any failure. The function never panics and always
+///   attempts to clean up the temp key file before returning.
+///
+/// # Defensive Notes
+/// - No `?` operator: every fallible call is matched explicitly so cleanup
+///   and per-function tagging always happen.
+/// - Input file existence/size and parent-directory existence for the
+///   output are verified up front to convert confusing downstream gpg
+///   stderr into clear ECTPK-tagged errors.
 fn encrypt_clearsigned_toml_with_public_key_content(
-    clearsigned_toml_path: &Path, // * `clearsigned_toml_path` - Path to the clearsigned TOML file to encrypt
-    gpg_key_public: &str, // * `gpg_key_public` - The GPG public key content to use for encryption
-    output_gpgtoml_path: &Path, // * `output_gpgtoml_path` - Path where the encrypted file should be saved
+    clearsigned_toml_path: &Path,
+    gpg_key_public: &str,
+    output_gpgtoml_path: &Path,
 ) -> Result<(), std::io::Error> {
     use std::fs;
     use std::process::Command;
 
-    debug_log!("Starting GPG encryption of clearsigned TOML");
-    debug_log!("Input file: {}", clearsigned_toml_path.display());
-    debug_log!("Output file: {}", output_gpgtoml_path.display());
+    #[cfg(debug_assertions)]
+    debug_log!(
+        "(ECTPK) start tid={} in={:?} out={:?}",
+        uma_current_thread_id(),
+        clearsigned_toml_path,
+        output_gpgtoml_path
+    );
 
-    // Create a temporary file for the public key
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_err(|e| std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Time error: {}", e)
-        ))?
-        .as_nanos();
+    // Helper closure to build the terse, tagged io::Error consistently.
+    // Kept inline (not a separate fn) to keep the function self-contained.
+    let make_err = |tag: &'static str| -> std::io::Error {
+        std::io::Error::new(std::io::ErrorKind::Other, tag)
+    };
 
-    let temp_pubkey_filename = format!("temp_pubkey_{}.asc", timestamp);
-    let temp_dir = std::env::temp_dir();
-    let temp_pubkey_path = temp_dir.join(&temp_pubkey_filename);
-
-    // Write the public key to temporary file
-    debug_log!("Writing public key to temporary file: {}", temp_pubkey_path.display());
-    fs::write(&temp_pubkey_path, gpg_key_public)?;
-
-    // Ensure cleanup happens regardless of success or failure
-    let cleanup_result = (|| -> Result<(), std::io::Error> {
-
-        // inspection: Read the clearsigned content
-        // let clearsigned_content = fs::read_to_string(clearsigned_toml_path)?;
-
-        // Use GPG to encrypt with the public key directly (no keyring operations)
-        let output = Command::new("gpg")
-            .arg("--batch")
-            .arg("--yes")
-            .arg("--trust-model")
-            .arg("always") // Trust the key without keyring
-            .arg("--armor")
-            .arg("--encrypt")
-            .arg("--recipient-file")
-            .arg(&temp_pubkey_path) // Use the public key file directly
-            .arg("--output")
-            .arg(output_gpgtoml_path)
-            .arg(clearsigned_toml_path)
-            .output()?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("GPG encryption failed: {}", stderr)
-            ));
-        }
-
-        debug_log!("Successfully encrypted file to: {}", output_gpgtoml_path.display());
-        Ok(())
-    })();
-
-    // Always clean up the temporary public key file
-    if let Err(e) = fs::remove_file(&temp_pubkey_path) {
-        eprintln!("Warning: Failed to remove temporary public key file {}: {}",
-                  temp_pubkey_path.display(), e);
+    // 0a. Defensive: recipient key must be non-empty.
+    if gpg_key_public.trim().is_empty() {
+        #[cfg(debug_assertions)]
+        debug_log!("(ECTPK) empty recipient key");
+        return Err(make_err("ECTPK: empty recipient key"));
     }
 
-    cleanup_result
+    // 0b. Defensive: input clearsigned file must exist, be a regular file,
+    //     and be non-empty. Surfaces a clear ECTPK error instead of letting
+    //     gpg fail with a confusing "can't open" stderr.
+    match fs::metadata(clearsigned_toml_path) {
+        Ok(md) => {
+            if !md.is_file() {
+                #[cfg(debug_assertions)]
+                debug_log!("(ECTPK) input is not a regular file");
+                return Err(make_err("ECTPK: input not a file"));
+            }
+            if md.len() == 0 {
+                #[cfg(debug_assertions)]
+                debug_log!("(ECTPK) input file is empty");
+                return Err(make_err("ECTPK: input empty"));
+            }
+        }
+        Err(_meta_err) => {
+            #[cfg(debug_assertions)]
+            debug_log!("(ECTPK) input metadata failed: {:?}", _meta_err);
+            return Err(make_err("ECTPK: input missing"));
+        }
+    }
+
+    // 0c. Defensive: ensure the output's parent directory exists and is a
+    //     directory. We do NOT silently create arbitrary directories on
+    //     behalf of the caller — that is a policy decision for the caller.
+    match output_gpgtoml_path.parent() {
+        Some(parent) if parent.as_os_str().is_empty() => {
+            // Empty parent means "current dir" — accepted.
+        }
+        Some(parent) => {
+            match fs::metadata(parent) {
+                Ok(md) if md.is_dir() => {
+                    #[cfg(debug_assertions)]
+                    debug_log!("(ECTPK) output parent ok");
+                }
+                Ok(_) => {
+                    #[cfg(debug_assertions)]
+                    debug_log!("(ECTPK) output parent exists but is not a dir");
+                    return Err(make_err("ECTPK: out parent not a dir"));
+                }
+                Err(_meta_err) => {
+                    #[cfg(debug_assertions)]
+                    debug_log!(
+                        "(ECTPK) output parent missing: {:?}",
+                        _meta_err
+                    );
+                    return Err(make_err("ECTPK: out parent missing"));
+                }
+            }
+        }
+        None => {
+            // No parent component at all (e.g. root) — reject defensively.
+            #[cfg(debug_assertions)]
+            debug_log!("(ECTPK) output path has no parent component");
+            return Err(make_err("ECTPK: out path invalid"));
+        }
+    }
+
+    // 1. Build a unique temp key path inside this thread's UMA sub-directory.
+    //    `uma_build_unique_temp_path` returns ThisProjectError; we translate
+    //    to io::Error here while preserving the ECTPK prefix.
+    let temp_pubkey_path = match uma_build_unique_temp_path("ectpk_pubkey", "asc") {
+        Ok(p) => p,
+        Err(_uma_err) => {
+            #[cfg(debug_assertions)]
+            debug_log!("(ECTPK) temp path build failed: {:?}", _uma_err);
+            return Err(make_err("ECTPK: temp path build failed"));
+        }
+    };
+
+    #[cfg(debug_assertions)]
+    debug_log!("(ECTPK) temp_pubkey_path={:?}", temp_pubkey_path);
+
+    // 2. Write the armored public key to the temp file.
+    if let Err(_write_err) = fs::write(&temp_pubkey_path, gpg_key_public) {
+        #[cfg(debug_assertions)]
+        debug_log!("(ECTPK) temp key write failed: {:?}", _write_err);
+        uma_best_effort_remove(&temp_pubkey_path);
+        return Err(make_err("ECTPK: temp key write failed"));
+    }
+
+    // 3. Verify the temp key landed on disk and is non-empty.
+    match fs::metadata(&temp_pubkey_path) {
+        Ok(md) if md.is_file() && md.len() > 0 => {
+            #[cfg(debug_assertions)]
+            debug_log!("(ECTPK) temp key verified, size={}", md.len());
+        }
+        Ok(_) => {
+            #[cfg(debug_assertions)]
+            debug_log!("(ECTPK) temp key present but empty/non-file");
+            uma_best_effort_remove(&temp_pubkey_path);
+            return Err(make_err("ECTPK: temp key invalid post-write"));
+        }
+        Err(_verify_err) => {
+            #[cfg(debug_assertions)]
+            debug_log!(
+                "(ECTPK) temp key vanished post-write: {:?}",
+                _verify_err
+            );
+            // Nothing to remove (already gone).
+            return Err(make_err("ECTPK: temp key vanished"));
+        }
+    }
+
+    // 4. Invoke gpg. We compute the gpg outcome first, then ALWAYS clean
+    //    up the temp key file, then evaluate the outcome. Cleanup never
+    //    masks the real error.
+    let gpg_result = Command::new("gpg")
+        .arg("--batch")
+        .arg("--yes")
+        .arg("--trust-model").arg("always") // one-shot recipient, no WoT
+        .arg("--armor")
+        .arg("--encrypt")
+        .arg("--recipient-file").arg(&temp_pubkey_path)
+        .arg("--output").arg(output_gpgtoml_path)
+        .arg(clearsigned_toml_path)
+        .output();
+
+    // 5. Pull the outcome out before cleanup so we don't drop information.
+    let gpg_output = match gpg_result {
+        Ok(out) => out,
+        Err(_spawn_err) => {
+            #[cfg(debug_assertions)]
+            debug_log!("(ECTPK) gpg spawn/output failed: {:?}", _spawn_err);
+            uma_best_effort_remove(&temp_pubkey_path);
+            return Err(make_err("ECTPK: gpg invocation failed"));
+        }
+    };
+
+    // 6. Best-effort cleanup of the temp key. NotFound is benign.
+    uma_best_effort_remove(&temp_pubkey_path);
+
+    // 7. Evaluate gpg's exit status.
+    if !gpg_output.status.success() {
+        #[cfg(debug_assertions)]
+        {
+            let stderr = String::from_utf8_lossy(&gpg_output.stderr);
+            debug_log!("(ECTPK) gpg encrypt nonzero exit: {}", stderr);
+        }
+        // If gpg created a partial output file, remove it so the caller
+        // never sees a truncated/garbage encrypted artifact.
+        match fs::metadata(output_gpgtoml_path) {
+            Ok(md) if md.is_file() => {
+                if let Err(_rm_err) = fs::remove_file(output_gpgtoml_path) {
+                    #[cfg(debug_assertions)]
+                    debug_log!(
+                        "(ECTPK) failed to remove partial output: {:?}",
+                        _rm_err
+                    );
+                    // Continue: surfacing the gpg failure is more important.
+                }
+            }
+            _ => {
+                // No partial file present, nothing to clean.
+            }
+        }
+        return Err(make_err("ECTPK: gpg encrypt nonzero exit"));
+    }
+
+    // 8. Defensive post-condition: gpg reported success — verify the output
+    //    file actually exists, is a file, and is non-empty.
+    match fs::metadata(output_gpgtoml_path) {
+        Ok(md) if md.is_file() && md.len() > 0 => {
+            #[cfg(debug_assertions)]
+            debug_log!("(ECTPK) ok output_size={}", md.len());
+            Ok(())
+        }
+        Ok(_) => {
+            #[cfg(debug_assertions)]
+            debug_log!("(ECTPK) output present but empty/non-file");
+            // Try to remove the bad artifact so downstream stages don't
+            // consume a zero-byte "encrypted" file.
+            let _ = fs::remove_file(output_gpgtoml_path);
+            Err(make_err("ECTPK: output invalid post-encrypt"))
+        }
+        Err(_verify_err) => {
+            #[cfg(debug_assertions)]
+            debug_log!(
+                "(ECTPK) output missing post-encrypt: {:?}",
+                _verify_err
+            );
+            Err(make_err("ECTPK: output missing post-encrypt"))
+        }
+    }
 }
 
+#[cfg(test)]
+mod ectpk_behavior_tests {
+    use super::*;
+    use std::io::Write;
+
+    /// Empty recipient key must be rejected up-front with an ECTPK-tagged error.
+    #[test]
+    fn ectpk_rejects_empty_recipient_key() {
+        let in_path  = std::path::Path::new("/tmp/ectpk_test_in_should_not_be_read.toml");
+        let out_path = std::path::Path::new("/tmp/ectpk_test_out_should_not_exist.gpgtoml");
+        match encrypt_clearsigned_toml_with_public_key_content(in_path, "   ", out_path) {
+            Err(e) => {
+                let msg = e.to_string();
+                assert!(
+                    msg.starts_with("ECTPK:"),
+                    "expected ECTPK-tagged error, got: {}",
+                    msg
+                );
+            }
+            Ok(_) => panic!("must not succeed with empty key"),
+        }
+    }
+
+    /// Missing input must be rejected with ECTPK tag, not panic, not call gpg.
+    #[test]
+    fn ectpk_rejects_missing_input() {
+        let bogus_in = std::path::Path::new("/nonexistent/ectpk_no_such_file.toml");
+        let bogus_out = std::path::Path::new("/tmp/ectpk_should_not_be_created.gpgtoml");
+        let key = "-----BEGIN PGP PUBLIC KEY BLOCK-----\nx\n-----END PGP PUBLIC KEY BLOCK-----\n";
+        match encrypt_clearsigned_toml_with_public_key_content(bogus_in, key, bogus_out) {
+            Err(e) => {
+                let msg = e.to_string();
+                assert!(
+                    msg.starts_with("ECTPK:"),
+                    "expected ECTPK-tagged error, got: {}",
+                    msg
+                );
+            }
+            Ok(_) => panic!("must not succeed with missing input"),
+        }
+    }
+
+    /// Output parent directory missing must produce an ECTPK-tagged error.
+    #[test]
+    fn ectpk_rejects_missing_output_parent() {
+        // Create a tiny real input file so the input-existence check passes
+        // and we get to the parent-dir check.
+        let tmp_in = std::env::temp_dir().join(format!(
+            "ectpk_test_input_{}_{}.toml",
+            std::process::id(),
+            uma_current_thread_id()
+        ));
+        {
+            let mut f = match std::fs::File::create(&tmp_in) {
+                Ok(f) => f,
+                Err(_) => return, // env issue; skip
+            };
+            if f.write_all(b"hello = 1\n").is_err() {
+                return; // env issue; skip
+            }
+        }
+
+        let bogus_out = std::path::Path::new(
+            "/this/directory/should/definitely/not/exist/x.gpgtoml"
+        );
+        let key = "-----BEGIN PGP PUBLIC KEY BLOCK-----\nx\n-----END PGP PUBLIC KEY BLOCK-----\n";
+
+        let result = encrypt_clearsigned_toml_with_public_key_content(&tmp_in, key, bogus_out);
+        let _ = std::fs::remove_file(&tmp_in);
+
+        match result {
+            Err(e) => {
+                let msg = e.to_string();
+                assert!(
+                    msg.starts_with("ECTPK:"),
+                    "expected ECTPK-tagged error, got: {}",
+                    msg
+                );
+            }
+            Ok(_) => panic!("must not succeed with missing output parent"),
+        }
+    }
+}
 
 // TODO, maybe add to buffy
 /// Writes a single hotkey command with color highlighting directly to terminal
@@ -13004,7 +13852,7 @@ mod tests_clearsigned_v2 {
 
     /// Helper function to create test temp directory
     fn create_test_temp_dir() -> Result<PathBuf, io::Error> {
-        let temp_base = std::env::temp_dir();
+        let temp_base = get_base_uma_temp_directory_path()?;
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Time error: {}", e)))?
@@ -13439,7 +14287,7 @@ mod tests_gpgtoml_v2 {
 
     /// Helper function to create test temp directory
     fn create_test_temp_dir() -> Result<PathBuf, io::Error> {
-        let temp_base = std::env::temp_dir();
+        let temp_base = get_base_uma_temp_directory_path()?;
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Time error: {}", e)))?
@@ -22942,25 +23790,60 @@ mod getb_behavior_tests {
 /// temporary files and using GPG in a non-interactive, batch mode.
 ///
 /// # Security Considerations
-/// - Temporary files are created and immediately deleted after use
-/// - Uses batch mode to prevent interactive prompts
-/// - Minimizes potential security risks associated with key handling
+/// - Temporary files are created and immediately deleted after use (best-effort,
+///   cleanup is attempted even when decryption fails).
+/// - Uses batch mode to prevent interactive prompts.
+/// - Minimizes potential security risks associated with key handling.
+/// - Production error messages are terse and reveal **no paths, no key material,
+///   no plaintext, no gpg stderr** — verbose details are emitted only under
+///   `#[cfg(debug_assertions)]`.
+/// - Every error is tagged with the unique prefix `GDFB:` so production logs can
+///   trace failures back to this exact function without leaking sensitive data.
+///
+/// # Project Context
+/// Part of the RSSFLL (Read-Send-Sign-File-Local-Loop) pipeline, the inverse of
+/// `gpg_encrypt_to_bytes`. The caller receives ciphertext bytes from a peer and
+/// must recover plaintext using the local user's private key, without leaving
+/// sensitive material on disk after the call returns.
+///
+/// # Temp-file Strategy
+/// All temporary files live under the project's canonical UMA temp directory
+/// returned by `get_base_uma_temp_directory_path()` (no use of `/tmp`,
+/// no hidden dot-prefixed directories). Each thread works inside its own
+/// sub-directory `<base>/uma_thread_<TID>/` so concurrent decryption calls
+/// cannot delete each other's in-flight files. Filenames are tagged with
+/// nanos + PID + thread id + atomic sequence to make collisions essentially
+/// impossible even under heavy concurrency.
+///
+/// # Behavioral Note (preserved from original implementation)
+/// The current implementation writes both the private key and the ciphertext
+/// to temp files **and** also pipes the ciphertext to gpg via stdin. gpg here
+/// reads from stdin (`-`), so decryption actually relies on the user's local
+/// keyring — the temp key file write is preserved for parity with the prior
+/// behavior. If a future revision wants to use a keyring-isolated decrypt,
+/// switch to `--homedir <isolated>` + `--import` of the temp key file. This
+/// is intentionally out of scope here.
 ///
 /// # Arguments
-/// * `data` - A byte slice containing the encrypted data to be decrypted
-/// * `your_gpg_key` - A string containing the GPG private key used for decryption
+/// * `data` - A byte slice containing the encrypted data to be decrypted.
+/// * `your_gpg_key` - A string containing the GPG private key used for decryption.
 ///
 /// # Returns
-/// * `Ok(Vec<u8>)` - The decrypted data as a vector of bytes if decryption is successful
-/// * `Err(ThisProjectError)` - An error if decryption fails, with details about the failure
+/// * `Ok(Vec<u8>)` - The decrypted data as a vector of bytes if decryption is successful.
+/// * `Err(ThisProjectError)` - An error if decryption fails, with a terse,
+///   function-tagged message in production builds.
 ///
 /// # Errors
 /// This function can return errors in several scenarios:
 /// - Invalid or incorrect GPG key
+/// - Empty input data or empty key (rejected up-front)
 /// - Corrupted encrypted data
 /// - GPG command-line tool not installed or accessible
 /// - Insufficient permissions
-/// - Temporary file creation or deletion failures
+/// - Temporary file creation, write, flush, or deletion failures
+/// - Per-thread temp sub-directory could not be created
+///
+/// All errors are returned as `ThisProjectError::GpgError("GDFB: <reason>")`.
 ///
 /// # Example
 /// ```rust
@@ -22972,72 +23855,300 @@ mod getb_behavior_tests {
 ///         println!("Decryption successful!");
 ///     },
 ///     Err(e) => {
-///         // Handle decryption error
+///         // Handle decryption error — caller MUST NOT halt the pipeline;
+///         // log terse, skip the item, continue.
 ///         eprintln!("Decryption failed: {:?}", e);
 ///     }
 /// }
 /// ```
 ///
 /// # Notes
-/// - Requires GPG to be installed on the system
-/// - Temporary files are created in the system's temporary directory
-/// - The function uses non-interactive GPG mode to prevent hanging on prompts
+/// - Requires GPG to be installed on the system.
+/// - Temporary files are created in the project's UMA temp directory under a
+///   per-thread sub-directory (see "Temp-file Strategy" above).
+/// - The function uses non-interactive GPG mode (`--batch --yes --no-tty
+///   --quiet`) to prevent hanging on prompts.
 ///
 /// # Performance
-/// - Creates temporary files for key and encrypted data
-/// - Spawns a GPG subprocess for decryption
-/// - Recommended for moderate-sized encrypted data
+/// - Creates two temporary files (key + ciphertext) per call.
+/// - Spawns a GPG subprocess for decryption.
+/// - Recommended for moderate-sized encrypted data.
 ///
 /// # Thread Safety
-/// - Not guaranteed to be thread-safe due to temporary file creation
-/// - Should be used with caution in multi-threaded contexts
+/// - Safe to call concurrently from multiple threads: each thread uses its
+///   own temp sub-directory and uniquely-tagged filenames, so calls cannot
+///   collide on temp paths (this addresses the same race-class bug that
+///   previously caused "gpg: can't open ..." errors in the sign path).
+/// - No shared mutable state is touched beyond the process-local atomic
+///   counter that hands out filename sequence numbers.
+///
+/// # Defensive Programming
+/// - All fallible operations are matched explicitly (no `?`).
+/// - Temp file cleanup is always attempted on every exit path, success or
+///   failure (`NotFound` during cleanup is treated as benign).
+/// - If writing to gpg's stdin fails, the child process is killed and
+///   reaped to avoid zombies.
+/// - Empty inputs and empty outputs (despite a success exit status) are
+///   detected and surfaced as tagged errors rather than silently passed on.
 fn gpg_decrypt_from_bytes(data: &[u8], your_gpg_key: &str) -> Result<Vec<u8>, ThisProjectError> {
     #[cfg(debug_assertions)]
-    debug_log("gpg_decrypt_from_bytes()-1. Start! ");
+    debug_log!(
+        "(GDFB) start tid={} data_len={}",
+        uma_current_thread_id(),
+        data.len()
+    );
 
-    // 1. Create temporary files
-    let mut temp_key_file = std::env::temp_dir();
-    temp_key_file.push("uma_temp_privkey.asc");
-    fs::write(&temp_key_file, your_gpg_key)?;
+    // 0. Defensive input checks. Empty key or empty ciphertext can never
+    //    produce valid plaintext; reject up-front with a tagged error rather
+    //    than wasting a gpg invocation and leaking gpg-stderr details.
+    if your_gpg_key.trim().is_empty() {
+        return Err(ThisProjectError::GpgError(
+            "GDFB: empty private key".into(),
+        ));
+    }
+    if data.is_empty() {
+        return Err(ThisProjectError::GpgError(
+            "GDFB: empty ciphertext".into(),
+        ));
+    }
 
-    let mut temp_encrypted_file = std::env::temp_dir();
-    temp_encrypted_file.push("uma_temp_encrypted.gpg");
-    fs::write(&temp_encrypted_file, data)?;
+    // 1. Build unique temp file paths inside this thread's sub-directory
+    //    under the project's canonical UMA temp dir. Two separate files:
+    //    one for the private key, one for the encrypted blob.
+    let temp_key_file = match uma_build_unique_temp_path("gdfb_key", "asc") {
+        Ok(p) => p,
+        Err(e) => return Err(e),
+    };
+    let temp_encrypted_file = match uma_build_unique_temp_path("gdfb_enc", "gpg") {
+        Ok(p) => p,
+        Err(e) => {
+            // The key path was reserved (filename only, not created on disk),
+            // but the encrypted-path build failed. Nothing on disk to clean.
+            #[cfg(debug_assertions)]
+            debug_log!("(GDFB) encrypted temp path build failed");
+            let _ = e;
+            return Err(ThisProjectError::GpgError(
+                "GDFB: temp path build failed".into(),
+            ));
+        }
+    };
 
-    // 2. Run GPG decryption
-    let mut child = StdCommand::new("gpg")
+    #[cfg(debug_assertions)]
+    debug_log!(
+        "(GDFB) temp_key_file={:?} temp_encrypted_file={:?}",
+        temp_key_file,
+        temp_encrypted_file
+    );
+
+    // 2. Write the private key to its temp file.
+    //    NOTE: preserved-behavior — this file is written but the current
+    //    decrypt invocation reads ciphertext from stdin and relies on the
+    //    user's local keyring. See "Behavioral Note" in the docstring.
+    if let Err(_write_err) = fs::write(&temp_key_file, your_gpg_key) {
+        #[cfg(debug_assertions)]
+        debug_log!("(GDFB) write key temp failed: {:?}", _write_err);
+        uma_best_effort_remove(&temp_key_file);
+        return Err(ThisProjectError::GpgError(
+            "GDFB: key temp write failed".into(),
+        ));
+    }
+
+    // 3. Write the encrypted payload to its temp file.
+    if let Err(_write_err) = fs::write(&temp_encrypted_file, data) {
+        #[cfg(debug_assertions)]
+        debug_log!("(GDFB) write encrypted temp failed: {:?}", _write_err);
+        uma_best_effort_remove(&temp_key_file);
+        uma_best_effort_remove(&temp_encrypted_file);
+        return Err(ThisProjectError::GpgError(
+            "GDFB: encrypted temp write failed".into(),
+        ));
+    }
+
+    // 4. Spawn gpg in batch / non-interactive mode reading ciphertext from stdin.
+    let spawn_result = StdCommand::new("gpg")
         .arg("--decrypt")
         .arg("--batch")  // Non-interactive mode
         .arg("--yes")    // Assume yes to prompts
         .arg("--quiet")  // Minimal output
         .arg("--no-tty") // No terminal interaction
-        .arg("-") // Read from stdin
+        .arg("-")        // Read from stdin
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .spawn()?;
+        .spawn();
 
-    // Write the encrypted data to the child process's standard input
-    if let Some(stdin) = child.stdin.as_mut() {
-        stdin.write_all(data)?;
-        stdin.flush()?;
+    let mut child = match spawn_result {
+        Ok(c) => c,
+        Err(_spawn_err) => {
+            #[cfg(debug_assertions)]
+            debug_log!("(GDFB) gpg spawn failed: {:?}", _spawn_err);
+            uma_best_effort_remove(&temp_key_file);
+            uma_best_effort_remove(&temp_encrypted_file);
+            return Err(ThisProjectError::GpgError(
+                "GDFB: gpg spawn failed".into(),
+            ));
+        }
+    };
+
+    // 5. Write the encrypted data to the child process's standard input,
+    //    then flush. Closing stdin (via drop) signals EOF so gpg can finish.
+    match child.stdin.take() {
+        Some(mut stdin_handle) => {
+            if let Err(_write_err) = stdin_handle.write_all(data) {
+                #[cfg(debug_assertions)]
+                debug_log!("(GDFB) stdin write failed: {:?}", _write_err);
+                let _ = child.kill();
+                let _ = child.wait();
+                uma_best_effort_remove(&temp_key_file);
+                uma_best_effort_remove(&temp_encrypted_file);
+                return Err(ThisProjectError::GpgError(
+                    "GDFB: stdin write failed".into(),
+                ));
+            }
+            if let Err(_flush_err) = stdin_handle.flush() {
+                #[cfg(debug_assertions)]
+                debug_log!("(GDFB) stdin flush failed: {:?}", _flush_err);
+                let _ = child.kill();
+                let _ = child.wait();
+                uma_best_effort_remove(&temp_key_file);
+                uma_best_effort_remove(&temp_encrypted_file);
+                return Err(ThisProjectError::GpgError(
+                    "GDFB: stdin flush failed".into(),
+                ));
+            }
+            // stdin_handle dropped here -> EOF delivered to gpg.
+        }
+        None => {
+            #[cfg(debug_assertions)]
+            debug_log!("(GDFB) gpg child had no stdin handle");
+            let _ = child.kill();
+            let _ = child.wait();
+            uma_best_effort_remove(&temp_key_file);
+            uma_best_effort_remove(&temp_encrypted_file);
+            return Err(ThisProjectError::GpgError(
+                "GDFB: no stdin handle".into(),
+            ));
+        }
     }
 
-    let output = child.wait_with_output()?;
+    // 6. Wait for gpg to finish and collect its output.
+    let output = match child.wait_with_output() {
+        Ok(o) => o,
+        Err(_wait_err) => {
+            #[cfg(debug_assertions)]
+            debug_log!("(GDFB) wait_with_output failed: {:?}", _wait_err);
+            uma_best_effort_remove(&temp_key_file);
+            uma_best_effort_remove(&temp_encrypted_file);
+            return Err(ThisProjectError::GpgError(
+                "GDFB: wait failed".into(),
+            ));
+        }
+    };
 
     #[cfg(debug_assertions)]
-    debug_log!("gpg_decrypt_from_bytes()-4. output {:?}", output);
+    debug_log!(
+        "(GDFB) gpg exit status success={} stdout_len={} stderr_len={}",
+        output.status.success(),
+        output.stdout.len(),
+        output.stderr.len()
+    );
 
-    // 3. Remove temporary files (important for security)
-    fs::remove_file(temp_key_file)?;
-    fs::remove_file(temp_encrypted_file)?;
+    // 7. Always remove the temporary files (important for security —
+    //    private key and ciphertext both must not linger on disk).
+    //    `NotFound` here is benign and silently absorbed.
+    uma_best_effort_remove(&temp_key_file);
+    uma_best_effort_remove(&temp_encrypted_file);
 
-    // 4. Handle output and errors
-    if output.status.success() {
-        Ok(output.stdout)
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(ThisProjectError::GpgError(format!("GPG decryption failed: {}", stderr)))
+    // 8. Handle output and errors.
+    if !output.status.success() {
+        #[cfg(debug_assertions)]
+        {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            debug_log!("(GDFB) gpg decrypt nonzero exit: {}", stderr);
+        }
+        return Err(ThisProjectError::GpgError(
+            "GDFB: gpg decrypt nonzero exit".into(),
+        ));
+    }
+
+    // Defensive: success with empty plaintext is unexpected for a non-empty
+    // ciphertext input. Treat as an error rather than passing zero bytes
+    // up the pipeline.
+    if output.stdout.is_empty() {
+        #[cfg(debug_assertions)]
+        debug_log!("(GDFB) empty plaintext despite success status");
+        return Err(ThisProjectError::GpgError(
+            "GDFB: empty plaintext".into(),
+        ));
+    }
+
+    #[cfg(debug_assertions)]
+    debug_log!("(GDFB) ok plaintext_len={}", output.stdout.len());
+
+    Ok(output.stdout)
+}
+
+#[cfg(test)]
+mod gdfb_behavior_tests {
+    use super::*;
+
+    /// Empty private key must be rejected up-front with a GDFB-tagged error.
+    #[test]
+    fn gdfb_rejects_empty_private_key() {
+        let some_bytes = b"\x00\x01\x02\x03";
+        match gpg_decrypt_from_bytes(some_bytes, "   ") {
+            Err(ThisProjectError::GpgError(msg)) => {
+                assert!(
+                    msg.starts_with("GDFB:"),
+                    "expected GDFB-tagged error, got: {}",
+                    msg
+                );
+            }
+            Ok(_) => panic!("must not succeed with empty key"),
+            Err(other) => panic!("unexpected error variant: {:?}", other),
+        }
+    }
+
+    /// Empty ciphertext must be rejected up-front.
+    #[test]
+    fn gdfb_rejects_empty_ciphertext() {
+        let placeholder_key = "-----BEGIN PGP PRIVATE KEY BLOCK-----\nx\n-----END PGP PRIVATE KEY BLOCK-----\n";
+        match gpg_decrypt_from_bytes(&[], placeholder_key) {
+            Err(ThisProjectError::GpgError(msg)) => {
+                assert!(
+                    msg.starts_with("GDFB:"),
+                    "expected GDFB-tagged error, got: {}",
+                    msg
+                );
+            }
+            Ok(_) => panic!("must not succeed with empty ciphertext"),
+            Err(other) => panic!("unexpected error variant: {:?}", other),
+        }
+    }
+
+    /// Garbage ciphertext must produce a GDFB-tagged error, not a panic and
+    /// not a leaked gpg-stderr passthrough.
+    #[test]
+    fn gdfb_garbage_ciphertext_returns_tagged_error() {
+        let placeholder_key = "-----BEGIN PGP PRIVATE KEY BLOCK-----\nx\n-----END PGP PRIVATE KEY BLOCK-----\n";
+        let garbage = b"not a valid gpg message at all";
+        match gpg_decrypt_from_bytes(garbage, placeholder_key) {
+            Err(ThisProjectError::GpgError(msg)) => {
+                assert!(
+                    msg.starts_with("GDFB:"),
+                    "expected GDFB-tagged error, got: {}",
+                    msg
+                );
+                // Must NOT contain gpg's raw stderr text in production format.
+                assert!(
+                    !msg.contains("gpg:"),
+                    "production error message leaked gpg stderr: {}",
+                    msg
+                );
+            }
+            Ok(_) => panic!("garbage must not decrypt"),
+            Err(other) => panic!("unexpected error variant: {:?}", other),
+        }
     }
 }
 
@@ -23459,7 +24570,363 @@ mod debug_file_print_tests {
     }
 }
 
+// // this old version works, but temp-file system is not ideal
+// /// Processes a file through the complete secure transmission pipeline with OTP encryption.
+// ///
+// /// # Project Context
+// /// This is the complete "sender" operation for secure file transmission in the Uma system.
+// /// It transforms a plaintext TOML configuration file through multiple security layers:
+// /// 1. **Clearsigning** (GPG): Ensures integrity and non-repudiation (proves sender identity)
+// /// 2. **Encryption** (GPG): Ensures confidentiality (only recipient can decrypt)
+// /// 3. **OTP XOR** (Padnet): Adds information-theoretic security (unbreakable if pad is secure)
+// ///
+// /// The combination provides:
+// /// - Authenticity: Clearsignature proves who sent it
+// /// - Confidentiality: Encryption prevents eavesdropping
+// /// - Perfect Secrecy: OTP makes cryptanalysis mathematically impossible
+// ///
+// /// # Critical Security Properties
+// /// - **Atomic**: Complete success or complete failure (no partial processing)
+// /// - **Cleanup**: All temporary files deleted even on error
+// /// - **Size Limits**: Defends against accidental/malicious large file processing
+// /// - **Pad Consumption**: Only consumes OTP pad material on successful completion
+// ///
+// /// # Pipeline Steps
+// /// ```text
+// /// Input: original.toml (plaintext TOML file)
+// ///   ↓
+// /// [1] GPG Clearsign → Vec<u8> (signed message)
+// ///   ↓
+// /// [2] GPG Encrypt → Vec<u8> (encrypted message)
+// ///   ↓
+// /// [3] Write to temp_file_1 (intermediate storage)
+// ///   ↓
+// /// [4] XOR with OTP Pad → temp_file_2 (OTP encrypted)
+// ///   ↓
+// /// [5] Read temp_file_2 → Vec<u8> (final payload)
+// ///   ↓
+// /// [6] Cleanup temp files (security hygiene)
+// ///   ↓
+// /// Output: (Vec<u8>, PadIndex) - ready for transmission
+// /// ```
+// ///
+// /// # Arguments
+// /// * `original_target_file_path` - Absolute path to plaintext TOML file to process
+// /// * `recipient_public_key` - Recipient's GPG public key (ASCII-armored format)
+// /// * `padnet_directory_path` - Absolute path to OTP padset directory
+// ///
+// /// # Returns
+// /// * `Ok((Vec<u8>, PadIndex))` - Success:
+// ///   - `Vec<u8>`: Final OTP-encrypted bytes (ready to transmit)
+// ///   - `PadIndex`: Starting pad index used (recipient needs this to decrypt)
+// /// * `Err(ThisProjectError)` - Operation failed at any stage
+// ///
+// /// # Error Handling Strategy
+// /// All errors result in complete rollback:
+// /// - Temporary files are deleted (even if error occurs)
+// /// - No partial output is returned
+// /// - OTP pad material is only consumed if entire pipeline succeeds
+// /// - Clear error messages with function prefix "PWPCTGTOTSB"
+// ///
+// /// # Cleanup Guarantee
+// /// Uses `TempFileCleanupGuard` RAII pattern to ensure temp files are deleted:
+// /// - On success: Files deleted before return
+// /// - On error: Files deleted before error propagation
+// /// - On panic: Files deleted by Drop trait (defense-in-depth)
+// ///
+// /// # Example Usage
+// /// ```rust,no_run
+// /// use std::path::Path;
+// ///
+// /// let toml_file = Path::new("/home/user/config/message.toml");
+// /// let recipient_key = "-----BEGIN PGP PUBLIC KEY BLOCK-----\n...";
+// /// let padset_dir = Path::new("/home/user/.uma/padsets/alice");
+// ///
+// /// match padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
+// ///     toml_file,
+// ///     recipient_key,
+// ///     padset_dir,
+// /// ) {
+// ///     Ok((encrypted_bytes, pad_index)) => {
+// ///         println!("Ready to send: {} bytes", encrypted_bytes.len());
+// ///         println!("Tell recipient to start from pad index: {:?}", pad_index);
+// ///         // ... send encrypted_bytes over network ...
+// ///     },
+// ///     Err(e) => {
+// ///         eprintln!("Encryption pipeline failed: {}", e);
+// ///         // No cleanup needed - handled automatically
+// ///     }
+// /// }
+// /// ```
+// ///
+// /// # Security Considerations
+// /// - Original file is read but never modified
+// /// - Intermediate files contain sensitive data (restrictive permissions)
+// /// - All temp files deleted (no sensitive data left on disk)
+// /// - Size limits prevent resource exhaustion attacks
+// /// - OTP pads are consumed destructively (cannot be reused)
+// ///
+// /// # Performance Characteristics
+// /// For typical small TOML files (< 100KB):
+// /// - Clearsigning: ~50-100ms (GPG process spawn)
+// /// - Encryption: ~50-100ms (GPG process spawn)
+// /// - File I/O: ~5-10ms total
+// /// - XOR operation: ~1-5ms
+// /// - **Total**: ~100-250ms typical
+// ///
+// /// # Failure Modes
+// /// - File too large: Fails immediately, no processing
+// /// - GPG clearsign fails: No temp files created
+// /// - GPG encrypt fails: No temp files created
+// /// - Temp file creation fails: Previous temp files cleaned up
+// /// - XOR operation fails: All temp files cleaned up, no pad consumed
+// /// - Read result fails: Temp files cleaned up, pad WAS consumed (unrecoverable)
+// ///
+// /// # Related Functions
+// /// - `gpg_clearsign_file_to_sendbytes`: Step 1 (clearsigning)
+// /// - `gpg_encrypt_to_bytes`: Step 2 (encryption)
+// /// - `padnet_writer_strict_cleanup_xor_file_to_resultpath`: Step 4 (OTP)
+// /// - `write_bytes_to_file_atomic`: Helper for temp file writing
+// /// - `read_file_to_bytes`: Helper for reading OTP result
+// fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
+//     original_target_file_path: &Path,
+//     recipient_public_key: &str,
+//     padnet_directory_path: &Path,
+// ) -> Result<(Vec<u8>, PadIndex), ThisProjectError> {
+//     debug_log!("PWPCTGTOTSB: start padnet");
 
+//     // =============================================================================
+//     // Input Validation (fail fast before any processing)
+//     // =============================================================================
+
+//     // Debug assertions for development
+//     #[cfg(all(debug_assertions, not(test)))]
+//     {
+//         debug_assert!(
+//             original_target_file_path.is_absolute(),
+//             "PWPCTGTOTSB: original_target_file_path must be absolute"
+//         );
+//         debug_assert!(
+//             padnet_directory_path.is_absolute(),
+//             "PWPCTGTOTSB: padnet_directory_path must be absolute"
+//         );
+//     }
+
+//     // Production safety checks
+//     if !original_target_file_path.is_absolute() {
+//         return Err(ThisProjectError::InvalidInput(
+//             "PWPCTGTOTSB: original_target_file_path must be absolute".to_string()
+//         ));
+//     }
+//     if !padnet_directory_path.is_absolute() {
+//         return Err(ThisProjectError::InvalidInput(
+//             "PWPCTGTOTSB: padnet_directory_path must be absolute".to_string()
+//         ));
+//     }
+
+//     #[cfg(debug_assertions)]
+//     debug_log!("PWPCTGTOTSB: padnet_directory_path {:?}", padnet_directory_path);
+
+
+//     // Check that original file exists and is within size limits
+//     // This prevents wasting GPG processing time on invalid inputs
+//     let original_metadata = fs::metadata(original_target_file_path)
+//         .map_err(|e| {
+//             ThisProjectError::IoError(std::io::Error::new(
+//                 e.kind(),
+//                 format!("PWPCTGTOTSB: cannot access original file: {}", e),
+//             ))
+//         })?;
+
+//     let original_size = original_metadata.len() as usize;
+//     if original_size > MAX_PROCESSABLE_FILE_SIZE_BYTES {
+//         return Err(ThisProjectError::FileTooLarge {
+//             path: original_target_file_path.to_path_buf(),
+//             size_bytes: original_size,
+//             max_allowed: MAX_PROCESSABLE_FILE_SIZE_BYTES,
+//         });
+//     }
+
+//     // =============================================================================
+//     // Setup: Initialize cleanup guard for automatic temp file deletion
+//     // =============================================================================
+
+//     let mut cleanup_guard = TempFileCleanupGuard::new();
+
+//     // =============================================================================
+//     // Step 1: Clearsign the original file (integrity + non-repudiation)
+//     // =============================================================================
+
+//     #[cfg(debug_assertions)]
+//     {
+//     debug_log!("PWPCTGTOTSB: Step 1 - Clearsigning file");
+//     debug_log!("PWPCTGTOTSB: Step 1 - original_target_file_path {:?}", original_target_file_path);
+//     }
+//     let clearsigned_content = gpg_clearsign_file_to_sendbytes(original_target_file_path)
+//         .map_err(|e| {
+//             // Enhance error with context
+//             ThisProjectError::GpgError(format!(
+//                 "PWPCTGTOTSB: clearsign failed: {}", e
+//             ))
+//         })?;
+
+//     #[cfg(debug_assertions)]
+//     debug_log!("PWPCTGTOTSB: Clearsigned {} bytes", clearsigned_content.len());
+
+//     // =============================================================================
+//     // Step 2: Encrypt the clearsigned content (confidentiality)
+//     // =============================================================================
+
+//     #[cfg(debug_assertions)]
+//     debug_log!("PWPCTGTOTSB: Step 2 - Encrypting clearsigned content");
+
+//     let encrypted_content = gpg_encrypt_to_bytes(&clearsigned_content, recipient_public_key)
+//         .map_err(|e| {
+//             ThisProjectError::GpgError(format!(
+//                 "PWPCTGTOTSB: encryption failed: {}", e
+//             ))
+//         })?;
+
+//     #[cfg(debug_assertions)]
+//     debug_log!("PWPCTGTOTSB: Encrypted {} bytes", encrypted_content.len());
+
+//     // =============================================================================
+//     // Step 3: Create temporary file #1 for GPG-encrypted data (XOR input)
+//     // =============================================================================
+
+//     #[cfg(debug_assertions)]
+//     debug_log!("PWPCTGTOTSB: Step 3 - Creating temp file for encrypted data");
+
+//     /*
+//     pub fn write_bytes_to_unique_temp_file(
+//         data: &[u8],
+//         base_path: &Path,
+//         prefix: &str,
+//         number_of_attempts: u32,
+//         retry_delay_ms: u64,
+//     ) -> Result<PathBuf, io::Error> {
+//     */
+
+//     let temp_gpg_encrypted_path = write_bytes_to_unique_temp_file(
+//         &encrypted_content,
+//         &std::env::temp_dir(),
+//         "uma_gpg_encrypted",
+//         TEMP_FILE_CREATION_RETRY_ATTEMPTS,
+//         TEMP_FILE_RETRY_DELAY_MS,)
+//         .map_err(|e| {
+//             ThisProjectError::IoError(std::io::Error::new(
+//                 std::io::ErrorKind::Other,
+//                 format!("PWPCTGTOTSB error : failed write_bytes_to_unique_temp_file: {}", e),
+//             ))
+//         })?;
+
+//     #[cfg(debug_assertions)]
+//     debug_log!("PWPCTGTOTSB: Created temp file: {:?}", temp_gpg_encrypted_path);
+
+//     // #[cfg(debug_assertions)]
+//     // {eprintln!("PWPCTGTOTSB: result_wbtfa: {:?}", result_wbtfa);
+//     // debug_log!("PWPCTGTOTSB: result_wbtfa: {:?}", result_wbtfa);}
+
+//     // Register temp file for cleanup
+//     cleanup_guard.add(temp_gpg_encrypted_path.clone());
+
+//     #[cfg(debug_assertions)]
+//     debug_log!("PWPCTGTOTSB: Wrote {} bytes to temp file #1", encrypted_content.len());
+
+//     // =============================================================================
+//     // Step 4: Create temporary file #2 for XOR result (OTP output)
+//     // =============================================================================
+
+//     #[cfg(debug_assertions)]
+//     debug_log!("PWPCTGTOTSB: Step 4 - Creating temp file for XOR result");
+
+//     let temp_xor_result_path = create_unique_temp_filepathbuf(
+//         &std::env::temp_dir(),
+//         "uma_xor_result",
+//         TEMP_FILE_CREATION_RETRY_ATTEMPTS,
+//         TEMP_FILE_RETRY_DELAY_MS,
+//     ).map_err(|e| {
+//         ThisProjectError::IoError(std::io::Error::new(
+//             e.kind(),
+//             format!("PWPCTGTOTSB error : failed to create temp file #2: {}", e),
+//         ))
+//     })?;
+
+//     // Register temp file for cleanup
+//     cleanup_guard.add(temp_xor_result_path.clone());
+
+//     #[cfg(debug_assertions)]
+//     debug_log!("PWPCTGTOTSB: Created temp file: {:?}", temp_xor_result_path);
+
+//     // =============================================================================
+//     // Step 5: XOR encrypt with OTP pad (information-theoretic security)
+//     // =============================================================================
+
+//     #[cfg(debug_assertions)]
+//     debug_log!("PWPCTGTOTSB: Step 5 - XOR encrypting with OTP pad");
+
+//     let pad_index = padnet_writer_strict_cleanup_xor_file_to_resultpath(
+//         &temp_gpg_encrypted_path,  // Input: GPG-encrypted file
+//         &temp_xor_result_path,      // Output: OTP-encrypted file
+//         padnet_directory_path,      // Padset directory
+//     ).map_err(|e| {
+//         // Convert PadnetError to ThisProjectError
+//         ThisProjectError::PadnetError(format!(
+//             "PWPCTGTOTSB error : OTP encryption failed: {:?}", e
+//         ))
+//     })?;
+
+//     #[cfg(debug_assertions)]
+//     debug_log!("PWPCTGTOTSB: OTP encryption complete, pad index: {:?}", pad_index);
+
+//     // =============================================================================
+//     // Step 6: Read OTP-encrypted result back into memory
+//     // =============================================================================
+
+//     #[cfg(debug_assertions)]
+//     debug_log!("PWPCTGTOTSB: Step 6 - Reading OTP result into memory");
+
+//     let final_otp_encrypted_bytes = read_file_to_bytes(
+//         &temp_xor_result_path
+//     ).map_err(|e| {
+//         ThisProjectError::IoError(std::io::Error::new(
+//             std::io::ErrorKind::Other,
+//             format!("PWPCTGTOTSB error : failed to read OTP result: {}", e),
+//         ))
+//     })?;
+
+//     #[cfg(debug_assertions)]
+//     debug_log!("PWPCTGTOTSB: Read {} final bytes", final_otp_encrypted_bytes.len());
+
+//     // =============================================================================
+//     // Step 7: Cleanup temporary files (security hygiene)
+//     // =============================================================================
+
+//     #[cfg(debug_assertions)]
+//     debug_log!("PWPCTGTOTSB: Step 7 - Cleaning up temporary files");
+
+//     // Explicit cleanup (Drop will handle it too, but we want logging)
+//     if let Err(_errors) = cleanup_guard.cleanup() {
+//         // Log warnings but don't fail the operation
+//         // The encryption succeeded, cleanup failures are non-critical
+//         #[cfg(debug_assertions)]
+//         for error_msg in _errors {
+//             debug_log!("PWPCTGTOTSB error  cleanup warning: {}", error_msg);
+//         }
+//     }
+
+//     // =============================================================================
+//     // Success: Return encrypted bytes and pad index
+//     // =============================================================================
+
+//     #[cfg(debug_assertions)]
+//     debug_log!(
+//         "PWPCTGTOTSB: SUCCESS - {} bytes ready for transmission",
+//         final_otp_encrypted_bytes.len()
+//     );
+
+//     Ok((final_otp_encrypted_bytes, pad_index))
+// }
 
 /// Processes a file through the complete secure transmission pipeline with OTP encryption.
 ///
@@ -23518,11 +24985,27 @@ mod debug_file_print_tests {
 /// - OTP pad material is only consumed if entire pipeline succeeds
 /// - Clear error messages with function prefix "PWPCTGTOTSB"
 ///
+/// ## Implementation Note (added)
+/// This function deliberately does NOT use the `?` operator. Every fallible
+/// call is matched explicitly so that `cleanup_guard.cleanup()` runs before
+/// the error is returned. The `TempFileCleanupGuard` `Drop` impl remains as
+/// a defense-in-depth fallback in case of panic or early return paths.
+///
 /// # Cleanup Guarantee
 /// Uses `TempFileCleanupGuard` RAII pattern to ensure temp files are deleted:
 /// - On success: Files deleted before return
 /// - On error: Files deleted before error propagation
 /// - On panic: Files deleted by Drop trait (defense-in-depth)
+///
+/// # Temp Directory Layout (added)
+/// All intermediate files used by this pipeline live under the project's
+/// canonical, executable-relative base temp directory returned by
+/// `get_base_uma_temp_directory_path()`. Within that base, each calling
+/// thread gets its own sub-directory `uma_thread_<TID>/` (visible, not
+/// dot-prefixed, per project policy) via
+/// `uma_get_or_create_thread_temp_subdir()`. This prevents cross-thread
+/// races where one thread's cleanup could remove another thread's in-flight
+/// temp file (the historical "gpg: can't open ..." race).
 ///
 /// # Example Usage
 /// ```rust,no_run
@@ -23578,6 +25061,8 @@ mod debug_file_print_tests {
 /// - `padnet_writer_strict_cleanup_xor_file_to_resultpath`: Step 4 (OTP)
 /// - `write_bytes_to_file_atomic`: Helper for temp file writing
 /// - `read_file_to_bytes`: Helper for reading OTP result
+/// - `uma_get_or_create_thread_temp_subdir`: Per-thread temp-dir helper (added)
+/// - `get_base_uma_temp_directory_path`: Project canonical temp root
 fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
     original_target_file_path: &Path,
     recipient_public_key: &str,
@@ -23617,16 +25102,23 @@ fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
     #[cfg(debug_assertions)]
     debug_log!("PWPCTGTOTSB: padnet_directory_path {:?}", padnet_directory_path);
 
-
-    // Check that original file exists and is within size limits
-    // This prevents wasting GPG processing time on invalid inputs
-    let original_metadata = fs::metadata(original_target_file_path)
-        .map_err(|e| {
-            ThisProjectError::IoError(std::io::Error::new(
-                e.kind(),
-                format!("PWPCTGTOTSB: cannot access original file: {}", e),
-            ))
-        })?;
+    // Check that original file exists and is within size limits.
+    // This prevents wasting GPG processing time on invalid inputs.
+    //
+    // NOTE (added): Explicit match instead of `?` so error messages can be
+    // unique-tagged and so we have a single, consistent error-return shape
+    // throughout the function.
+    let original_metadata = match fs::metadata(original_target_file_path) {
+        Ok(md) => md,
+        Err(meta_err) => {
+            #[cfg(debug_assertions)]
+            debug_log!("PWPCTGTOTSB: cannot access original file: {:?}", meta_err);
+            return Err(ThisProjectError::IoError(std::io::Error::new(
+                meta_err.kind(),
+                format!("PWPCTGTOTSB: cannot access original file: {}", meta_err),
+            )));
+        }
+    };
 
     let original_size = original_metadata.len() as usize;
     if original_size > MAX_PROCESSABLE_FILE_SIZE_BYTES {
@@ -23644,21 +25136,62 @@ fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
     let mut cleanup_guard = TempFileCleanupGuard::new();
 
     // =============================================================================
+    // Setup: Resolve this thread's temp sub-directory (added)
+    // =============================================================================
+    //
+    // Replaces `std::env::temp_dir()` so that:
+    //   * Temp files live under the project's canonical base
+    //     (`get_base_uma_temp_directory_path`), not `/tmp` or `%TEMP%`.
+    //   * Each thread has its own sub-directory, avoiding the cross-thread
+    //     cleanup race that previously produced
+    //     "gpg: can't open .../uma_temp_*.toml: No such file or directory".
+    // The guard above was already initialized; nothing to clean yet if this
+    // helper itself fails, so an early return is safe.
+
+    let uma_thread_temp_dir = match uma_get_or_create_thread_temp_subdir() {
+        Ok(dir) => dir,
+        Err(thread_dir_err) => {
+            #[cfg(debug_assertions)]
+            debug_log!(
+                "PWPCTGTOTSB: thread temp dir resolve failed: {:?}",
+                thread_dir_err
+            );
+            return Err(thread_dir_err);
+        }
+    };
+
+    #[cfg(debug_assertions)]
+    debug_log!(
+        "PWPCTGTOTSB: using thread temp dir {:?}",
+        uma_thread_temp_dir
+    );
+
+    // =============================================================================
     // Step 1: Clearsign the original file (integrity + non-repudiation)
     // =============================================================================
 
     #[cfg(debug_assertions)]
     {
-    debug_log!("PWPCTGTOTSB: Step 1 - Clearsigning file");
-    debug_log!("PWPCTGTOTSB: Step 1 - original_target_file_path {:?}", original_target_file_path);
+        debug_log!("PWPCTGTOTSB: Step 1 - Clearsigning file");
+        debug_log!(
+            "PWPCTGTOTSB: Step 1 - original_target_file_path {:?}",
+            original_target_file_path
+        );
     }
-    let clearsigned_content = gpg_clearsign_file_to_sendbytes(original_target_file_path)
-        .map_err(|e| {
+
+    let clearsigned_content = match gpg_clearsign_file_to_sendbytes(original_target_file_path) {
+        Ok(bytes) => bytes,
+        Err(clearsign_err) => {
+            // No temp files registered yet, but run cleanup defensively.
+            let _ = cleanup_guard.cleanup();
+            #[cfg(debug_assertions)]
+            debug_log!("PWPCTGTOTSB: clearsign failed: {:?}", clearsign_err);
             // Enhance error with context
-            ThisProjectError::GpgError(format!(
-                "PWPCTGTOTSB: clearsign failed: {}", e
-            ))
-        })?;
+            return Err(ThisProjectError::GpgError(format!(
+                "PWPCTGTOTSB: clearsign failed: {}", clearsign_err
+            )));
+        }
+    };
 
     #[cfg(debug_assertions)]
     debug_log!("PWPCTGTOTSB: Clearsigned {} bytes", clearsigned_content.len());
@@ -23670,12 +25203,18 @@ fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
     #[cfg(debug_assertions)]
     debug_log!("PWPCTGTOTSB: Step 2 - Encrypting clearsigned content");
 
-    let encrypted_content = gpg_encrypt_to_bytes(&clearsigned_content, recipient_public_key)
-        .map_err(|e| {
-            ThisProjectError::GpgError(format!(
-                "PWPCTGTOTSB: encryption failed: {}", e
-            ))
-        })?;
+    let encrypted_content = match gpg_encrypt_to_bytes(&clearsigned_content, recipient_public_key) {
+        Ok(bytes) => bytes,
+        Err(encrypt_err) => {
+            // Still no temp files, but keep the discipline uniform.
+            let _ = cleanup_guard.cleanup();
+            #[cfg(debug_assertions)]
+            debug_log!("PWPCTGTOTSB: encryption failed: {:?}", encrypt_err);
+            return Err(ThisProjectError::GpgError(format!(
+                "PWPCTGTOTSB: encryption failed: {}", encrypt_err
+            )));
+        }
+    };
 
     #[cfg(debug_assertions)]
     debug_log!("PWPCTGTOTSB: Encrypted {} bytes", encrypted_content.len());
@@ -23687,18 +25226,6 @@ fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
     #[cfg(debug_assertions)]
     debug_log!("PWPCTGTOTSB: Step 3 - Creating temp file for encrypted data");
 
-    // let temp_gpg_encrypted_path = create_unique_temp_filepathbuf(
-    //     &std::env::temp_dir(),
-    //     "uma_gpg_encrypted",
-    //     TEMP_FILE_CREATION_RETRY_ATTEMPTS,
-    //     TEMP_FILE_RETRY_DELAY_MS,
-    // ).map_err(|e| {
-    //     ThisProjectError::IoError(std::io::Error::new(
-    //         e.kind(),
-    //         format!("PWPCTGTOTSB: error failed to create temp file #1: {}", e),
-    //     ))
-    // })?;
-
     /*
     pub fn write_bytes_to_unique_temp_file(
         data: &[u8],
@@ -23709,30 +25236,33 @@ fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
     ) -> Result<PathBuf, io::Error> {
     */
 
-    let temp_gpg_encrypted_path = write_bytes_to_unique_temp_file(
+    let temp_gpg_encrypted_path = match write_bytes_to_unique_temp_file(
         &encrypted_content,
-        &std::env::temp_dir(),
+        &uma_thread_temp_dir,
         "uma_gpg_encrypted",
         TEMP_FILE_CREATION_RETRY_ATTEMPTS,
-        TEMP_FILE_RETRY_DELAY_MS,)
-        .map_err(|e| {
-            ThisProjectError::IoError(std::io::Error::new(
+        TEMP_FILE_RETRY_DELAY_MS,
+    ) {
+        Ok(path) => path,
+        Err(write_temp_err) => {
+            let _ = cleanup_guard.cleanup();
+            #[cfg(debug_assertions)]
+            debug_log!(
+                "PWPCTGTOTSB: write_bytes_to_unique_temp_file failed: {:?}",
+                write_temp_err
+            );
+            return Err(ThisProjectError::IoError(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                format!("PWPCTGTOTSB error : failed write_bytes_to_unique_temp_file: {}", e),
-            ))
-        })?;
+                format!(
+                    "PWPCTGTOTSB error : failed write_bytes_to_unique_temp_file: {}",
+                    write_temp_err
+                ),
+            )));
+        }
+    };
 
     #[cfg(debug_assertions)]
     debug_log!("PWPCTGTOTSB: Created temp file: {:?}", temp_gpg_encrypted_path);
-
-    // // Write encrypted content to temp file
-    // let result_wbtfa = write_bytes_to_file_atomic(&encrypted_content, &temp_gpg_encrypted_path)
-    //     .map_err(|e| {
-    //         ThisProjectError::IoError(std::io::Error::new(
-    //             std::io::ErrorKind::Other,
-    //             format!("PWPCTGTOTSB error : failed to write encrypted data to temp file: {}", e),
-    //         ))
-    //     })?;
 
     // #[cfg(debug_assertions)]
     // {eprintln!("PWPCTGTOTSB: result_wbtfa: {:?}", result_wbtfa);
@@ -23742,7 +25272,10 @@ fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
     cleanup_guard.add(temp_gpg_encrypted_path.clone());
 
     #[cfg(debug_assertions)]
-    debug_log!("PWPCTGTOTSB: Wrote {} bytes to temp file #1", encrypted_content.len());
+    debug_log!(
+        "PWPCTGTOTSB: Wrote {} bytes to temp file #1",
+        encrypted_content.len()
+    );
 
     // =============================================================================
     // Step 4: Create temporary file #2 for XOR result (OTP output)
@@ -23751,17 +25284,31 @@ fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
     #[cfg(debug_assertions)]
     debug_log!("PWPCTGTOTSB: Step 4 - Creating temp file for XOR result");
 
-    let temp_xor_result_path = create_unique_temp_filepathbuf(
-        &std::env::temp_dir(),
+    let temp_xor_result_path = match create_unique_temp_filepathbuf(
+        &uma_thread_temp_dir,
         "uma_xor_result",
         TEMP_FILE_CREATION_RETRY_ATTEMPTS,
         TEMP_FILE_RETRY_DELAY_MS,
-    ).map_err(|e| {
-        ThisProjectError::IoError(std::io::Error::new(
-            e.kind(),
-            format!("PWPCTGTOTSB error : failed to create temp file #2: {}", e),
-        ))
-    })?;
+    ) {
+        Ok(path) => path,
+        Err(create_temp_err) => {
+            // temp_gpg_encrypted_path is already registered with the guard;
+            // run cleanup explicitly so it goes away before we return.
+            let _ = cleanup_guard.cleanup();
+            #[cfg(debug_assertions)]
+            debug_log!(
+                "PWPCTGTOTSB: create_unique_temp_filepathbuf failed: {:?}",
+                create_temp_err
+            );
+            return Err(ThisProjectError::IoError(std::io::Error::new(
+                create_temp_err.kind(),
+                format!(
+                    "PWPCTGTOTSB error : failed to create temp file #2: {}",
+                    create_temp_err
+                ),
+            )));
+        }
+    };
 
     // Register temp file for cleanup
     cleanup_guard.add(temp_xor_result_path.clone());
@@ -23776,38 +25323,71 @@ fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
     #[cfg(debug_assertions)]
     debug_log!("PWPCTGTOTSB: Step 5 - XOR encrypting with OTP pad");
 
-    let pad_index = padnet_writer_strict_cleanup_xor_file_to_resultpath(
+    let pad_index = match padnet_writer_strict_cleanup_xor_file_to_resultpath(
         &temp_gpg_encrypted_path,  // Input: GPG-encrypted file
-        &temp_xor_result_path,      // Output: OTP-encrypted file
-        padnet_directory_path,      // Padset directory
-    ).map_err(|e| {
-        // Convert PadnetError to ThisProjectError
-        ThisProjectError::PadnetError(format!(
-            "PWPCTGTOTSB error : OTP encryption failed: {:?}", e
-        ))
-    })?;
+        &temp_xor_result_path,     // Output: OTP-encrypted file
+        padnet_directory_path,     // Padset directory
+    ) {
+        Ok(idx) => idx,
+        Err(xor_err) => {
+            // XOR failed → per docs, no pad was consumed; clean both temp files.
+            let _ = cleanup_guard.cleanup();
+            #[cfg(debug_assertions)]
+            debug_log!("PWPCTGTOTSB: OTP encryption failed: {:?}", xor_err);
+            // Convert PadnetError to ThisProjectError
+            return Err(ThisProjectError::PadnetError(format!(
+                "PWPCTGTOTSB error : OTP encryption failed: {:?}", xor_err
+            )));
+        }
+    };
 
     #[cfg(debug_assertions)]
-    debug_log!("PWPCTGTOTSB: OTP encryption complete, pad index: {:?}", pad_index);
+    debug_log!(
+        "PWPCTGTOTSB: OTP encryption complete, pad index: {:?}",
+        pad_index
+    );
 
     // =============================================================================
     // Step 6: Read OTP-encrypted result back into memory
     // =============================================================================
+    //
+    // IMPORTANT (documented in "Failure Modes" above):
+    // If this read fails, the pad WAS already consumed. We still must clean
+    // the temp files and surface the error; the pad-consumption state is
+    // unrecoverable by this function alone.
 
     #[cfg(debug_assertions)]
     debug_log!("PWPCTGTOTSB: Step 6 - Reading OTP result into memory");
 
-    let final_otp_encrypted_bytes = read_file_to_bytes(
-        &temp_xor_result_path
-    ).map_err(|e| {
-        ThisProjectError::IoError(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("PWPCTGTOTSB error : failed to read OTP result: {}", e),
-        ))
-    })?;
+    let final_otp_encrypted_bytes = match read_file_to_bytes(&temp_xor_result_path) {
+        Ok(bytes) => bytes,
+        Err(read_err) => {
+            #[cfg(debug_assertions)]
+            debug_log!(
+                "PWPCTGTOTSB: failed to read OTP result (pad already consumed): {:?}",
+                read_err
+            );
+            if let Err(_cleanup_errs) = cleanup_guard.cleanup() {
+                #[cfg(debug_assertions)]
+                for em in _cleanup_errs {
+                    debug_log!("PWPCTGTOTSB error  cleanup-on-error warning: {}", em);
+                }
+            }
+            return Err(ThisProjectError::IoError(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!(
+                    "PWPCTGTOTSB error : failed to read OTP result: {}",
+                    read_err
+                ),
+            )));
+        }
+    };
 
     #[cfg(debug_assertions)]
-    debug_log!("PWPCTGTOTSB: Read {} final bytes", final_otp_encrypted_bytes.len());
+    debug_log!(
+        "PWPCTGTOTSB: Read {} final bytes",
+        final_otp_encrypted_bytes.len()
+    );
 
     // =============================================================================
     // Step 7: Cleanup temporary files (security hygiene)
@@ -23837,6 +25417,77 @@ fn padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
     );
 
     Ok((final_otp_encrypted_bytes, pad_index))
+}
+
+#[cfg(test)]
+mod pwpctgtotsb_input_tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    /// Non-absolute original path must fail input validation with the
+    /// PWPCTGTOTSB-tagged error, not panic, not run gpg.
+    #[test]
+    fn pwpctgtotsb_rejects_non_absolute_original_path() {
+        let relative = PathBuf::from("relative_only.toml");
+        let abs_padnet = PathBuf::from("/tmp/uma_does_not_matter_for_this_test");
+        match padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
+            &relative,
+            "dummy-key",
+            &abs_padnet,
+        ) {
+            Err(ThisProjectError::InvalidInput(msg)) => {
+                assert!(
+                    msg.starts_with("PWPCTGTOTSB:"),
+                    "expected PWPCTGTOTSB-tagged error, got: {}", msg
+                );
+            }
+            Ok(_) => panic!("must not succeed with relative original path"),
+            Err(other) => panic!("unexpected error variant: {:?}", other),
+        }
+    }
+
+    /// Non-absolute padnet dir must fail input validation similarly.
+    #[test]
+    fn pwpctgtotsb_rejects_non_absolute_padnet_dir() {
+        let abs_original = PathBuf::from("/tmp/uma_does_not_matter_for_this_test.toml");
+        let relative_padnet = PathBuf::from("padnet_relative");
+        match padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
+            &abs_original,
+            "dummy-key",
+            &relative_padnet,
+        ) {
+            Err(ThisProjectError::InvalidInput(msg)) => {
+                assert!(
+                    msg.starts_with("PWPCTGTOTSB:"),
+                    "expected PWPCTGTOTSB-tagged error, got: {}", msg
+                );
+            }
+            Ok(_) => panic!("must not succeed with relative padnet path"),
+            Err(other) => panic!("unexpected error variant: {:?}", other),
+        }
+    }
+
+    /// Missing original file: metadata call must produce a tagged IoError.
+    #[test]
+    fn pwpctgtotsb_missing_original_file_returns_tagged_io_error() {
+        let abs_original = PathBuf::from("/nonexistent/uma_definitely_not_here.toml");
+        let abs_padnet = PathBuf::from("/tmp/uma_padnet_placeholder_for_test");
+        match padnet_wrapper_path_to_clearsign_to_gpgencrypt_to_otp_to_send_bytes(
+            &abs_original,
+            "dummy-key",
+            &abs_padnet,
+        ) {
+            Err(ThisProjectError::IoError(io_e)) => {
+                let s = format!("{}", io_e);
+                assert!(
+                    s.contains("PWPCTGTOTSB:"),
+                    "expected PWPCTGTOTSB-tagged io error, got: {}", s
+                );
+            }
+            Ok(_) => panic!("must not succeed when original file missing"),
+            Err(other) => panic!("unexpected error variant: {:?}", other),
+        }
+    }
 }
 
 /// RAII guard for automatic cleanup of temporary files.
@@ -24248,7 +25899,7 @@ fn read_file_to_bytes(
 ///
 /// // Typical usage in OTP encryption pipeline
 /// let encrypted_data = b"encrypted content here...";
-/// let temp_dir = std::env::temp_dir();
+/// use uma_get_or_create_thread_temp_subdir() for temp etc.
 ///
 /// match write_bytes_to_unique_temp_file(
 ///     encrypted_data,
@@ -37168,6 +38819,86 @@ fn handle_local_owner_desk(
                                 &remote_collaborator_name,
                             );
 
+                            // // =========================================================================
+                            // // Setup: Initialize cleanup guard for this packet
+                            // // =========================================================================
+                            // let mut cleanup_guard = TempFileCleanupGuard::new();
+
+                            // // 1. Extract OTP-encrypted blob
+                            // let still_otp_encrypted_file_blob = match &incoming_intray_file_struct.gpg_encrypted_intray_file {
+                            //     Some(data) => data,
+                            //     None => {
+                            //         #[cfg(debug_assertions)]
+                            //         debug_log!(
+                            //             "(from {}) HLOD-Padnet: gpg_encrypted_intray_file is None. Skipping.",
+                            //             &remote_collaborator_name,
+                            //         );
+
+                            //         // safe log
+                            //         debug_log!("HLOD-Padnet: gpg_encrypted_intray_file is None. Skipping.");
+                            //         continue;
+                            //     }
+                            // };
+
+                            // // =========================================================================
+                            // // 2. Write OTP blob to temp file
+                            // // =========================================================================
+                            // let otp_blob_file_path = write_bytes_to_unique_temp_file(
+                            //     still_otp_encrypted_file_blob,
+                            //     &std::env::temp_dir(),
+                            //     "uma_intray_otp",
+                            //     TEMP_FILE_CREATION_RETRY_ATTEMPTS,
+                            //     TEMP_FILE_RETRY_DELAY_MS,
+                            // ).map_err(|e| {
+                            //     ThisProjectError::IoError(std::io::Error::new(
+                            //         e.kind(),
+                            //         format!(
+                            //             "(from {}) HLOD: error failed to create OTP temp file: {}",
+                            //             &remote_collaborator_name,
+                            //             e,
+                            //         ),
+                            //     ))
+                            // })?;
+
+                            // // ✅ Register for cleanup immediately
+                            // cleanup_guard.add(otp_blob_file_path.clone());
+
+                            // #[cfg(debug_assertions)]
+                            // debug_log!(
+                            //     "(from {}) HLOD-Padnet: Created OTP temp file: {:?}",
+                            //     &remote_collaborator_name,
+                            //     otp_blob_file_path,
+                            // );
+
+                            // // =========================================================================
+                            // // 3. Create empty file for XOR result (GPG-encrypted data)
+                            // // =========================================================================
+                            // let gpg_blob_file_path = create_unique_temp_filepathbuf(
+                            //     &std::env::temp_dir(),
+                            //     "uma_intray_gpg",
+                            //     TEMP_FILE_CREATION_RETRY_ATTEMPTS,
+                            //     TEMP_FILE_RETRY_DELAY_MS,
+                            // ).map_err(|e| {
+                            //     ThisProjectError::IoError(std::io::Error::new(
+                            //         e.kind(),
+                            //         format!(
+                            //             "(from {}) HLOD-Padnet: failed to create GPG result temp file: {}",
+                            //             &remote_collaborator_name,
+                            //             e
+                            //         ),
+                            //     ))
+                            // })?;
+
+                            // // ✅ Register for cleanup immediately
+                            // cleanup_guard.add(gpg_blob_file_path.clone());
+
+                            // #[cfg(debug_assertions)]
+                            // debug_log!(
+                            //     "(from {}) HLOD-Padnet: Created GPG result temp file: {:?}",
+                            //     &remote_collaborator_name,
+                            //     gpg_blob_file_path,
+                            // );
+
                             // =========================================================================
                             // Setup: Initialize cleanup guard for this packet
                             // =========================================================================
@@ -37190,24 +38921,59 @@ fn handle_local_owner_desk(
                             };
 
                             // =========================================================================
-                            // 2. Write OTP blob to temp file
+                            // 1.5  Resolve this thread's UMA temp sub-directory
+                            // -------------------------------------------------------------------------
+                            // Project policy: temp files must live under the canonical UMA temp root
+                            // returned by `get_base_uma_temp_directory_path()` (executable-relative,
+                            // visible, no hidden dirs), and each thread must work in its own
+                            // sub-directory `<base>/uma_thread_<TID>/` to prevent cross-thread
+                            // cleanup races (this was the root cause of an earlier
+                            // "gpg: can't open ..." bug). We resolve it ONCE here and reuse for
+                            // both temp files in this packet.
                             // =========================================================================
-                            let otp_blob_file_path = write_bytes_to_unique_temp_file(
+                            let hlod_temp_dir = match uma_get_or_create_thread_temp_subdir() {
+                                Ok(d) => d,
+                                Err(_subdir_err) => {
+                                    #[cfg(debug_assertions)]
+                                    debug_log!(
+                                        "(from {}) HLOD-Padnet: per-thread temp subdir unavailable: {:?}. Skipping packet.",
+                                        &remote_collaborator_name,
+                                        _subdir_err,
+                                    );
+                                    // safe log (terse, no path leakage)
+                                    debug_log!("HLOD-Padnet: temp subdir unavailable. Skipping.");
+                                    // Handle and move on: this packet cannot be processed
+                                    // safely without a temp workspace; the pipeline continues
+                                    // with the next packet rather than tearing down the loop.
+                                    continue;
+                                }
+                            };
+
+                            // =========================================================================
+                            // 2. Write OTP blob to temp file (now under the per-thread UMA subdir)
+                            // =========================================================================
+                            let otp_blob_file_path = match write_bytes_to_unique_temp_file(
                                 still_otp_encrypted_file_blob,
-                                &std::env::temp_dir(),
+                                &hlod_temp_dir,
                                 "uma_intray_otp",
                                 TEMP_FILE_CREATION_RETRY_ATTEMPTS,
                                 TEMP_FILE_RETRY_DELAY_MS,
-                            ).map_err(|e| {
-                                ThisProjectError::IoError(std::io::Error::new(
-                                    e.kind(),
-                                    format!(
-                                        "(from {}) HLOD: error failed to create OTP temp file: {}",
+                            ) {
+                                Ok(p) => p,
+                                Err(_otp_temp_err) => {
+                                    #[cfg(debug_assertions)]
+                                    debug_log!(
+                                        "(from {}) HLOD-Padnet: OTP temp create failed: {:?}. Skipping packet.",
                                         &remote_collaborator_name,
-                                        e,
-                                    ),
-                                ))
-                            })?;
+                                        _otp_temp_err,
+                                    );
+                                    // safe log
+                                    debug_log!("HLOD-Padnet: OTP temp create failed. Skipping.");
+                                    // No file was registered yet, so nothing for the guard to
+                                    // clean. Move on to the next packet.
+                                    continue;
+                                }
+                            };
 
                             // ✅ Register for cleanup immediately
                             cleanup_guard.add(otp_blob_file_path.clone());
@@ -37220,23 +38986,31 @@ fn handle_local_owner_desk(
                             );
 
                             // =========================================================================
-                            // 3. Create empty file for XOR result (GPG-encrypted data)
+                            // 3. Create empty file for XOR result (GPG-encrypted data),
+                            //    also under the per-thread UMA subdir
                             // =========================================================================
-                            let gpg_blob_file_path = create_unique_temp_filepathbuf(
-                                &std::env::temp_dir(),
+                            let gpg_blob_file_path = match create_unique_temp_filepathbuf(
+                                &hlod_temp_dir,
                                 "uma_intray_gpg",
                                 TEMP_FILE_CREATION_RETRY_ATTEMPTS,
                                 TEMP_FILE_RETRY_DELAY_MS,
-                            ).map_err(|e| {
-                                ThisProjectError::IoError(std::io::Error::new(
-                                    e.kind(),
-                                    format!(
-                                        "(from {}) HLOD-Padnet: failed to create GPG result temp file: {}",
+                            ) {
+                                Ok(p) => p,
+                                Err(_gpg_temp_err) => {
+                                    #[cfg(debug_assertions)]
+                                    debug_log!(
+                                        "(from {}) HLOD-Padnet: GPG result temp create failed: {:?}. Skipping packet.",
                                         &remote_collaborator_name,
-                                        e
-                                    ),
-                                ))
-                            })?;
+                                        _gpg_temp_err,
+                                    );
+                                    // safe log
+                                    debug_log!("HLOD-Padnet: GPG result temp create failed. Skipping.");
+                                    // The OTP temp is already registered with `cleanup_guard`;
+                                    // it will be removed when the guard drops at end of scope.
+                                    // Handle and move on to the next packet.
+                                    continue;
+                                }
+                            };
 
                             // ✅ Register for cleanup immediately
                             cleanup_guard.add(gpg_blob_file_path.clone());
@@ -44097,7 +45871,7 @@ mod tempname_tests {
 
     /// Test error message format for debugging
     #[test]
-    fn test_error_messages_have_cutf_prefix() {
+    fn test_error_messages_have_cutf_prefix2() {
         let temp_dir = std::env::temp_dir();
 
         // Test zero attempts error

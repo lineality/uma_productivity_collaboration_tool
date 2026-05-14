@@ -16510,3 +16510,561 @@ fn extract_port_value(line: &str, key: &str) -> Option<u16> {
 
 //     Ok(output.stdout)
 // }
+
+// /// Decrypts GPG-encrypted data from a byte slice using a provided GPG private key.
+// ///
+// /// # Purpose
+// /// This function takes encrypted data as bytes and a GPG private key, and attempts to decrypt
+// /// the data using the GPG command-line tool. It handles the decryption process by creating
+// /// temporary files and using GPG in a non-interactive, batch mode.
+// ///
+// /// # Security Considerations
+// /// - Temporary files are created and immediately deleted after use
+// /// - Uses batch mode to prevent interactive prompts
+// /// - Minimizes potential security risks associated with key handling
+// ///
+// /// # Arguments
+// /// * `data` - A byte slice containing the encrypted data to be decrypted
+// /// * `your_gpg_key` - A string containing the GPG private key used for decryption
+// ///
+// /// # Returns
+// /// * `Ok(Vec<u8>)` - The decrypted data as a vector of bytes if decryption is successful
+// /// * `Err(ThisProjectError)` - An error if decryption fails, with details about the failure
+// ///
+// /// # Errors
+// /// This function can return errors in several scenarios:
+// /// - Invalid or incorrect GPG key
+// /// - Corrupted encrypted data
+// /// - GPG command-line tool not installed or accessible
+// /// - Insufficient permissions
+// /// - Temporary file creation or deletion failures
+// ///
+// /// # Example
+// /// ```rust
+// /// let encrypted_data: &[u8] = // ... some encrypted bytes
+// /// let private_key: &str = // ... GPG private key
+// /// match gpg_decrypt_from_bytes(encrypted_data, private_key) {
+// ///     Ok(decrypted_data) => {
+// ///         // Use decrypted data
+// ///         println!("Decryption successful!");
+// ///     },
+// ///     Err(e) => {
+// ///         // Handle decryption error
+// ///         eprintln!("Decryption failed: {:?}", e);
+// ///     }
+// /// }
+// /// ```
+// ///
+// /// # Notes
+// /// - Requires GPG to be installed on the system
+// /// - Temporary files are created in the system's temporary directory
+// /// - The function uses non-interactive GPG mode to prevent hanging on prompts
+// ///
+// /// # Performance
+// /// - Creates temporary files for key and encrypted data
+// /// - Spawns a GPG subprocess for decryption
+// /// - Recommended for moderate-sized encrypted data
+// ///
+// /// # Thread Safety
+// /// - Not guaranteed to be thread-safe due to temporary file creation
+// /// - Should be used with caution in multi-threaded contexts
+// fn gpg_decrypt_from_bytes(data: &[u8], your_gpg_key: &str) -> Result<Vec<u8>, ThisProjectError> {
+//     #[cfg(debug_assertions)]
+//     debug_log("gpg_decrypt_from_bytes()-1. Start! ");
+
+//     // 1. Create temporary files
+//     let mut temp_key_file = std::env::temp_dir();
+//     temp_key_file.push("uma_temp_privkey.asc");
+//     fs::write(&temp_key_file, your_gpg_key)?;
+
+//     let mut temp_encrypted_file = std::env::temp_dir();
+//     temp_encrypted_file.push("uma_temp_encrypted.gpg");
+//     fs::write(&temp_encrypted_file, data)?;
+
+//     // 2. Run GPG decryption
+//     let mut child = StdCommand::new("gpg")
+//         .arg("--decrypt")
+//         .arg("--batch")  // Non-interactive mode
+//         .arg("--yes")    // Assume yes to prompts
+//         .arg("--quiet")  // Minimal output
+//         .arg("--no-tty") // No terminal interaction
+//         .arg("-") // Read from stdin
+//         .stdin(Stdio::piped())
+//         .stdout(Stdio::piped())
+//         .stderr(Stdio::piped())
+//         .spawn()?;
+
+//     // Write the encrypted data to the child process's standard input
+//     if let Some(stdin) = child.stdin.as_mut() {
+//         stdin.write_all(data)?;
+//         stdin.flush()?;
+//     }
+
+//     let output = child.wait_with_output()?;
+
+//     #[cfg(debug_assertions)]
+//     debug_log!("gpg_decrypt_from_bytes()-4. output {:?}", output);
+
+//     // 3. Remove temporary files (important for security)
+//     fs::remove_file(temp_key_file)?;
+//     fs::remove_file(temp_encrypted_file)?;
+
+//     // 4. Handle output and errors
+//     if output.status.success() {
+//         Ok(output.stdout)
+//     } else {
+//         let stderr = String::from_utf8_lossy(&output.stderr);
+//         Err(ThisProjectError::GpgError(format!("GPG decryption failed: {}", stderr)))
+//     }
+// }
+
+// /// Encrypts a clearsigned TOML file using a provided GPG public key.
+// ///
+// /// This function takes a clearsigned TOML file and encrypts it using the provided
+// /// public key content directly, without any keyring operations. The encrypted
+// /// content is saved to a new file with the .gpgtoml extension.
+// ///
+// /// # Security
+// /// - Uses the public key content directly without keyring operations
+// /// - Creates temporary files with restricted permissions
+// /// - Ensures cleanup of all temporary files
+// /// - Does not modify or access the GPG keyring
+// ///
+// /// # Arguments
+// /// * `clearsigned_toml_path` - Path to the clearsigned TOML file to encrypt
+// /// * `gpg_key_public` - The GPG public key content to use for encryption
+// /// * `output_gpgtoml_path` - Path where the encrypted file should be saved
+// ///
+// /// # Returns
+// /// * `Result<(), std::io::Error>` - Ok(()) on success, or an error
+// fn encrypt_clearsigned_toml_with_public_key_content(
+//     clearsigned_toml_path: &Path, // * `clearsigned_toml_path` - Path to the clearsigned TOML file to encrypt
+//     gpg_key_public: &str, // * `gpg_key_public` - The GPG public key content to use for encryption
+//     output_gpgtoml_path: &Path, // * `output_gpgtoml_path` - Path where the encrypted file should be saved
+// ) -> Result<(), std::io::Error> {
+//     use std::fs;
+//     use std::process::Command;
+
+//     debug_log!("Starting GPG encryption of clearsigned TOML");
+//     debug_log!("Input file: {}", clearsigned_toml_path.display());
+//     debug_log!("Output file: {}", output_gpgtoml_path.display());
+
+//     // Create a temporary file for the public key
+//     let timestamp = std::time::SystemTime::now()
+//         .duration_since(std::time::UNIX_EPOCH)
+//         .map_err(|e| std::io::Error::new(
+//             std::io::ErrorKind::Other,
+//             format!("Time error: {}", e)
+//         ))?
+//         .as_nanos();
+
+//     let temp_pubkey_filename = format!("temp_pubkey_{}.asc", timestamp);
+//     let temp_dir = std::env::temp_dir();
+//     let temp_pubkey_path = temp_dir.join(&temp_pubkey_filename);
+
+//     // Write the public key to temporary file
+//     debug_log!("Writing public key to temporary file: {}", temp_pubkey_path.display());
+//     fs::write(&temp_pubkey_path, gpg_key_public)?;
+
+//     // Ensure cleanup happens regardless of success or failure
+//     let cleanup_result = (|| -> Result<(), std::io::Error> {
+
+//         // inspection: Read the clearsigned content
+//         // let clearsigned_content = fs::read_to_string(clearsigned_toml_path)?;
+
+//         // Use GPG to encrypt with the public key directly (no keyring operations)
+//         let output = Command::new("gpg")
+//             .arg("--batch")
+//             .arg("--yes")
+//             .arg("--trust-model")
+//             .arg("always") // Trust the key without keyring
+//             .arg("--armor")
+//             .arg("--encrypt")
+//             .arg("--recipient-file")
+//             .arg(&temp_pubkey_path) // Use the public key file directly
+//             .arg("--output")
+//             .arg(output_gpgtoml_path)
+//             .arg(clearsigned_toml_path)
+//             .output()?;
+
+//         if !output.status.success() {
+//             let stderr = String::from_utf8_lossy(&output.stderr);
+//             return Err(std::io::Error::new(
+//                 std::io::ErrorKind::Other,
+//                 format!("GPG encryption failed: {}", stderr)
+//             ));
+//         }
+
+//         debug_log!("Successfully encrypted file to: {}", output_gpgtoml_path.display());
+//         Ok(())
+//     })();
+
+//     // Always clean up the temporary public key file
+//     if let Err(e) = fs::remove_file(&temp_pubkey_path) {
+//         eprintln!("Warning: Failed to remove temporary public key file {}: {}",
+//                   temp_pubkey_path.display(), e);
+//     }
+
+//     cleanup_result
+// }
+
+// /// TODO: warning - any error should delete the temp file
+// /// Reads and parses collaborator setup data from a clearsigned TOML file.
+// ///
+// /// This function securely reads collaborator data from a clearsigned TOML file by:
+// /// 1. Extracting the GPG public key from the file itself
+// /// 2. Verifying the clearsign signature to ensure integrity and authenticity
+// /// 3. If verification succeeds, parsing the TOML data within the clearsigned content
+// /// 4. Extracting all required fields into a CollaboratorTomlData structure
+// ///
+// /// # Security Model
+// /// This function implements a self-verifying approach where each collaborator file
+// /// contains its own GPG public key and is clearsigned with the corresponding private key.
+// /// This ensures that:
+// /// - The data has not been tampered with (integrity)
+// /// - The data comes from the claimed source (authenticity)
+// /// - No external key management is required for basic verification
+// ///
+// /// # File Format Expected
+// /// The input file should be a clearsigned TOML file with the following structure:
+// /// ```
+// /// -----BEGIN PGP SIGNED MESSAGE-----
+// /// Hash: SHA256
+// ///
+// /// user_name = "alice"
+// /// user_salt_list = ["0x11111111111111111111111111111111", "0x11111111111111111111111111111112"]
+// /// ipv4_addresses = ["192.168.1.1", "10.0.0.1"]
+// /// ipv6_addresses = ["fe80::1", "::1"]
+// /// gpg_publickey_id = "3AA5C34371567BD2"
+// /// gpg_key_public = """-----BEGIN PGP PUBLIC KEY BLOCK-----
+// /// ...
+// /// -----END PGP PUBLIC KEY BLOCK-----"""
+// /// sync_interval = 60
+// /// updated_at_timestamp = 1728307160
+// /// -----BEGIN PGP SIGNATURE-----
+// /// ...
+// /// -----END PGP SIGNATURE-----
+// /// ```
+// ///
+// /// # Arguments
+// /// * `collaborator_name` - The username/identifier of the collaborator whose data to read
+// ///
+// /// # Returns
+// /// * `Ok(CollaboratorTomlData)` - Successfully parsed and verified collaborator data
+// /// * `Err(ThisProjectError)` - If verification fails, file is missing, or data is malformed
+// ///
+// /// # Errors
+// /// This function may return errors for several reasons:
+// /// * File not found or unreadable
+// /// * GPG signature verification failure
+// /// * Missing or invalid GPG public key in the file
+// /// * Missing required TOML fields
+// /// * Invalid data formats (e.g., malformed IP addresses, invalid timestamps)
+// ///
+// /// # Example Usage
+// /// ```rust
+// /// match read_one_collaborator_addressbook_toml("alice") {
+// ///     Ok(collaborator_data) => {
+// ///         println!("Successfully loaded data for: {}", collaborator_data.user_name);
+// ///         println!("IP addresses: {:?}", collaborator_data.ipv4_addresses);
+// ///     },
+// ///     Err(e) => {
+// ///         eprintln!("Failed to load collaborator data: {}", e);
+// ///     }
+// /// }
+// /// ```
+// ///
+// /// # Implementation Notes
+// /// - Uses line-by-line reading instead of loading entire file into memory
+// /// - Does not use any third-party crates like `serde` or `toml`
+// /// - Implements manual TOML field extraction for security and control
+// /// - Performs cryptographic verification before any data extraction
+// /// - Handles both IPv4 and IPv6 address parsing with proper error handling
+// ///
+// /// # Related Functions
+// /// This function uses several helper functions from the clearsign_toml_module:
+// /// - `read_singleline_string_from_clearsigntoml()` - For single-line string fields
+// /// - `read_stringarray_field_clearsigntoml()` - For string arrays
+// /// - `read_u64_field_from_toml()` - For numeric fields (after verification)
+// /// This function loads collaborator data from either a clearsigned TOML file (.toml)
+// /// or a GPG-encrypted clearsigned TOML file (.gpgtoml). It ensures data integrity
+// /// through cryptographic verification and handles both file formats transparently.
+// ///
+// /// # File Format Support
+// /// - **Clearsigned TOML (.toml)**: Plain text TOML file with GPG clearsign signature
+// /// - **GPG Encrypted TOML (.gpgtoml)**: Encrypted version of the clearsigned TOML
+// ///
+// /// # File Selection Logic
+// /// 1. Checks for both `{collaborator_name}__collaborator.toml` and `.gpgtoml` files
+// /// 2. If BOTH exist: prefers the `.toml` file (no decryption needed)
+// /// 3. If only `.gpgtoml` exists: decrypts it to a temporary file for processing
+// /// 4. If only `.toml` exists: uses it directly
+// /// 5. If neither exists: returns an error
+// ///
+// /// # GPG Decryption Process (for .gpgtoml files)
+// /// - Uses the specified GPG key from the local keyring for decryption
+// /// - Creates a secure temporary file with restricted permissions (0600 on Unix)
+// /// - Decrypts the content to the temporary file
+// /// - Processes the decrypted clearsigned TOML
+// /// - Automatically cleans up the temporary file after processing
+// ///
+// /// # Security Features
+// /// - All files must be cryptographically clearsigned (signature verification)
+// /// - Temporary decrypted files have restricted permissions
+// /// - Temporary files are always cleaned up, even on error paths
+// /// - Original `.gpgtoml` files are never modified or deleted
+// ///
+// /// # Error Handling
+// /// - If GPG decryption fails (wrong key, corrupted file, etc.):
+// ///   - Displays detailed error message to the user
+// ///   - Waits for user to press Enter (for visibility in multi-threaded context)
+// ///   - Returns an error to the caller
+// /// - This approach ensures users see decryption failures without crashing the application
+// ///
+// /// # Arguments
+// /// * `collaborator_name` - The username of the collaborator whose data to read
+// /// * `full_fingerprint_key_id_string` - The GPG key fingerprint to use for decrypting
+// ///   .gpgtoml files. This must be a private key available in the local keyring.
+// ///
+// /// # Returns
+// /// * `Ok(CollaboratorTomlData)` - Successfully parsed collaborator configuration
+// /// * `Err(ThisProjectError)` - Various errors:
+// ///   - File not found (neither .toml nor .gpgtoml exists)
+// ///   - GPG decryption failure
+// ///   - Clearsign verification failure
+// ///   - TOML parsing errors
+// ///   - IO errors
+// ///
+// /// # Example
+// /// ```no_run
+// /// let collaborator_data = read_one_collaborator_addressbook_toml(
+// ///     "alice",
+// ///     "1234567890ABCDEF1234567890ABCDEF12345678"
+// /// )?;
+// /// ```
+// ///
+// /// # Debug Logging
+// /// - Logs which file type was selected (.toml vs .gpgtoml)
+// /// - Logs file paths being processed
+// /// - Logs GPG operations and any errors encountered
+// fn read_one_collaborator_addressbook_toml(
+//     collaborator_name: &str,
+//     full_fingerprint_key_id_string: &str,
+//     ) -> Result<CollaboratorTomlData, ThisProjectError> {
+//     debug_log("Starting ROCST: read_one_collaborator_addressbook_toml()");
+
+//     // 1. File Paths
+//     // Check for both .toml and .gpgtoml files
+//     let toml_relative = Path::new(COLLABORATOR_ADDRESSBOOK_PATH_STR)
+//         .join(format!("{}__collaborator.toml", collaborator_name));
+//     let gpgtoml_relative = Path::new(COLLABORATOR_ADDRESSBOOK_PATH_STR)
+//         .join(format!("{}__collaborator.gpgtoml", collaborator_name));
+
+//     // Get absolute paths
+//     let toml_abs = make_input_path_name_abs_executabledirectoryrelative_nocheck(&toml_relative)?;
+//     let gpgtoml_abs = make_input_path_name_abs_executabledirectoryrelative_nocheck(&gpgtoml_relative)?;
+
+//     // Determine which file to use and prepare the path
+//     let (abs_file_path, temp_file_to_cleanup) = if toml_abs.exists() {
+//         // Prefer .toml if it exists
+//         debug_log!("ROCST: Using clearsigned .toml file for collaborator '{}'", collaborator_name);
+//         (toml_abs, None)
+//     } else if gpgtoml_abs.exists() {
+//         // Use .gpgtoml and decrypt it
+//         debug_log!("ROCST: Using GPG encrypted .gpgtoml file for collaborator '{}'", collaborator_name);
+
+//         // Create secure temp file for decrypted content
+//         let timestamp = std::time::SystemTime::now()
+//             .duration_since(std::time::UNIX_EPOCH)
+//             .map_err(|e| ThisProjectError::IoError(
+//                 std::io::Error::new(std::io::ErrorKind::Other, format!("Time error: {}", e))
+//             ))?
+//             .as_nanos();
+
+//         let temp_filename = format!("decrypt_collab_{}_{}.toml", collaborator_name, timestamp);
+
+//         // TODO: WRONG!!! must use get_base_uma_temp_directory_path()
+//         let temp_path = std::env::temp_dir().join(&temp_filename);
+
+//         // Decrypt the .gpgtoml file
+//         let output = std::process::Command::new("gpg")
+//             .arg("--quiet")
+//             .arg("--batch")
+//             .arg("--yes")
+//             .arg("--local-user")
+//             .arg(full_fingerprint_key_id_string)
+//             .arg("--decrypt")
+//             .arg("--output")
+//             .arg(&temp_path)
+//             .arg(&gpgtoml_abs)
+//             .output()
+//             .map_err(|e| {
+//                 let error_msg = format!("Failed to execute GPG decrypt for collaborator '{}': {}", collaborator_name, e);
+//                 eprintln!("\nERROR: {}", error_msg);
+//                 eprintln!("...Press Enter to continue...");
+//                 let _ = std::io::stdin().read_line(&mut String::new());
+//                 ThisProjectError::GpgError(error_msg)
+//             })?;
+
+//         if !output.status.success() {
+//             let stderr = String::from_utf8_lossy(&output.stderr);
+//             let error_msg = format!("GPG decryption failed for collaborator '{}': {}", collaborator_name, stderr);
+//             eprintln!("\nERROR: {}", error_msg);
+//             eprintln!("...Press Enter to continue...");
+//             let _ = std::io::stdin().read_line(&mut String::new());
+//             return Err(ThisProjectError::GpgError(error_msg));
+//         }
+
+//         // Set restricted permissions on temp file (Unix only)
+//         #[cfg(unix)]
+//         {
+//             use std::os::unix::fs::PermissionsExt;
+//             std::fs::set_permissions(&temp_path, std::fs::Permissions::from_mode(0o600))
+//                 .map_err(|e| ThisProjectError::IoError(
+//                     std::io::Error::new(std::io::ErrorKind::Other,
+//                         format!("Failed to set temp file permissions: {}", e))
+//                 ))?;
+//         }
+
+//         (temp_path.clone(), Some(temp_path))
+//     } else {
+//         return Err(ThisProjectError::IoError(
+//             std::io::Error::new(
+//                 std::io::ErrorKind::NotFound,
+//                 format!("No collaborator file found for '{}' (checked both .toml and .gpgtoml)", collaborator_name)
+//             )
+//         ));
+//     };
+
+//     debug_log!("ROCST: read_one_collaborator_addressbook_toml(), abs_file_path -> {:?}", abs_file_path);
+
+
+//     /////
+
+
+//     debug_log!("ROCST: read_one_collaborator_addressbook_toml(), abs_file_path (executable-relative) -> {:?}", abs_file_path);
+
+//     // Convert path to string for clearsign functions
+//     let file_path_str = abs_file_path.to_str()
+//         .ok_or_else(|| ThisProjectError::TomlVanillaDeserialStrError(
+//             "Failed to convert file path to string".to_string()
+//         ))?;
+
+//     // 2. Read and verify all fields from the clearsigned TOML file
+//     // Each read operation includes signature verification
+//     /*
+//     pub fn read_singleline_string_from_clearsigntoml(
+//         path_to_clearsigntoml_with_gpgkey: &str,
+//         name_of_toml_field_key_to_read: &str,
+//     ) -> Result<String, String> {
+//     */
+
+//     // Extract user_name
+//     let user_name = read_singleline_string_from_clearsigntoml(file_path_str, "user_name")
+//         .map_err(|e| ThisProjectError::TomlVanillaDeserialStrError(
+//             format!("Failed to read user_name: {}", e)
+//         ))?;
+
+//     // Extract gpg_publickey_id
+//     let gpg_publickey_id = read_singleline_string_from_clearsigntoml(file_path_str, "gpg_publickey_id")
+//         .map_err(|e| ThisProjectError::TomlVanillaDeserialStrError(
+//             format!("Failed to read gpg_publickey_id: {}", e)
+//         ))?;
+
+//     // Extract gpg_key_public
+//     let gpg_key_public = read_multiline_string_from_clearsigntoml(file_path_str, "gpg_key_public")
+//         .map_err(|e| ThisProjectError::TomlVanillaDeserialStrError(
+//             format!("Failed to read gpg_key_public: {}", e)
+//         ))?;
+
+//     // Extract user_salt_list (array of hex strings that need to be converted to u128)
+//     let salt_strings = read_str_array_field_clearsigntoml(file_path_str, "user_salt_list")
+//         .map_err(|e| ThisProjectError::TomlVanillaDeserialStrError(
+//             format!("Failed to read user_salt_list: {}", e)
+//         ))?;
+
+//     // Convert hex strings to u128 values
+//     let user_salt_list: Result<Vec<u128>, ThisProjectError> = salt_strings
+//         .iter()
+//         .map(|hex_str| {
+//             // Remove "0x" prefix if present
+//             let clean_hex = hex_str.trim_start_matches("0x");
+//             u128::from_str_radix(clean_hex, 16)
+//                 .map_err(|e| ThisProjectError::ParseIntError(e))
+//         })
+//         .collect();
+//     let user_salt_list = user_salt_list?;
+
+//     // Extract IPv4 addresses (optional)
+//     let ipv4_addresses = match read_str_array_field_clearsigntoml(file_path_str, "ipv4_addresses") {
+//         Ok(addr_strings) => {
+//             let parsed_addrs: Result<Vec<std::net::Ipv4Addr>, ThisProjectError> = addr_strings
+//                 .iter()
+//                 .map(|addr_str| {
+//                     addr_str.parse::<std::net::Ipv4Addr>()
+//                         .map_err(|e| ThisProjectError::TomlVanillaDeserialStrError(
+//                             format!("Invalid IPv4 address '{}': {}", addr_str, e)
+//                         ))
+//                 })
+//                 .collect();
+//             Some(parsed_addrs?)
+//         },
+//         Err(_) => None, // Field is optional
+//     };
+
+//     // Extract IPv6 addresses (optional)
+//     let ipv6_addresses = match read_str_array_field_clearsigntoml(file_path_str, "ipv6_addresses") {
+//         Ok(addr_strings) => {
+//             let parsed_addrs: Result<Vec<std::net::Ipv6Addr>, ThisProjectError> = addr_strings
+//                 .iter()
+//                 .map(|addr_str| {
+//                     addr_str.parse::<std::net::Ipv6Addr>()
+//                         .map_err(|e| ThisProjectError::TomlVanillaDeserialStrError(
+//                             format!("Invalid IPv6 address '{}': {}", addr_str, e)
+//                         ))
+//                 })
+//                 .collect();
+//             Some(parsed_addrs?)
+//         },
+//         Err(_) => None, // Field is optional
+//     };
+
+//     // For numeric fields, we need to read them as strings first (since they're in a clearsigned file)
+//     // then parse them manually
+
+//     // Extract sync_interval
+//     let sync_interval_str = read_singleline_string_from_clearsigntoml(file_path_str, "sync_interval")
+//         .map_err(|e| ThisProjectError::TomlVanillaDeserialStrError(
+//             format!("Failed to read sync_interval: {}", e)
+//         ))?;
+//     let sync_interval = sync_interval_str.parse::<u64>()
+//         .map_err(|e| ThisProjectError::ParseIntError(e))?;
+
+//     // Extract updated_at_timestamp
+//     let timestamp_str = read_singleline_string_from_clearsigntoml(file_path_str, "updated_at_timestamp")
+//         .map_err(|e| ThisProjectError::TomlVanillaDeserialStrError(
+//             format!("Failed to read updated_at_timestamp: {}", e)
+//         ))?;
+//     let updated_at_timestamp = timestamp_str.parse::<u64>()
+//         .map_err(|e| ThisProjectError::ParseIntError(e))?;
+
+//     // remove temp file
+//     // At the very end of the function, clean up temp file if we created one
+//     if let Some(temp_path) = temp_file_to_cleanup {
+//         if let Err(e) = std::fs::remove_file(&temp_path) {
+//             eprintln!("Warning: Failed to remove temporary decrypted file {}: {}", temp_path.display(), e);
+//         }
+//     }
+
+//     // 3. Construct and return the CollaboratorTomlData structure
+//     Ok(CollaboratorTomlData {
+//         user_name,
+//         user_salt_list,
+//         ipv4_addresses,
+//         ipv6_addresses,
+//         gpg_publickey_id,
+//         gpg_key_public,
+//         sync_interval,
+//         updated_at_timestamp,
+//     })
+// }
