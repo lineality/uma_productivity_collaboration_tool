@@ -1,20 +1,17 @@
-/* #[cfg(debug_assertions)]
+/*
 Uma
 2024.09-11
-RUST_BACKTRACE=full cargo run
 
-#### For smallest size, build (~1 mb)
-```bash
-cargo run --profile release-small
-```
-#### or for optimal performance (~10 mb)
-```bash
-cargo run --profile release-performance
-```
+cheat sheet:
+    #[cfg(debug_assertions)]
+    RUST_BACKTRACE=full cargo run
+    #### For smallest size, build (~1 mb)
+    cargo run --profile release-small
 
-```bash
-cargo build --profile release-performance
-```
+    #### or for optimal performance (~10 mb)
+    cargo run --profile release-performance
+    cargo build --profile release-performance
+
 
 # Uma: Coordination, Productivity, Hygiene
 ```
@@ -24,16 +21,12 @@ cargo build --profile release-performance
 
 # local_user desk
 local_user_ready_port_yourdesk_yousend_aimat_their_rmtclb_ip: u16, // locally: You send a signal through your port to their-IP (your desk)
-
 localuser_intray_port_yourdesk_youlisten_bind_yourlocal_ip: u16, // locally: You listen for files sent by the other collaborator to your-port at your-IP (your desk)
-
 local_user_gotit_port_yourdesk_yousend_aimat_their_rmtclb_ip: u16, // locally: You send a signal through your port to their-IP (your desk)
 
 # remote_collab desk
 remote_collab_ready_port_theirdesk_youlisten_bind_yourlocal_ip: u16, // locally: 'you' listen to their-port on your-IP (their desk)
-
 remote_collab_intray_port_theirdesk_yousend_aimat_their_rmtclb_ip: u16, // locally: 'you' add files to their-port on their-IP (their desk)
-
 remote_collab_gotit_port_theirdesk_youlisten_bind_yourlocal_ip: u16, // locally: 'you' listen to their-port on your-IP (their desk)
 
 
@@ -48,19 +41,22 @@ Uma Productivity Collaboration Tools for Project-Alignment
 - https://github.com/lineality/object_relationship_spaces_ai_ml
 In memory of Eleanor Th. Vadala 1923-2023: aviator, astronomer, engineer, pioneer, leader, friend.
 
+## Partner Projects:
+- File Fantastic  https://github.com/lineality/ff_file_manager_minimal_rust
+- Lines Editor    https://github.com/lineality/lines_editor
+
+
 cargo.toml ->
 
 [package]
 name = "uma"
-version = "0.1.0"
-edition = "2021"
+version = "N.N.N"
+edition = "2024"
 
 [dependencies]
 walkdir = "2.5.0"
-toml = "0.8.19"
-serde = { version = "1.0.210", features = ["derive"] }
-rand = "0.8.5"
-getifaddrs = "0.1.4"
+rand = "0.9"
+getifaddrs = "0.6"
 
 https://docs.rs/getifaddrs/latest/getifaddrs/
 
@@ -18491,7 +18487,7 @@ fn create_new_team_channel(
         node_unique_id,  // Vec<u8>, // unique node id
         &relative_messagepost_channel_pathbuf, // nodepath_for_path_in_node
         owner,
-        teamchannel_collaborators_with_access,
+        teamchannel_collaborators_with_access.clone(),
         99999, // default message expiry in minutes, 99_999 ~ 2-months
 
         // Special configurations (not for team channel)
@@ -18528,6 +18524,7 @@ fn create_new_team_channel(
                                 new_node.path_in_parentnode.display(),
                                 new_channel_path
                         );
+
                         Ok(())
                     },
                     Err(e) => {
@@ -19738,7 +19735,7 @@ fn create_corenode_q_and_a(
         node_unique_id.clone(),
         &relative_channel_pathbuf, //&node_specific_path.clone()
         owner,
-        teamchannel_collaborators_with_access,
+        teamchannel_collaborators_with_access.clone(),
         messageposts_expire_after_n_min,
         // Special configurations
         message_post_gpgtoml_required,
@@ -19862,6 +19859,13 @@ fn create_corenode_q_and_a(
                             );
                         }
 
+                        // Save a flag to update send-Qs
+                        let gpg_node_file_pathbuf = node_specific_path.join("node.gpgtoml");
+                        let _ = write_newfile_sendq_flag(
+                            &teamchannel_collaborators_with_access,
+                            &gpg_node_file_pathbuf,
+                        );
+
                         debug_log!("\n✓ Node successfully saved as encrypted file");
 
                         Ok(())
@@ -19888,6 +19892,14 @@ fn create_corenode_q_and_a(
                             );
                         }
                         println!("\n✓ Node successfully saved as clearsigned file: .../node.toml");
+
+                        // Save a flag to update send-Qs
+                        let clearsigned_node_file_pathbuf = node_specific_path.join("node.toml");
+                        let _ = write_newfile_sendq_flag(
+                            &teamchannel_collaborators_with_access,
+                            &clearsigned_node_file_pathbuf,
+                        );
+
                         debug_log!("CoreNode created successfully, saving as clearsigned file... -> new_node.save_node_to_clearsigned_file()");
 
                         Ok(())
@@ -39838,6 +39850,15 @@ fn handle_local_owner_desk(
                             // Move or Save
                             ////////////////
                             /*
+                            Fro move node move-node or save existing node:
+                            If the node is entirely new: save
+                            if node is an existing node, an updated existing node
+                            then the node.toml or node.gpgtoml must be updated
+
+                            Node: When saving a node there is a recurring-issue
+                            of the node-name being redundantly (in duplicate) added
+                            to the save-path.
+
                             1. Make a hash-table of node files' unique ID in session/team-channel: id: path lookup
                             2. check this node uniqeu ID
                             3. if this node is an existing node:
@@ -39975,21 +39996,23 @@ fn handle_local_owner_desk(
                                                     {
                                                         // inspection
 
-                                                        // Determine filename based on flag
-                                                        let node_filename = if save_as_gpgtoml {
-                                                            "node.gpgtoml"
-                                                        } else {
-                                                            "node.toml"
-                                                        };
+                                                        // // Determine filename based on flag
+                                                        // let node_filename = if save_as_gpgtoml {
+                                                        //     "node.gpgtoml"
+                                                        // } else {
+                                                        //     "node.toml"
+                                                        // };
 
-                                                        // add name and extention to path (node.toml or node.gpgtoml)
-                                                        // though only to make path
-                                                        let new_node_file_path = new_node_dir_path.join(node_filename);
+                                                        // // add name and extention to path (node.toml or node.gpgtoml)
+                                                        // // though only to make path
+                                                        // // Note: depending on (current) path system
+                                                        // // this step may not be needed
+                                                        // let new_node_file_path = new_node_dir_path.join(node_filename);
 
                                                         debug_log!(
                                                             "(from {}) HLOD 7.2.3 Node exists, handle move/replace: got-made new_node_toml_file_path -> {:?}",
                                                             &remote_collaborator_name,
-                                                            &new_node_file_path
+                                                            &new_node_dir_path
                                                         );
 
                                                         debug_log!(
