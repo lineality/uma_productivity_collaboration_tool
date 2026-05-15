@@ -16293,9 +16293,20 @@ pub fn get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
     gpg_full_fingerprint_key_id_string: &str, // COLLABORATOR_ADDRESSBOOK_PATH_STR
     base_uma_temp_directory_path: &Path,
 ) -> Result<String, GpgError> {
-    debug_log(
-        "starting gpttrofodg() -> get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml",
-    );
+    #[cfg(debug_assertions)]
+    {
+        debug_log(
+            "starting gpttrofodg() -> get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml",
+        );
+        debug_log!(
+            "gpttrofodg: input_toml_absolute_path{:?}",
+            input_toml_absolute_path
+        );
+        debug_log!(
+            "gpttrofodg: base_uma_temp_directory_path{:?}",
+            base_uma_temp_directory_path
+        );
+    }
 
     // Validate input parameters before proceeding
     if gpg_full_fingerprint_key_id_string.is_empty() {

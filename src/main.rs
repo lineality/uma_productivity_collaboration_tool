@@ -22592,6 +22592,7 @@ fn handle_custom_end_date_input(start_date_timestamp: Option<i64>) -> Result<Opt
 }
 
 /// Moves an entire directory tree from source to destination, preserving internal structure.
+/// LOCAL-USER-ACTION-VERSION: no-extra-add-name-to-path
 ///
 /// # Project Context
 /// This function performs filesystem directory relocation operations, which is a fundamental
@@ -22645,6 +22646,193 @@ pub fn move_directory_tree_to_new_path<P: AsRef<Path>, Q: AsRef<Path>>(
     source_directory: P,
     destination_parent: Q,
 ) -> io::Result<()> {
+
+    #[cfg(debug_assertions)]
+    debug_log!("Start MDTP");
+
+    let source_path = source_directory.as_ref();
+    let dest_parent_path = destination_parent.as_ref();
+
+    // =================================================
+    // Debug-Assert, Test-Assert, Production-Catch-Handle
+    // =================================================
+
+    // Debug assertion: source exists (not in tests, not in production)
+    #[cfg(all(debug_assertions, not(test)))]
+    debug_assert!(
+        source_path.exists(),
+        "Source directory must exist for move operation"
+    );
+
+    // Production catch: source exists
+    if !source_path.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "MDTP error: source directory not found",
+        ));
+    }
+
+    // Debug assertion: source is directory (not in tests, not in production)
+    #[cfg(all(debug_assertions, not(test)))]
+    debug_assert!(
+        source_path.is_dir(),
+        "Source path must be a directory, not a file"
+    );
+
+    // Production catch: source is directory
+    if !source_path.is_dir() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "MDTP error: source is not a directory",
+        ));
+    }
+
+    // Production: create destination parent if it doesn't exist
+    fs::create_dir_all(dest_parent_path)?;
+
+    // Debug assertion: destination parent exists (not in tests, not in production)
+    #[cfg(all(debug_assertions, not(test)))]
+    debug_assert!(
+        dest_parent_path.exists(),
+        "Destination parent directory must exist"
+    );
+
+    // // Extract source directory name
+    // let source_dir_name = match source_path.file_name() {
+    //     Some(name) => name,
+    //     None => {
+    //         return Err(io::Error::new(
+    //             io::ErrorKind::InvalidInput,
+    //             "MDTP error: invalid source path",
+    //         ));
+    //     }
+    // };
+
+    // Construct final destination path (destination_parent/source_dir_name)
+    // let final_destination = dest_parent_path.join(source_dir_name); // added name to path
+    let final_destination = dest_parent_path; // no added name
+
+    #[cfg(debug_assertions)]
+    debug_log!("MDTP: final_destination: {:?}", final_destination);
+
+    // Production catch: destination is a file the already exists (log and skip per requirements)
+    if final_destination.exists() && !final_destination.is_dir(){
+        #[cfg(debug_assertions)]
+        eprintln!(
+            "MDTP: Destination already exists, skipping: {}",
+            final_destination.display()
+        );
+
+        #[cfg(debug_assertions)]
+        debug_log!(
+            "MDTP: Destination already exists, skipping: {}",
+            final_destination.display()
+        );
+
+        return Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            "MDTP error: destination already exists",
+        ));
+    }
+
+    // =================================================
+    // Attempt atomic rename first (same filesystem, fast)
+    // =================================================
+
+    match fs::rename(source_path, &final_destination) {
+        Ok(()) => {
+            // Success: atomic rename completed
+            #[cfg(debug_assertions)]
+            eprintln!("MDTP: Atomic rename successful");
+
+            #[cfg(debug_assertions)]
+            debug_log!("MDTP: Atomic rename successful");
+
+            return Ok(());
+        }
+        Err(_e) => {
+            // Rename failed - likely cross-filesystem
+            // Log in debug mode and proceed to fallback
+            #[cfg(debug_assertions)]
+            eprintln!("MDTP: Atomic rename failed e={}, using copy-delete fallback", _e);
+        }
+    }
+
+    // =================================================
+    // Fallback: Cross-filesystem copy-then-delete
+    // =================================================
+
+    // Copy entire tree iteratively (no recursion)
+    copy_directory_tree_iteratively(source_path, &final_destination)?;
+
+    // Remove source tree after successful copy
+    remove_directory_tree_iteratively(source_path)?;
+
+    #[cfg(debug_assertions)]
+    debug_log!("MDTP End");
+
+    Ok(())
+}
+
+/// Moves an entire directory tree from source to destination, preserving internal structure.
+/// VERSION FOR SYNC, ADDS NAME TO PATH
+///
+/// # Project Context
+/// This function performs filesystem directory relocation operations, which is a fundamental
+/// requirement for file management systems, backup utilities, and application data migration.
+/// Unlike naive implementations that disassemble directory structures, this function treats
+/// the directory as an atomic unit - analogous to dragging and dropping a folder in a GUI.
+///
+/// # Behavior
+/// Given source `/old/mydir/` and destination `/new/`, creates `/new/mydir/` with entire
+/// structure preserved intact. This is the equivalent of GUI drag-and-drop folder movement.
+///
+/// # Strategy
+/// 1. **Atomic rename** (same filesystem): Fast, atomic operation using `fs::rename()`
+/// 2. **Cross-filesystem fallback**: Iterative copy-then-delete (no recursion per NASA rules)
+/// 3. **Error resilience**: Collects errors internally, continues operation, never panics
+///
+/// # Edge Cases Handled
+/// - Empty source directories: Creates empty destination directory
+/// - Existing destination: Logs and returns error without modification
+/// - Symlinks: Copies link itself, not target contents
+/// - Partial failures: Logs errors, continues with remaining items
+/// - Cross-filesystem moves: Automatically falls back to copy-delete
+///
+/// # Error Handling
+/// Production-safe error handling that never panics. Errors are logged in debug builds
+/// and returned as IO errors with unique function-prefixed messages ("MDTP error: ...").
+///
+/// # Example
+/// ```no_run
+/// use std::path::Path;
+///
+/// // Move entire directory tree from old location to new parent directory
+/// // Result: /new/parent/mydir/ contains full structure from /old/mydir/
+/// match move_directory_tree_to_new_path("/old/mydir", "/new/parent") {
+///     Ok(()) => println!("Directory moved successfully"),
+///     Err(e) => eprintln!("Move failed: {}", e),
+/// }
+/// ```
+///
+/// # Parameters
+/// - `source_directory`: Path to directory to move (will become subdirectory of destination)
+/// - `destination_parent`: Parent path where source directory will be relocated
+///
+/// # Returns
+/// - `Ok(())`: Directory successfully moved
+/// - `Err(io::Error)`: Operation failed with descriptive error message
+///
+/// # Panics
+/// Never panics in production builds. Debug assertions active in debug-only builds.
+pub fn sync_movedirectory_tree_to_new_path<P: AsRef<Path>, Q: AsRef<Path>>(
+    source_directory: P,
+    destination_parent: Q,
+) -> io::Result<()> {
+
+    #[cfg(debug_assertions)]
+    debug_log!("Start MDTP");
+
     let source_path = source_directory.as_ref();
     let dest_parent_path = destination_parent.as_ref();
 
@@ -22704,13 +22892,22 @@ pub fn move_directory_tree_to_new_path<P: AsRef<Path>, Q: AsRef<Path>>(
     };
 
     // Construct final destination path (destination_parent/source_dir_name)
-    let final_destination = dest_parent_path.join(source_dir_name);
+    let final_destination = dest_parent_path.join(source_dir_name); // added name to path
+    // let final_destination = dest_parent_path; // no added name
 
+    #[cfg(debug_assertions)]
+    debug_log!("MDTP: final_destination: {:?}", final_destination);
 
     // Production catch: destination is a file the already exists (log and skip per requirements)
     if final_destination.exists() && !final_destination.is_dir(){
         #[cfg(debug_assertions)]
         eprintln!(
+            "MDTP: Destination already exists, skipping: {}",
+            final_destination.display()
+        );
+
+        #[cfg(debug_assertions)]
+        debug_log!(
             "MDTP: Destination already exists, skipping: {}",
             final_destination.display()
         );
@@ -22728,8 +22925,11 @@ pub fn move_directory_tree_to_new_path<P: AsRef<Path>, Q: AsRef<Path>>(
     match fs::rename(source_path, &final_destination) {
         Ok(()) => {
             // Success: atomic rename completed
+            // #[cfg(debug_assertions)]
+            // eprintln!("MDTP: Atomic rename successful");
+
             #[cfg(debug_assertions)]
-            eprintln!("MDTP: Atomic rename successful");
+            debug_log!("MDTP: Atomic rename successful");
 
             return Ok(());
         }
@@ -22750,6 +22950,9 @@ pub fn move_directory_tree_to_new_path<P: AsRef<Path>, Q: AsRef<Path>>(
 
     // Remove source tree after successful copy
     remove_directory_tree_iteratively(source_path)?;
+
+    #[cfg(debug_assertions)]
+    debug_log!("MDTP End");
 
     Ok(())
 }
@@ -23106,7 +23309,7 @@ mod move_dir_tree_tests {
         create_test_directory_structure(&source).unwrap();
 
         // Execute move
-        let result = move_directory_tree_to_new_path(&source, &dest_parent);
+        let result = sync_movedirectory_tree_to_new_path(&source, &dest_parent);
 
         // Assert success
         assert!(result.is_ok(), "Move operation should succeed");
@@ -23140,7 +23343,7 @@ mod move_dir_tree_tests {
         fs::create_dir_all(&dest_parent).unwrap();
 
         // Execute move
-        let result = move_directory_tree_to_new_path(&source, &dest_parent);
+        let result = sync_movedirectory_tree_to_new_path(&source, &dest_parent);
 
         // Assert success
         assert!(result.is_ok(), "Empty directory move should succeed");
@@ -23232,7 +23435,7 @@ mod move_dir_tree_tests {
         fs::write(deep_path.join("deep_file.txt"), b"deep content").unwrap();
 
         // Execute move
-        let result = move_directory_tree_to_new_path(&source, &dest_parent);
+        let result = sync_movedirectory_tree_to_new_path(&source, &dest_parent);
 
         // Assert success
         assert!(result.is_ok(), "Deep structure move should succeed");
@@ -26701,13 +26904,18 @@ fn write_newfile_sendq_flag(
     recipients_list: &[String], // Use a slice for efficiency
     file_path: &Path, // Use a reference to avoid unnecessary cloning
 ) -> Result<(), ThisProjectError> {
+
+    #[cfg(debug_assertions)]
+    debug_log!("start write_newfile_sendq_flag");
+
+    #[cfg(debug_assertions)]
+    debug_log!("write_newfile_sendq_flag -> recipients_list {:?}", recipients_list);
+    debug_log!("write_newfile_sendq_flag -> file_path {:?}", file_path);
+
     let team_channel_name = get_current_team_channel_name_from_nav_path()
         .ok_or(ThisProjectError::InvalidData("Unable to get team channel name".into()))?;
 
     let timestamp_flagfile_name = get_current_unix_timestamp();
-
-    #[cfg(debug_assertions)]
-    debug_log!("write_newfile_sendq_flag -> recipients_list {:?}", recipients_list);
 
     // todo, can remove self from list
     let self_name = get_local_owner_username();
@@ -26717,7 +26925,7 @@ fn write_newfile_sendq_flag(
 
     for recipient in recipients_list {
 
-        // todo, can remove self from list
+        // TODO, can remove self from list
         if recipient != &self_name{
 
         }
@@ -33346,7 +33554,7 @@ fn find_parentnode_toml_path(start_path: &Path) -> Result<PathBuf, ThisProjectEr
 /// * `Result<(), ThisProjectError>` - Success or error status
 fn move_task_q_and_a_wrapper(
     next_path_lookup_table: &HashMap<usize, PathBuf>,
-    // parent_node_uniqueid: Vec<u8>,
+    collaborators: &[String],
 ) -> Result<(), ThisProjectError> {
     #[cfg(debug_assertions)]
     debug_log("starting move_task_q_and_a_wrapper()");
@@ -33403,18 +33611,25 @@ fn move_task_q_and_a_wrapper(
     let dest_path = match next_path_lookup_table.get(&dest_num) {
         Some(path) => path.clone(),
         None => return Err(ThisProjectError::InvalidData(
-            format!("Destination column {} not found", dest_num)
+            format!("error: move_task_q_and_a_wrapper, Destination column {} not found", dest_num)
         )),
     };
     #[cfg(debug_assertions)]
     debug_log!("move_task_q_and_a_wrapper(), Destination path: {:?}", dest_path);
 
     // 3. Perform the move operation
-    move_node_directory(
+    let _result_move_node_directory = move_node_directory(
         source_path,
         dest_path,
-        // parent_node_uniqueid,
+        collaborators,
     )?;
+
+    #[cfg(debug_assertions)]
+    debug_log!(
+        "move_task_q_and_a_wrapper(), _result_move_node_directory: {:?}",
+        _result_move_node_directory,
+    );
+
 
     #[cfg(debug_assertions)]
     debug_log!(
@@ -33607,6 +33822,701 @@ fn get_file_owners_ascii_armored_public_gpg_key(
     Ok(node_owners_public_gpg_key)
 }
 
+// /// TODO: this...needs to be updated
+// /// Moves a node directory and updates its metadata.
+// ///
+// /// This function moves a node's directory from the `source_path` to the `dest_path`.
+// /// It updates the `directory_path` field in the node's `node.toml` file to reflect
+// /// the new location. The function uses the `source_path`, not path within the struct.
+// /// It handles directory creation, moving, and file updates efficiently.
+// ///
+// /// # Arguments
+// ///
+// /// * `source_path`: The current path to the node's directory.
+// /// * `dest_path`: The intended path for the moved node's directory.
+// ///
+// /// # Returns
+// ///
+// /// * `Result<(), ThisProjectError>`: `Ok(())` if the move is successful; otherwise, a `ThisProjectError` is returned.
+// fn move_node_directory(
+//     source_path: PathBuf,
+//     dest_path: PathBuf,
+//     // parent_node_uniqueid: Vec<u8>,
+// ) -> Result<(), ThisProjectError> {
+
+//     #[cfg(debug_assertions)]
+//     {
+//         debug_log!("MND Starting move_node_directory()");
+//         debug_log!("MND Moving node from source_path {:?}", source_path);
+//         debug_log!("MND Moving node to dest_path {:?}", dest_path);
+//     }
+//     /*
+//     Moving Node:
+
+//     1. load node ~like fn update_core_node()
+
+//     2. from destination
+//     3. look for node.toml or node.gpgtoml
+//        if not fuond then look in parent
+//        etc back until found
+//        or exit
+
+//     4. make path_in_parent by
+//        comparing new destination path with
+//        with the parent of the node.* of new parent node
+
+//     5. from node.* file, get id of parent node
+//     6. from node.* file, get path in parent node
+//     7. update updated_at field
+//     8. update parent_node_id field
+//     9. update parent_node_name? field
+
+//     10. re-clearsign
+//     11. if gpgtoml, re-gpg
+//     12. make sure destination is directory path
+//     13. move whole dir
+//     14. node.toml to send-q of ?
+
+//     */
+
+//     match find_parentnode_toml_path(&dest_path) {
+//         Ok(parent_node_path_of_destination) => {
+
+//             #[cfg(debug_assertions)]
+//             debug_log!("MND parent_node_path_of_destination {:?}", parent_node_path_of_destination);
+
+//             // // A. Print the absolute path of the channel directory
+//             // match parent_node_path_of_destination.canonicalize() {
+//             //     Ok(abs_path) => debug_log!("MND 1. Absolute channel directory path: {:?}", abs_path),
+//             //     Err(e) => debug_log!("MND Error 1. getting absolute path of channel directory: {}", e),
+//             // }
+
+
+//             /*
+//             3. Get the parent path vs. new node path difference for 'path in parent'
+//             - remove path to parent from whole path, what remains is path local to parent
+
+
+//             e.g.
+//             full path
+//             animals/pets/fuzzy_pets/cats/long_haired_orange/
+
+//             "node" path:
+//             animals/pets/
+
+//             result: relative path from node
+//             fuzzy_pets/cats/long_haired_orange/
+
+//             */
+
+//             // If parent_node_path points to a file (like node.toml), get its parent directory
+//             let parent_node_dir = if parent_node_path_of_destination.is_file() || parent_node_path_of_destination.extension().is_some() {
+//                 match parent_node_path_of_destination.parent() {
+//                     Some(dir) => dir.to_path_buf(),
+//                     None => return Err(ThisProjectError::from("GRPIPN error: cannot get parent directory")),
+//                 }
+//             } else {
+//                 parent_node_path_of_destination.clone()
+//             };
+
+//             // Either-or .toml .gpgtoml
+//             // A. Check for either node.toml or node.gpgtoml
+//             let node_toml_path = parent_node_dir.join("node.toml");
+//             let node_gpgtoml_path = parent_node_dir.join("node.gpgtoml");
+
+//             let destination_parent_node_file_path = if node_toml_path.exists() {
+//                 debug_log!("MND: destination_parent_node_file_path Found node.toml");
+//                 node_toml_path
+//             } else if node_gpgtoml_path.exists() {
+//                 debug_log!("MND: destination_parent_node_file_path Found node.gpgtoml");
+//                 node_gpgtoml_path
+//             } else {
+//                 return Err(ThisProjectError::from(
+//                     "MND: error Neither node.toml nor node.gpgtoml found in team channel directory".to_string()
+//                 ));
+//             };
+
+//             #[cfg(debug_assertions)]
+//             debug_log!("MND destination_parent_node_file_path {:?}", destination_parent_node_file_path);
+
+//             // get values from parent
+//             // node_name = "alicetown"
+//             // node_unique_id = [222, 22, 116, 195]
+//             // 1 make readcopy
+//             // 2 read
+
+//             // Get armored public key, using key-id (full fingerprint in)
+//             let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+//                 Ok(fingerprint) => fingerprint,
+//                 // Err(e) => {
+//                 //     // Since the function returns Result<CoreNode, String>, we need to return a String error
+//                 //     return Err(format!(
+//                 //         "LCNFTF: implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}",
+//                 //         e
+//                 //     ));
+//                 // }
+//                 Err(_e) => {
+//                     #[cfg(debug_assertions)]
+//                     debug_log(&format!(
+//                         "{}: MND: error ",
+//                         _e
+//                     ));
+//                     return Err(ThisProjectError::from(
+//                         "MND: error gpg_full_fingerprint_key_id_string".to_string()
+//                     ));
+//                 }
+//             };
+
+//             // Get the UME temp directory path with explicit String conversion
+//             let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
+//                 .map_err(|io_err| {
+//                     let gpg_error = GpgError::ValidationError(
+//                         format!("MND: Failed to get UME temp directory path: {}", io_err)
+//                     );
+//                     // Convert GpgError to String for the function's return type
+//                     format!("MND: {:?}", gpg_error)
+//                 })?;
+
+
+//             let node_owners_public_gpg_key1 =
+//                 get_file_owners_ascii_armored_public_gpg_key(
+//                     &destination_parent_node_file_path
+//                 )?;
+
+//             // // ===============================
+//             // //  Get Armored Public Key (start)
+//             // // ===============================
+
+//             // // To Get armored public key, using key-id (use full fingerprint id)
+//             // let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+//             //     Ok(fingerprint) => fingerprint,
+//             //     Err(e) => {
+//             //         // Since the function returns Result<CoreNode, String>, we need to return a String error
+//             //         return Err(ThisProjectError::from(format!(
+//             //             "GPI: implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}",
+//             //             e
+//             //         )));
+//             //     }
+//             // };
+
+//             // // // 1. Paths & Reading-Copies Part 1: node.toml path and read-copy
+
+//             // // Get the UME temp directory path with explicit String conversion
+//             // let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
+//             //     .map_err(|io_err| {
+//             //         let gpg_error = GpgError::ValidationError(
+//             //             format!("GPI: Failed to get UME temp directory path: {}", io_err)
+//             //         );
+//             //         // Convert GpgError to String for the function's return type
+//             //         format!("GPI: {:?}", gpg_error)
+//             //     })?;
+
+//             // // Using Debug trait for more detailed error information
+//             // let node_readcopy_path = get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
+//             //     &destination_parent_node_file_path,
+//             //     &gpg_full_fingerprint_key_id_string,
+//             //     &base_uma_temp_directory_path,
+//             // ).map_err(|e| format!("GPI: Failed to get temporary read copy of TOML file: {:?}", e))?;
+
+//             // // //    // simple read string to get owner name
+//             // // //    // not for extraction and return, just part of validation
+
+//             // #[cfg(debug_assertions)]
+//             // debug_log!("GPI: node_readcopy_path: {:?}", node_readcopy_path);
+
+//             // // Extract Owner for Key Lookup
+//             // let owner_name_of_toml_field_key_to_read = "owner";
+//             // #[cfg(debug_assertions)]
+//             // debug_log!(
+//             //     "GPI: Reading file owner from field '{}' for security validation",
+//             //     owner_name_of_toml_field_key_to_read
+//             // );
+
+//             // // get node_owners_public_gpg_key
+//             // let file_owner_username = match read_single_line_string_field_from_toml(
+//             //     &node_readcopy_path,  // TODO convert to string?
+//             //     owner_name_of_toml_field_key_to_read,
+//             // ) {
+//             //     Ok(username) => {
+//             //         if username.is_empty() {
+//             //             // Convert to String error instead of GpgError
+//             //             return Err(ThisProjectError::from(format!(
+//             //                 "TCS error: Field '{}' is empty in TOML file. File owner is required for security validation.",
+//             //                 owner_name_of_toml_field_key_to_read
+//             //             )));
+//             //         }
+//             //         username
+//             //     }
+//             //     Err(e) => {
+//             //         // Convert to String error instead of GpgError
+//             //         return Err(ThisProjectError::from(format!(
+//             //             "TCS error: Failed to read file owner from field '{}': {}",
+//             //             owner_name_of_toml_field_key_to_read, e
+//             //         )));
+//             //     }
+//             // };
+//             // // println!("GPI: File owner: '{}'", file_owner_username);
+//             // #[cfg(debug_assertions)]
+//             // debug_log!("GPI: File owner: '{}'", file_owner_username);
+
+//             // // TODO returns full response not just string
+//             // // because the filepath needs to be constructed
+//             // // this is a separate function
+//             //    	// let addressbook_readcopy_path_string = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
+//             // //        &file_owner_username,
+//             // //        COLLABORATOR_ADDRESSBOOK_PATH_STR,
+//             // //        &gpg_full_fingerprint_key_id_string,
+//             // //    );
+
+//             // // Get the UME temp directory path with error handling
+//             // let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
+//             //     .map_err(|io_err| format!(
+//             //         "TCS error: Failed to get UME temp directory path: {:?}",
+//             //         io_err
+//             //     ))?;
+
+//             // // Extract the addressbook path string with inline error conversion
+//             // let addressbook_readcopy_path_string = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
+//             //     &file_owner_username,
+//             //     COLLABORATOR_ADDRESSBOOK_PATH_STR,
+//             //     &gpg_full_fingerprint_key_id_string,
+//             //     &base_uma_temp_directory_path,
+//             // ).map_err(|e| format!(
+//             //     "TCS error: Failed to get addressbook path for user '{}': {:?}",
+//             //     file_owner_username,
+//             //     e
+//             // ))?;
+
+//             // // Define cleanup closure
+//             // let cleanup_closure = || {
+//             //     let _ = cleanup_collaborator_temp_file(
+//             //         &node_readcopy_path,
+//             //         &base_uma_temp_directory_path,
+//             //         );
+//             //     let _ = cleanup_collaborator_temp_file(
+//             //         &addressbook_readcopy_path_string,
+//             //         &base_uma_temp_directory_path,
+//             //         );
+//             // };
+
+//             // // use function for general .toml or .gpgtoml readcopy
+//             // // let node_owners_public_gpg_key = read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml(
+//             // //     &addressbook_readcopy_path_string,
+//             // // );
+
+//             // let node_owners_public_gpg_key1 = read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml(
+//             //     &addressbook_readcopy_path_string,
+//             // ).map_err(|e| format!(
+//             //     "TCS error: Failed to get addressbook path for user '{}': {:?}",
+//             //     file_owner_username,
+//             //     e
+//             // ))?;
+
+//             // cleanup_closure();
+
+//             // // ============================
+//             // //  END get Armored Public Key
+//             // // ============================
+
+
+//             let temp_dest_path_string = get_pathstring_to_temp_plaintoml_verified_extracted(
+//                 &destination_parent_node_file_path, // input_toml_absolute_path: &Path,
+//                 &gpg_full_fingerprint_key_id_string, // gpg_full_fingerprint_key_id_string: &str, // COLLABORATOR_ADDRESSBOOK_PATH_STR
+//                 &base_uma_temp_directory_path, // base_uma_temp_directory_path: &Path,
+//                 &node_owners_public_gpg_key1,
+//             )
+//             .map_err(|e| format!("MND: GPG decryption failed: {:?}", e))?;
+
+
+
+//             // make path in parent...
+//             // parent_node_dir vs.
+
+
+//             #[cfg(debug_assertions)]
+//             debug_log!("MND temp_dest_path_string {:?}", temp_dest_path_string);
+
+//             let node_unique_id_vec = read_u8_array_field_from_toml(
+//                 &temp_dest_path_string,
+//                 "node_unique_id"
+//             )?;
+
+//             #[cfg(debug_assertions)]
+//             debug_log!(
+//                 "MND: node_unique_id_vec_result {:?}",
+//                 &node_unique_id_vec
+//             );
+
+//             // Either-or .toml .gpgtoml
+//             // A. Check sourth path for either node.toml or node.gpgtoml
+//             let node_toml_path2 = source_path.join("node.toml");
+//             let node_gpgtoml_path2 = source_path.join("node.gpgtoml");
+
+//             // just extensions type
+//             let source_path_with_file_name_and_extension: PathBuf = if node_toml_path2.exists() {
+//                 debug_log!("MND: source_path_with_file_name_and_extension Found node.toml");
+//                 node_toml_path2.clone()
+//             } else if node_gpgtoml_path2.exists() {
+//                 debug_log!("MND: source_path_with_file_name_and_extension found node.gpgtoml");
+//                 node_gpgtoml_path2.clone()
+//             } else {
+//                 return Err(ThisProjectError::from(
+//                     "MND: Neither node.toml nor node.gpgtoml found in team channel directory".to_string()
+//                 ));
+//             };
+
+//             // ===============================
+//             //  Get Armored Public Key
+//             // ===============================
+//             let node_owners_public_gpg_key =
+//                 get_file_owners_ascii_armored_public_gpg_key(
+//                     &source_path_with_file_name_and_extension
+//                 )?;
+
+//             // // ===============================
+//             // //  Get Armored Public Key (start)
+//             // // ===============================
+
+//             // // To Get armored public key, using key-id (use full fingerprint id)
+//             // let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
+//             //     Ok(fingerprint) => fingerprint,
+//             //     Err(e) => {
+//             //         // Since the function returns Result<CoreNode, String>, we need to return a String error
+//             //         return Err(ThisProjectError::from(format!(
+//             //             "GPI: implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}",
+//             //             e
+//             //         )));
+//             //     }
+//             // };
+
+//             // // // 1. Paths & Reading-Copies Part 1: node.toml path and read-copy
+
+//             // // Get the UME temp directory path with explicit String conversion
+//             // let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
+//             //     .map_err(|io_err| {
+//             //         let gpg_error = GpgError::ValidationError(
+//             //             format!("GPI: Failed to get UME temp directory path: {}", io_err)
+//             //         );
+//             //         // Convert GpgError to String for the function's return type
+//             //         format!("GPI: {:?}", gpg_error)
+//             //     })?;
+
+//             // // Using Debug trait for more detailed error information
+//             // let node_readcopy_path = get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
+//             //     &source_path_with_file_name_and_extension,
+//             //     &gpg_full_fingerprint_key_id_string,
+//             //     &base_uma_temp_directory_path,
+//             // ).map_err(|e| format!("GPI: Failed to get temporary read copy of TOML file: {:?}", e))?;
+
+//             // // //    // simple read string to get owner name
+//             // // //    // not for extraction and return, just part of validation
+
+//             // #[cfg(debug_assertions)]
+//             // debug_log!("GPI: node_readcopy_path: {:?}", node_readcopy_path);
+
+//             // // Extract Owner for Key Lookup
+//             // let owner_name_of_toml_field_key_to_read = "owner";
+//             // #[cfg(debug_assertions)]
+//             // debug_log!(
+//             //     "GPI: Reading file owner from field '{}' for security validation",
+//             //     owner_name_of_toml_field_key_to_read
+//             // );
+
+//             // // get node_owners_public_gpg_key
+//             // let file_owner_username = match read_single_line_string_field_from_toml(
+//             //     &node_readcopy_path,  // TODO convert to string?
+//             //     owner_name_of_toml_field_key_to_read,
+//             // ) {
+//             //     Ok(username) => {
+//             //         if username.is_empty() {
+//             //             // Convert to String error instead of GpgError
+//             //             return Err(ThisProjectError::from(format!(
+//             //                 "TCS error: Field '{}' is empty in TOML file. File owner is required for security validation.",
+//             //                 owner_name_of_toml_field_key_to_read
+//             //             )));
+//             //         }
+//             //         username
+//             //     }
+//             //     Err(e) => {
+//             //         // Convert to String error instead of GpgError
+//             //         return Err(ThisProjectError::from(format!(
+//             //             "TCS error: Failed to read file owner from field '{}': {}",
+//             //             owner_name_of_toml_field_key_to_read, e
+//             //         )));
+//             //     }
+//             // };
+//             // // println!("GPI: File owner: '{}'", file_owner_username);
+//             // #[cfg(debug_assertions)]
+//             // debug_log!("GPI: File owner: '{}'", file_owner_username);
+
+//             // // TODO returns full response not just string
+//             // // because the filepath needs to be constructed
+//             // // this is a separate function
+//             //    	// let addressbook_readcopy_path_string = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
+//             // //        &file_owner_username,
+//             // //        COLLABORATOR_ADDRESSBOOK_PATH_STR,
+//             // //        &gpg_full_fingerprint_key_id_string,
+//             // //    );
+
+//             // // Get the UME temp directory path with error handling
+//             // let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
+//             //     .map_err(|io_err| format!(
+//             //         "TCS error: Failed to get UME temp directory path: {:?}",
+//             //         io_err
+//             //     ))?;
+
+//             // // Extract the addressbook path string with inline error conversion
+//             // let addressbook_readcopy_path_string = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
+//             //     &file_owner_username,
+//             //     COLLABORATOR_ADDRESSBOOK_PATH_STR,
+//             //     &gpg_full_fingerprint_key_id_string,
+//             //     &base_uma_temp_directory_path,
+//             // ).map_err(|e| format!(
+//             //     "TCS error: Failed to get addressbook path for user '{}': {:?}",
+//             //     file_owner_username,
+//             //     e
+//             // ))?;
+
+//             // // Define cleanup closure
+//             // let cleanup_closure = || {
+//             //     let _ = cleanup_collaborator_temp_file(
+//             //         &node_readcopy_path,
+//             //         &base_uma_temp_directory_path,
+//             //         );
+//             //     let _ = cleanup_collaborator_temp_file(
+//             //         &addressbook_readcopy_path_string,
+//             //         &base_uma_temp_directory_path,
+//             //         );
+//             // };
+
+//             // // use function for general .toml or .gpgtoml readcopy
+//             // // let node_owners_public_gpg_key = read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml(
+//             // //     &addressbook_readcopy_path_string,
+//             // // );
+
+//             // let node_owners_public_gpg_key = read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml(
+//             //     &addressbook_readcopy_path_string,
+//             // ).map_err(|e| format!(
+//             //     "TCS error: Failed to get addressbook path for user '{}': {:?}",
+//             //     file_owner_username,
+//             //     e
+//             // ))?;
+
+//             // cleanup_closure();
+
+//             // // ============================
+//             // //  END get Armored Public Key
+//             // // ============================
+
+
+//             // node name
+//             let temp_source_path_string = get_pathstring_to_temp_plaintoml_verified_extracted(
+//                 &source_path_with_file_name_and_extension, // input_toml_absolute_path: &Path,
+//                 &gpg_full_fingerprint_key_id_string, // gpg_full_fingerprint_key_id_string: &str, // COLLABORATOR_ADDRESSBOOK_PATH_STR
+//                 &base_uma_temp_directory_path, // base_uma_temp_directory_path: &Path,
+//                 &node_owners_public_gpg_key,
+//             )
+//             .map_err(|e| format!("MND: GPG decryption failed: {:?}", e))?;
+//             // get name
+//             let node_name_string = read_single_line_string_field_from_toml(
+//                 &temp_source_path_string,
+//                 "node_name"
+//             ).map_err(|e| {
+//                 let error_msg = format!("MND Failed to read node_name: {}", e);
+//                 println!("Error: {}", error_msg);
+//                 GpgError::ValidationError(error_msg)
+//             })?;
+
+//             #[cfg(debug_assertions)]
+//             debug_log!(
+//                 "MND node_name_string {:?}",
+//                 &node_name_string
+//             );
+
+
+
+//             let new_path_in_parentnode = get_relative_path_in_parent_node(
+//                 &dest_path, // full file destination path
+//                 &parent_node_dir, // parent_node_path in middle of whole full path
+//             )?;
+
+//             #[cfg(debug_assertions)]
+//             debug_log!("MND new_path_in_parentnode {:?}", new_path_in_parentnode);
+
+//             // let newpath_in_parentnode_with_name = new_path_in_parentnode.join(node_name_string.clone());
+
+
+//             // #[cfg(debug_assertions)]
+//             // debug_log!("MND newpath_in_parentnode_with_name {:?}", newpath_in_parentnode_with_name);
+
+//             // 1. Construct the new node path (where the moved node will be located).
+//             // // NO UNWRAP!!
+//             // let new_node_path = dest_path.join(source_path.file_name().unwrap());
+//             // #[cfg(debug_assertions)]
+//             // debug_log!("MND: new_node_path is: {:?}", new_node_path);
+
+
+
+//             // add source file name to => destination_path
+//             let new_node_path: PathBuf = if node_toml_path2.exists() {
+//                 debug_log!("MND: for new_node_path using node.toml");
+//                 let newdestpath = dest_path.join(node_name_string);
+
+//                 newdestpath.join("node.toml")
+//             } else if node_gpgtoml_path2.exists() {
+//                 debug_log!("MND: for new_node_path using node.gpgtoml");
+//                 let newdestpath = dest_path.join(node_name_string);
+
+//                 newdestpath.join("node.gpgtoml")
+//             } else {
+//                 return Err(ThisProjectError::from(
+//                     "MND: Neither node.toml nor node.gpgtoml found in team channel directory".to_string()
+//                 ));
+//             };
+
+//             // parent of destination file
+//             // Safely get the parent directory as a PathBuf
+//             let new_nodepath_dir = match new_node_path.parent() {
+//                 Some(parent) => parent.to_path_buf(),
+//                 None => {
+//                     #[cfg(debug_assertions)]
+//                     debug_log!("error MND No parent directory found for path: {:?}", new_node_path);
+//                     // Handle the error case, e.g., return early or use a default
+//                     return Err(ThisProjectError::from(
+//                         "MND: error MND No parent directory found for path".to_string()
+//                     ));
+//                 }
+//             };
+
+
+
+//             // // let original_node_toml_path = new_node_path.push("node.toml");
+//             // let mut original_node_toml_path = source_path.clone();
+//             // original_node_toml_path.push("node.toml");
+
+//             // // 3. Update node.toml (use full path)
+//             // // Option 1: Using to_string_lossy() (safest for paths that might contain non-UTF-8 characters)
+//             // let new_node_path_string = dest_path.to_string_lossy().into_owned();
+
+//             // #[cfg(debug_assertions)]
+//             // debug_log!(
+//             //     "next: match safe_update_toml_field(\n{:?},\n{:?},\n{:?},\n)",
+//             //     &original_node_toml_path,   // path to .toml
+//             //     &new_node_path_string, // new value
+//             //     "path_in_parentnode",      // name of field
+//             // );
+
+
+//             /*
+
+
+
+
+//             */
+
+
+
+
+
+
+
+//             // 2. Create the new directory, including all parents.
+//             #[cfg(debug_assertions)]
+//             debug_log!("MND: source_path_with_file_name_and_extension: {:?}", source_path_with_file_name_and_extension);
+
+//             // add source file name to => source_path
+//             // source_path_with_file_name_and_extension
+//             // read_path...
+//             let save_format_use_gpgtoml: bool = if node_toml_path2.exists() {
+//                 debug_log!("MND: Found node.toml");
+//                 false
+//             } else if node_gpgtoml_path2.exists() {
+//                 debug_log!("MND: Found node.gpgtoml");
+//                 true
+//             } else {
+//                 return Err(ThisProjectError::from(
+//                     "MND: Neither node.toml nor node.gpgtoml found in team channel directory".to_string()
+//                 ));
+//             };
+
+
+
+
+
+//             /*
+//             read_from_path_to_node_file, // pathbuf
+//             save_to_path_dir, // &pathbuf, new_node_path not including filename/extension
+//             new_parent_node_uniqueid, // vec<u8>, value to update
+//             new_path_in_parentnode, // string, value to update
+//             save_format_use_gpgtoml, // bool for node.toml or node.gpgtoml
+
+//             fn safe_update_for_moving_node_toml_fields(
+//                1 read_from_path_to_node_file: PathBuf,
+//                2 save_to_path_dir: PathBuf,
+//                3 new_parent_node_uniqueid: Vec<u8>,
+//                4 new_path_in_parentnode: String,
+//                5 save_format_use_gpgtoml: bool,
+//             ) -> Result<(), String> {
+//             */
+
+
+
+//             match safe_update_for_moving_node_toml_fields(
+//                 &source_path_with_file_name_and_extension, //  pathbuf node_clearsigned_or_gpg_toml_path
+//                 &source_path, // &pathbuf, new_node_path not including filename/extension
+//                 node_unique_id_vec, // new_parent_node_uniqueid
+//                 &new_path_in_parentnode, // old &newpath_in_parentnode_with_name, // new_path_in_parentnode
+//                 save_format_use_gpgtoml, // bool for node.toml or node.gpgtoml
+//             ) {
+//                 Ok(_) => println!("Successfully updated TOML file"),
+//                 Err(e) => eprintln!("Error: {}", e)
+//             }
+
+
+//             // 2. Create the new directory, including all parents.
+//             // fs::create_dir_all(&new_nodepath_dir)?;
+
+//             #[cfg(debug_assertions)]
+//             {
+//                 debug_log!("MND file new_node_path {:?}", new_node_path);
+//                 debug_log!("MND: dif destination new_nodepath_dir: {:?}", new_nodepath_dir);
+//                 // debug_log!("MND: created new_nodepath_dir: {:?}", new_nodepath_dir);
+//             }
+
+
+
+//             // 4. Recursively move the source directory's contents to the new directory.
+//             // arguments are directories, not file-paths
+//             // move_directory_contents(
+//             let _ = move_directory_tree_to_new_path(
+//                 &source_path, // from
+//                 &new_nodepath_dir // to
+//             )?;
+
+//             #[cfg(debug_assertions)]
+//             {
+//                 debug_log!("MND: contents moved from: {:?}", source_path);
+//                 debug_log!("MND: contents moved to: {:?}", new_nodepath_dir);
+//                 debug_log!("MND: updated node.toml paths");
+//             }
+
+
+
+//             // 5. Remove the old directory.
+//             fs::remove_dir_all(source_path.clone())?;
+
+//             #[cfg(debug_assertions)]
+//             debug_log!("MND: removed source_path at : {:?}", source_path);
+
+//         },
+//         Err(e) => println!("Error: {}", e),
+//     }
+//     println!("Successfully moved Node Directory");
+
+//     Ok(())
+// }
+
+
 /// TODO: this...needs to be updated
 /// Moves a node directory and updates its metadata.
 ///
@@ -33622,11 +34532,13 @@ fn get_file_owners_ascii_armored_public_gpg_key(
 ///
 /// # Returns
 ///
+/// Note: this sets update flag, do not call this in sync
+///
 /// * `Result<(), ThisProjectError>`: `Ok(())` if the move is successful; otherwise, a `ThisProjectError` is returned.
 fn move_node_directory(
     source_path: PathBuf,
     dest_path: PathBuf,
-    // parent_node_uniqueid: Vec<u8>,
+    collaborators: &[String],
 ) -> Result<(), ThisProjectError> {
 
     #[cfg(debug_assertions)]
@@ -33661,7 +34573,6 @@ fn move_node_directory(
     12. make sure destination is directory path
     13. move whole dir
     14. node.toml to send-q of ?
-
     */
 
     match find_parentnode_toml_path(&dest_path) {
@@ -33671,16 +34582,9 @@ fn move_node_directory(
             debug_log!("MND parent_node_path_of_destination {:?}", parent_node_path_of_destination);
 
             // // A. Print the absolute path of the channel directory
-            // match parent_node_path_of_destination.canonicalize() {
-            //     Ok(abs_path) => debug_log!("MND 1. Absolute channel directory path: {:?}", abs_path),
-            //     Err(e) => debug_log!("MND Error 1. getting absolute path of channel directory: {}", e),
-            // }
-
-
             /*
             3. Get the parent path vs. new node path difference for 'path in parent'
             - remove path to parent from whole path, what remains is path local to parent
-
 
             e.g.
             full path
@@ -33733,13 +34637,6 @@ fn move_node_directory(
             // Get armored public key, using key-id (full fingerprint in)
             let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
                 Ok(fingerprint) => fingerprint,
-                // Err(e) => {
-                //     // Since the function returns Result<CoreNode, String>, we need to return a String error
-                //     return Err(format!(
-                //         "LCNFTF: implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}",
-                //         e
-                //     ));
-                // }
                 Err(_e) => {
                     #[cfg(debug_assertions)]
                     debug_log(&format!(
@@ -33768,142 +34665,6 @@ fn move_node_directory(
                     &destination_parent_node_file_path
                 )?;
 
-            // // ===============================
-            // //  Get Armored Public Key (start)
-            // // ===============================
-
-            // // To Get armored public key, using key-id (use full fingerprint id)
-            // let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
-            //     Ok(fingerprint) => fingerprint,
-            //     Err(e) => {
-            //         // Since the function returns Result<CoreNode, String>, we need to return a String error
-            //         return Err(ThisProjectError::from(format!(
-            //             "GPI: implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}",
-            //             e
-            //         )));
-            //     }
-            // };
-
-            // // // 1. Paths & Reading-Copies Part 1: node.toml path and read-copy
-
-            // // Get the UME temp directory path with explicit String conversion
-            // let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
-            //     .map_err(|io_err| {
-            //         let gpg_error = GpgError::ValidationError(
-            //             format!("GPI: Failed to get UME temp directory path: {}", io_err)
-            //         );
-            //         // Convert GpgError to String for the function's return type
-            //         format!("GPI: {:?}", gpg_error)
-            //     })?;
-
-            // // Using Debug trait for more detailed error information
-            // let node_readcopy_path = get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
-            //     &destination_parent_node_file_path,
-            //     &gpg_full_fingerprint_key_id_string,
-            //     &base_uma_temp_directory_path,
-            // ).map_err(|e| format!("GPI: Failed to get temporary read copy of TOML file: {:?}", e))?;
-
-            // // //    // simple read string to get owner name
-            // // //    // not for extraction and return, just part of validation
-
-            // #[cfg(debug_assertions)]
-            // debug_log!("GPI: node_readcopy_path: {:?}", node_readcopy_path);
-
-            // // Extract Owner for Key Lookup
-            // let owner_name_of_toml_field_key_to_read = "owner";
-            // #[cfg(debug_assertions)]
-            // debug_log!(
-            //     "GPI: Reading file owner from field '{}' for security validation",
-            //     owner_name_of_toml_field_key_to_read
-            // );
-
-            // // get node_owners_public_gpg_key
-            // let file_owner_username = match read_single_line_string_field_from_toml(
-            //     &node_readcopy_path,  // TODO convert to string?
-            //     owner_name_of_toml_field_key_to_read,
-            // ) {
-            //     Ok(username) => {
-            //         if username.is_empty() {
-            //             // Convert to String error instead of GpgError
-            //             return Err(ThisProjectError::from(format!(
-            //                 "TCS error: Field '{}' is empty in TOML file. File owner is required for security validation.",
-            //                 owner_name_of_toml_field_key_to_read
-            //             )));
-            //         }
-            //         username
-            //     }
-            //     Err(e) => {
-            //         // Convert to String error instead of GpgError
-            //         return Err(ThisProjectError::from(format!(
-            //             "TCS error: Failed to read file owner from field '{}': {}",
-            //             owner_name_of_toml_field_key_to_read, e
-            //         )));
-            //     }
-            // };
-            // // println!("GPI: File owner: '{}'", file_owner_username);
-            // #[cfg(debug_assertions)]
-            // debug_log!("GPI: File owner: '{}'", file_owner_username);
-
-            // // TODO returns full response not just string
-            // // because the filepath needs to be constructed
-            // // this is a separate function
-            //    	// let addressbook_readcopy_path_string = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
-            // //        &file_owner_username,
-            // //        COLLABORATOR_ADDRESSBOOK_PATH_STR,
-            // //        &gpg_full_fingerprint_key_id_string,
-            // //    );
-
-            // // Get the UME temp directory path with error handling
-            // let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
-            //     .map_err(|io_err| format!(
-            //         "TCS error: Failed to get UME temp directory path: {:?}",
-            //         io_err
-            //     ))?;
-
-            // // Extract the addressbook path string with inline error conversion
-            // let addressbook_readcopy_path_string = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
-            //     &file_owner_username,
-            //     COLLABORATOR_ADDRESSBOOK_PATH_STR,
-            //     &gpg_full_fingerprint_key_id_string,
-            //     &base_uma_temp_directory_path,
-            // ).map_err(|e| format!(
-            //     "TCS error: Failed to get addressbook path for user '{}': {:?}",
-            //     file_owner_username,
-            //     e
-            // ))?;
-
-            // // Define cleanup closure
-            // let cleanup_closure = || {
-            //     let _ = cleanup_collaborator_temp_file(
-            //         &node_readcopy_path,
-            //         &base_uma_temp_directory_path,
-            //         );
-            //     let _ = cleanup_collaborator_temp_file(
-            //         &addressbook_readcopy_path_string,
-            //         &base_uma_temp_directory_path,
-            //         );
-            // };
-
-            // // use function for general .toml or .gpgtoml readcopy
-            // // let node_owners_public_gpg_key = read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml(
-            // //     &addressbook_readcopy_path_string,
-            // // );
-
-            // let node_owners_public_gpg_key1 = read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml(
-            //     &addressbook_readcopy_path_string,
-            // ).map_err(|e| format!(
-            //     "TCS error: Failed to get addressbook path for user '{}': {:?}",
-            //     file_owner_username,
-            //     e
-            // ))?;
-
-            // cleanup_closure();
-
-            // // ============================
-            // //  END get Armored Public Key
-            // // ============================
-
-
             let temp_dest_path_string = get_pathstring_to_temp_plaintoml_verified_extracted(
                 &destination_parent_node_file_path, // input_toml_absolute_path: &Path,
                 &gpg_full_fingerprint_key_id_string, // gpg_full_fingerprint_key_id_string: &str, // COLLABORATOR_ADDRESSBOOK_PATH_STR
@@ -33913,10 +34674,8 @@ fn move_node_directory(
             .map_err(|e| format!("MND: GPG decryption failed: {:?}", e))?;
 
 
-
             // make path in parent...
             // parent_node_dir vs.
-
 
             #[cfg(debug_assertions)]
             debug_log!("MND temp_dest_path_string {:?}", temp_dest_path_string);
@@ -33958,142 +34717,6 @@ fn move_node_directory(
                     &source_path_with_file_name_and_extension
                 )?;
 
-            // // ===============================
-            // //  Get Armored Public Key (start)
-            // // ===============================
-
-            // // To Get armored public key, using key-id (use full fingerprint id)
-            // let gpg_full_fingerprint_key_id_string = match LocalUserUma::read_gpg_fingerprint_from_file() {
-            //     Ok(fingerprint) => fingerprint,
-            //     Err(e) => {
-            //         // Since the function returns Result<CoreNode, String>, we need to return a String error
-            //         return Err(ThisProjectError::from(format!(
-            //             "GPI: implCoreNode save node to file: Failed to read GPG fingerprint from uma.toml: {}",
-            //             e
-            //         )));
-            //     }
-            // };
-
-            // // // 1. Paths & Reading-Copies Part 1: node.toml path and read-copy
-
-            // // Get the UME temp directory path with explicit String conversion
-            // let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
-            //     .map_err(|io_err| {
-            //         let gpg_error = GpgError::ValidationError(
-            //             format!("GPI: Failed to get UME temp directory path: {}", io_err)
-            //         );
-            //         // Convert GpgError to String for the function's return type
-            //         format!("GPI: {:?}", gpg_error)
-            //     })?;
-
-            // // Using Debug trait for more detailed error information
-            // let node_readcopy_path = get_pathstring_to_tmp_clearsigned_readcopy_of_toml_or_decrypted_gpgtoml(
-            //     &source_path_with_file_name_and_extension,
-            //     &gpg_full_fingerprint_key_id_string,
-            //     &base_uma_temp_directory_path,
-            // ).map_err(|e| format!("GPI: Failed to get temporary read copy of TOML file: {:?}", e))?;
-
-            // // //    // simple read string to get owner name
-            // // //    // not for extraction and return, just part of validation
-
-            // #[cfg(debug_assertions)]
-            // debug_log!("GPI: node_readcopy_path: {:?}", node_readcopy_path);
-
-            // // Extract Owner for Key Lookup
-            // let owner_name_of_toml_field_key_to_read = "owner";
-            // #[cfg(debug_assertions)]
-            // debug_log!(
-            //     "GPI: Reading file owner from field '{}' for security validation",
-            //     owner_name_of_toml_field_key_to_read
-            // );
-
-            // // get node_owners_public_gpg_key
-            // let file_owner_username = match read_single_line_string_field_from_toml(
-            //     &node_readcopy_path,  // TODO convert to string?
-            //     owner_name_of_toml_field_key_to_read,
-            // ) {
-            //     Ok(username) => {
-            //         if username.is_empty() {
-            //             // Convert to String error instead of GpgError
-            //             return Err(ThisProjectError::from(format!(
-            //                 "TCS error: Field '{}' is empty in TOML file. File owner is required for security validation.",
-            //                 owner_name_of_toml_field_key_to_read
-            //             )));
-            //         }
-            //         username
-            //     }
-            //     Err(e) => {
-            //         // Convert to String error instead of GpgError
-            //         return Err(ThisProjectError::from(format!(
-            //             "TCS error: Failed to read file owner from field '{}': {}",
-            //             owner_name_of_toml_field_key_to_read, e
-            //         )));
-            //     }
-            // };
-            // // println!("GPI: File owner: '{}'", file_owner_username);
-            // #[cfg(debug_assertions)]
-            // debug_log!("GPI: File owner: '{}'", file_owner_username);
-
-            // // TODO returns full response not just string
-            // // because the filepath needs to be constructed
-            // // this is a separate function
-            //    	// let addressbook_readcopy_path_string = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
-            // //        &file_owner_username,
-            // //        COLLABORATOR_ADDRESSBOOK_PATH_STR,
-            // //        &gpg_full_fingerprint_key_id_string,
-            // //    );
-
-            // // Get the UME temp directory path with error handling
-            // let base_uma_temp_directory_path = get_base_uma_temp_directory_path()
-            //     .map_err(|io_err| format!(
-            //         "TCS error: Failed to get UME temp directory path: {:?}",
-            //         io_err
-            //     ))?;
-
-            // // Extract the addressbook path string with inline error conversion
-            // let addressbook_readcopy_path_string = get_addressbook_pathstring_to_temp_readcopy_of_toml_or_decrypted_gpgtoml(
-            //     &file_owner_username,
-            //     COLLABORATOR_ADDRESSBOOK_PATH_STR,
-            //     &gpg_full_fingerprint_key_id_string,
-            //     &base_uma_temp_directory_path,
-            // ).map_err(|e| format!(
-            //     "TCS error: Failed to get addressbook path for user '{}': {:?}",
-            //     file_owner_username,
-            //     e
-            // ))?;
-
-            // // Define cleanup closure
-            // let cleanup_closure = || {
-            //     let _ = cleanup_collaborator_temp_file(
-            //         &node_readcopy_path,
-            //         &base_uma_temp_directory_path,
-            //         );
-            //     let _ = cleanup_collaborator_temp_file(
-            //         &addressbook_readcopy_path_string,
-            //         &base_uma_temp_directory_path,
-            //         );
-            // };
-
-            // // use function for general .toml or .gpgtoml readcopy
-            // // let node_owners_public_gpg_key = read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml(
-            // //     &addressbook_readcopy_path_string,
-            // // );
-
-            // let node_owners_public_gpg_key = read_clearsignvalidated_gpg_key_public_multiline_string_from_clearsigntoml(
-            //     &addressbook_readcopy_path_string,
-            // ).map_err(|e| format!(
-            //     "TCS error: Failed to get addressbook path for user '{}': {:?}",
-            //     file_owner_username,
-            //     e
-            // ))?;
-
-            // cleanup_closure();
-
-            // // ============================
-            // //  END get Armored Public Key
-            // // ============================
-
-
             // node name
             let temp_source_path_string = get_pathstring_to_temp_plaintoml_verified_extracted(
                 &source_path_with_file_name_and_extension, // input_toml_absolute_path: &Path,
@@ -34128,36 +34751,25 @@ fn move_node_directory(
             #[cfg(debug_assertions)]
             debug_log!("MND new_path_in_parentnode {:?}", new_path_in_parentnode);
 
-            // let newpath_in_parentnode_with_name = new_path_in_parentnode.join(node_name_string.clone());
-
-
-            // #[cfg(debug_assertions)]
-            // debug_log!("MND newpath_in_parentnode_with_name {:?}", newpath_in_parentnode_with_name);
-
-            // 1. Construct the new node path (where the moved node will be located).
-            // // NO UNWRAP!!
-            // let new_node_path = dest_path.join(source_path.file_name().unwrap());
-            // #[cfg(debug_assertions)]
-            // debug_log!("MND: new_node_path is: {:?}", new_node_path);
-
-
-
             // add source file name to => destination_path
             let new_node_path: PathBuf = if node_toml_path2.exists() {
                 debug_log!("MND: for new_node_path using node.toml");
-                let newdestpath = dest_path.join(node_name_string);
-
+                let newdestpath = dest_path.join(node_name_string); // adding node name as dir name
+                // let newdestpath = dest_path; // without node-name
                 newdestpath.join("node.toml")
             } else if node_gpgtoml_path2.exists() {
                 debug_log!("MND: for new_node_path using node.gpgtoml");
-                let newdestpath = dest_path.join(node_name_string);
-
+                let newdestpath = dest_path.join(node_name_string); // adding node name as dir name
+                // let newdestpath = dest_path; // without node-name
                 newdestpath.join("node.gpgtoml")
             } else {
                 return Err(ThisProjectError::from(
                     "MND: Neither node.toml nor node.gpgtoml found in team channel directory".to_string()
                 ));
             };
+
+            #[cfg(debug_assertions)]
+            debug_log!("MND: new_node_path (parent+this+dir+file): {:?}", new_node_path);
 
             // parent of destination file
             // Safely get the parent directory as a PathBuf
@@ -34172,38 +34784,6 @@ fn move_node_directory(
                     ));
                 }
             };
-
-
-
-            // // let original_node_toml_path = new_node_path.push("node.toml");
-            // let mut original_node_toml_path = source_path.clone();
-            // original_node_toml_path.push("node.toml");
-
-            // // 3. Update node.toml (use full path)
-            // // Option 1: Using to_string_lossy() (safest for paths that might contain non-UTF-8 characters)
-            // let new_node_path_string = dest_path.to_string_lossy().into_owned();
-
-            // #[cfg(debug_assertions)]
-            // debug_log!(
-            //     "next: match safe_update_toml_field(\n{:?},\n{:?},\n{:?},\n)",
-            //     &original_node_toml_path,   // path to .toml
-            //     &new_node_path_string, // new value
-            //     "path_in_parentnode",      // name of field
-            // );
-
-
-            /*
-
-
-
-
-            */
-
-
-
-
-
-
 
             // 2. Create the new directory, including all parents.
             #[cfg(debug_assertions)]
@@ -34224,10 +34804,6 @@ fn move_node_directory(
                 ));
             };
 
-
-
-
-
             /*
             read_from_path_to_node_file, // pathbuf
             save_to_path_dir, // &pathbuf, new_node_path not including filename/extension
@@ -34244,8 +34820,6 @@ fn move_node_directory(
             ) -> Result<(), String> {
             */
 
-
-
             match safe_update_for_moving_node_toml_fields(
                 &source_path_with_file_name_and_extension, //  pathbuf node_clearsigned_or_gpg_toml_path
                 &source_path, // &pathbuf, new_node_path not including filename/extension
@@ -34257,9 +34831,36 @@ fn move_node_directory(
                 Err(e) => eprintln!("Error: {}", e)
             }
 
-
             // 2. Create the new directory, including all parents.
             // fs::create_dir_all(&new_nodepath_dir)?;
+            if !new_nodepath_dir.exists() {
+                // Debug: full path detail, not in production binary
+                #[cfg(debug_assertions)]
+                debug_log!(
+                    "MND: destination dir missing, creating: {:?}",
+                    new_nodepath_dir
+                );
+
+                match fs::create_dir_all(&new_nodepath_dir) {
+                    Ok(_) => {
+                        #[cfg(debug_assertions)]
+                        debug_log!("MND: created destination directory");
+                    }
+                    Err(_e) => {
+                        // Debug: full error + path, not in production binary
+                        #[cfg(debug_assertions)]
+                        debug_log!(
+                            "MND: create_dir_all failed - path={:?} err={:?}",
+                            new_nodepath_dir,
+                            _e
+                        );
+                        // Production: terse, no path/data leakage, unique prefix
+                        return Err(ThisProjectError::from(
+                            "MND_MKDST: failed to create destination directory"
+                        ));
+                    }
+                }
+            }
 
             #[cfg(debug_assertions)]
             {
@@ -34268,29 +34869,100 @@ fn move_node_directory(
                 // debug_log!("MND: created new_nodepath_dir: {:?}", new_nodepath_dir);
             }
 
-
-
             // 4. Recursively move the source directory's contents to the new directory.
             // arguments are directories, not file-paths
             // move_directory_contents(
-            let _ = move_directory_tree_to_new_path(
-                &source_path, // from
-                &new_nodepath_dir // to
-            )?;
+            // let _result_move_directory_tree_to_newpath = move_directory_tree_to_new_path(
+            //     &source_path, // from
+            //     &new_nodepath_dir // to
+            // )?;
+
+            // Debug-only pre-move existence snapshot
+            #[cfg(debug_assertions)]
+            {
+                debug_log!("MND_MV: source exists:      {}", source_path.exists());
+                debug_log!("MND_MV: destination exists: {}", new_nodepath_dir.exists());
+            }
+
+            match move_directory_tree_to_new_path(&source_path, &new_nodepath_dir) {
+                Ok(_) => {
+                    #[cfg(debug_assertions)]
+                    debug_log!("MND_MV: move_directory_tree_to_new_path succeeded");
+                }
+                Err(_e) => {
+                    // Debug: full path + OS error detail, NOT compiled into production
+                    #[cfg(debug_assertions)]
+                    debug_log!(
+                        "MND_MV: move failed - src={:?} dst={:?} os_err={:?}",
+                        source_path,
+                        new_nodepath_dir,
+                        _e
+                    );
+                    // Production: terse, unique prefix, no path or data leakage
+                    return Err(ThisProjectError::from(
+                        "MND_MV: move_directory_tree_to_new_path failed"
+                    ));
+                }
+            }
 
             #[cfg(debug_assertions)]
             {
+                // debug_log!("MND: _result_move_directory_tree_to_newpath: {:?}", _result_move_directory_tree_to_newpath);
                 debug_log!("MND: contents moved from: {:?}", source_path);
+                debug_log!("MND: new_node_path: {:?}", new_node_path);
                 debug_log!("MND: contents moved to: {:?}", new_nodepath_dir);
                 debug_log!("MND: updated node.toml paths");
             }
 
-            // 5. Remove the old directory.
-            fs::remove_dir_all(source_path.clone())?;
+            // ══════════════════════════════════════════════════════════════════
+            // TRIGGER SYNC FOR MOVED NODE
+            // ══════════════════════════════════════════════════════════════════
+            // new_node_path points to the actual node.toml / node.gpgtoml
+            // inside the NEW directory structure.
 
+            let _write_newfile_sendqflag = write_newfile_sendq_flag(
+                collaborators,
+                &new_node_path,
+            );
             #[cfg(debug_assertions)]
-            debug_log!("MND: removed source_path at : {:?}", source_path);
+            debug_log!("MND: _write_newfile_sendqflag : {:?}", _write_newfile_sendqflag);
 
+            // 5. Remove the old directory.
+            // fs::remove_dir_all(source_path.clone())?;
+
+            // Debug-only: confirm source still present before remove attempt
+            #[cfg(debug_assertions)]
+            debug_log!(
+                "MND_RM: source exists before remove: {} path={:?}",
+                source_path.exists(),
+                source_path
+            );
+
+            if source_path.exists() {
+                match fs::remove_dir_all(&source_path) {
+                    Ok(_) => {
+                        #[cfg(debug_assertions)]
+                        debug_log!("MND_RM: source directory removed successfully");
+                    }
+                    Err(_e) => {
+                        // Debug: full path + OS error, NOT in production binary
+                        #[cfg(debug_assertions)]
+                        debug_log!(
+                            "MND_RM: remove_dir_all failed (non-fatal, move succeeded) \
+                            path={:?} os_err={:?}",
+                            source_path,
+                            _e
+                        );
+                        // Production: terse warning only, no halt.
+                        // Move succeeded; orphaned source requires manual or scheduled cleanup.
+                        // No path/data in this message - security boundary.
+                        eprintln!("MND_RM: warn: source cleanup failed after successful move");
+                    }
+                }
+
+                #[cfg(debug_assertions)]
+                debug_log!("MND: removed source_path at : {:?}", source_path);
+            }
         },
         Err(e) => println!("Error: {}", e),
     }
@@ -34298,6 +34970,7 @@ fn move_node_directory(
 
     Ok(())
 }
+
 
 /// Updates a specified field in a TOML file with a new value.
 ///
@@ -39850,7 +40523,7 @@ fn handle_local_owner_desk(
                             // Move or Save
                             ////////////////
                             /*
-                            Fro move node move-node or save existing node:
+                            For move node move-node or save existing node:
                             If the node is entirely new: save
                             if node is an existing node, an updated existing node
                             then the node.toml or node.gpgtoml must be updated
@@ -40123,7 +40796,7 @@ fn handle_local_owner_desk(
                                                         // Recursive Move Whole Directory
                                                         // 3.3 Move old node directory (not remove/delete) (directory, not file)
                                                         // from olddir_abs_node_directory_path to new_full_abs_node_directory_path
-                                                        if let Err(_error) = move_directory_tree_to_new_path(&base_olddir_existing_node_directory_path, &base_node_path_new) {
+                                                        if let Err(_error) = sync_movedirectory_tree_to_new_path(&base_olddir_existing_node_directory_path, &base_node_path_new) {
                                                             #[cfg(debug_assertions)]
                                                             debug_log!(
                                                                 "(from {}) HLOD An error occurred: {}",
@@ -42040,7 +42713,7 @@ fn get_or_create_send_queue(
             Err(_e) => {
                 #[cfg(debug_assertions)]
                 debug_log!(
-                    "Failed to prepare readable path for {:?}: {} - using timestamp 0 (to {})",
+                    "GOCSQ Failed to prepare readable path for {:?}: {} - using timestamp 0 (to {})",
                     original_path,
                     _e,
                     remote_collaborator_name,
@@ -44694,11 +45367,14 @@ fn we_love_projects_loop(
     or maybe this gets done in the project-manager-thread (not the sink thread)
     */
 
+    #[cfg(debug_assertions)]
+    debug_log!("start: we_love_projects_loop");
 
     // Step 1: Get the absolute path to the executable's parent directory
     let executable_parent_directory = match get_absolute_path_to_executable_parentdirectory() {
         Ok(path) => path,
         Err(e) => {
+            #[cfg(debug_assertions)]
             debug_log(&format!("Error getting executable directory: {}", e));
             return Err(io::Error::new(
                 io::ErrorKind::NotFound,
@@ -44707,6 +45383,7 @@ fn we_love_projects_loop(
         }
     };
 
+    #[cfg(debug_assertions)]
     debug_log!("executable_parent_directory: {:?}", executable_parent_directory);
 
     // Step 2: Join the target path to the executable directory
@@ -44740,14 +45417,17 @@ fn we_love_projects_loop(
         debug_log(&format!("Path does not exist: {:?}", target_path));
         return Err(io::Error::new(
             io::ErrorKind::NotFound,
-            format!("Path does not exist: {:?}", target_path)
+            format!("Error Path does not exist: {:?}", target_path)
         ));
     };
 
+    #[cfg(debug_assertions)]
     debug_log!("Current executable-relative absolute path: {:?}", current_exe_dir_relative_abs_path_canonicalized);
 
+    #[cfg(debug_assertions)]
     debug_log!("Using project path: {:?}", current_exe_dir_relative_abs_path_canonicalized);
 
+    #[cfg(debug_assertions)]
     debug_log!(" {:?}", current_exe_dir_relative_abs_path_canonicalized);
 
     // getting data from uma.toml
@@ -44936,6 +45616,7 @@ fn we_love_projects_loop(
     let mut app = match App::new(graph_navigation_instance_state.clone()) {
         Ok(app) => app,
         Err(e) => {
+            #[cfg(debug_assertions)]
             debug_log(&format!("Failed to initialize App: {}", e));
             return Err(e); // Or handle the error in another appropriate way
         }
@@ -44981,19 +45662,24 @@ fn we_love_projects_loop(
         }
 
         // Update GraphNavigationInstanceState based on the current path
+        #[cfg(debug_assertions)]
         debug_log("start loop: we_love_projects_loop()");
+        #[cfg(debug_assertions)]
         debug_log!(
             "wlpl &app.current_path -> {:?}",
             &app.current_path,
         );
 
+        #[cfg(debug_assertions)]
         debug_log!("wlpl app.input_mode {:?}", &app.input_mode);
 
+        #[cfg(debug_assertions)]
         debug_log!(
             "wlpl &app.next_path_lookup_table -> {:?}",
             &app.next_path_lookup_table
         );
 
+        #[cfg(debug_assertions)]
         debug_log!(
             "wlpl &app.task_display_table -> {:?}",
             &app.task_display_table
@@ -45001,11 +45687,13 @@ fn we_love_projects_loop(
 
         app.graph_navigation_instance_state.current_full_file_path = app.current_path.clone();
 
+        #[cfg(debug_assertions)]
         debug_log!(
             "wlpl app.current_path.clone(); -> {:?}",
             &app.current_path.clone(),
         );
 
+        #[cfg(debug_assertions)]
         debug_log!(
             "wlpl &app.graph_navigation_instance_state.current_full_file_path -> {:?}",
             &app.graph_navigation_instance_state.current_full_file_path,
@@ -45018,6 +45706,7 @@ fn we_love_projects_loop(
 
         //  Check for exit signal
         if should_halt_uma() {
+            #[cfg(debug_assertions)]
             debug_log("Exiting we_love_projects_loop");
             break;
         }
@@ -45082,12 +45771,14 @@ fn we_love_projects_loop(
         // 3. Render TUI *before* input:
         if app.input_mode == InputMode::InsertText {
 
+            #[cfg(debug_assertions)]
             debug_log("we love projects: handle_insert_text_input");
 
             if input == "m" {
                 // pass
 
             } else if input == "back" {
+                #[cfg(debug_assertions)]
                 debug_log("escape toggled");
                 // app.input_mode = InputMode::MainCommand; // Access input_mode using self
                 // app.current_path.pop(); // Go back to the parent directory
@@ -45115,23 +45806,26 @@ fn we_love_projects_loop(
                 app.update_directory_list()?;  // refresh to current cwd display items
 
             } else if input == "b" {
+                #[cfg(debug_assertions)]
                 debug_log("escape toggled");
                 app.input_mode = InputMode::MainCommand; // Access input_mode using self
                 app.current_path.pop(); // Go back to the parent directory
                 app.update_directory_list()?;  // refresh to current cwd display items
 
             } else if input == "q" {
+                #[cfg(debug_assertions)]
                 debug_log("escape toggled");
                 app.input_mode = InputMode::MainCommand; // Access input_mode using self
                 app.current_path.pop(); // Go back to the parent directory
                 app.update_directory_list()?;  // refresh to current cwd display items
             } else if !input.is_empty() {
+                #[cfg(debug_assertions)]
                 debug_log("!input.is_empty()");
-
                 let local_owner_user = &app.graph_navigation_instance_state.local_owner_user; // Access using self
 
                 // 1. final path name (.toml)
                 let message_path = get_next_message_file_path(&app.current_path, local_owner_user);
+                #[cfg(debug_assertions)]
                 debug_log(&format!("Next message path: {:?}", message_path)); // Log the calculated message path
 
                 // 2. make message file
@@ -45149,12 +45843,14 @@ fn we_love_projects_loop(
         // 3. Render TUI *before* input:
         if app.input_mode == InputMode::TaskCommand {
 
+            #[cfg(debug_assertions)]
             debug_log("we love projects: task mode");
 
             // First, try to handle numeric input
             if let Ok(index) = input.trim().parse::<usize>() {
                 // Check if the index exists in the path lookup table
                 if let Some(target_path) = app.next_path_lookup_table.get(&index) {
+                    #[cfg(debug_assertions)]
                     debug_log(&format!("Selected path from lookup table: {:?}", target_path));
                     // Regular directory navigation
                     app.current_path = target_path.clone();
@@ -45164,6 +45860,7 @@ fn we_love_projects_loop(
                     app.input_mode = InputMode::MainCommand; // Access input_mode using self
 
                 } else {
+                    #[cfg(debug_assertions)]
                     debug_log(&format!("Invalid index: {} not found in path lookup table", index));
                 }
             }
@@ -45179,11 +45876,13 @@ fn we_love_projects_loop(
 
             // app.handle_tui_action(); // Remove the extra argument here
 
+            #[cfg(debug_assertions)]
             debug_log!(
                 "we_love_projects_loop() app.next_path_lookup_table {:?}",
                  app.next_path_lookup_table,
             );
 
+            #[cfg(debug_assertions)]
             debug_log("handle_tui_action() started in we_love_projects_loop()");
 
             if input == "t" {
@@ -45201,10 +45900,14 @@ fn we_love_projects_loop(
                 app.load_tasks();
 
                 // get user Q&A input
-                let _ = move_task_q_and_a_wrapper(
+                let _move_task_qanda_wrapper = move_task_q_and_a_wrapper(
                     &app.next_path_lookup_table,
-                    // app.graph_navigation_instance_state.parent_node_uniqueid.clone(), // parent node id
+                    &app.graph_navigation_instance_state.current_node_teamchannel_collaborators_with_access,
                 );
+                #[cfg(debug_assertions)]
+                debug_log!("we_love_projects_loop: _move_task_qanda_wrapper {:?}", _move_task_qanda_wrapper);
+
+                #[cfg(debug_assertions)]
                 println!("End of Move Action");
 
                 // ?
