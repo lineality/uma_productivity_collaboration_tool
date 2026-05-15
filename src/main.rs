@@ -9408,8 +9408,10 @@ fn write_formatted_taskbored_legend_to_tui() -> Result<(),Error> {
     // // // Red only
     // write_red_hotkey("m", "essage|")?;
 
-    write_red_hotkey("a", "dd task/node|")?;
-    write_red_hotkey("int", " go to task-node")?;
+    write_red_hotkey("m", "ove task/node|")?;
+
+    // TODO: add 'Add node in node-view, (b)ack' instructions on info-bar...
+    write_red_hotkey("int", " go to task-node | Add node in node-view, (b)ack")?;
 
     // // View operations group
 
@@ -21649,6 +21651,7 @@ fn q_and_a_get_message_post_gpgtoml_required() -> Result<Option<bool>, ThisProje
     let _ = clear_terminal_screen();
     println!("Message-Posts -> security -> .gpgtoml");
     buffy_println("", &[])?; // newline
+    buffy_println("(Optional, default is not-gpg-encrypted)", &[])?;
     println!("Require all message post are gpgtoml encrypted?  -> (y)es / (n)o\n(Press-Enter to skip):");
     buffy_println("", &[])?; // newline
     println!("(y/n)");
@@ -31556,10 +31559,10 @@ fn handle_command_main_mode(
                 // ... re-render
             }
 
-            "v" | "vote" => {
-                debug_log("Vote!");
-                // Display help information
-            }
+            // "v" | "vote" => {
+            //     debug_log("Vote!");
+            //     // Display help information
+            // }
             // "p" | "paralax" => {
             //     debug_log("!@#");
             //     // Display help information
@@ -32809,6 +32812,30 @@ fn handle_command_main_mode(
             _ => {
                 // Display error message (e.g., "Invalid command")
                 debug_log(" 'other' commend? _ => {...");
+
+                // refresh if emtpy-enter
+                // Handle empty input - refresh the view
+                if input.trim().is_empty() {
+                    debug_log("Empty input received - refreshing view");
+
+                    // Refresh the directory list and re-render
+                    app.update_directory_list()?;
+                    app.graph_navigation_instance_state.nav_graph_look_read_node_toml(); // Update internal state too.
+                    tiny_tui::render_list(
+                        &app.tui_directory_list,
+                        &app.current_path,
+                        &app.graph_navigation_instance_state.pa1_process,
+                        &app.graph_navigation_instance_state.pa2_schedule,
+                        &app.graph_navigation_instance_state.pa3_users,
+                        &app.graph_navigation_instance_state.pa4_features,
+                        &app.graph_navigation_instance_state.pa5_mvp,
+                        &app.graph_navigation_instance_state.pa6_feedback,
+                    );
+                    return Ok(false);
+                }
+
+
+
                 // if app.is_in_task_browser_directory() {
                 if app.is_in_message_posts_browser_directory() {
 
@@ -45025,14 +45052,9 @@ fn we_love_projects_loop(
 
         }
 
-        // // 2. handle input/command
-        // if handle_command_main_mode(&input, &mut app, &graph_navigation_instance_state)? {
-        //     return Ok(());
-        // } else if app.input_mode == InputMode::MainCommand {
-        //     handle_numeric_input(&input, &mut app, &graph_navigation_instance_state)?;
-        // }
-
-
+        // ==========================================
+        // TODO: this looks very odd... what is this?
+        // ==========================================
 
         // 3. Render TUI *before* input:
         if app.input_mode == InputMode::InsertText {
