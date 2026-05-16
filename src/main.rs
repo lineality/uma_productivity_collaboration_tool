@@ -2,16 +2,20 @@
 Uma
 2024.09-11
 
-cheat sheet:
+## Cargo Cheat Sheet:
     #[cfg(debug_assertions)]
     RUST_BACKTRACE=full cargo run
-    #### For smallest size, build (~1 mb)
+    #### For smaller size, build (~5 mb)
     cargo run --profile release-small
+    cargo build --profile release-small
+    cargo test --profile release-small
 
-    #### or for optimal performance (~10 mb)
+    #### For more optimal performance (~17 mb)
     cargo run --profile release-performance
     cargo build --profile release-performance
+    cargo test --profile release-performance
 
+    note: size inflated by --source functionality
 
 # Uma: Coordination, Productivity, Hygiene
 ```

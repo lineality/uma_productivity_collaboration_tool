@@ -11,7 +11,7 @@ Uma aims to be a do-one-thing-well distributed-multipoint-conferencing-unit (d-M
 - Message-Post Functionality (modular)
 - cli
 - TUI
-- Distributed Multi-point Conferencing Unit 
+- Distributed Multi-point Conferencing Unit
 - Distributed Graph Database
 - RustY
 
@@ -25,7 +25,7 @@ Be deliberate about where the executable is (do not flail through mysterious ins
 
 ## 2. setup-up
 - when you run a particular binary-executible it will look to see (you can see them too) if there are configuration-setup files
-- the first time you run Uma (or any time there is no local setup done) it will automatically start a Q&A-guide to set up A. local-owner-user and gpg B.team-channel-building. 
+- the first time you run Uma (or any time there is no local setup done) it will automatically start a Q&A-guide to set up A. local-owner-user and gpg B.team-channel-building.
 
 You can set up and use (at the same time) different instances of Uma as different binaries in different directories.
 
@@ -126,19 +126,19 @@ quit
 
 ### Recap:
 - Launch: 'uma'
-- 'm'/'messages' 
+- 'm'/'messages'
 - In Message-Post browser: toggle refresh-view/insert-text modes with empty enter)
-- 't'/'tasks' 
+- 't'/'tasks'
 - Move Task on Board: 1. 'move' 2. What, 3. where, (done)
 - Add task node: 'add'
 - Quit/Exit Uma: 'q'/'quit'
 - Uma's top legend, and bottom info-bar, will tell you what the commands and options are are.
 
-## Setup & Configuration 
-- See instructions on github: https://github.com/lineality/uma_productivity_collaboration_tool 
+## Setup & Configuration
+- See instructions on github: https://github.com/lineality/uma_productivity_collaboration_tool
 - First Setup: There is a setup-wizard to guide you with Q&A to set up your address-book file and your first team-channel
-- Invite-Update Wizard: The 'invite' command will start a Q&A Wizard that will guide you through team-setup with team-mates and other configuration tasks. 
-####  Your Files on your system: 
+- Invite-Update Wizard: The 'invite' command will start a Q&A Wizard that will guide you through team-setup with team-mates and other configuration tasks.
+####  Your Files on your system:
 These helper-tools (which can no doubt can be further improved upon) are an optional convenience. Uma is a system of your files on your local computer system. There are no hidden mysterious files in hidden mysterious formats. There is no hidden mysterious program-state. There is no hidden mysterious software. Your project files are your files on your system. You can make or change those files with a text editor or any tool you want. You can re-sign them with the standard POSIX shell command:
 
 ```bash
@@ -197,19 +197,19 @@ Decentralized: No central server; each user runs their own instance of Uma and s
 
 Secure: Uses GPG for authentication and encryption to ensure data integrity and confidentiality. Each user owns and signs their own files, and chooses who they share files with.
 
-Minimal: Focuses on essential team-administration features (instant messaging, task management, voting, etc.). This scope is not a replacement for git, google-drive, aws, etc. 
+Minimal: Focuses on essential team-administration features (instant messaging, task management, voting, etc.). This scope is not a replacement for git, google-drive, aws, etc.
 
 Modular: Designed to be easily adaptable and extensible for future uses, features, etc.
 
-Accessible: Students, startups, and anyone with limited resources should still be able to have access to best-practice project alignment tools. 
+Accessible: Students, startups, and anyone with limited resources should still be able to have access to best-practice project alignment tools.
 
 
-### Six items for the use-case/context for Uma: 
-- Aligned 
-- Hygienic 
-- Coordinated/Collaborative 
-- Data-STEM 
-- Productive 
+### Six items for the use-case/context for Uma:
+- Aligned
+- Hygienic
+- Coordinated/Collaborative
+- Data-STEM
+- Productive
 - Projects
 Uma is focused on this use-case specifically.
 Not all activities include these characteristics.
@@ -226,25 +226,25 @@ Not all activities include these characteristics.
 
 
 
-## Uma Collaboration Software 
+## Uma Collaboration Software
 - In memory of Eleanor Th. Vadala 1923-2023: aviator, astronomer, engineer, pioneer, leader, friend, ethical role model, good person.
 
-- In memory of Walter Pergamenter: liberated from Auschwitz at the age of six after WWII; worked as an architect; a good person; taught me fundamental concepts of decentness and civility. 
+- In memory of Walter Pergamenter: liberated from Auschwitz at the age of six after WWII; worked as an architect; a good person; taught me fundamental concepts of decentness and civility.
 
 - For Clarence 'Skip' Ellis whose project Neem (a team collaboration assistance agent-based project in the late 1990's early 2000's) was a foundational experience including Prof. Skip's insistence that the MCU portion of the software be considered with attention and not dismissed as a simple generic component.
 
 - In praise of the still very much alive and working Steve Gibson of GRC and 'Security Now,' sharing sound advice and guidance for computer scientists.
 
-- In respect of Amos Tversky and Daniel Kahneman, whose work on systems and information is pervasively important to many fields including computer science, the still nascent study of learning, and project management. 
+- In respect of Amos Tversky and Daniel Kahneman, whose work on systems and information is pervasively important to many fields including computer science, the still nascent study of learning, and project management.
 
 
 # project uma:馬
 "Read the old books."
-- MIT license 
-- https://github.com/lineality/uma_productivity_collaboration_tool 
+- MIT license
+- https://github.com/lineality/uma_productivity_collaboration_tool
 - https://github.com/lineality/definition_behavior_studies
 - https://github.com/lineality/Online_Voting_Using_One_Time_Pads
-- https://github.com/lineality/object_relationship_spaces_ai_ml 
+- https://github.com/lineality/object_relationship_spaces_ai_ml
 
 #### early pre-alpha development
 
@@ -257,14 +257,14 @@ Not all activities include these characteristics.
 - a Rust cli application
 - Supporting researchers, developers, management, administration, and STEM
 - Supporting projects, productivity, and collaboration.
-- Supporting project-alignment (agile alignment), which is not-automatic and requires constant maintenance. 
+- Supporting project-alignment (agile alignment), which is not-automatic and requires constant maintenance.
 - Supporting knowledge, education, learning, arts, speech, poetry, music, hygiene, language, and culture. ikezuki 池月: https://en.wikipedia.org/wiki/Ikezuki_(horse)
 - Supporting boy-scout values.
 - 馬さまたち、 頑張りましょう。
 
 
 ## Security
-Different users will have different security needs and concerns, including how many steps they want or need to take to reduce their attack-surface. 
+Different users will have different security needs and concerns, including how many steps they want or need to take to reduce their attack-surface.
 
 
 ## Alias Method
@@ -304,3 +304,19 @@ source ~/.bashrc
 or bash_profile
 
 Now you should be able to launch Uma by typing 'uma' (or whatever name you choose) into a terminal.
+
+## Cargo Cheat Sheet:
+
+#### For smaller size, build (~5 mb)
+```bash
+    cargo run --profile release-small
+    cargo test --profile release-small
+    cargo build --profile release-small
+```
+#### For more optimal performance (~17 mb)
+```bash
+    cargo run --profile release-performance
+    cargo test --profile release-performance
+    cargo build --profile release-performance
+```
+Note: size inflated by --source functionality
