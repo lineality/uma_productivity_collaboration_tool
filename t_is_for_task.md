@@ -28,6 +28,7 @@ g.g.ashbrook 2024.09.12-20, 2025.11-12
 9. Defining Project Data
 10. More Details on a 1960s Uma
 11. Utility Case study: ex/vi/vim
+12: Tiebreak: A case study of applications on a distributed platform using chess
 12. Links
 
 
@@ -189,6 +190,9 @@ Uma aims to be a do-one-thing-well tool that should be able to:
 - help teams to define and align on goals and project areas
 - distribured/decentralized: no central server
 - no subscription service
+
+##### DMCU-DGDB As Application Platform:
+- As demonstrated by a basic 'tie-break' decision tool, Uma should demonstrate, and be, a modular platform on which project-specific applications can be built (or with-which can work as stand-along DG-DB applications).
 
 #### Uma Is Not
 There are a number of related functionalities that task management and messaging should be confused with. Uma specifically is not designed to scope-creap into these features:
@@ -1045,11 +1049,89 @@ For example, while the original context of C for embedded systems will rarely di
 - Alpha Version 1, Uma 12.2025
 
 
+## 12: Tiebreak: A case study of applications on a distributed platform using chess
+
+As one provided tool, and as one provided example of how a distributed multipoint conferencing unit based on a distributed Graph Database can be a platform for team-applications or distributed-tools, Uma has a 'Tie Break' functionality where team members who are split evenly on a decision can opt to decide the decision-match-point with a game of chess.
+
+The various features that make chess strange as a game makes it both an excellent case-study for what is possible on a distributed platform and also useful as a Tiebreak mechanism, perhaps like the ever-mysterious president-of-the-senate.
+
+Chess is:
+- somewhat an interactive puzzle
+- somewhat random
+- somewhat turn-based
+- somewhat non-turn-based
+- somewhat rule-based
+- somewhat arbitrary ad-hoc conventions
+- somewhat systematic in instructions
+- somewhat an unstructured hodgepodge of many 'dialects'
+- somewhat civilized
+- somewhat low-brow perennial barberous sport-dualing (which may make it easier for most people to accept using)
+
+As it may sound suspicious, conspicuous, or superfluous to have chess in a coordination-tool platform, a somewhat-theoretical practicality to a chess game in a decision coordination platform: a somewhat randomized game-dual.
+
+Another way in which this is an excellent case study (though this reason may not be specifically tied to chess) is the question of whether an application, tool, or functionality can or should be inside or outside of the main Uma body of code? Chess may be a good example here because it requires enough extra code that it is arguable that the application should live outside of Uma.
+
+#### 1/3rd Coin Flip, 2/3rds Mind-Brawl
+Chess is a highly noisy game, as is highlighted in much criticism of the ELO scoring system which penalizes chess players for random outcomes. I cannot find a specific published reference, but in the ~2024 debates over rates of cheating in online chess several people mentioned an analysis of chess.com data showing that lower-ranked players may win a particular one third of the time. It may be difficult to put an exact number on this, but this trend is consistent across the body of chess practices. A classical chess match is not one game: Why not? Because you need more than one game to see beyond the noise. When there are events where every game is an elimination round, you see winners who you never heard of (and seldom hear of again). Etc. etc. While this is ponderous in terms of theories of chess play and the logistics of events, this may make chess an interesting candidate to be a tie-breaker mechanism: part coin flip, part skill-based challenge.
+
+
+#### Where and With What?
+Sometimes in computer science what you can and cannot do with a given architecture, tool, or data-structure can be misleading or counter-intuitive.
+
+- Can you play a game of chess with someone over a text-messenger?
+- Can you play a game of chess with someone in google-drive?
+- Can you play a game of chess with someone in Jira (or in Service-Now/EverForth)?
+
+Should you try or expect to do any of those?
+
+If we look at the history of what we take for granted as being highly useful and effective now, there is often a Charles Fort 'steam engine time' timeline where in the early days of development the potential was not seen.
+
+Would it make sense to try to play a game of chess inside of a coordination platform?
+At first the unprecedented nature of the question probably suggests that that answer is obviously no (but what did Grace Hopper say about engrained norms of how things are usually done or not done? (she felt it was a top danger to enterprises)).
+
+Here are two reasons why it makes sense to at least try to have a chess-game within a coordination-tools platform:
+1. as a possibly socially accepted mechanism for deciding a tie-break on a decision
+2. as a case study to empirically evaluate how a variety of applications may or may not be able to be built in or on the platform.
+
+To turn the question round, might we instead need to justify not being able to play a game of chess within a project-coordination platform? Let's look at the version of the question focusing on Jira (selected because it is a very widely known and capable project management tool).
+
+At first the question about playing chess in Jira may sound absurd: Jira is a project planning, tracking, management system for serious people with serious faces who wear suits and do serious things, not a childish game or entertainment-streaming service. But think about the technical details of the same question some more: Why exactly can't we play chess in Jira? Jira exists to not only plan out how to do a project but to track how and when every part of that project is done. Jira should be able to be used to plan and carry out and track every aspect of planning and carrying out a chess game. There seems to be a kind of invisible barrier here somewhere: Jira surely can do, it exists to do, each part of the question, but somehow knitting those pieces together does not happen. How can Jira be used to map and carry out every aspect of the game (who should do what, what's the status, is it done, who did it, etc.)... except Jira somehow cannot carry out and track the same game. That sounds like a kind of paradox, almost like the xeno-approach-paradox: we take every possible step but somehow never get there. This may or may not be a question that we can fully understand, as it may get more into 'stateful' projects than is currently known in STEM in 2026.
+
+But what you can empirically demonstrate for yourself is that Uma can not only theoretically and abstractly support the parts of a chess-like team-project, Uma naturally supports a fully functional chess playing platform (and so, any platform-application, any project-syncing-application, with that class of features and requirements).
+
+
+#### Does the chess application need to be 'inside'? (in the case of Uma, inside the  DGDB/DMCU (distributed graph database, distributed multipoint conferencing unit)?
+Overall, it does not. Both can work. Though there may be edge cases. If you wanted specific 'inside UMA encryption' to apply to various parts of the "game," then those would probably be best kept inside Uma. But any aspect that is not required to be secret can be 'externalized' for the tie-break application to see.
+Here the example of chess and the context of private-data (or some private aspects of data) may help to trace out the problem-space where a distributed platform is an eco-system of applications that, based on context such as privacy, may have different parameters for how they can interact and where they can be. This may start to show how such an 'ant ecosystem' could scale without the same bottlenecks as centralized systems.
+
+
+#### Flexibility for Many Edge Cases
+Chess is also a good example in this case for the various reasons that make chess an irregular and messy "game" (as making or accepting draws, but not as part of a turn, or how third time repetition and fifty move rules intersect with draws (and how repetition rules potentially introduce an unknown future limit of required memory-use and state).  For example if chess were more strictly turn-based, then barriers to entry would be lower and the requirements for flexibility would be lower.
+There are various aspects of chess that are not simply turn based, such as draws. And draws are more the norm in chess, not a rare edge case that could be ignored to any degree.
+
+The modular system is an eco-system of interoperable parts of various kinds.
 
 
 
+#### Tiebreak
+It is difficult to tell if some groups will find a game-form tie-break to be acceptable or practical. Given that Uma takes choice-based workflow to perhaps an extreme, there may be more potential with Uma to confront and not 'of force' bypass areas where people need to actively-accept decisions and pathways to decisions. (An example or analogy may be when the madness of crowds and ignorance of history compel people to refuse to acknowledge the outcome of a transparently monitored election process (such extremism is not bound to any given group but like 'retisense to participate' itself is sadly universal).) Perhaps the act of participating in a tiebreak (as in other active choices to agree) will be useful for cultures of participation. It is unclear how the bane of Montequeue (people's unquenchable determination to settle (even imagined) differences through game-combat) might show itself in how people operate. How might a tie-break mechanism be used by people in the wild? It is very experimental, but I think it is a worthwhile experiment (speaking as a person who personally finds both the game and culture of chess to be overwhelmingly unfortunate). It is entirely possible that the 'game' of chess is too compromised and is simply junkfood for the worst short-circuits of biology, psychology, and mis-perception, but should collect some data and base an evaluation of team-decisions games on data and not on desperate hopes for unlikely redemption or on jaded grudges refusing to accept a good-enough solution.
 
-## 12. Other Links & Notes
+#### Empirical-Check on Scope
+Another useful aspect of the chess example of a platform-application is to sanity-check how much work, or scope, an application needs to do. One of the great aspects of doing a chess-program project is that it challenges the persistently wrong intuition that 'just a few logical rules surely can't require that much scope.'
+
+#### Modular Processes and Applications: Ants and Horses
+- Uma for planning a decision/vote
+- Uma for the logistics of a decision/vote
+- Uma for data analysis on logistics
+- Uma for data analysis of decision/choices/signals/votes
+- Uma as an ecosystem of interactive modules, including those operating outside of uma itself: detached distributed platform applications.
+- Uma's application layer
+
+- Also see papers on tiebreaks more abstractly, such as:
+Axiomatic Theory of Tie-Breaking Impossibility, Characterization, and Decomposition by Frank M. V. Feys https://arxiv.org/abs/2605.22846
+
+
+## 13. Other Links & Notes
 - https://web.eecs.umich.edu/~imarkov/10rules.pdf: NASA: Rules for Developing Safety-Critical Code", Gerard J. Holzmann
 - https://djaa.com/kanban-board-examples/
 - https://github.com/Cube9999/vi
@@ -1083,6 +1165,5 @@ https://www.economist.com/business/2026/02/01/why-software-stocks-are-getting-pu
 - According to the wikipedia on Rust, Rust creator Graydon Hoare '...described the language as "technology from the past come to save the future..."'
 
 - The Uma, うま, is horse. 44444
-
 
 - otter.ai

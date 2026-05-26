@@ -13,8 +13,7 @@ Uma aims to be a do-one-thing-well distributed-multipoint-conferencing-unit (d-M
 - TUI
 - Distributed Multi-point Conferencing Unit
 - Distributed Graph Database
-- RustY
-
+- Rust
 
 ## 1 ~Install
 Uma is pre-compiled binary executable based. Your choices:
@@ -22,6 +21,14 @@ Uma is pre-compiled binary executable based. Your choices:
 - B. compile or get binary-executible for the same type of hardware, then get that compiled binary executable, or if rust can be installed build from source offline (e.g. a lan-only computer that has no internet connection)
 
 Be deliberate about where the executable is (do not flail through mysterious install procedures), and put it where you need it and use it how you need to use it. The 'Alias' method is recommended, easy to set up, easy to remove/undo/"uninstall". (see below)
+
+#### Tiebreak:
+To use software such as Tie-Break Chess (included in this repo,
+also here: https://github.com/lineality/memo_chess_module)
+put the executable-binary in the same parent directory as you use for Uma
+(in this case, the memochess executable needs to be in the same
+folder as the uma executable). Then 'tiebreak' will be a command
+you can use in any node.
 
 ## 2. setup-up
 - when you run a particular binary-executible it will look to see (you can see them too) if there are configuration-setup files
