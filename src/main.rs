@@ -47703,6 +47703,7 @@ const FF_SOURCE_FILES: &[SourcedFile] = &[
 
     // Tiebreak -- Memo-Chess v1
     SourcedFile::new("memo_chess_module/Cargo.toml", include_str!("../memo_chess_module/Cargo.toml")),
+    SourcedFile::new("memo_chess_module/README.md", include_str!("../memo_chess_module/README.md")),
     SourcedFile::new("memo_chess_module/src/main.rs", include_str!("../memo_chess_module/src/main.rs")),
     SourcedFile::new("memo_chess_module/src/launch_split_term_module.rs", include_str!("../memo_chess_module/src/launch_split_term_module.rs")),
     SourcedFile::new("memo_chess_module/src/memo_chess_tui_module.rs", include_str!("../memo_chess_module/src/memo_chess_tui_module.rs")),
