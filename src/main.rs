@@ -6303,7 +6303,6 @@ enum BrowserThreadMessage {
     // Backspace,          // Backspace key pressed
     Enter,              // Enter key pressed
     DirectoryChanged,   // Directory contents changed (new messages)
-    Exit,               // Request to exit browser
 }
 
 /// Modal message viewing states
@@ -6329,11 +6328,11 @@ fn run_message_browser_input_thread(sender: Sender<BrowserThreadMessage>) {
             let message = match buffer[0] {
                 b'\n' | b'\r' => BrowserThreadMessage::Enter,
                 // 8 | 127 => BrowserThreadMessage::Backspace,
-                b'q' => {
-                    debug_log("run_message_browser_input_thread -> q");
+                // b'q' => {
+                //     debug_log("run_message_browser_input_thread BrowserThreadMessage::Exit run_message_browser_input_thread -> q");
 
-                    BrowserThreadMessage::Exit
-                },
+                //     BrowserThreadMessage::Exit
+                // },
                 c => BrowserThreadMessage::KeyInput(c as char),
                 // _ => continue, // or BrowserThreadMessage::Unknown, or log a warning, etc.
 
@@ -7265,10 +7264,6 @@ impl App {
                         needs_display_refresh = true;
                     }
                 },
-                // Ok(BrowserThreadMessage::Backspace) => {
-                //     user_input_buffer.pop();
-                //     needs_display_refresh = true;
-                // },
                 Ok(BrowserThreadMessage::Enter) => {
                     if user_input_buffer.is_empty() {
                         debug_log("EMMPB toggle MessageViewMode::Insert/Refresh");
@@ -7289,8 +7284,14 @@ impl App {
                     } else {
                         // Process non-empty input (possibly a command or message)
                         match user_input_buffer.as_str() {
+
                             "q" | "quit" | "b" | "back" => {
-                            debug_log("EMMPB exit");
+
+                                #[cfg(debug_assertions)]{
+                                    debug_log!("EMMPB: user_input_buffer: {}", user_input_buffer);
+                                    debug_log("EMMPB exit");
+                                }
+
                                 break 'browser_loop;
                             },
                             "--custom" => {
@@ -7355,15 +7356,15 @@ impl App {
                         needs_display_refresh = true;
                     }
                 },
-                Ok(BrowserThreadMessage::Exit) => {
-                    // Exit due to quit command
-                    break 'browser_loop;
-                },
                 Err(TryRecvError::Empty) => {
                     // No messages, continue
                 },
                 Err(TryRecvError::Disconnected) => {
                     // Channel closed, exit
+
+                    #[cfg(debug_assertions)]
+                    debug_log("EMMPB: channel disconnected, exiting");
+
                     break 'browser_loop;
                 }
             }
@@ -33010,6 +33011,362 @@ fn handle_command_main_mode(
                 }
 
                 debug_log!("tph: Command handler completed successfully");
+            }
+
+            // ═════════════════════════════════════════════════════════════════
+            // Tiebreak, using separate binary
+            // ═════════════════════════════════════════════════════════════════
+
+            // Tiebreak Mode Handler - New Terminal Window
+            //
+            // Command aliases: "tb" | "tiebreak"
+            //
+            // # Purpose
+            //
+            // Locates the `tiebreak-memo-chess` binary (a separate executable
+            // that lives beside the Uma binary) and launches it in a new terminal
+            // window with the four required inputs derived from Uma's current
+            // application state.
+            //
+            // Unlike the passive-mode commands ("mp", "mpv", "mph") which relaunch
+            // Uma itself with a flag, this handler spawns a completely separate
+            // binary. Uma continues running normally after the spawn.
+            //
+            // # Four Inputs Built From Uma State
+            //
+            //   --memo-file-dir-path   app.current_path / "message_posts_browser"
+            //   --user-name            get_local_owner_username()
+            //   --log-path             <exe_parent> / "tiebreak" / "logs"
+            //   --chronosort-path      <exe_parent> / "tiebreak" / "chrono"
+            //
+            // # Tiebreak Support Directories
+            //
+            // The log and chrono directories are created on demand inside a
+            // `tiebreak/` subdirectory that lives beside the Uma executable.
+            // Example: if Uma lives at `/home/user/.local/bin/uma`, the tiebreak
+            // support directories are:
+            //
+            //   /home/user/.local/bin/tiebreak/logs/
+            //   /home/user/.local/bin/tiebreak/chrono/
+            //
+            // These are created with `std::fs::create_dir_all` if they do not
+            // yet exist. A failure to create them is reported and returns
+            // Ok(false) rather than propagating an error.
+            //
+            // # Binary Location
+            //
+            // The tiebreak-memo-chess binary is expected to live in the same
+            // directory as the Uma binary. Its name is platform-determined:
+            //
+            //   Linux / macOS / BSD / Redox: `tiebreak-memo-chess`
+            //
+            // If the binary is not found, a plain-language message is printed
+            // to the terminal and the handler returns Ok(false). No error is
+            // thrown. Uma continues running normally.
+            //
+            // # Platform Support (New Terminal Window)
+            //
+            // Mirrors the "mp" handler exactly:
+            //   Linux / Android  : gnome-terminal, then xterm (fallback)
+            //   macOS            : Terminal.app via osascript
+            //   BSD variants     : xterm
+            //   Redox            : terminal
+            //   Other            : print unsupported message, return Ok(false)
+            //
+            // # Error Handling
+            //
+            // All failures are non-fatal to Uma:
+            //   - Memo dir missing        : print message, return Ok(false)
+            //   - Exe parent unavailable  : print message, return Ok(false)
+            //   - Dir creation fails      : print message, return Ok(false)
+            //   - Binary not found        : print message, return Ok(false)
+            //   - Terminal spawn fails    : print message, return Ok(false)
+            //
+            // # Related Commands
+            //
+            // - "tbv" / "tiebreak-vsplit"  : same binary, tmux vertical split
+            // - "tbh" / "tiebreak-hsplit"  : same binary, tmux horizontal split
+            "tb" | "tiebreak" => {
+                debug_log("tb command selected - launching tiebreak-memo-chess in new terminal");
+
+                // ============================================================
+                // STEP 1: BUILD MEMO FILES PATH
+                // Derive the memo directory from Uma's current navigation path.
+                // ============================================================
+                let tie_break_files_path = app.current_path.join("message_posts_browser");
+
+                debug_log!("tb: memo files path: {:?}", tie_break_files_path);
+
+                if !tie_break_files_path.exists() {
+                    println!("Tiebreak memo directory not found: {:?}", tie_break_files_path);
+                    debug_log!("tb: memo directory does not exist, aborting");
+                    return Ok(false);
+                }
+
+                let memo_files_path_str = tie_break_files_path.to_string_lossy().into_owned();
+
+                // ============================================================
+                // STEP 2: GET LOCAL OWNER USERNAME
+                // ============================================================
+                let local_owner_username = get_local_owner_username();
+
+                debug_log!("tb: local owner username: {}", local_owner_username);
+
+                // ============================================================
+                // STEP 3: GET EXE PARENT DIRECTORY
+                // All tiebreak support files and the binary itself live here
+                // or in subdirectories of here.
+                // ============================================================
+                let exe_parent_directory = match get_absolute_path_to_executable_parentdirectory() {
+                    Ok(path) => path,
+                    Err(e) => {
+                        println!("Tiebreak: could not determine executable directory: {}", e);
+                        debug_log!("tb: get_absolute_path_to_executable_parentdirectory failed: {}", e);
+                        return Ok(false);
+                    }
+                };
+
+                debug_log!("tb: exe parent directory: {:?}", exe_parent_directory);
+
+                // ============================================================
+                // STEP 4: BUILD TIEBREAK SUPPORT DIRECTORY PATHS
+                // logs and chrono live inside tiebreak/ beside the Uma binary.
+                // ============================================================
+                let tiebreak_log_dir   = exe_parent_directory.join("tiebreak").join("logs");
+                let tiebreak_chrono_dir = exe_parent_directory.join("tiebreak").join("chrono");
+
+                debug_log!("tb: tiebreak log dir:    {:?}", tiebreak_log_dir);
+                debug_log!("tb: tiebreak chrono dir: {:?}", tiebreak_chrono_dir);
+
+                // ============================================================
+                // STEP 5: CREATE TIEBREAK SUPPORT DIRECTORIES IF MISSING
+                // ============================================================
+                if let Err(e) = std::fs::create_dir_all(&tiebreak_log_dir) {
+                    println!("Tiebreak: could not create log directory {:?}: {}", tiebreak_log_dir, e);
+                    debug_log!("tb: create_dir_all log dir failed: {}", e);
+                    return Ok(false);
+                }
+
+                if let Err(e) = std::fs::create_dir_all(&tiebreak_chrono_dir) {
+                    println!("Tiebreak: could not create chrono directory {:?}: {}", tiebreak_chrono_dir, e);
+                    debug_log!("tb: create_dir_all chrono dir failed: {}", e);
+                    return Ok(false);
+                }
+
+                // ============================================================
+                // STEP 6: LOCATE THE tiebreak-memo-chess BINARY
+                // Expected beside the Uma binary. Not in PATH, not elsewhere.
+                // If absent: inform the user, return without error.
+                // ============================================================
+                let tiebreak_binary_path = exe_parent_directory.join("memochess");
+
+                debug_log!("tb: tiebreak binary path: {:?}", tiebreak_binary_path);
+
+                if !tiebreak_binary_path.exists() {
+                    println!(
+                        "Tiebreak binary not found at {:?}. \
+                         Please place tiebreak-memo-chess binary beside the uma executable.",
+                        tiebreak_binary_path
+                    );
+                    debug_log!("tb: tiebreak-memo-chess binary: 'memochess' not found, aborting");
+                    return Ok(false);
+                }
+
+                let tiebreak_binary_str = match tiebreak_binary_path.to_str() {
+                    Some(s) => s,
+                    None => {
+                        println!("Tiebreak: binary path is not valid UTF-8, cannot launch.");
+                        debug_log!("tb: tiebreak binary path is not valid UTF-8");
+                        return Ok(false);
+                    }
+                };
+
+                // ============================================================
+                // STEP 7: BUILD ARGUMENT LIST
+                // These are the four required inputs for tiebreak-memo-chess.
+                // ============================================================
+                let tiebreak_log_dir_str = match tiebreak_log_dir.to_str() {
+                    Some(s) => s,
+                    None => {
+                        println!("Tiebreak: log directory path is not valid UTF-8, cannot launch.");
+                        debug_log!("tb: tiebreak log dir path is not valid UTF-8");
+                        return Ok(false);
+                    }
+                };
+
+                let tiebreak_chrono_dir_str = match tiebreak_chrono_dir.to_str() {
+                    Some(s) => s,
+                    None => {
+                        println!("Tiebreak: chrono directory path is not valid UTF-8, cannot launch.");
+                        debug_log!("tb: tiebreak chrono dir path is not valid UTF-8");
+                        return Ok(false);
+                    }
+                };
+
+                // ============================================================
+                // STEP 8: SPAWN IN NEW TERMINAL WINDOW (PLATFORM-AWARE)
+                // Mirrors the "mp" handler platform logic exactly.
+                // ============================================================
+
+                // Linux and Android/Termux
+                #[cfg(any(target_os = "linux", target_os = "android"))]
+                {
+                    debug_log!("tb: Linux/Android platform detected");
+
+                    // Try gnome-terminal first
+                    let gnome_result = StdCommand::new("gnome-terminal")
+                        .arg("--")
+                        .arg(tiebreak_binary_str)
+                        .args([
+                            "--memo-file-dir-path", &memo_files_path_str,
+                            "--user-name",          &local_owner_username,
+                            "--log-path",           tiebreak_log_dir_str,
+                            "--chronosort-path",    tiebreak_chrono_dir_str,
+                        ])
+                        .spawn();
+
+                    if gnome_result.is_ok() {
+                        debug_log!("tb: successfully launched via gnome-terminal");
+                    } else {
+                        debug_log!("tb: gnome-terminal failed, trying xterm fallback");
+
+                        match StdCommand::new("xterm")
+                            .arg("-e")
+                            .arg(tiebreak_binary_str)
+                            .args([
+                                "--memo-file-dir-path", &memo_files_path_str,
+                                "--user-name",          &local_owner_username,
+                                "--log-path",           tiebreak_log_dir_str,
+                                "--chronosort-path",    tiebreak_chrono_dir_str,
+                            ])
+                            .spawn()
+                        {
+                            Ok(_) => {
+                                debug_log!("tb: successfully launched via xterm");
+                            }
+                            Err(e) => {
+                                debug_log!("tb: xterm also failed: {}", e);
+                                println!(
+                                    "Tiebreak: could not launch terminal. \
+                                     Please install gnome-terminal or xterm."
+                                );
+                                return Ok(false);
+                            }
+                        }
+                    }
+                }
+
+                // macOS
+                #[cfg(target_os = "macos")]
+                {
+                    debug_log!("tb: macOS platform detected");
+
+                    let apple_script_command = format!(
+                        "tell application \"Terminal\" to do script \
+                         \"{} --memo-file-dir-path {} --user-name {} \
+                         --log-path {} --chronosort-path {}\"",
+                        tiebreak_binary_str,
+                        memo_files_path_str,
+                        local_owner_username,
+                        tiebreak_log_dir_str,
+                        tiebreak_chrono_dir_str,
+                    );
+
+                    match StdCommand::new("osascript")
+                        .arg("-e")
+                        .arg(&apple_script_command)
+                        .spawn()
+                    {
+                        Ok(_) => {
+                            debug_log!("tb: successfully launched via Terminal.app (osascript)");
+                        }
+                        Err(e) => {
+                            debug_log!("tb: osascript failed: {}", e);
+                            println!("Tiebreak: could not launch Terminal.app.");
+                            return Ok(false);
+                        }
+                    }
+                }
+
+                // BSD variants
+                #[cfg(any(
+                    target_os = "freebsd",
+                    target_os = "openbsd",
+                    target_os = "netbsd",
+                    target_os = "dragonfly"
+                ))]
+                {
+                    debug_log!("tb: BSD platform detected");
+
+                    match StdCommand::new("xterm")
+                        .arg("-e")
+                        .arg(tiebreak_binary_str)
+                        .args([
+                            "--memo-file-dir-path", &memo_files_path_str,
+                            "--user-name",          &local_owner_username,
+                            "--log-path",           tiebreak_log_dir_str,
+                            "--chronosort-path",    tiebreak_chrono_dir_str,
+                        ])
+                        .spawn()
+                    {
+                        Ok(_) => {
+                            debug_log!("tb: successfully launched via xterm (BSD)");
+                        }
+                        Err(e) => {
+                            debug_log!("tb: xterm failed on BSD: {}", e);
+                            println!("Tiebreak: could not launch xterm. Please install xterm.");
+                            return Ok(false);
+                        }
+                    }
+                }
+
+                // Redox
+                #[cfg(target_os = "redox")]
+                {
+                    debug_log!("tb: Redox platform detected");
+
+                    match StdCommand::new("terminal")
+                        .arg(tiebreak_binary_str)
+                        .args([
+                            "--memo-file-dir-path", &memo_files_path_str,
+                            "--user-name",          &local_owner_username,
+                            "--log-path",           tiebreak_log_dir_str,
+                            "--chronosort-path",    tiebreak_chrono_dir_str,
+                        ])
+                        .spawn()
+                    {
+                        Ok(_) => {
+                            debug_log!("tb: successfully launched via Redox terminal");
+                        }
+                        Err(e) => {
+                            debug_log!("tb: Redox terminal failed: {}", e);
+                            println!("Tiebreak: could not launch Redox terminal.");
+                            return Ok(false);
+                        }
+                    }
+                }
+
+                // Unsupported platform catch-all
+                #[cfg(not(any(
+                    target_os = "linux",
+                    target_os = "android",
+                    target_os = "macos",
+                    target_os = "freebsd",
+                    target_os = "openbsd",
+                    target_os = "netbsd",
+                    target_os = "dragonfly",
+                    target_os = "redox"
+                )))]
+                {
+                    debug_log!("tb: unsupported platform for new terminal launch");
+                    println!(
+                        "Tiebreak: new terminal launch is not supported on this platform. \
+                         Try 'tbv' or 'tbh' for tmux splits."
+                    );
+                    return Ok(false);
+                }
+
+                debug_log!("tb: command handler completed successfully");
             }
 
             "q" | "quit" | "exit" => {
