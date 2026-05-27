@@ -36,7 +36,7 @@ g.g.ashbrook 2024.09.12-20, 2025.11-12
 # 1. Three Questions on Collaboration Tools:
 
 1. Features:
-- What User-Features/Functionalities are needed for a project to use best-practice satisfying the standards of (if not using all methods of) Agile and Kahneman-Tversky-Decisions for all main areas project / product management?
+- What features are needed (to manage projects)? What User-Features/Functionalities are needed for a project to use best-practice satisfying the standards of (if not using all methods of) Agile and Kahneman-Tversky-Decisions for all main areas project / product management?
 
 2. Tools:
 - What tools are needed to effect what features?
@@ -45,12 +45,14 @@ g.g.ashbrook 2024.09.12-20, 2025.11-12
 - Could tools for Agile and Kahneman-Tversky-Decisions for project / product management have been built in the 1960's?
 
 
+[These three questions are unbelievably delicious, fun, and glorious. They cut through our imagined barriers between public sector, private sector, science and non-science, geography and culture, etc., and they challenge our understanding of the timelines of history on which we stumble. Regardless of whether anything else in this paper holds any use or interest for you, everyone should be enraptured with these questions and carry them however they will.]
+
 
 # 2 Introduction: Tasks & 'Task-Boards'
 
 Let's look at an example.
 
-Imagine you are working with a team, where you are all in the same workshop. And imagine, that where you have meetings, you are using an old-school-cool 1940's Toyota task-status-board. This means that you are using a physical board to share and see updates about what tasks people are working on, and how far along those tasks have gotten. You use the vertical columns of the board to share basic 'current-status' information such as 'this task is still being planned' or 'this task is now in progress,'or  'Done: this task has been completed.' On this 'task board,' you physically move something you are starting from 'Planning' to 'Started,' or something that you just finished from 'Started' to 'Done,' so that everyone else (including 'future-you') can see what the status is. For example, this could be moving a post-it note, or a magnet, or a cork-pinned slip of paper. And you also have, in your workshop, where you all work, blackboard or whiteboard note-boards for messages, notes, scribbles, tallying votes, asking questions, etc.
+Imagine you are working with a team, where you are all in the same workshop. And imagine, that where you have meetings, you are using an old-school-cool 1940's Toyota task-status-board. This means that you are using a physical board to share and see updates about what tasks people are working on, and how far along those tasks have gotten. You use the vertical columns of the board to share basic 'current-status' information such as 'this task is still being planned' or 'this task is now in progress,' or 'Done: this task has been completed.' On this 'task board,' you physically move something you are starting from 'Planning' to 'Started,' or something that you just finished from 'Started' to 'Done,' so that everyone else (including 'future-you') can see what the status is. For example, this could be moving a post-it note, or a magnet, or a cork-pinned slip of paper. And you also have, in your workshop, where you all work, blackboard or whiteboard note-boards for messages, notes, scribbles, taking polls, tallying votes, asking questions, etc.
 
 With these physical Task-Boards and Message-Boards, you and your teammates plan out your project, coordinate about the overall parts of the project, and the specifics of what is being done on tasks, and incorporate feedback from inside and outside the team to 'stay aligned' and make sure that everyone knows what the project is and what they are doing enough to follow through with completing the project.
 
@@ -58,14 +60,14 @@ This is the specific user-story scope of features and functionality that Uma aim
 
 At a high-level this is, or seems, simple. But easy things can be hard. There are many moving parts and details that usually make project-management non-trivial to follow-through on successfully.
 
-Hopefully adequate solutions for doing this already exist for some users (hopefully). The more detailed sections in the appendices below will look at use-cases and groups of users who likely are not currently being covered by available solutions (as of 2025), and which use-cases and users Uma may be able to support.
+Hopefully adequate solutions for doing this already exist for some users (hopefully). The more detailed sections in the appendices below will look at use-cases and groups of users who likely are not currently being covered by available solutions (as of ~2025), and which use-cases and users Uma may be able to support.
 
 Before doing a final feature-overview and tutorial, let's look in a bit more detail at what is involved in task-definition and messages.
 
 
 ### Task-Board Actions:
 
-We should have a concrete example of task =-board use, so let's say that you and your friends are going to bake pizzas for a fundraiser and maybe as a summer business (if that works out). Because you are a botany major, you are in charge of growing the fresh basil. You have scrambled up a plan, and scrabbled up the pots, soil, and seeds, and you are now ready to start. So, to let the team know, you pop open the task board and move the 'Basil' task from 'Planning' to 'Started.' Sounds simple so far.
+We should have a concrete example of task-board use, so let's say that you and your friends are going to bake pizzas for a fundraiser and maybe as a summer business (if that works out). Because you are a botany major, you are in charge of growing the fresh basil. You have scrambled up a plan, and scrabbled up the pots, soil, and seeds, and you are now ready to start. So, to let the team know, you pop open the task board and move the 'Basil' task from 'Planning' to 'Started.' Sounds simple so far.
 
 Let's look at this in terms of the actions a person takes. A simplified 'task-board-actions' list might look something like this:
 
@@ -130,16 +132,16 @@ At a high level, here are some of the main parts of Uma:
 Tasks are modular in Uma. By default you can start with a classic Kanban-Board style of organizing your project-tasks into the three "columns" of:
 1. 'planning' 2. 'started' or 3 'done,' but you are not restricted to that. You can arrange any 'Lego-block' configuration that you can think of. Each project can be different.
 
-Task boards can be simple or elaborate and take many forms. For examples, see https://djaa.com/kanban-board-examples/ .  Being modular, Uma should be able to take, or construct, a variety of common forms. Extra features such as 'swimlanes,' for example, could be constructed by using a separate 'node' for each swim-lane, and viewing your choice of those together. This fits Uma naturally, since a 'swimlane' is basically a nested Kanban table (with several tasks) in one 'row,' a table made of tables. Tasks-nodes in Uma are inherently as nested as you want.
+Task boards can be simple or elaborate and take many forms. For examples, see https://djaa.com/kanban-board-examples/ .  Being modular, Uma should be able to take, or construct, a variety of common forms. Extra features such as 'swimlanes,' for example, could be constructed by using a separate 'node' for each swim-lane, and viewing your choice of those together. This fits Uma naturally, since a 'swimlane' is basically a nested Kanban table (with several tasks) in one 'row,' a table made of tables. Task-nodes in Uma are inherently as nested as you want.
 
 
 ### M is for Message
 
 If you and your teammates are all together in the workshop, then it is easy to formally and informally communicate verbally and with scribbled notes in myriad subtle ways. But when you are not in the same physical place, it is not automatically easy to facilitate all of that human language and body language if you are only sharing lines of text.
 
-Uma needs to allow for flexibility in messages and posts and what they are intended to be for, so messages and posts in Uma are modular: not just messages, but building blocks of message-post systems. Sometimes you just want to instant-message someone. But sometimes the 'structure' around how you want to share posts is different.
+Uma needs to allow for flexibility in "messages and posts" and what they are intended to be for, so messages and posts in Uma are modular: not just messages, but building blocks of message-post systems. Sometimes you just want to instant-message someone. But sometimes the 'structure' around how you want to share posts is different.
 
-With a modular framework, you can 'Lego-Build' a large variety of message-post-family functionalities, and teams will need to do:
+With a modular framework, you can 'Lego-Build' a large variety of message-post functionalities that teams may need the flexibility to perform:
 
  1. Instant-messaging/text-messaging
  2. Micro-blogging
@@ -158,15 +160,19 @@ With a modular framework, you can 'Lego-Build' a large variety of message-post-f
 15. Write-in option
 16. Mixed choice or write-in
 17. Posts 'to the attention of' (ping-ing) a collaborator
+18. Public Posts
+19. Private Posts
+20. Temporary Posts
+21. Posts used to configure and use other applications, such as 'tie-break' (see below)
 etc.
 
 
 ### Modular Task-Nodes
 
-Uma is designed to be as modular as possible, designed so that most things are made of the same standard unit (like a lego-block) that can be place in or on or next to other building blocks.
+Uma is designed to be as modular as possible, designed so that most things are made of the same standard unit (like a lego-block) that can be placed in or on or next to other building blocks.
 
 
-Not to get bogged down in the details, apologies, the term 'node' comes from the fact that Uma's teammate-shared-database is a particular type of database called (confusingly) a 'graph' database. Here 'graph' does not mean a chart or figure, as the term nearly always does, but (for some reason) a type of data-structure made out of interconnected "nodes."
+Not to get bogged down in the details, apologies, the term 'node' comes from the fact that Uma's teammate-shared-database is a particular type of database called (confusingly) a 'graph' database. Here 'graph' does not mean a chart or figure, as the term nearly always does, but (for some reason) a type of data-structure made out of interconnected "nodes" (and the "edges" that connect them).
 
 Each node has message-post functionality.
 
@@ -175,7 +181,7 @@ Using the basic module-units in uma (described here as "task-nodes," but you can
 
 ### Project-Areas
 
-There are six main areas where projects most often fall apart and fail, and where projects fail repeatedly for the same reasons that are effectively invisible. So even though Uma aims to be minimal, these six Project Areas are a core part of tasks and nodes. When you make a new task-node, you are Q&A guided through each Project Area to add a definition to that task-node. Even where elaborate software exists to plan and manage and track various parts of projects, these simple six failure areas somehow manage to slip through the cracks and prevent projects from running smoothly while remaining off people's radar. Uma aims to do everything it can to help people to focus on aligning and communicating about these critical areas.
+There are six main areas where projects most often fall-apart and fail, and where projects done by the same institutions, teams, and individuals, will fail repeatedly for the same reasons while those reasons stay effectively invisible. So even though Uma aims to be minimal, these six Project Areas are a core part of tasks and nodes. When you make a new task-node, you are Q&A guided through each Project Area to add a definition to that task-node. Even where elaborate software exists to plan and manage and track various parts of projects, these simple six failure areas somehow manage to slip through the cracks and prevent projects from running smoothly while remaining off people's radar. Uma aims to do everything it can to help people to focus on aligning and communicating about these critical areas.
 
 
 ## Is vs. Is-Not
@@ -188,14 +194,16 @@ Uma aims to be a do-one-thing-well tool that should be able to:
 - allow teams to send messages
 - allow teams to set up shared task-boards
 - help teams to define and align on goals and project areas
-- distribured/decentralized: no central server
-- no subscription service
+
+Uma operates with no centralized server, subscriptions, or third party cloud services.
+
+Uma is choice-based and ownership-based. You only connect with people who you actively agree to interact with. Every module of task-node and message-post is owned by someone.
 
 ##### DMCU-DGDB As Application Platform:
-- As demonstrated by a basic 'tie-break' decision tool, Uma should demonstrate, and be, a modular platform on which project-specific applications can be built (or with-which can work as stand-along DG-DB applications).
+- As demonstrated by a basic 'tie-break' decision tool, Uma should be a modular platform on which applications can be built (for example, customized for your current project) either inside or outside of Uma.
 
 #### Uma Is Not
-There are a number of related functionalities that task management and messaging should be confused with. Uma specifically is not designed to scope-creap into these features:
+There are a number of related functionalities that task management and messaging should not be confused with. Uma specifically is not designed to scope-creap into these features:
 - not git
 - not online file storage
 - not general cloud file sharing
@@ -324,9 +332,13 @@ quit
 
 ### Setup & Configuration: Files and Wizards
 - See instructions on github: https://github.com/lineality/uma_productivity_collaboration_tool
+
 - Uma does not need to be 'installed' to run, it is a compiled executable file. Having Rust ('Cargo') installed will be useful, but is not required.
+
 - First Setup: There is a setup-wizard to guide you with Q&A to set up your address-book file and your first team-channel
+
 - Invite-Update Wizard: The 'invite' command will start a Q&A Wizard that will guide you through team-setup with team-mates and other configuration tasks.
+
 - Your files on your system: These helper-tools (which can no doubt can be further improved upon) are an optional convenience. Uma is a system of your files on your local computer system. There are no hidden-mysterious files in hidden-mysterious formats. There is no hidden-mysterious program-state. There is no hidden-mysterious software needed to make or read a file. Your project files are your plain text files on your system that you can look at, read, modify, encrypt, gpg-sign, OTP-envelope, etc. You can create or change those files with a text editor or any plain-text-file-tool you want. You can remove them any time by deleting them.
 
 
@@ -1166,4 +1178,4 @@ https://www.economist.com/business/2026/02/01/why-software-stocks-are-getting-pu
 
 - The Uma, うま, is horse. 44444
 
-- otter.ai
+- otter.ai (example of similar-ish space of tools and features)
