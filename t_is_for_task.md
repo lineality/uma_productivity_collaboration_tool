@@ -36,7 +36,7 @@ g.g.ashbrook 2024.09.12-20, 2025.11-12
 # 1. Three Questions on Collaboration Tools:
 
 1. Features:
-- What features are needed (to manage projects)? What User-Features/Functionalities are needed for a project to use best-practice satisfying the standards of (if not using all methods of) Agile and Kahneman-Tversky-Decisions for all main areas project / product management?
+- What features are needed (to manage projects)? What User-Features/Functionalities are needed for a project to use best-practice satisfying the standards of (if not using all methods of) Agile and Kahneman-Tversky-Decisions for all main areas of project / product management?
 
 2. Tools:
 - What tools are needed to effect what features?
