@@ -183,6 +183,9 @@ Using the basic module-units in uma (described here as "task-nodes," but you can
 
 There are six main areas where projects most often fall-apart and fail, and where projects done by the same institutions, teams, and individuals, will fail repeatedly for the same reasons while those reasons stay effectively invisible. So even though Uma aims to be minimal, these six Project Areas are a core part of tasks and nodes. When you make a new task-node, you are Q&A guided through each Project Area to add a definition to that task-node. Even where elaborate software exists to plan and manage and track various parts of projects, these simple six failure areas somehow manage to slip through the cracks and prevent projects from running smoothly while remaining off people's radar. Uma aims to do everything it can to help people to focus on aligning and communicating about these critical areas.
 
+For a closer look at an even narrower team-task coordination-skill-set, see code and paper on Social-Story-Puzzles vs. Logistics-Puzzles:
+https://github.com/stemnetbenchmarks/social_story_and_cookbook_puzzles
+
 
 ## Is vs. Is-Not
 
@@ -498,21 +501,21 @@ Administration and productivity tools Agile Agile-Kahneman-Tversky-Decision best
 
 
 ## Early Development
-Uma is, as of 2025, still in early-development. The ideals for how it should be built are more exemplified by FF (it's file fantastic!) and the Lines Editor which use modules and new technologies developed in-house after Uma was started, and those modules and better designs are then used for Uma.
+Uma is, as of 2025, still in early-development. The ideals for how it should be built are more exemplified by FF (it's file fantastic!) and the Lines Editor which use modules and new technologies developed in-house after Uma was started. Many of those modules and better designs have been integrated back into Uma, but there is still work to do.
 
-So far Uma has been largely an experiment to see what is possible.
+So far Uma has been largely an experiment to see what is possible:
 - Can we make a distributed Multi-Point Conferencing Unit (distributed/decentralized MCU) that does not use websites, web-logins, or any central servers at all?
 - Can users share gpg-clearsigned verifiable files with each-other?
 - Can the software work in a Rust-Language space of strict data-types and strict-memory-management to improve long term maintainability and security?
-- Is it possible to have a 'Pad-Net' One-Time-Pad layer in a packet-sharing network?
-- Is it possible to have the functionality of a graphic user interface (which is notoriously brittle, single-platform depending, resource bloated, and not easy to modify, adapt, build-on, and modularize) in a Text User Interface that is robust, memory-slim, scalable, maintainable, modifiable, platform-independent, etc.?
-- Is it possible to have stateless operations for viewing and interacting with (creating, changing) the share-graph-database?
+- Is it possible to have an optional 'Pad-Net' One-Time-Pad (OTP) layer in a packet-sharing network?
+- Is it possible to have the functionality of a graphic user interface (which is notoriously brittle, single-platform dependent, resource bloated, and not easy to modify, adapt, build-on, and modularize) in a Text User Interface that is robust, memory-slim, scalable, maintainable, modifiable, platform-independent, etc.?
+- Is it possible to have stateless operations for viewing and interacting with (creating, changing) the shared-graph-database?
 
-Hopefully this release of Uma is a viable, usable, MVP, and not merely an abstract proof of concept (POC). While Uma aims to stay minimal, there are doubtless useful or essential features that still need to be added.
+Hopefully this release of Uma is a viable, usable, MVP, and not merely an abstract proof of concept (POC). While Uma aims to stay minimal. There are doubtless useful or essential features that still need to be added, though some of these may be user and project specific suggesting that a core-uma should stay minimal and modular.
 
 
 #### Suite:
-The overall goal is for Uma to be one of a set of inter-operable cli-compatible tools, and modules.
+The overall goal is for Uma to be one of a set of inter-operable cli-compatible tools, and modules, that can also have ~api functionality for other access and interfaces, such a browser-GUI interface.
 - Uma
 - File-Manager/Explorer: FF
 - Lines Editor: text/hex editor
@@ -525,25 +528,31 @@ The overall goal is for Uma to be one of a set of inter-operable cli-compatible 
 
 ### Tools & Features Question: How to 'do' a shared task-board?
 
-The question of why a task-board does not somehow fit inside a simple shared text-doc or a .csv table (a spreadsheet) is very interesting. If someone told me (before I started working on Uma) that "companies used to use dedicated taskboards but now they use a shared .txt or .csv file to do the same thing with less overhead." I think that would have sounded feasible, almost expected. The puzzle of a 'shared' task-column-set structure (even without being nested) is one of those things that we casually assume must have a very, very, simple math-logic equivalent structure. For example, take the tiny example of just two columns: 'not-done' and 'done' and only one task: 'feed cat.' The non-John-McCarthy part of our brains deeply believes that this must be entirely simple, perhaps because we can visualize a mundane physical structure that performs this task. But sometimes easy things are hard. As far as I know, there is no known way to use commonly available text-message and doc-link features (that most people know and use) to cover the functionality of even a basic task-board.
+The question of why a task-board does not somehow fit inside a simple shared text-doc or a .csv table (a spreadsheet) is very interesting. If someone told me (before I started working on Uma) that "companies used to use dedicated taskboards but now they use a shared .txt or .csv file to do the same thing with less overhead." I think that would have sounded feasible, almost expected. The puzzle of a 'shared' task-column-set structure (even without being nested) is one of those things that we casually assume must have a very, very, simple math-logic equivalent structure. For example, take the tiny example of just two columns: 'not-done' and 'done' and only one task: 'feed cat.' The non-John-McCarthy part of our brains deeply believes that this must be entirely simple, perhaps because we can visualize a mundane physical structure that performs this task (move a pin on a cork-board, move a post-it-note, or wipe and rewrite a whiteboard). But sometimes easy things are hard. As far as I know, there is no known way to use commonly available text-message and doc-link features (that most people know and use) to cover the functionality of even a basic task-board.
 
-A task board is a strange kind of message board where the message doesn’t change, but it moves in a N-dimensional space (also known as an "ecosystem," though that is likely counterintuitive sounding). A task board is simpler than instant-messages in some ways, as the language or sub-language symbols can be fixed, and terse. But the dimensionality of the space is elusive.
+A task board is a strange kind of message board where the message does not change, but it moves in a N-dimensional space (more technically known as an "ecosystem," though that is likely counterintuitive-sounding since sadly people have incorrectly learned that the study of n-dimensional-hypervolumes is instead 'environmentalism'). A task board is simpler than instant-messages in some ways, as the language or sub-language symbols can be fixed, and terse. But the dimensionality of the space is elusive.
 
-A repeating theme here is that people underestimate project-task spaces and find them to be counter-intuitive (where people following their intuitions keeps leading to failures and confusions). So Uma's design should be, however minimal, functional and user-friendly.
+A repeating theme here is that people underestimate project-task spaces and find them to be counter-intuitive (where following intuition keeps leading to failures and confusions).
 
-A task board can be simple. Personally, I think the minimal 'Trello' interface (a WEB-GUI for dragging and dropping tasks into columns) is brilliant and the most user-friendly that I have seen. Jira has so many features and functionalities for IT-projects that arguably it is not really a Kanban-Board or even trying to be one, so much as a board-ish way of organizing myriad other features and functionalities. I recommend web-searching screenshots of Jira and Trello (both are now owned by Atlassian, Trello was purchased in 2017).
+A task board can be simple. Personally, I think the minimal 'Trello' interface (a WEB-GUI for dragging and dropping tasks into columns) is brilliant and the most user-friendly that I have seen. Jira has so many features and functionalities for projects that arguably it is not really a Kanban-Board or even trying to be one, so much as a board-ish way of organizing myriad other features and functionalities. I recommend web-searching screenshots of Jira and Trello (both are now owned by Atlassian, Trello was purchased in 2017).
+
+I want to try to separate criticism of education from criticism of Jira. I do think Jira's features are important to have for various roles in an organization, but predominantly where jira is used by developers on cross-functional teams during sprints I have seen Jira used both as a kind of blind cargo-cult of bureaucracy and as a 'you pretend to pay us, and we pretend to work' smoke-screen of obfuscation. In both cases incomprehensible webs of meaningless electronic form data are deliberately generated without any clear communication or coordination goals and zero intersection between that noise-creation and the practical-communication that is needed. A simpler similar analogy is the very real phenomenon of a 'standup' being very ironically misinterpreted as an obligatory in-the-weeds wordsalad session where people who are never guard-railed into learning what a standup is spend a half-hour flailing out miscellaneous project details: such a situation is clearly not a criticism of proper-standups; this should be an unambiguous situation that we can agree is a case where education and leadership are failing and the tendency towards mis-alignment is on full display.
+
+The goal of uma is to try to focus on the scope of team-alignment, and to actively avoid wandering into features and functionalities that would detract from agile-alignment-communication.
 
 
 ### Back to Time-Travel
 
-Let's continue with our example of the team using 1940's technology and concepts (using physical boards and task label signs, hand-written message-posts, and in-person verbal chatting and updates). Let's keep moving ahead in time past the early-internet years and imagine that you and your team can manage Task-Boards and Message-Posts without using websites, or subscription plans, or third-party accounts, or data-stored by host companies, or browsers, or touch-screens, or an injection-ready SQL system, or even setting up your own server in the cloud (or in a closet).
+Let's continue with our example of the team using 1940's technology and concepts (using physical boards and task-label-signs, hand-written message-posts, and in-person verbal chatting and updates).
+
+Let's keep moving ahead in time past the early-internet years and imagine that you and your team can manage Task-Boards and Message-Posts without using websites, or subscription plans, or third-party accounts, or data-stored by host companies, or browsers, or touch-screens, or an injection-ready SQL system, or even setting up your own server in the cloud (or in a closet).
 
 
 #### Selecting A Tech-Stack
 
-For Uma's design: The only software, and data, is what is on each team-member's computers. The only databases are the synced-project-graph databases used by the team-members, which are readable files in directories on the users' computers. These files are to be used or converted in format however the user needs to.
+For Uma's design: The only software, and data, is what is on each team-member's computers. The only databases are the synced-project-graph databases used by the team-members, which are readable files in directories on the users' computers. These files are to be used or converted in format how the user chooses to, with possible extra strictness in the team-channel setup.
 
-For large organizations with large budgets, long timeframes, and many deployable employees, there are various existing services and service-providers. But not all common use-cases are covered by web-subscription model services, or cloud-server infrastructure based services.
+For large organizations with large budgets, long timeframes, and many deployable employees, there are various existing services and service-providers. And arguably it may make the most sense for a particular large and profitable company to pay other specialist companies to support their IT infrastructure (e.g. where it can be demonstrated to save money in the long run by paying an expert to manage specific data and tasks, as in the case of specific Service-Now work that would be very costly to re-invent in-house). But not all common use-cases are covered by web-subscription model services, or cloud-server infrastructure based services.
 
 For small teams, researchers, schools, students, and local-municiple type operations that broadly have less than no extra resources, there was until 2025 no viable option. Uma (however minimal and imperfect) is striving to be an option for people who need to make and do things.
 
@@ -551,21 +560,23 @@ Part of the design process here is defining the process and policies, trying to 
 
 
 #### For example:
-- current "standards and norms" of software design may be inadequate or incompatible with some user/stakeholder needs
-- some groups of users and stakeholders may fall outside of key commercial markets that are able to fund an ecosystem of software
+- Current "standards and norms" of software design may be inadequate or incompatible with some user/stakeholder needs.
+
+- Some groups of users and stakeholders may fall outside of key commercial markets that are able to fund an ecosystem of software.
 
 - Task-Managers should have native support for messages, questions, discussions etc., but usually they are completely separate.
 
 - Easy-Start services and dependencies can turn into later roadblocks where needed features (such as being able to access your own past data) is behind upgrade-paywalls that some sets of users cannot afford.
 
-- Cloud login and web-security has become a troubled landscape without clear solutions, and security breaches at and through cloud providers as an ongoing problem.
+- Cloud login and web-security has become a troubled landscape without clear solutions, and security breaches at and through cloud providers is an ongoing problem.
 
-- The economics of producing and maintaining software is still struggling for general paradigms. There is no mature market for software and services that incentivizes or allows for long term maintainable software. Even well-intentioned and broadly adopted products can be too costly to maintain (such as vizicalc and lotus-123). If you look at the software that the world is built on: posix, bash, c, apache-server, nginx, kubernetes, pypi, npm, etc. These are not for-profit packages or cloud-services.
+- The economics of producing and maintaining software is still struggling for general paradigms. There is no mature market for software and services that incentivizes or allows for long term maintainable software. Even well-intentioned and broadly adopted products that are extremely popular and widely used in the short-term can be too costly to maintain in the long-term (such as visicalc and lotus-123). If you look at the software that the world is built on: posix, bash, c, apache-server, nginx, kubernetes, pypi, npm, etc. These are not for-profit packages, cloud-services, or subscription-based.
 
-- Software such as slack, trello, and jira, can be just what is needed to enable productivity for the range of users who are able to use and pay for that product. And without that band-range of demand to allow for a market, the software companies that produce those solutions would not be able to afford to do the significant work of building and maintaining that software.
+- Software such as Slack, Trello, Jira, and Service Now, can be just what is needed to enable productivity for the range of users who are able to use and pay for that product. And without that band-range of demand to allow for a market, the software companies that produce those solutions would not be able to afford to do the significant work of building and maintaining that software.
 
-- Third party information sharing is either a liability, a risk, or not appropriate for a number of types of users, such as students or ethically/legally protected information such as healthcare and 'personally identifiable information' (PII) data.
+- Third party information sharing is either a liability, a risk, or not appropriate for a number of types of users, such as students or ethically/legally protected information such as healthcare and 'personally identifiable information' (PII) data. (While GDPR may be largely a separate topic, it might highlight some of the cases and edge cases where data-handling can become fraught.)
 
+- ~Free options that are available for individual customers (perhaps including slack, zoom, and google-suite) may be no longer legal or appropriate if those same people are interacting as part of a municipality, or small business, or NPO, etc. and or the data-sharing environment may no longer be appropriate.
 
 There are many aspects of post-internet, post-DOS, software that are so common (in 2025) as to be assumed and presumed, but which are not necessary and in many cases may contribute to the lack of accessibility, the lack of maintainability, and the spiraling of costs and technical debt that IT projects usually exhibit.
 
@@ -573,7 +584,7 @@ Going to school on these design mistakes (or attempting to), Uma is designed to 
 
 #### Uma is to have:
 - no subscriptions or service fees (you run the software and compute)
-- no third party information sharing
+- no third party information sharing (you store your data)
 - no separate servers (uma runs on the device you are using)
 - no load balancing backend or kubernetes devops
 - no signing-certificate renewal
@@ -581,30 +592,33 @@ Going to school on these design mistakes (or attempting to), Uma is designed to 
 - no web-hosting/domain-configuration,etc. (uma is not website/server-bloatware)
 - no service-hosting third-party companies
 - no required api configurations
-- no web security liabilities (not a web application: no web)
+- no app-store tasks
+- no website security liabilities (not a website application)
 - no account-setup with a third party information-harvester
+- no standard login email, password, passkey management (though GPG scope does exist)
 - no liability of the service suddenly being turned off
 - no middle-man barriers to accessing your own data
 - no middle-man barriers to searching your own data
-- no separate database setup (e.g. no "SQL" costs, dependencies, security problems)
+- no separate database setup or maintenance (e.g. no "SQL" costs, dependencies, security problems)
 - no loss of access to source code
+- no bottlenecks where a low-code/no-code solution becomes a roadblock
 
 
-I have routinely seen it a month+ to get a new employee added to a team's slack channel or jira account, with indefinately intermittent access interruptions that go on indefinately as webs of offices and departments gradually coordinate to fix issues. There is a kind of endemic learned-helplessness and external locus of control that dysfunctional software solutions are 'teaching' users. Too many students learn (and too many employees expect) that controls over and success of basic software is buried in Kafka-esk layers of bureaucracy that takes weeks, months, or years to churn and where 'competence' and 'status' means that you have a gang-post in a gate-keeper role in this tragedy of dysfunction, that security breaches are expected, that you will lose all your data, and that all of this will be ever more expensive and require ever more powerful hardware to do the same things (perhaps a "red-queen effect"). This is not how software tools are supposed to be. This is not how STEM ecosystems are supposed to operate. If it takes 6 months to make and show someone (somewhere in the same building) a single heatmap plot, people react with cynical complacency and embrace the inertia of a shake-down world when nothing works and no one can get anything done and no one should speak it about it or the nail that sticks up gets hammered down (as the Japanese saying sadly goes). This is not right. This is not where the timeline of STEM should be leading institutions.
+I have routinely seen it take a month+ to get a new employee added to a team's slack channel or jira account, with indefinately intermittent access interruptions that go on indefinately as webs of offices and departments gradually coordinate to fix issues. There is a kind of endemic learned-helplessness and external locus of control that dysfunctional software solutions are 'teaching' users. Too many students learn (and too many employees expect) that controls over, and success of, basic software is buried in Kafka-esk layers of bureaucracy that takes weeks, months, or years to churn and where 'competence' and 'status' means that you have a gang-post in a gate-keeper role in this tragedy of dysfunction, that security breaches are expected, that you will lose all your data, and that all of this will be ever-more expensive and require ever-more powerful hardware to do the same things (perhaps a "red-queen effect"). This is not how software tools are supposed to be. This is not how STEM ecosystems are supposed to operate. If it takes 6 months to make and show someone (somewhere in the same building) a single heatmap plot, people react with cynical complacency and embrace the inertia of a shake-down world when nothing works and no one can get anything done and no one should speak it about it or the nail that sticks up gets hammered down (as the Japanese saying sadly goes). This is not right. This is not where the timeline of STEM should be leading teams and institutions. This is not helping communities of participants.
 
 
-# Diversity of User Cases
+# Diversity of Use-Cases
 
-The stance here is meant to observe and account for a diversity of situations in a diverse world, certainly not to suggest a one-size-fits-all solution, and not to demean various areas and situations. While there are contextual criticisms and questions here related to commercial products, this is not meant to be a rhetorical position against software companies, software markets, or companies who want to pay for software. I am not anti-company, anti-intellectual property, anti-patent, anti-copyright, anti-regulation, anti-private-ownership, anti-investment, anti-market, anti-business, or anything along those lines. Just as there is no 'single software package' for everything every company will ever need to do on any hardware, there should be a variety of solutions covering as many users and use-cases as possible. Students, researchers, libraries, municipalities, on-site healthcare and first responders, journalists, and others, may not always fit into a market of users for subscription services, be they consumer directed services or designed specifically for large corporations who use a particular tech stack for particular operations and staffing.
+The stance here is meant to observe and account for a diversity of situations in a diverse world, certainly not to suggest a one-size-fits-all solution, and not to demean various areas and situations. While there are contextual criticisms and questions here related to commercial products, this is not meant to be a rhetorical position against software companies, software markets, or companies who want to pay for software. I am not anti-company, anti-intellectual property, anti-patent, anti-copyright, anti-regulation, anti-private-ownership, anti-investment, anti-market, anti-business, or anything along those lines, or 'anti' any general part of the world. Just as there is no 'single software package' for everything every company will ever need to do on any hardware, there should be a variety of solutions covering as many users and use-cases as possible. Students, researchers, libraries, municipalities, on-site healthcare and first responders, journalists, and others, may not always fit into a market of users for subscription services, be they consumer-directed services or designed specifically for large corporations who use a particular tech stack for particular operations and staffing.
 
 As of 2025, the current trend is to raise a firewall around students and minors to make it impossible for companies to interact with or store the information of students. How then are students going to train on and learn how to use project-management tools? A. They have no money. B. There is the 'regime uncertainty' risk that it could suddenly become illegal for companies to deal with that set of users, or that there would be an onerous and incoherent set of regulations as with GDPR data storage and permission requirements. Education and other areas often become a tragedy of the commons. A few children of wealthy well-connected parents will have rule-bending access to technology (as in the case of Bill Gates) and everyone else will have learned helplessness: that is not an education plan.
 
 From another approach, if companies do not want to (or would even be legally allowed to) voluntarily pay higher than necessary taxes so that municipalities can then re-route that tax revenue to pay for expensive software subscriptions, then there should be some open-source utilities out there.
 
-As another example: 'Service Now' is a wonderful set of tools for managing many processes, if you are, or have the budget and staffing of, an international corporation or a state government, and can employ yet further consultants and engineers to help you to set up and use those services. If you are a third grader, or a single mother, or a forest ranger, or a researcher in Antarctica, or a student, or a small startup, or a normal public library, or a small-town doctor,  this is a complete mismatch:
+As another example: 'Service Now' is a wonderful set of tools for managing many processes, if you are, or have the budget and staffing of, an international corporation or a state government, and can employ yet further consultants and engineers to help set up and use those services. If you are a third grader, or a single mother, or a forest ranger, or a researcher in Antarctica, or a student, or a small startup, or a normal public library, or a small-town doctor,  this is a complete mismatch:
 - the cost is way out of range,
-- the depth of the service is way beyond what you need,
-If the European Union wanted to track every book-lending event in the entire EU over decades, and could dedicate a department with millions of Euros to spend to do this, then Service Now could be great for helping that to happen and run smoothly (and those data might in turn help the rest of the world and local library systems handedly). For the users/stakeholders are the focus here, the best highest-quality Service Now software does them no good at all for their treehouse construction, or lemonade stand, or garage startup, or school maker-hackathon workshop, or local project getting the tires out of Mrs. Weatherdale's pond, or a small town hospital with a total staff of three trying to plan with an ambulance driver and a fireman across the valley.
+- the depth of the service is way beyond what you need.
+If the European Union wanted to track every book-lending event in the entire EU over decades, and could dedicate a department with millions of Euros to spend to do this, then Service Now could be great for helping that to happen and run smoothly (and those data might in turn help the rest of the world and local library systems handedly). For the users/stakeholders who are the focus here, the best highest-quality Service Now software does them no good at all for their treehouse construction, or lemonade stand, or garage startup, or school maker-hackathon workshop, or local project getting the tires out of Mrs. Weatherdale's pond, or a small town hospital with a total staff of three trying to plan with an ambulance driver and a fireman across the valley.
 
 
 ### Practicality & Utility
@@ -613,58 +627,68 @@ Some processes have more or less translated sufficiently (if not so easily) into
 
 Turning a paper notepad into a .txt file has worked very well (overall). And in some cases a .csv file and a spreadsheet can go a long way (though there is a bigger story there too). But it has been significantly more difficult to convert the physical process of moving a post-it-note on a shared whiteboard (or pinned note on a workshop cork board) so people can update the progress they are making and see how other team members are doing as well.
 
-
 Without getting conspiratorial, as Steve Gibson points out, there is a kind of flaw or perverse-incentive in the now perhaps extinct business model of producing software to be loaded and run locally: by making the software complete, the vendor has effectively put themselves out of business. To have continual income there needs to be some option such as:
 1. a 'subscription' model where the user accesses a cloud service instead of running the software locally, and pays for it forever (ideally including IT help, updates, etc.)
 2. a perpetual number of problems with the software that then requires customers to continually pay for new versions, technical support, patches, etc.
 or
 3. embedded advertising
+or
 4. harvesting and monetizing customer data
 
 
-And by looking at the evolution of software vending as a business, the movement is clearly away from producing software that you pay for once and then use locally (which, before the internet, was the primary model).
+And by looking at the evolution of software-vending as a business, the movement is clearly away from producing software that you pay for once and then use locally (which, before the internet, was the primary model).
 
-Even in the early days of the Android operating system, many apps offered a one-and-done purchase option. And over and over I have had the experience of then being locked out of software that I had fully purchased (such as 'Auto-desk' image editing) because they retroactively changed to a subscription model. And, while frustrating, this makes sense: there is no clear business model in 'finished software.'
+Even in the early days of the Android operating system, many apps offered a one-and-done purchase option. And over and over I have had the experience of then being locked out of software that I had fully purchased (such as 'Auto-desk' image editing) because they retroactively changed to a monthly/annual subscription model. And, while frustrating, this makes sense: there is no clear business model in 'finished software.'
 
 Again, this is not an anti-liberal-economics, pro-naive-musalini-fasciest-mercantilism message. There are certainly many contexts for private-sector development of software.
 
-My intention is to point out that there are different categories of software, some should have advertising, some should utilize and monetize user input, some should be subscriptions, and some should be basic low level open utilities.
+My intention is to point out that there are different categories of software, some should have advertising, some should utilize and monetize user input, some should be subscriptions, and some should be basic-low level open utilities.
 
-Look at the Unix operating system: The functioning world of software (disfunctional software not included) run on POSIX. If Bell-AT&T had succeeded in (for no apparent reason, just because they wanted POSIX to not be an open-utility) preventing anyone from using POSIX in the early 1990's, would the economies of today and the businesses of today be imaginable?
+Look at the Unix operating system: The functioning world of software (dysfunctional software not included) runs on POSIX. If Bell-AT&T had succeeded in (for no apparent reason, just because they wanted POSIX to not be an open-utility) preventing anyone from using POSIX in the early 1990's, would the economies of today and the businesses of today be imaginable?
 
-
-When designing low level and backup utilities designed to last a long time we should look at historical examples and think carefully about technology-maintainability, including both
+When designing low-level and backup utilities designed to last a long time we should look at historical examples and think carefully about technology-maintainability, including both:
 1. Long Term Software
 2. Long Term Data Storage
+
+Is it possible to design code that should be expected to still work, be maintainable, and be safe to use decades into the future? I think the answer is 'yes.' Assuming that a posix terminal will continue to exist, software that is designed to operate in that environment should continue to exist. While not all software has been well-maintained (ex-vi-vim is such a mixed-example) a large ecosystem of posix software has survived from the 1970's to the 2020's, including many utilities taken for granted. The DOS ecosystem is at least in some ways a counter example (though open-dos does exist), and should be examined to see how some software can lose support (or conversely how some platforms need support).
 
 Long term data storage is a whole topic not explored in this paper, but likely of importance to many users and institutions.
 
 
 ## How much simplicity are we aiming for?
 
-One lesson from the Dartmouth Internet is that there are some important nuances to networks and messages. Having a very naively simple and open system is fine for a small number of trusted professors or expert engineers, but once the system is open to either broader users and or bad actors, the design requirements for a working system start to look different. From memory-management and sound software to privacy and security (or data hygiene) oriented software, the bad-behavior and bad-security problem visible from the year 2000 were often in some form experienced during the timesharing-mini-internets of the 1960s, and when we did not incorporate feedback into the design process in resulted in repeating the same mistakes.
+One lesson from the Dartmouth Internet is that there are some important nuances to networks and messages. Having a very naively simple and open system is fine for a small number of trusted professors or expert engineers, but once the system is open to either broader users and or bad actors, the design requirements for a working system start to look different. From memory-management and sound software to privacy and security (or data hygiene) oriented software, the bad-behavior and bad-security problems that become more clearly visible from the year 2000 were often in some form experienced during the timesharing-mini-internets of the 1960s. Sadly but predictably, when we did not incorporate feedback into the design process the result was repeating the same mistakes.
 
 Is there such a thing as a declared abstract identity that functions sufficiently concretely? There may not be.
 
-The approach that Uma takes is to be 'functional' as much as possible, with single-sources of truth, and functional sources of truth, not proliferations of declarations, abstractions, and reifications.
+The approach that Uma takes is to be 'functional' as much as possible, with single-sources of truth, and functional sources of truth, not proliferations of declarations, abstractions, and reifications:
 
-Your project is your shared project graph database.
-Your project graph database is/are your project files in directories on your digital computer.
-Your current team-channel is the base of your current path through your files, (not what something says that may be, or could or should be, or state-value passed along in a fragile myth of trust, not those, but the ultimately physical file-memory relationships on your device. When you visualize your project board in a TUI or GUI, you are seeing for convenience files in directories that you can interact with as your files in your directories.
-The current user is, ultimately, their shared gpg-key/id.
+- Your project is your shared project graph database.
 
-We want to keep the system as simple and modular as possible, but the design needs to fit the use-case.
-- avoid known historical mistakes
+- Your project graph database is/are your project files in directories on your digital computer.
+
+- Your current team-channel is the base of your current path through your files, (not what something says that may be, or could or should be, or state-value passed along in a fragile myth of trust, not those, but the ultimately physical file-memory relationships on your device. When you visualize your project board in a TUI or GUI, you are seeing for convenience files in directories that you can interact with as your files in your directories.
+
+- The current user is, ultimately, (access to) their shared gpg-key/id.
+
+We want to keep the system as simple and modular as possible, but the design needs to fit the use-case and avoid known historical mistakes.
+
 
 ## Specific Use-Cases:
-- A Low-Level Open Utility (that can be incorporated into projects as a module and modified directly at a low level) not a high level black-box Entertainment-Service.
-- Students and Researchers
-- Field Research with resource constrained decivics
-- Emergency Networks
-- Long Term Needs for Municipal and Community Systems
+- A Low-Level Open Utility (that can be incorporated into projects as a module and modified directly at a low level), not a high level black-box Entertainment-Service.
 - Coordinated Decisions
-- network efficiency
-- network security
+- Network efficiency
+- Network security
+- Long Term Needs for Municipal and Community Systems
+- For Students
+- For Researchers
+- For Field Research with resource constrained devices
+- For Emergency Networks
+
+
+Note: While not a primary use-case in ~2026, there is a grey-area that starts with field-research on resource constrained devices (with modular configurability for automated tasks) and a hybrid field research device network with autonomous devices (e.g. some form of AI-managed devices) that coordinate using the some network as people).
+
+
 
 
 ### Functionality & features
@@ -707,7 +731,7 @@ We want to keep the system as simple and modular as possible, but the design nee
 - headless OS compatible
 
 
-## network-flexible
+## Network-Flexible
 - low-bandwidth compatible
 - intermittent bandwidth compatible
 - network-agnostic
@@ -1143,7 +1167,298 @@ Another useful aspect of the chess example of a platform-application is to sanit
 Axiomatic Theory of Tie-Breaking Impossibility, Characterization, and Decomposition by Frank M. V. Feys https://arxiv.org/abs/2605.22846
 
 
-## 13. Other Links & Notes
+## 14. Production-Rust Guidelines
+
+
+Uma's future-proof ethos extends scope to include various aspects of how future-maintainable and safe code is. As a brief walkthrough of a larger topic, here are ~10 rules (and other commentary) for Rust in 2026, as a variation on NASA's 10 rules for embedded-c in 2006. The emphasis is on pointing out areas to be thoughtfully managed, more so than to dictate a one-size-fits-all way to manage each.
+
+🦀 Production Rust 🦀:
+- Always best practice.
+- Always extensive doc strings: what the code is doing with project context
+- Always clear comments.
+- Always cargo tests (where possible).
+- Never remove documentation.
+- Always clear, meaningful, unique names (e.g. variables, functions).
+- Always absolute file paths.
+- Always error handling.
+- Never unsafe code.
+- Never use unwrap (in production builds).
+
+Theory and real life are completely different in production code.
+Production code must be designed for bitflips, hardware failures, OS errors, etc.  Not pure platonic nirvana.
+E.g. According to Linus Torvalds, many or most windows blue screen of death issues in 1990-2010 happened because code did not account for real-world physical hard drive behaviors (including memory errors). According to Steve Gibson (and maybe Designing Data-Intensive Applications: by Martin Kleppmann) many network and database issues are caused by hard-radiation ("cosmic-ray") bitflips.
+
+Power failures happen. Hardware failures happen. Cyberattacks happen. Misbehaving applications happen. Rare edge cases happen. Race conditions happen. Undefined behavior happens. Most code does not have guardrails like either Rust or NASA's 'Power of Ten rules'. Etc.
+
+Much code is only for R&D and internal one-off use, and that is fine. Printing 'hello world' to test should not require elaborate production-hardening. Not all code is or needs to be "production" code. But production code must be smart.
+
+In production: Every line of code will fail eventually. Not 'if': every line of code will fail eventually. Production code is written to handle the failures when, (not 'if,' when) they happen. There is no 'should not fail.' There is no 'can not fail.' Every function will fail. Every call to every function will malfunction. Everything (in production) must be checked and handled so that when (not 'if,' when) these expected errors happen the process does not misbehave, crash, abort, or escalate malfunction, etc.
+
+Empirical processes are more "statistical," less tautological; and "statistical" quickly reaches into the unknown and the undefined.
+
+
+#### Rules of Thumb (there will be exceptions and edge cases):
+
+- Classic ~quote from Sid Meyer's Civilization Game: "The bureaucracy has expanded to meet the needs of the expanding bureaucracy." Bloat and project collapse due to nihilist mismanagement and bad project skills is not new to computer science.
+
+##### Rules Require Context:
+- Rules such as 'Don't Repeat Yourself' or 'Separation of Concerns' require a context to be coherent and a compelling reason: Do not repeat yourself IF there is a compelling reason in a clear context. Does aerospace engineering have a blind policy of zero redundancy? No, it does not. Context matters.
+
+
+##### Flat is better than nested. (Just like in the zen of python.)
+- Consider the flat option first.
+- Be wary of ever-more nested structs to infinitely 'separate concerns' for the sake of infinitely 'separating concerns.'
+
+
+##### 'Get [what is] needed, when [it is] needed.':
+- Do not load more into state than you need.
+- Do not store more information than you need.
+- Do not use more storage capacity than you need.
+- Do not keep a hold/handle on a file longer than is needed (e.g. forever).
+
+
+##### Grace Hopper ~"The most damaging phrase in the language is 'we've always done it this way.' The second most damaging is 'storage is cheap.'"
+- Be as caring and vigilant about memory-economics as Grace Hopper (who famously walked around with a piece of wire 30 cm long — "a nanosecond" — to make engineers physically feel the cost of waste). Before suggesting the size for a variable (such as apathetically using more memory than is needed) imagine you are suggesting this to Grace Hopper to her face. Only use as much memory as you are absolutely required to use.
+
+- Load what is needed when it is needed: Do not ever load a whole file or line, rarely load a whole anything. Increment and load only what is required pragmatically. Do not fill 'state' with anything that is not both necessary and actually used. Do not insecurity output information broadly in the case of production errors and exceptions (testing and debugging.
+
+- Always use defensive best practice.
+
+- Smoothly handle everything: Every part of every function will eventually fail, if only due to hardware failures or bit-flip noise (both of which are common in reality). As Linus Torvalds has explained, at the root of many 'blue screen of death' incessant window crashes in year's past were hardware irregularities that were not 'handled' by software. Production functions are not pure logic bubbles, they are physical engines that must account for all physically-possible (not just ideally-logically pure) outcomes. If a function gets a result from another function that is (for whatever reason, however logically impossible) malformed and broken, this needs to be handled, e.g. with the classic "let it fail and try again" resiliency model. Every return should be checked for what can be checked, with issues handled (structs and enums can be useful here to define what a healthy return value is allowed to be).
+
+Always error and exception handling: Every part of code, every process, function, and operation will fail at some point, if only because of cosmic-ray bit-flips (which are common), hardware failures, power-supply failures, adversarial attacks, etc. There must always be fail-safe error handling where production-release-build code handles issues and moves on without panic-crashing ever. Every failure must be handled smoothly: let it fail and move on. This does not mean that no function can return an error, nor does this mean that errors cannot be logged or reported. Case by case, a process can be retried or skipped, but the overall program must smoothly continue.
+
+### "Do not stop" in production: Case Handling
+Somehow there seems to be no clear vocabulary for 'Do not stop.' In production build code, when you come to something to handle, handle it:
+- Handle and move on: Do not halt the program.
+- Handle and move on: Do not terminate the program.
+- Handle and move on: Do not exit the program.
+- Handle and move on: Do not crash the program.
+- Handle and move on: Do not panic the program.
+- Handle and move on: Do not coredump the program.
+- Handle and move on: Do not finish the program.
+- Handle and move on: Do not spiral into undefined behavior of the program.
+- Handle and move on: Do not stop the program.
+
+### Project-Level Context For Functions, Comments, & Doc-Strings
+Comments and docs for functions and groups of functions must include project level information: To paraphrase Jack Welch, "The most dangerous thing in the world is a flawless operation that should never have been done in the first place." For projects, functions are not pure platonic abstractions; the project has a need that the function is or is not meeting. It happens constantly that a function does 'the wrong thing' well and so this 'bug' is never detected when functions are examined in isolation. Project-level (strategic level, architecture level) documentation and logic-level (tactical level) documentation are two different things that must both exist such that discrepancies must be identifiable; Project-level documentation, logic-level documentation, and the code, must align and align with user-needs, real conditions, the results of tests, and future conditions.
+
+Safety, reliability, maintainability, fail-safe, communication-documentation, are the goals: not ideology, aesthetics, popularity, momentum-tradition, bad habits, convenience, nihilism, lazyness, lack of impulse control, cooties, etc.
+
+### No third party libraries (or very very strictly avoid third party libraries where possible).
+
+### Scale: Code should be future-proof and scale well. The Y2K bug was not a wonderful feature, it was a horrendous mistake. Scale and size should be handled in a modular no-load way, not arbitrarily capped so that everything breaks.
+
+### Power-of-10-style Rules of Thumb
+We can derive a practical list of '10 Rust Production Rules' updated for general systems programming in 2026 (derived) from NASA's 2006 'Power of 10' rules that were originally narrowly framed for c for embedded-systems.
+
+These are ideals to be followed where possible and sensible, not absolute pedantic rules:
+
+1. no unsafe stuff:
+- no recursion
+- no goto
+- no pointers
+- no preprocessor branching
+(Term collision: Technically an 'unsafe code' block in Rust may be required for cases such as naked/assembly code or to interact with a Posix-OS, as in the case of raw-terminals. While use of jargon-'unsafe' blocks should be avoided where possible, the term 'unsafe' does not mean that a specific best-practice rule was violated.)
+
+2. Loops: either firmly bounded or unbounded:
+- Upper bound on all normal-loops (to make sure they do **not** keep looping)
+- Failsafe for all always-loops to make sure they **do** keep looping (e.g. additional restart layer)
+
+3. Pre-allocate all memory (no dynamic memory allocation)
+- Production code should minimize or eliminate use of heap (e.g. very terse error messages that do not leak any user-data)
+- Debug and testing often make sense to use heap and this code is not in production-binaries (e.g. detailed error messages)
+- Clearly separate lazy-convension from real-need. With tools such as "Buffy'
+github.com/lineality/buffy_stack_format_write_module, it is not necessary to use heap for string formatting.
+
+4. Clear Function Scope and Data Ownership:
+Part of having a function be 'focused' means knowing if the function is in scope. Functions should be neither swiss-army-knife functions that do too many things, nor scope-less micro-functions that may be doing something that should not be done. Many functions should have a narrow focus and a short length, but definition of actual-project scope functionality must be explicit. Replacing one long clear in-scope function with 50 scope-agnostic generic sub-functions with no clear way of telling if they are in scope or how they interact (e.g. hidden indirect recursion) is dangerous. Rust's ownership and borrowing rules focus on Data ownership and hidden dependencies, making it even less appropriate to scatter borrowing and ownership over a spray of microfunctions purely for the ideology of turning every sub-operation into a microfunction just for the sake of doing so. (See more in rule 9.)
+
+5. 'Case Handling' & Defensive Programming: debug-assert, test-assert, prod safely check & handle, not 'assert!' panic in production
+
+Note: Terminology varies across "error" / "fail" / "exception" / "catch" / "case" et al. The standard terminology is 'error handling' but 'case handling' or 'issue handling' may be a more accurate description, especially where 'error' refers to the output when unable to handle a case (which becomes semantically paradoxical). The goal is that a program will not terminate / halt / end / shut down / stop, etc., or crash / fail / panick / coredump / do undefined-behavior, etc. when 'expected' cases occur. Here production and debugging/testing starkly diverge: during testing you **DO** want/need to see how (and where in the code) the program may 'fail' and where and when cases are encountered. In testing you need to stop with extensive details. In debugging you want to show extensive issue-details. But in production you need to never stop and you need to keep logs memory-terse and privacy-safe.
+The proverbial satellite must never fall out of the sky, ever, regardless of how pedantically beautiful the error-message in the ball of flames may have been.
+
+##### Six aspects of case-handlng (Rule 5 of revised 'power of 10' for Rust)
+For production-release code:
+
+1 of 6: Check and handle without stop/panic/halt in production
+
+2 of 6: return result (such as Result<T, E>) and smoothly handle "errors" (not halt-panic stopping the application): no assert!() outside of test-only code
+Return Result<T, E>, with case/error/exception handling, so long as that is caught somewhere. Only in cases where there is no way (or no where) to handle the error-output should the function always return OK(), failing completely silently (sometimes internal-to-function error logging is best). Allow-to-fail and handle is not the same as no-handling. This is case-by case.
+
+3 of 6: test assert: use #[cfg(test)] assert!() to test production binaries (not in prod builds, not in debug builds)
+
+4 of 6: debug assert: use debug_assert! with  #[cfg(all(debug_assertions, not(test)))] to run tests in debug builds (not in prod, not in test)
+
+5 of 6: Note: #[cfg(debug_assertions)] and debug_assert! ARE active in test builds
+
+6 of 6: Use defensive programming with recovery of all issues at all times
+- use cargo tests
+- use debug_asserts
+- do not leave test-panic assertions in production code
+- use no-panic error/case handling in production code
+- use Option
+- use enums and structs
+- check bounds
+- check returns
+- note: a test-flagged assert can test a production release build (whereas debug_assert cannot); cargo test --release
+```
+#[cfg(test)]
+assert!(
+```
+
+e.g.
+"Assert & Catch-Handle" 3-part System for organizing production behavior, debug behavior, and cargo-test behavior:
+
+A three-part rule of thumb:
+
+1 of 3: For Debug assertions: Only in debug builds, NOT in tests - use:
+```
+#[cfg(all(debug_assertions, not(test)))]
+```
+
+2 of 3:. For Test assertions: use in test functions themselves, not in the function body (easy to conflict with debug/prod handling)
+E.g.
+When we run a cargo test:
+- The #[cfg(test)] assert compiles and is active
+- the cargo-test calls string_concat_list_function()
+- an assert! in the abc_function (not in the test) panics immediately inside the abc_function
+- abc_function never reaches the production error handling
+- so abc_function never returns an Err(...)
+- so the cargo-test 'fails' with a panic, not with a cargo-test error result
+
+3 of 3:. Production catches: Always present, return production-safe no-heap terse errors (no panic, no open-ended data exfiltration), with unique error prefixes to identify the function, e.g. 'SCLF error: arg empty' for string_concat_list_function()
+
+
+Note: Buffy may be useful in production error string formatting https://github.com/lineality/buffy_stack_format_write_module
+```
+// template/example for check/assert format
+//    =================================================
+// // Debug-Assert, Test-Asset, Production-Catch-Handle
+//    =================================================
+// This is not included in production builds
+// debug_assert: IS also active during test-builds
+// use #[cfg(not(test))] to run in debug-build only: will panic
+#[cfg(all(debug_assertions, not(test)))]
+debug_assert!(
+    INFOBAR_MESSAGE_BUFFER_SIZE > 0,
+    "Info bar buffer must have non-zero capacity"
+);
+
+// this is included in debug builds AND in test builds
+#[cfg(debug_assertions)]
+{
+xyz
+}
+
+// Production safe output example (buffy-write is a no-heap alternative)
+            Err(_e) => {
+                #[cfg(debug_assertions)]
+                eprintln!("function-acronym: process-name: {}", _e);
+
+                // safe log
+                eprintln!("function-acronym: process-name: failed");
+            }
+
+// Note: This is located only in cargo test functions.
+// This is not included in production builds.
+// assert: only when running cargo test: will panic
+#[cfg(test)]
+assert!(
+    INFOBAR_MESSAGE_BUFFER_SIZE > 0,
+    "Info bar buffer must have non-zero capacity"
+);
+// Catch & Handle without panic in production
+// This IS included in production to safe-catch
+if !INFOBAR_MESSAGE_BUFFER_SIZE == 0 {
+    // state.set_info_bar_message("Config error");
+    return Err(LinesError::GeneralAssertionCatchViolation(
+        "zero buffer size error".into(),
+    ));
+}
+```
+Depending on the test, you may need a test-assert to be in a cargo-test function and not in the main function.
+
+Warning: Do not collide or mix up test-asserts and debug asserts, or forget that debug code also runs in test builds by default.;
+use #[cfg(all(debug_assertions, not(test)))] for debug build only (not test build).
+use #[cfg(test)] assert!(  for test build only, not debug).
+Give descriptive non-colliding names to cargo-tests and test sets.
+
+Note: production-use characters and strings can be formatted, written, printed using modules such as Buffy
+https://github.com/lineality/buffy_stack_format_write_module
+instead of using standard Rust macros such as format! print! write! that use heap-memory.
+
+Note: Error messages must be unique per function (e.g. name of function (or abbreviation) in the error message). Colliding generic error messages that cannot be traced to a specific function are a significant liability.
+
+
+Avoid heap for error messages and for all things:
+Is heap used for error messages because that is THE best way, the most secure, the most efficient, proper separation of debug testing vs. secure production code?
+Or is heap used because of oversights and apathy: "it's future dev's problem, let's party."
+
+We can use heap in debug/test builds only.
+
+Production software must not insecurely output debug diagnostics.
+Debug information must not be included in production builds: "developers accidentally left development code in the software" is a classic error (not a desired design spec) that routinely leads to security and other issues. That is NOT supposed to happen. It is not coherent to insist that open ended heap output 'must' or 'should' be in a production build.
+
+This is central to the question about testing vs. a pedantic ban on conditional compilation; not putting full traceback insecurity into production code is not a different operational process logic tree for process operations.
+
+Just like with the pedantic "all loops being bounded" rule, there is a fundamental exception with conditional compilations: code that must NEVER be in production-builds must ALWAYS be excluded using conditional-compilation flags. This is not an OS or algo-tree conditional compilation, or a hardware conditional compilation; This is an 'unsafe-testing-only' vs. 'safe-production-code' condition. This includes several types of items, such as panic-inducing 'assert' statements (as opposed to proverbial-assert checks that do not panic-halt), and error-message data: Error messages and error outcomes in 'production' 'release' (real-use, not debug/testing) must not ever contain any information that could be a security vulnerability or attack surface. Failing to remove debugging inspection is a major category of security and hygiene problems.
+
+Security: Error messages in production must NOT contain:
+- File paths (can reveal system structure)
+- File contents
+- environment variables
+- user, file, state, data
+- pii data
+- internal implementation details
+- etc.
+
+All debug-prints not for production must be tagged with:
+```
+#[cfg(debug_assertions)]
+```
+
+Production output following an error / exception / case must be managed and defined, not not open to whatever an api or OS-call wants to dump out.
+
+6. Manage ownership and borrowing
+- Rust is designed to greatly assist here (vs. c).
+
+7. Manage return values:
+- use null-void return values
+- check non-void-null returns
+- see above for designing and checking return values to handle cases of invalid other return-value cases.
+- always have functions return a 'result' so errors and cases can be handled
+
+8. Manage conditional compilation: Navigate debugging and testing on the one hand and not-dangerous conditional-compilation on the other hand:
+- Here 'conditional compilation' is interpreted as significant changes to the overall 'tree' of operation depending on build settings/conditions, such as using different modules and basal functions. E.g. "GDPR compliance mode compilation"
+- Any LLVM type compilation or build-flag will modify compilation details, but not the target tree logic of what the software does (arguably).
+- 2025+ "compilation" and "conditions" cannot be simplistically compared with single-architecture 1970 pdp-11-only C or similar embedded device compilation.
+
+9. Communicate:
+- Use doc strings; use comments.
+- Document use-cases, edge-cases, and policies (These are project specific and cannot be telepathed from generic micro-function code. When a Mars satellite failed because one team used SI-metric units and another team did not, that problem could not have been detected by looking at, and auditing, any individual function in isolation without documentation. Breaking a process into innumerable undocumented micro-functions can make scope and policy impossible to track. To paraphrase Jack Welch: "The most dangerous thing in the world is a flawless operation that should never have been done in the first place.")
+- Rather than using '?' for terse function calling, when possible have detailed error handling.
+- Rather than having a result hidden in let _ =, allow that result to be shown in debugging
+
+10. Use state-less operations when possible:
+- a seemingly invisibly small increase in state often completely destroys projects
+- expanding state destroys projects with unmaintainable over-reach
+
+
+Also: As per Mara Bos's 'Rust Atomics and Locks' (O'Reilly) note the specific use-case and needs for threads, parallelism, concurrency, atomics, async, etc. Distributed processing varies significantly per project, and implementations of production functions, algorithms, and data structures, are rarely the same as abstract text-book examples.
+🦀Vigilance🦀: Properly written code supports users, developers, and the people who depend upon maintainable software. Maintainable software supports the future for us all.
+#### Links:
+- https://en.wikipedia.org/wiki/The_Power_of_10:_Rules_for_Developing_Safety-Critical_Code
+- https://spinroot.com/gerard/pdf/P10.pdf
+- https://spinroot.com/static/index.html
+- https://web.eecs.umich.edu/~imarkov/10rules.pdf
+- https://www.youtube.com/watch?v=JWKadu0ks20
+- https://en.wikipedia.org/wiki/Static_program_analysis
+- https://www.oreilly.com/library/view/designing-data-intensive-applications/9781491903063/
+
+
+## 14. Other Links & Notes
 - https://web.eecs.umich.edu/~imarkov/10rules.pdf: NASA: Rules for Developing Safety-Critical Code", Gerard J. Holzmann
 - https://djaa.com/kanban-board-examples/
 - https://github.com/Cube9999/vi
@@ -1169,13 +1484,12 @@ https://www.grc.com/sn/sn-1054.txt
 - Topic: Cost-Liabilities of Software and Software-Problems:
 https://www.economist.com/business/2026/02/01/why-software-stocks-are-getting-pummelled
 
-
-### Notes
-
 - Example discussion of a case-study of an unfixed bug that inadvertently generates revenue https://www.youtube.com/watch?v=E3_95BZYIVs , illustrating both the classic incentive problem, and the psychological problems of people ignoring, defending, and embracing failure, and insufficiency, and bad behavior.
 
+- otter.ai (example of similar-ish space of tools and features)
+
+
+### Notes
 - According to the wikipedia on Rust, Rust creator Graydon Hoare '...described the language as "technology from the past come to save the future..."'
 
-- The Uma, うま, is horse. 44444
-
-- otter.ai (example of similar-ish space of tools and features)
+- Uma, うま, is Japanese for horse.
