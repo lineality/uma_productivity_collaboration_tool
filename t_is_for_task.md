@@ -1,10 +1,12 @@
 ## T is for Task: Uma Collaboration Tool
-g.g.ashbrook 2024.09.12-20, 2025.11-12
+g.g.ashbrook 2024.09-12, 2025.11-12, 2026.4-5
 
-
+Uma is a message and task-board focused distributed/decentralized platform.
 1. Why do projects fail?
-2. What are the skills needed to do projects?
-3. Can everyone learn project skills?
+2. What are the skills needed to do team projects?
+3. Can everyone learn project-skills?
+4. Why does some software become obsolete and unmaintainable?
+5. Can software-utilities be designed to endure?
 
 
 ### Contents
@@ -12,7 +14,7 @@ g.g.ashbrook 2024.09.12-20, 2025.11-12
 
 2. Introduction to Project-Tasks & 'Task-Boards'
 
-3. Scope: Messages, Tasks. A basic outline of features
+3. Scope: Messages, Tasks. A Basic Outline of Features
 
 4. Tutorial: Uma
 - 't': tasks
@@ -20,7 +22,8 @@ g.g.ashbrook 2024.09.12-20, 2025.11-12
 - 'move': Task on Board: 1. 'move' 2. What, 3. where, (done)
 - 'add': task node
 
-### Appendices:
+
+### Appendices
 5. Process Design: project/product management and coordination more broadly
 6. Software Design: moving parts and details
 7. Prof. Skip Ellis and Project Neem
@@ -29,7 +32,8 @@ g.g.ashbrook 2024.09.12-20, 2025.11-12
 10. More Details on a 1960s Uma
 11. Utility Case study: ex/vi/vim
 12: Tiebreak: A case study of applications on a distributed platform using chess
-12. Links
+13: Primitives & Future Forms
+14. Links
 
 
 
@@ -45,7 +49,7 @@ g.g.ashbrook 2024.09.12-20, 2025.11-12
 - Could tools for Agile and Kahneman-Tversky-Decisions for project / product management have been built in the 1960's?
 
 
-[These three questions are unbelievably delicious, fun, and glorious. They cut through our imagined barriers between public sector, private sector, science and non-science, geography and culture, etc., and they challenge our understanding of the timelines of history on which we stumble. Regardless of whether anything else in this paper holds any use or interest for you, everyone should be enraptured with these questions and carry them however they will.]
+[These three questions are delicious. They cut through our imagined barriers between public sector, private sector, science and non-science, geography and culture, etc., and they challenge our understanding of the timelines of history on which we stumble. Regardless of whether anything else in this paper holds any use or interest for you, everyone should be enraptured with these questions and carry them however they will.]
 
 
 # 2 Introduction: Tasks & 'Task-Boards'
@@ -91,30 +95,45 @@ See: https://github.com/lineality/definition_behavior_studies
 A simplified set of policies and valued-processes for task-board use might look like this:
 1. Learning and Maintaining Non-Automatic Perception
 2. Maintaining Sound Definitions and Agendas (Prevent System Collapse)
-2. Not Repeating Past Mistakes
-3. Learning
-4. Communication
-5. Feedback
-6. Externalization / Articulation
-7. Problem Solving
-8. Iteration (Progressively-Incrementing Using Feedback/Repeating/Looping)
+3. Not Repeating Past Mistakes
+4. Communication & Externalization / Articulation
+5. Feedback & Constructive Use of Data from Errors and Mistakes
+6. Problem Solving
+7. Iteration (Progressively-Incrementing Using Feedback/Repeating/Looping)
+
+
+#### Non-Automatic Communication
+
+Question: "Is all this detail really necessary? Doesn't communication 'just happen' as people work?"
+
+As I understand it, we can deliberately implement and maintain mechanisms for correction, but self correction is (and perception of, and skills in related areas, are) not automatic. History is full of examples where proverbial trainwrecks continue to snowball through decades of failure, often across multiple 'generations' of human lives. The kind of cross-reinforcing mechanisms and defaults that we hope and expect to support value function and meaning exist more on the other side: system collapse, and barriers to perception.
+
+Areas of STEM frequently appear shallow and trivial at first glance, but things that seem easy and simple often are deeper and tricker than our intuition would lead us to suspect.
+
+We should anticipate that teams eager to get started on a project under-estimate the underlying challenges of planning, communicating, aligning, and scheduling. But we should also anticipate that all participants can learn the basic concepts and skills needed for good-enough system-and-definition-hygiene (perhaps 'information hygiene') in the same way that all participants are entirely capable of learning and practicing health-and-medical hygiene.
+
+For more, see:
+A study on tools for empirically analyzing specific communication skills and issues:
+- https://github.com/stemnetbenchmarks/social_story_and_cookbook_puzzles
+An ongoing study of the parts and processes of coordinated-decisions:
+- https://github.com/lineality/Networked_Voting_and_Decisions_Including_One_Time_Pads
 
 
 ### Task Workflow with Policy/Values:
 
 What the task-board is doing now looks not quite as simple as our minimal 'task-board-action-list' above.
 
-Updating and aligning happens in many areas. With each iteration, and during each step, many areas of updating, perception adjustment, strategy and prediction adjustment may be happening:
+Updating and aligning happens in many areas. With each iteration, and during each step, many areas of updating, perception-adjustment, strategy and prediction-adjustment may be happening:
 - Your perceptions and skills to perceive,
 - Your plan,
 - The tasks on the board,
-- Your understanding of your and other's task and how they relate,
+- Your understanding of your and others' task(s) and how they relate,
 - The schedule,
 - Your own communications,
 - Your skills and abilities: learning,
 - Your understanding of aspects and implications of the project,
 
-(Not to mention all of the long-term, and soft-skills, and 'classroom management', parts of a team project space. Spaces can be growth filled, discovery-filled, exciting, productive, synergistic, positive environments, but they can also become (as the internet sometimes puts on display) fraudulent, toxic, bad-actor filled, disinformation-filled, nihilistic, hostile, zero-sum regressive, and dysfunctional.)
+(There are also all of the long-term, and soft-skills, and 'classroom management', parts of a team project space. Spaces can be growth filled, discovery-filled, exciting, productive, synergistic, positive environments, but they can also become (as the internet sometimes puts on display) fraudulent, toxic, bad-actor filled, disinformation-filled, nihilistic, hostile, zero-sum regressive, and dysfunctional.)
 
 
 # 3. Scope: Let's do tasks. Let's post messages.
@@ -169,21 +188,24 @@ etc.
 
 ### Modular Task-Nodes
 
-Uma is designed to be as modular as possible, designed so that most things are made of the same standard unit (like a lego-block) that can be placed in or on or next to other building blocks.
+Uma is designed to be as modular as possible, so that most things are made of the same standard unit (like a lego-block) that can be placed in or next-to other building blocks. Each of these modular-units is called a "node."
 
-
-Not to get bogged down in the details, apologies, the term 'node' comes from the fact that Uma's teammate-shared-database is a particular type of database called (confusingly) a 'graph' database. Here 'graph' does not mean a chart or figure, as the term nearly always does, but (for some reason) a type of data-structure made out of interconnected "nodes" (and the "edges" that connect them).
+The term "node" comes from the fact that Uma's teammate-shared-database is a particular type of database called (confusingly) a "graph" database. Here "graph" does not mean a chart or figure, but rather a type of data-structure made out of interconnected "nodes" (and the "edges" that connect them).
 
 Each node has message-post functionality.
 
-Using the basic module-units in uma (described here as "task-nodes," but you can call them whatever you want) it is easy to create and organize main and sub 'channels' or 'rooms' (or however you want to describe them), and to configure them for the functionality you need them to have: open, private, everyone, some people, ephemeral, encrypted, structured as questionnaires or votes/polls, etc.
+Using the basic module-units in Uma (described here as "task-nodes," but you can call them whatever you want) it is easy to create and organize main and sub 'channels' or 'rooms' (or however you want to describe them), and to configure them for the functionality you need them to have: open, private, everyone, some people, ephemeral, encrypted, structured as questionnaires or votes/polls, etc.
 
 
 ### Project-Areas
 
-There are six main areas where projects most often fall-apart and fail, and where projects done by the same institutions, teams, and individuals, will fail repeatedly for the same reasons while those reasons stay effectively invisible. So even though Uma aims to be minimal, these six Project Areas are a core part of tasks and nodes. When you make a new task-node, you are Q&A guided through each Project Area to add a definition to that task-node. Even where elaborate software exists to plan and manage and track various parts of projects, these simple six failure areas somehow manage to slip through the cracks and prevent projects from running smoothly while remaining off people's radar. Uma aims to do everything it can to help people to focus on aligning and communicating about these critical areas.
+There are six main areas where projects most often fall-apart and fail, and where projects done by the same institutions, teams, and individuals, will fail repeatedly for the same reasons while those reasons stay effectively invisible. These six Project Areas are a core part of tasks and nodes. When you make a new task-node, you are Q&A guided through each Project Area to add definitions to that task-node.
 
-For a closer look at an even narrower team-task coordination-skill-set, see code and paper on Social-Story-Puzzles vs. Logistics-Puzzles:
+Even where elaborate software exists to plan and manage and track various parts of projects, these simple six failure-areas somehow manage to slip through the cracks and prevent projects from running smoothly while remaining off people's radar so those same mistakes recur indefinately.
+
+Another way to look at this situation of six main areas where most projects fail is to flip the portrait of a lack-of-skills upside down: projects done with skills and focus on these six areas have a much better chance of succeeding. Uma aims to help people to focus on aligning and communicating about these critical areas.
+
+For a closer look at evaluating a narrow team-task coordination-skill-set (in the form of a team-game), see code and paper on Social-Story-Puzzles vs. Logistics-Puzzles:
 https://github.com/stemnetbenchmarks/social_story_and_cookbook_puzzles
 
 
@@ -200,10 +222,10 @@ Uma aims to be a do-one-thing-well tool that should be able to:
 
 Uma operates with no centralized server, subscriptions, or third party cloud services.
 
-Uma is choice-based and ownership-based. You only connect with people who you actively agree to interact with. Every module of task-node and message-post is owned by someone.
+Uma is choice-based and ownership-based: You only connect with people who you actively agree to interact with. Every module of task-node and message-post is owned by someone.
 
 ##### DMCU-DGDB As Application Platform:
-- As demonstrated by a basic 'tie-break' decision tool, Uma should be a modular platform on which applications can be built (for example, customized for your current project) either inside or outside of Uma.
+- As demonstrated by a basic 'tie-break' decision tool, Uma should be a modular distributed platform on which applications can be built (for example, customized for your current project) either inside or outside of Uma.
 
 #### Uma Is Not
 There are a number of related functionalities that task management and messaging should not be confused with. Uma specifically is not designed to scope-creap into these features:
@@ -216,7 +238,7 @@ There are a number of related functionalities that task management and messaging
 - not full project research planning, needs and goals analysis, post-production analysis, etc.
 
 #### Uma Is
-Uma aims to be a do-one-thing-well distributed-multipoint-conferencing-unit (d-MCU) for type-strict task and message structures (not general data transfer) in the form of a distributed graph-database for project/product planning and management, alignment, and coordinated decisions.
+Uma aims to be a do-one-thing-well distributed-multipoint-conferencing-unit (d-MCU) and platform for type-strict task and message structures (not general data transfer) in the form of a distributed graph-database for project/product planning and management, alignment, and coordinated decisions.
 
 
 ## 4. Tutorial: Messages & Tasks in Uma
@@ -427,9 +449,10 @@ The term "project areas" here refers to these specific ~Agile-project-management
 
 ### Balancing Deeper Details
 
-There are a number of conceptual and skills areas around planning tasks, many of which can be quite in-depth.
+There are a number of conceptual areas and skills areas around planning tasks, many of which can be quite in-depth.
 
-We can, and perhaps for more subtle tool design should, go more deeply into details and areas around the maintaining definitions and systems for projects, supporting decisions and coordinated decisions, and seeing how people might want to use message-post and task-board structures. So this is a balance of focusing on the smaller problem space of the most common issues and basics, while also trying to be aware of and compatible with the larger problem-spaces and other foreseeable needs and issues.
+We can, and perhaps for more subtle tool design should, go more deeply into details and areas around maintaining definitions and systems for projects, supporting decisions and coordinated decisions, and seeing how people might want to use message-post and task-board structures.
+
 
 For reference:
 
@@ -454,20 +477,20 @@ For reference:
 
 - A framework for analyzing system-collapse (including project failures, planning failures, decision failures, and decision-coordination failures)
 
-Filling out a Systems & Definitions Profile for your team and a given project is an example of something that Uma overtly refers to in the project areas that it nudges the users to at least comment on, but there is no (and perhaps in the scope of uma should not be) a formal software system for documenting system and definition details. Uma is not a full project documentation publishing and file storage system: the focus is task-status and message posts for reference during alignment during a 'sprint' or time-block of project tasks.
+Filling out a 'Systems & Definitions Profile' for your team and for a given project is an example of something that Uma overtly refers to in the project areas (to *nudge users to at least comment on), but Uma has no (and perhaps to balance focus and scope uma should not have a) formal system for documenting in-depth system and definition details. Uma is not a full project documentation publishing and file storage system: the focus (to date) is task-status and message posts supporting alignment during "Agile"-type projects and tasks.
 
-The above link is an essay-walk-through-narative of a step-frame-work-process that can be followed to model a given system, such as a project, team, stakeholder, user-story, etc.
+The above link is an essay-walk-through-narative of a step-framework-process that can be followed to model a given system in more depth, such as a project, team, stakeholder, user-story, etc.
 
 
 5. Coordinated Decisions, Process, & Networks
 - https://github.com/lineality/Networked_Voting_and_Decisions_Including_One_Time_Pads (more details on project areas are here as well)
 
 
-6. input-output measures (externalization/articulation)
+6. Input-Output Measures (externalization/articulation)
 - https://github.com/lineality/input_output_measures
 
 
-7 Needs and Goals Evaluations
+7 Needs & Goals Evaluations
 - https://github.com/lineality/needs_goals_assessment_disambiguation
 - An equivalent of the questions at this link are recommended to disambiguate needs and goals analysis questions, which notoriously produce unhelpfully indeterminate answers.
 
@@ -476,14 +499,16 @@ The above link is an essay-walk-through-narative of a step-frame-work-process th
 - https://github.com/lineality/object_relationship_spaces_ai_ml
 - For further depth if desired into topics such as externalization of project data and modeling project-spaces and system architectures designed to operate on project-object databases statefully, see Object Relationship Spaces, various sections of which are also available as separate Medium/Blog articles and github repositories.
 
+*https://www.amazon.com/Nudge-Improving-Decisions-Health-Happiness/dp/014311526X
 
-This is just a starting set of examples. There are other clearly relevant areas that are still too young to have clear conclusive models of, such as network design decisions where the "designs" of parts of the internet have been clearly shown to be lacking or problematic, but often there is no clear consensus (or even any serious suggestion) about what may be a sufficient (if not ideal) solution.
 
-Hopefully in the future there will be something more coherent that what we have today for:
-- 'socially non-destructive networks' and
-- identity-authentication in networks
+This is just a starting set of examples. There are other clearly-relevant areas that are still too young to have clear conclusive models of, such as network design decisions. An example of such 'network design decisions' may be where the "designs" of parts of the internet have been clearly shown to be lacking or problematic, but where at the same time there is (very often) no clear consensus about what best-practice solutions, designs, and vetting are.
 
-Striking a balance between task/message high level coordination vs. project planning in more detail (which is arguably, in most cases, separate), Uma tries to focus on a scope that is as narrow, modular, and definable as possible.
+Hopefully in the future there will be something more coherent than what we have in 2026 for:
+- 'socially non-destructive networks,' and
+- identity-authentication in networks, etc.
+
+To strike a balance between task/message high-level coordination vs. project planning in more detail, Uma tries to focus on a scope that is as narrow, modular, and as clearly-definable as possible. Additional functionality can be added within Uma, on top of the Uma-platform-ecosystem, or separately on the side. Hopefully this modular approach is sufficient for allowing optional emphasis in directions called for per project, as projects and work-settings do often have unique needs.
 
 
 ## 6. Software Design
@@ -655,9 +680,9 @@ Is it possible to design code that should be expected to still work, be maintain
 Long term data storage is a whole topic not explored in this paper, but likely of importance to many users and institutions.
 
 
-## How much simplicity are we aiming for?
+## Strategy & Simplicity
 
-One lesson from the Dartmouth Internet is that there are some important nuances to networks and messages. Having a very naively simple and open system is fine for a small number of trusted professors or expert engineers, but once the system is open to either broader users and or bad actors, the design requirements for a working system start to look different. From memory-management and sound software to privacy and security (or data hygiene) oriented software, the bad-behavior and bad-security problems that become more clearly visible from the year 2000 were often in some form experienced during the timesharing-mini-internets of the 1960s. Sadly but predictably, when we did not incorporate feedback into the design process the result was repeating the same mistakes.
+How much simplicity are we aiming for? One lesson from the Dartmouth Internet is that there are some important nuances to networks and messages. Having a too naively simple and open system may be fine in the short-term for a small number of trusted professors or expert engineers, but once the system is open to either broader users and or bad actors, the design requirements for a working system start to look different. From memory-management and sound software to privacy and security (or data hygiene) oriented software, the bad-behavior and bad-security problems that became more clearly visible from the year 2000 were often in some form experienced during the timesharing-mini-internets of the 1960s. Sadly but predictably, when we did not incorporate feedback into the design process the result was repeating the same mistakes.
 
 Is there such a thing as a declared abstract identity that functions sufficiently concretely? There may not be.
 
@@ -669,102 +694,115 @@ The approach that Uma takes is to be 'functional' as much as possible, with sing
 
 - Your current team-channel is the base of your current path through your files, (not what something says that may be, or could or should be, or state-value passed along in a fragile myth of trust, not those, but the ultimately physical file-memory relationships on your device. When you visualize your project board in a TUI or GUI, you are seeing for convenience files in directories that you can interact with as your files in your directories.
 
-- The current user is, ultimately, (access to) their shared gpg-key/id.
+- The current user is, ultimately, (access to) a shared gpg-key/id.
 
 We want to keep the system as simple and modular as possible, but the design needs to fit the use-case and avoid known historical mistakes.
 
 
-## Specific Use-Cases:
-- A Low-Level Open Utility (that can be incorporated into projects as a module and modified directly at a low level), not a high level black-box Entertainment-Service.
-- Coordinated Decisions
-- Network efficiency
-- Network security
-- Long Term Needs for Municipal and Community Systems
+## Features, Functionality, Use-Contexts & Target-Users:
+
+As much as possible future user needs, choices, and conditions should be anticipated (or attempted) such as future compilers (including LLVM-family) and the lifespan/lifecycle of libraries and software dependencies (or lack thereof). The thinking is that Rust compilers, POSIX-OS, and cli-terminal applications will be most enduring over time.
+
+(Ideally there will be no 3rd party dependencies. As of 2026 walkdir,
+rand, getifaddrs are used but will eventually be replaced with native safe vanilla Rust. Future LoRa network functionality may (or may temporarily) use a 3rd party crate.)
+
+#### Future-Proofing 1: Human, Hybrid, Swarm
+While not a primary use-case in ~2026, there is a grey-area that starts with field-research on resource-constrained-devices (with modular configurability for automated tasks) and a hybrid field research-device-network with autonomous-devices (e.g. some form of AI-managed devices) that coordinate using the same network as people (e.g. weather sensors)).
+
+#### Future-Proofing 2: WAN, LoRa, etc.
+The tool should be as flexible and modular as possible so that future changes to most-popular network and signal protocols can be adapted to easily.
+- https://en.wikipedia.org/wiki/LoRa
+
+##### Context:
+- Network Efficiency
+- Network Security
 - For Students
 - For Researchers
-- For Field Research with resource constrained devices
-- For Emergency Networks
+- For Municipal and Community Systems
+- For Field Research with resource-constrained devices
+- For Emergency Networks & Disaster-Response
+- Features to support Coordinated Decisions for Projects
 
+##### STEM & Project Specifics:
+- Explicit Coordinated-Decisions emphasis
+- Explicit Definition Behavior Studies emphasis
+- Explicit Project-Areas emphasis
+- Explicit needs and goals evaluation emphasis
+- Explicit schedule management emphasis
 
-Note: While not a primary use-case in ~2026, there is a grey-area that starts with field-research on resource constrained devices (with modular configurability for automated tasks) and a hybrid field research device network with autonomous devices (e.g. some form of AI-managed devices) that coordinate using the some network as people).
+##### Type of application:
+- Source/compile oriented (e.g. to modify and re-compile easily)
+- Long Term Maintainable
+- A Low-Level Open Utility that can be incorporated into projects as a module and modified/forked at a low level (not a high-level black-box subscription Entertainment-Service).
+- Able to be integrated into your own project as a module
+- Able to be directly modified, customized, or borrowed from
+- Able to be understood at the code-level by anyone
 
+##### Features/Functionality :
+- Basic task-board functionality: move-able task in column
+- Flexible-modular use of 'message-posts' for a variety of specific end-uses including poles and votes
+- Describe/manage a task simply in one node
+- Describe/manage nested-task (a hierarchy/DAG of nested tasks)
+- Long-term archiving
+- Facilitate search
+- Facilitate project-diagnostics (e.g. schedule-dashboard)
+- ~Cross-platform or platform agnostic
+- Modular stateless functionality (e.g. call a specific operation such as read/write without loading excess state)
+- POSIX compatible
+- Headless OS compatible
+- (future-goal, see 'lines editor') Power-of-10--2026 safety compliant
+- Choice oriented
+- Ownership oriented
 
-
-
-### Functionality & features
-
-- flexible
-- long lasting
-- able to be integrated into your own project as a module
-- able to be directly modified, customized, or borrowed from
-- able to be understood at the code level by anyone
-- explicit definition behavior studies characteristics of projects
-- explicit needs and goals evaluations
-- explicit schedule setting
-
-- IM-chat
-- questions
-- votes (MC, Fillin)
-
-- send a message
-- call a vote
-- announce a decision topic
-- document a simple task
-- document a not-simple tasks (a hierarchy of nested tasks)
-
-- accountability verification
-- long term archiving
-- integrated-search
-- integrated-daignostics
-- data ownership: choice
-- data ownership: accountability
-- data ownership: reporting
-
-- disaster-relief coordination
-- long term maintainability
-- critical-software standard compatibility
-- cross-platform
-- stateless functionality
-- local project configurability
-- local project software integration
-- POSIX standards interoperability
-- headless OS compatible
-
-
-## Network-Flexible
-- low-bandwidth compatible
-- intermittent bandwidth compatible
-- network-agnostic
+##### Network-Flexible
+- Low-bandwidth compatible
+- Intermittent bandwidth compatible
+- Network-agnostic
+- Compatible with user needing to change type of connection
 - WAN compatible
 - LAN compatible
 - ipv4 compatible
 - ipv6 compatible
-- no-DNS
+- No-DNS
 - VPN Compatible
-- OTP Network Layer
-(future: native EM-spectrum use)
+(future: native EM-spectrum use, e.g. LoRa compatible; audio-signal; optical-signal)
 
-
-## Security Notes:
-- no raw plaintext project packet-content
-- strict input sanitizing
+##### Security Notes:
+- OTP Network Layer (optional)
+- 'input' and 'output' to be defined strictly by Rust enums, structs, etc.
+- gpg-ownership of file required to create, change, send, validate
+- gpg-recipient-role-ownership required to receive a file
+- choice to connect per participant-pair
+- no raw plaintext project packet-content in transit
+- strict input sanitizing: only Rust-structs are loaded & handled
 - 'to-recipient' validation/verification
 - 'from owner' validation/verification
 - 'ower is sender' validation/verification
-- replay attack defense
+- replay-attack defense
+- optional/configurable gpg-encryption of local files on disk
+- goal to make use of Rust's features for safety
+- etc.
 
-### Memory-Safety & Hidden Bugs
-A lesson that arguably has not been fully learned is that it is not simple to write safe production code, in part because we often fail to see future factors for how code is used, but, aside from that,
+##### Posix GPG Note:
+A design decision was made to use the OS implementation of GPG rather than trust a third party quasi-implimentation or trying to re-impliment GPG, given the difficulty and level of testing that goes into posix GPG. In theory there are advantages to having a native-in-program handling of GPG, but there are also risks and disadvantages. While a theoretical future goal is to make Uma suitable for a micro-controler, that is currently too much scope. It is also not entirely clear that a super-micro version of Uma would not better reply upon One Time Pads rather than GPG (e.g. to reduce packet-size and overall application size).
 
-Memory-management (often leading to security issues) has been especially challenging. Memory related security issues may be the most commonly discussed unintended side effect of memory management decisions but there are other such as, as described by Martin Kleppmann in "Designing Data-Intensive Applications", garbage-collection itself is a standard interference and network-level-error introducing aspect of networked software.
+
+### Value of Rust
+A lesson that arguably has not been fully learned is that it is not simple to write safe production code.
+
+Memory-management (often leading to security and other issues) is perennially assumed to be 'fine' and 'good enough' and then shown to be not good enough. Memory related security issues may be the most commonly discussed unintended side effect of memory management decisions but there are others such as, as described by Martin Kleppmann in "Designing Data-Intensive Applications", how garbage-collection itself is a standard interference and network-level-error introducing aspect of databases and networked software. As a distributed graph database, Uma not having garbage-collection may be an important design element.
 
 See: https://www.amazon.com/Designing-Data-Intensive-Applications-Reliable-Maintainable/dp/1449373321
 
-As much as possible we should try to anticipate future user choices and conditions such as future compilers and the lifespan/lifecycle of libraries and software dependencies.
 
-Uma is an experiment. It's not clear if it will work. It's not clear if it is the right modularity. It's not clear how the strict-ower and choice-strict model will work (socially, for productivity, for logistics). It's not clear how user-friendly the interface can be made to be (though there is a lot of flexibility with a browser-api-wrapper). But we should try. Having only one project manager available to students is paltry and inadequate, but it is better than nothing.
+### Early Development:
+Uma is an experiment. As of 2026, Uma is more than a proof-of-concept or a demo, and more than a super-minimal MVP. The intended range of functionalities appear to be working. But it is not a battle-tested and optimized design.
 
-This has not been extensively tested yet, hopefully it will be. For the local tests that I have been able to do as one person incrementing on the weekends, Uma is working. But surely in various real world situations there will be edge cases and needed-optimizations not yet covered by this early-alpha version.
+It is not clear if it is the right modularity. It is not clear how the strict-owner and choice-strict model will work (socially, for productivity, for logistics). It is not clear how user-friendly the interface can be made to be (though there is a lot of flexibility with a browser-api-wrapper). It is not clear what optimal interfaces, wrappers, and APIs will be needed. But we should try. Having only one project-management-tool available to students is paltry and inadequate, but it is better than nothing.
+
+As of 2026, Uma is still in a version-1 design. As Steve Gibson has described as "Built it; build it better; build it right." it generally takes at least three iterations of redesign and refactor (rebuilding from scratch) to arrive at an optimal structure. Work on File-Fantastic and the Lines-Editor represent examples of developing more-optimal standards and norms.
+
+Uma has not been extensively tested yet (for example by professional cybersecurity testers), hopefully it will be. For the local tests that I have been able to do as one person working on the weekends, Uma is working. But surely in various real world situations there will be edge cases and needed-optimizations not yet covered by this early-version.
 
 
 ### Network Design: Efficiency, Resilience, Responsibility, and hygiene
@@ -780,9 +818,15 @@ It is a long term aim of Uma to be able to operate over EM frequencies such as C
 The question of how much you could tweak the Uma sync system to be faster to send more information is an interesting abstract question, but the real, practical, responsible, forward thinking, question is how sparse sync can be made to be and still work. The more sparse and terse a network protocol is, the more efficient, resilient, scalable, affordable, maintainable, and integrate-able it can be.
 
 
-## 'Ownership' and 'Choice'
+## Ownership & Choice
 
-Uma is also strictly 'ownership' based, which is something of an experimental departure from the ideology-driven abstract-object-soup that has characterized software design goals for years, despite the ample evidence that anonymity and arbitrary access has been a network design problem of the internet and not a productive functional feature. Everything in Uma is, while human readable in a 'toml' (labeled text doc) format, a type and size strict rust struct and gpg-clearsigned by the author/owner for verifying data integrity and authorship/ownership.
+Uma is also strictly 'ownership' based, which is something of an experimental departure from the ideology-driven abstract-object-reification-soup that has characterized software design presumptions for years, despite the ample evidence (since the 1960s) that anonymity and arbitrary access has been a serious network design problem and not a productive functional feature.
+
+Everything in Uma has an 'owner.' Everything in Uma is, while human readable in a 'toml' (labeled text doc) format, a type and size strict rust struct and gpg-clearsigned by the author/owner for verifying data integrity and authorship/ownership.
+
+
+#### Orphan-Soup vs. Choice & Ownership
+This more-strict system may either lack functionality or gain functionality, time will tell. A standard real-world problem of using confluence and Jira to manage projects is that the over-abstraction and over-flexibility make everything an anonymous Orphan-Soup that no one owns or cares about or has any incentive to care about: tragedy of the commons. Tasks are 'assigned' to people who never find out anything about the tasks, including that they were assigned. Descriptions and docs in a digital-commons end up being a hodgepodge of anonymous spam and redactions that nobody owns. Having projects and an internet that are 'commons' is theoretically exciting (to some people) and in reality a disaster. Having owned-tasks-by-choice and owned-comments is at least worth trying in earnest.
 
 
 
@@ -933,7 +977,7 @@ For more high-level simple-language walkthrough of how the distributed sync netw
 
 ## 10. More Details on a 1960s Uma & Agile Timeline
 - Question: When should or could we have had basic collaboration and productivity tools developed, for example since the 1960s?
-- Question: Was such a tool available in the 1960s? (Could such a tool have been?)
+- Question: Was such a tool available in the 1960s? (Could such a tool have been made in the 1960s?)
 
 We need to make sure we do not put time-travel into this question.
 
@@ -959,19 +1003,18 @@ We need to make sure we do not put time-travel into this question.
 - Rust memory safety - 2012
 
 
-That is a fascinatingly not-simple question. Technologically, I think we could have and should have at least tried. But the 'soft' concepts of agile project management, network security, and production software standards, that we presume today (and are still evolving today) were not mature in the 1960's. But how about a 1940's Toyota Board? Hmm... It is very difficult to say no.
+The question of whether a tool like Uma could have been (or perhaps was) available in the 1960's is a fascinatingly not-simple question. Technologically, I think we could have built a similar tool, and that we should have at least tried. But the 'soft' concepts of agile project management, network security, and production software standards, that we presume today (and which are still evolving today) were not mature in the 1960's. But how about a 1940's Toyota Board? Hmm... It is very difficult to say no.
 
-In the 1960's there were (I think) several timesharing 'mini-internet' networks (where a mainframe would be accessed by many terminals). MIT's timesharing, Dartmouth's timesharing which was a kind of early-internet in various ways, and GE may have had an internal timesharing with, we may speculate, some project management systems.
+In the 1960's there were (I think) several timesharing 'mini-internet' networks (where a mainframe would be accessed by many terminals). MIT had a timesharing system. Dartmouth's timesharing was famously similar to the later broader internet in many ways (See: https://www.amazon.com/Peoples-History-Computing-United-States/dp/0674970977 ). And GE did have internal timesharing (see https://en.wikipedia.org/wiki/Dartmouth_Time-Sharing_System ) as well as providing the infrastructure to Dartmouth and others, and we could speculate (entirely speculation as far as I know) that they may have deployed some kind of project management system on their internal network.
 
-We cannot expect overt-time travel where people in the past used processes, standards, or technical specifications that did not exist at the time.
+We cannot expect overt-time travel where people in the past used processes, standards, or technical specifications that did not exist at the time. But we can ask if there was a well known planning-coordination utility for operating systems at the time, and for project management at the time, such as there were utilities for (forms of) "email" and "instant messaging". As far as I know the answer is no, but some of the 'early/pre' internet 'time sharing' systems existed in private companies such as General Electric (GE), who may have had their own internal tool not widely publicly known. One would think GE likely had some kind of project administration tools, and with Kanband boards being decades old even then, it is difficult not to push our present-day concepts back in time to force a "steam-engine-time" imperative onto them.
 
-But we can ask if there was a well known planning-coordination utility for operating systems at the time, and for project management at the time, such as there were utilities for (forms of) "email" and "instant messaging". As far as I know the answer is no, but some of the 'early/pre' internet 'time sharing' systems existed in private companies such as General Electric (GE), who may have had their own internal tool not widely publicly known. One would think GE likely had some kind of project administration tools, and with Kanband boards being decades old at the time, it is difficult not to push our present-day concepts back in time to force a "steam-engine-time" imperative onto them.
-
-"A People's History of Computing in the United States" by Joy Lisi Rankin is an excellent book about this often unmentioned chapter in the history of both computer science and internet-type networks:
+"A People's History of Computing in the United States" by Joy Lisi Rankin is an excellent book about this often unmentioned chapter in the history of both computer science and internet-type networks. See:
 - https://www.amazon.com/Peoples-History-Computing-United-States/dp/B07HHDFVHM/
 - https://en.wikipedia.org/wiki/Dartmouth_Time-Sharing_System
 - https://timereshared.com/ctss-dot-shell-email-chat/
 - https://timereshared.com/ctss/
+- https://www.cs.cornell.edu/wya/AcademicComputing/text/earlytimesharing.html
 
 Many industries and areas went into a tailspin from 1971. Maybe there were precursor systems that existed, or were started, that did not make it through the tumultuous years of changing software and hardware.
 
@@ -979,18 +1022,18 @@ While it is almost hard to believe that there was not some kind of kanban-board-
 
 (System and definition behavior studies, and Coordinated Decisions in Network Processes, are my own research areas, so those were not available in the 1960's.)
 
-Daniel Kanaman himself (in "Thinking Fast and Slow") recounts that in the 1970's communication and coordination was strongly considered to not be part of software project management (catastrophically). And his own work on decision making in general was more or less persecuted throughout the 70's, 80's, 90's until he won a nobel prize for it. Tomoyako's report in 1991 shows that a lack of communication, coordination, project teamwork and project/product management skills were the critical bottleneck and missing skill-set in computer science professionally and in computer science education (perhaps this helped to set a foundation for Agile). Aside from being astonishingly bare, the wikipedia page on Agile project management has no cited references before 2020; mentioning 2001 as the agile manifest publication date https://en.wikipedia.org/wiki/Agile_management. Needless to say this is after the 60s, 70s, 80s, and 90s, and is consistent with project management continuing to be not-prominant into the 2020's. Atlassian (founded (in Australia) in 2002) did not (according to wikipedia) branch into agile support until 2012).
+Daniel Kanaman himself (in "Thinking Fast and Slow") recounts that in the 1970's communication and coordination was strongly considered to not be part of software project management (catastrophically). And his own work on decision making in general was more or less persecuted throughout the 70's, 80's, 90's until he won a nobel prize for it. Tomoyako's report in 1991 shows that a lack of communication, coordination, project teamwork and project/product management skills were the critical bottleneck and missing skill-set in computer science professionally and in computer science education (perhaps this contributed to the slowly forming foundation for gradually establishing interest in and adoption of Agile project management). Aside from being astonishingly bare, the wikipedia page on Agile project management has no cited references before 2020; mentioning 2001 as the agile manifest publication date https://en.wikipedia.org/wiki/Agile_management. Needless to say, 2001 and 2020 are after the 60s, 70s, 80s, and 90s, and this lag is consistent with project management continuing to be not-prominant into the 2020's. Atlassian (founded (in Australia) in 2002) did not (according to wikipedia) branch into agile support until 2012). Again, in hindsight it is difficult to not impose 'current' expectations onto the past.
 
-Considering the extremely rapid evolution of software from ~1950-1970, it is a puzzle how the evolution from 1970-2020 is so strikingly meandering, retrograde, and plodding.
+Considering the extremely rapid and enthusiastic evolution of software from ~1950-1970, it is a puzzle how the evolution from 1970-2020 is so strikingly meandering, retrograde, plodding, and apathetic.
 
-The overall trend is that it is taking time for society to develop concepts of general STEM and of project and product management, coordinated decisions etc. It is understandable, if disappointing, that team-coordination was not a priority in the 1960s. What is more frustrating is how slow progress has been (and how few of the lessons that (self-referencially) should have been used to project-plan the 1990's World Wide Web were not heeded).
+The overall trend is that it is taking time for society to develop and accept concepts of general STEM, project and product management, and coordinated decisions etc. It is understandable, if disappointing, that team-coordination was not a priority in the 1960s. What is more frustrating is how slow progress has been, and how few of the lessons that (self-referencially) should have been learned-from to better project-plan the 1990's World Wide Web were not heeded.
 
 
 The main focus of this question, for me,  has two parts:
 
-1. That such a basic utility could have existed, in that the obstacle was conceptual and learning based, not a technological barrier; it is not as though some new form of processor or memory or peripheral devices (such as a USB-C port, or a wireless dongle, or advanced matrix/tensor parallel processing (e.g. GPU/TPU) would have been required.
+1. A basic team-alignment project-utility could have existed, in that the obstacle was conceptual and learning based, not a technological barrier; it is not as though some new form of processor, or memory, or peripheral devices (such as a USB-C port, or a wireless dongle, or advanced matrix/tensor parallel processing (e.g. GPU/TPU)) would have been required.
 
-2. That in the interest of long-term maintainable software we should look at software and systems that can keep working (more or less) indefinately, because they focus on basic technologies and functionalities, not being dependent on ephemeral hardware or software that is only available for a short window of time. In particular, a command-line terminal application (or CLI compatible application) appears to be robust over time.
+2. In the interest of long-term maintainable software we should look at software and systems that can keep working (more or less) indefinately, because they focus on basic technologies and functionalities and avoid being dependent on ephemeral hardware or software that is only available for a short window of time. In particular, a command-line terminal application (or CLI compatible application) appears to be robust over time. Headless-posix terminal use and other uses are not mutually exclusive: This does not mean that the system cannot have another "api" or wrapper or other ways to use and interface with it.
 
 We tend to be slow and resistant to becoming literate in new practices, however well supported by data they are. And then we tend to take current concepts that we had to be taught (that are not automatically part of awareness) for granted, missing how hard-won they were and how quickly they can be lost again. The psychology of learning is important for project/product management, decision coordination, system & definition maintainability, etc.
 
@@ -999,15 +1042,15 @@ We tend to be slow and resistant to becoming literate in new practices, however 
 
 As another kind of case-study, ex/vi/vim is a long-lasting application (sort of).
 
-Vi may be a paradigmatic model of a basic available utility that the international community from academia, to public sector, to private sector relies upon. The maintenance of such a fundamentally important core-utility is worth looking at more closely, and much of what we find will be less than ideal.
+Vi may be a paradigmatic model of a basic available utility that the international community relies upon, from academia, to public sector, to private sector. The maintenance of such a fundamentally important core-utility is worth looking at more closely, and much of what we find will be less than ideal.
 
 While ex/vi is a case study of a terminal-based utility that has benefited people and software broadly simply by being available over a long period of time, the story of ex/vi is not a simplistic story of success to be directly emulated.
 
-A. Use-Availability and basic maintainability are probably central, these appear to be what the ex-vi editor had.
+A. Use-Availability and basic maintainability are probably central, these appear to be what the ex-vi editor had enough of.
+s
+B. 'Open Source'/Available-Source took many decades. It is not clear if the original source code was lost, or how exactly the original ex/vi evolved into the available but somewhat troubled state it is in today.
 
-B. 'Open Source'/Available-Source took many decades, and it is still not clear if the original source code was lost. There are a few old websites claiming to have download links...which is sketchy.
-
-C. Security: For me, one of the primary parts of the story of vim/vi/ex that has me most puzzled is something that I consider to be pertinent to long term software maintainability. As I monitor new software updates that come in, including security updates including redhat, CVE, and other known security and vulnerability patches, I have for years been puzzled over the seemingly endless procession of (reported and fixed, so not including unreported or unfixed) security vulnerabilities in Vim including "Vim-Minimal" which has supposedly been feature-frozen since 1978 (Note: first dates for ex-vi vary between 1976 and 1978). How are there continually so many security problems with an extremely minimal utility that has had top-people working on it for generations, for longer than I have been alive?
+C. Security: For me, one of the primary parts of the story of vim/vi/ex that has me most puzzled is something that I consider to be pertinent to long term software maintainability. As I monitor new software updates that come in, including security updates such as redhat, nist, CVE, and other known security and vulnerability warning and patches, I have for years been puzzled over the seemingly endless procession of (reported and fixed, so not including unreported or unfixed) security vulnerabilities in Vim including "Vim-Minimal" which has supposedly been feature-frozen since 1978 (Note: first dates for ex-vi vary between 1976 and 1978). How are there continually so many security problems with an extremely minimal utility that has had top-people working on it for generations, for longer than I have been alive?
 
 https://www.cve.org/CVERecord/SearchResults?query=vim
 e.g. https://linuxsecurity.com/news/security-vulnerabilities/vim-code-execution-vulnerability-linux
@@ -1020,11 +1063,11 @@ e.g.
 1. Should code be open for security testing? (yes)
 2. Should a feature-frozen stable version be available for safe use (yes)
 3. How important is the choice of programming language?
-4. If an extremely minimal terminal application that has been used and refined for as long as anything can have been is still unmaintained and seems to be unmaintainable, what does that say about more derived and inherently less stable software? Is software development fundamentally more difficult than has been understood even by the top professional in technology? How many software developers are aware of the factors in long term software stability outside of their specialized work?
+4. If an extremely minimal terminal application that has been used and refined for as long as anything can have been is still unmaintained and seems to be unmaintainable, what does that say about more derived and inherently less stable software? Is software development fundamentally more difficult than has been understood even by top professionals and academics? How many software developers are aware of the factors in long term software stability outside of their specialized work?
 
-1976-2002: ex/vi/vim was under legal restrictions while also being available, which is puzzling and unclear.
+1976-2002: ex/vi/vim was under legal restrictions while also being available, which is puzzling and unclear. (It was available but not open-source? Or available to use, but closed-source?)
 
-2002-2025: minimal vi has/is a cascade of critical security vulnerabilities, which is puzzling and not ideal.
+2002-2025: Minimal vi continues to see a (never ending, never slowing) cascade of critical security vulnerabilities, which is puzzling and not ideal.
 
 
 #### See:
@@ -1043,6 +1086,7 @@ Also see a related case-study in notepad++ (not to be confused with microsoft wi
 - https://www.bleepingcomputer.com/news/security/notepad-plus-plus-update-feature-hijacked-by-chinese-state-hackers-for-months/
 - https://techcrunch.com/2026/02/02/notepad-says-chinese-government-hackers-hijacked-its-software-updates-for-months/
 - https://www.reuters.com/technology/popular-open-source-coding-application-targeted-chinese-linked-supply-chain-2026-02-02/
+
 
 ## 'The Power of 10"
 In 2006, Gerard J. Holzmann with NASA published the now legendary paper 'The Power of 10' on the topic of best practice for sound production code, in the context of mission-critical C code for embedded systems for NASA.
@@ -1089,7 +1133,7 @@ For example, while the original context of C for embedded systems will rarely di
 
 As one provided tool, and as one provided example of how a distributed multipoint conferencing unit based on a distributed Graph Database can be a platform for team-applications or distributed-tools, Uma has a 'Tie Break' functionality where team members who are split evenly on a decision can opt to decide the decision-match-point with a game of chess.
 
-The various features that make chess strange as a game makes it both an excellent case-study for what is possible on a distributed platform and also useful as a Tiebreak mechanism, perhaps like the ever-mysterious president-of-the-senate.
+The various features that make chess strange as a game make it both an excellent case-study for what is possible on a distributed platform and also useful as a Tiebreak mechanism, perhaps like the ever-mysterious president-of-the-senate.
 
 Chess is:
 - somewhat an interactive puzzle
@@ -1101,14 +1145,15 @@ Chess is:
 - somewhat systematic in instructions
 - somewhat an unstructured hodgepodge of many 'dialects'
 - somewhat civilized
-- somewhat low-brow perennial barberous sport-dualing (which may make it easier for most people to accept using)
+- somewhat low-brow perennial barberous sport-dualing (which may make it easier for most people to accept using it)
 
-As it may sound suspicious, conspicuous, or superfluous to have chess in a coordination-tool platform, a somewhat-theoretical practicality to a chess game in a decision coordination platform: a somewhat randomized game-dual.
 
-Another way in which this is an excellent case study (though this reason may not be specifically tied to chess) is the question of whether an application, tool, or functionality can or should be inside or outside of the main Uma body of code? Chess may be a good example here because it requires enough extra code that it is arguable that the application should live outside of Uma.
+Here are two reasons why it makes sense to at least try to have a chess-game within a coordination-tools platform:
+1. as a possibly socially accepted mechanism for deciding a tie-break on a decision
+2. as a case study to empirically evaluate how a variety of applications may or may not be able to be built in or on the platform.
 
 #### 1/3rd Coin Flip, 2/3rds Mind-Brawl
-Chess is a highly noisy game, as is highlighted in much criticism of the ELO scoring system which penalizes chess players for random outcomes. I cannot find a specific published reference, but in the ~2024 debates over rates of cheating in online chess several people mentioned an analysis of chess.com data showing that lower-ranked players may win a particular one third of the time. It may be difficult to put an exact number on this, but this trend is consistent across the body of chess practices. A classical chess match is not one game: Why not? Because you need more than one game to see beyond the noise. When there are events where every game is an elimination round, you see winners who you never heard of (and seldom hear of again). Etc. etc. While this is ponderous in terms of theories of chess play and the logistics of events, this may make chess an interesting candidate to be a tie-breaker mechanism: part coin flip, part skill-based challenge.
+Chess is a highly noisy game, as is highlighted in much criticism of the ELO scoring system which penalizes chess players for random outcomes. I cannot find a specific published reference, but in the ~2024 debates over rates of cheating in online chess several people mentioned an analysis of chess.com data showing that lower-ranked players may win a particular game one third of the time. It may be difficult to put an exact number on this, but this trend is consistent across the body of chess practices. A classical chess match is not one game: Why not? Because you need more than one game to see beyond the noise. When there are competitions where every game is an elimination round, you see winners who you never heard of (and seldom hear of again). Etc. etc. While this is ponderous in terms of theories of chess play and the logistics of events, this may make chess an interesting candidate to be a tie-breaker mechanism: part coin flip, part skill-based challenge.
 
 
 #### Where and With What?
@@ -1123,34 +1168,29 @@ Should you try or expect to do any of those?
 If we look at the history of what we take for granted as being highly useful and effective now, there is often a Charles Fort 'steam engine time' timeline where in the early days of development the potential was not seen.
 
 Would it make sense to try to play a game of chess inside of a coordination platform?
-At first the unprecedented nature of the question probably suggests that that answer is obviously no (but what did Grace Hopper say about engrained norms of how things are usually done or not done? (she felt it was a top danger to enterprises)).
+At first the unprecedented nature of the question probably suggests that that answer is obviously no (but what did Grace Hopper say about engrained norms of how things are usually done or not done? (she felt it was highly dangerous)).
 
-Here are two reasons why it makes sense to at least try to have a chess-game within a coordination-tools platform:
-1. as a possibly socially accepted mechanism for deciding a tie-break on a decision
-2. as a case study to empirically evaluate how a variety of applications may or may not be able to be built in or on the platform.
-
-To turn the question round, might we instead need to justify not being able to play a game of chess within a project-coordination platform? Let's look at the version of the question focusing on Jira (selected because it is a very widely known and capable project management tool).
+To turn the question round, might we instead need to justify not being able to play a game of chess within a project-coordination platform? Let's look at a version of that question focusing on Jira (selected because Jira is a very widely known and capable project management tool).
 
 At first the question about playing chess in Jira may sound absurd: Jira is a project planning, tracking, management system for serious people with serious faces who wear suits and do serious things, not a childish game or entertainment-streaming service. But think about the technical details of the same question some more: Why exactly can't we play chess in Jira? Jira exists to not only plan out how to do a project but to track how and when every part of that project is done. Jira should be able to be used to plan and carry out and track every aspect of planning and carrying out a chess game. There seems to be a kind of invisible barrier here somewhere: Jira surely can do, it exists to do, each part of the question, but somehow knitting those pieces together does not happen. How can Jira be used to map and carry out every aspect of the game (who should do what, what's the status, is it done, who did it, etc.)... except Jira somehow cannot carry out and track the same game. That sounds like a kind of paradox, almost like the xeno-approach-paradox: we take every possible step but somehow never get there. This may or may not be a question that we can fully understand, as it may get more into 'stateful' projects than is currently known in STEM in 2026.
 
 But what you can empirically demonstrate for yourself is that Uma can not only theoretically and abstractly support the parts of a chess-like team-project, Uma naturally supports a fully functional chess playing platform (and so, any platform-application, any project-syncing-application, with that class of features and requirements).
 
 
-#### Does the chess application need to be 'inside'? (in the case of Uma, inside the  DGDB/DMCU (distributed graph database, distributed multipoint conferencing unit)?
+#### Does the chess application need to be 'inside'? (in the case of Uma, inside the binary-executible for the DGDB/DMCU (distributed graph database, distributed multipoint conferencing unit)?
 Overall, it does not. Both can work. Though there may be edge cases. If you wanted specific 'inside UMA encryption' to apply to various parts of the "game," then those would probably be best kept inside Uma. But any aspect that is not required to be secret can be 'externalized' for the tie-break application to see.
 Here the example of chess and the context of private-data (or some private aspects of data) may help to trace out the problem-space where a distributed platform is an eco-system of applications that, based on context such as privacy, may have different parameters for how they can interact and where they can be. This may start to show how such an 'ant ecosystem' could scale without the same bottlenecks as centralized systems.
 
 
 #### Flexibility for Many Edge Cases
-Chess is also a good example in this case for the various reasons that make chess an irregular and messy "game" (as making or accepting draws, but not as part of a turn, or how third time repetition and fifty move rules intersect with draws (and how repetition rules potentially introduce an unknown future limit of required memory-use and state).  For example if chess were more strictly turn-based, then barriers to entry would be lower and the requirements for flexibility would be lower.
+Chess is also a good example in this case for the various reasons that make chess an irregular and messy "game" (such as making or accepting draws, but not as part of a turn, or how third-time-repetition and fifty-move rules intersect with draws (and how repetition rules potentially introduce an unknown future limit of required memory-use and state).  For example if chess were more strictly turn-based, then barriers to entry would be lower and the requirements for flexibility would be lower.
 There are various aspects of chess that are not simply turn based, such as draws. And draws are more the norm in chess, not a rare edge case that could be ignored to any degree.
 
 The modular system is an eco-system of interoperable parts of various kinds.
 
 
-
 #### Tiebreak
-It is difficult to tell if some groups will find a game-form tie-break to be acceptable or practical. Given that Uma takes choice-based workflow to perhaps an extreme, there may be more potential with Uma to confront and not 'of force' bypass areas where people need to actively-accept decisions and pathways to decisions. (An example or analogy may be when the madness of crowds and ignorance of history compel people to refuse to acknowledge the outcome of a transparently monitored election process (such extremism is not bound to any given group but like 'retisense to participate' itself is sadly universal).) Perhaps the act of participating in a tiebreak (as in other active choices to agree) will be useful for cultures of participation. It is unclear how the bane of Montequeue (people's unquenchable determination to settle (even imagined) differences through game-combat) might show itself in how people operate. How might a tie-break mechanism be used by people in the wild? It is very experimental, but I think it is a worthwhile experiment (speaking as a person who personally finds both the game and culture of chess to be overwhelmingly unfortunate). It is entirely possible that the 'game' of chess is too compromised and is simply junkfood for the worst short-circuits of biology, psychology, and mis-perception, but should collect some data and base an evaluation of team-decisions games on data and not on desperate hopes for unlikely redemption or on jaded grudges refusing to accept a good-enough solution.
+It is difficult to predict if various groups of users will find a game-form tie-break to be acceptable or practical. Given that Uma takes choice-based workflow to perhaps an extreme, there may be more potential with Uma to confront and not 'of force' bypass areas where people need to actively-accept decisions and pathways to decisions. (An example or analogy may be when the madness of crowds and ignorance of history compel people to refuse to acknowledge the outcome of a transparently monitored election process (such extremism is not bound to any given group but like 'retisense to participate' itself is sadly universal).) Perhaps the act of participating in a tiebreak (as in other active choices to agree) will be useful for cultures of participation. It is unclear how the bane of Montequeue (people's unquenchable determination to settle (even imagined) differences through game-combat) might show itself in how people operate. How might a tie-break mechanism be used by people in the wild? It is very experimental, but I think it is a worthwhile experiment (speaking as a person who personally finds both the game and culture of chess to be overwhelmingly unfortunate). It is entirely possible that the 'game' of chess is too compromised and is simply junkfood for the worst short-circuits of biology, psychology, and mis-perception, but we should collect some data and base an evaluation of team-decision-games on data.
 
 #### Empirical-Check on Scope
 Another useful aspect of the chess example of a platform-application is to sanity-check how much work, or scope, an application needs to do. One of the great aspects of doing a chess-program project is that it challenges the persistently wrong intuition that 'just a few logical rules surely can't require that much scope.'
@@ -1166,18 +1206,21 @@ Another useful aspect of the chess example of a platform-application is to sanit
 - Also see papers on tiebreaks more abstractly, such as:
 Axiomatic Theory of Tie-Breaking Impossibility, Characterization, and Decomposition by Frank M. V. Feys https://arxiv.org/abs/2605.22846
 
+#### Note: Second Binary Compilation
+Because Tiebreak-Chess was designed to demonstrate a platform-ecosystem for applications, it is a separate 'program,' not inside Uma. To be able to use and run Tiebreak-Chess you will need to compile the memochess binary and put it in the same parent-directory as the uma binary.
+
 
 ## 14. Production-Rust Guidelines
 
 
 Uma's future-proof ethos extends scope to include various aspects of how future-maintainable and safe code is. As a brief walkthrough of a larger topic, here are ~10 rules (and other commentary) for Rust in 2026, as a variation on NASA's 10 rules for embedded-c in 2006. The emphasis is on pointing out areas to be thoughtfully managed, more so than to dictate a one-size-fits-all way to manage each.
 
-🦀 Production Rust 🦀:
+# 🦀 Rust rules 🦀:
 - Always best practice.
 - Always extensive doc strings: what the code is doing with project context
 - Always clear comments.
 - Always cargo tests (where possible).
-- Never remove documentation.
+- Never remove (still-current) documentation.
 - Always clear, meaningful, unique names (e.g. variables, functions).
 - Always absolute file paths.
 - Always error handling.
@@ -1196,28 +1239,27 @@ In production: Every line of code will fail eventually. Not 'if': every line of 
 
 Empirical processes are more "statistical," less tautological; and "statistical" quickly reaches into the unknown and the undefined.
 
-
-#### Rules of Thumb (there will be exceptions and edge cases):
+### Rules of Thumb (there will be exceptions and edge cases):
 
 - Classic ~quote from Sid Meyer's Civilization Game: "The bureaucracy has expanded to meet the needs of the expanding bureaucracy." Bloat and project collapse due to nihilist mismanagement and bad project skills is not new to computer science.
 
-##### Rules Require Context:
+#### Rules Require Context:
 - Rules such as 'Don't Repeat Yourself' or 'Separation of Concerns' require a context to be coherent and a compelling reason: Do not repeat yourself IF there is a compelling reason in a clear context. Does aerospace engineering have a blind policy of zero redundancy? No, it does not. Context matters.
 
 
-##### Flat is better than nested. (Just like in the zen of python.)
-- Consider the flat option first.
-- Be wary of ever-more nested structs to infinitely 'separate concerns' for the sake of infinitely 'separating concerns.'
+#### Flat is better than nested. (Just like in the zen of python.)
+- Always consider the flat option first.
+- Be wary of ever-more nested structs that claim to infinitely 'separate concerns' for the sake of 'separating concerns.'
 
 
-##### 'Get [what is] needed, when [it is] needed.':
+#### 'Get [what is] needed, when [it is] needed.':
 - Do not load more into state than you need.
 - Do not store more information than you need.
 - Do not use more storage capacity than you need.
 - Do not keep a hold/handle on a file longer than is needed (e.g. forever).
 
 
-##### Grace Hopper ~"The most damaging phrase in the language is 'we've always done it this way.' The second most damaging is 'storage is cheap.'"
+#### Grace Hopper ~"The most damaging phrase in the language is 'we've always done it this way.' The second most damaging is 'storage is cheap.'"
 - Be as caring and vigilant about memory-economics as Grace Hopper (who famously walked around with a piece of wire 30 cm long — "a nanosecond" — to make engineers physically feel the cost of waste). Before suggesting the size for a variable (such as apathetically using more memory than is needed) imagine you are suggesting this to Grace Hopper to her face. Only use as much memory as you are absolutely required to use.
 
 - Load what is needed when it is needed: Do not ever load a whole file or line, rarely load a whole anything. Increment and load only what is required pragmatically. Do not fill 'state' with anything that is not both necessary and actually used. Do not insecurity output information broadly in the case of production errors and exceptions (testing and debugging.
@@ -1228,7 +1270,7 @@ Empirical processes are more "statistical," less tautological; and "statistical"
 
 Always error and exception handling: Every part of code, every process, function, and operation will fail at some point, if only because of cosmic-ray bit-flips (which are common), hardware failures, power-supply failures, adversarial attacks, etc. There must always be fail-safe error handling where production-release-build code handles issues and moves on without panic-crashing ever. Every failure must be handled smoothly: let it fail and move on. This does not mean that no function can return an error, nor does this mean that errors cannot be logged or reported. Case by case, a process can be retried or skipped, but the overall program must smoothly continue.
 
-### "Do not stop" in production: Case Handling
+## "Do not stop" in production: Case Handling
 Somehow there seems to be no clear vocabulary for 'Do not stop.' In production build code, when you come to something to handle, handle it:
 - Handle and move on: Do not halt the program.
 - Handle and move on: Do not terminate the program.
@@ -1240,17 +1282,17 @@ Somehow there seems to be no clear vocabulary for 'Do not stop.' In production b
 - Handle and move on: Do not spiral into undefined behavior of the program.
 - Handle and move on: Do not stop the program.
 
-### Project-Level Context For Functions, Comments, & Doc-Strings
+## Project-Level Context For Functions, Comments, & Doc-Strings
 Comments and docs for functions and groups of functions must include project level information: To paraphrase Jack Welch, "The most dangerous thing in the world is a flawless operation that should never have been done in the first place." For projects, functions are not pure platonic abstractions; the project has a need that the function is or is not meeting. It happens constantly that a function does 'the wrong thing' well and so this 'bug' is never detected when functions are examined in isolation. Project-level (strategic level, architecture level) documentation and logic-level (tactical level) documentation are two different things that must both exist such that discrepancies must be identifiable; Project-level documentation, logic-level documentation, and the code, must align and align with user-needs, real conditions, the results of tests, and future conditions.
 
 Safety, reliability, maintainability, fail-safe, communication-documentation, are the goals: not ideology, aesthetics, popularity, momentum-tradition, bad habits, convenience, nihilism, lazyness, lack of impulse control, cooties, etc.
 
-### No third party libraries (or very very strictly avoid third party libraries where possible).
+## No third party libraries (or very very strictly avoid third party libraries where possible).
 
-### Scale: Code should be future-proof and scale well. The Y2K bug was not a wonderful feature, it was a horrendous mistake. Scale and size should be handled in a modular no-load way, not arbitrarily capped so that everything breaks.
+## Scale: Code should be future-proof and scale well. The Y2K bug was not a wonderful feature, it was a horrendous mistake. Scale and size should be handled in a modular no-load way, not arbitrarily capped so that everything breaks.
 
-### Power-of-10-style Rules of Thumb
-We can derive a practical list of '10 Rust Production Rules' updated for general systems programming in 2026 (derived) from NASA's 2006 'Power of 10' rules that were originally narrowly framed for c for embedded-systems.
+## Power-of-10-style Rules of Thumb
+We can derive a list of '10 Rust Production Rules' updated for general systems programming in 2026 (derived) from NASA's 2006 'Power of 10' rules that were originally narrowly framed for c for embedded-systems.
 
 These are ideals to be followed where possible and sensible, not absolute pedantic rules:
 
@@ -1279,7 +1321,7 @@ Part of having a function be 'focused' means knowing if the function is in scope
 Note: Terminology varies across "error" / "fail" / "exception" / "catch" / "case" et al. The standard terminology is 'error handling' but 'case handling' or 'issue handling' may be a more accurate description, especially where 'error' refers to the output when unable to handle a case (which becomes semantically paradoxical). The goal is that a program will not terminate / halt / end / shut down / stop, etc., or crash / fail / panick / coredump / do undefined-behavior, etc. when 'expected' cases occur. Here production and debugging/testing starkly diverge: during testing you **DO** want/need to see how (and where in the code) the program may 'fail' and where and when cases are encountered. In testing you need to stop with extensive details. In debugging you want to show extensive issue-details. But in production you need to never stop and you need to keep logs memory-terse and privacy-safe.
 The proverbial satellite must never fall out of the sky, ever, regardless of how pedantically beautiful the error-message in the ball of flames may have been.
 
-##### Six aspects of case-handlng (Rule 5 of revised 'power of 10' for Rust)
+#### Six aspects of case-handlng (Rule 5 of revised 'power of 10' for Rust)
 For production-release code:
 
 1 of 6: Check and handle without stop/panic/halt in production
@@ -1309,14 +1351,11 @@ assert!(
 ```
 
 e.g.
-"Assert & Catch-Handle" 3-part System for organizing production behavior, debug behavior, and cargo-test behavior:
+# "Assert & Catch-Handle" 3-part System for organizing production behavior, debug behavior, and cargo-test behavior:
 
 A three-part rule of thumb:
 
-1 of 3: For Debug assertions: Only in debug builds, NOT in tests - use:
-```
-#[cfg(all(debug_assertions, not(test)))]
-```
+1 of 3: For Debug assertions: Only in debug builds, NOT in tests - use: #[cfg(all(debug_assertions, not(test)))]
 
 2 of 3:. For Test assertions: use in test functions themselves, not in the function body (easy to conflict with debug/prod handling)
 E.g.
@@ -1332,7 +1371,7 @@ When we run a cargo test:
 
 
 Note: Buffy may be useful in production error string formatting https://github.com/lineality/buffy_stack_format_write_module
-```
+
 // template/example for check/assert format
 //    =================================================
 // // Debug-Assert, Test-Asset, Production-Catch-Handle
@@ -1352,14 +1391,14 @@ debug_assert!(
 xyz
 }
 
-// Production safe output example (buffy-write is a no-heap alternative)
-            Err(_e) => {
-                #[cfg(debug_assertions)]
-                eprintln!("function-acronym: process-name: {}", _e);
+// Production safe output example (Buffy is a no-heap alternative)
+Err(_e) => {
+    #[cfg(debug_assertions)]
+    eprintln!("function-acronym: process-name: {}", _e);
 
-                // safe log
-                eprintln!("function-acronym: process-name: failed");
-            }
+    // safe log
+    buffy_println!("function-acronym: process-name: failed", &[])?;
+}
 
 // Note: This is located only in cargo test functions.
 // This is not included in production builds.
@@ -1377,7 +1416,7 @@ if !INFOBAR_MESSAGE_BUFFER_SIZE == 0 {
         "zero buffer size error".into(),
     ));
 }
-```
+
 Depending on the test, you may need a test-assert to be in a cargo-test function and not in the main function.
 
 Warning: Do not collide or mix up test-asserts and debug asserts, or forget that debug code also runs in test builds by default.;
@@ -1458,6 +1497,13 @@ Also: As per Mara Bos's 'Rust Atomics and Locks' (O'Reilly) note the specific us
 - https://www.oreilly.com/library/view/designing-data-intensive-applications/9781491903063/
 
 
+
+## 13: Primitives & Future Forms
+Even though electronic signal sending thought the early internet (from the history of message encryption though Turing's "Delilah" system, to Claude Shannon and telecommunications, to Time-Share to email to the WWW to 'social media') is scattered over probably more than a century, it is unclear what modes will be preferred and relied upon in future.
+
+One example may be "email." From the vantage of 2026, 'email' infrastructure has become badly broken and is increasingly a liability while in various ways it remains a kind of fundamental building-block that many other systems rely on.
+
+
 ## 14. Other Links & Notes
 - https://web.eecs.umich.edu/~imarkov/10rules.pdf: NASA: Rules for Developing Safety-Critical Code", Gerard J. Holzmann
 - https://djaa.com/kanban-board-examples/
@@ -1474,7 +1520,8 @@ Also: As per Mara Bos's 'Rust Atomics and Locks' (O'Reilly) note the specific us
 - grc.com/sn
 - https://en.wikipedia.org/wiki/Trello
 - https://twit.tv/shows/security-now/episodes/1054
-
+- https://www.kings.cam.ac.uk/news/alan-turings-delilah-papers-saved-nation
+- https://en.wikipedia.org/wiki/LoRa
 
 - In Security-Now Episode 1054, there is an interesting anecdote about people still using an Apple IIGS for the music study software, and the technical details of what they may need to do to keep being able to access the physical floppy disk memory.
 https://twit.tv/shows/security-now/episodes/1054
